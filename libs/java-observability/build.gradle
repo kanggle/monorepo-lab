@@ -1,0 +1,38 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Spring Boot Actuator + Micrometer
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // OpenTelemetry API (for trace context extraction)
+    implementation 'io.opentelemetry:opentelemetry-api:1.43.0'
+
+    // Logback JSON encoder
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Servlet API (for MDC filter)
+    compileOnly 'jakarta.servlet:jakarta.servlet-api'
+
+    // Spring Web (for WebFilter, optional)
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework:spring-webflux'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // Spring Kafka (for RecordInterceptor, optional)
+    compileOnly 'org.springframework.kafka:spring-kafka'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}

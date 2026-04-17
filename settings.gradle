@@ -1,0 +1,18 @@
+rootProject.name = 'wms-platform'
+
+include(
+    'libs:java-common',
+    'libs:java-messaging',
+    'libs:java-observability',
+    'libs:java-security',
+    'libs:java-test-support',
+    'libs:java-web',
+    'apps:gateway-service',
+    'apps:inbound-service',
+    'apps:inventory-service',
+    'apps:outbound-service',
+    'apps:master-service',
+    'apps:notification-service',
+    'apps:admin-service',
+    'tests:e2e'
+)

@@ -1,0 +1,33 @@
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Local H2 database files
+/data/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+.gradle/
+.next/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/worktrees/
+.turbo/
+*/data/*.mv.db
+*/data/*.lock.db

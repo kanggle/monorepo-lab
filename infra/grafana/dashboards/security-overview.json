@@ -1,0 +1,54 @@
+{
+  "uid": "security-overview",
+  "title": "Security Service Overview",
+  "tags": ["security"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    { "id": 1, "title": "Consumer Lag", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "kafka_consumer_fetch_manager_records_lag_max{service=\"security-service\"}", "legendFormat": "{{topic}}", "refId": "A" }]
+    },
+    { "id": 2, "title": "DLQ Depth", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "security_dlq_depth", "refId": "A" }]
+    },
+    { "id": 3, "title": "Detection Rules Triggered", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "sum(rate(security_rules_triggered_total[5m])) by (rule)", "legendFormat": "{{rule}}", "refId": "A" }]
+    },
+    { "id": 4, "title": "Auto-lock Count", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "rate(security_auto_lock_issued_total[5m])", "refId": "A" }]
+    },
+    { "id": 5, "title": "Risk Score Distribution", "type": "heatmap", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "sum(rate(security_risk_score_bucket[5m])) by (le)", "format": "heatmap", "refId": "A" }]
+    },
+    { "id": 6, "title": "Event Processing Latency p99", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(security_event_processing_seconds_bucket[5m])) by (le))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    { "id": 7, "title": "Suspicious Events", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "rate(security_suspicious_events_total[5m])", "refId": "A" }]
+    },
+    { "id": 8, "title": "Login Outcomes", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "sum(rate(security_login_outcome_total[5m])) by (outcome)", "legendFormat": "{{outcome}}", "refId": "A" }]
+    },
+    { "id": 9, "title": "Redis Miss Rate", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "rate(security_redis_misses_total[5m]) / (rate(security_redis_hits_total[5m]) + rate(security_redis_misses_total[5m]))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    { "id": 10, "title": "Active Consumer Threads", "type": "stat", "gridPos": { "h": 6, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "kafka_consumer_coordinator_assigned_partitions{service=\"security-service\"}", "refId": "A" }]
+    }
+  ]
+}
