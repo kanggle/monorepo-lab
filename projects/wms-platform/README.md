@@ -1,136 +1,203 @@
 # wms-platform
 
-창고 관리 시스템(Warehouse Management System). 백엔드 포트폴리오 프로젝트로, 물류 센터의 입고·재고·출고 전 과정을 spec-driven · task-driven 방식으로 구축한다.
+> **Warehouse Management System backend** — production-oriented, spec-driven, AI-assisted
 
-핵심 기능: 입고 예정(ASN) 관리, 검수·적치, 로케이션 기반 재고 추적, 재고 조정·이동, 출고 오더 처리, 피킹·패킹·출하, 마스터 데이터 관리, 대시보드·KPI.
-
-스택: Java 21 · Spring Boot 3 · Gradle multi-module · JPA + QueryDSL · MySQL · Redis · Kafka · Docker Compose · Prometheus/Grafana/Loki.
+Spring Boot 3 microservices implementing the full inbound → inventory → outbound workflow for a warehouse. Built as a portfolio project, but engineered to production standards: event-driven separation, transactional outbox, idempotency keys, circuit breakers, observability, and strict contract-first development.
 
 ---
 
-## Principles
+## 📍 Status
 
-- [PROJECT.md](PROJECT.md)가 프로젝트의 domain과 trait 분류를 선언한다 (taxonomy 기반 규칙 시스템)
-- `specs/`가 공식 source of truth이다
-- 작업은 `tasks/`를 통해 수행한다
-- `tasks/ready/`에 있는 태스크만 구현 가능하다
-- [CLAUDE.md](../../CLAUDE.md)가 최소 운영 규칙을 정의한다
-- 서비스 내부 구조는 전역적으로 고정되지 않는다. 각 서비스의 아키텍처는 [specs/services/<service>/architecture.md](specs/services/)에 선언된다
-
----
-
-## Document Roles
-
-### `PROJECT.md`
-프로젝트의 분류 — `domain`(하나)과 `traits`(다수)를 선언한다. 이 값에 따라 [rules/](../../rules/) 아래 어떤 규칙 계층이 활성화되는지가 결정된다.
-
-### `CLAUDE.md`
-AI 에이전트와 개발자가 따라야 할 최소 운영 규칙. "Project Classification (Read First)" 섹션이 규칙 계층 해결 순서를 정의한다.
-
-### `specs/`
-공식 프로젝트 규칙·컨트랙트·서비스 정의·기능 정의·교차 서비스 흐름.
-- [platform/](../../platform/) — 모든 프로젝트에 공통된 기술 수준 규칙 (아키텍처·코딩·보안·테스트·관측성 등)
-- [rules/](../../rules/) — taxonomy 기반 조건부 규칙 (`common.md` 인덱스, `domains/<domain>.md`, `traits/<trait>.md`)
-- `specs/contracts/` — HTTP 및 이벤트 컨트랙트
-- `specs/services/` — 서비스별 아키텍처·개요·경계
-- `specs/features/`, `specs/use-cases/` — 기능 수준·유스케이스 스펙
-
-### `.claude/skills/`
-구현 가이드, 작업 패턴, 체크리스트.
-
-### `knowledge/`
-설계 판단·트레이드오프·모범 사례 참고 자료.
-
-### `tasks/`
-생명주기 상태로 관리되는 실행 가능한 작업 단위.
-
-### `docs/`
-사람을 위한 온보딩, 운영 가이드, 런북.
+| Area | State |
+|---|---|
+| Project classification | ✅ Declared ([PROJECT.md](PROJECT.md)) |
+| master-service v1 specs | ✅ Architecture / domain model / HTTP contract / event contract / idempotency strategy |
+| First implementation tasks | ✅ Ready: [TASK-BE-001](tasks/ready/TASK-BE-001-master-service-bootstrap.md), [TASK-INT-001](tasks/ready/TASK-INT-001-gateway-master-service-route.md) |
+| Service code | 🚧 Not started — Warehouse CRUD slice is next |
 
 ---
 
-## Repository Structure
+## 🏛️ Architecture
 
-    wms-platform/
-    ├── README.md
-    ├── CLAUDE.md
-    ├── PROJECT.md           ← 프로젝트 분류 (domain + traits)
-    ├── .claude/
-    ├── apps/                ← 서비스 구현
-    │   ├── gateway-service
-    │   ├── inbound-service
-    │   ├── inventory-service
-    │   ├── outbound-service
-    │   ├── master-service
-    │   ├── notification-service
-    │   └── admin-service
-    ├── libs/                ← 공유 기술 라이브러리
-    ├── specs/
-    │   ├── contracts/
-    │   ├── services/
-    │   ├── features/
-    │   └── use-cases/
-    ├── platform/            ← 기술 수준 공통 규칙
-    ├── rules/               ← taxonomy 기반 규칙
-    ├── knowledge/
-    ├── tasks/
-    ├── docs/
-    ├── infra/               ← Prometheus / Grafana / Loki 설정
-    └── scripts/
+### Services (7)
 
----
+| Service | Service Type | Responsibility |
+|---|---|---|
+| `gateway-service` | `rest-api` | External routing, JWT validation, rate limiting, header enrichment |
+| `master-service` | `rest-api` | Master data: warehouses, zones, locations, SKUs, partners, lots |
+| `inbound-service` | `rest-api` | ASN management, inspection, putaway |
+| `inventory-service` | `rest-api` | Location-based inventory, transfers, adjustments, real-time query |
+| `outbound-service` | `rest-api` | Outbound orders, picking, packing, shipping |
+| `notification-service` | `event-consumer` | Kafka consumer for operational alerts (Slack, email) |
+| `admin-service` | `rest-api` | Dashboards, KPIs, user/permission management |
 
-## Implementation Rule
+Each service declares its own internal architecture in `specs/services/<service>/architecture.md`. Master-service uses **Hexagonal (Ports & Adapters)**; inventory/inbound/outbound will also use Hexagonal (integration-heavy nature). Gateway is Layered.
 
-기존 코드에서 시작하지 않는다. 다음 순서로 읽는다:
+### Bounded Contexts (per `rules/domains/wms.md`)
 
-1. [CLAUDE.md](../../CLAUDE.md)
-2. [PROJECT.md](PROJECT.md) — 이어서 [platform/entrypoint.md](../../platform/entrypoint.md)의 **Step 0**에 따라 활성 규칙 계층([rules/common.md](../../rules/common.md), [rules/domains/wms.md](../../rules/domains/wms.md), [rules/traits/](../../rules/traits/) 아래 선언된 trait 파일)을 로드
-3. 대상 태스크 (`tasks/ready/`)
-4. [platform/entrypoint.md](../../platform/entrypoint.md) — Core, Service-Type-Specific, Auxiliary 레이어
-5. 관련 플랫폼 스펙
-6. 대상 서비스 스펙
-7. 관련 컨트랙트
-8. 관련 기능 스펙과 유스케이스
-9. [.claude/skills/](../../.claude/skills/)
-10. [knowledge/](knowledge/) (필요 시)
+- **Inbound** — ASN, inspection, putaway
+- **Inventory** — location-based stock, transfers, adjustments
+- **Outbound** — orders, picking, packing, shipping
+- **Master Data** — warehouse, zone, location, SKU, partner, lot
+- **Admin / Operations** — dashboards, KPIs, user management
 
-[PROJECT.md](PROJECT.md)에 선언되지 않았거나 미확인 `domain`/`trait` 값은 [CLAUDE.md](../../CLAUDE.md)에 따라 Hard Stop.
+### Traits applied
+
+- **`transactional`** — all mutating paths use `Idempotency-Key`, state machines, optimistic locking, transactional outbox
+- **`integration-heavy`** — future ERP / TMS / scanner integrations via dedicated ports, circuit breakers, bulkhead patterns
+
+See [`../../rules/traits/transactional.md`](../../rules/traits/transactional.md) and [`../../rules/traits/integration-heavy.md`](../../rules/traits/integration-heavy.md) for the full rule set.
 
 ---
 
-## Service Architecture Rule
+## 🛠️ Tech Stack
 
-서비스 내부 구조는 의도적으로 전역 표준화하지 않는다.
-
-각 서비스는 오직 자신의 `specs/services/<service>/architecture.md`에 선언된 아키텍처만을 따른다. 서비스마다 다른 아키텍처를 사용할 수 있다.
-
----
-
-## Shared Library Rule
-
-`libs/`는 재사용 가능한 기술·공통 코드 전용이다.
-
-다음을 둘 수 없다:
-- 서비스 특화 도메인 로직
-- 서비스 소유의 비즈니스 규칙
-- 서비스 특화 엔터티
-- 서비스 사유 오케스트레이션 로직
-
-참조: [platform/shared-library-policy.md](../../platform/shared-library-policy.md)
+- **Language**: Java 21
+- **Framework**: Spring Boot 3.4
+- **Build**: Gradle 8.14 (multi-project monorepo)
+- **Persistence**: PostgreSQL + Flyway (per-service DB; no shared DB)
+- **Messaging**: Apache Kafka (transactional outbox pattern)
+- **Cache**: Redis (session, idempotency key storage, rate limit counters)
+- **Observability**: Micrometer → Prometheus → Grafana, OpenTelemetry → Jaeger, structured JSON logs → Loki
+- **Test**: JUnit 5 + Testcontainers (no in-memory substitutes), WireMock for external integrations
+- **Local dev**: Docker Compose
 
 ---
 
-## Task Lifecycle
+## 🚀 Getting Started
 
-`backlog → ready → in-progress → review → done → archive`
+### Prerequisites
 
-`ready/`에 있는 태스크만 구현할 수 있다. 상세는 [tasks/INDEX.md](tasks/INDEX.md) 참조.
+- Java 21 (Temurin recommended)
+- Docker (for local stack and Testcontainers)
+- From repo root:
+
+### Boot the local stack
+
+```bash
+cd projects/wms-platform
+cp .env.example .env    # fill in values
+docker-compose up -d    # Postgres, Kafka, Redis, Prometheus, Grafana, Loki
+```
+
+### Run a service (once it's implemented)
+
+```bash
+# from repo root
+./gradlew :projects:wms-platform:apps:master-service:bootRun
+```
+
+### Run tests
+
+```bash
+./gradlew :projects:wms-platform:apps:master-service:test
+./gradlew :projects:wms-platform:build    # everything
+```
 
 ---
 
-## Notes
+## 📁 Directory Structure
 
-- 스펙이 없거나, 불명확하거나, 충돌하면 중단하고 보고한다.
-- 컨트랙트 변경이 필요하면 컨트랙트를 먼저 갱신한다.
-- 서비스 아키텍처 변경이 필요하면 서비스 스펙을 먼저 갱신한다.
+```
+wms-platform/
+├── PROJECT.md              ← domain=wms, traits=[transactional, integration-heavy]
+├── README.md               ← this file
+├── apps/                   ← 7 service modules (build.gradle per service, added on implementation)
+│   ├── gateway-service/
+│   ├── master-service/
+│   ├── inbound-service/
+│   ├── inventory-service/
+│   ├── outbound-service/
+│   ├── notification-service/
+│   └── admin-service/
+├── specs/
+│   ├── contracts/
+│   │   ├── http/           ← REST contracts (currently: master-service-api.md)
+│   │   └── events/         ← event schemas (currently: master-events.md)
+│   ├── services/
+│   │   └── master-service/ ← architecture, domain-model, idempotency
+│   ├── features/
+│   └── use-cases/
+├── tasks/
+│   ├── INDEX.md            ← lifecycle rules
+│   ├── ready/              ← TASK-BE-001, TASK-INT-001
+│   ├── in-progress/, review/, done/, archive/
+├── knowledge/
+│   └── adr/                ← architecture decision records
+├── docs/                   ← project-specific operational docs
+├── infra/                  ← Prometheus, Grafana, Loki, Promtail, Alertmanager configs
+├── scripts/                ← dev-up, build, migrate, topic creation, e2e scripts
+├── docker/                 ← Docker build contexts (DB init, etc.)
+├── docker-compose.yml
+├── .env.example
+└── build.gradle            ← project-level Gradle config (placeholder)
+```
+
+---
+
+## 📐 Key Design Decisions
+
+### v1 Entity Scope (Master Data)
+
+6 aggregates: **Warehouse, Zone, Location, SKU, Partner, Lot**. Each aggregate carries common fields (`id`, `*_code`, `name`, `status`, `version`, timestamps, actor ids). Soft deactivation only (no hard deletes in v1). Details: [specs/services/master-service/domain-model.md](specs/services/master-service/domain-model.md).
+
+### Hexagonal Architecture for Write-Heavy Services
+
+Master / inventory / inbound / outbound use Hexagonal to isolate domain logic from infrastructure. Gateway is Layered (no rich domain). Rationale: external integration variety (ERP, TMS, scanners) matches the Ports & Adapters metaphor naturally. Details: [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md).
+
+### Transactional Outbox for Event Publication
+
+Every state change writes an outbox row in the same DB transaction; a separate publisher forwards rows to Kafka. Guarantees exactly-one publish per committed change. At-least-once delivery; consumers must be idempotent keyed by `eventId`.
+
+### Idempotency-Key on All Mutating Endpoints
+
+Client-supplied UUID + method + path scope. Redis-backed storage with 24h TTL. Fail-closed on Redis outage (returns 503). Details: [specs/services/master-service/idempotency.md](specs/services/master-service/idempotency.md).
+
+### Local-Only Referential Integrity (v1)
+
+Master-service checks only its own child records on deactivation (e.g., Zone deactivation blocked while active Locations remain). Cross-service check (inventory references) deferred to v2 via a `deactivation.requested` saga. This is a known v1 simplification.
+
+---
+
+## 🔗 Related Documents
+
+### Repo-shared rules (this project activates these)
+
+- [`../../rules/common.md`](../../rules/common.md) — always-loaded rule index
+- [`../../rules/domains/wms.md`](../../rules/domains/wms.md) — WMS domain rules (W1–W6)
+- [`../../rules/traits/transactional.md`](../../rules/traits/transactional.md) — T1–T8
+- [`../../rules/traits/integration-heavy.md`](../../rules/traits/integration-heavy.md) — I1–I10
+
+### Project-specific specs
+
+- [PROJECT.md](PROJECT.md) — domain/traits declaration, service map, out-of-scope list
+- [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md)
+- [specs/services/master-service/domain-model.md](specs/services/master-service/domain-model.md)
+- [specs/services/master-service/idempotency.md](specs/services/master-service/idempotency.md)
+- [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md)
+- [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md)
+
+### Ready tasks
+
+- [tasks/ready/TASK-BE-001-master-service-bootstrap.md](tasks/ready/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice
+- [tasks/ready/TASK-INT-001-gateway-master-service-route.md](tasks/ready/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring
+
+---
+
+## 🧭 How I Built This
+
+This project is developed with **[Claude Code](https://claude.com/claude-code)** (Anthropic) using a rule-driven workflow:
+
+- Specs, contracts, and task definitions are authored **before** any implementation code.
+- A taxonomy-based rule system (`rules/common.md` + `rules/domains/wms.md` + `rules/traits/*.md`) is activated by the project's `PROJECT.md` classification. The AI loads only the relevant rules.
+- 80+ reusable skills under `.claude/skills/` guide implementation patterns (Hexagonal structure, outbox pattern, idempotent consumer, testing strategy, etc.).
+- Specialized sub-agents (`architect`, `backend-engineer`, `code-reviewer`, `api-designer`, ...) handle distinct phases of work under `.claude/agents/`.
+- Every task follows Plan → Implement → Test → Review. Only `tasks/ready/` items may be implemented.
+
+The full framework lives at the [repo root](../../) and is designed to scale to multiple projects. See the [root README](../../README.md) and [TEMPLATE.md](../../TEMPLATE.md) for the "Discovery → Distribution" strategy.
+
+---
+
+## 📄 License
+
+Part of the [monorepo-lab](../../) portfolio. License pending.

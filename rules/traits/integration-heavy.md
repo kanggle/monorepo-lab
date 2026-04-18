@@ -8,10 +8,11 @@
 
 외부 시스템(써드파티 API, 웹훅, 파일 교환, 메시지 브로커)과의 연동이 다수이며, 연동 안정성이 시스템 품질을 좌우하는 서비스에 적용된다.
 
-Global Account Platform 기준 적용 범위:
+적용 범위는 프로젝트마다 다르며 각 서비스의 `specs/services/<service>/architecture.md` 또는 `specs/services/<service>/external-integrations.md`에서 선언된다. 일반 원칙:
 
-- 필수: `apps/auth-service/` (이메일/SMS 발송, OAuth 소셜 로그인 제공자 연동), `apps/security-service/` (리스크 인텔리전스·IP 평판 API 선택적 연동)
-- 조건부: 외부 API 2개 이상과 연동하는 모든 서비스
+- **필수 적용**: 외부 알림 제공자(이메일/SMS/푸시), OAuth 제공자, 결제·PG, 배송·물류 시스템(TMS/ERP), 바코드/RFID 스캐너, 리스크 인텔리전스 API 등 외부 시스템과 직접 연동하는 서비스
+- **조건부**: 외부 API를 2개 이상 호출하는 서비스 (공용 풀 고갈·연쇄 장애 위험)
+- **제외**: 외부 연동이 없는 순수 내부 서비스
 
 ---
 
