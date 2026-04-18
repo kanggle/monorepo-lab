@@ -7,10 +7,10 @@ Defines platform-wide security requirements that all services must follow.
 # Authentication
 
 - JWT (JSON Web Token) is the standard authentication mechanism.
-- `auth-service` is the sole issuer of access tokens and refresh tokens.
-- Token validation at the gateway: `gateway-service` verifies JWT on all inbound requests before routing.
-- Services behind the gateway may trust the identity forwarded by the gateway.
-- Services must not re-implement token issuance logic.
+- Each project declares exactly one service (in `PROJECT.md`) as the **sole issuer** of access tokens and refresh tokens. If the project delegates to an external identity provider, the project still declares which internal surface trusts which issuer.
+- The gateway service (as declared in `PROJECT.md`) verifies JWT on all inbound requests before routing.
+- Services behind the gateway may trust the identity forwarded by the gateway via identity headers (`X-User-Id`, `X-User-Role`).
+- Services MUST NOT re-implement token issuance logic. Only the declared issuer mints tokens.
 
 ---
 
@@ -35,8 +35,8 @@ Defines platform-wide security requirements that all services must follow.
 
 - Credentials, tokens, and secrets must not be logged.
 - Personally identifiable information (PII) must not appear in logs or error messages.
-- Payment-related sensitive data (card numbers, CVV) is owned exclusively by `payment-service`.
-- No other service may store or transit raw payment credentials.
+- If the project handles payment or similarly sensitive credentials (card numbers, CVV, medical records, government ids), exactly one service MUST own that data (declared in `PROJECT.md` and in its `specs/services/<service>/architecture.md`).
+- No other service may store or transit raw payment credentials or equivalent sensitive material — only references (e.g., payment intent id, vaulted token) may cross service boundaries.
 - Secrets must be managed through environment variables or a secrets manager. Hard-coded secrets are forbidden.
 
 ---

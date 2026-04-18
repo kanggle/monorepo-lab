@@ -10,7 +10,7 @@ This document extends the Core platform specs. It does not replace them.
 
 An `event-consumer` service primarily reacts to domain events published by other services. It may expose a small set of admin or query endpoints, but its primary role is asynchronous event processing.
 
-Candidate services in this monorepo: `notification-service` (reacts to user/order events), `search-service` (reacts to catalog events for index sync).
+Typical candidates include notification services (react to business events to send emails/SMS/push), read-model or search-index services (react to write-side events to maintain a projection), and audit services (record events to an append-only log). Each project's `PROJECT.md` declares which services are of type `event-consumer`.
 
 ---
 
@@ -19,7 +19,7 @@ Candidate services in this monorepo: `notification-service` (reacts to user/orde
 ## Subscription Ownership
 - Every consumed topic MUST be declared in `specs/services/<service>/architecture.md` under "Subscribed Topics"
 - A topic MUST have exactly one team-owned consumer for any given consumer group
-- Consumer group naming: `<service>-<purpose>` (e.g., `notification-service-order-events`)
+- Consumer group naming: `<service>-<purpose>` (e.g., `<consumer-service>-<producer-aggregate>-events`)
 
 ## Idempotency
 - Every consumer MUST be idempotent — duplicate event delivery is expected
@@ -47,7 +47,7 @@ Candidate services in this monorepo: `notification-service` (reacts to user/orde
 
 ## Ordering Guarantees
 - If ordering matters, document the partition key in `architecture.md`
-- Use Kafka partition key tied to the aggregate identity (e.g., `orderId`, `userId`)
+- Use Kafka partition key tied to the aggregate identity (e.g., `<aggregateId>` — concrete id field is declared in the event contract)
 - Cross-aggregate ordering is not guaranteed and must not be relied upon
 
 ## Observability

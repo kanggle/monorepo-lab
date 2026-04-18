@@ -10,7 +10,7 @@ This document extends the Core platform specs. It does not replace them.
 
 A `batch-job` service performs scheduled or one-shot execution of long-running work: ETL, reconciliation, periodic aggregation, cleanup, report generation, outbox dispatch.
 
-Candidate services in this monorepo: `batch-worker`.
+Typical candidates include a generic batch worker, data warehouse ingestion jobs, month-end reconciliation services, and scheduled report generators. Each project's `PROJECT.md` declares which services are of type `batch-job`.
 
 ---
 

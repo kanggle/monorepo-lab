@@ -9,7 +9,7 @@ Defines how services are built, packaged, and deployed.
 - Each service is packaged as a Docker image.
 - Base image: `eclipse-temurin:21-jre-alpine` (or equivalent slim JRE).
 - Images must not contain source code or build tools.
-- Image tag format: `{service-name}:{git-sha}` (e.g. `auth-service:abc1234`).
+- Image tag format: `{service-name}:{git-sha}` (e.g. `<service-name>:abc1234`).
 
 ---
 

@@ -8,7 +8,7 @@ Defines versioning rules for APIs, events, and libraries.
 
 ## Strategy
 
-- URL path versioning: `/api/v{n}/{resource}` (e.g. `/api/v1/products`).
+- URL path versioning: `/api/v{n}/{resource}` (e.g. `/api/v1/<resource>`).
 - Current default version: `v1`. All existing endpoints are implicitly `v1`.
 - Version prefix is omitted in current contracts but must be added when a breaking change is introduced.
 
@@ -34,7 +34,7 @@ Defines versioning rules for APIs, events, and libraries.
 
 # Event Versioning
 
-- Event type format: `{EventName}V{n}` when a breaking change is needed (e.g. `OrderPlacedV2`).
+- Event type format: `{EventName}V{n}` when a breaking change is needed (e.g. `<EventName>V2`). Alternatively, the project may version by topic suffix (`<topic>.v2`) — either approach documented in `specs/contracts/events/README.md`.
 - Old and new versions must be produced simultaneously during the migration window.
 - Consumers must migrate to new versions before old versions are retired.
 

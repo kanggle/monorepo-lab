@@ -8,7 +8,7 @@ This document extends the Core platform specs. It does not replace them.
 
 # Scope
 
-A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mobile, other services). Examples in this monorepo: `auth-service`, `user-service`, `product-service`, `order-service`, `payment-service`, `promotion-service`, `review-service`.
+A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mobile, other services). This is the default service type for backend services that respond to HTTP calls. Each project's `PROJECT.md` declares which services are of type `rest-api`.
 
 ---
 

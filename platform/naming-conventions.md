@@ -61,9 +61,9 @@ Examples:
 
 # API Endpoints
 
-- Use `kebab-case` for URL path segments: `/api/auth/refresh-token` (but prefer single words where possible).
-- Use plural nouns for resource collections: `/api/products`, `/api/orders`.
-- Use verbs only for action endpoints that don't map cleanly to resources: `/api/auth/login`, `/api/auth/logout`.
+- Use `kebab-case` for URL path segments: `/api/v1/<resource>/refresh-token` (but prefer single words where possible).
+- Use plural nouns for resource collections: `/api/v1/<resources>`.
+- Use verbs only for action endpoints that don't map cleanly to resources: `/api/v1/<resource>/<action>` (e.g., `/deactivate`, `/refresh`).
 
 ---
 

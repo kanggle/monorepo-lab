@@ -10,7 +10,7 @@ This document extends the Core platform specs. It does not replace them.
 
 A `frontend-app` service is a Next.js application that serves UI to end users (browser, mobile web). It is the primary surface that users interact with.
 
-Services in this monorepo: `web-store` (customer-facing storefront), `admin-dashboard` (internal operator console).
+Typical frontend surfaces include a customer-facing storefront/portal and an internal operator console (admin dashboard). Each project's `PROJECT.md` declares which services are of type `frontend-app`.
 
 ---
 

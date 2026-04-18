@@ -25,13 +25,13 @@ Defines platform-wide standards for logging, metrics, and tracing.
 |---|---|
 | `timestamp` | ISO 8601 UTC |
 | `level` | INFO / WARN / ERROR |
-| `service` | Service name (e.g. `auth-service`) |
+| `service` | Service name as declared in `PROJECT.md` |
 | `traceId` | Distributed trace ID (from MDC) |
 | `message` | Log message |
 
 ## Rules
 
-- Log `INFO` for business events: user registered, order placed, payment confirmed.
+- Log `INFO` for significant business events (e.g., resource created, state transition committed, external integration call succeeded).
 - Log `WARN` for degraded conditions: retry, fallback, slow query.
 - Log `ERROR` with full stack trace for unexpected failures.
 - Never log: passwords, tokens, card numbers, PII.
@@ -101,7 +101,9 @@ New metrics or tracing requirements must be documented here before implementatio
 
 # Deprecated Metrics
 
-- `security_consumer_lag` (aggregate, single-value): removed in TASK-BE-031-fix.
-  Use the per-partition gauge `kafka_consumer_lag{topic,group,partition}` and
-  aggregate in the query layer, e.g.
-  `sum(kafka_consumer_lag{service="security-service"})`.
+Project-specific deprecated metrics (single-value lag gauges, obsolete business counters, etc.)
+belong in the owning project's `specs/services/<service>/observability.md` or a project-level
+changelog — not in this platform document.
+
+As a platform rule, prefer **per-dimension** metrics (e.g., `kafka_consumer_lag{topic,group,partition}`)
+over **pre-aggregated** single-value gauges, and let the query layer aggregate as needed.

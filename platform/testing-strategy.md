@@ -85,16 +85,16 @@ For implementation details (annotations, imports, container images, setup code),
 
 # Naming Conventions
 
-| Test Type | Naming Pattern | Example |
+| Test Type | Naming Pattern | Example (generic) |
 |---|---|---|
-| Unit (service) | `{ServiceName}Test` | `LoginServiceTest` |
-| Unit (entity) | `{EntityName}Test` | `UserTest` |
-| Unit (infrastructure) | `{ClassName}UnitTest` | `RedisUserSessionRegistryUnitTest` |
-| Controller slice | `{ControllerName}Test` | `AuthControllerTest` |
-| Integration (infrastructure) | `{ClassName}Test` | `RedisUserSessionRegistryTest` |
-| Integration (full flow) | `{Feature}IntegrationTest` | `AuthSignupLoginIntegrationTest` |
-| Event (unit) | `{EventName}EventTest` | `UserSignedUpEventTest` |
-| Event (integration) | `{Feature}EventIntegrationTest` | `AuthEventPublishIntegrationTest` |
+| Unit (service) | `{ServiceName}Test` | `<ApplicationServiceClass>Test` |
+| Unit (entity) | `{EntityName}Test` | `<DomainEntityClass>Test` |
+| Unit (infrastructure) | `{ClassName}UnitTest` | `<InfrastructureClass>UnitTest` |
+| Controller slice | `{ControllerName}Test` | `<RestControllerClass>Test` |
+| Integration (infrastructure) | `{ClassName}Test` | `<PersistenceAdapter>Test` |
+| Integration (full flow) | `{Feature}IntegrationTest` | `<FeatureName>IntegrationTest` |
+| Event (unit) | `{EventName}EventTest` | `<DomainEvent>EventTest` |
+| Event (integration) | `{Feature}EventIntegrationTest` | `<FeatureName>EventIntegrationTest` |
 
 ---
 
