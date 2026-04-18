@@ -1,12 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.infrastructure.metrics.AuthMetricsTest\")",
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.LoginServiceTest\")",
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.AuthSignupLoginIntegrationTest\")",
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.AuthSignupLoginIntegrationTest\" --info)",
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.*\" --tests \"com.example.auth.infrastructure.metrics.*\" --tests \"com.example.auth.domain.*\")",
-      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.*\" --tests \"com.example.auth.infrastructure.metrics.*\" --tests \"com.example.auth.domain.*\" --info)",
       "Bash(grep -E \"SUCCESS|PASS|test$\")",
       "Edit(/.claude/skills/backend/**)",
       "Edit(/.claude/skills/frontend/**)",
@@ -14,10 +8,6 @@
       "Edit(/.claude/skills/search/**)",
       "Edit(/.claude/skills/testing/**)",
       "Edit(/.claude/skills/service-types/**)"
-    ],
-    "additionalDirectories": [
-      "c:\\Users\\kangdow\\dev\\project\\ai-project\\first-project\\apps\\web-store\\src\\app\\(store)\\products",
-      "C:\\Users\\kangdow\\dev\\project\\ai-project\\first-project\\.claude\\agents"
     ]
   },
   "hooks": {

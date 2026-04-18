@@ -31,9 +31,9 @@ Prerequisite: read `platform/service-types/event-consumer.md` before using this 
 Format: `<service>-<purpose>`
 
 ```
-notification-service-order-events
-notification-service-user-events
-search-service-product-catalog
+example-consumer-order-events
+example-consumer-user-events
+example-indexer-product-catalog
 ```
 
 One consumer group per (service, purpose) pair. Never share a group across services.
@@ -57,7 +57,7 @@ Choose the cheapest sufficient strategy:
 ```java
 @KafkaListener(
     topics = "order.events.v1",
-    groupId = "notification-service-order-events",
+    groupId = "example-consumer-order-events",
     containerFactory = "retryableKafkaListenerContainerFactory"
 )
 public void onOrderEvent(OrderEvent event, Acknowledgment ack) {

@@ -32,7 +32,7 @@ JSON only. Required fields:
 {
   "timestamp": "2026-04-12T08:30:00.000Z",
   "level": "INFO",
-  "service": "order-service",
+  "service": "example-service",
   "traceId": "...",
   "spanId": "...",
   "userId": "...",
@@ -89,7 +89,7 @@ Always include unit suffix (`_seconds`, `_bytes`, `_total`). Use labels sparingl
 # application.yml
 otel:
   service:
-    name: order-service
+    name: example-service
   exporter:
     otlp:
       endpoint: http://otel-collector:4317

@@ -86,13 +86,13 @@ spec:
 apiVersion: split.smi-spec.io/v1alpha1
 kind: TrafficSplit
 metadata:
-  name: order-service-canary
+  name: example-service-canary
 spec:
-  service: order-service
+  service: example-service
   backends:
-    - service: order-service-stable
+    - service: example-service-stable
       weight: 90
-    - service: order-service-canary
+    - service: example-service-canary
       weight: 10
 ```
 
@@ -102,14 +102,14 @@ spec:
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: order-service
+  name: example-service
 spec:
-  hosts: [order-service]
+  hosts: [example-service]
   http:
     - route:
-        - destination: { host: order-service, subset: stable }
+        - destination: { host: example-service, subset: stable }
           weight: 90
-        - destination: { host: order-service, subset: canary }
+        - destination: { host: example-service, subset: canary }
           weight: 10
 ```
 
@@ -124,10 +124,10 @@ Default deny, explicit allow per service-to-service edge:
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: order-service-allow
+  name: example-service-allow
 spec:
   selector:
-    matchLabels: { app.kubernetes.io/name: order-service }
+    matchLabels: { app.kubernetes.io/name: example-service }
   action: ALLOW
   rules:
     - from:

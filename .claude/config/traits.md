@@ -39,13 +39,13 @@ Values not listed above are a **Hard Stop** — see [`CLAUDE.md`](../../CLAUDE.m
 
 ---
 
-## Example
+## Example (typical trait combinations per domain)
 
-- ecommerce order-service
+- `ecommerce` (order-handling service)
   - `transactional`
   - `integration-heavy`
 
-- fintech payment-service
+- `fintech` (payment-handling service)
   - `transactional`
   - `regulated`
   - `audit-heavy`

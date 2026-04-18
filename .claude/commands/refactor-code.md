@@ -19,11 +19,11 @@ Refactor code safely without changing behavior. Scope depends on arguments.
 Examples:
 
 ```
-/refactor-code order-service
-/refactor-code order-service OrderAggregate method extraction
-/refactor-code order-service presentation layer cleanup
-/refactor-code order-service --dry-run
-/refactor-code order-service --focus=duplication
+/refactor-code <service-name>
+/refactor-code <service-name> <AggregateClass> method extraction
+/refactor-code <service-name> presentation layer cleanup
+/refactor-code <service-name> --dry-run
+/refactor-code <service-name> --focus=duplication
 ```
 
 ## Mode Selection

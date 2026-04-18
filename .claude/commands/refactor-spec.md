@@ -32,9 +32,9 @@ Examples:
 ```
 /refactor-spec platform
 /refactor-spec contracts --focus=consistency
-/refactor-spec order-service architecture.md structure
+/refactor-spec <service-name> architecture.md structure
 /refactor-spec all --dry-run
-/refactor-spec features order-processing.md missing-section
+/refactor-spec features <feature-file>.md missing-section
 /refactor-spec use-cases --focus=formatting
 ```
 

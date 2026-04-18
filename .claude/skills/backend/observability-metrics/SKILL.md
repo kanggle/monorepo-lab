@@ -125,15 +125,17 @@ public class AuthMetrics implements AuthMetricsRecorder {
 
 ## Metric Naming Convention
 
-| Metric | Tags | Service |
+Pattern: `<domain-noun>_<action>_total` (counters) or `<domain-noun>_<measure>_<unit>` (gauges/histograms). Generic examples:
+
+| Metric Pattern | Typical Tags | Typical Owner |
 |---|---|---|
-| `auth_login_total` | result=[success\|failure] | auth-service |
-| `auth_login_failure_total` | reason=[invalid_credentials\|rate_limited] | auth-service |
-| `order_placed_total` | — | order-service |
-| `order_cancelled_total` | reason=[user\|system\|payment_failed] | order-service |
-| `event_publish_failure_total` | service, event_type | all services |
-| `gateway_jwt_validation_failure_total` | reason=[missing\|expired\|invalid] | gateway |
-| `gateway_requests_routed_total` | target | gateway |
+| `<feature>_<action>_total` (e.g. counter for a completed operation) | `result=[success\|failure]` | service owning the feature |
+| `<feature>_<action>_failure_total` | `reason=[<categorized-cause>]` | same service |
+| `event_publish_failure_total` | `service`, `event_type` | all services emitting events |
+| `gateway_jwt_validation_failure_total` | `reason=[missing\|expired\|invalid]` | gateway service |
+| `gateway_requests_routed_total` | `target` | gateway service |
+
+Concrete metric definitions belong to each service's `specs/services/<service>/observability.md`. This shared skill covers only cross-cutting shapes (gateway, event publisher).
 
 ### Shared Metric Names
 
@@ -154,14 +156,14 @@ Pre-register counters in the constructor. Use `registry.counter()` for dynamic t
 
 ```java
 // Static tags — pre-register in constructor
-this.loginSuccess = Counter.builder("auth_login_total")
+this.operationSuccess = Counter.builder("<feature>_<action>_total")
     .tag("result", "success")
     .register(registry);
 
 // Dynamic tags — create on demand
 public void incrementEventPublishFailure(String eventType) {
     registry.counter(EVENT_PUBLISH_FAILURE_TOTAL,
-        TAG_SERVICE, "auth-service",
+        TAG_SERVICE, "<current-service-name>",
         TAG_EVENT_TYPE, eventType
     ).increment();
 }

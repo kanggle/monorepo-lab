@@ -12,14 +12,14 @@ Implement tasks in `tasks/ready/` end-to-end.
 ```
 /implement-task TASK-BE-113       # implement a single task
 /implement-task                   # implement all tasks in tasks/ready/
-/implement-task order-service     # implement tasks for a specific service only
+/implement-task <service-name>    # implement tasks for a specific service only
 /implement-task --dry-run         # show execution plan only, do not implement
 ```
 
 ## Argument Parsing
 
 1. If argument matches `TASK-*` pattern → **single task mode**
-2. If argument is a service name (e.g., `order-service`) → **batch mode filtered by service**
+2. If argument is a service name (as declared in `PROJECT.md`) → **batch mode filtered by service**
 3. If argument is `--dry-run` → **batch mode, plan only**
 4. If no argument → **batch mode for all tasks**
 

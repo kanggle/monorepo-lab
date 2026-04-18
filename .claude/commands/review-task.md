@@ -12,14 +12,14 @@ Review the implementation of tasks in `tasks/review/`.
 ```
 /review-task TASK-BE-024        # review a single task
 /review-task                    # review all tasks in tasks/review/
-/review-task order-service      # review tasks for a specific service only
+/review-task <service-name>     # review tasks for a specific service only
 /review-task --dry-run          # list tasks to review only, do not execute
 ```
 
 ## Argument Parsing
 
 1. If argument matches `TASK-*` pattern → **single task mode**
-2. If argument is a service name (e.g., `order-service`) → **batch mode filtered by service**
+2. If argument is a service name (as declared in `PROJECT.md`) → **batch mode filtered by service**
 3. If argument is `--dry-run` → **batch mode, list only**
 4. If no argument → **batch mode for all tasks**
 

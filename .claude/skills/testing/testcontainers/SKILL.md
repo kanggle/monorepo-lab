@@ -47,12 +47,12 @@ class AuthIntegrationTest {
 
 ## Container Types Used
 
-| Container | Image | Used By |
+| Container | Image | Typical Use |
 |---|---|---|
-| PostgreSQL | `postgres:16-alpine` | All backend services |
-| Redis | `redis:7-alpine` | auth-service (sessions, tokens) |
+| PostgreSQL | `postgres:16-alpine` | Backend services persisting relational state |
+| Redis | `redis:7-alpine` | Services using Redis for sessions, cache, idempotency keys, rate limits |
 | Kafka | `apache/kafka:3.7.0` | Event producer/consumer tests |
-| Elasticsearch | `elasticsearch:8.15.0` | search-service |
+| Elasticsearch | `elasticsearch:8.15.0` | Search-index services |
 
 ---
 

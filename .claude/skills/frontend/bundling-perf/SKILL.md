@@ -36,7 +36,7 @@ module.exports = withBundleAnalyzer({ /* ... */ });
 ```
 
 ```bash
-ANALYZE=true pnpm build --filter=web-store
+ANALYZE=true pnpm build --filter=example-frontend
 ```
 
 CI fails if first-load JS exceeds the per-route budget (default: 180 KB gzipped for landing routes, 250 KB for app routes).

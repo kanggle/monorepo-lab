@@ -17,8 +17,8 @@ Write tests for the specified service or class.
 Examples:
 
 ```
-/write-tests auth-service
-/write-tests order-service OrderPlacementService
+/write-tests <service-name>
+/write-tests <service-name> <ServiceClass>
 ```
 
 ## Procedure

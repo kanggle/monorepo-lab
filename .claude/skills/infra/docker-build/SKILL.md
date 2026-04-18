@@ -66,10 +66,10 @@ Uses 75% of container memory limit. Set memory limits in Docker Compose or Kuber
 
 ```yaml
 services:
-  auth-service:
+  example-service:
     build:
       context: .
-      dockerfile: apps/auth-service/Dockerfile
+      dockerfile: apps/example-service/Dockerfile
     deploy:
       resources:
         limits:

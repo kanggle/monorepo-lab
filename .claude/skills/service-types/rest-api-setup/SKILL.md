@@ -62,8 +62,8 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: order-service
-          uri: lb://order-service
+        - id: example-service
+          uri: lb://example-service
           predicates:
             - Path=/v1/orders/**
           filters:

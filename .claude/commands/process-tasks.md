@@ -19,7 +19,7 @@ Examples:
 
 ```
 /process-tasks
-/process-tasks order-service
+/process-tasks <service-name>
 /process-tasks --dry-run
 ```
 

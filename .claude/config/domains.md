@@ -83,12 +83,12 @@ Values not listed above are a **Hard Stop** — see [`CLAUDE.md`](../../CLAUDE.m
 
 ---
 
-## Example
+## Example (service → domain mapping in a hypothetical project)
 
-- order-service → `ecommerce`
-- settlement-service → `fintech`
-- report-worker → `data-platform`
-- factory-ops-service → `mes`
+- `<order-service-name>` → `ecommerce`
+- `<settlement-service-name>` → `fintech`
+- `<report-worker-name>` → `data-platform`
+- `<factory-ops-service-name>` → `mes`
 
 ---
 

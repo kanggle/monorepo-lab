@@ -71,9 +71,9 @@ spec:
     name: db-credentials
   data:
     - secretKey: username
-      remoteRef: { key: secret/data/order-service/db, property: username }
+      remoteRef: { key: secret/data/example-service/db, property: username }
     - secretKey: password
-      remoteRef: { key: secret/data/order-service/db, property: password }
+      remoteRef: { key: secret/data/example-service/db, property: password }
 ```
 
 Refresh interval triggers automatic re-sync when the source rotates.

@@ -97,10 +97,10 @@ spring:
 
 ```bash
 # Via environment variable
-SPRING_PROFILES_ACTIVE=standalone ./gradlew :apps:auth-service:bootRun
+SPRING_PROFILES_ACTIVE=standalone ./gradlew :projects:<project-name>:apps:<service-name>:bootRun
 
 # Via Gradle property
-./gradlew :apps:auth-service:bootRun --args='--spring.profiles.active=standalone'
+./gradlew :projects:<project-name>:apps:<service-name>:bootRun --args='--spring.profiles.active=standalone'
 ```
 
 ---
@@ -127,15 +127,21 @@ public RefreshTokenStore refreshTokenStore() {
 
 ---
 
-## Services with StandaloneConfig
+## Typical Beans Served by StandaloneConfig
 
-| Service | Standalone Beans |
+A service's `StandaloneConfig` typically substitutes beans that would normally require external infrastructure. Common categories:
+
+| Category | Example Bean Names |
 |---|---|
-| auth-service | RateLimiter, RefreshTokenStore, UserSessionRegistry, OAuthStateStore, AccessTokenBlocklist, AuthEventPublisher |
-| order-service | OrderEventPublisher (+ RestClient for payment) |
-| product-service | ProductEventPublisher |
-| payment-service | PaymentEventPublisher, PaymentGatewayPort |
-| user-service | ProductInfoProvider, test user initialization |
+| Rate limiting / throttling | `RateLimiter`, `RequestQuotaTracker` |
+| Session / token storage | `RefreshTokenStore`, `SessionRegistry`, `AccessTokenBlocklist` |
+| OAuth / external identity state | `OAuthStateStore` |
+| Event publishers (Kafka → in-memory) | `<Aggregate>EventPublisher` |
+| External gateway adapters | `<Vendor>GatewayPort` implementations |
+| Inter-service clients | `<OtherService>InfoProvider` (backed by stubs) |
+| Seed data | test user/tenant/entity initialization |
+
+Each service declares its standalone bean set in its own `StandaloneConfig` class. This shared skill does not enumerate per-service beans — see the target service's `specs/services/<service>/architecture.md` or the class itself.
 
 ---
 

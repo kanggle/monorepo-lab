@@ -17,7 +17,7 @@ Prerequisite: read `platform/deployment-policy.md` before using this skill.
 Each service has manifests in `k8s/services/{service}/`:
 
 ```
-k8s/services/auth-service/
+k8s/services/example-service/
 ├── deployment.yaml
 ├── service.yaml
 └── configmap.yaml
@@ -31,22 +31,22 @@ k8s/services/auth-service/
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: auth-service
+  name: example-service
   labels:
-    app: auth-service
+    app: example-service
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: auth-service
+      app: example-service
   template:
     metadata:
       labels:
-        app: auth-service
+        app: example-service
     spec:
       containers:
-        - name: auth-service
-          image: auth-service:latest
+        - name: example-service
+          image: example-service:latest
           ports:
             - containerPort: 8081
           env:
@@ -54,7 +54,7 @@ spec:
               value: "prod"
           envFrom:
             - configMapRef:
-                name: auth-service-config
+                name: example-service-config
           resources:
             requests:
               cpu: 250m
@@ -84,10 +84,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: auth-service
+  name: example-service
 spec:
   selector:
-    app: auth-service
+    app: example-service
   ports:
     - port: 8081
       targetPort: 8081
@@ -102,7 +102,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: auth-service-config
+  name: example-service-config
 data:
   SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/auth_db"
   SPRING_DATA_REDIS_HOST: "redis"
