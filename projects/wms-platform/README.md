@@ -14,7 +14,7 @@
 - `specs/`가 공식 source of truth이다
 - 작업은 `tasks/`를 통해 수행한다
 - `tasks/ready/`에 있는 태스크만 구현 가능하다
-- [CLAUDE.md](CLAUDE.md)가 최소 운영 규칙을 정의한다
+- [CLAUDE.md](../../CLAUDE.md)가 최소 운영 규칙을 정의한다
 - 서비스 내부 구조는 전역적으로 고정되지 않는다. 각 서비스의 아키텍처는 [specs/services/<service>/architecture.md](specs/services/)에 선언된다
 
 ---
@@ -22,15 +22,15 @@
 ## Document Roles
 
 ### `PROJECT.md`
-프로젝트의 분류 — `domain`(하나)과 `traits`(다수)를 선언한다. 이 값에 따라 [rules/](rules/) 아래 어떤 규칙 계층이 활성화되는지가 결정된다.
+프로젝트의 분류 — `domain`(하나)과 `traits`(다수)를 선언한다. 이 값에 따라 [rules/](../../rules/) 아래 어떤 규칙 계층이 활성화되는지가 결정된다.
 
 ### `CLAUDE.md`
 AI 에이전트와 개발자가 따라야 할 최소 운영 규칙. "Project Classification (Read First)" 섹션이 규칙 계층 해결 순서를 정의한다.
 
 ### `specs/`
 공식 프로젝트 규칙·컨트랙트·서비스 정의·기능 정의·교차 서비스 흐름.
-- [platform/](platform/) — 모든 프로젝트에 공통된 기술 수준 규칙 (아키텍처·코딩·보안·테스트·관측성 등)
-- [rules/](rules/) — taxonomy 기반 조건부 규칙 (`common.md` 인덱스, `domains/<domain>.md`, `traits/<trait>.md`)
+- [platform/](../../platform/) — 모든 프로젝트에 공통된 기술 수준 규칙 (아키텍처·코딩·보안·테스트·관측성 등)
+- [rules/](../../rules/) — taxonomy 기반 조건부 규칙 (`common.md` 인덱스, `domains/<domain>.md`, `traits/<trait>.md`)
 - `specs/contracts/` — HTTP 및 이벤트 컨트랙트
 - `specs/services/` — 서비스별 아키텍처·개요·경계
 - `specs/features/`, `specs/use-cases/` — 기능 수준·유스케이스 스펙
@@ -84,18 +84,18 @@ AI 에이전트와 개발자가 따라야 할 최소 운영 규칙. "Project Cla
 
 기존 코드에서 시작하지 않는다. 다음 순서로 읽는다:
 
-1. [CLAUDE.md](CLAUDE.md)
-2. [PROJECT.md](PROJECT.md) — 이어서 [platform/entrypoint.md](platform/entrypoint.md)의 **Step 0**에 따라 활성 규칙 계층([rules/common.md](rules/common.md), [rules/domains/wms.md](rules/domains/wms.md), [rules/traits/](rules/traits/) 아래 선언된 trait 파일)을 로드
+1. [CLAUDE.md](../../CLAUDE.md)
+2. [PROJECT.md](PROJECT.md) — 이어서 [platform/entrypoint.md](../../platform/entrypoint.md)의 **Step 0**에 따라 활성 규칙 계층([rules/common.md](../../rules/common.md), [rules/domains/wms.md](../../rules/domains/wms.md), [rules/traits/](../../rules/traits/) 아래 선언된 trait 파일)을 로드
 3. 대상 태스크 (`tasks/ready/`)
-4. [platform/entrypoint.md](platform/entrypoint.md) — Core, Service-Type-Specific, Auxiliary 레이어
+4. [platform/entrypoint.md](../../platform/entrypoint.md) — Core, Service-Type-Specific, Auxiliary 레이어
 5. 관련 플랫폼 스펙
 6. 대상 서비스 스펙
 7. 관련 컨트랙트
 8. 관련 기능 스펙과 유스케이스
-9. [.claude/skills/](.claude/skills/)
+9. [.claude/skills/](../../.claude/skills/)
 10. [knowledge/](knowledge/) (필요 시)
 
-[PROJECT.md](PROJECT.md)에 선언되지 않았거나 미확인 `domain`/`trait` 값은 [CLAUDE.md](CLAUDE.md)에 따라 Hard Stop.
+[PROJECT.md](PROJECT.md)에 선언되지 않았거나 미확인 `domain`/`trait` 값은 [CLAUDE.md](../../CLAUDE.md)에 따라 Hard Stop.
 
 ---
 
@@ -117,7 +117,7 @@ AI 에이전트와 개발자가 따라야 할 최소 운영 규칙. "Project Cla
 - 서비스 특화 엔터티
 - 서비스 사유 오케스트레이션 로직
 
-참조: [platform/shared-library-policy.md](platform/shared-library-policy.md)
+참조: [platform/shared-library-policy.md](../../platform/shared-library-policy.md)
 
 ---
 

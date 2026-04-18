@@ -25,7 +25,7 @@ taxonomy_version: 0.1
 - `logistics`(물류 전반)보다 범위가 좁고, `ecommerce`(상거래)와는 관심사가 다르다. WMS는 "물건이 창고 안에서 어떻게 움직이는가"에 집중한다.
 - `mes`(제조 실행)는 생산 공정에 초점이 맞춰져 있어 이 프로젝트의 성격과 다르다.
 
-Bounded context는 [rules/domains/wms.md](rules/domains/wms.md)의 표준 구분(Inbound / Inventory / Outbound / Master Data / Admin)을 따른다.
+Bounded context는 [../../rules/domains/wms.md](../../rules/domains/wms.md)의 표준 구분(Inbound / Inventory / Outbound / Master Data / Admin)을 따른다.
 
 ## Trait Rationale
 
@@ -59,7 +59,7 @@ Bounded context는 [rules/domains/wms.md](rules/domains/wms.md)의 표준 구분
 - **data-intensive**: 재고 데이터는 SKU당 구조적으로 작음. TB급 분석 플랫폼 아님
 - **read-heavy**: 쓰기 경로(입출고/재고 이동)와 읽기 경로가 균형
 
-이 경계가 바뀌면 이 PROJECT.md의 traits를 수정하고 해당 [rules/traits/](rules/traits/) 파일을 로딩 범위에 포함시킬 것.
+이 경계가 바뀌면 이 PROJECT.md의 traits를 수정하고 해당 [../../rules/traits/](../../rules/traits/) 파일을 로딩 범위에 포함시킬 것.
 
 ## Overrides
 

@@ -1,18 +1,23 @@
-rootProject.name = 'wms-platform'
+rootProject.name = 'monorepo-lab'
 
+// Shared libraries (at repo root)
 include(
     'libs:java-common',
     'libs:java-messaging',
     'libs:java-observability',
     'libs:java-security',
     'libs:java-test-support',
-    'libs:java-web',
-    'apps:gateway-service',
-    'apps:inbound-service',
-    'apps:inventory-service',
-    'apps:outbound-service',
-    'apps:master-service',
-    'apps:notification-service',
-    'apps:admin-service',
-    'tests:e2e'
+    'libs:java-web'
+)
+
+// Project: wms-platform
+include(
+    'projects:wms-platform:apps:gateway-service',
+    'projects:wms-platform:apps:inbound-service',
+    'projects:wms-platform:apps:inventory-service',
+    'projects:wms-platform:apps:outbound-service',
+    'projects:wms-platform:apps:master-service',
+    'projects:wms-platform:apps:notification-service',
+    'projects:wms-platform:apps:admin-service',
+    'projects:wms-platform:tests:e2e'
 )
