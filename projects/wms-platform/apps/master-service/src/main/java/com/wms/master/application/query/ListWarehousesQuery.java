@@ -1,0 +1,8 @@
+package com.wms.master.application.query;
+
+import com.example.common.page.PageQuery;
+
+public record ListWarehousesQuery(
+        WarehouseListCriteria criteria,
+        PageQuery pageQuery) {
+}
