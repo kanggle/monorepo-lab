@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wms.example.com/contracts/events/envelope.v1.json",
+  "title": "Global event envelope",
+  "description": "Derived from specs/contracts/events/master-events.md § Global Envelope. Every published event must validate against this schema.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "producer",
+    "aggregateType",
+    "aggregateId",
+    "actorId",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string" },
+    "eventType": {
+      "type": "string",
+      "pattern": "^master\\.(warehouse|zone|location|sku|partner|lot)\\.(created|updated|deactivated|reactivated|expired)$"
+    },
+    "eventVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "type": "string" },
+    "producer": { "type": "string", "const": "master-service" },
+    "aggregateType": {
+      "type": "string",
+      "enum": ["warehouse", "zone", "location", "sku", "partner", "lot"]
+    },
+    "aggregateId": { "type": "string" },
+    "traceId": { "type": ["string", "null"] },
+    "actorId": { "type": ["string", "null"] },
+    "payload": { "type": "object" }
+  }
+}

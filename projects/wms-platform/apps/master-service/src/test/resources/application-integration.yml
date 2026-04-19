@@ -1,0 +1,20 @@
+# Integration-test profile. Container endpoints are injected by the test
+# initializer (see MasterServiceIntegrationBase). This file pins the few
+# defaults that the initializer cannot reach — profile-gated beans, log
+# level, and the JPA/Hibernate mode.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+
+logging:
+  level:
+    org.apache.kafka: WARN
+    kafka: WARN
+    org.testcontainers: INFO
+    com.wms.master: INFO

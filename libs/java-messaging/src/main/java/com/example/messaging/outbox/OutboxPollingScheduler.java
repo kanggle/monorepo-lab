@@ -30,6 +30,7 @@ public abstract class OutboxPollingScheduler {
         try {
             String topic = resolveTopic(eventType);
             kafkaTemplate.send(topic, aggregateId, payload).get();
+            onKafkaSendSuccess(eventType, aggregateId);
             return true;
         } catch (Exception e) {
             log.error("Kafka send failed: eventType={}, aggregateId={}", eventType, aggregateId, e);
@@ -56,6 +57,17 @@ public abstract class OutboxPollingScheduler {
      * @param e           the exception that caused the failure
      */
     protected void onKafkaSendFailure(String eventType, String aggregateId, Exception e) {
+        // default: no additional handling
+    }
+
+    /**
+     * Hook called when Kafka send succeeds (broker acknowledgment received).
+     * Subclasses can override to record metrics. Default: no-op.
+     *
+     * @param eventType   the event type that was sent
+     * @param aggregateId the aggregate ID
+     */
+    protected void onKafkaSendSuccess(String eventType, String aggregateId) {
         // default: no additional handling
     }
 }

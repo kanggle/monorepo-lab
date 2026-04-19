@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wms.example.com/contracts/http/warehouse-response.v1.json",
+  "title": "Warehouse resource response",
+  "description": "Derived from specs/contracts/http/master-service-api.md §1 Warehouse. Matches 2xx responses of create, get-by-id, update, deactivate, reactivate.",
+  "type": "object",
+  "required": [
+    "id",
+    "warehouseCode",
+    "name",
+    "timezone",
+    "status",
+    "version",
+    "createdAt",
+    "createdBy",
+    "updatedAt",
+    "updatedBy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "warehouseCode": { "type": "string", "pattern": "^WH\\d{2,3}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "address": { "type": ["string", "null"], "maxLength": 200 },
+    "timezone": { "type": "string" },
+    "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+    "version": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string" },
+    "createdBy": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "updatedBy": { "type": "string" }
+  }
+}

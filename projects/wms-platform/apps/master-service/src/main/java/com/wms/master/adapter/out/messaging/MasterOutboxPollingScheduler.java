@@ -46,4 +46,9 @@ public class MasterOutboxPollingScheduler extends OutboxPollingScheduler {
     protected void onKafkaSendFailure(String eventType, String aggregateId, Exception e) {
         metrics.recordPublishFailure();
     }
+
+    @Override
+    protected void onKafkaSendSuccess(String eventType, String aggregateId) {
+        metrics.recordPublishSuccess();
+    }
 }
