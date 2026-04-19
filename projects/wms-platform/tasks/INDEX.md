@@ -67,8 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` integration suite (Postgres + Kafka + Redis) + contract-test harness; addresses gaps carried from BE-001/BE-002/BE-003
-- `TASK-INT-002-gateway-master-e2e.md` — live-pair Testcontainers test (gateway + master + Postgres + Redis + Kafka + JWKS MockWebServer) covering happy path / 401 / 429 / 503 / trace propagation; addresses the live-pair gap flagged in TASK-INT-001 review
+(empty)
 
 ## in-progress
 
@@ -82,6 +81,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-003-location-aggregate.md` — Location CRUD vertical slice + Zone guard turned on (dual-parent + globally-unique code + split HTTP routing; `hasActiveLocationsFor` stub replaced with real JPA query)
 - `TASK-DOC-001-library-boundary-cleanup.md` — Javadoc sweep in libs/ (auth-service / admin-service citations + TASK-BE-028c / TASK-BE-047 references removed; platform/* docs were already clean via commit 09e7e95)
 - `TASK-BE-004-sku-aggregate.md` — SKU CRUD vertical slice (independent aggregate; UPPERCASE normalization + partial barcode unique + `by-code`/`by-barcode` lookup endpoints; Lot active-children guard stubbed for TASK-BE-006). `SkuControllerTest` + `SkuPersistenceAdapterTest` (Testcontainers) flagged as follow-up punch-list items.
+- `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` suite (Postgres + Kafka + Redis in one Testcontainers `Network`) + contract-test harness (networknt JSON-schema) + 3 named Micrometer counters. CI-gated verification per Windows blocker
+- `TASK-INT-002-gateway-master-e2e.md` — live-pair e2e (gateway + master + infra containers + JWKS MockWebServer) covering 5 scenarios; new `e2e-tests` CI job wired. Trace propagation assertion reduced scope (deferred to BE-007 contract harness)
 
 ## done
 
