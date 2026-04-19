@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
@@ -16,7 +17,11 @@ import java.util.UUID;
  * adapter touches this class. Domain code uses {@link com.wms.master.domain.model.Warehouse}.
  */
 @Entity
-@Table(name = "warehouses")
+@Table(
+        name = "warehouses",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_warehouses_warehouse_code",
+                columnNames = "warehouse_code"))
 class WarehouseJpaEntity {
 
     @Id

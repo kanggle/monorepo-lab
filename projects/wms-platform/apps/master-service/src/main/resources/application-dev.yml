@@ -1,0 +1,8 @@
+# Dev profile: connects to the docker-compose Postgres/Kafka/Redis stack.
+# Activated with SPRING_PROFILES_ACTIVE=dev.
+#
+# Adds the seed migration location so Flyway inserts the WH01 baseline row.
+
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed

@@ -14,9 +14,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
-@Component
+@Repository
 class WarehousePersistenceAdapter implements WarehousePersistencePort {
 
     private static final String DEFAULT_SORT_FIELD = "updatedAt";
@@ -33,7 +33,10 @@ class WarehousePersistenceAdapter implements WarehousePersistencePort {
 
     @Override
     public Warehouse insert(Warehouse newWarehouse) {
-        WarehouseJpaEntity entity = mapper.toNewEntity(newWarehouse);
+        // The insert-path mapper emits version=null so Spring Data JPA treats the
+        // entity as new and runs INSERT. A non-null @Version + pre-assigned id
+        // otherwise triggers UPDATE semantics and StaleObjectStateException.
+        WarehouseJpaEntity entity = mapper.toInsertEntity(newWarehouse);
         try {
             WarehouseJpaEntity saved = jpaRepository.saveAndFlush(entity);
             return mapper.toDomain(saved);

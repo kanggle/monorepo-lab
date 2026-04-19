@@ -30,6 +30,26 @@ class WarehousePersistenceMapper {
     }
 
     /**
+     * Insert path: emits an entity with {@code version=null} so Hibernate treats
+     * it as unpersisted and runs INSERT (otherwise a non-null {@code @Version}
+     * + pre-assigned id triggers {@code detached entity passed to persist}).
+     */
+    WarehouseJpaEntity toInsertEntity(Warehouse warehouse) {
+        return new WarehouseJpaEntity(
+                warehouse.getId(),
+                warehouse.getWarehouseCode(),
+                warehouse.getName(),
+                warehouse.getAddress(),
+                warehouse.getTimezone(),
+                warehouse.getStatus(),
+                null,
+                warehouse.getCreatedAt(),
+                warehouse.getCreatedBy(),
+                warehouse.getUpdatedAt(),
+                warehouse.getUpdatedBy());
+    }
+
+    /**
      * Copy mutable fields from the domain aggregate onto a managed JPA entity
      * so Hibernate dirty-checking detects the change and bumps {@code @Version}.
      * Used on update / deactivate / reactivate paths.

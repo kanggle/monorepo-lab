@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.wms.master.application.port.out.WarehousePersistencePort;
 import com.wms.master.application.query.WarehouseListCriteria;
 import com.wms.master.config.MasterServicePersistenceConfig;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
@@ -15,44 +16,36 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.TestPropertySource;
 
+/**
+ * H2-backed persistence adapter test — identical coverage to
+ * {@link WarehousePersistenceAdapterTest} but without Testcontainers, so the
+ * JPA/ORM path is exercised on every CI run regardless of Docker availability.
+ * The Testcontainers version remains authoritative for the Flyway migration
+ * against real Postgres.
+ */
 @DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({MasterServicePersistenceConfig.class,
         WarehousePersistenceMapper.class,
         WarehousePersistenceAdapter.class})
-@Testcontainers(disabledWithoutDocker = true)
-class WarehousePersistenceAdapterTest {
-
-    @Container
-    @SuppressWarnings("resource")
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("master_test")
-            .withUsername("master_test")
-            .withPassword("master_test");
-
-    @DynamicPropertySource
-    static void dataSourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("spring.flyway.enabled", () -> "true");
-    }
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:master_adapter_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.flyway.enabled=false"
+})
+class WarehousePersistenceAdapterH2Test {
 
     private static final String ACTOR = "actor-uuid";
 
     @Autowired
-    com.wms.master.application.port.out.WarehousePersistencePort adapter;
+    WarehousePersistencePort adapter;
 
     @Autowired
     JpaWarehouseRepository jpaRepository;
@@ -72,8 +65,7 @@ class WarehousePersistenceAdapterTest {
     @Test
     @DisplayName("insert translates duplicate warehouseCode to WarehouseCodeDuplicateException")
     void insertDuplicateCode() {
-        Warehouse first = Warehouse.create("WH02", "First", null, "UTC", ACTOR);
-        adapter.insert(first);
+        adapter.insert(Warehouse.create("WH02", "First", null, "UTC", ACTOR));
 
         Warehouse duplicate = Warehouse.create("WH02", "Second", null, "UTC", ACTOR);
 
@@ -120,15 +112,15 @@ class WarehousePersistenceAdapterTest {
     @Test
     @DisplayName("update mutable fields; version bumps; immutable fields preserved")
     void updateMutableFields() {
-        Warehouse w = Warehouse.create("WH05", "Original", "Original Addr", "UTC", ACTOR);
-        Warehouse inserted = adapter.insert(w);
+        Warehouse inserted = adapter.insert(
+                Warehouse.create("WH05", "Original", "Original Addr", "UTC", ACTOR));
         assertThat(inserted.getVersion()).isZero();
 
-        Warehouse loaded = adapter.findById(w.getId()).orElseThrow();
+        Warehouse loaded = adapter.findById(inserted.getId()).orElseThrow();
         loaded.applyUpdate("Renamed", "New Addr", "Asia/Seoul", "actor-2");
         adapter.update(loaded);
 
-        Warehouse reloaded = adapter.findById(w.getId()).orElseThrow();
+        Warehouse reloaded = adapter.findById(inserted.getId()).orElseThrow();
         assertThat(reloaded.getName()).isEqualTo("Renamed");
         assertThat(reloaded.getAddress()).isEqualTo("New Addr");
         assertThat(reloaded.getTimezone()).isEqualTo("Asia/Seoul");
@@ -141,8 +133,8 @@ class WarehousePersistenceAdapterTest {
     @Test
     @DisplayName("deactivate state persists")
     void deactivatePersists() {
-        Warehouse w = Warehouse.create("WH06", "For deactivation", null, "UTC", ACTOR);
-        adapter.insert(w);
+        Warehouse w = adapter.insert(
+                Warehouse.create("WH06", "For deactivation", null, "UTC", ACTOR));
 
         Warehouse loaded = adapter.findById(w.getId()).orElseThrow();
         loaded.deactivate("actor-2");
@@ -156,10 +148,8 @@ class WarehousePersistenceAdapterTest {
     @Test
     @DisplayName("optimistic locking collision surfaces as ObjectOptimisticLockingFailureException")
     void optimisticLockCollision() {
-        Warehouse w = Warehouse.create("WH07", "Concurrent", null, "UTC", ACTOR);
-        adapter.insert(w);
+        Warehouse w = adapter.insert(Warehouse.create("WH07", "Concurrent", null, "UTC", ACTOR));
 
-        // Two separate loads represent two actors reading the same version
         Warehouse firstLoad = adapter.findById(w.getId()).orElseThrow();
         Warehouse secondLoad = adapter.findById(w.getId()).orElseThrow();
 
