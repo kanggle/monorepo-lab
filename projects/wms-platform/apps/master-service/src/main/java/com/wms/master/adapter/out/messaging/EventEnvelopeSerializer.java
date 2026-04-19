@@ -4,11 +4,16 @@ import com.example.common.id.UuidV7;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.application.result.WarehouseResult;
+import com.wms.master.application.result.ZoneResult;
 import com.wms.master.domain.event.DomainEvent;
 import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
+import com.wms.master.domain.event.ZoneCreatedEvent;
+import com.wms.master.domain.event.ZoneDeactivatedEvent;
+import com.wms.master.domain.event.ZoneReactivatedEvent;
+import com.wms.master.domain.event.ZoneUpdatedEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.MDC;
@@ -72,6 +77,20 @@ public class EventEnvelopeSerializer {
                 yield payload;
             }
             case WarehouseReactivatedEvent e -> Map.of("warehouse", WarehouseResult.from(e.snapshot()));
+            case ZoneCreatedEvent e -> Map.of("zone", ZoneResult.from(e.snapshot()));
+            case ZoneUpdatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("zone", ZoneResult.from(e.snapshot()));
+                payload.put("changedFields", e.changedFields());
+                yield payload;
+            }
+            case ZoneDeactivatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("zone", ZoneResult.from(e.snapshot()));
+                payload.put("reason", e.reason());
+                yield payload;
+            }
+            case ZoneReactivatedEvent e -> Map.of("zone", ZoneResult.from(e.snapshot()));
         };
     }
 }
