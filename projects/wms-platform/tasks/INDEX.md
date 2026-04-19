@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-002-zone-aggregate.md` — add Zone aggregate to master-service (domain, persistence, application, HTTP, outbox) mirroring TASK-BE-001's Warehouse pattern
 
 ## in-progress
 
