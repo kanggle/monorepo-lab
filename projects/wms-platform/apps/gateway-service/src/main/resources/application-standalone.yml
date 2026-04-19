@@ -1,0 +1,16 @@
+# Standalone profile: disable Redis-dependent rate limiting so the gateway
+# runs without external infra. Activated with SPRING_PROFILES_ACTIVE=standalone.
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  cloud:
+    gateway:
+      routes:
+        - id: master-service
+          uri: ${MASTER_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/master/**
+          # No RequestRateLimiter filter under standalone (Redis is not available).
