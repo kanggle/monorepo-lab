@@ -24,7 +24,10 @@ class MasterOutboxPollingSchedulerTest {
         assertThat(scheduler.resolveTopic("master.zone.updated")).isEqualTo("wms.master.zone.v1");
         assertThat(scheduler.resolveTopic("master.zone.deactivated")).isEqualTo("wms.master.zone.v1");
         assertThat(scheduler.resolveTopic("master.zone.reactivated")).isEqualTo("wms.master.zone.v1");
+        assertThat(scheduler.resolveTopic("master.location.created")).isEqualTo("wms.master.location.v1");
+        assertThat(scheduler.resolveTopic("master.location.updated")).isEqualTo("wms.master.location.v1");
         assertThat(scheduler.resolveTopic("master.location.deactivated")).isEqualTo("wms.master.location.v1");
+        assertThat(scheduler.resolveTopic("master.location.reactivated")).isEqualTo("wms.master.location.v1");
         assertThat(scheduler.resolveTopic("master.sku.reactivated")).isEqualTo("wms.master.sku.v1");
         assertThat(scheduler.resolveTopic("master.partner.created")).isEqualTo("wms.master.partner.v1");
         assertThat(scheduler.resolveTopic("master.lot.expired")).isEqualTo("wms.master.lot.v1");

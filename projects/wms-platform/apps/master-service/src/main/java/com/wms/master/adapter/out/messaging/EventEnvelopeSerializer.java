@@ -3,9 +3,14 @@ package com.wms.master.adapter.out.messaging;
 import com.example.common.id.UuidV7;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wms.master.application.result.LocationResult;
 import com.wms.master.application.result.WarehouseResult;
 import com.wms.master.application.result.ZoneResult;
 import com.wms.master.domain.event.DomainEvent;
+import com.wms.master.domain.event.LocationCreatedEvent;
+import com.wms.master.domain.event.LocationDeactivatedEvent;
+import com.wms.master.domain.event.LocationReactivatedEvent;
+import com.wms.master.domain.event.LocationUpdatedEvent;
 import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
@@ -91,6 +96,20 @@ public class EventEnvelopeSerializer {
                 yield payload;
             }
             case ZoneReactivatedEvent e -> Map.of("zone", ZoneResult.from(e.snapshot()));
+            case LocationCreatedEvent e -> Map.of("location", LocationResult.from(e.snapshot()));
+            case LocationUpdatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("location", LocationResult.from(e.snapshot()));
+                payload.put("changedFields", e.changedFields());
+                yield payload;
+            }
+            case LocationDeactivatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("location", LocationResult.from(e.snapshot()));
+                payload.put("reason", e.reason());
+                yield payload;
+            }
+            case LocationReactivatedEvent e -> Map.of("location", LocationResult.from(e.snapshot()));
         };
     }
 }
