@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-003-location-aggregate.md` — add Location aggregate to master-service (dual-parent, globally-unique code, split HTTP routing) and turn on Zone's active-children guard
 
 ## in-progress
 
