@@ -67,7 +67,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-008-error-envelope-compliance.md` — add `timestamp` to error envelope; correct `STATE_TRANSITION_INVALID` to 422 per `platform/error-handling.md` (addresses BE-001 blockers + cross-aggregate impact on BE-002/003/004/INT-001)
+- `TASK-BE-009-persistence-adapter-cleanup.md` — remove redundant `existsById` pre-checks in update() across Warehouse/Zone/Location adapters; narrow ZonePersistenceAdapter.insert() exception translation; fix hasActiveLocationsFor Javadoc drift; switch SkuPersistenceAdapter to `getConstraintName()` (addresses BE-002/BE-003 warnings + BE-004 constraint-detection robustness)
+- `TASK-BE-010-reference-integrity-violation-exception.md` — introduce `ReferenceIntegrityViolationException` with code `REFERENCE_INTEGRITY_VIOLATION`; replace Zone deactivate's `InvalidStateTransitionException("zone has active locations")` (addresses BE-003 contract divergence)
+- `TASK-BE-011-sku-test-coverage-followup.md` — author `SkuControllerTest` + `SkuPersistenceAdapterTest` (Testcontainers); fix the broken `@link` in `SkuPersistenceAdapterH2Test` (addresses BE-004 coverage gaps)
+- `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — rate-limit key `(clientIp, routeId)`; fail-open RedisRateLimiter decorator; empty `X-User-Role` on missing-claim JWT (addresses INT-001 criticals)
+- `TASK-INT-004-e2e-scenario2-guard-and-kafka-port.md` — expose master-service `metrics` actuator (integration profile); fix Kafka bootstrap port 9092 in E2EBase; Awaitility counter stability check (addresses INT-002 scenario-2 silent false-negative + Kafka port bug)
 
 ## in-progress
 
@@ -75,15 +80,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-BE-001-master-service-bootstrap.md` — Warehouse CRUD vertical slice (impl + unit/slice tests + CI green; full `@SpringBootTest` integration suite flagged as follow-up)
-- `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment (impl + filter unit tests + CI green; live-pair e2e flagged as follow-up)
-- `TASK-BE-002-zone-aggregate.md` — Zone CRUD vertical slice (domain + persistence + application + HTTP + outbox + seed; mirrors Warehouse pattern; integration-test gaps carried into TASK-BE-007)
-- `TASK-BE-003-location-aggregate.md` — Location CRUD vertical slice + Zone guard turned on (dual-parent + globally-unique code + split HTTP routing; `hasActiveLocationsFor` stub replaced with real JPA query)
-- `TASK-DOC-001-library-boundary-cleanup.md` — Javadoc sweep in libs/ (auth-service / admin-service citations + TASK-BE-028c / TASK-BE-047 references removed; platform/* docs were already clean via commit 09e7e95)
-- `TASK-BE-004-sku-aggregate.md` — SKU CRUD vertical slice (independent aggregate; UPPERCASE normalization + partial barcode unique + `by-code`/`by-barcode` lookup endpoints; Lot active-children guard stubbed for TASK-BE-006). `SkuControllerTest` + `SkuPersistenceAdapterTest` (Testcontainers) flagged as follow-up punch-list items.
-- `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` suite (Postgres + Kafka + Redis in one Testcontainers `Network`) + contract-test harness (networknt JSON-schema) + 3 named Micrometer counters. CI-gated verification per Windows blocker
-- `TASK-INT-002-gateway-master-e2e.md` — live-pair e2e (gateway + master + infra containers + JWKS MockWebServer) covering 5 scenarios; new `e2e-tests` CI job wired. Trace propagation assertion reduced scope (deferred to BE-007 contract harness)
+(empty)
 
 ## done
 
-(empty)
+- `TASK-BE-001-master-service-bootstrap.md` — Warehouse CRUD vertical slice. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-008
+- `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-003
+- `TASK-BE-002-zone-aggregate.md` — Zone CRUD vertical slice. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-009
+- `TASK-BE-003-location-aggregate.md` — Location CRUD + Zone guard. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-010
+- `TASK-DOC-001-library-boundary-cleanup.md` — Javadoc sweep in libs/. Review verdict 2026-04-20: **APPROVED**
+- `TASK-BE-004-sku-aggregate.md` — SKU CRUD. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-011
+- `TASK-BE-007-master-service-integration-tests.md` — integration suite + contract harness. Review verdict 2026-04-20: **APPROVED** (2 non-blocking warnings noted)
+- `TASK-INT-002-gateway-master-e2e.md` — live-pair e2e. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-004
