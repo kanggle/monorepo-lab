@@ -12,7 +12,11 @@ public sealed interface DomainEvent
         ZoneCreatedEvent,
         ZoneUpdatedEvent,
         ZoneDeactivatedEvent,
-        ZoneReactivatedEvent {
+        ZoneReactivatedEvent,
+        LocationCreatedEvent,
+        LocationUpdatedEvent,
+        LocationDeactivatedEvent,
+        LocationReactivatedEvent {
 
     UUID aggregateId();
 
