@@ -1,12 +1,15 @@
 package com.wms.master.adapter.in.web.advice;
 
 import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.wms.master.domain.exception.BarcodeDuplicateException;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
 import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.MasterDomainException;
+import com.wms.master.domain.exception.SkuCodeDuplicateException;
+import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -58,6 +61,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(LocationCodeDuplicateException.class)
     public ResponseEntity<ApiErrorEnvelope> handleLocationCodeDuplicate(LocationCodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(SkuNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleSkuNotFound(SkuNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(SkuCodeDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleSkuCodeDuplicate(SkuCodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(BarcodeDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleBarcodeDuplicate(BarcodeDuplicateException ex) {
         return build(HttpStatus.CONFLICT, ex);
     }
 

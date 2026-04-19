@@ -16,7 +16,11 @@ public sealed interface DomainEvent
         LocationCreatedEvent,
         LocationUpdatedEvent,
         LocationDeactivatedEvent,
-        LocationReactivatedEvent {
+        LocationReactivatedEvent,
+        SkuCreatedEvent,
+        SkuUpdatedEvent,
+        SkuDeactivatedEvent,
+        SkuReactivatedEvent {
 
     UUID aggregateId();
 
