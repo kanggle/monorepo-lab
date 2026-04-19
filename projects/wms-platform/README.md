@@ -15,9 +15,10 @@ Spring Boot 3 microservices implementing the full inbound → inventory → outb
 | Project classification | ✅ Declared ([PROJECT.md](PROJECT.md)) |
 | master-service v1 specs | ✅ Architecture / domain model / HTTP contract / event contract / idempotency strategy |
 | master-service — Warehouse slice | ✅ Hexagonal skeleton · JPA persistence · application layer · HTTP adapter · JWT + method security · Idempotency-Key filter · outbox publisher · Flyway + seed · Dockerfile |
+| master-service — Zone slice | ✅ Domain · persistence (compound unique · Flyway V3) · application (parent-warehouse-active guard) · nested HTTP route · outbox wired to `wms.master.zone.v1` · seed V100 |
 | gateway-service bootstrap | ✅ Spring Cloud Gateway route · JWT validation · rate limit (Redis) · identity header strip · X-Request-Id propagation |
 | CI pipeline | ✅ GitHub Actions: `./gradlew check` + boot-jar artifacts on Linux/JDK 21 |
-| Next | 🚧 TASK-BE-002 Zone aggregate (second entity, depends on Warehouse) |
+| Next | 🚧 TASK-BE-003 Location aggregate (nested under Zone; turns on Zone's `hasActiveLocationsFor` guard) |
 
 ---
 
@@ -190,6 +191,7 @@ Master-service checks only its own child records on deactivation (e.g., Zone dea
 
 - [tasks/review/TASK-BE-001-master-service-bootstrap.md](tasks/review/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice (implementation + tests landed, in review)
 - [tasks/review/TASK-INT-001-gateway-master-service-route.md](tasks/review/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring (implementation + filter tests landed, in review)
+- [tasks/review/TASK-BE-002-zone-aggregate.md](tasks/review/TASK-BE-002-zone-aggregate.md) — Zone CRUD vertical slice (implementation + tests landed, in review)
 
 ---
 

@@ -20,7 +20,10 @@ class MasterOutboxPollingSchedulerTest {
     @Test
     void resolvesTopic_forEachAggregate() {
         assertThat(scheduler.resolveTopic("master.warehouse.created")).isEqualTo("wms.master.warehouse.v1");
+        assertThat(scheduler.resolveTopic("master.zone.created")).isEqualTo("wms.master.zone.v1");
         assertThat(scheduler.resolveTopic("master.zone.updated")).isEqualTo("wms.master.zone.v1");
+        assertThat(scheduler.resolveTopic("master.zone.deactivated")).isEqualTo("wms.master.zone.v1");
+        assertThat(scheduler.resolveTopic("master.zone.reactivated")).isEqualTo("wms.master.zone.v1");
         assertThat(scheduler.resolveTopic("master.location.deactivated")).isEqualTo("wms.master.location.v1");
         assertThat(scheduler.resolveTopic("master.sku.reactivated")).isEqualTo("wms.master.sku.v1");
         assertThat(scheduler.resolveTopic("master.partner.created")).isEqualTo("wms.master.partner.v1");

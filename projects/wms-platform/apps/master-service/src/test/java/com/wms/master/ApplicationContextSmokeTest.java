@@ -3,9 +3,12 @@ package com.wms.master;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.master.adapter.in.web.controller.WarehouseController;
+import com.wms.master.adapter.in.web.controller.ZoneController;
 import com.wms.master.adapter.in.web.filter.IdempotencyFilter;
 import com.wms.master.application.port.in.WarehouseCrudUseCase;
 import com.wms.master.application.port.in.WarehouseQueryUseCase;
+import com.wms.master.application.port.in.ZoneCrudUseCase;
+import com.wms.master.application.port.in.ZoneQueryUseCase;
 import com.wms.master.application.port.out.DomainEventPort;
 import com.wms.master.application.port.out.IdempotencyStore;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,7 @@ class ApplicationContextSmokeTest {
     @Test
     void webLayerBeansAreRegistered() {
         assertThat(context.getBean(WarehouseController.class)).isNotNull();
+        assertThat(context.getBean(ZoneController.class)).isNotNull();
         FilterRegistrationBean<?> registration =
                 context.getBean("idempotencyFilterRegistration", FilterRegistrationBean.class);
         assertThat(registration.getFilter()).isInstanceOf(IdempotencyFilter.class);
@@ -46,6 +50,8 @@ class ApplicationContextSmokeTest {
     void applicationPortsAreWired() {
         assertThat(context.getBean(WarehouseCrudUseCase.class)).isNotNull();
         assertThat(context.getBean(WarehouseQueryUseCase.class)).isNotNull();
+        assertThat(context.getBean(ZoneCrudUseCase.class)).isNotNull();
+        assertThat(context.getBean(ZoneQueryUseCase.class)).isNotNull();
         assertThat(context.getBean(DomainEventPort.class)).isNotNull();
         assertThat(context.getBean(IdempotencyStore.class)).isNotNull();
     }

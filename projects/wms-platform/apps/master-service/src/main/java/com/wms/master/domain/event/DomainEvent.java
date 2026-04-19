@@ -8,7 +8,11 @@ public sealed interface DomainEvent
         WarehouseCreatedEvent,
         WarehouseUpdatedEvent,
         WarehouseDeactivatedEvent,
-        WarehouseReactivatedEvent {
+        WarehouseReactivatedEvent,
+        ZoneCreatedEvent,
+        ZoneUpdatedEvent,
+        ZoneDeactivatedEvent,
+        ZoneReactivatedEvent {
 
     UUID aggregateId();
 

@@ -9,8 +9,15 @@ import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
+import com.wms.master.domain.event.ZoneCreatedEvent;
+import com.wms.master.domain.event.ZoneDeactivatedEvent;
+import com.wms.master.domain.event.ZoneReactivatedEvent;
+import com.wms.master.domain.event.ZoneUpdatedEvent;
 import com.wms.master.domain.model.Warehouse;
+import com.wms.master.domain.model.Zone;
+import com.wms.master.domain.model.ZoneType;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
@@ -100,5 +107,70 @@ class EventEnvelopeSerializerTest {
         JsonNode envelope = mapper.readTree(
                 serializer.serialize(WarehouseCreatedEvent.from(wh)));
         assertThat(envelope.get("traceId").isNull()).isTrue();
+    }
+
+    // ---------- Zone events ----------
+
+    @Test
+    void zoneCreatedEvent_producesContractEnvelope() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+        Zone zone = Zone.create(warehouseId, "Z-A", "Ambient A", ZoneType.AMBIENT, "actor-42");
+        ZoneCreatedEvent event = ZoneCreatedEvent.from(zone);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.created");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("zone");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(zone.getId().toString());
+        assertThat(envelope.get("actorId").asText()).isEqualTo("actor-42");
+
+        JsonNode zonePayload = envelope.get("payload").get("zone");
+        assertThat(zonePayload.get("zoneCode").asText()).isEqualTo("Z-A");
+        assertThat(zonePayload.get("warehouseId").asText()).isEqualTo(warehouseId.toString());
+        assertThat(zonePayload.get("zoneType").asText()).isEqualTo("AMBIENT");
+        assertThat(zonePayload.get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(zonePayload.get("version").asLong()).isZero();
+    }
+
+    @Test
+    void zoneUpdatedEvent_carriesChangedFields() throws Exception {
+        Zone zone = Zone.create(UUID.randomUUID(), "Z-A", "Name", ZoneType.AMBIENT, "actor");
+        ZoneUpdatedEvent event = ZoneUpdatedEvent.from(zone, List.of("name", "zoneType"));
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.updated");
+        JsonNode changed = envelope.get("payload").get("changedFields");
+        assertThat(changed.isArray()).isTrue();
+        assertThat(changed.get(0).asText()).isEqualTo("name");
+        assertThat(changed.get(1).asText()).isEqualTo("zoneType");
+    }
+
+    @Test
+    void zoneDeactivatedEvent_carriesReason() throws Exception {
+        Zone zone = Zone.create(UUID.randomUUID(), "Z-A", "Name", ZoneType.AMBIENT, "actor");
+        zone.deactivate("actor");
+        ZoneDeactivatedEvent event = ZoneDeactivatedEvent.from(zone, "closing");
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.deactivated");
+        assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("closing");
+        assertThat(envelope.get("payload").get("zone").get("status").asText()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void zoneReactivatedEvent_hasSnapshotOnly() throws Exception {
+        Zone zone = Zone.create(UUID.randomUUID(), "Z-A", "Name", ZoneType.AMBIENT, "actor");
+        zone.deactivate("actor");
+        zone.reactivate("actor");
+        ZoneReactivatedEvent event = ZoneReactivatedEvent.from(zone);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.reactivated");
+        assertThat(envelope.get("payload").get("zone").get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(envelope.get("payload").has("reason")).isFalse();
+        assertThat(envelope.get("payload").has("changedFields")).isFalse();
     }
 }
