@@ -68,6 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` integration suite (Postgres + Kafka + Redis) + contract-test harness; addresses gaps carried from BE-001/BE-002/BE-003
+- `TASK-INT-002-gateway-master-e2e.md` — live-pair Testcontainers test (gateway + master + Postgres + Redis + Kafka + JWKS MockWebServer) covering happy path / 401 / 429 / 503 / trace propagation; addresses the live-pair gap flagged in TASK-INT-001 review
 
 ## in-progress
 
