@@ -15,6 +15,10 @@ Triggered on push to `main` and every PR targeting `main`.
 
 Older runs for the same branch/PR are cancelled on new commits to avoid queue pile-up.
 
+### Runner Node runtime
+
+Workflow sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` to opt into the Node 24 runtime ahead of GitHub's June 2, 2026 default switch (Node 20 is deprecated and scheduled for removal on September 16, 2026 — see [GitHub changelog](https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/)). Once every action pinned below publishes a `@v5` that defaults to Node 24, this env var can be removed.
+
 ### Artifacts
 
 - **test-reports** (on failure only, 7d) — HTML + XML test output for post-mortem.
