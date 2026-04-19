@@ -1,5 +1,10 @@
 # monorepo-lab
 
+[![CI](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
+[![Java 21](https://img.shields.io/badge/java-21-007396)](https://adoptium.net/)
+[![Spring Boot 3.4](https://img.shields.io/badge/spring--boot-3.4-6DB33F)](https://spring.io/projects/spring-boot)
+[![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-D97757)](https://claude.com/claude-code)
+
 > **AI-assisted multi-domain backend/fullstack portfolio**
 > Built with Claude Code · rule-driven · spec-driven · task-driven
 
@@ -11,7 +16,7 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 | Project | Domain | Tech | Status | Links |
 |---|---|---|---|---|
-| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3 · Kafka · Redis · Hexagonal | 🚧 Active — master-service v1 specs done | [README](projects/wms-platform/README.md) · [PROJECT.md](projects/wms-platform/PROJECT.md) |
+| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3 · Kafka · Redis · Hexagonal | 🚧 Active — master-service Warehouse slice + gateway-service bootstrapped, CI green | [README](projects/wms-platform/README.md) · [PROJECT.md](projects/wms-platform/PROJECT.md) |
 
 _Future projects (planned): additional domains to stress-test the shared library and validate the Template extraction._
 
@@ -156,6 +161,7 @@ Full strategy and rationale: [TEMPLATE.md](TEMPLATE.md).
 | [platform/architecture.md](platform/architecture.md) | System architecture baseline |
 | [rules/README.md](rules/README.md) | Rule library architecture |
 | [platform/service-types/INDEX.md](platform/service-types/INDEX.md) | Service type catalog |
+| [.github/workflows/README.md](.github/workflows/README.md) | CI pipeline (build-and-test + boot-jars jobs) |
 | [docs/guides/](docs/guides/) | Human workflow guides (conventional commits, monorepo workflow — authored progressively) |
 
 ---

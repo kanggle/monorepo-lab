@@ -1,5 +1,7 @@
 # wms-platform
 
+[![CI](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
+
 > **Warehouse Management System backend** — production-oriented, spec-driven, AI-assisted
 
 Spring Boot 3 microservices implementing the full inbound → inventory → outbound workflow for a warehouse. Built as a portfolio project, but engineered to production standards: event-driven separation, transactional outbox, idempotency keys, circuit breakers, observability, and strict contract-first development.
@@ -12,8 +14,10 @@ Spring Boot 3 microservices implementing the full inbound → inventory → outb
 |---|---|
 | Project classification | ✅ Declared ([PROJECT.md](PROJECT.md)) |
 | master-service v1 specs | ✅ Architecture / domain model / HTTP contract / event contract / idempotency strategy |
-| First implementation tasks | ✅ Ready: [TASK-BE-001](tasks/ready/TASK-BE-001-master-service-bootstrap.md), [TASK-INT-001](tasks/ready/TASK-INT-001-gateway-master-service-route.md) |
-| Service code | 🚧 Not started — Warehouse CRUD slice is next |
+| master-service — Warehouse slice | ✅ Hexagonal skeleton · JPA persistence · application layer · HTTP adapter · JWT + method security · Idempotency-Key filter · outbox publisher · Flyway + seed · Dockerfile |
+| gateway-service bootstrap | ✅ Spring Cloud Gateway route · JWT validation · rate limit (Redis) · identity header strip · X-Request-Id propagation |
+| CI pipeline | ✅ GitHub Actions: `./gradlew check` + boot-jar artifacts on Linux/JDK 21 |
+| Next | 🚧 TASK-BE-002 Zone aggregate (second entity, depends on Warehouse) |
 
 ---
 
@@ -80,11 +84,16 @@ cp .env.example .env    # fill in values
 docker-compose up -d    # Postgres, Kafka, Redis, Prometheus, Grafana, Loki
 ```
 
-### Run a service (once it's implemented)
+### Run a service
 
 ```bash
-# from repo root
+# from repo root — master-service on :8081, gateway-service on :8080
 ./gradlew :projects:wms-platform:apps:master-service:bootRun
+./gradlew :projects:wms-platform:apps:gateway-service:bootRun
+
+# or boot the jars produced by CI
+./gradlew :projects:wms-platform:apps:master-service:bootJar
+java -jar projects/wms-platform/apps/master-service/build/libs/master-service.jar
 ```
 
 ### Run tests
@@ -177,10 +186,10 @@ Master-service checks only its own child records on deactivation (e.g., Zone dea
 - [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md)
 - [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md)
 
-### Ready tasks
+### Tasks
 
-- [tasks/ready/TASK-BE-001-master-service-bootstrap.md](tasks/ready/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice
-- [tasks/ready/TASK-INT-001-gateway-master-service-route.md](tasks/ready/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring
+- [tasks/in-progress/TASK-BE-001-master-service-bootstrap.md](tasks/in-progress/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice (implementation landed; awaiting closure review)
+- [tasks/in-progress/TASK-INT-001-gateway-master-service-route.md](tasks/in-progress/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring (implementation landed; awaiting closure review)
 
 ---
 
