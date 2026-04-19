@@ -23,9 +23,10 @@ import org.springframework.stereotype.Repository;
  * {@code DataIntegrityViolationException}, and the compound-unique-constraint
  * duplicate test will fail on H2.
  *
- * <p>In v1 this adapter does NOT implement {@link #hasActiveLocationsFor} for
- * real — Locations ship in TASK-BE-003. Returning {@code false} is an
- * intentional, documented stub.
+ * <p>{@link #hasActiveLocationsFor} is now backed by a real query against the
+ * {@code locations} table (via {@link JpaLocationRepository}) as of
+ * TASK-BE-003. Both adapters share the same datasource so the cross-adapter
+ * repository dependency is acceptable — see the task's Implementation Notes.
  */
 @Repository
 class ZonePersistenceAdapter implements ZonePersistencePort {
@@ -34,11 +35,14 @@ class ZonePersistenceAdapter implements ZonePersistencePort {
     private static final Sort.Direction DEFAULT_SORT_DIRECTION = Sort.Direction.DESC;
 
     private final JpaZoneRepository jpaRepository;
+    private final JpaLocationRepository jpaLocationRepository;
     private final ZonePersistenceMapper mapper;
 
     ZonePersistenceAdapter(JpaZoneRepository jpaRepository,
+                           JpaLocationRepository jpaLocationRepository,
                            ZonePersistenceMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.jpaLocationRepository = jpaLocationRepository;
         this.mapper = mapper;
     }
 
@@ -102,9 +106,8 @@ class ZonePersistenceAdapter implements ZonePersistencePort {
 
     @Override
     public boolean hasActiveLocationsFor(UUID zoneId) {
-        // Locations arrive in TASK-BE-003. Until then no child can exist, so
-        // the invariant trivially holds.
-        return false;
+        return jpaLocationRepository.existsByZoneIdAndStatus(
+                zoneId, com.wms.master.domain.model.WarehouseStatus.ACTIVE);
     }
 
     private Pageable toPageable(PageQuery pageQuery) {

@@ -9,10 +9,16 @@ import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
+import com.wms.master.domain.event.LocationCreatedEvent;
+import com.wms.master.domain.event.LocationDeactivatedEvent;
+import com.wms.master.domain.event.LocationReactivatedEvent;
+import com.wms.master.domain.event.LocationUpdatedEvent;
 import com.wms.master.domain.event.ZoneCreatedEvent;
 import com.wms.master.domain.event.ZoneDeactivatedEvent;
 import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
+import com.wms.master.domain.model.Location;
+import com.wms.master.domain.model.LocationType;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.Zone;
 import com.wms.master.domain.model.ZoneType;
@@ -170,6 +176,87 @@ class EventEnvelopeSerializerTest {
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.reactivated");
         assertThat(envelope.get("payload").get("zone").get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(envelope.get("payload").has("reason")).isFalse();
+        assertThat(envelope.get("payload").has("changedFields")).isFalse();
+    }
+
+    // ---------- Location events ----------
+
+    @Test
+    void locationCreatedEvent_producesContractEnvelope() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+        UUID zoneId = UUID.randomUUID();
+        Location loc = Location.create(
+                "WH01", warehouseId, zoneId,
+                "WH01-A-01-02-03", "01", "02", "03", null,
+                LocationType.STORAGE, 500, "actor-42");
+        LocationCreatedEvent event = LocationCreatedEvent.from(loc);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.created");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("location");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(loc.getId().toString());
+        assertThat(envelope.get("actorId").asText()).isEqualTo("actor-42");
+
+        JsonNode locationPayload = envelope.get("payload").get("location");
+        assertThat(locationPayload.get("locationCode").asText()).isEqualTo("WH01-A-01-02-03");
+        assertThat(locationPayload.get("warehouseId").asText()).isEqualTo(warehouseId.toString());
+        assertThat(locationPayload.get("zoneId").asText()).isEqualTo(zoneId.toString());
+        assertThat(locationPayload.get("locationType").asText()).isEqualTo("STORAGE");
+        assertThat(locationPayload.get("capacityUnits").asInt()).isEqualTo(500);
+        assertThat(locationPayload.get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(locationPayload.get("version").asLong()).isZero();
+    }
+
+    @Test
+    void locationUpdatedEvent_carriesChangedFields() throws Exception {
+        Location loc = Location.create(
+                "WH01", UUID.randomUUID(), UUID.randomUUID(),
+                "WH01-A-01-01-01", null, null, null, null,
+                LocationType.STORAGE, 10, "actor");
+        LocationUpdatedEvent event = LocationUpdatedEvent.from(
+                loc, List.of("locationType", "capacityUnits"));
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.updated");
+        JsonNode changed = envelope.get("payload").get("changedFields");
+        assertThat(changed.isArray()).isTrue();
+        assertThat(changed.get(0).asText()).isEqualTo("locationType");
+        assertThat(changed.get(1).asText()).isEqualTo("capacityUnits");
+    }
+
+    @Test
+    void locationDeactivatedEvent_carriesReason() throws Exception {
+        Location loc = Location.create(
+                "WH01", UUID.randomUUID(), UUID.randomUUID(),
+                "WH01-A-01-01-01", null, null, null, null,
+                LocationType.STORAGE, null, "actor");
+        loc.deactivate("actor");
+        LocationDeactivatedEvent event = LocationDeactivatedEvent.from(loc, "closing");
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.deactivated");
+        assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("closing");
+        assertThat(envelope.get("payload").get("location").get("status").asText()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void locationReactivatedEvent_hasSnapshotOnly() throws Exception {
+        Location loc = Location.create(
+                "WH01", UUID.randomUUID(), UUID.randomUUID(),
+                "WH01-A-01-01-01", null, null, null, null,
+                LocationType.STORAGE, null, "actor");
+        loc.deactivate("actor");
+        loc.reactivate("actor");
+        LocationReactivatedEvent event = LocationReactivatedEvent.from(loc);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.reactivated");
+        assertThat(envelope.get("payload").get("location").get("status").asText()).isEqualTo("ACTIVE");
         assertThat(envelope.get("payload").has("reason")).isFalse();
         assertThat(envelope.get("payload").has("changedFields")).isFalse();
     }

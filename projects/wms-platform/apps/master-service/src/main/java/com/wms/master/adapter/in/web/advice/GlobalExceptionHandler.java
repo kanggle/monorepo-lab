@@ -4,6 +4,8 @@ import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.LocationCodeDuplicateException;
+import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.MasterDomainException;
 import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
@@ -46,6 +48,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ZoneCodeDuplicateException.class)
     public ResponseEntity<ApiErrorEnvelope> handleZoneCodeDuplicate(ZoneCodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(LocationNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleLocationNotFound(LocationNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(LocationCodeDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleLocationCodeDuplicate(LocationCodeDuplicateException ex) {
         return build(HttpStatus.CONFLICT, ex);
     }
 

@@ -39,7 +39,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         WarehousePersistenceMapper.class,
         WarehousePersistenceAdapter.class,
         ZonePersistenceMapper.class,
-        ZonePersistenceAdapter.class})
+        ZonePersistenceAdapter.class,
+        LocationPersistenceMapper.class,
+        LocationPersistenceAdapter.class})
 @Testcontainers(disabledWithoutDocker = true)
 class ZonePersistenceAdapterTest {
 
@@ -203,8 +205,8 @@ class ZonePersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("hasActiveLocationsFor stub returns false in v1")
-    void hasActiveLocationsStub() {
+    @DisplayName("hasActiveLocationsFor returns false for a zone with no locations")
+    void hasActiveLocationsEmpty() {
         UUID warehouseId = seedWarehouseAndGetId("WH11");
         Zone z = adapter.insert(Zone.create(warehouseId, "Z-A", "Name", ZoneType.AMBIENT, ACTOR));
 

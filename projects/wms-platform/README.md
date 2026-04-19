@@ -16,9 +16,10 @@ Spring Boot 3 microservices implementing the full inbound → inventory → outb
 | master-service v1 specs | ✅ Architecture / domain model / HTTP contract / event contract / idempotency strategy |
 | master-service — Warehouse slice | ✅ Hexagonal skeleton · JPA persistence · application layer · HTTP adapter · JWT + method security · Idempotency-Key filter · outbox publisher · Flyway + seed · Dockerfile |
 | master-service — Zone slice | ✅ Domain · persistence (compound unique · Flyway V3) · application (parent-warehouse-active guard) · nested HTTP route · outbox wired to `wms.master.zone.v1` · seed V100 |
+| master-service — Location slice | ✅ Domain (dual parent · prefix-match invariant) · persistence (global unique · Flyway V4) · split HTTP routing (POST nested / others flat) · outbox wired to `wms.master.location.v1` · seed V101 · **Zone guard turned on (real query)** |
 | gateway-service bootstrap | ✅ Spring Cloud Gateway route · JWT validation · rate limit (Redis) · identity header strip · X-Request-Id propagation |
 | CI pipeline | ✅ GitHub Actions: `./gradlew check` + boot-jar artifacts on Linux/JDK 21 |
-| Next | 🚧 TASK-BE-003 Location aggregate (nested under Zone; turns on Zone's `hasActiveLocationsFor` guard) |
+| Next | 🚧 TASK-BE-004 SKU aggregate (first independent aggregate — no parent refs) |
 
 ---
 
@@ -192,6 +193,7 @@ Master-service checks only its own child records on deactivation (e.g., Zone dea
 - [tasks/review/TASK-BE-001-master-service-bootstrap.md](tasks/review/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice (implementation + tests landed, in review)
 - [tasks/review/TASK-INT-001-gateway-master-service-route.md](tasks/review/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring (implementation + filter tests landed, in review)
 - [tasks/review/TASK-BE-002-zone-aggregate.md](tasks/review/TASK-BE-002-zone-aggregate.md) — Zone CRUD vertical slice (implementation + tests landed, in review)
+- [tasks/review/TASK-BE-003-location-aggregate.md](tasks/review/TASK-BE-003-location-aggregate.md) — Location CRUD + Zone active-children guard turned on (implementation + tests landed, in review)
 
 ---
 
