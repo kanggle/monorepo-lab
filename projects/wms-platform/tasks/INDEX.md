@@ -68,6 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` integration suite (Postgres + Kafka + Redis) + contract-test harness; addresses gaps carried from BE-001/BE-002/BE-003
+- `TASK-DOC-001-library-boundary-cleanup.md` — remove stale project-specific refs (auth-service / admin-service citations, old task numbers) from Javadoc in `libs/`
 
 ## in-progress
 
