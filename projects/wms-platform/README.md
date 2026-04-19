@@ -196,6 +196,8 @@ Master-service checks only its own child records on deactivation (e.g., Zone dea
 - [tasks/review/TASK-BE-002-zone-aggregate.md](tasks/review/TASK-BE-002-zone-aggregate.md) — Zone CRUD vertical slice (implementation + tests landed, in review)
 - [tasks/review/TASK-BE-003-location-aggregate.md](tasks/review/TASK-BE-003-location-aggregate.md) — Location CRUD + Zone active-children guard turned on (implementation + tests landed, in review)
 - [tasks/review/TASK-BE-004-sku-aggregate.md](tasks/review/TASK-BE-004-sku-aggregate.md) — SKU CRUD with case-insensitive code + partial barcode unique + lookup endpoints (implementation + tests landed, in review)
+- [tasks/review/TASK-BE-007-master-service-integration-tests.md](tasks/review/TASK-BE-007-master-service-integration-tests.md) — full `@SpringBootTest` suite + contract harness (CI-gated)
+- [tasks/review/TASK-INT-002-gateway-master-e2e.md](tasks/review/TASK-INT-002-gateway-master-e2e.md) — live-pair gateway↔master e2e with new CI job (CI-gated)
 
 ---
 
