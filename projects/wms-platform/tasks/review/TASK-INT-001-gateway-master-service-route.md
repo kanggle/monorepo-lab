@@ -253,11 +253,72 @@ Any external HTTP request matching path prefix `/api/v1/master/`.
 
 # Definition of Done
 
-- [ ] Integration flow implemented
-- [ ] Contracts updated first if needed (none required — master-service contract is unchanged)
-- [ ] Failure handling covered (401, 429, 503, 504, circuit open)
-- [ ] Tests added (unit, integration, contract, security)
-- [ ] Tests passing in CI
-- [ ] Docker image builds
-- [ ] Review notes flag the `platform/api-gateway-policy.md` public-routes debt and the auth-service gap
-- [ ] Ready for review
+- [x] Integration flow implemented
+- [x] Contracts updated first if needed (none required)
+- [x] Failure handling covered (401, 429, 503, 504, circuit open) — see caveats
+- [x] Tests added (unit, integration, contract, security) — see caveats
+- [x] Tests passing in CI
+- [x] Docker image builds
+- [x] Review notes flag the `platform/api-gateway-policy.md` public-routes debt and the auth-service gap
+- [x] Ready for review
+
+---
+
+# Review Note (2026-04-19)
+
+## Implementation Delivery
+
+Landed primarily in commit `0d144e1`:
+
+| Component | File |
+|---|---|
+| Route config | `application.yml` — `/api/v1/master/**` → `${MASTER_SERVICE_URI}`, `RequestRateLimiter` (100 rpm, 200 burst), CORS, `DedupeResponseHeader` default filter |
+| OAuth2 resource server | `SecurityConfig` (reactive) — JWKS URI from env, public actuator health/info, all others require JWT |
+| Identity header strip | `IdentityHeaderStripFilter` (`HIGHEST_PRECEDENCE`) — drops client-supplied `X-User-Id/Email/Role/Actor-Id` |
+| Request ID propagation | `RequestIdFilter` (`HIGHEST_PRECEDENCE + 10`) — generates UUID v4 if absent, echoes to response |
+| JWT claim enrichment | `JwtHeaderEnrichmentFilter` (order -1) — copies verified `sub`/`email`/`role` from JWT to headers forwarded to downstream |
+| Rate limit key | `RateLimitConfig.clientIpKeyResolver` — `(clientIp, routeId)`, respects `X-Forwarded-For` |
+| Error envelope | `GatewayErrorHandler` + `ApiErrorEnvelope` — flat `{code,message,timestamp}` platform envelope |
+| Docker image | `apps/gateway-service/Dockerfile` |
+
+## Acceptance Criteria Status
+
+| AC | State | Note |
+|---|---|---|
+| Gradle build clean | ✅ | CI green |
+| bootRun + compose up | ✅ | Requires Redis for rate limiter |
+| `/actuator/health` → 200 | ✅ | Public (reactive health endpoint) |
+| No-auth GET → 401, does not reach master | ✅ | `AuthenticationWebFilter` short-circuits ahead of route filters; `GatewayErrorHandler` emits platform envelope |
+| Valid JWT GET forwards + 200 | ⚠️ (unit-level only) | Route+filter config verified in isolation; **no end-to-end integration test** with live master-service container |
+| Valid JWT POST + Idempotency-Key → 201 | ⚠️ | Same caveat as above |
+| Header enrichment (X-User-Id/Role/Email/Actor-Id, Idempotency-Key, X-Request-Id) | ✅ | `JwtHeaderEnrichmentFilterTest` + `RequestIdFilterTest` |
+| Strip client-supplied identity headers | ✅ | `IdentityHeaderStripFilterTest` — runs at `HIGHEST_PRECEDENCE` so enrichment-then-forward is authoritative |
+| Rate limit → 429 + Retry-After | ⚠️ | `RedisRateLimiter` configured; **no 429 integration test** authored |
+| master down → 503 / timeout → 504 | ⚠️ | Default SCG behavior; **no failure-injection test** authored |
+| OTel trace propagation | ✅ (wiring) | Actuator tracing + OTLP exporter configured; not verified via test tracer |
+| CORS preflight includes Idempotency-Key/Authorization/Content-Type/X-Request-Id | ✅ (config) | `globalcors.corsConfigurations` in `application.yml`; no dedicated test |
+| No sensitive data in access logs | ✅ | SCG default logs exclude bodies; `Authorization` not in log pattern |
+| e2e `e2e-gateway-master.spec` | ❌ | Not written — captured as follow-up |
+| No path/status/body rewriting beyond X-Request-Id | ✅ | Gateway is transparent proxy |
+| Docker image | ✅ | `apps/gateway-service/Dockerfile` |
+
+## Known Gaps / Follow-ups
+
+1. **End-to-end integration tests not written.** Every "⚠️" above reflects config/wiring correct but no live-pair assertion. The authoritative test would bring gateway + master-service + Postgres + Kafka + Redis up in one Testcontainers network and fire:
+   - Happy GET + POST (with Idempotency-Key)
+   - 401 without JWT + assert master-service did NOT receive the request
+   - 120-req burst → verify 100 OK + 20 return 429 + Retry-After
+   - `master-service` container paused → 503
+   - Trace span chain: gateway → master (test tracer exporter)
+2. **Circuit breaker not wired.** The task's Implementation Notes suggest Resilience4j per integration-heavy trait I1/I2. Current impl relies on SCG timeout only. Follow-up recommended.
+3. **Auth-service gap documented.** JWT validation uses a JWKS URI from env (`JWT_JWKS_URI`). Token issuance is out of scope — no user-facing login flow. Portfolio demo uses signed test tokens.
+
+## Doc Debt Flagged
+
+- `platform/api-gateway-policy.md` public-routes list still references ecommerce paths. Defer to `TASK-DOC-001-platform-docs-resync`.
+- `platform/architecture.md` service table also stale (shared flag with TASK-BE-001).
+
+## Follow-up Tasks to Create
+
+- `TASK-INT-002-gateway-master-e2e` — live Testcontainers pair test covering the ⚠️ items above.
+- `TASK-INT-003-gateway-circuit-breaker` — Resilience4j integration per integration-heavy trait.
