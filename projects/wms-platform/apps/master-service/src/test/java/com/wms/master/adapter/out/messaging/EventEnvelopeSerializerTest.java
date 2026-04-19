@@ -13,12 +13,19 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
+import com.wms.master.domain.event.SkuCreatedEvent;
+import com.wms.master.domain.event.SkuDeactivatedEvent;
+import com.wms.master.domain.event.SkuReactivatedEvent;
+import com.wms.master.domain.event.SkuUpdatedEvent;
 import com.wms.master.domain.event.ZoneCreatedEvent;
 import com.wms.master.domain.event.ZoneDeactivatedEvent;
 import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
+import com.wms.master.domain.model.BaseUom;
 import com.wms.master.domain.model.Location;
 import com.wms.master.domain.model.LocationType;
+import com.wms.master.domain.model.Sku;
+import com.wms.master.domain.model.TrackingType;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.Zone;
 import com.wms.master.domain.model.ZoneType;
@@ -257,6 +264,73 @@ class EventEnvelopeSerializerTest {
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.reactivated");
         assertThat(envelope.get("payload").get("location").get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(envelope.get("payload").has("reason")).isFalse();
+        assertThat(envelope.get("payload").has("changedFields")).isFalse();
+    }
+
+    @Test
+    void skuCreatedEvent_producesContractEnvelope() throws Exception {
+        Sku sku = Sku.create(
+                "sku-001", "Gala Apple 1kg", null, "8801234567890",
+                BaseUom.EA, TrackingType.LOT, 1000, null, null, 30, "actor");
+        SkuCreatedEvent event = SkuCreatedEvent.from(sku);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.created");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("sku");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(sku.getId().toString());
+
+        JsonNode payload = envelope.get("payload").get("sku");
+        // skuCode normalized to UPPERCASE by the domain factory
+        assertThat(payload.get("skuCode").asText()).isEqualTo("SKU-001");
+        assertThat(payload.get("baseUom").asText()).isEqualTo("EA");
+        assertThat(payload.get("trackingType").asText()).isEqualTo("LOT");
+        assertThat(payload.get("barcode").asText()).isEqualTo("8801234567890");
+        assertThat(payload.get("status").asText()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void skuUpdatedEvent_carriesChangedFields() throws Exception {
+        Sku sku = Sku.create("SKU-001", "Name", null, null,
+                BaseUom.EA, TrackingType.NONE, null, null, null, null, "actor");
+        SkuUpdatedEvent event = SkuUpdatedEvent.from(sku, List.of("name", "weightGrams"));
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.updated");
+        JsonNode changed = envelope.get("payload").get("changedFields");
+        assertThat(changed.isArray()).isTrue();
+        assertThat(changed.get(0).asText()).isEqualTo("name");
+        assertThat(changed.get(1).asText()).isEqualTo("weightGrams");
+    }
+
+    @Test
+    void skuDeactivatedEvent_carriesReason() throws Exception {
+        Sku sku = Sku.create("SKU-001", "Name", null, null,
+                BaseUom.EA, TrackingType.NONE, null, null, null, null, "actor");
+        sku.deactivate("actor");
+        SkuDeactivatedEvent event = SkuDeactivatedEvent.from(sku, "obsolete");
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.deactivated");
+        assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("obsolete");
+        assertThat(envelope.get("payload").get("sku").get("status").asText()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void skuReactivatedEvent_hasSnapshotOnly() throws Exception {
+        Sku sku = Sku.create("SKU-001", "Name", null, null,
+                BaseUom.EA, TrackingType.NONE, null, null, null, null, "actor");
+        sku.deactivate("actor");
+        sku.reactivate("actor");
+        SkuReactivatedEvent event = SkuReactivatedEvent.from(sku);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.reactivated");
+        assertThat(envelope.get("payload").get("sku").get("status").asText()).isEqualTo("ACTIVE");
         assertThat(envelope.get("payload").has("reason")).isFalse();
         assertThat(envelope.get("payload").has("changedFields")).isFalse();
     }

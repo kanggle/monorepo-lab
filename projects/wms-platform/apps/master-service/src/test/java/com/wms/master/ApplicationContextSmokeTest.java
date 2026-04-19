@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.master.adapter.in.web.controller.LocationController;
 import com.wms.master.adapter.in.web.controller.LocationCreateController;
+import com.wms.master.adapter.in.web.controller.SkuController;
 import com.wms.master.adapter.in.web.controller.WarehouseController;
 import com.wms.master.adapter.in.web.controller.ZoneController;
 import com.wms.master.adapter.in.web.filter.IdempotencyFilter;
 import com.wms.master.application.port.in.LocationCrudUseCase;
 import com.wms.master.application.port.in.LocationQueryUseCase;
+import com.wms.master.application.port.in.SkuCrudUseCase;
+import com.wms.master.application.port.in.SkuQueryUseCase;
 import com.wms.master.application.port.in.WarehouseCrudUseCase;
 import com.wms.master.application.port.in.WarehouseQueryUseCase;
 import com.wms.master.application.port.in.ZoneCrudUseCase;
@@ -47,6 +50,7 @@ class ApplicationContextSmokeTest {
         assertThat(context.getBean(ZoneController.class)).isNotNull();
         assertThat(context.getBean(LocationController.class)).isNotNull();
         assertThat(context.getBean(LocationCreateController.class)).isNotNull();
+        assertThat(context.getBean(SkuController.class)).isNotNull();
         FilterRegistrationBean<?> registration =
                 context.getBean("idempotencyFilterRegistration", FilterRegistrationBean.class);
         assertThat(registration.getFilter()).isInstanceOf(IdempotencyFilter.class);
@@ -60,6 +64,8 @@ class ApplicationContextSmokeTest {
         assertThat(context.getBean(ZoneQueryUseCase.class)).isNotNull();
         assertThat(context.getBean(LocationCrudUseCase.class)).isNotNull();
         assertThat(context.getBean(LocationQueryUseCase.class)).isNotNull();
+        assertThat(context.getBean(SkuCrudUseCase.class)).isNotNull();
+        assertThat(context.getBean(SkuQueryUseCase.class)).isNotNull();
         assertThat(context.getBean(DomainEventPort.class)).isNotNull();
         assertThat(context.getBean(IdempotencyStore.class)).isNotNull();
     }

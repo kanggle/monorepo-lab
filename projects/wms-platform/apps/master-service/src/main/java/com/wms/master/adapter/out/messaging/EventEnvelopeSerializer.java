@@ -4,6 +4,7 @@ import com.example.common.id.UuidV7;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.application.result.LocationResult;
+import com.wms.master.application.result.SkuResult;
 import com.wms.master.application.result.WarehouseResult;
 import com.wms.master.application.result.ZoneResult;
 import com.wms.master.domain.event.DomainEvent;
@@ -11,6 +12,10 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
+import com.wms.master.domain.event.SkuCreatedEvent;
+import com.wms.master.domain.event.SkuDeactivatedEvent;
+import com.wms.master.domain.event.SkuReactivatedEvent;
+import com.wms.master.domain.event.SkuUpdatedEvent;
 import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
@@ -110,6 +115,20 @@ public class EventEnvelopeSerializer {
                 yield payload;
             }
             case LocationReactivatedEvent e -> Map.of("location", LocationResult.from(e.snapshot()));
+            case SkuCreatedEvent e -> Map.of("sku", SkuResult.from(e.snapshot()));
+            case SkuUpdatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("sku", SkuResult.from(e.snapshot()));
+                payload.put("changedFields", e.changedFields());
+                yield payload;
+            }
+            case SkuDeactivatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("sku", SkuResult.from(e.snapshot()));
+                payload.put("reason", e.reason());
+                yield payload;
+            }
+            case SkuReactivatedEvent e -> Map.of("sku", SkuResult.from(e.snapshot()));
         };
     }
 }
