@@ -63,15 +63,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty — tasks will be added after TASK-BE-000 cleanup is merged)
+(empty — subsequent tasks TASK-BE-002..006 will cover Zone/Location/SKU/Partner/Lot)
 
 ## ready
 
-(empty — first task set will be TASK-BE-001 ~ TASK-BE-007)
+- `TASK-INT-001-gateway-master-service-route.md` — wire gateway route to master-service
 
 ## in-progress
 
-(empty)
+- `TASK-BE-001-master-service-bootstrap.md` — Warehouse vertical slice (HTTP, idempotency, JWT, outbox all in place; Testcontainers-backed integration tests still pending)
 
 ## review
 
@@ -79,4 +79,4 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
-(empty — this project started fresh, no completed tasks yet)
+(empty)
