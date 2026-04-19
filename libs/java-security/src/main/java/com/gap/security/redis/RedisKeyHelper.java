@@ -4,9 +4,8 @@ package com.gap.security.redis;
  * Provides standardized Redis key construction for security-related keys.
  * <p>
  * This is an interface only. Each service provides its own implementation
- * in the infrastructure layer based on its specific key namespace and schema.
- * <p>
- * Key patterns follow the conventions in specs/services/auth-service/redis-keys.md.
+ * in its infrastructure layer, choosing the namespace prefix and key
+ * segmentation rules declared in that service's own spec.
  */
 public interface RedisKeyHelper {
 

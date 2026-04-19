@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Verifies UUID v7 structural fields per RFC 9562 (TASK-BE-028c Test Requirements). */
+/** Verifies UUID v7 structural fields per RFC 9562. */
 class UuidV7Test {
 
     @Test
