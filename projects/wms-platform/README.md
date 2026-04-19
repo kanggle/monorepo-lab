@@ -188,8 +188,8 @@ Master-service checks only its own child records on deactivation (e.g., Zone dea
 
 ### Tasks
 
-- [tasks/in-progress/TASK-BE-001-master-service-bootstrap.md](tasks/in-progress/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice (implementation landed; awaiting closure review)
-- [tasks/in-progress/TASK-INT-001-gateway-master-service-route.md](tasks/in-progress/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring (implementation landed; awaiting closure review)
+- [tasks/review/TASK-BE-001-master-service-bootstrap.md](tasks/review/TASK-BE-001-master-service-bootstrap.md) — Warehouse CRUD vertical slice (implementation + tests landed, in review)
+- [tasks/review/TASK-INT-001-gateway-master-service-route.md](tasks/review/TASK-INT-001-gateway-master-service-route.md) — gateway route + JWT filter wiring (implementation + filter tests landed, in review)
 
 ---
 

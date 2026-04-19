@@ -63,19 +63,20 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty — subsequent tasks TASK-BE-002..006 will cover Zone/Location/SKU/Partner/Lot)
+(empty — subsequent tasks TASK-BE-002..006 will cover Zone/Location/SKU/Partner/Lot; follow-ups flagged in review notes: `TASK-BE-007` full integration tests, `TASK-INT-002` e2e gateway-master, `TASK-INT-003` circuit breaker, `TASK-DOC-001` platform doc resync)
 
 ## ready
 
-- `TASK-INT-001-gateway-master-service-route.md` — wire gateway route to master-service
+(empty)
 
 ## in-progress
 
-- `TASK-BE-001-master-service-bootstrap.md` — Warehouse vertical slice (HTTP, idempotency, JWT, outbox all in place; Testcontainers-backed integration tests still pending)
+(empty)
 
 ## review
 
-(empty)
+- `TASK-BE-001-master-service-bootstrap.md` — Warehouse CRUD vertical slice (impl + unit/slice tests + CI green; full `@SpringBootTest` integration suite flagged as follow-up)
+- `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment (impl + filter unit tests + CI green; live-pair e2e flagged as follow-up)
 
 ## done
 
