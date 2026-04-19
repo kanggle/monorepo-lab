@@ -5,6 +5,33 @@ plugins {
 
 group = 'com.wms.gateway'
 
+// -------------------------------------------------------------------------
+// Source sets: split e2e tests from the fast `test` suite.
+//
+// * `test`                → unit/slice tests that run on every `./gradlew check`.
+//                            No Docker required.
+// * `e2eTest`             → Testcontainers-backed live-pair tests that boot
+//                            gateway-service + master-service + Postgres +
+//                            Redis + Kafka + a MockWebServer JWKS stand-in.
+//                            Runs on CI (ubuntu-latest) or any developer with
+//                            a working Docker daemon. Never part of `check`.
+// -------------------------------------------------------------------------
+sourceSets {
+    e2eTest {
+        java.srcDir 'src/e2eTest/java'
+        resources.srcDir 'src/e2eTest/resources'
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+}
+
+configurations {
+    e2eTestImplementation.extendsFrom testImplementation
+    e2eTestRuntimeOnly.extendsFrom testRuntimeOnly
+    e2eTestCompileOnly.extendsFrom testCompileOnly
+    e2eTestAnnotationProcessor.extendsFrom testAnnotationProcessor
+}
+
 dependencies {
     // Spring Cloud Gateway (reactive)
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
@@ -33,18 +60,41 @@ dependencies {
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')
 
-    // Test
+    // Test (unit / slice)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webflux'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.assertj:assertj-core'
+
+    // JWT signing helper used in both unit-level self-tests and the e2e suite.
+    // Nimbus ships with Spring Security's oauth2-resource-server on the runtime
+    // classpath, but we declare it explicitly here so the test compile sees it.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // MockWebServer for the JWKS stand-in (used by both phases, so declare
+    // here so the compile-time self-test sees it too).
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+
+    // Kafka client — required so the KafkaTestConsumer helper compiles under
+    // the regular `test` source set. Its self-test runs without Docker.
+    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+    // e2e-only: Testcontainers, Awaitility, plain HTTP client for live-pair
+    // calls through the gateway container.
+    e2eTestImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    e2eTestImplementation 'org.testcontainers:postgresql:1.21.3'
+    e2eTestImplementation 'org.testcontainers:kafka:1.21.3'
+    e2eTestImplementation 'org.awaitility:awaitility:4.2.2'
+    e2eTestImplementation 'com.redis:testcontainers-redis:2.2.2'
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
 }
 
@@ -54,4 +104,33 @@ tasks.named('bootJar') {
 
 test {
     useJUnitPlatform()
+}
+
+// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`
+// so the fast-feedback loop (`./gradlew check`) stays Docker-free. CI invokes
+// this task explicitly in a separate job.
+tasks.register('e2eTest', Test) {
+    description = 'Runs Testcontainers-backed end-to-end live-pair tests (requires Docker).'
+    group = 'verification'
+    testClassesDirs = sourceSets.e2eTest.output.classesDirs
+    classpath = sourceSets.e2eTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
+
+    // Ensure both bootJars are produced before the containerized tests spin
+    // up — Testcontainers'  ImageFromDockerfile COPYs build/libs/*.jar.
+    dependsOn ':projects:wms-platform:apps:gateway-service:bootJar'
+    dependsOn ':projects:wms-platform:apps:master-service:bootJar'
+
+    // Propagate environment where needed (e.g. DOCKER_HOST overrides for
+    // WSL2 / colima setups).
+    systemProperty 'testcontainers.reuse.enable', System.getProperty('testcontainers.reuse.enable', 'false')
+
+    // A generous single-test timeout catches hung containers without masking
+    // real assertion failures.
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = false
+    }
 }
