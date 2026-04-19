@@ -10,8 +10,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * This configuration registers the messaging-specific JPA repositories scoped
  * to the messaging package via basePackageClasses.
  *
- * IMPORTANT (TASK-BE-047): declaring any explicit {@code @EnableJpaRepositories}
- * in the application context causes Spring Boot's
+ * IMPORTANT: declaring any explicit {@code @EnableJpaRepositories} in the
+ * application context causes Spring Boot's
  * {@code JpaRepositoriesAutoConfiguration} to back off. As a result, the
  * consuming service's own repositories are NO LONGER auto-scanned from the
  * {@code @SpringBootApplication} base package. Every service that depends on

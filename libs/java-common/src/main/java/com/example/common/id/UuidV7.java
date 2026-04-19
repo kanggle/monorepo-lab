@@ -6,16 +6,10 @@ import java.util.UUID;
 /**
  * Minimal UUID v7 (time-ordered, RFC 9562) generator.
  *
- * <p>Promoted to {@code libs/java-common} per TASK-BE-028c. A pure utility with no
- * service-owned domain logic; meets shared-library policy criteria (technical,
- * multi-service, stable). Used for:
- * <ul>
- *   <li>{@code auth-service} {@code device_sessions.device_id}
- *       (specs/services/auth-service/device-session.md D1)</li>
- *   <li>{@code admin-service} {@code admin_operators.operator_id} and the
- *       {@code admin.action.performed} outbox envelope {@code eventId}
- *       (specs/services/admin-service/rbac.md D4, data-model.md)</li>
- * </ul>
+ * <p>A pure utility with no service-owned domain logic; meets the
+ * shared-library policy (technical, multi-service, stable). Suitable wherever
+ * an aggregate id or event id needs time-ordered stability — lexicographic
+ * ordering follows insertion order, giving good B-tree index locality.
  *
  * <p>Layout (128 bits):
  * <pre>
@@ -23,8 +17,8 @@ import java.util.UUID;
  *   2 bits variant (10) | 62 bits rand_b
  * </pre>
  *
- * <p>Clock regression across JVM invocations may break monotonicity — RFC 9562
- * explicitly permits this (task TASK-BE-028c Edge Cases).
+ * <p>Clock regression across JVM invocations may break monotonicity —
+ * RFC 9562 explicitly permits this.
  */
 public final class UuidV7 {
 

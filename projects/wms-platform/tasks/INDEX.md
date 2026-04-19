@@ -79,6 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment (impl + filter unit tests + CI green; live-pair e2e flagged as follow-up)
 - `TASK-BE-002-zone-aggregate.md` — Zone CRUD vertical slice (domain + persistence + application + HTTP + outbox + seed; mirrors Warehouse pattern; integration-test gaps carried into TASK-BE-007)
 - `TASK-BE-003-location-aggregate.md` — Location CRUD vertical slice + Zone guard turned on (dual-parent + globally-unique code + split HTTP routing; `hasActiveLocationsFor` stub replaced with real JPA query)
+- `TASK-DOC-001-library-boundary-cleanup.md` — Javadoc sweep in libs/ (auth-service / admin-service citations + TASK-BE-028c / TASK-BE-047 references removed; platform/* docs were already clean via commit 09e7e95)
 
 ## done
 
