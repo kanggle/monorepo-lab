@@ -67,6 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-BE-004-sku-aggregate.md` — add SKU aggregate (independent; case-insensitive code + optional unique barcode + two lookup endpoints); stubs the Lot active-children guard for TASK-BE-006
 - `TASK-BE-007-master-service-integration-tests.md` — full `@SpringBootTest` integration suite (Postgres + Kafka + Redis) + contract-test harness; addresses gaps carried from BE-001/BE-002/BE-003
 
 ## in-progress
