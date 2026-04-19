@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
   external_labels:
     env: local
-    platform: global-account-platform
+    platform: wms
 
 alerting:
   alertmanagers:
@@ -13,6 +13,8 @@ alerting:
 rule_files:
   - /etc/prometheus/alert-rules.yml
 
+# wms services scraped from the host (Spring Boot Actuator /actuator/prometheus).
+# Port assignments align with projects/wms-platform/apps/*/application.yml.
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
@@ -26,50 +28,50 @@ scrape_configs:
         labels:
           service: gateway-service
 
-  - job_name: 'auth-service'
+  - job_name: 'master-service'
     metrics_path: /actuator/prometheus
     scrape_interval: 15s
     static_configs:
       - targets: ['host.docker.internal:8081']
         labels:
-          service: auth-service
+          service: master-service
 
-  - job_name: 'account-service'
+  - job_name: 'inbound-service'
     metrics_path: /actuator/prometheus
     scrape_interval: 15s
     static_configs:
       - targets: ['host.docker.internal:8082']
         labels:
-          service: account-service
+          service: inbound-service
 
-  - job_name: 'security-service'
+  - job_name: 'inventory-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['host.docker.internal:8083']
+        labels:
+          service: inventory-service
+
+  - job_name: 'outbound-service'
     metrics_path: /actuator/prometheus
     scrape_interval: 15s
     static_configs:
       - targets: ['host.docker.internal:8084']
         labels:
-          service: security-service
+          service: outbound-service
 
-  - job_name: 'admin-service'
+  - job_name: 'notification-service'
     metrics_path: /actuator/prometheus
     scrape_interval: 15s
     static_configs:
       - targets: ['host.docker.internal:8085']
         labels:
-          service: admin-service
+          service: notification-service
 
-  - job_name: 'community-service'
+  - job_name: 'admin-service'
     metrics_path: /actuator/prometheus
     scrape_interval: 15s
     static_configs:
       - targets: ['host.docker.internal:8086']
         labels:
-          service: community-service
-
-  - job_name: 'membership-service'
-    metrics_path: /actuator/prometheus
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['host.docker.internal:8087']
-        labels:
-          service: membership-service
+          service: admin-service

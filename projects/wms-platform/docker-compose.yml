@@ -1,49 +1,57 @@
 # =============================================================================
 # WMS Platform — Local Development Infrastructure
 # =============================================================================
-# Usage:
-#   docker compose up -d        — start all services
-#   docker compose down -v      — stop and remove volumes (clean state)
-#   docker compose ps           — check service status
+# Services:
+#   postgres     — master_db and future wms databases (see docker/postgres/init.sh)
+#   redis        — idempotency store, rate-limit counters (no auth in dev)
+#   kafka        — event bus (KRaft, single broker)
+#   kafka-init   — creates wms.master.*.v1 topics per the event contract
+#   kafka-ui     — broker / topic inspection
+#   prometheus   — metrics scrape
+#   alertmanager — alert routing
+#   loki         — log aggregation
+#   promtail     — docker log tailer
+#   grafana      — dashboards
 #
-# Port Conflicts:
-#   If you already have MySQL running on 3306, change MYSQL_PORT in .env
-#   If you already have Redis running on 6379, change REDIS_PORT in .env
-#   If you already have Kafka running on 9092/9093, change KAFKA_*_PORT in .env
-#   If you already have a service on 8090, change KAFKA_UI_PORT in .env
+# Usage:
+#   docker compose up -d         — start everything
+#   docker compose down -v       — stop + drop volumes (clean slate)
+#   docker compose ps            — status
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # MySQL 8 — 5 databases: inbound_db, inventory_db, outbound_db, master_db, admin_db
+  # Postgres 16 — per-service databases for master/inbound/inventory/outbound/admin
   # ---------------------------------------------------------------------------
-  mysql:
-    image: mysql:8.0
-    container_name: wms-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: wms-postgres
     restart: unless-stopped
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
-      INBOUND_DB_PASSWORD: ${INBOUND_DB_PASSWORD:-inbound_pass}
-      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory_pass}
-      OUTBOUND_DB_PASSWORD: ${OUTBOUND_DB_PASSWORD:-outbound_pass}
-      MASTER_DB_PASSWORD: ${MASTER_DB_PASSWORD:-master_pass}
-      ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:-admin_pass}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:-postgres}
+      # Service-user passwords consumed by the init script
+      MASTER_DB_PASSWORD: ${MASTER_DB_PASSWORD:-master}
+      INBOUND_DB_PASSWORD: ${INBOUND_DB_PASSWORD:-inbound}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory}
+      OUTBOUND_DB_PASSWORD: ${OUTBOUND_DB_PASSWORD:-outbound}
+      ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:-admin}
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 15s
     networks:
       - wms-network
 
   # ---------------------------------------------------------------------------
-  # Redis 7 Alpine — single instance with password
+  # Redis 7 Alpine — no auth in local dev to match application.yml defaults
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -51,11 +59,11 @@ services:
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6379}:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redispass} --appendonly yes
+    command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispass}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,22 +81,18 @@ services:
     ports:
       - "${KAFKA_EXTERNAL_PORT:-9093}:9093"
     environment:
-      # KRaft settings
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
       CLUSTER_ID: ${KAFKA_KRAFT_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qg}
-      # Listeners
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9093}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      # Log retention — 1 day for local dev
       KAFKA_LOG_RETENTION_HOURS: 24
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
       KAFKA_LOG_SEGMENT_BYTES: 104857600
-      # Defaults
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -105,7 +109,10 @@ services:
       - wms-network
 
   # ---------------------------------------------------------------------------
-  # Kafka Topic Initializer — creates WMS topics idempotently
+  # Kafka Topic Initializer — creates wms topics idempotently
+  # Topic naming follows specs/contracts/events/master-events.md § Topic Layout.
+  # Placeholder topics for other services are included so they exist when
+  # those services come online.
   # ---------------------------------------------------------------------------
   kafka-init:
     image: apache/kafka:3.7.0
@@ -129,20 +136,23 @@ services:
         DLQ_RETENTION_MS=2592000000
 
         TOPICS=(
-          "wms.inbound.asn.received"
-          "wms.inbound.inspection.completed"
-          "wms.inbound.putaway.completed"
-          "wms.inventory.adjusted"
-          "wms.inventory.transferred"
-          "wms.inventory.reserved"
-          "wms.inventory.released"
-          "wms.outbound.order.received"
-          "wms.outbound.picking.completed"
-          "wms.outbound.packing.completed"
-          "wms.outbound.shipped"
-          "wms.master.sku.created"
-          "wms.master.location.created"
-          "wms.master.location.updated"
+          "wms.master.warehouse.v1"
+          "wms.master.zone.v1"
+          "wms.master.location.v1"
+          "wms.master.sku.v1"
+          "wms.master.partner.v1"
+          "wms.master.lot.v1"
+          "wms.inbound.asn.v1"
+          "wms.inbound.inspection.v1"
+          "wms.inbound.putaway.v1"
+          "wms.inventory.adjusted.v1"
+          "wms.inventory.transferred.v1"
+          "wms.inventory.reserved.v1"
+          "wms.inventory.released.v1"
+          "wms.outbound.order.v1"
+          "wms.outbound.picking.v1"
+          "wms.outbound.packing.v1"
+          "wms.outbound.shipped.v1"
           "wms.alert.low-stock"
           "wms.alert.anomaly-detected"
         )
@@ -236,7 +246,7 @@ services:
     container_name: wms-alertmanager
     restart: unless-stopped
     ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
+      - "${ALERTMANAGER_PORT:-9095}:9093"
     volumes:
       - ./infra/alertmanager:/etc/alertmanager:ro
     command:
@@ -302,7 +312,7 @@ services:
       - wms-network
 
 volumes:
-  mysql-data:
+  postgres-data:
   redis-data:
   kafka-data:
   prometheus-data:
