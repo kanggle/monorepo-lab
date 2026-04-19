@@ -30,6 +30,12 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 2s
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -82,14 +88,11 @@ logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}]"
 
-master:
-  security:
-    jwt:
-      jwks-uri: ${JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
-      issuer: ${JWT_ISSUER:monorepo-lab}
-  outbox:
-    poll-interval-ms: 500
+outbox:
+  polling:
+    interval-ms: 500
     batch-size: 100
-    publisher-topic-prefix: wms.master
+
+master:
   idempotency:
     ttl-seconds: 86400

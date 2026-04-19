@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     }
 
     @Override
+    @PreAuthorize("hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public WarehouseResult create(CreateWarehouseCommand command) {
         Warehouse created = Warehouse.create(
                 command.warehouseCode(),
@@ -55,6 +57,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     }
 
     @Override
+    @PreAuthorize("hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public WarehouseResult update(UpdateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
@@ -75,6 +78,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     }
 
     @Override
+    @PreAuthorize("hasRole('MASTER_ADMIN')")
     public WarehouseResult deactivate(DeactivateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
@@ -90,6 +94,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     }
 
     @Override
+    @PreAuthorize("hasRole('MASTER_ADMIN')")
     public WarehouseResult reactivate(ReactivateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
@@ -102,12 +107,14 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public WarehouseResult findById(UUID id) {
         return WarehouseResult.from(loadOrThrow(id));
     }
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public WarehouseResult findByCode(String warehouseCode) {
         Warehouse warehouse = persistencePort.findByCode(warehouseCode)
                 .orElseThrow(() -> new WarehouseNotFoundException(warehouseCode));
@@ -116,6 +123,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public PageResult<WarehouseResult> list(ListWarehousesQuery query) {
         return persistencePort.findPage(query.criteria(), query.pageQuery())
                 .map(WarehouseResult::from);
