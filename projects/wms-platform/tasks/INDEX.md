@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-003-location-aggregate.md` — add Location aggregate to master-service (dual-parent, globally-unique code, split HTTP routing) and turn on Zone's active-children guard
+(empty)
 
 ## in-progress
 
@@ -78,6 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-001-master-service-bootstrap.md` — Warehouse CRUD vertical slice (impl + unit/slice tests + CI green; full `@SpringBootTest` integration suite flagged as follow-up)
 - `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment (impl + filter unit tests + CI green; live-pair e2e flagged as follow-up)
 - `TASK-BE-002-zone-aggregate.md` — Zone CRUD vertical slice (domain + persistence + application + HTTP + outbox + seed; mirrors Warehouse pattern; integration-test gaps carried into TASK-BE-007)
+- `TASK-BE-003-location-aggregate.md` — Location CRUD vertical slice + Zone guard turned on (dual-parent + globally-unique code + split HTTP routing; `hasActiveLocationsFor` stub replaced with real JPA query)
 
 ## done
 

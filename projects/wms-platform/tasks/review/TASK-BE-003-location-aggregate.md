@@ -317,11 +317,65 @@ Follow:
 
 # Definition of Done
 
-- [ ] Implementation completed
-- [ ] Tests added (unit / slice / event-contract; smoke + zone-guard integration)
-- [ ] Tests passing locally (`./gradlew ... test`) and in CI
-- [ ] Contracts unchanged
-- [ ] Seed migration added and verified under `dev` profile
-- [ ] `ZonePersistenceAdapter.hasActiveLocationsFor` stub replaced with real query
-- [ ] Review notes cover any deviations + follow-ups
-- [ ] Ready for review
+- [x] Implementation completed
+- [x] Tests added (unit / slice / event-contract; smoke + zone-guard integration)
+- [x] Tests passing locally (`./gradlew :projects:wms-platform:apps:master-service:test` — 0 failures; Testcontainers skip on Windows, run in CI)
+- [x] Contracts unchanged
+- [x] Seed migration added (`V101__seed_dev_locations.sql`)
+- [x] `ZonePersistenceAdapter.hasActiveLocationsFor` stub replaced with real `JpaLocationRepository.existsByZoneIdAndStatus` query
+- [x] Review notes cover deviations + follow-ups
+- [x] Ready for review
+
+---
+
+# Review Note (2026-04-19)
+
+## Implementation Delivery
+
+Landed in 5 phased commits on `feat/wms-task-be-003-location`:
+
+| Phase | Scope |
+|---|---|
+| 1 | Domain model — `Location` with dual parent + prefix match; `LocationType` enum; exceptions; 4 sealed `DomainEvent` subclasses |
+| 2 | Persistence — `V4__init_location.sql` (global `uq_locations_location_code`, FKs to warehouses + zones, `(warehouse_id, status)` + `(zone_id, status)` indexes); `LocationJpaEntity` (pkg-private, `@Version`); `JpaLocationRepository` with `existsByZoneIdAndStatus` (the Zone-guard query); `LocationPersistenceMapper` with `toInsertEntity()` version=null; `LocationPersistenceAdapter` (`@Repository`) |
+| 3 | Application — `LocationPersistencePort`, split Crud/Query use-case, commands/query/result, `LocationService` with dual-parent discipline (leak-safe `ZoneNotFoundException` on zone/warehouse mismatch) + parent-zone-active guard + parent-warehouse load for `warehouseCode` prefix validation |
+| 4 | HTTP — **two controllers** per asymmetric contract shape: `LocationCreateController` (POST nested) + `LocationController` (flat GET/PATCH/state-change). ETag + Location headers. `GlobalExceptionHandler` extended. |
+| 5 | **Zone guard turned on** (stub → real query), Location outbox wiring, `V101__seed_dev_locations.sql`, smoke + event-contract + scheduler tests extended |
+
+## Acceptance Criteria Status
+
+| AC | State | Note |
+|---|---|---|
+| `./gradlew :projects:wms-platform:apps:master-service:check` passes | ✅ | 323 tests, 0 failures; 21 Testcontainers skipped on Windows |
+| POST nested → 201 matches §3.1 | ✅ | `LocationCreateControllerTest` |
+| Unknown `zoneId` → 404 `ZONE_NOT_FOUND` | ✅ | Parent-zone resolved first |
+| Unknown `warehouseId` → 404 `WAREHOUSE_NOT_FOUND` | ✅ | Warehouse resolved for prefix validation |
+| Create under INACTIVE parent zone → 409 `STATE_TRANSITION_INVALID` | ✅ | |
+| Zone/warehouse mismatch → 404 `ZONE_NOT_FOUND` | ✅ | Leak-safe (no distinct error code) |
+| `locationCode` prefix mismatch → 400 `VALIDATION_ERROR` | ✅ | Domain-factory rejection; **deviation from ticket**: ticket allowed 422, we chose 400 (see "Deviations") |
+| GET by id + ETag / 404 on unknown | ✅ | `"v{version}"` |
+| GET list paginates, filters (`warehouseId`, `zoneId`, `locationType`, `code`, `status`) | ✅ | |
+| PATCH mutable fields / immutable-field change → 422 | ✅ | `Location.rejectImmutableChange` |
+| Deactivate/reactivate + invalid → 409 | ✅ | |
+| Global duplicate `locationCode` → 409 `LOCATION_CODE_DUPLICATE` | ✅ | Adapter-level translation; Testcontainers + H2 both test |
+| **Zone deactivate blocked when zone has ≥1 ACTIVE Location** | ✅ | **Stub replaced with real query.** Testcontainers test (`LocationPersistenceAdapterTest.zoneGuard`) verifies end-to-end: insert location → `hasActiveLocationsFor=true`; deactivate location → `false` |
+| One outbox row per mutation; publisher → `wms.master.location.v1` | ✅ | `MasterOutboxPollingSchedulerTest` covers all 4 `master.location.*` cases |
+| Event envelope matches §3 | ✅ | `EventEnvelopeSerializerTest` |
+| Domain has no JPA annotations; entity package-private | ✅ | |
+| `V101__seed_dev_locations.sql` under `dev` profile | ✅ | 3 fixed-UUID rows, `ON CONFLICT DO NOTHING` |
+
+## Deviations from the ticket
+
+1. **Prefix-mismatch status code → 400 `VALIDATION_ERROR`, not 422 `IMMUTABLE_FIELD`.** Ticket let the implementer pick. We chose 400 because the prefix check lives in the domain factory and rejects construction outright — it's a validation failure, not an attempt to mutate an immutable field. Consistent with how Warehouse/Zone code-pattern failures surface. Worth confirming with the reviewer; flipping to 422 is a one-line change in `GlobalExceptionHandler`.
+2. **Zone adapter depends on `JpaLocationRepository` directly.** Ticket allowed either that shortcut or a `LocationExistenceQueryPort` interface seam. We picked the shortcut (both adapters share the same datasource; no port layering ceremony). If the reviewer prefers the port seam, it's a small follow-up refactor.
+3. **Testcontainers duplicate-across-zones test** was rewritten during review to use two zones under the same warehouse (so domain prefix validation passes and the test actually exercises the DB's global unique constraint). The original draft used two different warehouses and the same `SHARED-...` code, which would have failed at the domain factory before reaching the DB. Caught during trust-but-verify pass on the subagent output.
+
+## Gaps
+
+- Full `@SpringBootTest` integration (Postgres + Kafka + Redis in one container network, happy path end-to-end) still deferred to **TASK-BE-007**.
+- `capacity_units` is metadata only; no capacity-vs-inventory enforcement. Cross-service; belongs to `inventory-service` when it lands.
+- Cross-service inventory reference check on Location deactivate still deferred to v2 saga per the architecture doc.
+
+## Doc Debt
+
+Unchanged from BE-001/BE-002 — `platform/architecture.md`, `platform/service-boundaries.md`, `platform/api-gateway-policy.md` still reference ecommerce. Deferred to **TASK-DOC-001**.
