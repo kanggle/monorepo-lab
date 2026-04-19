@@ -8,6 +8,8 @@ import com.wms.master.domain.exception.MasterDomainException;
 import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
+import com.wms.master.domain.exception.ZoneCodeDuplicateException;
+import com.wms.master.domain.exception.ZoneNotFoundException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,6 +36,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(WarehouseCodeDuplicateException.class)
     public ResponseEntity<ApiErrorEnvelope> handleCodeDuplicate(WarehouseCodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(ZoneNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleZoneNotFound(ZoneNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(ZoneCodeDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleZoneCodeDuplicate(ZoneCodeDuplicateException ex) {
         return build(HttpStatus.CONFLICT, ex);
     }
 
