@@ -216,7 +216,7 @@ class LocationControllerTest {
     }
 
     @Test
-    void deactivate_returns409_onInvalidTransition() throws Exception {
+    void deactivate_returns422_onInvalidTransition() throws Exception {
         UUID id = UUID.randomUUID();
         when(crudUseCase.deactivate(any()))
                 .thenThrow(new InvalidStateTransitionException("INACTIVE", "deactivate"));
@@ -228,7 +228,7 @@ class LocationControllerTest {
         mockMvc.perform(post("/api/v1/master/locations/" + id + "/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isConflict())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error.code").value("STATE_TRANSITION_INVALID"));
     }
 

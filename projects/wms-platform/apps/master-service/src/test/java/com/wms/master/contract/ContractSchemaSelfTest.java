@@ -66,9 +66,24 @@ class ContractSchemaSelfTest {
         ContractSchema schema = ContractSchema.load(
                 "/contracts/http/error-envelope.schema.json");
 
+        // Per platform/error-handling.md, every error envelope carries
+        // {code, message, timestamp} — so the "minimal" compliant payload
+        // must include a timestamp.
         schema.assertValid("""
-                {"error":{"code":"UNAUTHORIZED","message":"x"}}
+                {"error":{"code":"UNAUTHORIZED","message":"x","timestamp":"2026-04-20T12:34:56Z"}}
                 """);
+    }
+
+    @Test
+    void errorEnvelopeSchema_rejectsMissingTimestamp() {
+        ContractSchema schema = ContractSchema.load(
+                "/contracts/http/error-envelope.schema.json");
+
+        assertThatThrownBy(() -> schema.assertValid("""
+                {"error":{"code":"UNAUTHORIZED","message":"x"}}
+                """))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("timestamp");
     }
 
     @Test

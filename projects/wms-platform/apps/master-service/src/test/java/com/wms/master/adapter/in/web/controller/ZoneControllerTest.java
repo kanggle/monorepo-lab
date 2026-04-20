@@ -149,7 +149,7 @@ class ZoneControllerTest {
     }
 
     @Test
-    void create_returns409_whenParentWarehouseInactive() throws Exception {
+    void create_returns422_whenParentWarehouseInactive() throws Exception {
         when(crudUseCase.create(any()))
                 .thenThrow(new InvalidStateTransitionException("parent warehouse is not ACTIVE"));
 
@@ -160,7 +160,7 @@ class ZoneControllerTest {
         mockMvc.perform(post("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isConflict())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error.code").value("STATE_TRANSITION_INVALID"));
     }
 
@@ -354,7 +354,7 @@ class ZoneControllerTest {
     }
 
     @Test
-    void deactivate_returns409_onInvalidTransition() throws Exception {
+    void deactivate_returns422_onInvalidTransition() throws Exception {
         UUID id = UUID.randomUUID();
         when(crudUseCase.deactivate(any()))
                 .thenThrow(new InvalidStateTransitionException("INACTIVE", "deactivate"));
@@ -366,7 +366,7 @@ class ZoneControllerTest {
         mockMvc.perform(post("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones/" + id + "/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isConflict())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error.code").value("STATE_TRANSITION_INVALID"));
     }
 

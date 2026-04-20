@@ -151,7 +151,7 @@ class LocationCreateControllerTest {
     }
 
     @Test
-    void create_returns409_whenParentZoneInactive() throws Exception {
+    void create_returns422_whenParentZoneInactive() throws Exception {
         when(crudUseCase.create(any()))
                 .thenThrow(new InvalidStateTransitionException("parent zone is not ACTIVE"));
 
@@ -162,7 +162,7 @@ class LocationCreateControllerTest {
         mockMvc.perform(post(url())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isConflict())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error.code").value("STATE_TRANSITION_INVALID"));
     }
 

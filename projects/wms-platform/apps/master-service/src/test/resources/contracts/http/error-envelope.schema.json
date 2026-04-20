@@ -2,18 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wms.example.com/contracts/http/error-envelope.v1.json",
   "title": "API error envelope",
-  "description": "Derived from specs/contracts/http/master-service-api.md § Error Envelope and platform/error-handling.md. Used for all 4xx/5xx responses.",
+  "description": "Derived from specs/contracts/http/master-service-api.md § Error Envelope and platform/error-handling.md. Used for all 4xx/5xx responses. The platform mandates {code, message, timestamp} on every error.",
   "type": "object",
   "required": ["error"],
   "additionalProperties": false,
   "properties": {
     "error": {
       "type": "object",
-      "required": ["code", "message"],
+      "required": ["code", "message", "timestamp"],
       "additionalProperties": true,
       "properties": {
         "code": { "type": "string" },
         "message": { "type": "string" },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO 8601 UTC instant",
+          "format": "date-time"
+        },
         "details": { "type": ["object", "null"] },
         "traceId": { "type": ["string", "null"] },
         "requestId": { "type": ["string", "null"] }

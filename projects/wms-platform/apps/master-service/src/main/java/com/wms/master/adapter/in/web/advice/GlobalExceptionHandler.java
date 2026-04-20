@@ -86,7 +86,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidStateTransitionException.class)
     public ResponseEntity<ApiErrorEnvelope> handleInvalidTransition(InvalidStateTransitionException ex) {
-        return build(HttpStatus.CONFLICT, ex);
+        // Per platform/error-handling.md, STATE_TRANSITION_INVALID is an
+        // unprocessable business rule violation → 422 Unprocessable Entity.
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
     }
 
     @ExceptionHandler(ImmutableFieldException.class)
