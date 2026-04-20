@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-006-lot-aggregate.md` — 6th master-service aggregate (Lot). Cross-aggregate invariants with SKU (trackingType=LOT + reverse deactivate guard), scheduled expiration job (master.lot.expired event), 7 endpoints. Final master-service v1 aggregate.
+- `TASK-BE-015-lot-test-coverage-followup.md` — Lot aggregate test coverage gap: author LotControllerTest (20+ cases), LotServiceAuthorizationTest, LotPersistenceAdapterH2Test, LotPersistenceAdapterTest (Testcontainers), LotExpirationSchedulerTest; add Lot event schemas to contract harness (addresses BE-006 review criticals)
 
 ## in-progress
 
@@ -95,3 +95,4 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — `(ip, routeId)` key + fail-open decorator + empty role header. Review verdict 2026-04-20: **APPROVED** (2 non-blocking warnings noted — metric emission + blank-list filtering)
 - `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — warehouse deactivate active-zones guard + hasActiveZonesFor port/adapter. Review verdict 2026-04-20: **APPROVED**
 - `TASK-INT-006-drain-destructive-in-awaitility.md` — accumulate drain() across Awaitility retries; fixes masked field-mismatch failures. Review verdict 2026-04-20: **APPROVED** (1 pre-existing UUID.fromString nit noted)
+- `TASK-BE-006-lot-aggregate.md` — master-service v1 final aggregate (Lot), scheduled expiration, SKU reverse-guard upgrade. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-015 (5 missing test classes + contract harness). 2 non-blocking warnings on LotService (WarehouseStatus comparison, expireBatch transaction scope)
