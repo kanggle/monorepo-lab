@@ -14,9 +14,11 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 ## 🎯 Projects
 
-| Project | Domain | Tech | Status | Links |
+| Project | Domain | Tech | Status | Standalone repo |
 |---|---|---|---|---|
-| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3 · Kafka · Redis · Hexagonal | 🚧 Active — master-service Warehouse slice + gateway-service bootstrapped, CI green | [README](projects/wms-platform/README.md) · [PROJECT.md](projects/wms-platform/PROJECT.md) |
+| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3 · Postgres · Kafka · Redis · Hexagonal | ✅ master-service v1 complete (5/6 aggregates + gateway + outbox + contract harness + live-pair e2e) | [kanggle/wms-platform](https://github.com/kanggle/wms-platform) |
+
+Each project is extracted to its own standalone repo via [`scripts/sync-portfolio.sh`](scripts/sync-portfolio.sh) for easier discovery. This monorepo retains the full development history and shared library development.
 
 _Future projects (planned): additional domains to stress-test the shared library and validate the Template extraction._
 
