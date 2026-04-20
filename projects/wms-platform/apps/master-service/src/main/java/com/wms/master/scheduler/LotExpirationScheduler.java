@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -45,6 +46,7 @@ public class LotExpirationScheduler {
     private final ExpireLotsBatchUseCase useCase;
     private final Clock clock;
 
+    @Autowired
     public LotExpirationScheduler(ExpireLotsBatchUseCase useCase) {
         this(useCase, Clock.systemDefaultZone());
     }

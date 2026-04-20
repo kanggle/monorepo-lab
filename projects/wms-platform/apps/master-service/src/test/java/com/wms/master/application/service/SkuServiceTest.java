@@ -20,6 +20,7 @@ import com.wms.master.domain.exception.BarcodeDuplicateException;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.exception.ValidationException;
@@ -293,15 +294,20 @@ class SkuServiceTest {
         }
 
         @Test
-        @DisplayName("blocked when hasActiveLotsFor=true, no state change, no event")
+        @DisplayName("blocked when hasActiveLotsFor=true — REFERENCE_INTEGRITY_VIOLATION, no state change, no event")
         void blockedByActiveLots() {
+            // TASK-BE-006 upgrade: the stub-based "always passes" path is
+            // gone. hasActiveLotsFor is now a real query and the service
+            // raises ReferenceIntegrityViolationException (409) when the
+            // guard fires — same shape as Warehouse.deactivate when ACTIVE
+            // Zones still exist.
             SkuResult created = service.create(baseCreate("SKU-1"));
             events.clear();
             persistence.setHasActiveLots(true);
 
             assertThatThrownBy(() -> service.deactivate(new DeactivateSkuCommand(
                     created.id(), "closing", created.version(), ACTOR)))
-                    .isInstanceOf(InvalidStateTransitionException.class)
+                    .isInstanceOf(ReferenceIntegrityViolationException.class)
                     .hasMessageContaining("active lots");
 
             assertThat(events.published()).isEmpty();
