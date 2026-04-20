@@ -5,7 +5,6 @@ import com.example.common.page.PageResult;
 import com.wms.master.application.port.out.WarehousePersistencePort;
 import com.wms.master.application.query.WarehouseListCriteria;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
-import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.Warehouse;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,12 +49,15 @@ class WarehousePersistenceAdapter implements WarehousePersistencePort {
 
     @Override
     public Warehouse update(Warehouse modified) {
-        if (!jpaRepository.existsById(modified.getId())) {
-            throw new WarehouseNotFoundException(modified.getId().toString());
-        }
-        // Build a detached entity carrying the caller's @Version so Hibernate's merge
-        // performs the optimistic-lock check at flush. Mismatch surfaces as
-        // ObjectOptimisticLockingFailureException (Spring's translation of
+        // No existsById pre-check: the service layer's loadOrThrow already
+        // guaranteed existence before entering this adapter. A concurrent
+        // delete between load and save surfaces as
+        // ObjectOptimisticLockingFailureException / StaleStateException at
+        // flush, which the application layer already translates.
+        //
+        // Build a detached entity carrying the caller's @Version so Hibernate's
+        // merge performs the optimistic-lock check at flush. Mismatch surfaces
+        // as ObjectOptimisticLockingFailureException (Spring's translation of
         // Hibernate's OptimisticLockException).
         WarehouseJpaEntity detached = mapper.toNewEntity(modified);
         WarehouseJpaEntity merged = jpaRepository.saveAndFlush(detached);

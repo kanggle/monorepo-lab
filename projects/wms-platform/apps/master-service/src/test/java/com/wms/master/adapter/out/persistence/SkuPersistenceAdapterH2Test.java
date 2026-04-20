@@ -2,12 +2,16 @@ package com.wms.master.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.wms.master.application.port.out.SkuPersistencePort;
 import com.wms.master.application.query.ListSkusCriteria;
 import com.wms.master.config.MasterServicePersistenceConfig;
+import com.wms.master.domain.exception.BarcodeDuplicateException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
 import com.wms.master.domain.model.BaseUom;
 import com.wms.master.domain.model.Sku;
@@ -17,9 +21,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
 
@@ -231,6 +238,43 @@ class SkuPersistenceAdapterH2Test {
 
         assertThat(byBarcode.totalElements()).isEqualTo(3);
         assertThat(byBarcode.content().get(0).getSkuCode()).isEqualTo("SKU-P01");
+    }
+
+    /**
+     * TASK-BE-009: the constraint-name extraction path must translate a
+     * barcode-unique violation to {@link BarcodeDuplicateException} even
+     * when the exception's root-cause message is opaque (e.g. because the
+     * DB emitted a localized message that does not contain the constraint
+     * string). This simulates a Postgres {@link PSQLException} whose
+     * {@link ServerErrorMessage#getConstraint()} returns only the constraint
+     * name — the substring fallback would not fire in that case.
+     */
+    @Test
+    @DisplayName("translateIntegrityViolation uses Postgres constraint-name to detect barcode duplicate")
+    void translateBarcodeDuplicateViaConstraintName() {
+        JpaSkuRepository mockRepo = mock(JpaSkuRepository.class);
+        SkuPersistenceMapper realMapper = new SkuPersistenceMapper();
+        SkuPersistenceAdapter directAdapter = new SkuPersistenceAdapter(mockRepo, realMapper);
+
+        // Server-error message wire format: each field is a single-char type
+        // code followed by a null-terminated value. PostgreSQL uses 'n'
+        // (U+006E) for the constraint field (see Postgres protocol: ErrorResponse).
+        // The message body ('M') is intentionally a non-English, non-matching
+        // string so the substring fallback cannot match the constraint name —
+        // forcing the test to rely on the structured getConstraint() path.
+        ServerErrorMessage sem = new ServerErrorMessage(
+                "Sérror\0Mopaque localized message\0nuq_skus_barcode\0");
+        PSQLException pg = new PSQLException(sem);
+        DataIntegrityViolationException wrapped =
+                new DataIntegrityViolationException("could not execute statement", pg);
+        when(mockRepo.saveAndFlush(any(SkuJpaEntity.class))).thenThrow(wrapped);
+
+        Sku s = sku("SKU-BARC", "Dup bar", "8801234567890",
+                BaseUom.EA, TrackingType.NONE, null);
+
+        assertThatThrownBy(() -> directAdapter.insert(s))
+                .isInstanceOf(BarcodeDuplicateException.class)
+                .hasMessageContaining("8801234567890");
     }
 
     private static Sku sku(String code, String name, String barcode,

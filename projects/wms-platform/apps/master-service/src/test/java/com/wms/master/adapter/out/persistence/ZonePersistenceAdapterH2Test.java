@@ -2,6 +2,9 @@ package com.wms.master.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
 
@@ -154,5 +158,47 @@ class ZonePersistenceAdapterH2Test {
                 ListZonesCriteria.forWarehouse(wh1),
                 new PageQuery(0, 10, "updatedAt", "desc"));
         assertThat(wh1All.totalElements()).isEqualTo(2);
+    }
+
+    /**
+     * TASK-BE-009: inserting a zone whose warehouseId references a non-existent
+     * warehouse trips a foreign-key violation (fk_zones_warehouse), which
+     * surfaces as {@link DataIntegrityViolationException}. The adapter MUST
+     * NOT remap this to {@link ZoneCodeDuplicateException} — only the compound
+     * unique constraint should translate.
+     *
+     * <p>This test bypasses the Spring-managed adapter and constructs one
+     * directly against a Mockito {@link JpaZoneRepository}, because the
+     * JPA entity does not model the FK as a {@code @ManyToOne} and so
+     * H2 auto-DDL does not emit a real FK constraint. The narrowed catch is
+     * what we are verifying; a mocked repository reproduces the exception
+     * shape faithfully.
+     */
+    @Test
+    @DisplayName("FK violation on insert rethrows, does NOT translate to ZoneCodeDuplicateException")
+    void insertFkViolationIsNotRemapped() {
+        JpaZoneRepository mockRepo = mock(JpaZoneRepository.class);
+        JpaLocationRepository mockLocationRepo = mock(JpaLocationRepository.class);
+        ZonePersistenceMapper realMapper = new ZonePersistenceMapper();
+        ZonePersistenceAdapter directAdapter =
+                new ZonePersistenceAdapter(mockRepo, mockLocationRepo, realMapper);
+
+        // Simulate a Postgres FK violation on fk_zones_warehouse. On the real
+        // driver this would be a PSQLException nested under DataIntegrityViolationException;
+        // here we reproduce the shape via message text, which falls through
+        // to the message-substring fallback and still fails the narrowed catch
+        // (the message does not contain "uq_zones_warehouse_code").
+        DataIntegrityViolationException fkViolation = new DataIntegrityViolationException(
+                "could not execute statement",
+                new RuntimeException(
+                        "ERROR: insert or update on table \"zones\" violates foreign key "
+                                + "constraint \"fk_zones_warehouse\""));
+        when(mockRepo.saveAndFlush(any(ZoneJpaEntity.class))).thenThrow(fkViolation);
+
+        Zone z = Zone.create(UUID.randomUUID(), "Z-A", "Orphan", ZoneType.AMBIENT, ACTOR);
+
+        assertThatThrownBy(() -> directAdapter.insert(z))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .isNotInstanceOf(ZoneCodeDuplicateException.class);
     }
 }

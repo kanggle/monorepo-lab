@@ -13,10 +13,10 @@ import java.util.UUID;
  * Spring Data types.
  *
  * <p>{@link #hasActiveLocationsFor(UUID)} exists so the Zone deactivation path
- * can enforce the "no active Locations" invariant once Locations ship
- * (TASK-BE-003). In v1 the implementation always returns {@code false} because
- * Locations do not yet exist — a documented, 1:1 seam, not speculative
- * generality.
+ * can enforce the "no active Locations" invariant. As of TASK-BE-003 it is
+ * backed by a real query against the {@code locations} table; the adapter
+ * implementation lives alongside the Zone adapter and shares the same
+ * datasource.
  */
 public interface ZonePersistencePort {
 
@@ -42,9 +42,10 @@ public interface ZonePersistencePort {
     PageResult<Zone> findPage(ListZonesCriteria criteria, PageQuery pageQuery);
 
     /**
-     * Returns whether this zone currently has any ACTIVE child Location. Stubbed
-     * to {@code false} in v1 — Locations arrive in TASK-BE-003 and the real
-     * implementation will live behind this same port.
+     * Returns whether this zone currently has any ACTIVE child Location.
+     * Implemented as a real query against the {@code locations} table as of
+     * TASK-BE-003; the Zone deactivation path in the service layer relies on
+     * this to enforce the "no active child locations" invariant.
      */
     boolean hasActiveLocationsFor(UUID zoneId);
 }

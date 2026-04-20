@@ -5,7 +5,6 @@ import com.example.common.page.PageResult;
 import com.wms.master.application.port.out.LocationPersistencePort;
 import com.wms.master.application.query.ListLocationsCriteria;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
-import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.model.Location;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,9 +56,11 @@ class LocationPersistenceAdapter implements LocationPersistencePort {
 
     @Override
     public Location update(Location modified) {
-        if (!jpaRepository.existsById(modified.getId())) {
-            throw new LocationNotFoundException(modified.getId().toString());
-        }
+        // No existsById pre-check: the service layer's loadOrThrow already
+        // guaranteed existence before entering this adapter. A concurrent
+        // delete between load and save surfaces as
+        // ObjectOptimisticLockingFailureException / StaleStateException at
+        // flush, which the application layer already translates.
         LocationJpaEntity detached = mapper.toNewEntity(modified);
         LocationJpaEntity merged = jpaRepository.saveAndFlush(detached);
         return mapper.toDomain(merged);
