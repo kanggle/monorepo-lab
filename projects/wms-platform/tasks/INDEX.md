@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-015-lot-test-coverage-followup.md` — Lot aggregate test coverage gap: author LotControllerTest (20+ cases), LotServiceAuthorizationTest, LotPersistenceAdapterH2Test, LotPersistenceAdapterTest (Testcontainers), LotExpirationSchedulerTest; add Lot event schemas to contract harness (addresses BE-006 review criticals)
+- `TASK-BE-016-lot-contract-harness-wiring.md` — wire Lot cases into EventContractTest + HttpContractTest (5 event schemas already exist; lot-response.schema.json needed). Only remaining Lot-related gap after BE-015.
 
 ## in-progress
 
@@ -96,3 +96,4 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — warehouse deactivate active-zones guard + hasActiveZonesFor port/adapter. Review verdict 2026-04-20: **APPROVED**
 - `TASK-INT-006-drain-destructive-in-awaitility.md` — accumulate drain() across Awaitility retries; fixes masked field-mismatch failures. Review verdict 2026-04-20: **APPROVED** (1 pre-existing UUID.fromString nit noted)
 - `TASK-BE-006-lot-aggregate.md` — master-service v1 final aggregate (Lot), scheduled expiration, SKU reverse-guard upgrade. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-015 (5 missing test classes + contract harness). 2 non-blocking warnings on LotService (WarehouseStatus comparison, expireBatch transaction scope)
+- `TASK-BE-015-lot-test-coverage-followup.md` — Lot test classes (5/5 confirmed). Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-016 (contract harness Lot wiring only). All 5 test classes high-quality; contract harness missing Lot cases.
