@@ -140,16 +140,26 @@ sync_project() {
     sed -i "s|'projects:$project:|'|g" settings.gradle
     sed -i "s|rootProject.name = '.*'|rootProject.name = '$project'|" settings.gradle
 
+    # Patch CI workflows: colon Gradle task refs + slash file paths
+    if [ -d .github/workflows ]; then
+        for yml in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yml" ] || continue
+            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$yml"
+        done
+    fi
+
     local changed=0
-    git add build.gradle settings.gradle
+    git add build.gradle settings.gradle .github/workflows/ 2>/dev/null || true
     if ! git diff --cached --quiet; then
-        git commit -m "chore(portfolio): restore root build.gradle + rewrite settings.gradle paths
+        git commit -m "chore(portfolio): restore root build.gradle + rewrite paths for standalone layout
 
 Extraction via git-filter-repo --path-rename projects/$project/:
-overwrote the monorepo root build.gradle with the project's
-placeholder. Restore the monorepo root build.gradle (plugins +
-subprojects block) and rewrite settings.gradle include paths
-to match the hoisted layout." --quiet
+- overwrote the monorepo root build.gradle with the project's
+  placeholder — restore from monorepo root (plugins + subprojects block)
+- left settings.gradle with colon-separated include paths referencing
+  the monorepo layout — rewrite to the hoisted layout
+- left .github/workflows/*.yml with monorepo-style Gradle task refs
+  and file paths — rewrite for standalone CI" --quiet
         changed=1
     fi
 
