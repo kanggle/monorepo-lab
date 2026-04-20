@@ -8,7 +8,7 @@ Add active-zones guard to `WarehouseService.deactivate` — contract compliance
 
 # Status
 
-ready
+review
 
 # Owner
 

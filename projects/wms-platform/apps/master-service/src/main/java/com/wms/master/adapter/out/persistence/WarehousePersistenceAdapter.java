@@ -6,6 +6,7 @@ import com.wms.master.application.port.out.WarehousePersistencePort;
 import com.wms.master.application.query.WarehouseListCriteria;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.model.Warehouse;
+import com.wms.master.domain.model.WarehouseStatus;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -15,6 +16,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Warehouse persistence adapter.
+ *
+ * <p>{@link #hasActiveZonesFor} is backed by {@link JpaZoneRepository}; both
+ * adapters share the same datasource so the cross-adapter repository
+ * dependency is acceptable — mirrors how {@code ZonePersistenceAdapter}
+ * reaches into {@link JpaLocationRepository} for its active-children check.
+ */
 @Repository
 class WarehousePersistenceAdapter implements WarehousePersistencePort {
 
@@ -22,11 +31,14 @@ class WarehousePersistenceAdapter implements WarehousePersistencePort {
     private static final Sort.Direction DEFAULT_SORT_DIRECTION = Sort.Direction.DESC;
 
     private final JpaWarehouseRepository jpaRepository;
+    private final JpaZoneRepository jpaZoneRepository;
     private final WarehousePersistenceMapper mapper;
 
     WarehousePersistenceAdapter(JpaWarehouseRepository jpaRepository,
+                                JpaZoneRepository jpaZoneRepository,
                                 WarehousePersistenceMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.jpaZoneRepository = jpaZoneRepository;
         this.mapper = mapper;
     }
 
@@ -86,6 +98,11 @@ class WarehousePersistenceAdapter implements WarehousePersistencePort {
                 page.getSize(),
                 page.getTotalElements(),
                 page.getTotalPages());
+    }
+
+    @Override
+    public boolean hasActiveZonesFor(UUID warehouseId) {
+        return jpaZoneRepository.existsByWarehouseIdAndStatus(warehouseId, WarehouseStatus.ACTIVE);
     }
 
     private Pageable toPageable(PageQuery pageQuery) {

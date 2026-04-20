@@ -18,6 +18,7 @@ import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -215,6 +216,27 @@ class WarehouseServiceTest {
 
             WarehouseDeactivatedEvent event = events.single(WarehouseDeactivatedEvent.class);
             assertThat(event.reason()).isEqualTo("Closing");
+        }
+
+        @Test
+        @DisplayName("blocked when warehouse has active zones raises ReferenceIntegrityViolationException (REFERENCE_INTEGRITY_VIOLATION)")
+        void deactivate_blockedByActiveZones() {
+            WarehouseResult created = service.create(new CreateWarehouseCommand(
+                    "WH01", "Name", null, "UTC", ACTOR));
+            events.clear();
+            persistence.markWarehouseAsHavingActiveZones(created.id());
+
+            assertThatThrownBy(() -> service.deactivate(new DeactivateWarehouseCommand(
+                    created.id(), "Closing", created.version(), ACTOR)))
+                    .isInstanceOf(ReferenceIntegrityViolationException.class)
+                    .hasMessageContaining("warehouse has active zones")
+                    .extracting("code").isEqualTo("REFERENCE_INTEGRITY_VIOLATION");
+
+            assertThat(events.published()).isEmpty();
+            // The aggregate must remain ACTIVE — the guard runs BEFORE deactivate()
+            // and BEFORE persistence.update(), so no version bump should have occurred.
+            assertThat(persistence.stored(created.id()).getStatus()).isEqualTo(WarehouseStatus.ACTIVE);
+            assertThat(persistence.stored(created.id()).getVersion()).isEqualTo(created.version());
         }
 
         @Test
