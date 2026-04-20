@@ -5,10 +5,10 @@ import com.example.common.page.PageResult;
 import com.wms.master.application.port.out.ZonePersistencePort;
 import com.wms.master.application.query.ListZonesCriteria;
 import com.wms.master.domain.exception.ZoneCodeDuplicateException;
-import com.wms.master.domain.exception.ZoneNotFoundException;
 import com.wms.master.domain.model.Zone;
 import java.util.Optional;
 import java.util.UUID;
+import org.postgresql.util.PSQLException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -56,24 +56,74 @@ class ZonePersistenceAdapter implements ZonePersistencePort {
             ZoneJpaEntity saved = jpaRepository.saveAndFlush(entity);
             return mapper.toDomain(saved);
         } catch (DataIntegrityViolationException e) {
-            // The only unique constraint on zones is (warehouse_id, zone_code),
-            // so every DataIntegrityViolationException on insert is a duplicate
-            // within the same warehouse.
-            throw new ZoneCodeDuplicateException(newZone.getWarehouseId(), newZone.getZoneCode());
+            // Narrowed to the compound-unique violation only. FK (fk_zones_warehouse)
+            // and CHECK (ck_zones_status / ck_zones_zone_type) violations also surface
+            // as DataIntegrityViolationException but must NOT be remapped to
+            // ZoneCodeDuplicateException — rethrow unchanged so the global handler
+            // renders them as 500 rather than a misleading 409.
+            if (isZoneCodeUniqueViolation(e)) {
+                throw new ZoneCodeDuplicateException(newZone.getWarehouseId(), newZone.getZoneCode());
+            }
+            throw e;
         }
     }
 
     @Override
     public Zone update(Zone modified) {
-        if (!jpaRepository.existsById(modified.getId())) {
-            throw new ZoneNotFoundException(modified.getId().toString());
-        }
+        // No existsById pre-check: the service layer's loadOrThrow already
+        // guaranteed existence before entering this adapter. A concurrent
+        // delete between load and save surfaces as
+        // ObjectOptimisticLockingFailureException / StaleStateException at
+        // flush, which the application layer already translates.
+        //
         // Build a detached entity carrying the caller's @Version so Hibernate's
         // merge performs the optimistic-lock check at flush. Mismatch surfaces
         // as ObjectOptimisticLockingFailureException.
         ZoneJpaEntity detached = mapper.toNewEntity(modified);
         ZoneJpaEntity merged = jpaRepository.saveAndFlush(detached);
         return mapper.toDomain(merged);
+    }
+
+    /**
+     * Detects whether the given {@link DataIntegrityViolationException} was
+     * caused by a violation of {@code uq_zones_warehouse_code}. Prefers the
+     * structured {@link PSQLException#getServerErrorMessage()} constraint
+     * field on Postgres (immune to error-message localization); falls back to
+     * a message-substring match for H2 and any other driver whose cause chain
+     * does not expose a {@link PSQLException}.
+     */
+    private static boolean isZoneCodeUniqueViolation(DataIntegrityViolationException e) {
+        PSQLException pg = findCause(e, PSQLException.class);
+        if (pg != null && pg.getServerErrorMessage() != null) {
+            String constraint = pg.getServerErrorMessage().getConstraint();
+            if (constraint != null) {
+                return "uq_zones_warehouse_code".equalsIgnoreCase(constraint);
+            }
+        }
+        String rootMessage = rootMessage(e);
+        return rootMessage != null
+                && rootMessage.toLowerCase().contains("uq_zones_warehouse_code");
+    }
+
+    private static <T extends Throwable> T findCause(Throwable t, Class<T> type) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            if (type.isInstance(cursor)) {
+                return type.cast(cursor);
+            }
+            cursor = cursor.getCause();
+        }
+        return null;
+    }
+
+    private static String rootMessage(Throwable t) {
+        Throwable cursor = t;
+        Throwable last = t;
+        while (cursor != null) {
+            last = cursor;
+            cursor = cursor.getCause();
+        }
+        return last == null ? null : last.getMessage();
     }
 
     @Override
