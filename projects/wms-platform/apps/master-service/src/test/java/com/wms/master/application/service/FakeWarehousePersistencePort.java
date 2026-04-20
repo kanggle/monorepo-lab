@@ -10,9 +10,11 @@ import com.wms.master.domain.model.Warehouse;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -26,6 +28,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 class FakeWarehousePersistencePort implements WarehousePersistencePort {
 
     private final Map<UUID, Warehouse> byId = new HashMap<>();
+    private final Set<UUID> warehousesWithActiveZones = new HashSet<>();
     private boolean failNextUpdateAsOptimisticLock = false;
 
     @Override
@@ -103,9 +106,18 @@ class FakeWarehousePersistencePort implements WarehousePersistencePort {
         return new PageResult<>(slice, pageQuery.page(), pageQuery.size(), all.size(), totalPages);
     }
 
+    @Override
+    public boolean hasActiveZonesFor(UUID warehouseId) {
+        return warehousesWithActiveZones.contains(warehouseId);
+    }
+
     // test hooks
     void triggerOptimisticLockOnNextUpdate() {
         this.failNextUpdateAsOptimisticLock = true;
+    }
+
+    void markWarehouseAsHavingActiveZones(UUID warehouseId) {
+        warehousesWithActiveZones.add(warehouseId);
     }
 
     Warehouse stored(UUID id) {

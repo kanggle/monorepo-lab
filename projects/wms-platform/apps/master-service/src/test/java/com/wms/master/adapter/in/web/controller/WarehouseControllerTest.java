@@ -22,6 +22,7 @@ import com.wms.master.application.query.ListWarehousesQuery;
 import com.wms.master.application.result.WarehouseResult;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.WarehouseStatus;
@@ -268,6 +269,24 @@ class WarehouseControllerTest {
                 .andExpect(jsonPath("$.status").value("INACTIVE"));
 
         verify(crudUseCase).deactivate(new DeactivateWarehouseCommand(id, "closing", 3L, ACTOR));
+    }
+
+    @Test
+    void deactivate_returns409_withReferenceIntegrityCode_whenWarehouseHasActiveZones() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(crudUseCase.deactivate(any()))
+                .thenThrow(new ReferenceIntegrityViolationException(
+                        "Warehouse", id, "warehouse has active zones"));
+
+        String body = """
+                { "version": 3, "reason": "closing" }
+                """;
+
+        mockMvc.perform(post("/api/v1/master/warehouses/" + id + "/deactivate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("REFERENCE_INTEGRITY_VIOLATION"));
     }
 
     @Test

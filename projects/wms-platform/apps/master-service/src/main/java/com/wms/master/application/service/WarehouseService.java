@@ -16,6 +16,7 @@ import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.Warehouse;
 import java.util.ArrayList;
@@ -83,10 +84,15 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
         Warehouse loaded = loadOrThrow(command.id());
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
 
+        // v1 reference-integrity check is local-only: refuse to orphan ACTIVE
+        // child Zones. Mirrors ZoneService.deactivate's hasActiveLocationsFor
+        // guard. Cross-service references (Inventory etc.) are out of scope —
+        // tracked in architecture.md Open Items for v2.
+        if (persistencePort.hasActiveZonesFor(loaded.getId())) {
+            throw new ReferenceIntegrityViolationException(
+                    AGGREGATE_TYPE, loaded.getId(), "warehouse has active zones");
+        }
         loaded.deactivate(command.actorId());
-        // v1 reference-integrity check is local-only. Warehouse has no local child
-        // aggregates yet (Zone ships in a later task); when it does, check here
-        // and raise REFERENCE_INTEGRITY_VIOLATION before calling the port.
 
         Warehouse saved = saveWithOptimisticLock(loaded);
         eventPort.publish(List.of(WarehouseDeactivatedEvent.from(saved, command.reason())));

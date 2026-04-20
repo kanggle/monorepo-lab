@@ -11,6 +11,8 @@ import com.wms.master.config.MasterServicePersistenceConfig;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.WarehouseStatus;
+import com.wms.master.domain.model.ZoneType;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +51,9 @@ class WarehousePersistenceAdapterH2Test {
 
     @Autowired
     JpaWarehouseRepository jpaRepository;
+
+    @Autowired
+    JpaZoneRepository jpaZoneRepository;
 
     @Test
     @DisplayName("insert persists a new warehouse and assigns version 0")
@@ -196,5 +201,60 @@ class WarehousePersistenceAdapterH2Test {
         assertThat(firstPage.totalElements()).isEqualTo(3);
         assertThat(firstPage.totalPages()).isEqualTo(2);
         assertThat(firstPage.content().get(0).getWarehouseCode()).isEqualTo("WH10");
+    }
+
+    @Test
+    @DisplayName("hasActiveZonesFor returns false for a warehouse with no zones")
+    void hasActiveZonesEmpty() {
+        Warehouse w = adapter.insert(Warehouse.create("WH20", "Empty", null, "UTC", ACTOR));
+
+        assertThat(adapter.hasActiveZonesFor(w.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("hasActiveZonesFor returns true when at least one ACTIVE zone exists")
+    void hasActiveZonesTrue() {
+        Warehouse w = adapter.insert(Warehouse.create("WH21", "WithZones", null, "UTC", ACTOR));
+        insertZone(w.getId(), "Z-A", WarehouseStatus.ACTIVE);
+
+        assertThat(adapter.hasActiveZonesFor(w.getId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("hasActiveZonesFor returns false when only INACTIVE zones exist")
+    void hasActiveZonesAllInactive() {
+        Warehouse w = adapter.insert(Warehouse.create("WH22", "AllClosed", null, "UTC", ACTOR));
+        insertZone(w.getId(), "Z-A", WarehouseStatus.INACTIVE);
+        insertZone(w.getId(), "Z-B", WarehouseStatus.INACTIVE);
+
+        assertThat(adapter.hasActiveZonesFor(w.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("hasActiveZonesFor scopes to the queried warehouseId — sibling zones do not leak")
+    void hasActiveZonesScopedToWarehouse() {
+        Warehouse w1 = adapter.insert(Warehouse.create("WH23", "First", null, "UTC", ACTOR));
+        Warehouse w2 = adapter.insert(Warehouse.create("WH24", "Second", null, "UTC", ACTOR));
+        insertZone(w2.getId(), "Z-A", WarehouseStatus.ACTIVE);
+
+        assertThat(adapter.hasActiveZonesFor(w1.getId())).isFalse();
+        assertThat(adapter.hasActiveZonesFor(w2.getId())).isTrue();
+    }
+
+    private void insertZone(UUID warehouseId, String zoneCode, WarehouseStatus status) {
+        Instant now = Instant.now();
+        ZoneJpaEntity zone = new ZoneJpaEntity(
+                UUID.randomUUID(),
+                warehouseId,
+                zoneCode,
+                "Zone " + zoneCode,
+                ZoneType.AMBIENT,
+                status,
+                null, // version=null so JPA treats as new
+                now,
+                ACTOR,
+                now,
+                ACTOR);
+        jpaZoneRepository.saveAndFlush(zone);
     }
 }

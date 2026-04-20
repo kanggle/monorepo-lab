@@ -14,6 +14,13 @@ interface JpaZoneRepository extends JpaRepository<ZoneJpaEntity, UUID> {
 
     boolean existsByWarehouseIdAndZoneCode(UUID warehouseId, String zoneCode);
 
+    /**
+     * Used by {@code WarehousePersistenceAdapter.hasActiveZonesFor} to enforce
+     * the "no active child Zone" invariant on Warehouse deactivate. Mirrors
+     * {@link JpaLocationRepository#existsByZoneIdAndStatus(UUID, WarehouseStatus)}.
+     */
+    boolean existsByWarehouseIdAndStatus(UUID warehouseId, WarehouseStatus status);
+
     Optional<ZoneJpaEntity> findByWarehouseIdAndZoneCode(UUID warehouseId, String zoneCode);
 
     /**

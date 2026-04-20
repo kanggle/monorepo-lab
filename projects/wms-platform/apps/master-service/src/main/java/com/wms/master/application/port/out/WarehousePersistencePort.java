@@ -15,6 +15,11 @@ import java.util.UUID;
  * <p>Split {@code insert} vs {@code update} so the adapter can pick the
  * correct strategy (persist vs merge + dirty-check) based on caller intent
  * instead of inferring it from domain state.
+ *
+ * <p>{@link #hasActiveZonesFor(UUID)} exists so the Warehouse deactivation
+ * path can enforce the "no active child Zones" invariant. Backed by a real
+ * query against the {@code zones} table — the adapter implementation lives
+ * alongside the Warehouse adapter and shares the same datasource.
  */
 public interface WarehousePersistencePort {
 
@@ -39,4 +44,13 @@ public interface WarehousePersistencePort {
     Optional<Warehouse> findByCode(String warehouseCode);
 
     PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery);
+
+    /**
+     * Returns whether this warehouse currently has any ACTIVE child Zone.
+     * Implemented as a real query against the {@code zones} table; the
+     * Warehouse deactivation path in the service layer relies on this to
+     * enforce the "no active child zones" invariant — mirrors
+     * {@link com.wms.master.application.port.out.ZonePersistencePort#hasActiveLocationsFor(UUID)}.
+     */
+    boolean hasActiveZonesFor(UUID warehouseId);
 }
