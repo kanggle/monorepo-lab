@@ -4,6 +4,7 @@ import com.example.common.id.UuidV7;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.application.result.LocationResult;
+import com.wms.master.application.result.LotResult;
 import com.wms.master.application.result.SkuResult;
 import com.wms.master.application.result.WarehouseResult;
 import com.wms.master.application.result.ZoneResult;
@@ -12,6 +13,11 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
+import com.wms.master.domain.event.LotCreatedEvent;
+import com.wms.master.domain.event.LotDeactivatedEvent;
+import com.wms.master.domain.event.LotExpiredEvent;
+import com.wms.master.domain.event.LotReactivatedEvent;
+import com.wms.master.domain.event.LotUpdatedEvent;
 import com.wms.master.domain.event.SkuCreatedEvent;
 import com.wms.master.domain.event.SkuDeactivatedEvent;
 import com.wms.master.domain.event.SkuReactivatedEvent;
@@ -34,6 +40,11 @@ import org.slf4j.MDC;
  * <p>
  * One envelope per {@link DomainEvent}, serialized as a self-contained string
  * suitable for writing to the outbox.
+ *
+ * <p>{@code actorId} is a nullable field: system-originated events such as
+ * {@link LotExpiredEvent} carry {@code null} (see
+ * {@code contracts/events/event-envelope.schema.json} — the type is
+ * {@code ["string","null"]}).
  */
 public class EventEnvelopeSerializer {
 
@@ -56,6 +67,8 @@ public class EventEnvelopeSerializer {
         envelope.put("aggregateType", event.aggregateType());
         envelope.put("aggregateId", event.aggregateId().toString());
         envelope.put("traceId", currentTraceId());
+        // actorId is deliberately nullable; LinkedHashMap preserves null values
+        // so the JSON carries `"actorId": null` rather than dropping the key.
         envelope.put("actorId", event.actorId());
         envelope.put("payload", buildPayload(event));
 
@@ -129,6 +142,27 @@ public class EventEnvelopeSerializer {
                 yield payload;
             }
             case SkuReactivatedEvent e -> Map.of("sku", SkuResult.from(e.snapshot()));
+            case LotCreatedEvent e -> Map.of("lot", LotResult.from(e.snapshot()));
+            case LotUpdatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("lot", LotResult.from(e.snapshot()));
+                payload.put("changedFields", e.changedFields());
+                yield payload;
+            }
+            case LotDeactivatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("lot", LotResult.from(e.snapshot()));
+                payload.put("reason", e.reason());
+                yield payload;
+            }
+            case LotReactivatedEvent e -> Map.of("lot", LotResult.from(e.snapshot()));
+            case LotExpiredEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("lot", LotResult.from(e.snapshot()));
+                payload.put("triggeredBy", e.triggeredBy());
+                payload.put("scheduledAt", e.scheduledAt().toString());
+                yield payload;
+            }
         };
     }
 }

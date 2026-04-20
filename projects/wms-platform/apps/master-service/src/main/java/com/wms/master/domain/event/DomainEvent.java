@@ -20,7 +20,12 @@ public sealed interface DomainEvent
         SkuCreatedEvent,
         SkuUpdatedEvent,
         SkuDeactivatedEvent,
-        SkuReactivatedEvent {
+        SkuReactivatedEvent,
+        LotCreatedEvent,
+        LotUpdatedEvent,
+        LotDeactivatedEvent,
+        LotReactivatedEvent,
+        LotExpiredEvent {
 
     UUID aggregateId();
 
@@ -30,5 +35,10 @@ public sealed interface DomainEvent
 
     Instant occurredAt();
 
+    /**
+     * JWT subject that originated the change, or {@code null} for
+     * system-originated events (e.g. {@link LotExpiredEvent}, where the
+     * scheduled expiration job has no user context).
+     */
     String actorId();
 }

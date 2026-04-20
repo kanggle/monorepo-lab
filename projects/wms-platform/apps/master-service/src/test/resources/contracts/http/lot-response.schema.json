@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wms.example.com/contracts/http/lot-response.v1.json",
+  "title": "Lot resource response",
+  "description": "Derived from specs/contracts/http/master-service-api.md §6 Lot. Matches 2xx responses of create, get-by-id, update, deactivate, reactivate.",
+  "type": "object",
+  "required": [
+    "id",
+    "skuId",
+    "lotNo",
+    "status",
+    "version",
+    "createdAt",
+    "createdBy",
+    "updatedAt",
+    "updatedBy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "skuId": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "lotNo": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "manufacturedDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "expiryDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "supplierPartnerId": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "EXPIRED"] },
+    "version": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string" },
+    "createdBy": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "updatedBy": { "type": "string" }
+  }
+}

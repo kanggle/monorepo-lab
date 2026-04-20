@@ -16,7 +16,7 @@ import com.wms.master.domain.event.SkuDeactivatedEvent;
 import com.wms.master.domain.event.SkuReactivatedEvent;
 import com.wms.master.domain.event.SkuUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
-import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.model.Sku;
 import java.util.ArrayList;
@@ -37,7 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>SKU has no parent aggregate reference, so create/reactivate do not perform
  * the parent-active check Zone and Location require. It does carry a
  * {@link SkuPersistencePort#hasActiveLotsFor(UUID)} guard on deactivate —
- * stubbed in v1, fully wired when TASK-BE-006 (Lot) lands.
+ * real query as of TASK-BE-006; violation surfaces as 409
+ * {@code REFERENCE_INTEGRITY_VIOLATION} (same mapping Warehouse / Zone use
+ * for their own children).
  */
 @Service
 @Transactional
@@ -113,7 +115,8 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
 
         if (persistencePort.hasActiveLotsFor(loaded.getId())) {
-            throw new InvalidStateTransitionException("sku has active lots");
+            throw new ReferenceIntegrityViolationException(
+                    AGGREGATE_TYPE, loaded.getId(), "sku has active lots");
         }
         loaded.deactivate(command.actorId());
 

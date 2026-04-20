@@ -96,3 +96,10 @@ outbox:
 master:
   idempotency:
     ttl-seconds: 86400
+
+wms:
+  scheduler:
+    lot-expiration:
+      # Default ON in every profile except integration tests; see
+      # application-integration.yml for the test-harness override.
+      enabled: true

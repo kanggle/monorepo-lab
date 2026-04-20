@@ -253,8 +253,9 @@ class SkuPersistenceAdapterH2Test {
     @DisplayName("translateIntegrityViolation uses Postgres constraint-name to detect barcode duplicate")
     void translateBarcodeDuplicateViaConstraintName() {
         JpaSkuRepository mockRepo = mock(JpaSkuRepository.class);
+        JpaLotRepository mockLotRepo = mock(JpaLotRepository.class);
         SkuPersistenceMapper realMapper = new SkuPersistenceMapper();
-        SkuPersistenceAdapter directAdapter = new SkuPersistenceAdapter(mockRepo, realMapper);
+        SkuPersistenceAdapter directAdapter = new SkuPersistenceAdapter(mockRepo, mockLotRepo, realMapper);
 
         // Server-error message wire format: each field is a single-char type
         // code followed by a null-terminated value. PostgreSQL uses 'n'

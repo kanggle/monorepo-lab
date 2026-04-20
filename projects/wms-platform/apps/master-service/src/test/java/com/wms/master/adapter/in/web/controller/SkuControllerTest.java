@@ -23,6 +23,7 @@ import com.wms.master.application.result.SkuResult;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.model.BaseUom;
@@ -379,6 +380,30 @@ class SkuControllerTest {
                 .andExpect(jsonPath("$.status").value("INACTIVE"));
 
         verify(crudUseCase).deactivate(new DeactivateSkuCommand(id, "discontinued", 3L, ACTOR));
+    }
+
+    @Test
+    void deactivate_returns409_whenActiveLotsPresent() throws Exception {
+        // TASK-BE-006: the SKU deactivate reverse guard now raises
+        // ReferenceIntegrityViolationException (409) when the SKU still has
+        // ACTIVE child Lots. Controller must map to 409 with
+        // code=REFERENCE_INTEGRITY_VIOLATION (distinct from
+        // STATE_TRANSITION_INVALID = 422, which covers single-aggregate
+        // invariants only).
+        UUID id = UUID.randomUUID();
+        when(crudUseCase.deactivate(any())).thenThrow(
+                new ReferenceIntegrityViolationException(
+                        "Sku", id, "sku has active lots"));
+
+        String body = """
+                { "version": 0, "reason": "retired" }
+                """;
+
+        mockMvc.perform(post("/api/v1/master/skus/" + id + "/deactivate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("REFERENCE_INTEGRITY_VIOLATION"));
     }
 
     @Test
