@@ -136,11 +136,23 @@ class GatewayMasterE2ETest extends E2EBase {
                 //   - envelope.aggregateId matches POST response id
                 //   - envelope.eventId is UUID-parseable
                 //   - envelope.payload.warehouse.warehouseCode echoes the POST
+                //
+                // The accumulator is declared OUTSIDE the Awaitility lambda so
+                // it persists across polling cycles. `consumer.drain()` is
+                // destructive (poll-and-remove from the underlying queue): if
+                // we re-declared the list inside the lambda, a record received
+                // on cycle N but failing a field assertion on the same cycle
+                // would be gone on cycle N+1, masking the real field mismatch
+                // behind a misleading "no record received" failure. Appending
+                // to a captured list keeps every drained record visible to
+                // every retry until the field assertions pass or the timeout
+                // elapses.
+                List<ConsumerRecord<String, String>> accumulated = new ArrayList<>();
                 await().atMost(Duration.ofSeconds(10))
                         .pollInterval(Duration.ofMillis(500))
                         .untilAsserted(() -> {
-                            List<ConsumerRecord<String, String>> records = consumer.drain();
-                            ConsumerRecord<String, String> match = records.stream()
+                            accumulated.addAll(consumer.drain());
+                            ConsumerRecord<String, String> match = accumulated.stream()
                                     .filter(r -> warehouseId.equals(r.key()))
                                     .findFirst()
                                     .orElse(null);
