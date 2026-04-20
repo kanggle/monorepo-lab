@@ -1,6 +1,7 @@
 package com.wms.master.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,11 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 /**
  * Unit tests for {@link LotExpirationScheduler}.
@@ -114,21 +112,16 @@ class LotExpirationSchedulerTest {
     @Test
     @DisplayName("비활성 속성: wms.scheduler.lot-expiration.enabled=false 이면 빈이 생성되지 않는다")
     void scheduler_whenDisabled_beanIsNotCreated() {
-        // Manually spin up a minimal Spring context with the property set to false.
+        ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext()) {
-            ctx.getEnvironment().getSystemProperties()
-                    .put("wms.scheduler.lot-expiration.enabled", "false");
-            ctx.register(DisabledSchedulerConfig.class);
+            TestPropertyValues.of("wms.scheduler.lot-expiration.enabled=false").applyTo(ctx);
+            ctx.registerBean("expireLotsBatchUseCase", ExpireLotsBatchUseCase.class, () -> useCase);
+            ctx.register(LotExpirationScheduler.class);
             ctx.refresh();
 
-            // The scheduler bean must NOT be present — ConditionalOnProperty blocks creation.
-            try {
-                ctx.getBean(LotExpirationScheduler.class);
-                throw new AssertionError(
-                        "Expected LotExpirationScheduler bean to be absent when enabled=false");
-            } catch (NoSuchBeanDefinitionException expected) {
-                // Correct: bean is not created when the property is false.
-            }
+            // Class-level @ConditionalOnProperty(havingValue="true") blocks creation.
+            assertThatThrownBy(() -> ctx.getBean(LotExpirationScheduler.class))
+                    .isInstanceOf(NoSuchBeanDefinitionException.class);
         }
     }
 
@@ -147,24 +140,4 @@ class LotExpirationSchedulerTest {
         }
     }
 
-    // ---------- inner config for disabled test ----------
-
-    /**
-     * Minimal Spring configuration providing a mock use-case bean so
-     * the LotExpirationScheduler can load without a full app context.
-     */
-    @Configuration
-    static class DisabledSchedulerConfig {
-
-        @Bean
-        ExpireLotsBatchUseCase expireLotsBatchUseCase() {
-            return mock(ExpireLotsBatchUseCase.class);
-        }
-
-        // Explicitly register the scheduler so the ConditionalOnProperty can fire.
-        @Bean
-        LotExpirationScheduler lotExpirationScheduler(ExpireLotsBatchUseCase useCase) {
-            return new LotExpirationScheduler(useCase);
-        }
-    }
 }
