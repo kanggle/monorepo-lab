@@ -39,6 +39,8 @@ class HttpContractTest extends MasterServiceIntegrationBase {
             ContractSchema.load("/contracts/http/zone-response.schema.json");
     private static final ContractSchema LOCATION_RESPONSE =
             ContractSchema.load("/contracts/http/location-response.schema.json");
+    private static final ContractSchema LOT_RESPONSE =
+            ContractSchema.load("/contracts/http/lot-response.schema.json");
     private static final ContractSchema ERROR_ENVELOPE =
             ContractSchema.load("/contracts/http/error-envelope.schema.json");
 
@@ -108,6 +110,37 @@ class HttpContractTest extends MasterServiceIntegrationBase {
     }
 
     @Test
+    @DisplayName("POST /skus/{skuId}/lots 201 response conforms to lot-response.schema")
+    void createLot_matchesSchema() throws Exception {
+        String skuId = seedLotTrackedSku();
+        String lotBody = """
+                {"lotNo":"LOT-%s"}
+                """.formatted(shortSuffix());
+        ResponseEntity<String> response = post("/api/v1/master/skus/" + skuId + "/lots",
+                lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        LOT_RESPONSE.assertValid(response.getBody());
+    }
+
+    @Test
+    @DisplayName("GET /lots/{id} 200 response conforms to lot-response.schema")
+    void getLot_matchesSchema() throws Exception {
+        String skuId = seedLotTrackedSku();
+        String lotBody = """
+                {"lotNo":"LOT-%s"}
+                """.formatted(shortSuffix());
+        ResponseEntity<String> created = post("/api/v1/master/skus/" + skuId + "/lots",
+                lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        JsonNode createdNode = objectMapper.readTree(created.getBody());
+
+        ResponseEntity<String> response = get(
+                "/api/v1/master/lots/" + createdNode.get("id").asText(), "MASTER_READ");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        LOT_RESPONSE.assertValid(response.getBody());
+    }
+
+    @Test
     @DisplayName("401 response conforms to error-envelope.schema")
     void unauthorizedResponse_matchesErrorSchema() {
         // No Authorization header → 401
@@ -168,6 +201,17 @@ class HttpContractTest extends MasterServiceIntegrationBase {
                 zoneBody, UUID.randomUUID().toString(), "MASTER_WRITE");
         String zoneId = objectMapper.readTree(zone.getBody()).get("id").asText();
         return new Seed(warehouseId, warehouseCode, zoneId);
+    }
+
+    private String seedLotTrackedSku() throws Exception {
+        String skuCode = "SKU-LOT-" + shortSuffix();
+        String body = """
+                {"skuCode":"%s","name":"Lot-Tracked SKU","baseUom":"EA","trackingType":"LOT"}
+                """.formatted(skuCode);
+        ResponseEntity<String> response = post("/api/v1/master/skus",
+                body, UUID.randomUUID().toString(), "MASTER_WRITE");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return objectMapper.readTree(response.getBody()).get("id").asText();
     }
 
     private ResponseEntity<String> post(String path, String body, String idempKey, String role) {
