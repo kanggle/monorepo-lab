@@ -166,7 +166,7 @@ class SkuPersistenceAdapterTest {
                     .setParameter("name", "Should fail")
                     .executeUpdate();
             entityManager.flush();
-        }).isInstanceOf(DataIntegrityViolationException.class);
+        }).hasRootCauseInstanceOf(org.postgresql.util.PSQLException.class);
     }
 
     @Test
