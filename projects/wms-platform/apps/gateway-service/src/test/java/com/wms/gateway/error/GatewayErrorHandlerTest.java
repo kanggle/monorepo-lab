@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -13,7 +15,16 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 
 class GatewayErrorHandlerTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    /**
+     * Mirrors the Spring Boot default ObjectMapper configuration:
+     * {@code JavaTimeModule} registered and timestamps written as ISO 8601
+     * strings (not numeric). That matches the contract enforced by
+     * {@code platform/error-handling.md} § Error Response Format.
+     */
+    private final ObjectMapper mapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
     private final GatewayErrorHandler handler = new GatewayErrorHandler(mapper);
 
     @Test
@@ -32,7 +43,10 @@ class GatewayErrorHandlerTest {
         JsonNode node = mapper.readTree(body);
         assertThat(node.get("code").asText()).isEqualTo("UNAUTHORIZED");
         assertThat(node.get("message").asText()).isEqualTo("Authentication required");
-        assertThat(node.get("timestamp").asText()).isNotEmpty();
+        // Platform envelope: timestamp is required and must be ISO 8601 UTC
+        // (per platform/error-handling.md § Error Response Format).
+        assertThat(node.get("timestamp").asText())
+                .matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$");
     }
 
     @Test

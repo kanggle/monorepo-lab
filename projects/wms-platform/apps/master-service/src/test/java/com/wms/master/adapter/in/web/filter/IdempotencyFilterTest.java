@@ -3,6 +3,8 @@ package com.wms.master.adapter.in.web.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wms.master.application.port.out.IdempotencyStore;
 import com.wms.master.application.port.out.StoredResponse;
 import jakarta.servlet.FilterChain;
@@ -20,7 +22,16 @@ class IdempotencyFilterTest {
     private static final String KEY = "11111111-2222-3333-4444-555555555555";
     private static final String PATH = "/api/v1/master/warehouses";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    /**
+     * Mirrors the Spring Boot default ObjectMapper: {@code JavaTimeModule}
+     * registered and timestamps written as ISO 8601 strings. Required now
+     * that {@code ApiErrorEnvelope.ApiError} carries an {@link Instant}
+     * timestamp (per {@code platform/error-handling.md}).
+     */
+    private final ObjectMapper mapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
     private final RequestBodyCanonicalizer canonicalizer = new RequestBodyCanonicalizer(mapper);
 
     @Test

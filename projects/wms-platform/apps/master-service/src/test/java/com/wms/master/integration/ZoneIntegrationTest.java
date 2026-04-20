@@ -25,7 +25,7 @@ import org.springframework.http.ResponseEntity;
  * <p>Covers the zone-specific end-to-end invariants:
  * <ul>
  *   <li>Parent-warehouse-active guard (AC: zone create on INACTIVE warehouse
- *       returns 409 STATE_TRANSITION_INVALID)</li>
+ *       returns 422 STATE_TRANSITION_INVALID)</li>
  *   <li>Outbox → {@code wms.master.zone.v1} delivery with the correct envelope</li>
  *   <li>Idempotency replay on a nested route</li>
  * </ul>
@@ -80,7 +80,7 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
     }
 
     @Test
-    @DisplayName("zone create under INACTIVE warehouse returns 409 STATE_TRANSITION_INVALID")
+    @DisplayName("zone create under INACTIVE warehouse returns 422 STATE_TRANSITION_INVALID")
     void createZone_whenWarehouseInactive_blocks() throws Exception {
         String warehouseId = seedWarehouse();
 
@@ -99,7 +99,7 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
         ResponseEntity<String> attempt = post(
                 "/api/v1/master/warehouses/" + warehouseId + "/zones",
                 zoneBody, UUID.randomUUID().toString(), WRITE_ROLE);
-        assertThat(attempt.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(attempt.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(attempt.getBody()).contains("STATE_TRANSITION_INVALID");
     }
 

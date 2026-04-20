@@ -2,6 +2,7 @@ package com.wms.gateway.error;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,8 +36,12 @@ public final class GatewayErrorHandler {
             return objectMapper.writeValueAsBytes(envelope);
         } catch (Exception e) {
             // Fallback to a hand-rolled JSON so an envelope always reaches the client.
+            // Per platform/error-handling.md the envelope must always carry a
+            // timestamp; use the current UTC instant so the fallback path stays
+            // spec-compliant.
+            Instant timestamp = envelope.timestamp() != null ? envelope.timestamp() : Instant.now();
             String fallback = "{\"code\":\"" + envelope.code() + "\",\"message\":\""
-                    + envelope.message() + "\"}";
+                    + envelope.message() + "\",\"timestamp\":\"" + timestamp + "\"}";
             return fallback.getBytes(StandardCharsets.UTF_8);
         }
     }

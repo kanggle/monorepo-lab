@@ -43,13 +43,16 @@ Enforced at the application layer, not in controllers.
 
 ### Error Envelope
 
-Per `platform/error-handling.md`:
+Per `platform/error-handling.md`. Every error response carries `code`,
+`message`, and `timestamp` (ISO 8601 UTC). The nested `error` wrapper is
+service-level envelope used by `master-service`:
 
 ```json
 {
   "error": {
     "code": "WAREHOUSE_NOT_FOUND",
     "message": "Warehouse not found: WH99",
+    "timestamp": "2026-04-20T12:34:56.789Z",
     "details": { "warehouseCode": "WH99" },
     "traceId": "abc123",
     "requestId": "req-xyz"
@@ -66,7 +69,7 @@ Domain error → HTTP status mapping:
 | `REFERENCE_INTEGRITY_VIOLATION` | Deactivation blocked | 409 |
 | `VALIDATION_ERROR` | Bad input | 400 |
 | `CONFLICT` | Optimistic lock collision | 409 |
-| `STATE_TRANSITION_INVALID` | Reactivate an `EXPIRED` Lot | 409 |
+| `STATE_TRANSITION_INVALID` | Reactivate an `EXPIRED` Lot | 422 |
 | `DUPLICATE_REQUEST` | Idempotency replay mismatch | 409 |
 | `UNAUTHORIZED` / `FORBIDDEN` | | 401 / 403 |
 
@@ -202,7 +205,7 @@ Request:
 Effect: `status` → `INACTIVE`. Blocked if any `ACTIVE` Zone under this warehouse.
 Response `200`: updated resource.
 Errors: `WAREHOUSE_NOT_FOUND` (404), `CONFLICT` (409), `REFERENCE_INTEGRITY_VIOLATION` (409),
-`STATE_TRANSITION_INVALID` (409) if already `INACTIVE`.
+`STATE_TRANSITION_INVALID` (422) if already `INACTIVE`.
 
 ### 1.6 POST `/api/v1/master/warehouses/{id}/reactivate`
 
@@ -250,7 +253,7 @@ Response `201`:
 ```
 
 Errors: `WAREHOUSE_NOT_FOUND` (404), `ZONE_CODE_DUPLICATE` (409),
-`STATE_TRANSITION_INVALID` (409) if parent is `INACTIVE`.
+`STATE_TRANSITION_INVALID` (422) if parent is `INACTIVE`.
 
 ### 2.2 GET `/{zoneId}` — Get
 
@@ -304,7 +307,7 @@ Parent Zone must be `ACTIVE`.
 Response `201`: includes `warehouseId`, `zoneId`, `locationCode`, etc.
 
 Errors: `ZONE_NOT_FOUND` (404), `LOCATION_CODE_DUPLICATE` (409),
-`STATE_TRANSITION_INVALID` (409), `VALIDATION_ERROR` (400).
+`STATE_TRANSITION_INVALID` (422), `VALIDATION_ERROR` (400).
 
 ### 3.2 GET `/api/v1/master/locations/{id}` — Get
 
@@ -466,7 +469,7 @@ Response `201`:
 ```
 
 Errors: `SKU_NOT_FOUND` (404), `LOT_NO_DUPLICATE` (409),
-`STATE_TRANSITION_INVALID` (409) if parent SKU not `ACTIVE` or not LOT-tracked,
+`STATE_TRANSITION_INVALID` (422) if parent SKU not `ACTIVE` or not LOT-tracked,
 `VALIDATION_ERROR` (400), `PARTNER_NOT_FOUND` (404) if `supplierPartnerId` unknown.
 
 ### 6.2 GET `/api/v1/master/lots/{id}` — Get
