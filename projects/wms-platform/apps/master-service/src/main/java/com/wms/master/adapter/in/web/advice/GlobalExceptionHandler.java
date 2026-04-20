@@ -8,6 +8,7 @@ import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
 import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.MasterDomainException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.exception.ValidationException;
@@ -89,6 +90,14 @@ public class GlobalExceptionHandler {
         // Per platform/error-handling.md, STATE_TRANSITION_INVALID is an
         // unprocessable business rule violation → 422 Unprocessable Entity.
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
+    }
+
+    @ExceptionHandler(ReferenceIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleReferenceIntegrity(ReferenceIntegrityViolationException ex) {
+        // Per specs/contracts/http/master-service-api.md, REFERENCE_INTEGRITY_VIOLATION
+        // maps to 409 CONFLICT (distinct from STATE_TRANSITION_INVALID 422 — the latter
+        // covers single-aggregate invariants; this covers cross-aggregate orphan risk).
+        return build(HttpStatus.CONFLICT, ex);
     }
 
     @ExceptionHandler(ImmutableFieldException.class)

@@ -19,6 +19,7 @@ import com.wms.master.domain.event.ZoneUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.exception.ZoneCodeDuplicateException;
@@ -282,7 +283,7 @@ class ZoneServiceTest {
         }
 
         @Test
-        @DisplayName("blocked when zone has active locations")
+        @DisplayName("blocked when zone has active locations raises ReferenceIntegrityViolationException (REFERENCE_INTEGRITY_VIOLATION)")
         void blockedByActiveLocations() {
             ZoneResult created = service.create(new CreateZoneCommand(
                     warehouseId, "Z-A", "Name", ZoneType.AMBIENT, ACTOR));
@@ -291,8 +292,9 @@ class ZoneServiceTest {
 
             assertThatThrownBy(() -> service.deactivate(new DeactivateZoneCommand(
                     created.id(), "r", created.version(), ACTOR)))
-                    .isInstanceOf(InvalidStateTransitionException.class)
-                    .hasMessageContaining("zone has active locations");
+                    .isInstanceOf(ReferenceIntegrityViolationException.class)
+                    .hasMessageContaining("zone has active locations")
+                    .extracting("code").isEqualTo("REFERENCE_INTEGRITY_VIOLATION");
 
             assertThat(events.published()).isEmpty();
         }

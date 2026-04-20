@@ -23,6 +23,7 @@ import com.wms.master.application.result.ZoneResult;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.exception.ZoneCodeDuplicateException;
 import com.wms.master.domain.exception.ZoneNotFoundException;
@@ -368,6 +369,24 @@ class ZoneControllerTest {
                         .content(body))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error.code").value("STATE_TRANSITION_INVALID"));
+    }
+
+    @Test
+    void deactivate_returns409_withReferenceIntegrityCode_whenZoneHasActiveLocations() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(crudUseCase.deactivate(any()))
+                .thenThrow(new ReferenceIntegrityViolationException(
+                        "Zone", id, "zone has active locations"));
+
+        String body = """
+                { "version": 3, "reason": "closing" }
+                """;
+
+        mockMvc.perform(post("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones/" + id + "/deactivate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("REFERENCE_INTEGRITY_VIOLATION"));
     }
 
     // ---------- POST .../reactivate ----------

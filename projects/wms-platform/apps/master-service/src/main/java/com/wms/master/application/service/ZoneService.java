@@ -18,6 +18,7 @@ import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
+import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.exception.ZoneNotFoundException;
 import com.wms.master.domain.model.Warehouse;
@@ -102,7 +103,8 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
         requireVersionMatch(command.id(), command.version(), loaded.getVersion());
 
         if (zonePersistencePort.hasActiveLocationsFor(loaded.getId())) {
-            throw new InvalidStateTransitionException("zone has active locations");
+            throw new ReferenceIntegrityViolationException(
+                    AGGREGATE_TYPE, loaded.getId(), "zone has active locations");
         }
         loaded.deactivate(command.actorId());
 
