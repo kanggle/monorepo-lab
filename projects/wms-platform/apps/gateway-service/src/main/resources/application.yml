@@ -12,7 +12,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
+          # Default port 8088 avoids a self-referential loop when the gateway
+          # binds to 8080 (SERVER_PORT default). Real environments set
+          # JWT_JWKS_URI to the issuer's JWKS endpoint.
+          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8088/.well-known/jwks.json}
 
   cloud:
     gateway:

@@ -50,6 +50,49 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     @Test
+    void emitsEmptyRoleHeaderWhenNoRoleOrRolesClaim() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-99")
+                .claim("email", "noroles@example.com")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        // Header is always present — empty string signals "no authorized role"
+        // to downstream services, which must deny access rather than default.
+        assertThat(headers.containsKey("X-User-Role")).isTrue();
+        assertThat(headers.getFirst("X-User-Role")).isEmpty();
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("user-99");
+        assertThat(headers.getFirst("X-User-Email")).isEqualTo("noroles@example.com");
+    }
+
+    @Test
+    void emitsEmptyRoleHeaderWhenRoleClaimIsBlank() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-100")
+                .claim("role", "   ")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.containsKey("X-User-Role")).isTrue();
+        assertThat(headers.getFirst("X-User-Role")).isEmpty();
+    }
+
+    @Test
+    void rolesArrayTakesPrecedenceOverRoleString() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-101")
+                .claim("role", "LEGACY_ROLE")
+                .claim("roles", List.of("MASTER_READ", "MASTER_WRITE"))
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-User-Role")).isEqualTo("MASTER_READ,MASTER_WRITE");
+    }
+
+    @Test
     void passesThroughWhenNoSecurityContext() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/master/warehouses").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
