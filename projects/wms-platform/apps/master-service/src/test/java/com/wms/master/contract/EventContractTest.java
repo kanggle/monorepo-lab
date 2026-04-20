@@ -93,6 +93,24 @@ class EventContractTest extends MasterServiceIntegrationBase {
         }
     }
 
+    @Test
+    @DisplayName("wms.master.lot.v1 envelope validates against the event schema")
+    void lotEvent_envelopeValidates() throws Exception {
+        try (KafkaTestConsumer kafka = new KafkaTestConsumer(
+                KAFKA.getBootstrapServers(), "wms.master.lot.v1")) {
+            String skuId = createLotTrackedSku();
+            String lotBody = """
+                    {"lotNo":"LOT-%s"}
+                    """.formatted(shortSuffix());
+            ResponseEntity<String> lot = post("/api/v1/master/skus/" + skuId + "/lots",
+                    lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
+            assertThat(lot.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+            ConsumerRecord<String, String> record = kafka.pollOne(Duration.ofSeconds(15));
+            ENVELOPE.assertValid(record.value());
+        }
+    }
+
     // ---------- helpers ----------
 
     private String lastWarehouseCode;
@@ -106,6 +124,17 @@ class EventContractTest extends MasterServiceIntegrationBase {
                 body, UUID.randomUUID().toString(), "MASTER_WRITE");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         lastWarehouseCode = code;
+        return objectMapper.readTree(response.getBody()).get("id").asText();
+    }
+
+    private String createLotTrackedSku() throws Exception {
+        String skuCode = "SKU-LOT-" + shortSuffix();
+        String body = """
+                {"skuCode":"%s","name":"Lot-Tracked SKU","baseUom":"EA","trackingType":"LOT"}
+                """.formatted(skuCode);
+        ResponseEntity<String> response = post("/api/v1/master/skus",
+                body, UUID.randomUUID().toString(), "MASTER_WRITE");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return objectMapper.readTree(response.getBody()).get("id").asText();
     }
 
