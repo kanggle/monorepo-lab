@@ -3,6 +3,9 @@ package com.wms.gateway.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wms.gateway.testsupport.KafkaTestConsumer;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -35,10 +39,13 @@ import org.junit.jupiter.api.Test;
 class GatewayMasterE2ETest extends E2EBase {
 
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
+    private static final String WAREHOUSE_TOPIC = "wms.master.warehouse.v1";
 
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // -------------------------------------------------------------------
     // Scenario 1 — Happy GET + POST with a valid JWT.
@@ -68,10 +75,19 @@ class GatewayMasterE2ETest extends E2EBase {
         }
 
         @Test
-        @DisplayName("POST /api/v1/master/warehouses with MASTER_WRITE → 201")
+        @DisplayName("POST /api/v1/master/warehouses with MASTER_WRITE → 201 + outbox→Kafka event")
         void createWarehouseThroughGateway() throws Exception {
             String token = jwt.signMasterWriteToken("e2e-writer-" + UUID.randomUUID());
-            String code = "WH" + (100 + new java.util.Random().nextInt(800));
+            // UUID-derived short form: 6 hex chars = 16^6 = ~16.7M possible
+            // codes per run. Replaces the old 3-digit Random range whose
+            // collision surface was small enough to bite on repeat CI runs
+            // against a shared Postgres volume (WH-codes are unique per
+            // warehouse and do not auto-cleanup between suites).
+            String code = "WH" + UUID.randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .substring(0, 6)
+                    .toUpperCase();
             String body = """
                     {
                       "warehouseCode": "%s",
@@ -81,20 +97,82 @@ class GatewayMasterE2ETest extends E2EBase {
                     }
                     """.formatted(code, code);
 
-            HttpResponse<String> response = send(HttpRequest.newBuilder(
-                    gatewayBaseUri().resolve("/api/v1/master/warehouses"))
-                    .timeout(CALL_TIMEOUT)
-                    .header("Authorization", "Bearer " + token)
-                    .header("Content-Type", "application/json")
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .header("X-Forwarded-For", "10.0.0.11")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build());
+            // Subscribe to the warehouse topic BEFORE issuing the POST so the
+            // consumer does not miss the event (KafkaTestConsumer starts from
+            // earliest, but "earliest" still misses events published before
+            // the group's first assignment on a just-created partition —
+            // pre-subscribing is the safest seam).
+            try (KafkaTestConsumer consumer = new KafkaTestConsumer(
+                    kafkaBootstrapForHost(), List.of(WAREHOUSE_TOPIC))) {
 
-            assertThat(response.statusCode()).isEqualTo(201);
-            assertThat(response.body())
-                    .as("response echoes the created warehouseCode from master-service")
-                    .contains(code);
+                HttpResponse<String> response = send(HttpRequest.newBuilder(
+                        gatewayBaseUri().resolve("/api/v1/master/warehouses"))
+                        .timeout(CALL_TIMEOUT)
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .header("X-Forwarded-For", "10.0.0.11")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build());
+
+                assertThat(response.statusCode()).isEqualTo(201);
+                assertThat(response.body())
+                        .as("response echoes the created warehouseCode from master-service")
+                        .contains(code);
+
+                JsonNode created = objectMapper.readTree(response.body());
+                String warehouseId = created.get("id").asText();
+
+                // Outbox→Kafka smoke assertion. This is the acid test for the
+                // Kafka bootstrap port fix in E2EBase: if the master container
+                // is wired to the wrong port (no brokers reachable), outbox
+                // rows stay PENDING forever and this Awaitility loop times
+                // out within 10 seconds.
+                //
+                // Verifies the canonical envelope per
+                // `specs/contracts/events/master-events.md` § Global Envelope:
+                //   - record.key() == aggregateId (partition key guarantee)
+                //   - envelope.eventType == "master.warehouse.created"
+                //   - envelope.aggregateId matches POST response id
+                //   - envelope.eventId is UUID-parseable
+                //   - envelope.payload.warehouse.warehouseCode echoes the POST
+                await().atMost(Duration.ofSeconds(10))
+                        .pollInterval(Duration.ofMillis(500))
+                        .untilAsserted(() -> {
+                            List<ConsumerRecord<String, String>> records = consumer.drain();
+                            ConsumerRecord<String, String> match = records.stream()
+                                    .filter(r -> warehouseId.equals(r.key()))
+                                    .findFirst()
+                                    .orElse(null);
+                            assertThat(match)
+                                    .as("outbox publisher should deliver "
+                                            + "master.warehouse.created to "
+                                            + WAREHOUSE_TOPIC
+                                            + " keyed by aggregateId within 10s")
+                                    .isNotNull();
+
+                            JsonNode envelope = objectMapper.readTree(match.value());
+                            assertThat(envelope.get("eventType").asText())
+                                    .isEqualTo("master.warehouse.created");
+                            assertThat(envelope.get("aggregateType").asText())
+                                    .isEqualTo("warehouse");
+                            assertThat(envelope.get("aggregateId").asText())
+                                    .isEqualTo(warehouseId);
+                            assertThat(envelope.get("producer").asText())
+                                    .isEqualTo("master-service");
+                            assertThat(envelope.get("eventVersion").asInt())
+                                    .isEqualTo(1);
+                            // eventId must be a valid UUID per the envelope
+                            // schema (UUIDv7 in production; parseability is
+                            // the contract we care about here).
+                            UUID.fromString(envelope.get("eventId").asText());
+                            assertThat(envelope.get("payload")
+                                    .get("warehouse")
+                                    .get("warehouseCode")
+                                    .asText())
+                                    .isEqualTo(code);
+                        });
+            }
         }
     }
 
@@ -122,10 +200,19 @@ class GatewayMasterE2ETest extends E2EBase {
                     .contains("\"code\"")
                     .contains("UNAUTHORIZED");
 
-            int masterHitsAfter = masterRequestCount();
-            assertThat(masterHitsAfter)
-                    .as("master-service must NOT have seen the request — counter unchanged")
-                    .isEqualTo(masterHitsBefore);
+            // Awaitility `during(...)` asserts the condition stays true for
+            // the whole window — i.e. the master request counter does NOT
+            // change over 2 seconds. This catches a regression where the
+            // gateway forwards the 401'd request asynchronously (e.g. a
+            // misconfigured filter order), which a single post-401 read
+            // would miss because Micrometer counters increment off the
+            // request thread.
+            await().during(Duration.ofSeconds(2))
+                    .pollInterval(Duration.ofMillis(200))
+                    .untilAsserted(() -> assertThat(masterRequestCount())
+                            .as("master-service must NOT have seen the request — "
+                                    + "counter remains at pre-call value for the full window")
+                            .isEqualTo(masterHitsBefore));
         }
     }
 
@@ -174,12 +261,22 @@ class GatewayMasterE2ETest extends E2EBase {
                 }
             }
 
+            // Tightened bounds (was >=100 / >=1 — too loose to catch a
+            // broken limiter that lets everything through). With
+            // burstCapacity=200 and replenishRate=100/s, a 250-request
+            // burst fired serially should leave ok ≈ 200-220 and
+            // rateLimited ≈ 30-50. >=190 tolerates replenish jitter at
+            // the edges; >=40 ensures the 429 path is genuinely
+            // exercised (a no-op limiter would score 0 rateLimited).
             assertThat(ok.get())
-                    .as("at least burstCapacity requests must succeed (tolerate replenishment)")
-                    .isGreaterThanOrEqualTo(100);
+                    .as("rate-limit still admits the bucket's capacity "
+                            + "(>=190 tolerates replenish jitter)")
+                    .isGreaterThanOrEqualTo(190);
             assertThat(rateLimited.get())
-                    .as("the 250-request burst must trigger at least one 429")
-                    .isGreaterThanOrEqualTo(1);
+                    .as("the 250-request burst must drain the bucket and "
+                            + "yield a decisive block count (>=40 catches "
+                            + "a broken limiter that returns few or no 429s)")
+                    .isGreaterThanOrEqualTo(40);
             assertThat(retryAfterValues)
                     .as("every 429 carries a Retry-After header per api-gateway-policy")
                     .isNotEmpty();
