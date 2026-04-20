@@ -122,13 +122,21 @@ public abstract class E2EBase {
                 .withNetwork(network)
                 .withNetworkAliases(MASTER_ALIAS)
                 .withExtraHost("host.docker.internal", "host-gateway")
-                .withEnv("SPRING_PROFILES_ACTIVE", "default")
+                // `integration` profile exposes the `metrics` actuator endpoint
+                // so masterRequestCount() (used by scenario 2) can query
+                // http.server.requests. Production stays locked down.
+                .withEnv("SPRING_PROFILES_ACTIVE", "integration")
                 .withEnv("DB_URL", "jdbc:postgresql://" + POSTGRES_ALIAS + ":5432/master_db")
                 .withEnv("DB_USERNAME", "master")
                 .withEnv("DB_PASSWORD", "master")
                 .withEnv("REDIS_HOST", REDIS_ALIAS)
                 .withEnv("REDIS_PORT", "6379")
-                .withEnv("KAFKA_BOOTSTRAP_SERVERS", KAFKA_ALIAS + ":9093")
+                // Peer-container bootstrap port: Testcontainers' KafkaContainer
+                // (apache/kafka image, KRaft mode) exposes PLAINTEXT on 9092.
+                // Port 9093 is the internal BROKER listener reserved for
+                // inter-broker traffic — wiring a client to it silently fails
+                // to consume advertised listeners.
+                .withEnv("KAFKA_BOOTSTRAP_SERVERS", KAFKA_ALIAS + ":9092")
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("SERVER_PORT", String.valueOf(MASTER_PORT))
                 .waitingFor(Wait.forHttp("/actuator/health")
@@ -199,6 +207,16 @@ public abstract class E2EBase {
     /** Master base URL reachable from the host JVM (for sanity / metrics checks). */
     protected URI masterBaseUri() {
         return URI.create("http://" + master.getHost() + ":" + master.getMappedPort(MASTER_PORT));
+    }
+
+    /**
+     * Kafka bootstrap servers reachable from the host JVM (the test process).
+     * Peer containers — including master-service — use {@code KAFKA_ALIAS:9092}
+     * instead, see the {@code KAFKA_BOOTSTRAP_SERVERS} env on the master
+     * container above.
+     */
+    protected String kafkaBootstrapForHost() {
+        return kafka.getBootstrapServers();
     }
 
     private static Path locateJar(String relative) {
