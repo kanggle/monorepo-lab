@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — add active-zones guard to WarehouseService.deactivate; add hasActiveZonesFor to port + adapter (addresses BE-010 review critical)
 - `TASK-BE-011-sku-test-coverage-followup.md` — author `SkuControllerTest` + `SkuPersistenceAdapterTest` (Testcontainers); fix the broken `@link` in `SkuPersistenceAdapterH2Test` (addresses BE-004 coverage gaps)
 - `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — rate-limit key `(clientIp, routeId)`; fail-open RedisRateLimiter decorator; empty `X-User-Role` on missing-claim JWT (addresses INT-001 criticals)
-- `TASK-INT-004-e2e-scenario2-guard-and-kafka-port.md` — expose master-service `metrics` actuator (integration profile); fix Kafka bootstrap port 9092 in E2EBase; Awaitility counter stability check (addresses INT-002 scenario-2 silent false-negative + Kafka port bug)
+- `TASK-INT-006-drain-destructive-in-awaitility.md` — fix destructive drain() inside untilAsserted; accumulate records across Awaitility retries (addresses INT-004 critical)
 
 ## in-progress
 
@@ -92,4 +92,5 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-004-sku-aggregate.md` — SKU CRUD. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-011
 - `TASK-BE-007-master-service-integration-tests.md` — integration suite + contract harness. Review verdict 2026-04-20: **APPROVED** (2 non-blocking warnings noted)
 - `TASK-INT-002-gateway-master-e2e.md` — live-pair e2e. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-004
+- `TASK-INT-004-e2e-scenario2-guard-and-kafka-port.md` — scenario-2 guard + Kafka port + outbox smoke. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-006
 - `TASK-BE-010-reference-integrity-violation-exception.md` — ReferenceIntegrityViolationException + Zone deactivate guard. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-014
