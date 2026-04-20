@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-006-lot-aggregate.md` — 6th master-service aggregate (Lot). Cross-aggregate invariants with SKU (trackingType=LOT + reverse deactivate guard), scheduled expiration job (master.lot.expired event), 7 endpoints. Final master-service v1 aggregate.
 
 ## in-progress
 
