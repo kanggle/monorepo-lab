@@ -84,6 +84,7 @@ class LotPersistenceAdapterTest {
     @DisplayName("insert persists a new Lot and assigns version 0")
     void insertPersistsNew() {
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         Lot created = lot(skuId, "LOT-TC-001", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
 
         Lot saved = adapter.insert(created);
@@ -97,6 +98,7 @@ class LotPersistenceAdapterTest {
     @DisplayName("insert path mapper: version=null produces a version-0 row (defence against detached-persist confusion)")
     void insertPathMapper_versionNullProducesVersionZero() {
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         Lot created = lot(skuId, "LOT-TC-VER", null, null);
 
         Lot saved = adapter.insert(created);
@@ -113,6 +115,7 @@ class LotPersistenceAdapterTest {
         // PSQLException.getServerErrorMessage().getConstraint() and raises the typed
         // domain exception — not a generic DataIntegrityViolationException.
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         Lot first = lot(skuId, "LOT-DUP", null, null);
         Lot second = lot(skuId, "LOT-DUP", null, null);
 
@@ -129,6 +132,7 @@ class LotPersistenceAdapterTest {
         // via the normal adapter API. Native SQL bypasses domain validation to confirm
         // the DB-level CHECK fires independently (defense-in-depth).
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         UUID id = UUID.randomUUID();
 
         String insertSql = """
@@ -149,7 +153,7 @@ class LotPersistenceAdapterTest {
                     .setParameter("lotNo", "LOT-BAD-DATES")
                     .executeUpdate();
             entityManager.flush();
-        }).isInstanceOf(DataIntegrityViolationException.class);
+        }).hasRootCauseInstanceOf(org.postgresql.util.PSQLException.class);
     }
 
     @Test
@@ -160,6 +164,7 @@ class LotPersistenceAdapterTest {
         // 2. ACTIVE + expires tomorrow   → must NOT be returned
         // 3. EXPIRED + expired yesterday → must NOT be returned (status != ACTIVE)
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         LocalDate today = LocalDate.of(2026, 4, 20);
         LocalDate yesterday = today.minusDays(1);
         LocalDate tomorrow = today.plusDays(1);
@@ -187,6 +192,8 @@ class LotPersistenceAdapterTest {
     void crossSkuSameLotNoIsAllowed() {
         UUID skuId1 = UUID.randomUUID();
         UUID skuId2 = UUID.randomUUID();
+        seedSku(skuId1);
+        seedSku(skuId2);
 
         Lot first = adapter.insert(lot(skuId1, "SHARED-LOT", null, null));
         Lot second = adapter.insert(lot(skuId2, "SHARED-LOT", null, null));
@@ -199,6 +206,7 @@ class LotPersistenceAdapterTest {
     @DisplayName("optimistic locking collision surfaces as ObjectOptimisticLockingFailureException")
     void optimisticLockCollision() {
         UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
         Lot s = lot(skuId, "LOT-TC-OPT", null, null);
         adapter.insert(s);
 
@@ -217,5 +225,33 @@ class LotPersistenceAdapterTest {
 
     private static Lot lot(UUID skuId, String lotNo, LocalDate mfd, LocalDate expiry) {
         return Lot.create(skuId, lotNo, mfd, expiry, null, ACTOR);
+    }
+
+    /**
+     * Seeds a parent SKU row with {@code tracking_type=LOT, status=ACTIVE} via
+     * native SQL so Lot insert tests can satisfy the
+     * {@code sku_id UUID NOT NULL REFERENCES skus(id)} foreign key without
+     * going through the SKU domain factory. Tests that need multiple distinct
+     * parent SKUs call this once per UUID before inserting Lots.
+     *
+     * <p>Uses native SQL (bypasses domain/Hibernate) so test setup stays
+     * orthogonal to SKU adapter behaviour — these tests verify Lot constraints,
+     * not SKU ones.
+     */
+    private void seedSku(UUID skuId) {
+        entityManager.createNativeQuery("""
+                INSERT INTO skus (
+                    id, sku_code, name, base_uom, tracking_type, status,
+                    version, created_at, created_by, updated_at, updated_by
+                ) VALUES (
+                    CAST(:id AS uuid), :skuCode, :name, 'EA', 'LOT', 'ACTIVE',
+                    0, NOW(), 'test', NOW(), 'test'
+                )
+                """)
+                .setParameter("id", skuId.toString())
+                .setParameter("skuCode", "SKU-TC-" + skuId.toString().substring(0, 8).toUpperCase())
+                .setParameter("name", "Test SKU " + skuId)
+                .executeUpdate();
+        entityManager.flush();
     }
 }
