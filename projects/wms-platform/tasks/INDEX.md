@@ -67,11 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-008-error-envelope-compliance.md` — add `timestamp` to error envelope; correct `STATE_TRANSITION_INVALID` to 422 per `platform/error-handling.md` (addresses BE-001 blockers + cross-aggregate impact on BE-002/003/004/INT-001)
-- `TASK-BE-009-persistence-adapter-cleanup.md` — remove redundant `existsById` pre-checks in update() across Warehouse/Zone/Location adapters; narrow ZonePersistenceAdapter.insert() exception translation; fix hasActiveLocationsFor Javadoc drift; switch SkuPersistenceAdapter to `getConstraintName()` (addresses BE-002/BE-003 warnings + BE-004 constraint-detection robustness)
 - `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — add active-zones guard to WarehouseService.deactivate; add hasActiveZonesFor to port + adapter (addresses BE-010 review critical)
-- `TASK-BE-011-sku-test-coverage-followup.md` — author `SkuControllerTest` + `SkuPersistenceAdapterTest` (Testcontainers); fix the broken `@link` in `SkuPersistenceAdapterH2Test` (addresses BE-004 coverage gaps)
-- `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — rate-limit key `(clientIp, routeId)`; fail-open RedisRateLimiter decorator; empty `X-User-Role` on missing-claim JWT (addresses INT-001 criticals)
 - `TASK-INT-006-drain-destructive-in-awaitility.md` — fix destructive drain() inside untilAsserted; accumulate records across Awaitility retries (addresses INT-004 critical)
 
 ## in-progress
@@ -94,3 +90,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-INT-002-gateway-master-e2e.md` — live-pair e2e. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-004
 - `TASK-INT-004-e2e-scenario2-guard-and-kafka-port.md` — scenario-2 guard + Kafka port + outbox smoke. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-006
 - `TASK-BE-010-reference-integrity-violation-exception.md` — ReferenceIntegrityViolationException + Zone deactivate guard. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-014
+- `TASK-BE-008-error-envelope-compliance.md` — error envelope `timestamp` + `STATE_TRANSITION_INVALID` → 422. Review verdict 2026-04-20: **APPROVED** (2 non-blocking suggestions)
+- `TASK-BE-009-persistence-adapter-cleanup.md` — removed `existsById` pre-checks, narrowed catch, Javadoc drift. Review verdict 2026-04-20: **APPROVED** (2 non-blocking suggestions)
+- `TASK-BE-011-sku-test-coverage-followup.md` — `SkuControllerTest` + `SkuPersistenceAdapterTest` Testcontainers variant. Review verdict 2026-04-20: **APPROVED** (2 non-blocking suggestions)
+- `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — `(ip, routeId)` key + fail-open decorator + empty role header. Review verdict 2026-04-20: **APPROVED** (2 non-blocking warnings noted — metric emission + blank-list filtering)
