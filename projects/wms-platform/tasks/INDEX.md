@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-015-lot-test-coverage-followup.md` — Lot aggregate test coverage gap: author LotControllerTest (20+ cases), LotServiceAuthorizationTest, LotPersistenceAdapterH2Test, LotPersistenceAdapterTest (Testcontainers), LotExpirationSchedulerTest; add Lot event schemas to contract harness (addresses BE-006 review criticals)
+- `TASK-BE-016-lot-contract-harness-wiring.md` — wire Lot cases into EventContractTest + HttpContractTest (5 event schemas already exist; lot-response.schema.json needed). Only remaining Lot-related gap after BE-015.
 
 ## in-progress
 
