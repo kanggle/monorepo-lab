@@ -67,8 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — add active-zones guard to WarehouseService.deactivate; add hasActiveZonesFor to port + adapter (addresses BE-010 review critical)
-- `TASK-INT-006-drain-destructive-in-awaitility.md` — fix destructive drain() inside untilAsserted; accumulate records across Awaitility retries (addresses INT-004 critical)
+(empty)
 
 ## in-progress
 
@@ -94,3 +93,5 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-009-persistence-adapter-cleanup.md` — removed `existsById` pre-checks, narrowed catch, Javadoc drift. Review verdict 2026-04-20: **APPROVED** (2 non-blocking suggestions)
 - `TASK-BE-011-sku-test-coverage-followup.md` — `SkuControllerTest` + `SkuPersistenceAdapterTest` Testcontainers variant. Review verdict 2026-04-20: **APPROVED** (2 non-blocking suggestions)
 - `TASK-INT-003-gateway-rate-limit-and-fail-open.md` — `(ip, routeId)` key + fail-open decorator + empty role header. Review verdict 2026-04-20: **APPROVED** (2 non-blocking warnings noted — metric emission + blank-list filtering)
+- `TASK-BE-014-warehouse-deactivate-active-zones-guard.md` — warehouse deactivate active-zones guard + hasActiveZonesFor port/adapter. Review verdict 2026-04-20: **APPROVED**
+- `TASK-INT-006-drain-destructive-in-awaitility.md` — accumulate drain() across Awaitility retries; fixes masked field-mismatch failures. Review verdict 2026-04-20: **APPROVED** (1 pre-existing UUID.fromString nit noted)
