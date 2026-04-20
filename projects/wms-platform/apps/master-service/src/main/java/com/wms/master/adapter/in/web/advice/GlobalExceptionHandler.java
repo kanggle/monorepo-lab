@@ -7,6 +7,8 @@ import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
 import com.wms.master.domain.exception.LocationNotFoundException;
+import com.wms.master.domain.exception.LotNoDuplicateException;
+import com.wms.master.domain.exception.LotNotFoundException;
 import com.wms.master.domain.exception.MasterDomainException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
@@ -77,6 +79,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BarcodeDuplicateException.class)
     public ResponseEntity<ApiErrorEnvelope> handleBarcodeDuplicate(BarcodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(LotNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleLotNotFound(LotNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(LotNoDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleLotNoDuplicate(LotNoDuplicateException ex) {
         return build(HttpStatus.CONFLICT, ex);
     }
 

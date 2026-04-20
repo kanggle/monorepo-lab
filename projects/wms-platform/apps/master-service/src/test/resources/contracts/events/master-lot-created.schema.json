@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wms.example.com/contracts/events/master-lot-created.v1.json",
+  "title": "master.lot.created event envelope",
+  "description": "Derived from specs/contracts/events/master-events.md §6. Extends the global envelope with the lot created payload.",
+  "type": "object",
+  "required": [
+    "eventId", "eventType", "eventVersion", "occurredAt", "producer",
+    "aggregateType", "aggregateId", "actorId", "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string" },
+    "eventType": { "type": "string", "const": "master.lot.created" },
+    "eventVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "type": "string" },
+    "producer": { "type": "string", "const": "master-service" },
+    "aggregateType": { "type": "string", "const": "lot" },
+    "aggregateId": { "type": "string" },
+    "traceId": { "type": ["string", "null"] },
+    "actorId": { "type": ["string", "null"] },
+    "payload": {
+      "type": "object",
+      "required": ["lot"],
+      "additionalProperties": false,
+      "properties": {
+        "lot": { "$ref": "#/$defs/lotSnapshot" }
+      }
+    }
+  },
+  "$defs": {
+    "lotSnapshot": {
+      "type": "object",
+      "required": ["id", "skuId", "lotNo", "status", "version",
+        "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "skuId": { "type": "string" },
+        "lotNo": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "manufacturedDate": { "type": ["string", "null"] },
+        "expiryDate": { "type": ["string", "null"] },
+        "supplierPartnerId": { "type": ["string", "null"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "EXPIRED"] },
+        "version": { "type": "integer", "minimum": 0 },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      }
+    }
+  }
+}

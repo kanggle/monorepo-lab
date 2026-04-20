@@ -16,3 +16,13 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+
+# Disable the scheduled Lot expiration batch for integration / e2e harnesses.
+# Test harnesses that need to exercise the batch invoke
+# LotExpirationScheduler.runNow() or the ExpireLotsBatchUseCase directly so
+# they control the clock and the Lot fixtures; unsolicited cron fires during a
+# test window would cause flaky timing assertions.
+wms:
+  scheduler:
+    lot-expiration:
+      enabled: false

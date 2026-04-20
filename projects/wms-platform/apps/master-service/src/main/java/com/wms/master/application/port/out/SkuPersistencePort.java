@@ -12,12 +12,11 @@ import java.util.UUID;
  * {@code adapter.out.persistence}. Uses domain / shared types only — no JPA or
  * Spring Data types.
  *
- * <p>{@link #hasActiveLotsFor(UUID)} exists so the SKU deactivation path can
- * enforce the "no active Lots" invariant once Lots ship (TASK-BE-006). In v1
- * the implementation always returns {@code false} because Lots do not yet
- * exist — a documented, 1:1 seam, not speculative generality. Same shape as
- * {@code ZonePersistencePort.hasActiveLocationsFor} used before Locations
- * existed.
+ * <p>{@link #hasActiveLotsFor(UUID)} enforces the "no active Lots" invariant
+ * on SKU deactivation — per {@code specs/services/master-service/domain-model.md}
+ * §4. The adapter delegates to {@code JpaLotRepository.existsBySkuIdAndStatus}
+ * (same shape as {@code ZonePersistencePort.hasActiveLocationsFor}). Wired
+ * for real in TASK-BE-006 alongside the Lot aggregate.
  */
 public interface SkuPersistencePort {
 
@@ -54,9 +53,9 @@ public interface SkuPersistencePort {
     PageResult<Sku> findPage(ListSkusCriteria criteria, PageQuery pageQuery);
 
     /**
-     * Returns whether this SKU currently has any ACTIVE child Lot. Stubbed to
-     * {@code false} in v1 — Lots arrive in TASK-BE-006 and the real
-     * implementation will live behind this same port.
+     * Returns whether this SKU currently has any ACTIVE child Lot. Drives
+     * the SKU deactivate reverse guard (409
+     * {@code REFERENCE_INTEGRITY_VIOLATION}).
      */
     boolean hasActiveLotsFor(UUID skuId);
 }

@@ -6,6 +6,7 @@ import com.wms.master.application.port.out.SkuPersistencePort;
 import com.wms.master.application.query.ListSkusCriteria;
 import com.wms.master.domain.exception.BarcodeDuplicateException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
+import com.wms.master.domain.model.LotStatus;
 import com.wms.master.domain.model.Sku;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,9 +33,12 @@ import org.springframework.stereotype.Repository;
  * match is kept as a fallback for H2 and any driver that does not surface a
  * {@link PSQLException} in the cause chain.
  *
- * <p>{@link #hasActiveLotsFor(UUID)} is stubbed to {@code false} until
- * TASK-BE-006 (Lot aggregate) replaces it with a real
- * {@code JpaLotRepository.existsBySkuIdAndStatus} call.
+ * <p>{@link #hasActiveLotsFor(UUID)} delegates to
+ * {@code JpaLotRepository.existsBySkuIdAndStatus(skuId, ACTIVE)} — wired as
+ * part of TASK-BE-006 (the Lot aggregate landing alongside this adapter).
+ * {@code JpaLotRepository} is package-private and co-located here because the
+ * reverse guard is a single, aggregate-local concern; exposing a cross-aggregate
+ * outbound port for a yes/no count would add indirection without value.
  */
 @Repository
 class SkuPersistenceAdapter implements SkuPersistencePort {
@@ -46,10 +50,14 @@ class SkuPersistenceAdapter implements SkuPersistencePort {
     private static final String BARCODE_CONSTRAINT = "uq_skus_barcode";
 
     private final JpaSkuRepository jpaRepository;
+    private final JpaLotRepository jpaLotRepository;
     private final SkuPersistenceMapper mapper;
 
-    SkuPersistenceAdapter(JpaSkuRepository jpaRepository, SkuPersistenceMapper mapper) {
+    SkuPersistenceAdapter(JpaSkuRepository jpaRepository,
+                          JpaLotRepository jpaLotRepository,
+                          SkuPersistenceMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.jpaLotRepository = jpaLotRepository;
         this.mapper = mapper;
     }
 
@@ -123,9 +131,11 @@ class SkuPersistenceAdapter implements SkuPersistencePort {
 
     @Override
     public boolean hasActiveLotsFor(UUID skuId) {
-        // Stub per TASK-BE-004 §Lot active-children stub. Replaced by a real
-        // JpaLotRepository query in TASK-BE-006.
-        return false;
+        // TASK-BE-006: real query via the partial-index backed
+        // existsBySkuIdAndStatus on the lots table. The
+        // idx_lots_sku_status composite index makes this a fast index-only
+        // lookup.
+        return jpaLotRepository.existsBySkuIdAndStatus(skuId, LotStatus.ACTIVE);
     }
 
     private RuntimeException translateIntegrityViolation(DataIntegrityViolationException e, Sku sku) {
