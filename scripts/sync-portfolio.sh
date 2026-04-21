@@ -32,6 +32,13 @@ set -euo pipefail
 # Project → remote URL mapping. Add new projects here.
 declare -A PROJECT_REMOTES=(
     ["wms-platform"]="https://github.com/kanggle/wms-platform.git"
+    # ecommerce-microservices-platform — integrated via Gradle includeBuild (composite).
+    # Extraction here still assumes direct-include projects (restores monorepo-root
+    # build.gradle, rewrites 'projects:<name>:' paths in settings.gradle). For
+    # composite-build projects the post-process must instead keep the project's
+    # own settings.gradle/build.gradle and drop the monorepo-root versions. Wire up
+    # only after extraction logic is made project-type-aware.
+    # ["ecommerce-microservices-platform"]="https://github.com/kanggle/ecommerce-microservices-platform.git"
 )
 
 # Shared paths kept at extracted repo root.
