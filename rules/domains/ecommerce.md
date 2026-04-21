@@ -33,6 +33,29 @@ B2C 이커머스 플랫폼. 고객이 상품을 탐색하고 주문하고 결제
 
 ---
 
+## Ubiquitous Language
+
+이 도메인의 핵심 용어 정의. 서비스·API·이벤트·문서는 **같은 용어로 같은 개념**을 가리켜야 한다. Bounded Contexts 표의 책임과 겹치지 않는 선에서 용어 자체의 정의를 명시.
+
+| Term | Definition |
+|---|---|
+| **User** | 가입된 계정. UUID 로 식별. email, hashed password, profile name 보유. `Customer` 와 동의어로 혼용하지 않고 `User` 로 통일. |
+| **Order** | 고객이 하나 이상의 Product 를 구매하기 위해 생성한 요청. `order-service` 가 소유. Order ID 는 UUID v7 권장. |
+| **Payment** | Order 에 연결된 금융 거래. `payment-service` 가 소유. Order 와 별도 aggregate (rule E2). |
+| **Product** | 판매 가능한 품목. 가격·재고·설명·미디어 보유. `product-service` 가 소유. SKU 개념이 필요하면 `Variant` 로 분리. |
+| **Variant** | 동일 Product 의 옵션 조합(사이즈·색상 등). 각 Variant 가 독립된 가격·재고를 가질 수 있음. |
+| **Inventory** | Product/Variant 의 판매 가능 수량. rule E3 에 따라 `available` 과 `reserved` 상태로 분리 관리. |
+| **Cart** | 구매 전 담아둔 항목들. 익명(쿠키) 또는 로그인(User ID) 기준. rule E4 에 따라 로그인 시 merge. |
+| **Promotion** | 쿠폰·할인·적립금 정책. 주문 시점 스냅샷 저장 (rule E7). |
+| **Coupon** | Promotion 에서 발급된 사용자별 이용권. |
+| **Review** | 실제 구매 이력(`DELIVERED` Order) 있는 User 가 Product 에 대해 작성한 평가. rule E6. |
+| **Wishlist** | User 가 관심 표시한 Product 목록. Cart 와 구분 (구매 의도 아님). |
+| **PG (Payment Gateway)** | 외부 결제 대행사 (토스페이먼츠·나이스 등). Payment 가 호출하며 `Idempotency-Key` 필수 (rule E2). |
+
+용어가 변경될 때는 이 표를 먼저 수정하고, 서비스·API·이벤트 명세를 뒤따라 업데이트한다.
+
+---
+
 ## Mandatory Rules
 
 ### E1. 주문 라이프사이클 상태 기계 (이벤트-소싱 가능)
@@ -113,9 +136,34 @@ compliance 요구사항은 프로젝트 `PROJECT.md` 의 `compliance` 필드 선
 ## 관련 traits
 
 - **transactional** (필수): Order, Payment, Inventory, Promotion 모두 idempotency + state machine 필요. T1~T8 전체 적용.
-- **content-heavy** (강력 권장): Product / Review / Promotion이 콘텐츠 자산. C1~C6 적용.
+- **content-heavy** (강력 권장): Product / Review / Promotion이 콘텐츠 자산. C1~C6 적용. 미디어 저장은 [`platform/object-storage-policy.md`](../../platform/object-storage-policy.md) 준수.
 - **read-heavy** (강력 권장): 쇼핑/검색/상품 조회가 쓰기의 수십 배. R1~R5 적용.
 - **integration-heavy** (선택): PG, SMS/Email provider, 물류사 API, 광고 플랫폼 등 외부 연동이 많은 경우. I1~I10 적용.
+
+---
+
+## Standard Error Codes
+
+도메인 에러 코드 표 자체는 플랫폼 레지스트리인 [`platform/error-handling.md`](../../platform/error-handling.md) 에서 `[domain: ecommerce]` 태그가 붙은 섹션에 유지된다. 중복을 피하기 위해 이 파일에서는 표를 반복하지 않고, 섹션 대응만 나열한다:
+
+| Bounded Context | Error section in `platform/error-handling.md` |
+|---|---|
+| Catalog (Product, Variant) | `Product`, `Search` |
+| Order | `Order` |
+| Payment | `Payment` |
+| Cart / Wishlist | `Wishlist` |
+| Promotion | `Promotion` |
+| Review | `Review` |
+| Shipping | `Shipping` |
+| Identity / User | `User` |
+| Notification | `Notification` |
+
+플랫폼 공통 에러 (`VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `RATE_LIMIT_EXCEEDED`, `CONFLICT`, `STATE_TRANSITION_INVALID`, …) 는 모든 도메인이 공유한다. 미디어 업로드 실패는 Content-Heavy Trait 공통 코드(`STORAGE_UNAVAILABLE`, `MEDIA_NOT_FOUND`, `MEDIA_VALIDATION_FAILED`) 를 사용한다.
+
+새 에러 코드 추가 시:
+1. 먼저 `platform/error-handling.md` 의 해당 섹션에 등록.
+2. 필요하면 이 표에서 섹션이 신설됐는지 확인.
+3. 해당 서비스 코드에서 사용.
 
 ---
 

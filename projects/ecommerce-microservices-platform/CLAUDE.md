@@ -10,13 +10,13 @@ The operating rules, source-of-truth priority, workflow, and Hard Stop rules all
 
 ## Migration note (2026-04-21)
 
-This project was imported into `monorepo-lab` via `git subtree` and now participates in the monorepo's shared rule and library layers. The following nested content is **legacy from the standalone-repo era** and is still present but **must not be used** when working inside the monorepo:
+This project was imported into `monorepo-lab` via `git subtree` and now participates in the monorepo's shared rule and library layers.
 
-- `specs/rules/` — superseded by root `rules/` (shared). Delete after reconciliation.
-- `specs/platform/` — superseded by root `platform/` (shared). Delete after reconciliation.
-- `.claude/` — a future merge with root `.claude/` is planned. Until then, root `.claude/` wins for agent/skill resolution.
+**Reconciliation status:**
 
-If you find yourself reading any of the legacy directories above, stop and consult root `CLAUDE.md` instead.
+- `specs/rules/`, `specs/platform/`, `tasks/templates/` — **deleted**. The legacy standalone-repo copies are gone; the authoritative sources are root `rules/`, root `platform/`, root `tasks/templates/`. Any promotable universal content was merged up (notably `platform/object-storage-policy.md` now lives at root as shared policy); ecommerce-specific content was absorbed into `rules/domains/ecommerce.md` (Ubiquitous Language, Standard Error Codes cross-ref) and `platform/error-handling.md` (domain error-code sections tagged `[domain: ecommerce]`).
+- `.claude/` — nested directory still present; **root `.claude/` wins** for agent/skill resolution. A future merge into root is a pending follow-up.
+- Historical task records in `tasks/done/` may contain broken `specs/rules/...` / `specs/platform/...` links — preserved as immutable history; rewrite is not planned.
 
 ## What lives here
 

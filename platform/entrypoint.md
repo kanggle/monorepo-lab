@@ -74,6 +74,7 @@ Reading more than one service-type spec for a single task is forbidden — pick 
 | `test` | `testing-strategy.md` |
 | `adr` | `architecture-decision-rule.md`, `ownership-rule.md` |
 | `onboarding` | `glossary.md`, `repository-structure.md` |
+| `storage` | `object-storage-policy.md` (auto-activated when project declares `content-heavy` trait) |
 
 Tags are declared in the task file under `Task Tags` (optional section, not required by CLAUDE.md).
 If no tags are declared or the section does not exist, read only `error-handling.md` and `testing-strategy.md` as defaults.

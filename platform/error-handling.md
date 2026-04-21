@@ -9,15 +9,16 @@ Defines the platform-wide error response format and error code conventions.
 This document is the **platform-wide error registry**. It contains two kinds of error codes:
 
 1. **Platform-Common** — errors that every project inherits regardless of domain/traits.
-   Sections: `Authentication`, `Authorization`, `Validation`, `Rate Limiting`, `Transactional Trait`, `General`.
+   Sections: `Authentication`, `Authorization`, `Validation`, `Rate Limiting`, `Transactional Trait`, `Content-Heavy Trait`, `General`.
    These must be carried over verbatim when bootstrapping a new project.
 
-2. **Domain-Specific** — errors that belong to the active primary domain declared in `PROJECT.md`.
-   Sections below the `Platform-Common` block are tagged with their owning domain (e.g. `[domain: wms]`).
-   When a new project is bootstrapped with a different domain, replace the existing domain sections with the matching domain's error codes.
+2. **Domain-Specific** — errors that belong to a primary domain declared by a project in `PROJECT.md`.
+   Sections below the `Platform-Common` block are tagged with their owning domain (e.g. `[domain: wms]`, `[domain: ecommerce]`).
+   In the monorepo, multiple domain sections coexist (one per project). When a standalone project is extracted via `scripts/sync-portfolio.sh`, only the matching domain's sections are carried into the extracted repo.
 
-For the active domain's context and business semantics of each code group, see
-[`rules/domains/<domain>.md`](../rules/domains/) → `Standard Error Codes` section. The current project declares `wms`, so the authoritative file is [`rules/domains/wms.md`](../rules/domains/wms.md).
+For each domain's context and business semantics of its code group, see the
+matching `rules/domains/<domain>.md` (e.g. [`wms`](../rules/domains/wms.md),
+[`ecommerce`](../rules/domains/ecommerce.md)) → `Standard Error Codes` section.
 
 **Change protocol**:
 - New platform-common error codes → add to this file only.
@@ -106,6 +107,16 @@ Codes activated by the `transactional` trait declared in `PROJECT.md`. Expected 
 | DUPLICATE_REQUEST | 409 | Same `Idempotency-Key` replayed with a different request body/hash on the same endpoint |
 | REFERENCE_INTEGRITY_VIOLATION | 409 | Operation blocked because active child/related records still reference this aggregate |
 
+## Content-Heavy Trait
+
+Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected to be emitted by any service that stores or serves binary media following [`object-storage-policy.md`](object-storage-policy.md).
+
+| Code | HTTP | Description |
+|---|---|---|
+| STORAGE_UNAVAILABLE | 503 | Object storage backend is unreachable or failed to issue a presigned URL |
+| MEDIA_NOT_FOUND | 404 | Announced upload object was not found in the bucket at registration time |
+| MEDIA_VALIDATION_FAILED | 400 | Uploaded object size or content-type does not match the allow-list |
+
 ## General
 
 | Code | HTTP | Description |
@@ -120,7 +131,7 @@ Codes activated by the `transactional` trait declared in `PROJECT.md`. Expected 
 
 # Domain-Specific Error Codes
 
-> The sections below belong to the active primary domain (`wms`). When bootstrapping a new project with a different `domain` in `PROJECT.md`, replace these sections with the matching domain's error codes.
+> Sections below are grouped by owning domain. In the monorepo multiple domains coexist. During standalone extraction via `scripts/sync-portfolio.sh`, only the matching domain's sections are carried into the extracted repo.
 
 ## Master Data  `[domain: wms]`
 
@@ -176,6 +187,122 @@ Owned by `outbound-service` (future). See `rules/domains/wms.md`.
 | ORDER_ALREADY_SHIPPED | 422 | Operation attempted on an already-shipped order |
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
+
+## Product  `[domain: ecommerce]`
+
+Owned by `product-service`. See `rules/domains/ecommerce.md`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| PRODUCT_NOT_FOUND | 404 | Product with given ID does not exist |
+| INVALID_CATEGORY | 400 | Category with given ID does not exist |
+| VARIANT_NOT_FOUND | 404 | Variant with given ID does not exist |
+| INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock |
+| IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
+| IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
+
+## Search  `[domain: ecommerce]`
+
+Owned by `search-service`. See `rules/domains/ecommerce.md`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| INVALID_SEARCH_REQUEST | 400 | Search request is invalid (missing or blank `q` parameter, invalid `size`) |
+
+## Order  `[domain: ecommerce]`
+
+Owned by `order-service`. See `rules/domains/ecommerce.md` rules E1, E2.
+
+| Code | HTTP | Description |
+|---|---|---|
+| ORDER_NOT_FOUND | 404 | Order with given ID does not exist |
+| INVALID_ORDER_REQUEST | 400 | Order request is invalid (missing fields, invalid quantity) |
+| ORDER_CANNOT_BE_CANCELLED | 422 | Order cannot be cancelled in its current status |
+
+## Payment  `[domain: ecommerce]`
+
+Owned by `payment-service`. See `rules/domains/ecommerce.md` rule E2.
+
+| Code | HTTP | Description |
+|---|---|---|
+| PAYMENT_NOT_FOUND | 404 | Payment for given order does not exist |
+| INVALID_PAYMENT_REQUEST | 400 | Payment request is invalid (missing required identity header) |
+| AMOUNT_MISMATCH | 400 | Confirm amount does not match PENDING payment amount |
+| PAYMENT_ALREADY_COMPLETED | 409 | Payment is not in PENDING status |
+| PG_CONFIRM_FAILED | 502 | Payment Gateway confirmation API returned an error |
+
+## User  `[domain: ecommerce]`
+
+Owned by `user-service`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| USER_PROFILE_NOT_FOUND | 404 | User profile does not exist |
+| ADDRESS_NOT_FOUND | 404 | Address with given ID does not exist |
+| ADDRESS_LIMIT_EXCEEDED | 422 | Maximum number of addresses reached |
+| DEFAULT_ADDRESS_CANNOT_BE_DELETED | 422 | Cannot delete the default address while other addresses exist |
+| USER_ALREADY_WITHDRAWN | 422 | User has already been withdrawn |
+
+## Promotion  `[domain: ecommerce]`
+
+Owned by `promotion-service`. See `rules/domains/ecommerce.md` rule E7.
+
+| Code | HTTP | Description |
+|---|---|---|
+| INVALID_PROMOTION_REQUEST | 400 | Promotion request is invalid (missing or invalid fields, bad status filter, invalid date format) |
+| PROMOTION_NOT_FOUND | 404 | Promotion with given ID does not exist |
+| PROMOTION_ALREADY_ENDED | 422 | Cannot update an ended promotion |
+| PROMOTION_HAS_ISSUED_COUPONS | 422 | Cannot delete a promotion with issued coupons |
+| PROMOTION_NOT_ACTIVE | 422 | Promotion is not currently active |
+| COUPON_NOT_FOUND | 404 | Coupon with given ID does not exist |
+| COUPON_ALREADY_USED | 422 | Coupon has already been used |
+| COUPON_EXPIRED | 422 | Coupon has expired |
+| COUPON_NOT_OWNED | 422 | Coupon does not belong to the user |
+| COUPON_LIMIT_EXCEEDED | 422 | Issuance would exceed max issuance count |
+| COUPON_RESTORE_NOT_ALLOWED | 422 | Coupon cannot be restored (e.g. coupon is not in a used state) |
+
+## Notification  `[domain: ecommerce]`
+
+Owned by `notification-service`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| NOTIFICATION_NOT_FOUND | 404 | Notification with given ID does not exist |
+| INVALID_PREFERENCE_REQUEST | 400 | Notification preference request is invalid |
+| INVALID_TEMPLATE_REQUEST | 400 | Notification template request is invalid |
+| TEMPLATE_NOT_FOUND | 404 | Template with given ID does not exist |
+| TEMPLATE_ALREADY_EXISTS | 409 | Template for this type and channel already exists |
+
+## Review  `[domain: ecommerce]`
+
+Owned by `review-service`. See `rules/domains/ecommerce.md` rule E6.
+
+| Code | HTTP | Description |
+|---|---|---|
+| INVALID_REVIEW_REQUEST | 400 | Review request is invalid (missing or invalid fields) |
+| REVIEW_NOT_FOUND | 404 | Review with given ID does not exist |
+| REVIEW_ALREADY_EXISTS | 409 | User already reviewed this product |
+| PRODUCT_NOT_PURCHASED | 422 | User has not purchased this product |
+
+## Wishlist  `[domain: ecommerce]`
+
+Owned by `user-service` (wishlist feature) or a dedicated service.
+
+| Code | HTTP | Description |
+|---|---|---|
+| INVALID_WISHLIST_REQUEST | 400 | Wishlist request is invalid (missing or invalid fields) |
+| WISHLIST_ITEM_NOT_FOUND | 404 | Wishlist item with given ID does not exist |
+| ALREADY_IN_WISHLIST | 409 | Product is already in the wishlist |
+
+## Shipping  `[domain: ecommerce]`
+
+Owned by `shipping-service`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| INVALID_SHIPPING_REQUEST | 400 | Shipping request is invalid (missing or invalid fields) |
+| SHIPPING_NOT_FOUND | 404 | Shipping record does not exist |
+| INVALID_STATUS_TRANSITION | 422 | Shipping status transition is not allowed |
 
 ---
 

@@ -38,6 +38,8 @@
 - URL 규칙: 원본 경로에서 파생본 경로를 결정적으로 파생 (`product/123/original.jpg` → `product/123/thumb_300x300.jpg`)
 - 파생본 캐시 무효화는 원본 버전 기반 (ETag, 해시 suffix)
 
+원본 저장·버킷 네이밍·presigned URL 업로드 플로우·라이프사이클 규칙은 [`platform/object-storage-policy.md`](../../platform/object-storage-policy.md) 를 따른다.
+
 ### C3. 콘텐츠 인덱싱은 **쓰기 모델과 분리된 read projection**
 
 원본 스키마(정규화, ACID, 수정 로그 적합)와 소비용 스키마(denormalize, search-friendly, 조회 빠름)를 분리. 업데이트는 이벤트 기반으로 전파.
