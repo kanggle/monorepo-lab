@@ -66,17 +66,21 @@ public abstract class E2EBase {
     protected static final int GATEWAY_PORT = 8080;
     protected static final int MASTER_PORT = 8081;
 
+    // Paths are relative to the wms-platform project root. locateFile() walks
+    // up from the current working directory until it finds the prefix — this
+    // works in both the monorepo (cwd deep under projects/wms-platform/) and
+    // the extracted standalone repo (cwd deep under the repo root).
     /** Resolves absolute paths to the built boot jars; Gradle produces these first. */
     private static final Path MASTER_JAR = locateJar(
-            "projects/wms-platform/apps/master-service/build/libs/master-service.jar");
+            "apps/master-service/build/libs/master-service.jar");
     private static final Path GATEWAY_JAR = locateJar(
-            "projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar");
+            "apps/gateway-service/build/libs/gateway-service.jar");
 
     /** Dockerfile locations — reused verbatim from production image builds. */
     private static final Path MASTER_DOCKERFILE = locateFile(
-            "projects/wms-platform/apps/master-service/Dockerfile");
+            "apps/master-service/Dockerfile");
     private static final Path GATEWAY_DOCKERFILE = locateFile(
-            "projects/wms-platform/apps/gateway-service/Dockerfile");
+            "apps/gateway-service/Dockerfile");
 
     protected Network network;
     protected PostgreSQLContainer<?> postgres;
