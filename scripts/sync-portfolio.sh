@@ -148,8 +148,17 @@ sync_project() {
         done
     fi
 
+    # Patch subproject *.gradle files — cross-project dependsOn and
+    # project(':projects:...') lookups are hardcoded with the monorepo prefix.
+    # After hoisting, `:projects:<name>:apps:...` must become `:apps:...`.
+    while IFS= read -r -d '' gradle_file; do
+        if grep -q "projects:$project:\|projects/$project/" "$gradle_file"; then
+            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$gradle_file"
+        fi
+    done < <(find apps libs -name "*.gradle" -print0 2>/dev/null)
+
     local changed=0
-    git add build.gradle settings.gradle .github/workflows/ 2>/dev/null || true
+    git add -A 2>/dev/null || true
     if ! git diff --cached --quiet; then
         git commit -m "chore(portfolio): restore root build.gradle + rewrite paths for standalone layout
 
@@ -158,8 +167,9 @@ Extraction via git-filter-repo --path-rename projects/$project/:
   placeholder — restore from monorepo root (plugins + subprojects block)
 - left settings.gradle with colon-separated include paths referencing
   the monorepo layout — rewrite to the hoisted layout
-- left .github/workflows/*.yml with monorepo-style Gradle task refs
-  and file paths — rewrite for standalone CI" --quiet
+- left .github/workflows/*.yml and subproject *.gradle files with
+  monorepo-style Gradle task refs and file paths (cross-project
+  dependsOn, project() lookups) — rewrite for standalone CI + build" --quiet
         changed=1
     fi
 
