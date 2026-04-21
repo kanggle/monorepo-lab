@@ -84,9 +84,12 @@ public class LotExpirationScheduler {
                     result.considered(), result.expired(), result.failed());
             return result;
         } catch (RuntimeException ex) {
-            // Top-level safety net: the scheduled thread must not die.
+            // Top-level safety net: the scheduled thread must not die. Report
+            // the batch-level crash as one failed item so observers (metrics,
+            // tests) see a non-zero failed count that reflects the actual
+            // failure (TASK-BE-018 item 6).
             log.error("LotExpirationScheduler: batch failed", ex);
-            return new LotExpirationResult(0, 0, 0);
+            return new LotExpirationResult(0, 0, 1);
         }
     }
 }
