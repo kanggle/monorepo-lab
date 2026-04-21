@@ -29,6 +29,129 @@ Spring Boot 3 microservices for a warehouse's master-data and ingress path. Buil
 
 ## 🏛️ Architecture
 
+### System view
+
+```mermaid
+flowchart LR
+    Client(["Client<br/>(web · mobile · ERP)"])
+
+    subgraph Edge["Edge"]
+        GW["gateway-service<br/>:8080<br/><br/>• JWT validate<br/>• rate-limit<br/>  (ip,routeId) fail-open<br/>• header enrich<br/>  X-User-Id, X-User-Role"]
+    end
+
+    subgraph App["Application"]
+        MS["master-service<br/>:8081<br/><br/>• Hexagonal<br/>• Idempotency filter<br/>• Outbox publisher<br/>• Lot expiry scheduler"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        PG[("Postgres 16<br/>master DB + outbox")]
+        KF[["Kafka (KRaft)<br/>wms.master.*.v1"]]
+        RD[("Redis<br/>idempotency +<br/>rate-limit counters")]
+    end
+
+    Consumer(["Event Consumers<br/>inventory · notification<br/>· admin · future ERP"])
+
+    Client -->|HTTPS| GW
+    GW -->|"HTTP + JWT<br/>+ X-User-*"| MS
+    GW -.->|session<br/>rate-limit| RD
+    MS -->|JPA| PG
+    MS -.->|Idempotency-Key<br/>cache| RD
+    MS -->|outbox row<br/>(same tx)| PG
+    PG -->|polling| MS
+    MS -->|publish| KF
+    KF --> Consumer
+
+    style Client fill:#e1f5ff,stroke:#0288d1
+    style Consumer fill:#e1f5ff,stroke:#0288d1
+    style GW fill:#fff3e0,stroke:#f57c00
+    style MS fill:#f3e5f5,stroke:#7b1fa2
+    style PG fill:#e8f5e9,stroke:#388e3c
+    style KF fill:#e8f5e9,stroke:#388e3c
+    style RD fill:#e8f5e9,stroke:#388e3c
+```
+
+### Master-service internal — Hexagonal
+
+```mermaid
+flowchart TB
+    subgraph Adapters_In["Adapters — inbound"]
+        HTTP["HTTP adapter<br/>controller + DTO<br/>+ ETag + ApiErrorEnvelope"]
+        Filter["Filters<br/>IdempotencyKey · JWT<br/>· ApiError translation"]
+    end
+
+    subgraph Application["Application layer"]
+        UseCases["Use cases<br/>CreateWarehouse · UpdateSku<br/>· DeactivateZone · ExpireLotsBatch · …"]
+        Services["Services<br/>WarehouseService · ZoneService<br/>· LocationService · SkuService · LotService"]
+    end
+
+    subgraph Domain["Domain (pure)"]
+        Aggregates["Aggregates<br/>Warehouse · Zone · Location<br/>· SKU · Lot"]
+        Invariants["Invariants<br/>state machines · immutable fields<br/>· cross-aggregate guards"]
+    end
+
+    subgraph Adapters_Out["Adapters — outbound"]
+        JPA["Persistence adapter<br/>JPA + Flyway + constraint-name<br/>exception translation"]
+        Outbox["Outbox adapter<br/>appends event row in same tx"]
+    end
+
+    subgraph Lib["libs/java-messaging"]
+        Publisher["OutboxPollingScheduler<br/>every 500ms → Kafka"]
+    end
+
+    Filter --> HTTP
+    HTTP --> UseCases
+    UseCases --> Services
+    Services --> Aggregates
+    Services --> JPA
+    Services --> Outbox
+    Outbox -.-> Publisher
+    Aggregates -.-> Invariants
+
+    style Domain fill:#f3e5f5,stroke:#7b1fa2
+    style Application fill:#e3f2fd,stroke:#1976d2
+    style Adapters_In fill:#fff3e0,stroke:#f57c00
+    style Adapters_Out fill:#fff3e0,stroke:#f57c00
+    style Lib fill:#e8f5e9,stroke:#388e3c
+```
+
+### Mutation flow (POST / PATCH / deactivate)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant GW as gateway
+    participant MS as master
+    participant R as Redis
+    participant PG as Postgres
+    participant K as Kafka
+    participant X as Consumer
+
+    C->>GW: POST /api/v1/master/warehouses<br/>Idempotency-Key + JWT
+    GW->>GW: Validate JWT + rate-limit
+    GW->>MS: HTTP + X-User-Id / X-User-Role
+    MS->>R: Check Idempotency-Key
+    alt Key replay
+        R-->>MS: Cached response bytes
+        MS-->>GW: Cached 201 (byte-identical)
+    else First request
+        MS->>MS: Authorize · validate · domain invariants
+        MS->>PG: BEGIN TX<br/>INSERT warehouses<br/>INSERT outbox (same tx)
+        PG-->>MS: COMMIT
+        MS->>R: Store idempotency response (24h TTL)
+        MS-->>GW: 201 + ETag "v0" + Location
+    end
+    GW-->>C: 201 response
+
+    Note over MS,PG: Separate tx, async
+    MS->>PG: Poll outbox (500ms)
+    MS->>K: Publish event envelope<br/>wms.master.warehouse.v1
+    K->>X: Deliver (at-least-once)
+    X->>X: Idempotent by eventId
+```
+
+---
+
 ### Services
 
 | Service | Service Type | Responsibility | v1 Status |
