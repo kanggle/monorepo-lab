@@ -1,0 +1,76 @@
+# ============================================================
+# AlertManager 설정
+# Slack Webhook 기반 알림 전송
+#
+# Webhook URL은 `slack_api_url_file`로 파일 참조 (보안)
+# 채널명은 docker-compose 환경변수 치환으로 주입 (민감 정보 아님)
+# ============================================================
+
+global:
+  resolve_timeout: 5m
+  slack_api_url_file: /etc/alertmanager/slack-webhook-url
+
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: 'critical'
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers:
+        - severity="warning"
+      receiver: 'warning'
+      repeat_interval: 4h
+
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#alerts'
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Severity*: {{ .Labels.severity }}
+          *Service*: {{ .Labels.job }}
+          *Category*: {{ .Labels.category }}
+          *Summary*: {{ .Annotations.summary }}
+          *Description*: {{ .Annotations.description }}
+          {{ end }}
+
+  - name: 'critical'
+    slack_configs:
+      - channel: '#alerts-critical'
+        send_resolved: true
+        title: '🚨 [CRITICAL] {{ .CommonLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Service*: {{ .Labels.job }}
+          *Category*: {{ .Labels.category }}
+          *Summary*: {{ .Annotations.summary }}
+          *Description*: {{ .Annotations.description }}
+          {{ end }}
+
+  - name: 'warning'
+    slack_configs:
+      - channel: '#alerts-warning'
+        send_resolved: true
+        title: '⚠️ [WARNING] {{ .CommonLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Service*: {{ .Labels.job }}
+          *Category*: {{ .Labels.category }}
+          *Summary*: {{ .Annotations.summary }}
+          *Description*: {{ .Annotations.description }}
+          {{ end }}
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'service']

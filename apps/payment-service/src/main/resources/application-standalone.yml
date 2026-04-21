@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/payment_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=VALUE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.metrics.KafkaMetricsAutoConfiguration
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+server:
+  port: 8087
+
+logging:
+  level:
+    com.example.payment: DEBUG
+    org.springframework.kafka: WARN
+    org.apache.kafka: WARN

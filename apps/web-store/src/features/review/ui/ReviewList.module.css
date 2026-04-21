@@ -1,0 +1,12 @@
+.wrapper {
+  margin-top: var(--space-8);
+  max-width: 844px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .wrapper {
+    max-width: 480px;
+  }
+}

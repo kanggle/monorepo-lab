@@ -1,0 +1,118 @@
+package com.example.shipping.application.service;
+
+import com.example.shipping.application.command.CreateShippingCommand;
+import com.example.shipping.application.command.UpdateShippingStatusCommand;
+import com.example.web.exception.AccessDeniedException;
+import com.example.shipping.application.port.ShippingEventPublisher;
+import com.example.shipping.application.result.UpdateShippingStatusResult;
+import com.example.shipping.domain.exception.InvalidStatusTransitionException;
+import com.example.shipping.domain.exception.ShippingNotFoundException;
+import com.example.shipping.domain.model.Shipping;
+import com.example.shipping.domain.model.ShippingStatus;
+import com.example.shipping.domain.repository.ShippingRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("ShippingCommandService 단위 테스트")
+class ShippingCommandServiceTest {
+
+    private ShippingCommandService shippingCommandService;
+
+    @Mock
+    private ShippingRepository shippingRepository;
+
+    @Mock
+    private ShippingEventPublisher shippingEventPublisher;
+
+    private final Clock fixedClock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @BeforeEach
+    void setUp() {
+        shippingCommandService = new ShippingCommandService(shippingRepository, shippingEventPublisher, fixedClock);
+    }
+
+    @Test
+    @DisplayName("배송 생성 성공")
+    void createShipping_validCommand_success() {
+        given(shippingRepository.existsByOrderId("order-1")).willReturn(false);
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.createShipping(new CreateShippingCommand("order-1", "user-1"));
+
+        verify(shippingRepository).save(any(Shipping.class));
+    }
+
+    @Test
+    @DisplayName("중복 orderId로 배송 생성 시 멱등 처리 (무시)")
+    void createShipping_duplicateOrderId_skips() {
+        given(shippingRepository.existsByOrderId("order-1")).willReturn(true);
+
+        shippingCommandService.createShipping(new CreateShippingCommand("order-1", "user-1"));
+
+        verify(shippingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("배송 상태 업데이트 성공 및 이벤트 발행")
+    void updateStatus_validTransition_updatesAndPublishesEvent() {
+        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        given(shippingRepository.findById(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", "ADMIN");
+
+        UpdateShippingStatusResult result = shippingCommandService.updateStatus(command);
+
+        assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
+        verify(shippingEventPublisher).publishShippingStatusChanged(
+                eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
+                eq(ShippingStatus.PREPARING), eq(ShippingStatus.SHIPPED),
+                eq("TRK-001"), eq("CJ대한통운"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 배송 ID로 상태 업데이트 시 예외")
+    void updateStatus_shippingNotFound_throws() {
+        given(shippingRepository.findById("nonexistent")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", "ADMIN")))
+                .isInstanceOf(ShippingNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("잘못된 전이 시도 시 예외")
+    void updateStatus_invalidTransition_throws() {
+        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        given(shippingRepository.findById(shipping.getShippingId())).willReturn(Optional.of(shipping));
+
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, "ADMIN")))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("비관리자 역할로 상태 업데이트 시 AccessDeniedException")
+    void updateStatus_nonAdminRole_throwsAccessDeniedException() {
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", "USER")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+}

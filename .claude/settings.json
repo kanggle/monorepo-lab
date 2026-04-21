@@ -1,0 +1,117 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.infrastructure.metrics.AuthMetricsTest\")",
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.LoginServiceTest\")",
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.AuthSignupLoginIntegrationTest\")",
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.AuthSignupLoginIntegrationTest\" --info)",
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.*\" --tests \"com.example.auth.infrastructure.metrics.*\" --tests \"com.example.auth.domain.*\")",
+      "Bash(./gradlew :apps:auth-service:test --tests \"com.example.auth.application.service.*\" --tests \"com.example.auth.infrastructure.metrics.*\" --tests \"com.example.auth.domain.*\" --info)",
+      "Bash(grep -E \"SUCCESS|PASS|test$\")",
+      "Edit(/.claude/skills/backend/**)",
+      "Edit(/.claude/skills/frontend/**)",
+      "Edit(/.claude/skills/infra/**)",
+      "Edit(/.claude/skills/search/**)",
+      "Edit(/.claude/skills/testing/**)",
+      "Edit(/.claude/skills/service-types/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\kangdow\\dev\\project\\ai-project\\ecommerce-microservices-platform\\apps\\web-store\\src\\app\\(store)\\products",
+      "C:\\Users\\kangdow\\dev\\project\\ai-project\\ecommerce-microservices-platform\\.claude\\agents"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/task-completed.ps1"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/notify.ps1 -Message \"확인이 필요합니다\"",
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/protect-main-branch.ps1"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/spec-check.ps1"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/spec-check.ps1"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/format-check.ps1",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/test-on-edit.ps1",
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/format-check.ps1",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/test-on-edit.ps1",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/notify.ps1 -Message \"권한 승인이 필요합니다\"",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

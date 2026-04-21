@@ -1,0 +1,52 @@
+# Environment variables (secrets)
+.env
+.env.*
+
+# Alertmanager Slack webhook URL (secret) — commit .example only
+infra/alertmanager/slack-webhook-url
+
+# k6 부하 테스트 결과 (재현 가능, 용량 큼)
+load-tests/results/
+
+# Local H2 database files
+/data/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+.gradle/
+.next/
+*.class
+*.tsbuildinfo
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/worktrees/
+.turbo/
+*/data/*.mv.db
+*/data/*.lock.db
+apps/payment-service/data/
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log
+
+# Test coverage reports
+apps/*/coverage/
+
+# Playwright E2E artifacts
+apps/*/test-results/
+apps/*/playwright-report/
+apps/*/playwright/.cache/

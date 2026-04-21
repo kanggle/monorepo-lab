@@ -1,0 +1,53 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.cloud.gateway.config.GatewayRedisAutoConfiguration
+
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/auth/**
+
+        - id: product-service
+          uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/products/**,/api/admin/products/**
+
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/users/**,/api/admin/users/**
+
+        - id: search-service
+          uri: ${SEARCH_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/search/**
+
+        - id: order-service
+          uri: ${ORDER_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/orders/**,/api/admin/orders/**
+
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/payments/**
+
+        - id: shipping-service
+          uri: ${SHIPPING_SERVICE_URL:http://localhost:8090}
+          predicates:
+            - Path=/api/shippings/**
+
+jwt:
+  secret: standalone-dev-jwt-secret-key-must-be-at-least-32chars!
+
+management:
+  health:
+    redis:
+      enabled: false

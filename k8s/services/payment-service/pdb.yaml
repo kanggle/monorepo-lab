@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-service-pdb
+  namespace: ecommerce
+  labels:
+    app: payment-service
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: payment-service

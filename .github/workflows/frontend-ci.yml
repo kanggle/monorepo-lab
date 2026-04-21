@@ -1,0 +1,98 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    paths:
+      - 'apps/web-store/**'
+      - 'apps/admin-dashboard/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+
+concurrency:
+  group: frontend-ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    name: Detect changed apps
+    runs-on: ubuntu-latest
+    outputs:
+      web-store: ${{ steps.changes.outputs.web-store }}
+      admin-dashboard: ${{ steps.changes.outputs.admin-dashboard }}
+      packages: ${{ steps.changes.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            packages:
+              - 'packages/**'
+            web-store:
+              - 'apps/web-store/**'
+            admin-dashboard:
+              - 'apps/admin-dashboard/**'
+
+      - id: changes
+        run: |
+          echo "web-store=${{ steps.changed-files.outputs.web-store_any_changed }}" >> "$GITHUB_OUTPUT"
+          echo "admin-dashboard=${{ steps.changed-files.outputs.admin-dashboard_any_changed }}" >> "$GITHUB_OUTPUT"
+          echo "packages=${{ steps.changed-files.outputs.packages_any_changed }}" >> "$GITHUB_OUTPUT"
+
+  lint-typecheck-test:
+    name: "Lint, Type-check & Test"
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.web-store == 'true' ||
+      needs.detect-changes.outputs.admin-dashboard == 'true' ||
+      needs.detect-changes.outputs.packages == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build turbo filter
+        id: filter
+        run: |
+          filter=""
+          packages_changed="${{ needs.detect-changes.outputs.packages }}"
+
+          if [[ "$packages_changed" == "true" ]]; then
+            # packages 변경 시 모든 프론트엔드 앱 빌드
+            filter="--filter=web-store --filter=admin-dashboard"
+          else
+            if [[ "${{ needs.detect-changes.outputs.web-store }}" == "true" ]]; then
+              filter="$filter --filter=web-store"
+            fi
+            if [[ "${{ needs.detect-changes.outputs.admin-dashboard }}" == "true" ]]; then
+              filter="$filter --filter=admin-dashboard"
+            fi
+          fi
+
+          echo "filter=$filter" >> "$GITHUB_OUTPUT"
+
+      - name: Lint
+        run: pnpm turbo lint ${{ steps.filter.outputs.filter }}
+
+      - name: Type-check
+        run: pnpm turbo build ${{ steps.filter.outputs.filter }}
+
+      - name: Test
+        run: pnpm turbo test ${{ steps.filter.outputs.filter }}

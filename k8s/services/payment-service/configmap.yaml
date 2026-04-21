@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-config
+  namespace: ecommerce
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SERVER_PORT: "8087"
+  OTEL_SERVICE_NAME: "payment-service"
+  DB_URL: "jdbc:postgresql://payment-postgres.infra.svc.cluster.local:5432/payment_db"

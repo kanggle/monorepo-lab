@@ -1,0 +1,22 @@
+rootProject.name = 'ecommerce-microservices-platform'
+
+include(
+    'apps:auth-service',
+    'apps:batch-worker',
+    'apps:gateway-service',
+    'apps:notification-service',
+    'apps:order-service',
+    'apps:promotion-service',
+    'apps:payment-service',
+    'apps:product-service',
+    'apps:review-service',
+    'apps:search-service',
+    'apps:shipping-service',
+    'apps:user-service',
+    'libs:java-common',
+    'libs:java-messaging',
+    'libs:java-observability',
+    'libs:java-security',
+    'libs:java-test-support',
+    'libs:java-web'
+)
