@@ -84,15 +84,11 @@ class LotServiceAuthorizationTest {
         when(skuPersistencePort.findById(skuId)).thenReturn(Optional.of(parentSku));
         when(lotPersistencePort.insert(any(Lot.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Authorization gate passes — create proceeds past @PreAuthorize.
-        // The call may fail on domain logic (e.g. version), but NOT on AccessDeniedException.
-        try {
-            crudUseCase.create(sampleCreate(skuId));
-        } catch (AccessDeniedException e) {
-            throw new AssertionError("Expected create to be allowed for MASTER_WRITE but got AccessDeniedException", e);
-        } catch (Exception ignored) {
-            // Other exceptions from domain / mock setup are fine here
-        }
+        // Authorization gate passes — mock plumbing lets create succeed end-to-end.
+        // Matches the happy-path style of SkuServiceAuthorizationTest
+        // (TASK-BE-018 item 5 — replaces a bare try/catch(Exception ignored)).
+        LotResult result = crudUseCase.create(sampleCreate(skuId));
+        assertThat(result.lotNo()).isEqualTo("L-001");
     }
 
     @Test
@@ -104,13 +100,8 @@ class LotServiceAuthorizationTest {
         when(skuPersistencePort.findById(skuId)).thenReturn(Optional.of(parentSku));
         when(lotPersistencePort.insert(any(Lot.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        try {
-            crudUseCase.create(sampleCreate(skuId));
-        } catch (AccessDeniedException e) {
-            throw new AssertionError("Expected create to be allowed for MASTER_ADMIN but got AccessDeniedException", e);
-        } catch (Exception ignored) {
-            // Other exceptions from domain / mock setup are fine here
-        }
+        LotResult result = crudUseCase.create(sampleCreate(skuId));
+        assertThat(result.lotNo()).isEqualTo("L-001");
     }
 
     @Test
@@ -256,10 +247,17 @@ class LotServiceAuthorizationTest {
         }
 
         @Bean
+        LotExpirationBatchProcessor lotExpirationBatchProcessor() {
+            return mock(LotExpirationBatchProcessor.class);
+        }
+
+        @Bean
         LotService lotService(LotPersistencePort lotPersistencePort,
                               SkuPersistencePort skuPersistencePort,
-                              DomainEventPort eventPort) {
-            return new LotService(lotPersistencePort, skuPersistencePort, eventPort);
+                              DomainEventPort eventPort,
+                              LotExpirationBatchProcessor lotExpirationBatchProcessor) {
+            return new LotService(lotPersistencePort, skuPersistencePort, eventPort,
+                    lotExpirationBatchProcessor);
         }
     }
 }
