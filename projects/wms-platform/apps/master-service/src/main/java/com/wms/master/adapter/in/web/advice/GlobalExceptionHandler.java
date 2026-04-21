@@ -26,6 +26,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -158,6 +160,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(ApiErrorEnvelope.of("VALIDATION_ERROR",
                         "Invalid value for parameter: " + ex.getName()));
+    }
+
+    /**
+     * {@code @PreAuthorize} on application-service methods throws
+     * {@link AccessDeniedException} (or its Spring Security 6 subclass
+     * {@code AuthorizationDeniedException}) that bubbles past the Spring
+     * Security filter chain, because the failure originates inside the
+     * controller/service call. Without this explicit handler the generic
+     * {@link #handleUnexpected} fallback maps it to 500; integration tests
+     * that exercise role enforcement (TASK-BE-017) then see a 500 instead of
+     * the contracted 403. Mirror the {@code accessDeniedHandler} in
+     * {@link com.wms.master.config.SecurityConfig} for consistency.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorEnvelope.of("FORBIDDEN",
+                        "Insufficient privileges for this operation"));
+    }
+
+    /**
+     * {@link AuthenticationCredentialsNotFoundException} surfaces when
+     * method-security gates a call but the SecurityContext is empty — e.g., a
+     * mis-configured request that slipped past the authentication filter.
+     * Map to 401 per the platform error table rather than letting the generic
+     * handler downgrade it to 500.
+     */
+    @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleMissingCredentials(
+            AuthenticationCredentialsNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiErrorEnvelope.of("UNAUTHORIZED", "Authentication required"));
     }
 
     @ExceptionHandler(Exception.class)

@@ -20,11 +20,29 @@ import org.apache.kafka.common.serialization.StringDeserializer;
  * <p>
  * Subscribes once, polls with a bounded timeout, and exposes {@link
  * #pollOne(Duration)} / {@link #pollAll(Duration)} helpers. Each instance uses
- * a unique consumer group so tests are independent, and {@code
- * AUTO_OFFSET_RESET=earliest} so messages published before subscribe are not
- * lost (important for the publisher-resilience test).
+ * a unique consumer group so tests are independent.
+ * <p>
+ * <strong>Offset strategy:</strong> {@code AUTO_OFFSET_RESET=latest} so the
+ * consumer only sees records <em>published after the constructor returns</em>.
+ * This is critical for test isolation: the Spring context (and therefore the
+ * Kafka broker) is cached across test classes in the same JVM, so events
+ * produced by earlier tests accumulate on shared topics such as
+ * {@code wms.master.warehouse.v1}. An {@code earliest} reset would cause a
+ * new consumer to replay every historical event and fail the next
+ * {@code aggregateId} assertion (TASK-BE-017). The constructor blocks until
+ * the initial partition assignment has landed — i.e., the consumer is
+ * committed to {@code endOffsets()} — so that a subsequent producer write
+ * is guaranteed to be delivered.
+ * <p>
+ * <strong>Callers that want to peek at historical records</strong> (e.g., the
+ * publisher-resilience test that asserts a drain after unpausing Kafka) must
+ * construct the consumer <em>before</em> the producer write, while the broker
+ * is still reachable — mirroring the
+ * {@code gateway-master-e2e} drain-accumulation pattern.
  */
 public final class KafkaTestConsumer implements AutoCloseable {
+
+    private static final Duration ASSIGNMENT_WAIT = Duration.ofSeconds(5);
 
     private final KafkaConsumer<String, String> consumer;
     private final String topic;
@@ -37,15 +55,34 @@ public final class KafkaTestConsumer implements AutoCloseable {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // See the class-level javadoc for the rationale behind `latest` — it
+        // is required to avoid cross-test pollution from the shared broker.
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         this.consumer = new KafkaConsumer<>(props);
         this.topic = topic;
         this.consumer.subscribe(Collections.singletonList(topic));
-        // Prime the subscription so earliest offset is committed at consumer start
-        this.consumer.poll(Duration.ofMillis(100));
+        waitForPartitionAssignment();
+    }
+
+    /**
+     * Subscribe() is lazy — the consumer only learns its partitions on the
+     * first successful poll. Block until assignment has actually landed so the
+     * producer-write that the test is about to trigger is guaranteed to be
+     * captured (no race between the POST and the background rebalance).
+     *
+     * <p>If assignment does not complete within {@link #ASSIGNMENT_WAIT}, we
+     * fall back without throwing — the subsequent {@code pollOne} will produce
+     * the actual diagnostic ({@link NoSuchElementException} with the topic
+     * name).
+     */
+    private void waitForPartitionAssignment() {
+        long deadline = System.nanoTime() + ASSIGNMENT_WAIT.toNanos();
+        while (consumer.assignment().isEmpty() && System.nanoTime() < deadline) {
+            consumer.poll(Duration.ofMillis(200));
+        }
     }
 
     /**
