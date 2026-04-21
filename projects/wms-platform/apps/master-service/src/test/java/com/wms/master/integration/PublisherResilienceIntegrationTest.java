@@ -49,36 +49,41 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
     void outboxSurvivesKafkaOutage() throws Exception {
         double failuresBefore = failureCounter();
 
-        // Step 1: pause Kafka (SIGSTOP inside container)
-        KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
-        try {
-            // Step 2: issue a mutation — commits to DB, outbox row written,
-            // publisher retries hopelessly.
-            String code = "WH" + shortSuffix();
-            String body = """
-                    {"warehouseCode":"%s","name":"Paused","timezone":"UTC"}
-                    """.formatted(code);
-            ResponseEntity<String> created = post("/api/v1/master/warehouses",
-                    body, UUID.randomUUID().toString(), WRITE_ROLE);
-            assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
-            // Step 3: the DB-resident outbox row persists (no data loss).
-            // We can't enter transactional context from here easily; instead we
-            // poll the pending count from the gauge which queries the DB.
-            await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                    assertThat(pendingGauge()).isGreaterThanOrEqualTo(1.0d));
-
-            // Failure counter must eventually increment (publisher tried and failed)
-            await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
-                    assertThat(failureCounter()).isGreaterThan(failuresBefore));
-        } finally {
-            // Step 4: resume Kafka
-            KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
-        }
-
-        // Step 5: outbox drains — pending count returns to zero and the event
-        // lands on Kafka within the retry window.
+        // Subscribe BEFORE the broker is paused so the consumer's partition
+        // assignment lands while the cluster is healthy, and its committed
+        // offset is {@code latest} at the moment we pause. Any record that is
+        // published after unpause is then guaranteed to be delivered to us.
         try (KafkaTestConsumer kafka = new KafkaTestConsumer(KAFKA.getBootstrapServers(), TOPIC)) {
+
+            // Step 1: pause Kafka (SIGSTOP inside container)
+            KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
+            try {
+                // Step 2: issue a mutation — commits to DB, outbox row written,
+                // publisher retries hopelessly.
+                String code = "WH" + shortSuffix();
+                String body = """
+                        {"warehouseCode":"%s","name":"Paused","timezone":"UTC"}
+                        """.formatted(code);
+                ResponseEntity<String> created = post("/api/v1/master/warehouses",
+                        body, UUID.randomUUID().toString(), WRITE_ROLE);
+                assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+                // Step 3: the DB-resident outbox row persists (no data loss).
+                // We can't enter transactional context from here easily; instead we
+                // poll the pending count from the gauge which queries the DB.
+                await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                        assertThat(pendingGauge()).isGreaterThanOrEqualTo(1.0d));
+
+                // Failure counter must eventually increment (publisher tried and failed)
+                await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
+                        assertThat(failureCounter()).isGreaterThan(failuresBefore));
+            } finally {
+                // Step 4: resume Kafka
+                KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
+            }
+
+            // Step 5: outbox drains — pending count returns to zero and the event
+            // lands on Kafka within the retry window.
             await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
                     assertThat(pendingGauge()).isEqualTo(0.0d));
             // At least one record lands after resume

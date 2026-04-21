@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Pure-unit test for {@link OutboxMetrics}. Gauge depends on an EntityManager
@@ -14,10 +15,16 @@ import org.junit.jupiter.api.Test;
  */
 class OutboxMetricsTest {
 
+    private static TransactionTemplate nullTxTemplate() {
+        // The gauge callback short-circuits when the template is null, so we
+        // don't need a live PlatformTransactionManager for these counter tests.
+        return null;
+    }
+
     @Test
     void recordPublishSuccess_incrementsSuccessCounter() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        OutboxMetrics metrics = new OutboxMetrics(registry);
+        OutboxMetrics metrics = new OutboxMetrics(registry, nullTxTemplate());
 
         metrics.recordPublishSuccess();
         metrics.recordPublishSuccess();
@@ -29,7 +36,7 @@ class OutboxMetricsTest {
     @Test
     void recordPublishFailure_incrementsFailureCounter() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        OutboxMetrics metrics = new OutboxMetrics(registry);
+        OutboxMetrics metrics = new OutboxMetrics(registry, nullTxTemplate());
 
         metrics.recordPublishFailure();
 
@@ -40,7 +47,7 @@ class OutboxMetricsTest {
     @Test
     void allThreeMetersAreRegistered() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        new OutboxMetrics(registry);
+        new OutboxMetrics(registry, nullTxTemplate());
 
         assertThat(registry.find(OutboxMetrics.PUBLISH_SUCCESS_TOTAL).counter()).isNotNull();
         assertThat(registry.find(OutboxMetrics.PUBLISH_FAILURE_TOTAL).counter()).isNotNull();
