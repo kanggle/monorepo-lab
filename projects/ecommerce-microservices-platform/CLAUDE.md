@@ -15,7 +15,7 @@ This project was imported into `monorepo-lab` via `git subtree` and now particip
 **Reconciliation status:**
 
 - `specs/rules/`, `specs/platform/`, `tasks/templates/` — **deleted**. The legacy standalone-repo copies are gone; the authoritative sources are root `rules/`, root `platform/`, root `tasks/templates/`. Any promotable universal content was merged up (notably `platform/object-storage-policy.md` now lives at root as shared policy); ecommerce-specific content was absorbed into `rules/domains/ecommerce.md` (Ubiquitous Language, Standard Error Codes cross-ref) and `platform/error-handling.md` (domain error-code sections tagged `[domain: ecommerce]`).
-- `.claude/` — nested directory still present; **root `.claude/` wins** for agent/skill resolution. A future merge into root is a pending follow-up.
+- `.claude/` — **reduced to a minimal project-specific overlay**. 126 duplicate files deleted (identical to root, or only differing in legacy `specs/rules/` → `rules/` path references). Only three genuine overrides remain: `agents/common/coordinator.md` and `commands/process-tasks.md` (use concrete ecommerce service names in examples), and `agents/common/frontend-engineer.md` (routes frontend work to `web-store` + `admin-dashboard` instead of the generic `frontend` domain). `settings.json` was deleted — its extra entries were stale after the composite-build move (referenced old standalone `apps:auth-service` Gradle paths and the pre-import standalone repo directory). Hooks and all other skills/agents/commands now load from root `.claude/`.
 - Historical task records in `tasks/done/` may contain broken `specs/rules/...` / `specs/platform/...` links — preserved as immutable history; rewrite is not planned.
 
 ## What lives here
