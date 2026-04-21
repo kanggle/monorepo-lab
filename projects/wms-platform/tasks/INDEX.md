@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — master-service v1 complete)
+- `TASK-BE-019-remaining-integration-test-flakiness.md` — 3 of 5 integration tests still failing on CI Linux after BE-017 (PublisherResilience Kafka pause/resume, Prometheus actuator metrics, WarehouseIntegrationTest create_then_replay). Portfolio CI unaffected (job gated to monorepo-lab only); dev-env hardening only.
 
 ## in-progress
 
@@ -98,3 +98,5 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-006-lot-aggregate.md` — master-service v1 final aggregate (Lot), scheduled expiration, SKU reverse-guard upgrade. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-015 (5 missing test classes + contract harness). 2 non-blocking warnings on LotService (WarehouseStatus comparison, expireBatch transaction scope)
 - `TASK-BE-015-lot-test-coverage-followup.md` — Lot test classes (5/5 confirmed). Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-016 (contract harness Lot wiring only). All 5 test classes high-quality; contract harness missing Lot cases.
 - `TASK-BE-016-lot-contract-harness-wiring.md` — Lot cases wired into EventContractTest + HttpContractTest (3 new tests). Review verdict 2026-04-20: **APPROVED** (1 non-blocking note — master-lot-created.schema.json not asserted alongside generic envelope, can be added in future if envelope-depth parity desired)
+- `TASK-BE-017-integration-test-flakiness.md` — Kafka consumer offset-reset + AccessDeniedException handler + OutboxMetrics TransactionTemplate + new integration-tests CI job. Review verdict 2026-04-21: **APPROVED** — 2 of 5 tests verified fixed; 3 remain CI-flaky on infra, deferred to TASK-BE-019
+- `TASK-BE-018-non-blocking-suggestions-cleanup.md` — batch of 10 cleanup items from BE-008..BE-016 reviews (Sku.isActive, LotExpirationBatchProcessor REQUIRES_NEW, GatewayErrorHandler JSON escape, ApiError requireNonNull, etc.). Review verdict 2026-04-21: **APPROVED** (all 10 items verified)
