@@ -69,21 +69,25 @@ tasks.named('bootJar') {
     archiveFileName = 'master-service.jar'
 }
 
+// The default `test` task excludes @Tag("integration") so `./gradlew check`
+// is fast and deterministic (unit + slice + @DataJpaTest Testcontainers only,
+// no full @SpringBootTest boot). Integration tests are opt-in via the
+// `integrationTest` task registered below — they exercise Postgres + Kafka
+// + Redis on a shared Docker network and are slower + more brittle.
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
 }
 
 // --- TASK-BE-007: integration test isolation ---
 //
-// The default `test` task runs everything (fast unit + slice + Testcontainers
-// when Docker is available). Integration tests marked @Tag("integration") boot
-// the full Spring context with Postgres + Kafka + Redis containers on a shared
-// network; they are slower and depend on a working Docker daemon.
-//
-// `unitTest` — excludes @Tag("integration"), used for no-Docker local runs.
-// `integrationTest` — includes only @Tag("integration"), used in CI once
-// Docker is guaranteed. Both share the standard `test` source set to keep
-// compilation simple and avoid classpath duplication.
+// `unitTest` — excludes @Tag("integration"). Same behaviour as the default
+//   `test` task above; kept as a named alias for discoverability.
+// `integrationTest` — includes only @Tag("integration"), opt-in when Docker
+//   is guaranteed and the Kafka/Postgres timing is tolerable.
+// Both share the standard `test` source set to keep compilation simple and
+// avoid classpath duplication.
 tasks.register('unitTest', Test) {
     description = 'Runs unit and slice tests; excludes the integration tag.'
     group = 'verification'
