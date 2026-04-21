@@ -58,7 +58,12 @@ class LocationIntegrationTest extends MasterServiceIntegrationBase {
             assertThat(node.get("locationCode").asText()).isEqualTo(locationCode);
             assertThat(node.get("zoneId").asText()).isEqualTo(seed.zoneId);
 
-            ConsumerRecord<String, String> record = kafka.pollOne(Duration.ofSeconds(10));
+            // Filter by aggregateId so a drained leftover location event from
+            // a previous test case (e.g. globalLocationCode_collision) does
+            // not match this assertion. TASK-BE-019.
+            String expectedAggregateId = node.get("id").asText();
+            ConsumerRecord<String, String> record =
+                    kafka.pollOneForKey(Duration.ofSeconds(10), expectedAggregateId);
             JsonNode envelope = objectMapper.readTree(record.value());
             assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.created");
             assertThat(envelope.get("aggregateType").asText()).isEqualTo("location");
