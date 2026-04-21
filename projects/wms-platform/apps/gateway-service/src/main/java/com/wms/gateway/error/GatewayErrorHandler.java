@@ -1,5 +1,6 @@
 package com.wms.gateway.error;
 
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -39,9 +40,19 @@ public final class GatewayErrorHandler {
             // Per platform/error-handling.md the envelope must always carry a
             // timestamp; use the current UTC instant so the fallback path stays
             // spec-compliant.
+            //
+            // Escape the code/message via Jackson's JsonStringEncoder so a
+            // message containing quotes, backslashes, or control characters
+            // cannot produce malformed JSON (TASK-BE-018 item 3).
             Instant timestamp = envelope.timestamp() != null ? envelope.timestamp() : Instant.now();
-            String fallback = "{\"code\":\"" + envelope.code() + "\",\"message\":\""
-                    + envelope.message() + "\",\"timestamp\":\"" + timestamp + "\"}";
+            JsonStringEncoder encoder = JsonStringEncoder.getInstance();
+            String escapedCode = new String(encoder.quoteAsString(
+                    envelope.code() != null ? envelope.code() : ""));
+            String escapedMessage = new String(encoder.quoteAsString(
+                    envelope.message() != null ? envelope.message() : ""));
+            String escapedTimestamp = new String(encoder.quoteAsString(timestamp.toString()));
+            String fallback = "{\"code\":\"" + escapedCode + "\",\"message\":\""
+                    + escapedMessage + "\",\"timestamp\":\"" + escapedTimestamp + "\"}";
             return fallback.getBytes(StandardCharsets.UTF_8);
         }
     }

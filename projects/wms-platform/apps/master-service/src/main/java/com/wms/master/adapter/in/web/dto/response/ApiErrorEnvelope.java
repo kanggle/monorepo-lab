@@ -3,6 +3,7 @@ package com.wms.master.adapter.in.web.dto.response;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Error envelope matching
@@ -36,5 +37,16 @@ public record ApiErrorEnvelope(ApiError error) {
             Map<String, Object> details,
             String traceId,
             String requestId) {
+
+        /**
+         * Compact canonical constructor — enforces the platform contract that
+         * every error envelope carries a non-null {@code timestamp} (per
+         * {@code platform/error-handling.md} § Error Response Format). A future
+         * caller bypassing the {@link ApiErrorEnvelope} factory methods still
+         * cannot construct an invalid record (TASK-BE-018 item 4).
+         */
+        public ApiError {
+            Objects.requireNonNull(timestamp, "timestamp");
+        }
     }
 }

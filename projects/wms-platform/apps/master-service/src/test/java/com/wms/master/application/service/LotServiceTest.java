@@ -55,7 +55,12 @@ class LotServiceTest {
         lotPersistence = new FakeLotPersistencePort();
         skuPersistence = new FakeSkuPersistencePort();
         events = new FakeDomainEventPort();
-        service = new LotService(lotPersistence, skuPersistence, events);
+        // Wire the per-row batch processor to the same fakes so the
+        // ExpireBatch tests still exercise the persistence + event path
+        // through the extracted bean (TASK-BE-018 item 2).
+        LotExpirationBatchProcessor expirationProcessor =
+                new LotExpirationBatchProcessor(lotPersistence, events);
+        service = new LotService(lotPersistence, skuPersistence, events, expirationProcessor);
 
         // Seed 3 parent SKUs with different tracking/status combinations
         activeLotSku = skuPersistence.insert(Sku.create(

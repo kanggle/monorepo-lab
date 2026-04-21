@@ -26,6 +26,7 @@ import com.wms.master.domain.exception.LotNoDuplicateException;
 import com.wms.master.domain.exception.LotNotFoundException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.model.LotStatus;
+import com.wms.master.testsupport.TestConstants;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -53,8 +54,7 @@ class LotControllerTest {
     private static final Instant NOW = Instant.parse("2026-04-20T00:00:00Z");
     private static final LocalDate MFD = LocalDate.of(2026, 1, 1);
     private static final LocalDate EXP = LocalDate.of(2026, 12, 31);
-    private static final String ISO_TIMESTAMP_REGEX =
-            "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$";
+    private static final String ISO_TIMESTAMP_REGEX = TestConstants.ISO_TIMESTAMP_REGEX;
 
     @Autowired
     private MockMvc mockMvc;

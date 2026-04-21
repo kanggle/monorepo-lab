@@ -28,6 +28,8 @@ class EventContractTest extends MasterServiceIntegrationBase {
 
     private static final ContractSchema ENVELOPE =
             ContractSchema.load("/contracts/events/event-envelope.schema.json");
+    private static final ContractSchema LOT_CREATED =
+            ContractSchema.load("/contracts/events/master-lot-created.schema.json");
 
     @Autowired
     private TestRestTemplate rest;
@@ -108,6 +110,9 @@ class EventContractTest extends MasterServiceIntegrationBase {
 
             ConsumerRecord<String, String> record = kafka.pollOne(Duration.ofSeconds(15));
             ENVELOPE.assertValid(record.value());
+            // Full envelope-depth parity with the other aggregates: validate
+            // the record against the per-event schema too (TASK-BE-018 item 10).
+            LOT_CREATED.assertValid(record.value());
         }
     }
 

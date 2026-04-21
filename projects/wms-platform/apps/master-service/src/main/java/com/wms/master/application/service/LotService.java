@@ -15,7 +15,6 @@ import com.wms.master.application.query.ListLotsQuery;
 import com.wms.master.application.result.LotResult;
 import com.wms.master.domain.event.LotCreatedEvent;
 import com.wms.master.domain.event.LotDeactivatedEvent;
-import com.wms.master.domain.event.LotExpiredEvent;
 import com.wms.master.domain.event.LotReactivatedEvent;
 import com.wms.master.domain.event.LotUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
@@ -26,7 +25,6 @@ import com.wms.master.domain.model.Lot;
 import com.wms.master.domain.model.LotStatus;
 import com.wms.master.domain.model.Sku;
 import com.wms.master.domain.model.TrackingType;
-import com.wms.master.domain.model.WarehouseStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -38,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -70,18 +69,20 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
 
     private static final Logger log = LoggerFactory.getLogger(LotService.class);
     private static final String AGGREGATE_TYPE = "Lot";
-    private static final String SYSTEM_ACTOR = "system";
 
     private final LotPersistencePort persistencePort;
     private final SkuPersistencePort skuPersistencePort;
     private final DomainEventPort eventPort;
+    private final LotExpirationBatchProcessor expirationBatchProcessor;
 
     public LotService(LotPersistencePort persistencePort,
                       SkuPersistencePort skuPersistencePort,
-                      DomainEventPort eventPort) {
+                      DomainEventPort eventPort,
+                      LotExpirationBatchProcessor expirationBatchProcessor) {
         this.persistencePort = persistencePort;
         this.skuPersistencePort = skuPersistencePort;
         this.eventPort = eventPort;
+        this.expirationBatchProcessor = expirationBatchProcessor;
     }
 
     @Override
@@ -91,8 +92,10 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
         Sku parent = skuPersistencePort.findById(command.skuId())
                 .orElseThrow(() -> new SkuNotFoundException(command.skuId().toString()));
 
-        // 2) Parent SKU must be ACTIVE.
-        if (parent.getStatus() != WarehouseStatus.ACTIVE) {
+        // 2) Parent SKU must be ACTIVE. Going through Sku.isActive() insulates
+        //    the application layer from the WarehouseStatus enum reuse on Sku
+        //    (TASK-BE-018 item 1).
+        if (!parent.isActive()) {
             throw new InvalidStateTransitionException(
                     "parent SKU " + parent.getId() + " is not ACTIVE");
         }
@@ -189,15 +192,26 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
 
     /**
      * Scheduled expiration batch. Query the ACTIVE lots with
-     * {@code expiry_date < today}, transition each to EXPIRED, and emit one
-     * {@code master.lot.expired} event per success via the outbox.
+     * {@code expiry_date < today}, transition each to EXPIRED in its OWN new
+     * transaction, and emit one {@code master.lot.expired} event per success
+     * via the outbox.
      *
      * <p>Per-row failures are caught, logged, and counted so one bad row does
      * not block the others. Typical causes: transient DB contention, version
      * drift introduced by a concurrent user deactivating the lot between the
      * scheduler's query and the per-row transition.
+     *
+     * <p>Transaction boundary: the read-only candidate query runs outside any
+     * enclosing transaction (this method is NOT annotated; the class-level
+     * {@code @Transactional} default is overridden by the
+     * {@link Transactional#propagation()} on {@link #execute(LocalDate)}
+     * being {@code NOT_SUPPORTED}). Each row's transition then uses
+     * {@link LotExpirationBatchProcessor#expireOne} which runs in a fresh
+     * {@code REQUIRES_NEW} transaction so a mid-loop constraint violation
+     * rolls back only that one row (TASK-BE-018 item 2).
      */
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LotExpirationResult execute(LocalDate today) {
         Instant scheduledAt = Instant.now();
         List<Lot> candidates = persistencePort.findAllByStatusAndExpiryDateBefore(
@@ -207,9 +221,7 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
         int failed = 0;
         for (Lot candidate : candidates) {
             try {
-                candidate.expire(SYSTEM_ACTOR);
-                Lot saved = saveWithOptimisticLock(candidate);
-                eventPort.publish(List.of(LotExpiredEvent.from(saved, scheduledAt)));
+                expirationBatchProcessor.expireOne(candidate, scheduledAt);
                 expired++;
             } catch (RuntimeException ex) {
                 failed++;

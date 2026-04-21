@@ -44,7 +44,7 @@ class LotExpirationSchedulerTest {
     // ---------- happy path ----------
 
     @Test
-    @DisplayName("runNow 위임: 사용 사례가 성공 결과를 반환하면 스케줄러가 동일한 결과를 반환한다")
+    @DisplayName("runNow delegates: when the use case returns a success result the scheduler returns the same result")
     void runNow_happyPath_returnsUseCaseResult() {
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         LotExpirationResult expected = new LotExpirationResult(5, 5, 0);
@@ -60,7 +60,7 @@ class LotExpirationSchedulerTest {
     }
 
     @Test
-    @DisplayName("runScheduled 위임: runScheduled는 runNow와 동일한 경로로 사용 사례에 위임한다")
+    @DisplayName("runScheduled delegates: runScheduled reaches the use case via the same path as runNow")
     void runScheduled_delegatesToRunNow() {
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         LotExpirationResult expected = new LotExpirationResult(3, 2, 1);
@@ -76,7 +76,7 @@ class LotExpirationSchedulerTest {
     // ---------- failure isolation ----------
 
     @Test
-    @DisplayName("최상위 예외 격리: 사용 사례가 RuntimeException을 던지면 스케줄러가 잡아서 빈 결과를 반환한다")
+    @DisplayName("top-level exception isolation: when the use case throws a RuntimeException the scheduler catches it and reports the failure in the result")
     void runNow_useCaseThrows_schedulerCatchesAndReturnsEmptyResult() {
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         when(useCase.execute(any(LocalDate.class)))
@@ -90,11 +90,14 @@ class LotExpirationSchedulerTest {
         assertThat(result).isNotNull();
         assertThat(result.considered()).isZero();
         assertThat(result.expired()).isZero();
-        assertThat(result.failed()).isZero();
+        // The scheduler now reports the batch-level crash as >=1 failed item so
+        // observers (metrics, dashboards) see a non-zero failure count
+        // (TASK-BE-018 item 6).
+        assertThat(result.failed()).isGreaterThanOrEqualTo(1);
     }
 
     @Test
-    @DisplayName("빈 배치: 만료 대상이 없을 때도 정상 결과를 반환한다")
+    @DisplayName("empty batch: returns a zero-count result when no lots are due to expire")
     void runNow_emptyBatch_returnsZeroCounts() {
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         when(useCase.execute(TODAY)).thenReturn(new LotExpirationResult(0, 0, 0));
@@ -110,7 +113,7 @@ class LotExpirationSchedulerTest {
     // ---------- disabled-property guard ----------
 
     @Test
-    @DisplayName("비활성 속성: wms.scheduler.lot-expiration.enabled=false 이면 빈이 생성되지 않는다")
+    @DisplayName("disabled property: the bean is not created when wms.scheduler.lot-expiration.enabled=false")
     void scheduler_whenDisabled_beanIsNotCreated() {
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);
         try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext()) {
@@ -126,7 +129,7 @@ class LotExpirationSchedulerTest {
     }
 
     @Test
-    @DisplayName("기본 활성: wms.scheduler.lot-expiration.enabled 없을 때 matchIfMissing=true 로 빈이 생성된다")
+    @DisplayName("default-enabled: when wms.scheduler.lot-expiration.enabled is absent the bean is created via matchIfMissing=true")
     void scheduler_whenPropertyMissing_beanIsCreated_matchIfMissingTrue() {
         // No property set → matchIfMissing=true → bean should be created.
         ExpireLotsBatchUseCase useCase = mock(ExpireLotsBatchUseCase.class);

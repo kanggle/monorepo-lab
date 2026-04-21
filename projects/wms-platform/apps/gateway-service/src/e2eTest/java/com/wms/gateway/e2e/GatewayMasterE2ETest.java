@@ -1,6 +1,7 @@
 package com.wms.gateway.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -176,8 +177,14 @@ class GatewayMasterE2ETest extends E2EBase {
                                     .isEqualTo(1);
                             // eventId must be a valid UUID per the envelope
                             // schema (UUIDv7 in production; parseability is
-                            // the contract we care about here).
-                            UUID.fromString(envelope.get("eventId").asText());
+                            // the contract we care about here). Wrapped in
+                            // assertThatNoException so a parse failure shows
+                            // up as a descriptive AssertJ failure rather than
+                            // a bare IllegalArgumentException
+                            // (TASK-BE-018 item 9).
+                            assertThatNoException().isThrownBy(
+                                    () -> UUID.fromString(
+                                            envelope.get("eventId").asText()));
                             assertThat(envelope.get("payload")
                                     .get("warehouse")
                                     .get("warehouseCode")

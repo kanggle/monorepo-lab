@@ -29,6 +29,7 @@ import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.model.BaseUom;
 import com.wms.master.domain.model.TrackingType;
 import com.wms.master.domain.model.WarehouseStatus;
+import com.wms.master.testsupport.TestConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -324,8 +325,7 @@ class SkuControllerTest {
                 // BE-008: every error envelope carries an ISO 8601 UTC timestamp
                 .andExpect(jsonPath("$.error.timestamp").isString())
                 .andExpect(jsonPath("$.error.timestamp",
-                        org.hamcrest.Matchers.matchesRegex(
-                                "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$")));
+                        org.hamcrest.Matchers.matchesRegex(TestConstants.ISO_TIMESTAMP_REGEX)));
     }
 
     @Test
@@ -424,8 +424,7 @@ class SkuControllerTest {
                 // BE-008: timestamp is always present in the error envelope
                 .andExpect(jsonPath("$.error.timestamp").isString())
                 .andExpect(jsonPath("$.error.timestamp",
-                        org.hamcrest.Matchers.matchesRegex(
-                                "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$")));
+                        org.hamcrest.Matchers.matchesRegex(TestConstants.ISO_TIMESTAMP_REGEX)));
     }
 
     // ---------- POST /skus/{id}/reactivate ----------

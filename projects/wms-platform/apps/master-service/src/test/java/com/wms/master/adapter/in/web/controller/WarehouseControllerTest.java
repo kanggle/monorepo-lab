@@ -26,6 +26,7 @@ import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.WarehouseStatus;
+import com.wms.master.testsupport.TestConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -308,8 +309,7 @@ class WarehouseControllerTest {
                 // per platform/error-handling.md § Error Response Format.
                 .andExpect(jsonPath("$.error.timestamp").isString())
                 .andExpect(jsonPath("$.error.timestamp",
-                        org.hamcrest.Matchers.matchesRegex(
-                                "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$")));
+                        org.hamcrest.Matchers.matchesRegex(TestConstants.ISO_TIMESTAMP_REGEX)));
     }
 
     // ---------- POST /warehouses/{id}/reactivate ----------
