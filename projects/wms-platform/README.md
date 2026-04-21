@@ -323,6 +323,8 @@ Master-service checks only its own child records on deactivation. Cross-service 
 
 ## 🧭 How this was built
 
+> **Full walk-through** (rule layers · `/process-tasks` pipeline · review discipline · concrete artifacts): [docs/guides/development-process.md](docs/guides/development-process.md)
+
 This project follows a rule-driven, task-centric workflow assisted by **[Claude Code](https://claude.com/claude-code)**:
 
 - **Specs first**: contracts, architecture, and domain model authored before any implementation.

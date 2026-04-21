@@ -58,6 +58,9 @@ Violating this boundary blocks future Template extraction. See [TEMPLATE.md](TEM
 
 ## 🤖 AI Collaboration Approach
 
+> **Full process walk-through**: [docs/guides/development-process.md](docs/guides/development-process.md)
+> — rule layers · spec-first · task lifecycle · `/process-tasks` pipeline · review discipline · concrete artifacts.
+
 This repository is optimized for **rule-driven AI-assisted development** with Claude Code:
 
 - **[PROJECT.md](projects/wms-platform/PROJECT.md)** per project declares `domain` and `traits` — the AI loads the matching rule layers automatically.
