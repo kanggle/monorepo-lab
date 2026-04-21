@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-019-remaining-integration-test-flakiness.md` — 3 of 5 integration tests still failing on CI Linux after BE-017 (PublisherResilience Kafka pause/resume, Prometheus actuator metrics, WarehouseIntegrationTest create_then_replay). Portfolio CI unaffected (job gated to monorepo-lab only); dev-env hardening only.
+(empty)
 
 ## in-progress
 
@@ -100,3 +100,4 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-016-lot-contract-harness-wiring.md` — Lot cases wired into EventContractTest + HttpContractTest (3 new tests). Review verdict 2026-04-20: **APPROVED** (1 non-blocking note — master-lot-created.schema.json not asserted alongside generic envelope, can be added in future if envelope-depth parity desired)
 - `TASK-BE-017-integration-test-flakiness.md` — Kafka consumer offset-reset + AccessDeniedException handler + OutboxMetrics TransactionTemplate + new integration-tests CI job. Review verdict 2026-04-21: **APPROVED** — 2 of 5 tests verified fixed; 3 remain CI-flaky on infra, deferred to TASK-BE-019
 - `TASK-BE-018-non-blocking-suggestions-cleanup.md` — batch of 10 cleanup items from BE-008..BE-016 reviews (Sku.isActive, LotExpirationBatchProcessor REQUIRES_NEW, GatewayErrorHandler JSON escape, ApiError requireNonNull, etc.). Review verdict 2026-04-21: **APPROVED** (all 10 items verified)
+- `TASK-BE-019-remaining-integration-test-flakiness.md` — bounded producer timeouts (integration profile), key-filtered `KafkaTestConsumer.pollOneForKey`, Awaitility-wrapped Prometheus scrape. Review verdict 2026-04-21: **APPROVED** (3 non-blocking warnings: buffer-on-discard in pollOneMatching, bare pollOneForKey in PublisherResilience, tight 5s counter window)
