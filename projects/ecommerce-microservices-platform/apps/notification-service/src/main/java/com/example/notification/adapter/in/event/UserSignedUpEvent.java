@@ -1,0 +1,18 @@
+package com.example.notification.adapter.in.event;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record UserSignedUpEvent(
+        @JsonProperty("event_id") @JsonAlias("eventId") String eventId,
+        @JsonProperty("event_type") @JsonAlias("eventType") String eventType,
+        @JsonProperty("occurred_at") @JsonAlias("occurredAt") String occurredAt,
+        String source,
+        UserSignedUpPayload payload
+) {
+    public record UserSignedUpPayload(
+            String userId,
+            String email,
+            String name
+    ) {}
+}

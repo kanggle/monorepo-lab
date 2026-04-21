@@ -1,0 +1,55 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/auth_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=VALUE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.metrics.KafkaMetricsAutoConfiguration
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+management:
+  health:
+    redis:
+      enabled: false
+    db:
+      enabled: true
+
+oauth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
+    client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8081/api/auth/oauth/google/callback}
+  naver:
+    client-id: ${NAVER_CLIENT_ID:your-naver-client-id}
+    client-secret: ${NAVER_CLIENT_SECRET:your-naver-client-secret}
+    redirect-uri: ${NAVER_REDIRECT_URI:http://localhost:8081/api/auth/oauth/naver/callback}
+
+jwt:
+  secret: standalone-dev-jwt-secret-key-must-be-at-least-32chars!
+  issuer: auth-service
+  audience: api
+
+logging:
+  level:
+    com.example.auth: DEBUG

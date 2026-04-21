@@ -1,0 +1,48 @@
+
+> admin-dashboard@0.0.0 build C:\Users\kangdow\dev\project\ai-project\first-project\apps\admin-dashboard
+> next build
+
+   ▲ Next.js 15.5.14
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings in 5.7s
+
+./src/shared/ui/DataTable.tsx
+Attempted import error: 'buildPageNumbers' is not exported from '@repo/utils' (imported as 'buildPageNumbers').
+
+Import trace for requested module:
+./src/shared/ui/DataTable.tsx
+./src/shared/ui/index.ts
+./src/app/(admin)/layout.tsx
+
+ ⚠ Compiled with warnings in 1069ms
+
+./src/shared/ui/DataTable.tsx
+Attempted import error: 'buildPageNumbers' is not exported from '@repo/utils' (imported as 'buildPageNumbers').
+
+Import trace for requested module:
+./src/shared/ui/DataTable.tsx
+./src/shared/ui/index.ts
+./src/app/(admin)/layout.tsx
+
+ ✓ Compiled successfully in 7.0s
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/10) ...
+ ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/login". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at g (C:\Users\kangdow\dev\project\ai-project\first-project\apps\admin-dashboard\.next\server\chunks\394.js:30:37731)
+    at m (C:\Users\kangdow\dev\project\ai-project\first-project\apps\admin-dashboard\.next\server\chunks\394.js:23:32472)
+    at i (C:\Users\kangdow\dev\project\ai-project\first-project\apps\admin-dashboard\.next\server\app\login\page.js:1:418)
+    at n3 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:82831)
+    at n6 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:84601)
+    at n5 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:104801)
+    at n7 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:102219)
+    at n8 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:83183)
+    at n6 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:84647)
+    at n5 (C:\Users\kangdow\dev\project\ai-project\first-project\node_modules\.pnpm\next@15.5.14_react-dom@19.2.4_react@19.2.4__react@19.2.4\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:2:104801)
+Error occurred prerendering page "/login". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /login/page: /login, exiting the build.
+ ⨯ Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

@@ -1,0 +1,446 @@
+{
+  "uid": "business-metrics",
+  "title": "Business Metrics",
+  "tags": ["business"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 100,
+      "title": "Auth Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 1,
+      "title": "Signups",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "increase(auth_signup_total{job=\"auth-service\"}[1h])",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Logins (success/failure)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 4, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(auth_login_total{job=\"auth-service\"}[5m])",
+          "legendFormat": "login total",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(auth_login_failure_total{job=\"auth-service\"}[5m])",
+          "legendFormat": "failure ({{reason}})",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Token Refresh / Logout / Session Eviction",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(auth_token_refresh_total{job=\"auth-service\"}[5m])",
+          "legendFormat": "token refresh",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(auth_logout_total{job=\"auth-service\"}[5m])",
+          "legendFormat": "logout",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(auth_session_eviction_total{job=\"auth-service\"}[5m])",
+          "legendFormat": "session eviction",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 200,
+      "title": "Gateway Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false
+    },
+    {
+      "id": 4,
+      "title": "Routed Requests by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(gateway_requests_routed_total{job=\"gateway-service\"}[5m])",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Rate Limited / JWT Failures / Upstream Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(gateway_rate_limited_total{job=\"gateway-service\"}[5m])",
+          "legendFormat": "rate limited ({{route}})",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(gateway_jwt_validation_failure_total{job=\"gateway-service\"}[5m])",
+          "legendFormat": "jwt failure ({{reason}})",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(gateway_upstream_error_total{job=\"gateway-service\"}[5m])",
+          "legendFormat": "upstream error ({{service}})",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 300,
+      "title": "Product Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "collapsed": false
+    },
+    {
+      "id": 6,
+      "title": "Product CRUD",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(product_created_total{job=\"product-service\"}[5m])",
+          "legendFormat": "created",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(product_updated_total{job=\"product-service\"}[5m])",
+          "legendFormat": "updated",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(product_deleted_total{job=\"product-service\"}[5m])",
+          "legendFormat": "deleted",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "Stock Adjustments / Out of Stock",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(product_stock_adjusted_total{job=\"product-service\"}[5m])",
+          "legendFormat": "stock adjust ({{type}})",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(product_out_of_stock_total{job=\"product-service\"}[5m])",
+          "legendFormat": "out of stock",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 400,
+      "title": "Order Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "collapsed": false
+    },
+    {
+      "id": 8,
+      "title": "Orders (placed / confirmed / cancelled)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(order_placed_total{job=\"order-service\"}[5m])",
+          "legendFormat": "placed",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(order_confirmed_total{job=\"order-service\"}[5m])",
+          "legendFormat": "confirmed",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(order_cancelled_total{job=\"order-service\"}[5m])",
+          "legendFormat": "cancelled ({{reason}})",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Order Status Transitions / Revenue",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(order_status_transition_total{job=\"order-service\"}[5m])",
+          "legendFormat": "{{from}} -> {{to}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(order_amount_sum{job=\"order-service\"}[5m])",
+          "legendFormat": "revenue rate",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 500,
+      "title": "Payment Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "collapsed": false
+    },
+    {
+      "id": 10,
+      "title": "Payments (created / completed / failed / refunded)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(payment_created_total{job=\"payment-service\"}[5m])",
+          "legendFormat": "created",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(payment_completed_total{job=\"payment-service\"}[5m])",
+          "legendFormat": "completed",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(payment_failed_total{job=\"payment-service\"}[5m])",
+          "legendFormat": "failed ({{reason}})",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(payment_refunded_total{job=\"payment-service\"}[5m])",
+          "legendFormat": "refunded",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "Payment Amount Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(payment_amount_sum{job=\"payment-service\"}[5m])",
+          "legendFormat": "amount rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "currencyKRW"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 600,
+      "title": "Search Service",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "collapsed": false
+    },
+    {
+      "id": 12,
+      "title": "Search Queries / Zero Results",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(search_query_total{job=\"search-service\"}[5m])",
+          "legendFormat": "queries",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(search_zero_results_total{job=\"search-service\"}[5m])",
+          "legendFormat": "zero results",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "title": "Search Query Duration P50 / P95 / P99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(search_query_duration_seconds_bucket{job=\"search-service\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(search_query_duration_seconds_bucket{job=\"search-service\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(search_query_duration_seconds_bucket{job=\"search-service\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "title": "Index Sync / Sync Failures",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(search_index_sync_total{job=\"search-service\"}[5m])",
+          "legendFormat": "sync ({{type}})",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(search_index_sync_failure_total{job=\"search-service\"}[5m])",
+          "legendFormat": "sync failure",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

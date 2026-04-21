@@ -1,0 +1,91 @@
+package com.example.order.infrastructure.persistence;
+
+import com.example.order.domain.model.Order;
+import com.example.order.domain.model.OrderItem;
+import com.example.order.domain.model.OrderStatus;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "orders")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+class OrderJpaEntity {
+
+    @Id
+    @Column(name = "order_id")
+    private String orderId;
+
+    @Column(name = "user_id", nullable = false)
+    private String userId;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItemJpaEntity> items = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private OrderStatus status;
+
+    @Column(name = "total_price", nullable = false)
+    private long totalPrice;
+
+    @Embedded
+    private ShippingAddressEmbeddable shippingAddress;
+
+    @Column(name = "created_at", nullable = false, columnDefinition = "TIMESTAMP")
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false, columnDefinition = "TIMESTAMP")
+    private Instant updatedAt;
+
+    @Column(name = "payment_id")
+    private String paymentId;
+
+    @Column(name = "paid_at", columnDefinition = "TIMESTAMP")
+    private Instant paidAt;
+
+    @Column(name = "refunded_at", columnDefinition = "TIMESTAMP")
+    private Instant refundedAt;
+
+    @Version
+    private Long version;
+
+    static OrderJpaEntity fromDomain(Order order) {
+        OrderJpaEntity entity = new OrderJpaEntity();
+        entity.orderId = order.getOrderId();
+        entity.userId = order.getUserId();
+        entity.status = order.getStatus();
+        entity.totalPrice = order.getTotalPrice();
+        entity.shippingAddress = ShippingAddressEmbeddable.fromDomain(order.getShippingAddress());
+        entity.createdAt = order.getCreatedAt();
+        entity.updatedAt = order.getUpdatedAt();
+        entity.paymentId = order.getPaymentId();
+        entity.paidAt = order.getPaidAt();
+        entity.refundedAt = order.getRefundedAt();
+        entity.version = order.getVersion();
+
+        for (OrderItem item : order.getItems()) {
+            OrderItemJpaEntity itemEntity = OrderItemJpaEntity.fromDomain(item, entity);
+            entity.items.add(itemEntity);
+        }
+
+        return entity;
+    }
+
+    void updateFrom(Order order) {
+        this.userId = order.getUserId();
+        this.status = order.getStatus();
+        this.totalPrice = order.getTotalPrice();
+        this.shippingAddress = ShippingAddressEmbeddable.fromDomain(order.getShippingAddress());
+        this.updatedAt = order.getUpdatedAt();
+        this.paymentId = order.getPaymentId();
+        this.paidAt = order.getPaidAt();
+        this.refundedAt = order.getRefundedAt();
+    }
+}

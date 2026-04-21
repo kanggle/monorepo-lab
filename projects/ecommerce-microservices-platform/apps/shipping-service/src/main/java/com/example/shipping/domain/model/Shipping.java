@@ -1,0 +1,95 @@
+package com.example.shipping.domain.model;
+
+import com.example.shipping.domain.exception.InvalidStatusTransitionException;
+import com.example.shipping.domain.exception.InvalidShippingException;
+import lombok.Getter;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+
+@Getter
+public class Shipping {
+
+    private String shippingId;
+    private String orderId;
+    private String userId;
+    private ShippingStatus status;
+    private String trackingNumber;
+    private String carrier;
+    private List<StatusHistoryEntry> statusHistory = new ArrayList<>();
+    private Instant createdAt;
+    private Instant updatedAt;
+
+    private Shipping() {
+    }
+
+    public static Shipping create(String orderId, String userId, Clock clock) {
+        if (orderId == null || orderId.isBlank()) {
+            throw new InvalidShippingException("Order ID must not be null or blank");
+        }
+        if (userId == null || userId.isBlank()) {
+            throw new InvalidShippingException("User ID must not be null or blank");
+        }
+
+        Shipping shipping = new Shipping();
+        shipping.shippingId = UUID.randomUUID().toString();
+        shipping.orderId = orderId;
+        shipping.userId = userId;
+        shipping.status = ShippingStatus.PREPARING;
+        Instant now = Instant.now(clock);
+        shipping.createdAt = now;
+        shipping.updatedAt = now;
+        shipping.statusHistory.add(new StatusHistoryEntry(ShippingStatus.PREPARING, now));
+        return shipping;
+    }
+
+    public static Shipping reconstitute(String shippingId, String orderId, String userId,
+                                         ShippingStatus status, String trackingNumber, String carrier,
+                                         List<StatusHistoryEntry> statusHistory,
+                                         Instant createdAt, Instant updatedAt) {
+        Shipping shipping = new Shipping();
+        shipping.shippingId = shippingId;
+        shipping.orderId = orderId;
+        shipping.userId = userId;
+        shipping.status = status;
+        shipping.trackingNumber = trackingNumber;
+        shipping.carrier = carrier;
+        shipping.statusHistory = new ArrayList<>(statusHistory);
+        shipping.createdAt = createdAt;
+        shipping.updatedAt = updatedAt;
+        return shipping;
+    }
+
+    public ShippingStatus transitionTo(ShippingStatus newStatus, String trackingNumber,
+                                        String carrier, Clock clock) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw new InvalidStatusTransitionException(this.status, newStatus);
+        }
+
+        if (newStatus == ShippingStatus.SHIPPED) {
+            if (trackingNumber == null || trackingNumber.isBlank()) {
+                throw new InvalidShippingException("Tracking number is required when status is SHIPPED");
+            }
+            if (carrier == null || carrier.isBlank()) {
+                throw new InvalidShippingException("Carrier is required when status is SHIPPED");
+            }
+            this.trackingNumber = trackingNumber;
+            this.carrier = carrier;
+        }
+
+        ShippingStatus previousStatus = this.status;
+        this.status = newStatus;
+        Instant now = Instant.now(clock);
+        this.updatedAt = now;
+        this.statusHistory.add(new StatusHistoryEntry(newStatus, now));
+        return previousStatus;
+    }
+
+    public List<StatusHistoryEntry> getStatusHistory() {
+        return Collections.unmodifiableList(statusHistory);
+    }
+}

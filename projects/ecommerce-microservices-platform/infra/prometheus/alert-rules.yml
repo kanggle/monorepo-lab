@@ -1,0 +1,263 @@
+# ============================================================
+# Prometheus Alert Rules
+# 6개 카테고리: 에러율, 응답시간, 서비스다운, Kafka지연, DB커넥션풀, 알림 발송
+# ============================================================
+
+groups:
+
+  # ──────────────────────────────────────────────
+  # 카테고리 1: 높은 에러율 (5xx 비율)
+  # specs/platform/observability.md 기준: Error rate > 5% → CRITICAL
+  # ──────────────────────────────────────────────
+  - name: high_error_rate
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          category: error_rate
+        annotations:
+          summary: "{{ $labels.job }} 에러율 5% 초과"
+          description: "{{ $labels.job }}의 5xx 에러 비율이 {{ $value | humanizePercentage }}입니다. (임계값: 5%)"
+
+      - alert: ElevatedErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          category: error_rate
+        annotations:
+          summary: "{{ $labels.job }} 에러율 1% 초과"
+          description: "{{ $labels.job }}의 5xx 에러 비율이 {{ $value | humanizePercentage }}입니다. (임계값: 1%)"
+
+  # ──────────────────────────────────────────────
+  # 카테고리 2: 느린 응답 시간 (P95/P99 임계값)
+  # specs/platform/observability.md 기준: P99 > 2s → WARNING
+  # ──────────────────────────────────────────────
+  - name: slow_response_time
+    rules:
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (rate(http_server_requests_seconds_bucket[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: latency
+        annotations:
+          summary: "{{ $labels.job }} P99 응답시간 2초 초과"
+          description: "{{ $labels.job }}의 P99 응답시간이 {{ $value | humanizeDuration }}입니다. (임계값: 2s)"
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (rate(http_server_requests_seconds_bucket[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: latency
+        annotations:
+          summary: "{{ $labels.job }} P95 응답시간 1초 초과"
+          description: "{{ $labels.job }}의 P95 응답시간이 {{ $value | humanizeDuration }}입니다. (임계값: 1s)"
+
+      - alert: CriticalLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (rate(http_server_requests_seconds_bucket[5m]))
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: latency
+        annotations:
+          summary: "{{ $labels.job }} P99 응답시간 5초 초과"
+          description: "{{ $labels.job }}의 P99 응답시간이 {{ $value | humanizeDuration }}입니다. 즉시 확인이 필요합니다."
+
+  # ──────────────────────────────────────────────
+  # 카테고리 3: 서비스 다운 (health check 실패)
+  # specs/platform/observability.md 기준: health check failure → CRITICAL
+  # ──────────────────────────────────────────────
+  - name: service_down
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "{{ $labels.job }} 서비스 다운"
+          description: "{{ $labels.job }} ({{ $labels.instance }})이 1분 이상 응답하지 않습니다."
+
+      - alert: ServiceHealthCheckFailing
+        expr: |
+          spring_boot_health_status{status!="UP"} == 1
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "{{ $labels.job }} 헬스체크 실패"
+          description: "{{ $labels.job }}의 Spring Boot 헬스체크 상태가 {{ $labels.status }}입니다."
+
+  # ──────────────────────────────────────────────
+  # 카테고리 4: Kafka 소비 지연 (consumer lag)
+  # ──────────────────────────────────────────────
+  - name: kafka_consumer_lag
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          sum by (job, group, topic) (
+            kafka_consumer_fetch_manager_records_lag_max
+          ) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          category: kafka
+        annotations:
+          summary: "{{ $labels.job }} Kafka consumer lag 높음"
+          description: "{{ $labels.job }}의 토픽 {{ $labels.topic }} (그룹: {{ $labels.group }}) consumer lag이 {{ $value }}입니다. (임계값: 10,000)"
+
+      - alert: KafkaConsumerLagCritical
+        expr: |
+          sum by (job, group, topic) (
+            kafka_consumer_fetch_manager_records_lag_max
+          ) > 50000
+        for: 5m
+        labels:
+          severity: critical
+          category: kafka
+        annotations:
+          summary: "{{ $labels.job }} Kafka consumer lag 심각"
+          description: "{{ $labels.job }}의 토픽 {{ $labels.topic }} (그룹: {{ $labels.group }}) consumer lag이 {{ $value }}입니다. (임계값: 50,000)"
+
+      - alert: KafkaConsumerNotConsuming
+        expr: |
+          rate(kafka_consumer_fetch_manager_records_consumed_total[5m]) == 0
+          and
+          kafka_consumer_fetch_manager_records_lag_max > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: kafka
+        annotations:
+          summary: "{{ $labels.job }} Kafka consumer 소비 중단"
+          description: "{{ $labels.job }}의 consumer가 10분 이상 메시지를 소비하지 않고 있으며 lag이 존재합니다."
+
+  # ──────────────────────────────────────────────
+  # 카테고리 5: DB 커넥션 풀 고갈
+  # specs/platform/observability.md 기준: DB pool exhausted → CRITICAL
+  # ──────────────────────────────────────────────
+  - name: db_connection_pool
+    rules:
+      - alert: DBConnectionPoolNearExhaustion
+        expr: |
+          (
+            hikaricp_connections_active
+            /
+            hikaricp_connections_max
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "{{ $labels.job }} DB 커넥션 풀 80% 초과"
+          description: "{{ $labels.job }}의 활성 커넥션이 {{ $value | humanizePercentage }} 사용 중입니다. (최대: {{ with printf `hikaricp_connections_max{job=\"%s\"}` $labels.job | query }}{{ . | first | value }}{{ end }})"
+
+      - alert: DBConnectionPoolExhausted
+        expr: |
+          (
+            hikaricp_connections_active
+            /
+            hikaricp_connections_max
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "{{ $labels.job }} DB 커넥션 풀 고갈 임박"
+          description: "{{ $labels.job }}의 활성 커넥션이 {{ $value | humanizePercentage }} 사용 중입니다. 즉시 확인이 필요합니다."
+
+      - alert: DBConnectionPoolPendingHigh
+        expr: |
+          hikaricp_connections_pending > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "{{ $labels.job }} DB 커넥션 대기 요청 증가"
+          description: "{{ $labels.job }}의 커넥션 풀 대기 요청이 {{ $value }}건입니다."
+
+  # ──────────────────────────────────────────────
+  # 카테고리 6: 알림 발송 실패 (notification-service 전용)
+  # specs/services/notification-service/observability.md:
+  #   notification_failed_total{channel, reason} 기반
+  # ──────────────────────────────────────────────
+  - name: notification_delivery
+    rules:
+      - alert: NotificationDeliveryFailureRateHigh
+        expr: |
+          (
+            sum(rate(notification_failed_total[5m]))
+            /
+            (
+              sum(rate(notification_failed_total[5m]))
+              +
+              sum(rate(notification_sent_total[5m]))
+            )
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: notification
+          service: notification-service
+        annotations:
+          summary: "notification-service 발송 실패율 10% 초과"
+          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. (임계값: 10%)"
+
+      - alert: NotificationDeliveryFailureRateCritical
+        expr: |
+          (
+            sum(rate(notification_failed_total[5m]))
+            /
+            (
+              sum(rate(notification_failed_total[5m]))
+              +
+              sum(rate(notification_sent_total[5m]))
+            )
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          category: notification
+          service: notification-service
+        annotations:
+          summary: "notification-service 발송 실패율 30% 초과"
+          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. 외부 채널 연동 장애 가능성이 있습니다."
+
+      - alert: NotificationSenderDown
+        expr: up{job="notification-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: notification
+          service: notification-service
+        annotations:
+          summary: "notification-service 다운"
+          description: "notification-service가 1분 이상 응답하지 않아 알림 발송이 중단되었습니다."

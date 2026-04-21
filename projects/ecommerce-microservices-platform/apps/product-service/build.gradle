@@ -1,0 +1,66 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Shared Web
+    implementation project(':libs:java-web')
+
+    // Observability
+    implementation project(':libs:java-observability')
+
+    // Micrometer (for metrics)
+    implementation 'io.micrometer:micrometer-core'
+
+    // Web
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Data JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // OpenAPI / Swagger UI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
+    // Flyway
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // Redis cache (상품 조회 캐싱)
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // AWS S3 SDK v2
+    implementation platform('software.amazon.awssdk:bom:2.25.60')
+    implementation 'software.amazon.awssdk:s3'
+
+    // PostgreSQL driver
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // H2 (local standalone profile)
+    runtimeOnly 'com.h2database:h2'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+test {
+    environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
+    jvmArgs '-Dapi.version=1.44'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.20.4"
+    }
+}

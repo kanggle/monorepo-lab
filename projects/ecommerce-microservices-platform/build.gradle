@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version "${springBootVersion}" apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'jacoco'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(javaVersion.toInteger())
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    dependencies {
+        compileOnly 'org.projectlombok:lombok:1.18.36'
+        annotationProcessor 'org.projectlombok:lombok:1.18.36'
+        testCompileOnly 'org.projectlombok:lombok:1.18.36'
+        testAnnotationProcessor 'org.projectlombok:lombok:1.18.36'
+    }
+
+    test {
+        useJUnitPlatform()
+        jvmArgs '-XX:+EnableDynamicAgentLoading'
+        finalizedBy jacocoTestReport
+    }
+
+    jacoco {
+        toolVersion = '0.8.12'
+    }
+
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+}
