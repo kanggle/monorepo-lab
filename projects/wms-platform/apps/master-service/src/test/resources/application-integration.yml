@@ -12,6 +12,32 @@ spring:
   flyway:
     enabled: true
 
+  # Tighter producer timeouts for the integration suite only. The production
+  # profile keeps `retries: 2147483647` and the Kafka defaults
+  # (max.block.ms=60s, delivery.timeout.ms=120s, request.timeout.ms=30s),
+  # which is correct for real traffic but incompatible with the
+  # PublisherResilienceIntegrationTest scenario: that test pauses the broker
+  # (SIGSTOP) and expects the send loop to surface a failure within ~20s.
+  # With the default max.block.ms=60s, `kafkaTemplate.send(...).get()` blocks
+  # past the Awaitility window and the failure-counter gauge never ticks.
+  # TASK-BE-019 — CI flakiness fix.
+  kafka:
+    producer:
+      # Finite retries so `delivery.timeout.ms` can actually fire. Production
+      # keeps retries=MAX because the outbox pattern requires at-least-once
+      # delivery with backoff; for tests we need the failure path to surface.
+      retries: 3
+      properties:
+        # Bound the initial metadata fetch + buffer wait so a paused-broker
+        # scenario surfaces within the 20 s Awaitility window.
+        max.block.ms: 4000
+        # request.timeout.ms must be <= delivery.timeout.ms; 3 s leaves room
+        # for three retries within the 10 s delivery ceiling.
+        request.timeout.ms: 3000
+        # Upper bound for one send attempt (including all retries). Must be
+        # < the Awaitility window in PublisherResilienceIntegrationTest (20 s).
+        delivery.timeout.ms: 10000
+
 logging:
   level:
     org.apache.kafka: WARN

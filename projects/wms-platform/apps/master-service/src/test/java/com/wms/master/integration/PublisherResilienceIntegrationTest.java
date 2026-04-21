@@ -3,6 +3,7 @@ package com.wms.master.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.out.messaging.OutboxMetrics;
 import com.wms.master.integration.support.KafkaTestConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -44,6 +45,9 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
     @Autowired
     private MeterRegistry meterRegistry;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Test
     @DisplayName("Kafka pause → outbox accumulates, counter rises; resume → rows drain")
     void outboxSurvivesKafkaOutage() throws Exception {
@@ -55,11 +59,15 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
         // published after unpause is then guaranteed to be delivered to us.
         try (KafkaTestConsumer kafka = new KafkaTestConsumer(KAFKA.getBootstrapServers(), TOPIC)) {
 
+            String createdId;
+
             // Step 1: pause Kafka (SIGSTOP inside container)
             KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
             try {
                 // Step 2: issue a mutation — commits to DB, outbox row written,
-                // publisher retries hopelessly.
+                // publisher retries against a paused broker until its bounded
+                // `delivery.timeout.ms` (see application-integration.yml) fires
+                // and surfaces the failure to onKafkaSendFailure.
                 String code = "WH" + shortSuffix();
                 String body = """
                         {"warehouseCode":"%s","name":"Paused","timezone":"UTC"}
@@ -67,15 +75,18 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
                 ResponseEntity<String> created = post("/api/v1/master/warehouses",
                         body, UUID.randomUUID().toString(), WRITE_ROLE);
                 assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+                createdId = objectMapper.readTree(created.getBody()).get("id").asText();
 
                 // Step 3: the DB-resident outbox row persists (no data loss).
                 // We can't enter transactional context from here easily; instead we
                 // poll the pending count from the gauge which queries the DB.
-                await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
                         assertThat(pendingGauge()).isGreaterThanOrEqualTo(1.0d));
 
-                // Failure counter must eventually increment (publisher tried and failed)
-                await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
+                // Failure counter must eventually increment (publisher tried and failed).
+                // delivery.timeout.ms=10s in the integration profile makes this ~12 s
+                // worst-case; 25 s gives enough headroom for CI scheduling jitter.
+                await().atMost(Duration.ofSeconds(25)).untilAsserted(() ->
                         assertThat(failureCounter()).isGreaterThan(failuresBefore));
             } finally {
                 // Step 4: resume Kafka
@@ -86,8 +97,10 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
             // lands on Kafka within the retry window.
             await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
                     assertThat(pendingGauge()).isEqualTo(0.0d));
-            // At least one record lands after resume
-            assertThat(kafka.pollOne(Duration.ofSeconds(15))).isNotNull();
+            // The warehouse we created during the outage lands on Kafka after
+            // resume. Filter by aggregateId (record key) so a leftover event
+            // from a previous test case cannot spuriously satisfy this check.
+            assertThat(kafka.pollOneForKey(Duration.ofSeconds(15), createdId)).isNotNull();
         }
     }
 

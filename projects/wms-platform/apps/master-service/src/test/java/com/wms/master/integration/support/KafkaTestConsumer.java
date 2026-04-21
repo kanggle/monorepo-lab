@@ -9,6 +9,7 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -99,6 +100,45 @@ public final class KafkaTestConsumer implements AutoCloseable {
         }
         throw new NoSuchElementException(
                 "No record received on topic '" + topic + "' within " + timeout);
+    }
+
+    /**
+     * Blocks up to {@code timeout} and returns the first record whose key (the
+     * aggregateId in the outbox envelope contract) matches {@code expectedKey}.
+     * Skips any earlier records that do not match — this is how a test isolates
+     * the event it just produced from events drained by the outbox scheduler
+     * for a previous test case in the same JVM.
+     *
+     * <p>Rationale: {@code AUTO_OFFSET_RESET=latest} + {@link
+     * #waitForPartitionAssignment()} blocks out records produced <em>before</em>
+     * the consumer subscribed, but the outbox scheduler can flush stale outbox
+     * rows from a previous test case <em>after</em> subscription. Matching by
+     * key eliminates that race without requiring global test ordering.
+     *
+     * @throws NoSuchElementException if no matching record arrives in time
+     */
+    public ConsumerRecord<String, String> pollOneForKey(Duration timeout, String expectedKey) {
+        return pollOneMatching(timeout, r -> expectedKey.equals(r.key()));
+    }
+
+    /**
+     * Blocks up to {@code timeout} and returns the first record that satisfies
+     * {@code predicate}. Non-matching records are silently discarded.
+     * See {@link #pollOneForKey(Duration, String)} for the key-based shortcut.
+     */
+    public ConsumerRecord<String, String> pollOneMatching(
+            Duration timeout, Predicate<ConsumerRecord<String, String>> predicate) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+            for (ConsumerRecord<String, String> record : records) {
+                if (predicate.test(record)) {
+                    return record;
+                }
+            }
+        }
+        throw new NoSuchElementException(
+                "No matching record received on topic '" + topic + "' within " + timeout);
     }
 
     /**

@@ -79,17 +79,22 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
             assertThat(mismatch.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(mismatch.getBody()).contains("DUPLICATE_REQUEST");
 
-            // Outbox → Kafka delivery within 5s
-            ConsumerRecord<String, String> record = kafka.pollOne(Duration.ofSeconds(10));
+            // Outbox → Kafka delivery within 5s. Filter by aggregateId so a
+            // drained leftover event from a previous test case in the same JVM
+            // (the outbox scheduler may flush rows after our consumer subscribed)
+            // does not match this assertion. TASK-BE-019.
+            String expectedAggregateId = created.get("id").asText();
+            ConsumerRecord<String, String> record =
+                    kafka.pollOneForKey(Duration.ofSeconds(10), expectedAggregateId);
             JsonNode envelope = objectMapper.readTree(record.value());
             assertThat(envelope.get("eventType").asText()).isEqualTo("master.warehouse.created");
             assertThat(envelope.get("aggregateType").asText()).isEqualTo("warehouse");
-            assertThat(envelope.get("aggregateId").asText()).isEqualTo(created.get("id").asText());
+            assertThat(envelope.get("aggregateId").asText()).isEqualTo(expectedAggregateId);
             assertThat(envelope.get("producer").asText()).isEqualTo("master-service");
             assertThat(envelope.get("eventVersion").asInt()).isEqualTo(1);
             assertThat(envelope.get("payload").get("warehouse").get("warehouseCode").asText())
                     .isEqualTo(code);
-            assertThat(record.key()).isEqualTo(created.get("id").asText());
+            assertThat(record.key()).isEqualTo(expectedAggregateId);
         }
 
         // Success counter incremented (at-least-once)
@@ -153,14 +158,30 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     @Test
     @DisplayName("prometheus actuator endpoint exposes the three outbox metrics")
     void prometheusEndpoint_exposesOutboxMetrics() {
-        // Permit-all endpoint per SecurityConfig — no auth
-        ResponseEntity<String> response =
-                rest.getForEntity("/actuator/prometheus", String.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String body = response.getBody();
-        assertThat(body).contains(OutboxMetrics.PENDING_COUNT.replace('.', '_'));
-        assertThat(body).contains(OutboxMetrics.PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
-        assertThat(body).contains(OutboxMetrics.PUBLISH_FAILURE_TOTAL.replace('.', '_'));
+        // Permit-all endpoint per SecurityConfig — no auth.
+        //
+        // CI-only flakiness: when this test runs right after
+        // PublisherResilienceIntegrationTest (which pauses + unpauses the
+        // Kafka container), the shared Spring context's KafkaTemplate may
+        // still be settling — a transient 500 has been observed on GitHub
+        // shared runners while Micrometer-registered Kafka client meters
+        // re-attach to a healthy broker. Passes immediately in WSL2.
+        // Retry the scrape for up to 10 s so the endpoint has time to
+        // stabilise; the assertion remains real (three outbox metrics must
+        // appear in a 200 response body). TASK-BE-019.
+        await().atMost(Duration.ofSeconds(10))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    ResponseEntity<String> response =
+                            rest.getForEntity("/actuator/prometheus", String.class);
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+                    String body = response.getBody();
+                    assertThat(body).contains(OutboxMetrics.PENDING_COUNT.replace('.', '_'));
+                    assertThat(body).contains(
+                            OutboxMetrics.PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
+                    assertThat(body).contains(
+                            OutboxMetrics.PUBLISH_FAILURE_TOTAL.replace('.', '_'));
+                });
         // sanity: ADMIN role unused here; kept as reference for role table completeness
         assertThat(ADMIN_ROLE).isNotBlank();
     }

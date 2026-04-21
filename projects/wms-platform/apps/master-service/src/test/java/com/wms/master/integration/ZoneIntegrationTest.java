@@ -69,11 +69,16 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
             assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             assertThat(replay.getBody()).isEqualTo(created.getBody());
 
-            ConsumerRecord<String, String> record = kafka.pollOne(Duration.ofSeconds(10));
+            // Filter by aggregateId so a leftover zone event from a different
+            // test case (same shared broker + JVM context) cannot match.
+            // TASK-BE-019.
+            String expectedAggregateId = node.get("id").asText();
+            ConsumerRecord<String, String> record =
+                    kafka.pollOneForKey(Duration.ofSeconds(10), expectedAggregateId);
             JsonNode envelope = objectMapper.readTree(record.value());
             assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.created");
             assertThat(envelope.get("aggregateType").asText()).isEqualTo("zone");
-            assertThat(envelope.get("aggregateId").asText()).isEqualTo(node.get("id").asText());
+            assertThat(envelope.get("aggregateId").asText()).isEqualTo(expectedAggregateId);
             assertThat(envelope.get("payload").get("zone").get("warehouseId").asText())
                     .isEqualTo(warehouseId);
         }
