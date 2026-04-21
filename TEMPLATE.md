@@ -109,24 +109,50 @@ When the library has been stable for a month+ with no churn:
 
 ## Starting a New Project in the Monorepo (Phase 2+)
 
-Before the Template extraction, new projects are added directly to this monorepo.
+Before the Template extraction, new projects are added directly to this monorepo. There are two integration styles depending on whether the project is greenfield or a pre-existing standalone repo.
 
-### 1. Create project directory structure
+### Choosing the integration style
+
+```
+Does a standalone git repo for this project already exist?
+├─ No  → Option A: Greenfield (direct-include)          ← default, simpler
+└─ Yes → Does it already own its own settings.gradle + libs/?
+         ├─ No  → Option A: Greenfield (direct-include) — copy content in as plain subdir
+         └─ Yes → Option B: Import (composite-build)    ← avoids rewriting internal paths
+```
+
+| Aspect | Option A (direct-include) | Option B (composite-build) |
+|---|---|---|
+| Root `settings.gradle` | `include('projects:<name>:apps:...')` | `includeBuild('projects/<name>')` |
+| Gradle perspective | Single build, each service is a subproject | Two builds loosely coupled |
+| `.gradle/` cache | One, at monorepo root | Two — monorepo root + nested project |
+| Uses root `libs/` | Yes (shared) | Project keeps its own nested `libs/` |
+| Path rewrites on import | N/A (greenfield) | None — project's `project(':libs:x')` refs resolve within its own build |
+| PROJECT_TYPES in sync-portfolio.sh | `direct-include` | `composite-build` |
+| Examples in this monorepo | `wms-platform` | `ecommerce-microservices-platform` |
+
+Use Option A unless Option B's benefit (zero rewrites of many existing internal Gradle references) genuinely outweighs the cost of running two Gradle builds and managing a nested `libs/` stack.
+
+---
+
+### Option A — Greenfield (direct-include)
+
+#### 1. Create project directory structure
 
 ```bash
 mkdir -p projects/<new-project>/{apps,specs/{contracts/{http,events},services,features,use-cases},tasks/{ready,in-progress,review,done,archive},knowledge,docs,infra}
 touch projects/<new-project>/tasks/{ready,in-progress,review,done,archive}/.gitkeep
 ```
 
-### 2. Write `PROJECT.md`
+#### 2. Write `PROJECT.md`
 
 Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). Declare `domain`, `traits`, `service_types`. Write Purpose, Domain Rationale, Trait Rationale, Out of Scope in prose.
 
-### 3. Write `tasks/INDEX.md`
+#### 3. Write `tasks/INDEX.md`
 
 Copy from the existing project and adjust. This file defines the task lifecycle for the new project.
 
-### 4. Update root `settings.gradle`
+#### 4. Update root `settings.gradle`
 
 Add an `include` block for the new project's apps:
 
@@ -137,18 +163,110 @@ include(
 )
 ```
 
-### 5. Create project-level `build.gradle` (placeholder)
+#### 5. Create project-level `build.gradle` (placeholder)
 
 Start empty. Add project-wide common config (e.g., Spring Boot plugin) when multiple services share it.
 
-### 6. Write the first `tasks/ready/TASK-BE-001-*.md`
+#### 6. Write the first `tasks/ready/TASK-BE-001-*.md`
 
 Typically a `<service>-bootstrap` task that stands up the first service skeleton.
 
-### 7. Verify Gradle sees the new structure
+#### 7. Register for portfolio sync (when ready to publish)
+
+In `scripts/sync-portfolio.sh`:
+
+```bash
+PROJECT_REMOTES["<new-project>"]="https://github.com/<owner>/<new-project>.git"
+PROJECT_TYPES["<new-project>"]="direct-include"
+```
+
+#### 8. Verify Gradle sees the new structure
 
 ```bash
 ./gradlew projects
+```
+
+---
+
+### Option B — Import an existing standalone repo (composite-build)
+
+Use this path when the incoming repo already has its own `settings.gradle`, `build.gradle`, and nested `libs/` stack that you want to preserve without rewriting every internal `project(':libs:…')` reference. The `ecommerce-microservices-platform` import (commits `0956dc6` → `dad3b41`) is the worked example.
+
+#### 1. Import the subtree
+
+From a fresh clone of the standalone repo's latest branch (tip of whatever branch holds all the work — NOT necessarily `main` if unpushed work sits elsewhere):
+
+```bash
+git remote add -f <name>-source /path/to/standalone/clone   # or https remote
+git subtree add --prefix=projects/<name> <name>-source <branch> --squash
+```
+
+Use `--squash` for a clean single-commit import, or omit it to carry full per-commit history into the monorepo (larger `.git`, richer history).
+
+#### 2. Wire the composite build
+
+```groovy
+// root settings.gradle
+includeBuild('projects/<new-project>')
+```
+
+That's it — the project's own `settings.gradle` continues to declare its apps/libs with its own root-relative paths. No sed rewrites.
+
+#### 3. Neutralise the nested CLAUDE.md
+
+Replace `projects/<name>/CLAUDE.md` with a short pointer to the monorepo root `CLAUDE.md`. Example structure: see `projects/ecommerce-microservices-platform/CLAUDE.md` — declares the project is now inside a monorepo and that this file is not a source of truth.
+
+#### 4. Reconcile shared-layer duplicates (Discovery → Distribution)
+
+The imported project typically carries legacy copies of shared-layer content from its standalone days. Resolve them per the monorepo's boundary rules:
+
+| Legacy location | Action |
+|---|---|
+| `projects/<name>/specs/rules/` | **Delete.** Root `rules/` is authoritative. If any mandatory rule was novel, add it to the matching `rules/domains/<d>.md` or `rules/traits/<t>.md` before deleting. |
+| `projects/<name>/specs/platform/` | **Delete.** Root `platform/` is authoritative. Universally valuable files (e.g. `object-storage-policy.md` from the ecommerce import) **promote** to root `platform/` with project-specific examples generalised to `<placeholder>` tokens. |
+| `projects/<name>/tasks/templates/` | **Delete.** Root `tasks/templates/` is shared. |
+| `projects/<name>/.claude/` | **Delete entirely.** Root `.claude/` is the sole authority. Project-specific agent routing belongs in `PROJECT.md` or `specs/services/<s>/architecture.md`, not in nested agent frontmatter (see `.claude/agents/domain/README.md` L18). |
+
+Project-specific content stays — `apps/`, `specs/contracts/`, `specs/services/`, `specs/features/`, `specs/use-cases/`, `tasks/{backlog..archive}/` (not `templates/`), `knowledge/`, `docs/` (not `guides/`), `infra/`, `k8s/`, `load-tests/`, `scripts/`, `docker-compose.yml`, `.env.example`, project-specific `.gitignore`/`.dockerignore`/`.github/workflows/`/`LICENSE`.
+
+Domain-specific error codes, ubiquitous language, and similar content the standalone repo placed in its `specs/platform/*.md` gets absorbed into `rules/domains/<domain>.md` (for domain rules) or `platform/error-handling.md` under `[domain: <name>]` sections (for error codes). Concrete per-project details (public API route lists, rate-limit tiers) belong in `projects/<name>/specs/services/<gateway>/public-routes.md` per `platform/api-gateway-policy.md`.
+
+#### 5. Keep the project runnable from monorepo root (optional but recommended)
+
+If the project has a frontend (pnpm workspace) or its own docker-compose.yml, add shortcut scripts to the monorepo root `package.json` so developers need not `cd` into the project. Examples from the current monorepo:
+
+```jsonc
+{
+  "scripts": {
+    "<name>:install":   "pnpm --dir projects/<name> install",
+    "<name>:dev":       "pnpm --dir projects/<name> dev",
+    "<name>:up":        "docker compose --project-directory projects/<name> up -d",
+    "<name>:down":      "docker compose --project-directory projects/<name> down"
+  }
+}
+```
+
+`pnpm --dir` and `docker compose --project-directory` preserve the project's own `pnpm-workspace.yaml` and `.env` scope — no root workspace, no leakage.
+
+#### 6. Register for portfolio sync
+
+In `scripts/sync-portfolio.sh`:
+
+```bash
+PROJECT_REMOTES["<new-project>"]="https://github.com/<owner>/<new-project>.git"
+PROJECT_TYPES["<new-project>"]="composite-build"
+```
+
+The script already handles composite-build post-process: it trusts filter-repo's hoisted `settings.gradle`/`build.gradle` and strips any orphan `includeBuild(...)` line if present.
+
+#### 7. Verify
+
+```bash
+./gradlew projects                                                # lists the included build
+./gradlew :<new-project>:apps:<service>:compileJava               # composite-build path
+./gradlew :projects:wms-platform:apps:master-service:compileJava  # regression check — direct-include still works
+ls projects/<new-project>/specs/                                  # only contracts/features/services/use-cases
+ls projects/<new-project>/.claude 2>&1                            # "No such file or directory"
 ```
 
 ---
@@ -259,6 +377,9 @@ A: Either (1) split into a more general base rule with project-specific extensio
 
 **Q: Can `platform/` files have example placeholders like `<service>`?**
 A: Yes, `<placeholder>` tokens are the recommended way to illustrate patterns without hardcoding project names. Concrete examples (`auth-service`, `OrderPlaced` event) are forbidden in shared files — they create drift and leak one project's domain into others.
+
+**Q: When should I use `composite-build` instead of `direct-include` for a new project?**
+A: Only when an existing standalone repo with its own `settings.gradle` + nested `libs/` is being imported and rewriting its many internal `project(':libs:…')` references would be worse than the cost of running two Gradle builds. Greenfield projects — even when they physically live under `projects/<name>/` — should always use `direct-include`. See the integration-style decision tree in "Starting a New Project in the Monorepo".
 
 ---
 
