@@ -51,7 +51,7 @@ services:
       - KAFKA_MIN_INSYNC_REPLICAS=1
       - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
     ports:
-      - "9093:9094"
+      - "${PORT_PREFIX:-1}9093:9094"
     deploy:
       resources:
         limits:
@@ -72,7 +72,7 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${PORT_PREFIX:-1}6379:6379"
     deploy:
       resources:
         limits:
@@ -100,7 +100,7 @@ services:
       - xpack.security.enrollment.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+      - "${PORT_PREFIX:-1}9200:9200"
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     deploy:
@@ -128,8 +128,8 @@ services:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${PORT_PREFIX:-1}9000:9000"
+      - "${PORT_PREFIX:-1}9001:9001"
     volumes:
       - minio-data:/data
     deploy:
@@ -179,8 +179,8 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
+      - "${PORT_PREFIX:-1}4317:4317"
+      - "${PORT_PREFIX:-1}4318:4318"
     deploy:
       resources:
         limits:
@@ -203,7 +203,7 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
     ports:
-      - "9090:9090"
+      - "${PORT_PREFIX:-1}9090:9090"
     deploy:
       resources:
         limits:
@@ -234,7 +234,7 @@ services:
       - '--storage.path=/alertmanager'
       - '--web.listen-address=:9093'
     ports:
-      - "9094:9093"
+      - "${PORT_PREFIX:-1}9094:9093"
     deploy:
       resources:
         limits:
@@ -262,7 +262,7 @@ services:
       - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3100:3000"
+      - "${PORT_PREFIX:-1}3100:3000"
     deploy:
       resources:
         limits:
@@ -292,7 +292,7 @@ services:
       - ./infra/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
     ports:
-      - "3101:3100"
+      - "${PORT_PREFIX:-1}3101:3100"
     deploy:
       resources:
         limits:
@@ -338,7 +338,7 @@ services:
       POSTGRES_USER: auth_user
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${PORT_PREFIX:-1}5432:5432"
     volumes:
       - auth-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -361,7 +361,7 @@ services:
       POSTGRES_USER: product_user
       POSTGRES_PASSWORD: ${PRODUCT_DB_PASSWORD}
     ports:
-      - "5433:5432"
+      - "${PORT_PREFIX:-1}5433:5432"
     volumes:
       - product-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -384,7 +384,7 @@ services:
       POSTGRES_USER: order_user
       POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD}
     ports:
-      - "5434:5432"
+      - "${PORT_PREFIX:-1}5434:5432"
     volumes:
       - order-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -407,7 +407,7 @@ services:
       POSTGRES_USER: payment_user
       POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD}
     ports:
-      - "5435:5432"
+      - "${PORT_PREFIX:-1}5435:5432"
     volumes:
       - payment-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -430,7 +430,7 @@ services:
       POSTGRES_USER: user_user
       POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
     ports:
-      - "5437:5432"
+      - "${PORT_PREFIX:-1}5437:5432"
     volumes:
       - user-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -453,7 +453,7 @@ services:
       POSTGRES_USER: batch_user
       POSTGRES_PASSWORD: ${BATCH_DB_PASSWORD}
     ports:
-      - "5436:5432"
+      - "${PORT_PREFIX:-1}5436:5432"
     volumes:
       - batch-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -476,7 +476,7 @@ services:
       POSTGRES_USER: shipping_user
       POSTGRES_PASSWORD: ${SHIPPING_DB_PASSWORD}
     ports:
-      - "5438:5432"
+      - "${PORT_PREFIX:-1}5438:5432"
     volumes:
       - shipping-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -499,7 +499,7 @@ services:
       POSTGRES_USER: review_user
       POSTGRES_PASSWORD: ${REVIEW_DB_PASSWORD}
     ports:
-      - "5439:5432"
+      - "${PORT_PREFIX:-1}5439:5432"
     volumes:
       - review-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -522,7 +522,7 @@ services:
       POSTGRES_USER: promotion_user
       POSTGRES_PASSWORD: ${PROMOTION_DB_PASSWORD}
     ports:
-      - "5440:5432"
+      - "${PORT_PREFIX:-1}5440:5432"
     volumes:
       - promotion-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -545,7 +545,7 @@ services:
       POSTGRES_USER: notification_user
       POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
     ports:
-      - "5441:5432"
+      - "${PORT_PREFIX:-1}5441:5432"
     volumes:
       - notification-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -596,7 +596,7 @@ services:
       - NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
       - OAUTH_CALLBACK_ALLOWLIST=${OAUTH_CALLBACK_ALLOWLIST}
     ports:
-      - "8081:8081"
+      - "${PORT_PREFIX:-1}8081:8081"
     deploy:
       resources:
         limits:
@@ -641,7 +641,7 @@ services:
       - S3_BUCKET_PRODUCT_IMAGES=firstproject-local-product-images
       - CDN_BASE_URL=http://localhost:9000
     ports:
-      - "8082:8082"
+      - "${PORT_PREFIX:-1}8082:8082"
     deploy:
       resources:
         limits:
@@ -681,7 +681,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8085:8085"
+      - "${PORT_PREFIX:-1}8085:8085"
     deploy:
       resources:
         limits:
@@ -719,7 +719,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8084:8084"
+      - "${PORT_PREFIX:-1}8084:8084"
     deploy:
       resources:
         limits:
@@ -757,7 +757,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8086:8086"
+      - "${PORT_PREFIX:-1}8086:8086"
     deploy:
       resources:
         limits:
@@ -796,7 +796,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8087:8087"
+      - "${PORT_PREFIX:-1}8087:8087"
     deploy:
       resources:
         limits:
@@ -834,7 +834,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8088:8088"
+      - "${PORT_PREFIX:-1}8088:8088"
     deploy:
       resources:
         limits:
@@ -872,7 +872,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8090:8090"
+      - "${PORT_PREFIX:-1}8090:8090"
     deploy:
       resources:
         limits:
@@ -911,7 +911,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - ORDER_SERVICE_URL=http://order-service:8086
     ports:
-      - "8091:8091"
+      - "${PORT_PREFIX:-1}8091:8091"
     deploy:
       resources:
         limits:
@@ -949,7 +949,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8092:8092"
+      - "${PORT_PREFIX:-1}8092:8092"
     deploy:
       resources:
         limits:
@@ -987,7 +987,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8093:8093"
+      - "${PORT_PREFIX:-1}8093:8093"
     deploy:
       resources:
         limits:
@@ -1034,7 +1034,7 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
     ports:
-      - "8080:8080"
+      - "${PORT_PREFIX:-1}8080:8080"
     deploy:
       resources:
         limits:
@@ -1085,7 +1085,7 @@ services:
     environment:
       - API_URL_INTERNAL=http://gateway-service:8080
     ports:
-      - "3000:3000"
+      - "${PORT_PREFIX:-1}3000:3000"
     deploy:
       resources:
         limits:
@@ -1112,7 +1112,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "${PORT_PREFIX:-1}3001:3001"
     deploy:
       resources:
         limits:

@@ -286,6 +286,59 @@ The flat layout (no `projects/` level) keeps the single-project repository simpl
 
 ---
 
+## Port Namespace Convention (`PORT_PREFIX`)
+
+Every project's `docker-compose.yml` maps host ports through a single shared variable so multiple projects can run concurrently on one machine without manual `.env` editing.
+
+**Pattern** (applied to every `ports:` line with a 4-digit host port):
+
+```yaml
+ports: ["${PORT_PREFIX:-N}XXXX:YYYY"]
+```
+
+- `XXXX` is the original 4-digit port (unchanged from upstream defaults — `5432` for Postgres, `8080` for gateway, `3000` for web frontends, etc.).
+- `N` is the project-assigned default prefix digit (baked into each project's compose file).
+- `YYYY` is the container port — never changes.
+- A user can override the single project-wide prefix by setting `PORT_PREFIX=<digit>` in the project's `.env`, or override a specific service with a per-service variable.
+
+**Allocation table** (update when adding a project):
+
+| Prefix | Project | Host port range |
+|---|---|---|
+| `1` | ecommerce-microservices-platform | 1XXXX |
+| `2` | wms-platform | 2XXXX |
+| `3` | *(reserved — likely global-account-platform)* | 3XXXX |
+| `4`–`6` | available | 4XXXX–6XXXX |
+
+Prefixes above `6` cannot be used — host port range tops out at 65535, so `7XXXX` overflows.
+
+**Exceptions**:
+
+- Host ports that already have 5 digits (e.g. Jaeger UI `16686`) cannot take a prefix (would become 6 digits). Leave them unprefixed; they are unlikely to collide because 5-digit ports are usually unique per project.
+- Rare inter-project service name collisions (Postgres `5432` vs `5432`) are resolved at the container-name level by each project prefixing its containers (`wms-postgres`, `auth-postgres`).
+
+**Adding a new project** (applies to both Option A / Greenfield and Option B / composite-build):
+
+1. Pick an unused prefix digit from the allocation table.
+2. In the project's `docker-compose.yml`, write every host port as `${PORT_PREFIX:-<prefix>}<original>:<container>`.
+3. In the project's `.env.example`, add a `PORT_PREFIX=<prefix>` line at the top with a comment explaining the convention.
+4. Update the allocation table above in the same PR.
+
+**Validation** (after any compose port change):
+
+```bash
+# Single project default
+docker compose --project-directory projects/<name> config | grep published
+
+# Cross-project collision check (monorepo root)
+comm -12 \
+  <(docker compose --project-directory projects/ecommerce-microservices-platform config | grep published | sort -u) \
+  <(docker compose --project-directory projects/wms-platform config | grep published | sort -u)
+# Expected: empty (no overlap)
+```
+
+---
+
 ## On-Demand Rule Policy
 
 `rules/domains/` and `rules/traits/` contain **only rule files for what has actually been declared** by some project in the monorepo. Adding a new project that declares a new `domain` or `trait` requires **adding the matching rule file in the same PR** — this is the On-Demand Policy defined in `rules/README.md`.
