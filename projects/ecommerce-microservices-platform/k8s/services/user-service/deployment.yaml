@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: ecommerce
+  labels:
+    app: user-service
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+      annotations:
+        checksum/config: "${USER_SERVICE_CONFIG_CHECKSUM}"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: user-service
+          image: user-service:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          envFrom:
+            - configMapRef:
+                name: user-service-config
+            - configMapRef:
+                name: infrastructure-endpoints
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-secret
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-secret
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir: {}

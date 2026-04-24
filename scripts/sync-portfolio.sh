@@ -19,7 +19,12 @@
 #   2. Run git-filter-repo inside python:3-alpine container to:
 #      a. Keep only shared-library paths + the target project's path
 #      b. Hoist projects/<name>/ → root via --path-rename
-#   3. Post-process: patch settings.gradle to drop projects/<name>/ prefix
+#   3. Post-process per integration type (see PROJECT_TYPES below):
+#      - direct-include: restore monorepo-root build.gradle + sed-rewrite
+#                        'projects:<name>:' include paths
+#      - composite-build: trust filter-repo's hoisted settings.gradle +
+#                         build.gradle; strip orphan includeBuild lines;
+#                         replace monorepo-pointer CLAUDE.md
 #   4. Force-push to the target remote
 #
 # History preservation (a): full history. Only commits that touched
@@ -32,6 +37,26 @@ set -euo pipefail
 # Project → remote URL mapping. Add new projects here.
 declare -A PROJECT_REMOTES=(
     ["wms-platform"]="https://github.com/kanggle/wms-platform.git"
+    ["ecommerce-microservices-platform"]="https://github.com/kanggle/ecommerce-microservices-platform.git"
+)
+
+# Project → integration type. Governs how post-process rewrites gradle files.
+#   direct-include — monorepo root `settings.gradle` declares each project
+#                    subproject with `projects:<name>:...` paths; project has
+#                    only a placeholder `build.gradle`. Post-process restores
+#                    the monorepo root `build.gradle` and sed-rewrites the
+#                    `projects:<name>:` prefixes.
+#   composite-build — monorepo root `settings.gradle` pulls the project in via
+#                     `includeBuild('projects/<name>')`; the project owns its
+#                     own real `settings.gradle` + `build.gradle` with its own
+#                     `apps:...` / `libs:...` include paths (no monorepo prefix).
+#                     Post-process trusts filter-repo's --path-rename output
+#                     and only strips the orphan monorepo `includeBuild(...)`
+#                     line if filter-repo preserved it.
+# Default (unmapped): direct-include — preserves backwards compatibility.
+declare -A PROJECT_TYPES=(
+    ["wms-platform"]="direct-include"
+    ["ecommerce-microservices-platform"]="composite-build"
 )
 
 # Shared paths kept at extracted repo root.
@@ -68,16 +93,144 @@ log()  { printf '\e[1;34m[sync]\e[0m %s\n' "$*"; }
 warn() { printf '\e[1;33m[warn]\e[0m %s\n' "$*" >&2; }
 fail() { printf '\e[1;31m[fail]\e[0m %s\n' "$*" >&2; exit 1; }
 
+# ───────────────────────── Post-process: direct-include ─────────────────────────
+# After --path-rename, the project's placeholder build.gradle overwrote the
+# monorepo root build.gradle (which declared plugins + subprojects block).
+# Restore the real root build.gradle and sed-rewrite the colon-separated
+# `projects:<name>:` include paths.
+post_process_direct_include() {
+    local project="$1"
+
+    log "  restoring monorepo root build.gradle..."
+    cp "$MONOREPO_DIR/build.gradle" build.gradle
+
+    log "  rewriting settings.gradle include paths..."
+    # settings.gradle uses colon-separated include paths (Gradle convention)
+    sed -i "s|'projects:$project:|'|g" settings.gradle
+    sed -i "s|rootProject.name = '.*'|rootProject.name = '$project'|" settings.gradle
+
+    # Patch CI workflows: colon Gradle task refs + slash file paths
+    if [ -d .github/workflows ]; then
+        log "  rewriting .github/workflows/*.yml task refs..."
+        for yml in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yml" ] || continue
+            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$yml"
+        done
+    fi
+
+    # Patch subproject *.gradle files — cross-project dependsOn and
+    # project(':projects:...') lookups are hardcoded with the monorepo prefix.
+    # After hoisting, `:projects:<name>:apps:...` must become `:apps:...`.
+    log "  rewriting subproject *.gradle files..."
+    while IFS= read -r -d '' gradle_file; do
+        if grep -q "projects:$project:\|projects/$project/" "$gradle_file"; then
+            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$gradle_file"
+        fi
+    done < <(find apps libs -name "*.gradle" -print0 2>/dev/null)
+}
+
+direct_include_commit_msg() {
+    local project="$1"
+    cat <<EOF
+chore(portfolio): restore root build.gradle + rewrite paths for standalone layout
+
+Extraction via git-filter-repo --path-rename projects/$project/:
+- overwrote the monorepo root build.gradle with the project's
+  placeholder — restore from monorepo root (plugins + subprojects block)
+- left settings.gradle with colon-separated include paths referencing
+  the monorepo layout — rewrite to the hoisted layout
+- left .github/workflows/*.yml and subproject *.gradle files with
+  monorepo-style Gradle task refs and file paths (cross-project
+  dependsOn, project() lookups) — rewrite for standalone CI + build
+EOF
+}
+
+# ───────────────────────── Post-process: composite-build ─────────────────────────
+# A composite-build project owns its own real settings.gradle + build.gradle
+# inside projects/<name>/. filter-repo's --path-rename hoists those to the root
+# of the extracted repo, colliding with and winning over the monorepo-root
+# copies. The project's gradle paths are already root-relative (`apps:...`,
+# `libs:...`), so no sed rewrites are needed.
+#
+# What we DO need to clean up:
+#   - monorepo root `settings.gradle` might still be sitting at root because of
+#     filter-repo collision resolution. If so, it will contain `includeBuild(
+#     'projects/<name>')` referencing a now-deleted path. Strip that line and
+#     any monorepo-style `include('projects:...')` lines.
+#   - CLAUDE.md at root is the monorepo's pointer version (replaced during
+#     Phase 2 import). After extraction it's misleading. Replace with the
+#     monorepo-root CLAUDE.md (which has the full operating rules — readable as
+#     a standalone even though it uses monorepo framing; project-specific
+#     framing is a future improvement).
+#   - .github/workflows/*.yml may contain `:projects:<name>:` task refs or
+#     `projects/<name>/` paths — same rewrite as direct-include (harmless
+#     no-op if they don't contain these).
+post_process_composite_build() {
+    local project="$1"
+
+    # Strip orphan includeBuild or include('projects:...') lines from
+    # settings.gradle in case filter-repo kept the monorepo-root version.
+    if [ -f settings.gradle ] && grep -qE "includeBuild\(['\"]projects/$project['\"]|include\(['\"]projects:$project:" settings.gradle; then
+        log "  stripping orphan monorepo includeBuild/include lines from settings.gradle..."
+        sed -i "/includeBuild(['\"]projects\\/$project['\"])/d" settings.gradle
+        sed -i "/include(['\"]projects:$project:/d" settings.gradle
+    fi
+
+    # Replace monorepo-pointer CLAUDE.md with monorepo-root CLAUDE.md so the
+    # extracted repo has usable guidance at root. (Future: synthesize a
+    # standalone-specific CLAUDE.md that strips monorepo framing.)
+    if [ -f CLAUDE.md ] && grep -q "member of the \`monorepo-lab\` monorepo" CLAUDE.md; then
+        log "  replacing monorepo-pointer CLAUDE.md with standalone copy..."
+        cp "$MONOREPO_DIR/CLAUDE.md" CLAUDE.md
+    fi
+
+    # CI workflows: same rewrite as direct-include (harmless no-op otherwise)
+    if [ -d .github/workflows ]; then
+        for yml in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yml" ] || continue
+            if grep -q ":projects:$project:\|projects/$project/" "$yml"; then
+                log "  rewriting CI workflow $yml..."
+                sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$yml"
+            fi
+        done
+    fi
+}
+
+composite_build_commit_msg() {
+    local project="$1"
+    cat <<EOF
+chore(portfolio): clean up monorepo scaffolding for standalone layout
+
+Extraction via git-filter-repo --path-rename projects/$project/: for a
+Gradle composite-build project. The project owns its own real
+settings.gradle + build.gradle, which filter-repo hoists to root intact.
+Remaining cleanup:
+- stripped any residual monorepo includeBuild('projects/$project') or
+  include('projects:$project:...') lines from the root settings.gradle
+- replaced the monorepo-pointer CLAUDE.md with the monorepo-root copy so
+  the extracted repo has usable guidance at root
+- rewrote any \`:projects:$project:\` / \`projects/$project/\` refs in
+  .github/workflows/*.yml
+EOF
+}
+
+
 sync_project() {
     local project="$1"
     local dry_run="$2"
     local remote="${PROJECT_REMOTES[$project]:-}"
+    local ptype="${PROJECT_TYPES[$project]:-direct-include}"
 
     [ -n "$remote" ] || fail "Unknown project: $project. Configure in PROJECT_REMOTES."
     [ -d "$MONOREPO_DIR/projects/$project" ] || fail "projects/$project not found in monorepo."
+    case "$ptype" in
+        direct-include|composite-build) ;;
+        *) fail "Unknown project type '$ptype' for $project. Expected: direct-include | composite-build" ;;
+    esac
 
     log "Project:  $project"
     log "Remote:   $remote"
+    log "Type:     $ptype"
     log "Source:   $MONOREPO_DIR"
 
     local workdir="$TEMP_ROOT/$project"
@@ -128,49 +281,17 @@ sync_project() {
     cd "$workdir"
 
     # ── Step 3: Post-process ──
-    # After --path-rename, the project's placeholder build.gradle overwrote the
-    # monorepo root build.gradle (which declared plugins + subprojects block).
-    # Restore the real root build.gradle from the live monorepo and patch
-    # settings.gradle colon-separated subproject paths + rootProject.name.
-    log "Post-processing root build.gradle + settings.gradle..."
+    log "Post-processing for $ptype project..."
 
-    cp "$MONOREPO_DIR/build.gradle" build.gradle
+    local commit_msg=""
+    case "$ptype" in
+        direct-include) post_process_direct_include "$project"; commit_msg=$(direct_include_commit_msg "$project") ;;
+        composite-build) post_process_composite_build "$project"; commit_msg=$(composite_build_commit_msg "$project") ;;
+    esac
 
-    # settings.gradle uses colon-separated include paths (Gradle convention)
-    sed -i "s|'projects:$project:|'|g" settings.gradle
-    sed -i "s|rootProject.name = '.*'|rootProject.name = '$project'|" settings.gradle
-
-    # Patch CI workflows: colon Gradle task refs + slash file paths
-    if [ -d .github/workflows ]; then
-        for yml in .github/workflows/*.yml .github/workflows/*.yaml; do
-            [ -f "$yml" ] || continue
-            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$yml"
-        done
-    fi
-
-    # Patch subproject *.gradle files — cross-project dependsOn and
-    # project(':projects:...') lookups are hardcoded with the monorepo prefix.
-    # After hoisting, `:projects:<name>:apps:...` must become `:apps:...`.
-    while IFS= read -r -d '' gradle_file; do
-        if grep -q "projects:$project:\|projects/$project/" "$gradle_file"; then
-            sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$gradle_file"
-        fi
-    done < <(find apps libs -name "*.gradle" -print0 2>/dev/null)
-
-    local changed=0
     git add -A 2>/dev/null || true
     if ! git diff --cached --quiet; then
-        git commit -m "chore(portfolio): restore root build.gradle + rewrite paths for standalone layout
-
-Extraction via git-filter-repo --path-rename projects/$project/:
-- overwrote the monorepo root build.gradle with the project's
-  placeholder — restore from monorepo root (plugins + subprojects block)
-- left settings.gradle with colon-separated include paths referencing
-  the monorepo layout — rewrite to the hoisted layout
-- left .github/workflows/*.yml and subproject *.gradle files with
-  monorepo-style Gradle task refs and file paths (cross-project
-  dependsOn, project() lookups) — rewrite for standalone CI + build" --quiet
-        changed=1
+        git commit -m "$commit_msg" --quiet
     fi
 
     # ── Step 4: Push ──

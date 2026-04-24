@@ -21,3 +21,7 @@ include(
     'projects:wms-platform:apps:admin-service',
     'projects:wms-platform:tests:e2e'
 )
+
+// Project: ecommerce-microservices-platform (Gradle composite build)
+// Keeps nested libs/ stack isolated from root libs/ — see projects/ecommerce-microservices-platform/settings.gradle
+includeBuild('projects/ecommerce-microservices-platform')

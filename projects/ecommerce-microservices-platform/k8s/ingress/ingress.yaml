@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-ingress
+  namespace: ecommerce
+  labels:
+    app.kubernetes.io/part-of: ecommerce
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # HSTS — native NGINX Ingress annotations (no snippet required)
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+    nginx.ingress.kubernetes.io/hsts-preload: "true"
+    # Additional security headers via ConfigMap — requires NGINX Ingress Controller
+    # ConfigMap setting: add-headers: "ecommerce/security-response-headers"
+    # See k8s/ingress/security-response-headers.yaml
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.example.com
+        - store.example.com
+        - admin.example.com
+      secretName: ecommerce-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 8080
+    - host: store.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-store
+                port:
+                  number: 3000
+    - host: admin.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-dashboard
+                port:
+                  number: 3001

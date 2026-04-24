@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: ecommerce
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SERVER_PORT: "8081"
+  OTEL_SERVICE_NAME: "auth-service"
+  DB_URL: "jdbc:postgresql://auth-postgres.infra.svc.cluster.local:5432/auth_db"
+  JWT_ACCESS_TOKEN_TTL_SECONDS: "3600"
+  JWT_REFRESH_TOKEN_TTL_SECONDS: "2592000"
+  JWT_ISSUER: "auth-service"
+  JWT_AUDIENCE: "api"

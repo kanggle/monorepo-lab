@@ -1,0 +1,19 @@
+{
+  "name": "monorepo-lab",
+  "private": true,
+  "description": "Monorepo root — thin shortcut scripts that delegate runtimes to the owning project. No workspace / no dependencies at this level.",
+  "scripts": {
+    "ecommerce:install": "pnpm --dir projects/ecommerce-microservices-platform install",
+    "ecommerce:dev": "pnpm --dir projects/ecommerce-microservices-platform dev",
+    "ecommerce:build": "pnpm --dir projects/ecommerce-microservices-platform build",
+    "ecommerce:lint": "pnpm --dir projects/ecommerce-microservices-platform lint",
+    "ecommerce:web-store": "pnpm --dir projects/ecommerce-microservices-platform --filter web-store dev",
+    "ecommerce:admin": "pnpm --dir projects/ecommerce-microservices-platform --filter admin-dashboard dev",
+    "ecommerce:up": "docker compose --project-directory projects/ecommerce-microservices-platform up -d",
+    "ecommerce:down": "docker compose --project-directory projects/ecommerce-microservices-platform down",
+    "ecommerce:ps": "docker compose --project-directory projects/ecommerce-microservices-platform ps",
+    "ecommerce:logs": "docker compose --project-directory projects/ecommerce-microservices-platform logs -f",
+    "ecommerce:docker": "docker compose --project-directory projects/ecommerce-microservices-platform",
+    "ecommerce:pnpm": "pnpm --dir projects/ecommerce-microservices-platform"
+  }
+}

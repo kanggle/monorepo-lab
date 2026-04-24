@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infrastructure-endpoints
+  namespace: ecommerce
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.infra.svc.cluster.local:9092"
+  REDIS_HOST: "redis.infra.svc.cluster.local"
+  REDIS_PORT: "6379"
+  ELASTICSEARCH_URIS: "http://elasticsearch.infra.svc.cluster.local:9200"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger.infra.svc.cluster.local:4318"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "none"
+  STORAGE_S3_ENDPOINT: "http://minio.infra.svc.cluster.local:9000"
+  STORAGE_S3_REGION: "us-east-1"
+  STORAGE_S3_PATH_STYLE_ACCESS: "true"
+  STORAGE_CDN_BASE_URL: "http://minio.infra.svc.cluster.local:9000"

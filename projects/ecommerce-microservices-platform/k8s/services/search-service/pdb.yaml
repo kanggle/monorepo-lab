@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: search-service-pdb
+  namespace: ecommerce
+  labels:
+    app: search-service
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: search-service

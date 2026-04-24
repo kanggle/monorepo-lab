@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecommerce
+  labels:
+    app: product-service
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+      annotations:
+        checksum/config: "${PRODUCT_SERVICE_CONFIG_CHECKSUM}"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: product-service
+          image: product-service:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          envFrom:
+            - configMapRef:
+                name: product-service-config
+            - configMapRef:
+                name: infrastructure-endpoints
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: product-db-secret
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: product-db-secret
+                  key: DB_PASSWORD
+            - name: STORAGE_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: storage-credentials
+                  key: STORAGE_S3_ACCESS_KEY
+            - name: STORAGE_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: storage-credentials
+                  key: STORAGE_S3_SECRET_KEY
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir: {}

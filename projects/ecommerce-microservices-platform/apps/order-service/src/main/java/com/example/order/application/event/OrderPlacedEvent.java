@@ -1,0 +1,51 @@
+package com.example.order.application.event;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+public record OrderPlacedEvent(
+        @JsonProperty("event_id") String eventId,
+        @JsonProperty("event_type") String eventType,
+        @JsonProperty("occurred_at") String occurredAt,
+        String source,
+        Payload payload
+) {
+    public static OrderPlacedEvent of(String orderId, String userId, long totalPrice,
+                                      List<Item> items, ShippingAddress shippingAddress,
+                                      Clock clock) {
+        return new OrderPlacedEvent(
+                UUID.randomUUID().toString(),
+                "OrderPlaced",
+                Instant.now(clock).toString(),
+                "order-service",
+                new Payload(orderId, userId, totalPrice, items, shippingAddress)
+        );
+    }
+
+    public record Payload(
+            String orderId,
+            String userId,
+            long totalPrice,
+            List<Item> items,
+            ShippingAddress shippingAddress
+    ) {}
+
+    public record Item(
+            String productId,
+            String variantId,
+            int quantity,
+            long unitPrice
+    ) {}
+
+    public record ShippingAddress(
+            String recipient,
+            String phone,
+            String zipCode,
+            String address1,
+            String address2
+    ) {}
+}

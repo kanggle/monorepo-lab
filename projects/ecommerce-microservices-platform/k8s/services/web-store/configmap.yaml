@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-store-config
+  namespace: ecommerce
+data:
+  NEXT_PUBLIC_API_URL: "https://api.example.com"

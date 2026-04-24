@@ -1,0 +1,2 @@
+ALTER TABLE orders ADD COLUMN payment_id VARCHAR(36);
+ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP;

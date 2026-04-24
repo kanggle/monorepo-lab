@@ -1,0 +1,117 @@
+spring:
+  application:
+    name: auth-service
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/auth_db}
+    username: ${DB_USERNAME:auth_user}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT_MS:2000}ms
+      timeout: ${REDIS_TIMEOUT_MS:2000}ms
+      lettuce:
+        pool:
+          enabled: true
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-wait: ${REDIS_POOL_MAX_WAIT_MS:1000}ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: auth-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+app:
+  redis:
+    key-namespace: ${APP_REDIS_KEY_NAMESPACE:auth}
+  rate-limit:
+    login:
+      max-requests: ${RATE_LIMIT_LOGIN_MAX_REQUESTS:20}
+      window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    signup:
+      max-requests: ${RATE_LIMIT_SIGNUP_MAX_REQUESTS:10}
+      window-seconds: ${RATE_LIMIT_SIGNUP_WINDOW_SECONDS:3600}
+    refresh:
+      max-requests: ${RATE_LIMIT_REFRESH_MAX_REQUESTS:30}
+      window-seconds: ${RATE_LIMIT_REFRESH_WINDOW_SECONDS:60}
+
+auth:
+  session:
+    max-concurrent: ${AUTH_SESSION_MAX_CONCURRENT:5}
+    inactivity-timeout: ${AUTH_SESSION_INACTIVITY_TIMEOUT:604800}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:3600}
+  refresh-token-ttl-seconds: ${JWT_REFRESH_TOKEN_TTL_SECONDS:2592000}
+  issuer: ${JWT_ISSUER:auth-service}
+  audience: ${JWT_AUDIENCE:api}
+
+server:
+  port: ${SERVER_PORT:8081}
+  forward-headers-strategy: native
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+
+logging:
+  level:
+    com.example.auth: INFO
+    org.flywaydb: INFO

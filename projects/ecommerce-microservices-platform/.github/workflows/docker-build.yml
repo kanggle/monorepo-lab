@@ -1,0 +1,167 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'packages/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'pnpm-lock.yaml'
+      - 'turbo.json'
+
+concurrency:
+  group: docker-build-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      backend-services: ${{ steps.backend.outputs.services }}
+      frontend-services: ${{ steps.frontend.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            libs:
+              - 'libs/**'
+            packages:
+              - 'packages/**'
+            auth-service:
+              - 'apps/auth-service/**'
+            batch-worker:
+              - 'apps/batch-worker/**'
+            gateway-service:
+              - 'apps/gateway-service/**'
+            order-service:
+              - 'apps/order-service/**'
+            payment-service:
+              - 'apps/payment-service/**'
+            product-service:
+              - 'apps/product-service/**'
+            search-service:
+              - 'apps/search-service/**'
+            user-service:
+              - 'apps/user-service/**'
+            web-store:
+              - 'apps/web-store/**'
+            admin-dashboard:
+              - 'apps/admin-dashboard/**'
+
+      - id: backend
+        run: |
+          services=()
+          libs_changed="${{ steps.changed-files.outputs.libs_any_changed }}"
+
+          for svc in auth-service batch-worker gateway-service order-service payment-service product-service search-service user-service; do
+            case "$svc" in
+              auth-service) svc_changed="${{ steps.changed-files.outputs.auth-service_any_changed }}" ;;
+              batch-worker) svc_changed="${{ steps.changed-files.outputs.batch-worker_any_changed }}" ;;
+              gateway-service) svc_changed="${{ steps.changed-files.outputs.gateway-service_any_changed }}" ;;
+              order-service) svc_changed="${{ steps.changed-files.outputs.order-service_any_changed }}" ;;
+              payment-service) svc_changed="${{ steps.changed-files.outputs.payment-service_any_changed }}" ;;
+              product-service) svc_changed="${{ steps.changed-files.outputs.product-service_any_changed }}" ;;
+              search-service) svc_changed="${{ steps.changed-files.outputs.search-service_any_changed }}" ;;
+              user-service) svc_changed="${{ steps.changed-files.outputs.user-service_any_changed }}" ;;
+            esac
+
+            if [[ "$svc_changed" == "true" || "$libs_changed" == "true" ]]; then
+              services+=("\"$svc\"")
+            fi
+          done
+
+          if [[ ${#services[@]} -eq 0 ]]; then
+            echo "services=[]" >> "$GITHUB_OUTPUT"
+          else
+            json=$(IFS=,; echo "[${services[*]}]")
+            echo "services=$json" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: frontend
+        run: |
+          services=()
+          packages_changed="${{ steps.changed-files.outputs.packages_any_changed }}"
+
+          for app in web-store admin-dashboard; do
+            case "$app" in
+              web-store) app_changed="${{ steps.changed-files.outputs.web-store_any_changed }}" ;;
+              admin-dashboard) app_changed="${{ steps.changed-files.outputs.admin-dashboard_any_changed }}" ;;
+            esac
+
+            if [[ "$app_changed" == "true" || "$packages_changed" == "true" ]]; then
+              services+=("\"$app\"")
+            fi
+          done
+
+          if [[ ${#services[@]} -eq 0 ]]; then
+            echo "services=[]" >> "$GITHUB_OUTPUT"
+          else
+            json=$(IFS=,; echo "[${services[*]}]")
+            echo "services=$json" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-backend-image:
+    name: "Docker Build — ${{ matrix.service }}"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend-services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.backend-services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build JAR
+        run: ./gradlew :apps:${{ matrix.service }}:bootJar
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ matrix.service }}:${{ github.sha }} \
+            -f apps/${{ matrix.service }}/Dockerfile \
+            .
+
+      - name: Verify image
+        run: docker image inspect ${{ matrix.service }}:${{ github.sha }}
+
+  build-frontend-image:
+    name: "Docker Build — ${{ matrix.service }}"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend-services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.frontend-services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ matrix.service }}:${{ github.sha }} \
+            -f apps/${{ matrix.service }}/Dockerfile \
+            .
+
+      - name: Verify image
+        run: docker image inspect ${{ matrix.service }}:${{ github.sha }}

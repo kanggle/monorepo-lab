@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: ecommerce
+  labels:
+    app: auth-service
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: auth-service

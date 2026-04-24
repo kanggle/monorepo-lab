@@ -1,0 +1,195 @@
+package com.example.payment.adapter.in.rest;
+
+import com.example.payment.application.service.PaymentConfirmResult;
+import com.example.payment.application.service.PaymentConfirmService;
+import com.example.payment.application.service.PaymentProcessingService;
+import com.example.payment.application.service.PaymentQueryService;
+import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.payment.domain.exception.PaymentNotFoundException;
+import com.example.payment.domain.model.Payment;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(PaymentController.class)
+@Import(GlobalExceptionHandler.class)
+@DisplayName("PaymentController 슬라이스 테스트")
+class PaymentControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private PaymentQueryService paymentQueryService;
+
+    @MockitoBean
+    private PaymentConfirmService paymentConfirmService;
+
+    @MockitoBean
+    private PaymentProcessingService paymentProcessingService;
+
+    @Nested
+    @DisplayName("GET /api/payments/orders/{orderId}")
+    class GetPaymentByOrderId {
+
+        @Test
+        @DisplayName("정상 조회 시 200과 결제 정보를 반환한다")
+        void getPayment_validRequest_returns200() throws Exception {
+            Payment payment = Payment.create("order-1", "user-1", 30000L);
+            payment.confirm("test-payment-key", "CARD", "http://receipt.example.com");
+            given(paymentQueryService.getPaymentByOrderId("order-1", "user-1")).willReturn(payment);
+
+            mockMvc.perform(get("/api/payments/orders/order-1").header("X-User-Id", "user-1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.orderId").value("order-1"))
+                    .andExpect(jsonPath("$.status").value("COMPLETED"))
+                    .andExpect(jsonPath("$.amount").value(30000));
+        }
+
+        @Test
+        @DisplayName("X-User-Id 헤더 누락 시 400 반환")
+        void getPayment_missingUserId_returns400() throws Exception {
+            mockMvc.perform(get("/api/payments/orders/order-1"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 orderId 조회 시 404 반환")
+        void getPayment_notFound_returns404() throws Exception {
+            given(paymentQueryService.getPaymentByOrderId(any(), any()))
+                    .willThrow(new PaymentNotFoundException("order-x"));
+
+            mockMvc.perform(get("/api/payments/orders/order-x").header("X-User-Id", "user-1"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("다른 사용자 조회 시 403 반환")
+        void getPayment_differentUser_returns403() throws Exception {
+            given(paymentQueryService.getPaymentByOrderId(any(), any()))
+                    .willThrow(new UnauthorizedPaymentAccessException());
+
+            mockMvc.perform(get("/api/payments/orders/order-1").header("X-User-Id", "attacker"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/payments")
+    class CreatePayment {
+
+        @Test
+        @DisplayName("정상 생성 요청 시 201 반환")
+        void createPayment_validRequest_returns201() throws Exception {
+            mockMvc.perform(post("/api/payments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"orderId":"order-1","userId":"user-1","amount":30000}
+                                    """))
+                    .andExpect(status().isCreated());
+
+            verify(paymentProcessingService).processPayment("order-1", "user-1", 30000L);
+        }
+
+        @Test
+        @DisplayName("깨진 JSON 본문이면 400 / VALIDATION_ERROR 반환")
+        void createPayment_malformedBody_returns400() throws Exception {
+            mockMvc.perform(post("/api/payments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"orderId\":"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.message").value("Malformed request body"));
+        }
+
+    }
+
+    @Nested
+    @DisplayName("POST /api/payments/confirm")
+    class ConfirmPayment {
+
+        @Test
+        @DisplayName("정상 confirm 시 200과 결제 승인 결과를 반환한다")
+        void confirmPayment_validRequest_returns200() throws Exception {
+            LocalDateTime paidAt = LocalDateTime.of(2026, 4, 6, 12, 0, 0);
+            given(paymentConfirmService.confirm(eq("user-1"), eq("pk_test_123"), eq("order-1"), eq(30000L)))
+                    .willReturn(new PaymentConfirmResult("pay-1", "order-1", "COMPLETED", "CARD", "https://receipt.url", paidAt));
+
+            mockMvc.perform(post("/api/payments/confirm")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"paymentKey":"pk_test_123","orderId":"order-1","amount":30000}
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.paymentId").value("pay-1"))
+                    .andExpect(jsonPath("$.orderId").value("order-1"))
+                    .andExpect(jsonPath("$.status").value("COMPLETED"))
+                    .andExpect(jsonPath("$.paymentMethod").value("CARD"))
+                    .andExpect(jsonPath("$.receiptUrl").value("https://receipt.url"));
+        }
+
+        @Test
+        @DisplayName("X-User-Id 헤더 누락 시 400 반환")
+        void confirmPayment_missingUserId_returns400() throws Exception {
+            mockMvc.perform(post("/api/payments/confirm")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"paymentKey":"pk_test_123","orderId":"order-1","amount":30000}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 orderId로 confirm 시 404 반환")
+        void confirmPayment_notFound_returns404() throws Exception {
+            given(paymentConfirmService.confirm(any(), any(), any(), any(long.class)))
+                    .willThrow(new PaymentNotFoundException("order-x"));
+
+            mockMvc.perform(post("/api/payments/confirm")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"paymentKey":"pk_test_123","orderId":"order-x","amount":30000}
+                                    """))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("다른 사용자가 confirm 시 403 반환")
+        void confirmPayment_differentUser_returns403() throws Exception {
+            given(paymentConfirmService.confirm(any(), any(), any(), any(long.class)))
+                    .willThrow(new UnauthorizedPaymentAccessException());
+
+            mockMvc.perform(post("/api/payments/confirm")
+                            .header("X-User-Id", "attacker")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"paymentKey":"pk_test_123","orderId":"order-1","amount":30000}
+                                    """))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+    }
+}

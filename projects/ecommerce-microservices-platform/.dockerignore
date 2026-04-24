@@ -1,0 +1,10 @@
+**/node_modules
+**/.next
+**/.turbo
+**/.gradle
+.git
+.claude
+docs
+specs
+tasks
+knowledge

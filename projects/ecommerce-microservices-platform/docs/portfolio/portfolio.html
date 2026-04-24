@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>E-Commerce Microservices Platform — 포트폴리오</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg-soft: #f8fafc;
+    --green: #16a34a;
+    --orange: #ea580c;
+    --purple: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--primary);
+    line-height: 1.7;
+    font-size: 11pt;
+    background: white;
+    -webkit-font-smoothing: antialiased;
+  }
+  @page { size: A4; margin: 18mm 16mm; }
+  .page {
+    page-break-after: always;
+    padding: 0;
+    min-height: 250mm;
+  }
+  .page:last-of-type { page-break-after: auto; }
+
+  /* Cover */
+  .cover {
+    text-align: center;
+    padding-top: 50mm;
+  }
+  .cover .eyebrow {
+    color: var(--accent);
+    font-size: 12pt;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 12mm;
+  }
+  .cover h1 {
+    font-size: 32pt;
+    font-weight: 900;
+    margin: 0 0 6mm;
+    line-height: 1.2;
+    color: var(--primary);
+  }
+  .cover .subtitle {
+    font-size: 13pt;
+    color: var(--muted);
+    margin-bottom: 16mm;
+    font-weight: 400;
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 0 auto 14mm;
+    max-width: 150mm;
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--accent-light);
+    color: var(--accent);
+    border-radius: 4px;
+    font-size: 9pt;
+    font-weight: 500;
+  }
+  .cover-meta {
+    margin-top: 24mm;
+    border-top: 1px solid var(--line);
+    padding-top: 8mm;
+    display: flex;
+    justify-content: center;
+    gap: 24mm;
+    color: var(--muted);
+    font-size: 10pt;
+  }
+  .cover-meta strong { color: var(--primary); display: block; font-size: 11pt; margin-bottom: 2px; }
+
+  /* Headings */
+  h1.section {
+    font-size: 22pt;
+    font-weight: 900;
+    margin: 0 0 4mm;
+    color: var(--primary);
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: 4mm;
+    display: inline-block;
+  }
+  .section-num {
+    color: var(--accent);
+    font-size: 10pt;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 3mm;
+  }
+  h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    margin: 8mm 0 3mm;
+    color: var(--primary);
+  }
+  h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    margin: 6mm 0 2mm;
+    color: var(--primary);
+  }
+  p { margin: 0 0 3mm; }
+  .lede {
+    font-size: 12pt;
+    color: var(--muted);
+    margin-bottom: 6mm;
+    line-height: 1.6;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4mm 0 6mm;
+    font-size: 10pt;
+  }
+  thead th {
+    background: var(--bg-soft);
+    color: var(--primary);
+    font-weight: 700;
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 2px solid var(--line);
+  }
+  tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  td code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 9pt; }
+
+  /* Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin: 4mm 0;
+  }
+  .card-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4mm 5mm;
+    background: white;
+  }
+  .card .label {
+    font-size: 9pt;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+  .card .value {
+    font-size: 18pt;
+    font-weight: 900;
+    color: var(--accent);
+    margin: 2mm 0;
+    line-height: 1.1;
+  }
+  .card .desc { font-size: 9.5pt; color: var(--muted); margin: 0; line-height: 1.5; }
+
+  .pattern-card {
+    border-left: 4px solid var(--line);
+    padding: 2mm 5mm;
+    background: var(--bg-soft);
+    border-radius: 0 6px 6px 0;
+    margin: 2mm 0;
+  }
+  .pattern-card.ddd { border-left-color: var(--accent); }
+  .pattern-card.hex { border-left-color: var(--purple); }
+  .pattern-card.lay { border-left-color: var(--green); }
+  .pattern-card h3 { margin-top: 0; margin-bottom: 1mm; }
+  .pattern-card p { margin-bottom: 0; font-size: 10pt; }
+
+  /* Highlights box */
+  .highlight-box {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0e7ff 100%);
+    border-radius: 8px;
+    padding: 5mm 7mm;
+    margin: 4mm 0;
+    border: 1px solid #c7d2fe;
+  }
+  .highlight-box h3 { margin-top: 0; color: var(--accent); }
+
+  /* Mermaid */
+  .diagram {
+    margin: 5mm 0;
+    text-align: center;
+    page-break-inside: avoid;
+    background: var(--bg-soft);
+    border-radius: 8px;
+    padding: 5mm;
+    border: 1px solid var(--line);
+  }
+  .mermaid { font-family: 'Noto Sans KR', sans-serif; }
+  .diagram .mermaid svg {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+  }
+  .diagram.compact .mermaid svg {
+    max-width: 65% !important;
+  }
+  .diagram-caption {
+    font-size: 9pt;
+    color: var(--muted);
+    margin-top: 2mm;
+    font-style: italic;
+  }
+
+  /* Screenshots */
+  .screenshot {
+    margin: 5mm 0;
+    page-break-inside: avoid;
+    text-align: center;
+  }
+  .screenshot img {
+    max-width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .screenshot.compact img {
+    max-height: 95mm;
+    width: auto;
+    max-width: 100%;
+  }
+  .screenshot .caption {
+    font-size: 10pt;
+    color: var(--muted);
+    margin-top: 2mm;
+    font-style: italic;
+  }
+
+  /* Lists */
+  ul, ol { margin: 2mm 0 4mm; padding-left: 6mm; }
+  li { margin-bottom: 1.5mm; }
+
+  /* Page header */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4mm;
+    padding-bottom: 3mm;
+    border-bottom: 1px solid var(--line);
+    font-size: 9pt;
+    color: var(--muted);
+  }
+  .page-header .right { font-weight: 500; }
+
+  /* Tag */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 8.5pt;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .tag.ddd { background: #dbeafe; color: #1e40af; }
+  .tag.hex { background: #ede9fe; color: #6d28d9; }
+  .tag.lay { background: #dcfce7; color: #166534; }
+
+  /* Quote */
+  blockquote {
+    border-left: 4px solid var(--accent);
+    margin: 4mm 0;
+    padding: 2mm 6mm;
+    background: var(--bg-soft);
+    color: var(--primary);
+    font-style: italic;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Avoid orphan diagrams */
+  h2, h3 { page-break-after: avoid; }
+  .keep-together { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<!-- ============== COVER ============== -->
+<section class="page cover">
+  <div class="eyebrow">Portfolio · 2026</div>
+  <h1>E-Commerce<br>Microservices Platform</h1>
+  <p class="subtitle">도메인 기반 마이크로서비스 아키텍처로 설계된<br>End-to-End 이커머스 플랫폼</p>
+
+  <div class="badges">
+    <span class="badge">Java 21</span>
+    <span class="badge">Spring Boot 3.4</span>
+    <span class="badge">Next.js 15</span>
+    <span class="badge">React 19</span>
+    <span class="badge">TypeScript 5.5</span>
+    <span class="badge">PostgreSQL 16</span>
+    <span class="badge">Apache Kafka 3.7</span>
+    <span class="badge">Redis 7</span>
+    <span class="badge">Elasticsearch 8.15</span>
+    <span class="badge">Kubernetes</span>
+    <span class="badge">Docker Compose</span>
+    <span class="badge">Prometheus · Grafana · Loki · Jaeger</span>
+  </div>
+
+  <div class="cover-meta">
+    <div><strong>12</strong> Backend Services</div>
+    <div><strong>2</strong> Frontend Apps</div>
+    <div><strong>500+</strong> Tests</div>
+    <div><strong>99/100</strong> Lighthouse</div>
+  </div>
+</section>
+
+<!-- ============== 1. 프로젝트 개요 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">01 · 프로젝트 개요</span></div>
+
+  <span class="section-num">Section 01</span>
+  <h1 class="section">프로젝트 개요</h1>
+
+  <p class="lede">상품 카탈로그·주문·결제·배송·리뷰·알림·검색·프로모션을 포함하는 B2C 이커머스 플랫폼입니다. 12개의 백엔드 서비스와 2개의 프론트엔드 앱이 모노레포로 운영되며, 각 서비스는 도메인 특성에 맞는 서로 다른 아키텍처 패턴을 채택합니다.</p>
+
+  <h2>핵심 지표 한눈에 보기</h2>
+  <div class="card-grid">
+    <div class="card">
+      <div class="label">Services</div>
+      <div class="value">12 + 2</div>
+      <div class="desc">백엔드 마이크로서비스 12개 · 프론트 앱 2개 (Web Store, Admin)</div>
+    </div>
+    <div class="card">
+      <div class="label">Architecture Patterns</div>
+      <div class="value">3 패턴</div>
+      <div class="desc">DDD · Hexagonal · Layered — 도메인 복잡도에 따라 선택 적용</div>
+    </div>
+    <div class="card">
+      <div class="label">Test Coverage (admin)</div>
+      <div class="value">84.3%</div>
+      <div class="desc">admin-dashboard 라인 커버리지 (Vitest + RTL, 420 tests)</div>
+    </div>
+    <div class="card">
+      <div class="label">Lighthouse (web-store)</div>
+      <div class="value">99/100</div>
+      <div class="desc">홈 LCP 1.0s · CLS 0 · TBT 0ms (Desktop)</div>
+    </div>
+  </div>
+
+  <h2>설계 원칙 (Highlights)</h2>
+  <ul>
+    <li><strong>도메인 중심 분리</strong> — Bounded Context마다 독립 서비스 + 독립 DB. 12개 서비스 모두 Database-per-Service 적용.</li>
+    <li><strong>이벤트 기반 통신</strong> — 동기 호출 최소화, Apache Kafka + Outbox Pattern으로 트랜잭션 일관성 확보.</li>
+    <li><strong>아키텍처 패턴의 의도적 다양성</strong> — 모든 서비스에 동일 패턴을 강제하지 않고 도메인 복잡도에 맞춰 DDD/Hexagonal/Layered 선택.</li>
+    <li><strong>Spec-Driven Development</strong> — 스펙 → 계약 → 태스크 → 구현 → 리뷰의 명시적 워크플로우. <code>specs/</code>가 단일 진실 공급원.</li>
+    <li><strong>Full Observability</strong> — Prometheus(메트릭) + Grafana(시각화) + Loki(로그) + Jaeger(트레이스) 통합 모니터링.</li>
+    <li><strong>K8s Production-Ready</strong> — NetworkPolicy(Default-Deny) · PodDisruptionBudget · ConfigMap 기반 배포.</li>
+  </ul>
+
+  <div class="highlight-box">
+    <h3>왜 이 프로젝트가 의미 있는가</h3>
+    <p style="margin:0;">단순히 "마이크로서비스를 잘게 쪼갠 프로젝트"가 아니라, <strong>"왜 이 서비스에는 DDD를, 저 서비스에는 Layered를 적용했는가"</strong>에 대한 명시적 근거(<code>specs/services/&lt;svc&gt;/architecture.md</code>)가 있는 프로젝트입니다. 동시에 분류(taxonomy) 기반 규칙 시스템의 첫 dogfood로, 후속 프로젝트의 템플릿이 될 구조를 검증합니다.</p>
+  </div>
+</section>
+
+<!-- ============== 2. 시스템 아키텍처 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">02 · 시스템 아키텍처</span></div>
+
+  <span class="section-num">Section 02</span>
+  <h1 class="section">시스템 아키텍처</h1>
+
+  <p class="lede">전체 토폴로지: 두 개의 프론트엔드 클라이언트가 단일 게이트웨이를 통과해 12개 백엔드 서비스에 도달하며, 서비스 간 통신은 Kafka 이벤트로 비동기화되어 있습니다.</p>
+
+  <div class="diagram">
+    <div class="mermaid">
+graph TB
+    subgraph Clients
+        WS[Web Store<br/>Next.js 15 :3000]
+        AD[Admin Dashboard<br/>Next.js 15 :3001]
+    end
+
+    subgraph Gateway
+        GW[Gateway Service<br/>Spring Cloud Gateway :8080<br/>JWT / Rate Limit]
+    end
+
+    subgraph Core
+        AUTH[Auth :8081]
+        PRODUCT[Product :8082]
+        USER[User :8084]
+        ORDER[Order :8086]
+        PROMO[Promotion :8092]
+    end
+
+    subgraph Integration
+        PAY[Payment :8087]
+        SEARCH[Search :8085]
+        NOTI[Notification :8093]
+        SHIP[Shipping :8090]
+    end
+
+    subgraph Support
+        REVIEW[Review :8091]
+        BATCH[Batch Worker :8088]
+    end
+
+    subgraph Infrastructure
+        KAFKA[Apache Kafka]
+        REDIS[Redis]
+        ES[Elasticsearch]
+    end
+
+    WS --> GW
+    AD --> GW
+    GW --> AUTH
+    GW --> PRODUCT
+    GW --> USER
+    GW --> ORDER
+    GW --> PAY
+    GW --> SEARCH
+    GW --> SHIP
+    GW --> REVIEW
+    GW --> PROMO
+    GW --> NOTI
+    GW --> REDIS
+
+    ORDER --> KAFKA
+    PAY --> KAFKA
+    PRODUCT --> KAFKA
+    SHIP --> KAFKA
+    PROMO --> KAFKA
+    AUTH --> KAFKA
+    KAFKA --> NOTI
+    KAFKA --> SEARCH
+    KAFKA --> BATCH
+    SEARCH --> ES
+    AUTH --> REDIS
+
+    PAY -. Toss Payments .-> EXT_PG[External PG]
+    NOTI -. Email/SMS/Push .-> EXT_MSG[External Channels]
+    </div>
+    <div class="diagram-caption">그림 2-1. 시스템 전체 토폴로지 — Gateway 단일 진입점 + Kafka 기반 이벤트 버스</div>
+  </div>
+
+  <h2>레이어별 역할</h2>
+  <ul>
+    <li><strong>Clients</strong> — 고객용 Web Store와 운영자용 Admin Dashboard, 둘 다 Next.js 15 + React 19로 구현되며 같은 게이트웨이를 공유합니다.</li>
+    <li><strong>Gateway</strong> — 모든 외부 트래픽의 단일 진입점. JWT 검증, Redis 기반 IP 토큰 버킷 Rate Limiting, 라우팅을 담당.</li>
+    <li><strong>Core / Integration / Support</strong> — 도메인 책임에 따라 분류. 외부 시스템 의존이 큰 서비스는 Hexagonal로 격리.</li>
+    <li><strong>Infrastructure</strong> — Kafka(이벤트 버스) · Redis(캐시/세션/Rate Limit) · Elasticsearch(검색).</li>
+  </ul>
+</section>
+
+<!-- ============== 3. 서비스 카탈로그 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">03 · 서비스 카탈로그</span></div>
+
+  <span class="section-num">Section 03</span>
+  <h1 class="section">서비스 카탈로그</h1>
+
+  <p class="lede">12개 백엔드 서비스 + 2개 프론트엔드 앱. 각 서비스는 독립 포트, 독립 데이터베이스, 명시적 아키텍처 패턴을 갖습니다.</p>
+
+  <h2>Backend (Spring Boot 3.4 / Java 21)</h2>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Port</th><th>Architecture</th><th>역할</th><th>핵심 패턴</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Gateway</strong></td><td>8080</td><td><span class="tag lay">Layered</span></td><td>API 라우팅, 인증, Rate Limiting</td><td>Spring Cloud Gateway, Redis</td></tr>
+      <tr><td><strong>Auth</strong></td><td>8081</td><td><span class="tag lay">Layered</span></td><td>회원가입, JWT 인증, 세션 관리</td><td>JWT, Redis Session</td></tr>
+      <tr><td><strong>Product</strong></td><td>8082</td><td><span class="tag ddd">DDD</span></td><td>상품 카탈로그, 재고 관리</td><td>Aggregate, Domain Events</td></tr>
+      <tr><td><strong>User</strong></td><td>8084</td><td><span class="tag lay">Layered</span></td><td>프로필, 주소, 위시리스트</td><td>CRUD, Preferences</td></tr>
+      <tr><td><strong>Search</strong></td><td>8085</td><td><span class="tag hex">Hexagonal</span></td><td>상품 검색, 필터링</td><td>Elasticsearch, Event Indexing</td></tr>
+      <tr><td><strong>Order</strong></td><td>8086</td><td><span class="tag ddd">DDD</span></td><td>주문 생성, 상태 추적, 취소</td><td>Saga, Outbox Pattern</td></tr>
+      <tr><td><strong>Payment</strong></td><td>8087</td><td><span class="tag hex">Hexagonal</span></td><td>결제 승인, 환불</td><td>Toss Payments, Port/Adapter</td></tr>
+      <tr><td><strong>Batch Worker</strong></td><td>8088</td><td><span class="tag lay">Layered</span></td><td>배치 작업, 데이터 집계</td><td>Spring Batch, Scheduling</td></tr>
+      <tr><td><strong>Shipping</strong></td><td>8090</td><td><span class="tag lay">Layered</span></td><td>배송 추적, 상태 관리</td><td>Outbox Pattern</td></tr>
+      <tr><td><strong>Review</strong></td><td>8091</td><td><span class="tag lay">Layered</span></td><td>상품 리뷰, 평점</td><td>Cross-service REST</td></tr>
+      <tr><td><strong>Promotion</strong></td><td>8092</td><td><span class="tag ddd">DDD</span></td><td>프로모션, 쿠폰</td><td>Outbox Pattern</td></tr>
+      <tr><td><strong>Notification</strong></td><td>8093</td><td><span class="tag hex">Hexagonal</span></td><td>알림 (Email/SMS/Push)</td><td>Multi-channel Consumer</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Frontend (Next.js 15 / React 19 / TypeScript)</h2>
+  <table>
+    <thead>
+      <tr><th>App</th><th>Port</th><th>Architecture</th><th>역할</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Web Store</strong></td><td>3000</td><td>Feature-Sliced Design</td><td>고객 쇼핑 (검색, 장바구니, 주문, 결제)</td></tr>
+      <tr><td><strong>Admin Dashboard</strong></td><td>3001</td><td>Feature-based Layered</td><td>관리자 (상품·주문·프로모션·알림 관리)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>공유 라이브러리</h2>
+  <table>
+    <thead><tr><th>Library</th><th>역할</th></tr></thead>
+    <tbody>
+      <tr><td><code>java-common</code></td><td>공통 유틸리티</td></tr>
+      <tr><td><code>java-web</code></td><td>HTTP 예외 처리, Jackson 설정</td></tr>
+      <tr><td><code>java-messaging</code></td><td>Kafka + Outbox Pattern 구현</td></tr>
+      <tr><td><code>java-observability</code></td><td>Actuator + Micrometer + OpenTelemetry</td></tr>
+      <tr><td><code>java-security</code></td><td>인증·보안 유틸리티</td></tr>
+      <tr><td><code>@repo/api-client</code> · <code>@repo/types</code> · <code>@repo/ui</code></td><td>프론트 공통 API 클라이언트, 타입, UI 컴포넌트</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== 4. 아키텍처 패턴 선택 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">04 · 아키텍처 패턴 선택</span></div>
+
+  <span class="section-num">Section 04</span>
+  <h1 class="section">아키텍처 패턴 선택</h1>
+
+  <p class="lede">"모든 서비스에 같은 패턴을 강제하면 단순한 CRUD에는 과잉, 복잡한 도메인에는 부족"이라는 판단 아래, 도메인 복잡도에 맞춰 세 가지 패턴 중 적합한 것을 선택했습니다.</p>
+
+  <div class="pattern-card ddd">
+    <h3>DDD — 복잡한 비즈니스 규칙</h3>
+    <p><strong>적용:</strong> Order · Product · Promotion. Aggregate 일관성과 도메인 이벤트가 1급 시민.</p>
+    <p><strong>이유:</strong> 주문 라이프사이클(PENDING → CONFIRMED → SHIPPED → DELIVERED)이나 재고 차감같이 불변식이 강한 영역에서 도메인 모델이 비즈니스 언어를 그대로 표현하도록 함.</p>
+  </div>
+  <div class="pattern-card hex">
+    <h3>Hexagonal — 외부 시스템 연동 중심</h3>
+    <p><strong>적용:</strong> Payment(Toss Payments) · Search(Elasticsearch) · Notification(Email/SMS/Push).</p>
+    <p><strong>이유:</strong> 외부 어댑터가 교체될 가능성이 크고 테스트 격리가 중요. Port/Adapter로 핵심 도메인을 외부 의존성으로부터 보호.</p>
+  </div>
+  <div class="pattern-card lay">
+    <h3>Layered — 단순한 CRUD</h3>
+    <p><strong>적용:</strong> Auth · User · Shipping · Review · Batch · Gateway.</p>
+    <p><strong>이유:</strong> 비교적 단순한 데이터 흐름에 DDD를 강제하면 보일러플레이트만 늘어남. 빠른 구현과 가독성을 우선.</p>
+  </div>
+
+  <div class="diagram compact">
+    <div class="mermaid">
+graph TB
+    subgraph DDD["DDD — 복잡한 도메인"]
+        direction LR
+        DDD_API[API] --> DDD_APP[Application]
+        DDD_APP --> DDD_DOMAIN[Domain<br/>Aggregate · Event]
+        DDD_DOMAIN --> DDD_INFRA[Infrastructure]
+    end
+
+    subgraph HEX["Hexagonal — 외부 연동 격리"]
+        direction LR
+        HEX_ADAPTER_IN[Web Adapter] --> HEX_IN[Inbound Port]
+        HEX_IN --> HEX_CORE[Core Domain]
+        HEX_CORE --> HEX_OUT[Outbound Port]
+        HEX_OUT --> HEX_ADAPTER_OUT[External Adapter]
+    end
+
+    subgraph LAY["Layered — 단순 CRUD"]
+        direction LR
+        LAY_CTRL[Controller] --> LAY_SVC[Service]
+        LAY_SVC --> LAY_REPO[Repository]
+        LAY_REPO --> LAY_DB[(Database)]
+    end
+
+    DDD ~~~ HEX
+    HEX ~~~ LAY
+    </div>
+    <div class="diagram-caption">그림 4-1. 세 가지 아키텍처 패턴의 레이어 구조 비교</div>
+  </div>
+
+  <blockquote>
+    각 서비스의 패턴 선택 근거는 <code>specs/services/&lt;service&gt;/architecture.md</code>에 명시되어 있어, "왜 이렇게 설계했는가"의 추적성이 코드와 함께 버전 관리됩니다.
+  </blockquote>
+</section>
+
+<!-- ============== 5. 이벤트 기반 통신 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">05 · 이벤트 기반 통신</span></div>
+
+  <span class="section-num">Section 05</span>
+  <h1 class="section">이벤트 기반 통신</h1>
+
+  <p class="lede">서비스 간 통신은 Apache Kafka 이벤트로 이루어지며, 트랜잭션 일관성을 위해 <strong>Outbox Pattern</strong>을 적용합니다. "DB에 비즈니스 데이터 저장" + "이벤트 발행"을 단일 트랜잭션으로 묶어, 부분 성공으로 인한 데이터 불일치를 원천 차단합니다.</p>
+
+  <h2>주문 → 결제 → 배송 Saga</h2>
+
+  <div class="diagram">
+    <div class="mermaid">
+sequenceDiagram
+    actor Customer
+    participant Order as Order Service
+    participant Kafka
+    participant Payment as Payment Service
+    participant Shipping as Shipping Service
+    participant Notification as Notification Service
+
+    Customer->>Order: POST /api/orders
+    activate Order
+    Order->>Order: 주문 생성 + Outbox 저장 (단일 TX)
+    Order-->>Kafka: OrderPlaced
+    deactivate Order
+
+    Kafka-->>Payment: OrderPlaced
+    activate Payment
+    Payment->>Payment: 결제 처리 (Toss Payments)
+    Payment-->>Kafka: PaymentCompleted
+    deactivate Payment
+
+    Kafka-->>Order: PaymentCompleted
+    activate Order
+    Order->>Order: 주문 확정 (CONFIRMED)
+    Order-->>Kafka: OrderConfirmed
+    deactivate Order
+
+    Kafka-->>Shipping: OrderConfirmed
+    activate Shipping
+    Shipping->>Shipping: 배송 시작
+    Shipping-->>Kafka: ShippingStatusChanged
+    deactivate Shipping
+
+    Kafka-->>Notification: OrderPlaced
+    Kafka-->>Notification: PaymentCompleted
+    Kafka-->>Notification: ShippingStatusChanged
+    Notification->>Customer: 알림 발송 (Email/SMS/Push)
+    </div>
+    <div class="diagram-caption">그림 5-1. 주문 → 결제 → 배송 → 알림 Saga 흐름</div>
+  </div>
+
+  <h2>주요 도메인 이벤트</h2>
+  <table>
+    <thead><tr><th>도메인</th><th>이벤트</th></tr></thead>
+    <tbody>
+      <tr><td>Auth</td><td><code>UserSignedUp</code> · <code>LoginFailed</code> · <code>SessionLimitExceeded</code></td></tr>
+      <tr><td>Order</td><td><code>OrderPlaced</code> · <code>OrderConfirmed</code> · <code>OrderCancelled</code></td></tr>
+      <tr><td>Payment</td><td><code>PaymentCompleted</code> · <code>PaymentFailed</code> · <code>RefundInitiated</code></td></tr>
+      <tr><td>Product</td><td><code>ProductCreated</code> · <code>ProductUpdated</code> · <code>StockChanged</code></td></tr>
+      <tr><td>Shipping</td><td><code>ShippingStatusChanged</code></td></tr>
+      <tr><td>Promotion</td><td><code>CouponIssued</code> · <code>PromotionActivated</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== 6. 검색 인덱싱 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">06 · 검색 인덱싱</span></div>
+
+  <span class="section-num">Section 06</span>
+  <h1 class="section">상품 → 검색 인덱싱</h1>
+
+  <p class="lede">상품 카탈로그(PostgreSQL)와 검색 인덱스(Elasticsearch)는 Kafka 이벤트로 비동기 동기화됩니다. 한국어 검색 품질을 위해 <strong>Nori analyzer</strong>를 적용 (ADR-005).</p>
+
+  <div class="diagram">
+    <div class="mermaid">
+sequenceDiagram
+    actor Admin
+    participant Product as Product Service
+    participant Kafka
+    participant Search as Search Service
+    participant ES as Elasticsearch
+
+    Admin->>Product: POST /api/admin/products
+    activate Product
+    Product->>Product: 상품 저장 (PostgreSQL)
+    Product-->>Kafka: ProductCreated
+    deactivate Product
+
+    Kafka-->>Search: ProductCreated
+    activate Search
+    Search->>ES: Index Document (Nori analyzer)
+    deactivate Search
+
+    Admin->>Product: PATCH /api/admin/products/{id}
+    activate Product
+    Product->>Product: 상품 수정
+    Product-->>Kafka: ProductUpdated
+    deactivate Product
+
+    Kafka-->>Search: ProductUpdated
+    activate Search
+    Search->>ES: Update Document
+    deactivate Search
+    </div>
+    <div class="diagram-caption">그림 6-1. 상품 변경 이벤트의 검색 인덱스 반영 흐름</div>
+  </div>
+
+  <h2>Database-per-Service</h2>
+
+  <p>각 서비스는 자기 도메인의 데이터를 자기 DB에서만 관리합니다. 다른 서비스가 그 데이터를 필요로 하면 API 호출 또는 이벤트 구독으로만 접근합니다.</p>
+
+  <div class="diagram compact">
+    <div class="mermaid">
+graph TB
+    subgraph PG["PostgreSQL × 10 (Database-per-Service)"]
+        direction LR
+        A[Auth] --> A_DB[(auth_db<br/>:5432)]
+        B[Product] --> B_DB[(product_db<br/>:5433)]
+        C[Order] --> C_DB[(order_db<br/>:5434)]
+        D[Payment] --> D_DB[(payment_db<br/>:5435)]
+        F[Batch] --> F_DB[(batch_db<br/>:5436)]
+        E[User] --> E_DB[(user_db<br/>:5437)]
+        G[Shipping] --> G_DB[(shipping_db<br/>:5438)]
+        H[Review] --> H_DB[(review_db<br/>:5439)]
+        I[Promotion] --> I_DB[(promotion_db<br/>:5440)]
+        J[Notification] --> J_DB[(notification_db<br/>:5441)]
+    end
+
+    subgraph OTHER["전용 스토리지"]
+        direction LR
+        K[Search] --> K_ES[(Elasticsearch<br/>:9200)]
+        L[Gateway] --> L_REDIS[(Redis<br/>:6379)]
+    end
+    </div>
+    <div class="diagram-caption">그림 6-2. Database-per-Service — 10개 PostgreSQL 인스턴스 + Elasticsearch + Redis</div>
+  </div>
+</section>
+
+<!-- ============== 7. 인프라 & 옵저버빌리티 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">07 · 인프라 & 옵저버빌리티</span></div>
+
+  <span class="section-num">Section 07</span>
+  <h1 class="section">인프라 & 옵저버빌리티</h1>
+
+  <p class="lede">메트릭 · 로그 · 트레이스 세 가지 신호를 모두 수집하고, Grafana에서 통합 뷰로 관찰합니다.</p>
+
+  <div class="diagram">
+    <div class="mermaid">
+graph TB
+    subgraph Application
+        SVC1[Auth]
+        SVC2[Product]
+        SVC3[Order]
+        SVC_N[... 9 more services]
+    end
+
+    subgraph Observability
+        PROM[Prometheus<br/>:9090<br/>Metrics]
+        GRAFANA[Grafana<br/>:3100<br/>Dashboards]
+        LOKI[Loki<br/>:3101<br/>Logs]
+        PROMTAIL[Promtail<br/>Log Collector]
+        JAEGER[Jaeger<br/>:16686<br/>Tracing]
+        ALERT[AlertManager<br/>:9094]
+    end
+
+    SVC1 -- "/actuator/prometheus" --> PROM
+    SVC2 -- "/actuator/prometheus" --> PROM
+    SVC3 -- "/actuator/prometheus" --> PROM
+    SVC_N -- "/actuator/prometheus" --> PROM
+
+    SVC1 -- "OTLP traces" --> JAEGER
+    SVC2 -- "OTLP traces" --> JAEGER
+    SVC3 -- "OTLP traces" --> JAEGER
+
+    PROMTAIL -- "Docker logs" --> LOKI
+    PROM --> GRAFANA
+    LOKI --> GRAFANA
+    JAEGER --> GRAFANA
+    PROM --> ALERT
+    </div>
+    <div class="diagram-caption">그림 7-1. 옵저버빌리티 스택 — Prometheus + Grafana + Loki + Jaeger</div>
+  </div>
+
+  <h2>Kubernetes 배포 토폴로지</h2>
+
+  <div class="diagram">
+    <div class="mermaid">
+graph TB
+    subgraph K8s Cluster
+        ING[Ingress Controller<br/>+ Security Headers]
+        subgraph Pods
+            GW_POD[Gateway + PDB]
+            AUTH_POD[Auth + PDB]
+            PRODUCT_POD[Product + PDB]
+            ORDER_POD[Order + PDB]
+            PAY_POD[Payment + PDB]
+            WS_POD[Web Store + PDB]
+            AD_POD[Admin Dashboard + PDB]
+        end
+        NP[NetworkPolicy<br/>Default Deny + Per-Service Allow]
+        subgraph External
+            EXT_DB[(PostgreSQL × 10)]
+            EXT_KAFKA[Kafka]
+            EXT_REDIS[Redis]
+            EXT_ES[Elasticsearch]
+        end
+    end
+
+    ING --> GW_POD
+    GW_POD --> AUTH_POD
+    GW_POD --> PRODUCT_POD
+    GW_POD --> ORDER_POD
+    GW_POD --> PAY_POD
+    AUTH_POD --> EXT_DB
+    PRODUCT_POD --> EXT_DB
+    ORDER_POD --> EXT_DB
+    ORDER_POD --> EXT_KAFKA
+    NP -. Zero Trust .-> AUTH_POD
+    NP -. Zero Trust .-> ORDER_POD
+    </div>
+    <div class="diagram-caption">그림 7-2. Kubernetes 배포 — PDB · NetworkPolicy(Zero Trust)</div>
+  </div>
+</section>
+
+<!-- ============== 8. 품질 지표 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">08 · 품질 지표</span></div>
+
+  <span class="section-num">Section 08</span>
+  <h1 class="section">품질 지표</h1>
+
+  <p class="lede">코드 품질, 테스트 커버리지, 성능 — 세 축에서 측정 가능한 지표로 관리합니다.</p>
+
+  <h2>테스트 전략</h2>
+  <table>
+    <thead><tr><th>레이어</th><th>도구</th><th>범위</th></tr></thead>
+    <tbody>
+      <tr><td>Unit / Integration</td><td>JUnit 5, Testcontainers</td><td>백엔드 서비스 로직, DB 통합</td></tr>
+      <tr><td>Contract</td><td>Custom Contract Tests</td><td>API 계약 검증</td></tr>
+      <tr><td>Component</td><td>Vitest, React Testing Library</td><td>프론트엔드 컴포넌트</td></tr>
+      <tr><td>E2E</td><td>Playwright (Chromium)</td><td>브라우저 골든 플로우 검증</td></tr>
+      <tr><td>Load</td><td>k6</td><td>성능 (P95 &lt; 500ms, Error &lt; 1%)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>프론트엔드 커버리지 (v8 provider)</h3>
+  <table>
+    <thead><tr><th>App</th><th>Lines</th><th>Statements</th><th>Functions</th><th>Branches</th><th>Tests</th></tr></thead>
+    <tbody>
+      <tr><td><code>admin-dashboard</code></td><td><strong>84.33%</strong></td><td>80.89%</td><td>73.29%</td><td>79.09%</td><td>420</td></tr>
+      <tr><td><code>web-store</code></td><td><strong>81.15%</strong></td><td>80.07%</td><td>77.01%</td><td>81.38%</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h2>성능 측정 결과</h2>
+
+  <h3>web-store 홈페이지 (Lighthouse Desktop)</h3>
+  <p>홈에 ISR(<code>revalidate=60</code>)을 적용하고 HeroBanner 이미지를 <code>next/image</code>(AVIF/WebP 자동 변환)로 전환한 뒤 실측.</p>
+  <div class="card-grid three">
+    <div class="card"><div class="label">Performance</div><div class="value">99/100</div><div class="desc">Lighthouse Desktop</div></div>
+    <div class="card"><div class="label">LCP</div><div class="value">1.0s</div><div class="desc">≤ 2.5s 기준 통과</div></div>
+    <div class="card"><div class="label">CLS</div><div class="value">0</div><div class="desc">≤ 0.1 기준 통과</div></div>
+  </div>
+  <table>
+    <thead><tr><th>변경</th><th>Before</th><th>After</th><th>효과</th></tr></thead>
+    <tbody>
+      <tr><td>홈 <code>force-dynamic</code> → <code>revalidate=60</code></td><td>94–263 ms/req</td><td>8–15 ms/req</td><td><strong>~15×</strong></td></tr>
+      <tr><td>Hero 이미지 JPEG → WebP</td><td>340 KB / 423 ms</td><td>92 KB / 13 ms</td><td><strong>−73% / ~32×</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Redis Cache (product-service)</h3>
+  <p><code>QueryProductService.findAll/findById</code>에 <code>@Cacheable</code> + <code>RedisCacheConfiguration</code>(TTL 60s) 적용. 쓰기 경로 5곳은 <code>@CacheEvict</code>로 일관성 보장.</p>
+  <table>
+    <thead><tr><th>상황</th><th>샘플 수</th><th>중앙값</th><th>평균</th></tr></thead>
+    <tbody>
+      <tr><td>MISS (DB 조회 + 캐시 저장)</td><td>5</td><td><strong>122 ms</strong></td><td>122 ms</td></tr>
+      <tr><td>HIT (Redis 읽기)</td><td>10</td><td><strong>32 ms</strong></td><td>38 ms</td></tr>
+      <tr><td>개선</td><td>—</td><td><strong>~3.8×</strong></td><td>~3.2×</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Gateway Rate Limiting (실측)</h3>
+  <p>Spring Cloud Gateway <code>RequestRateLimiter</code> + Redis 토큰 버킷. <code>/api/auth/**</code>는 10 req/s · burst 20으로 가장 엄격.</p>
+  <table>
+    <thead><tr><th>라우트</th><th>Replenish</th><th>Burst</th><th>의도</th></tr></thead>
+    <tbody>
+      <tr><td><code>/api/auth/**</code></td><td>10 req/s</td><td>20</td><td>크리덴셜 스터핑 / 브루트포스 방어</td></tr>
+      <tr><td><code>/api/products/**</code> 등</td><td>100 req/s</td><td>200</td><td>일반 조회·쓰기</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:10pt; color:var(--muted);">버스트 테스트 (N=30 rapid POST): 처음 20개 통과 → 21~30번째 <code>429 Too Many Requests</code>. <code>burstCapacity=20</code> 설정과 정확히 일치.</p>
+</section>
+
+<!-- ============== 9. 코드 품질 사례 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">09 · 코드 품질 사례</span></div>
+
+  <span class="section-num">Section 09</span>
+  <h1 class="section">코드 품질: 리팩토링 사례</h1>
+
+  <p class="lede">실제 누적된 중복 제거 및 구조 개선 작업. "언제 추상화하고 언제 하지 않는가"의 판단 기준이 함께 기록되어 있다는 점이 핵심입니다.</p>
+
+  <h2>Case Study — admin-dashboard 뮤테이션 훅 팩토리화</h2>
+
+  <h3>문제</h3>
+  <p>5개 도메인(product · promotion · notification · order · shipping)에 걸쳐 12개의 <code>useMutation</code> 기반 훅이 존재. 각 훅이 <code>useMutation</code> + <code>useQueryClient.invalidateQueries</code> + <code>alertError</code> 보일러플레이트를 반복.</p>
+
+  <h3>접근</h3>
+  <p>실제 중복이 있는 영역에만 공용 훅 <code>useInvalidatingMutation</code> 신설. 각 훅은 <code>mutationFn</code> · invalidate 키 · <code>errorMessage</code> · 선택적 커스텀 핸들러만 선언.</p>
+
+  <h3>결과</h3>
+  <table>
+    <thead><tr><th>지표</th><th>Before</th><th>After</th><th>변화</th></tr></thead>
+    <tbody>
+      <tr><td>뮤테이션 훅 평균 LOC</td><td>~18줄</td><td>~11줄</td><td><strong>−39%</strong></td></tr>
+      <tr><td>에러 처리 중앙 집중</td><td>각 훅에 중복</td><td>팩토리 1곳</td><td>—</td></tr>
+      <tr><td>테스트 (admin-dashboard)</td><td>420 passed</td><td>420 passed</td><td>무회귀</td></tr>
+    </tbody>
+  </table>
+
+  <h3>의도적으로 추상화하지 않은 것</h3>
+  <ul>
+    <li><code>use-*-form.ts</code> 3개 훅은 필드·검증·제출·라우팅이 각기 달라 공용화 시 제네릭 지옥·억지 추상화가 됨 → 원형 유지</li>
+    <li>191줄짜리 <code>TemplateForm</code>은 단일 Section 평탄 구조라 분해 시 프롭 드릴링만 증가 → 유지</li>
+    <li>공용 <code>FormField</code> 래퍼는 실제 소비자가 1곳뿐이라 제공하지 않음</li>
+  </ul>
+
+  <blockquote>
+    <strong>"Three similar lines is better than a premature abstraction"</strong> — 추상화는 반복이 진짜로 비용이 될 때만 하고, 그렇지 않으면 명시성을 유지한다는 원칙을 실제 판단에 적용한 기록.
+  </blockquote>
+
+  <h2>플레이키 테스트 원인 분석</h2>
+  <p><code>&lt;input type="date"&gt;</code>에 <code>userEvent.type</code>을 쓰면 문자 단위 키스트로크가 중간값을 무효 날짜로 만들어 병렬 부하 시 타이밍 플레이키를 유발. <code>fireEvent.change</code>로 전환해 완성된 값을 단일 이벤트로 주입하여 안정화.</p>
+
+  <h2>주요 ADR (Architecture Decision Records)</h2>
+  <table>
+    <thead><tr><th>번호</th><th>주제</th></tr></thead>
+    <tbody>
+      <tr><td>ADR-001</td><td>마이크로서비스 vs 모놀리식 — MSA 선택 근거</td></tr>
+      <tr><td>ADR-002</td><td>Saga vs 분산 트랜잭션 — Saga 채택 이유</td></tr>
+      <tr><td>ADR-003</td><td>프론트엔드 이원화 전략 (Web Store / Admin)</td></tr>
+      <tr><td>ADR-004</td><td>Taxonomy 기반 룰 시스템</td></tr>
+      <tr><td>ADR-005</td><td>한국어 검색 — Nori analyzer 채택</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== 10. 화면 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">10 · 화면</span></div>
+
+  <span class="section-num">Section 10</span>
+  <h1 class="section">화면 — Web Store</h1>
+
+  <div class="screenshot">
+    <img src="../screenshots/01-home.png" alt="Web Store 홈">
+    <div class="caption">홈 — Elasticsearch 기반 검색 · 카테고리 필터 · ISR 적용</div>
+  </div>
+
+  <div class="screenshot">
+    <img src="../screenshots/02-product-detail.png" alt="상품 상세">
+    <div class="caption">상품 상세 — 옵션 선택 · 리뷰 · 위시리스트</div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">10 · 화면</span></div>
+  <span class="section-num">Section 10 · 계속</span>
+  <h1 class="section">화면 — 결제 & 주문</h1>
+
+  <div class="screenshot compact">
+    <img src="../screenshots/03-checkout.png" alt="체크아웃">
+    <div class="caption">체크아웃 — 배송지 입력 · Toss Payments 결제 연동</div>
+  </div>
+
+  <div class="screenshot compact">
+    <img src="../screenshots/04-my-orders.png" alt="주문 내역">
+    <div class="caption">주문 내역 — 상태 추적 (PENDING → CONFIRMED → SHIPPED → DELIVERED)</div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">10 · 화면</span></div>
+  <span class="section-num">Section 10 · 계속</span>
+  <h1 class="section">화면 — Admin & Observability</h1>
+
+  <div class="screenshot">
+    <img src="../screenshots/05-admin-dashboard.png" alt="관리자 홈">
+    <div class="caption">관리자 대시보드 — 주요 KPI · 최근 주문</div>
+  </div>
+
+  <div class="screenshot">
+    <img src="../screenshots/06-admin-products.png" alt="상품 관리">
+    <div class="caption">상품 관리 — <code>ProductCreated</code> 이벤트 발행 → Search 인덱스 실시간 반영</div>
+  </div>
+
+  <div class="screenshot">
+    <img src="../screenshots/07-grafana.png" alt="Grafana 대시보드">
+    <div class="caption">Grafana — Prometheus 메트릭 · Loki 로그 · Jaeger 트레이스 통합 뷰</div>
+  </div>
+</section>
+
+<!-- ============== 11. 개발 방법론 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">11 · 개발 방법론</span></div>
+
+  <span class="section-num">Section 11</span>
+  <h1 class="section">개발 방법론</h1>
+
+  <p class="lede">"코드가 곧 진실"이 아니라 <strong>"스펙이 진실, 코드는 그 스펙의 구현"</strong>이라는 원칙을 명시적인 워크플로우로 운영합니다.</p>
+
+  <h2>Spec-Driven, Task-Driven Workflow</h2>
+
+  <div class="diagram">
+    <div class="mermaid">
+graph LR
+    A[Spec 작성] --> B[Contract 정의]
+    B --> C[Task 생성<br/>backlog]
+    C --> D[ready]
+    D --> E[in-progress]
+    E --> F[review]
+    F --> G[done]
+    G --> H[archive]
+
+    style A fill:#dbeafe,stroke:#2563eb
+    style F fill:#fef3c7,stroke:#ea580c
+    style G fill:#dcfce7,stroke:#16a34a
+    </div>
+    <div class="diagram-caption">그림 11-1. Task 라이프사이클 — 모든 구현은 ready 단계의 태스크에서만 시작</div>
+  </div>
+
+  <ol>
+    <li><strong>Spec First</strong> — 구현 전에 스펙 문서를 먼저 작성 (<code>specs/</code>).</li>
+    <li><strong>Contract First</strong> — API/Event 계약을 코드 변경 전에 갱신 (<code>specs/contracts/</code>).</li>
+    <li><strong>Task Lifecycle</strong> — <code>backlog → ready → in-progress → review → done → archive</code>.</li>
+    <li><strong>Architecture per Service</strong> — 각 서비스의 아키텍처 결정은 <code>specs/services/&lt;service&gt;/architecture.md</code>에 선언.</li>
+  </ol>
+
+  <h2>Taxonomy 기반 룰 시스템</h2>
+
+  <p>프로젝트의 도메인과 특성(trait)에 따라 적용할 규칙이 자동으로 결정됩니다. 같은 워크플로우/AI 에이전트로 다른 도메인의 프로젝트를 운영할 수 있도록 한 추상화 계층입니다.</p>
+
+  <table>
+    <thead><tr><th>Trait</th><th>활성화되는 규칙</th></tr></thead>
+    <tbody>
+      <tr><td><code>transactional</code></td><td>Saga · Idempotency · Outbox Pattern</td></tr>
+      <tr><td><code>content-heavy</code></td><td>캐시 · CDN · 검색 최적화</td></tr>
+      <tr><td><code>read-heavy</code></td><td>읽기 복제 · 페이지네이션</td></tr>
+      <tr><td><code>integration-heavy</code></td><td>Circuit Breaker · Retry · DLQ</td></tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:10pt; color:var(--muted); margin-top:4mm;">현재 프로젝트의 분류: <code>domain: ecommerce</code> · <code>traits: [transactional, content-heavy, read-heavy, integration-heavy]</code></p>
+</section>
+
+<!-- ============== 12. 핵심 차별점 ============== -->
+<section class="page">
+  <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">12 · 핵심 차별점</span></div>
+
+  <span class="section-num">Section 12</span>
+  <h1 class="section">핵심 차별점 & 마무리</h1>
+
+  <p class="lede">이 프로젝트가 단순한 "마이크로서비스 토이 프로젝트"와 다른 점을 정리합니다.</p>
+
+  <div class="highlight-box">
+    <h3>1. 패턴 선택의 근거가 코드와 함께 버전 관리됨</h3>
+    <p style="margin:0;">12개 서비스에 동일한 패턴을 강제하지 않고, "왜 이 서비스에는 DDD를, 저 서비스에는 Layered를?"라는 질문에 대한 답이 <code>specs/services/&lt;svc&gt;/architecture.md</code>에 명시적으로 기록됩니다. 추후 변경 시에도 의사결정 맥락이 보존됩니다.</p>
+  </div>
+
+  <div class="highlight-box">
+    <h3>2. 측정 가능한 성능 개선 사례</h3>
+    <p style="margin:0;">"성능을 신경 썼다"가 아니라 "Hero 이미지 JPEG → WebP로 <strong>−73% / ~32×</strong>", "ISR 적용으로 응답 시간 <strong>~15×</strong>", "Redis 캐시 적용으로 <strong>~3.8×</strong>"와 같이 Before/After가 숫자로 남아 있습니다.</p>
+  </div>
+
+  <div class="highlight-box">
+    <h3>3. 추상화 절제의 명시적 기록</h3>
+    <p style="margin:0;">중복을 발견할 때마다 추상화하는 것이 아니라, "팩토리화로 LOC −39% & 무회귀" 같은 성공 케이스와 "이 3개 훅은 일부러 공용화하지 않았다" 같은 절제 케이스가 함께 문서화됩니다.</p>
+  </div>
+
+  <div class="highlight-box">
+    <h3>4. Taxonomy 기반 재사용 가능한 룰 시스템</h3>
+    <p style="margin:0;">이 프로젝트의 워크플로우/AI 에이전트 구조는 ecommerce에 종속되지 않고, <code>PROJECT.md</code>에 도메인·trait만 선언하면 다른 도메인의 프로젝트에도 그대로 적용됩니다 (ADR-004).</p>
+  </div>
+
+  <div class="highlight-box">
+    <h3>5. Production-Ready 인프라 구성</h3>
+    <p style="margin:0;">로컬은 Docker Compose로 풀 스택 기동, 운영은 Kubernetes 매니페스트(NetworkPolicy Default-Deny · PDB · ConfigMap · Ingress + Security Headers)까지 작성되어 "데모용 코드"가 아닌 "배포 가능한 형태"로 마감되어 있습니다.</p>
+  </div>
+
+  <h2 style="margin-top:10mm;">기술 스택 요약</h2>
+  <div class="card-grid">
+    <div class="card" style="border-left: 4px solid var(--accent);">
+      <div class="label">Backend</div>
+      <p style="margin:2mm 0 0; font-size:10pt;">Java 21 · Spring Boot 3.4 · Spring Cloud Gateway · PostgreSQL 16 · Kafka 3.7 · Redis 7 · Elasticsearch 8.15 · Gradle</p>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--purple);">
+      <div class="label">Frontend</div>
+      <p style="margin:2mm 0 0; font-size:10pt;">Next.js 15 · React 19 · TypeScript 5.5 · TanStack Query · Toss Payments SDK · Turbo + pnpm Workspaces</p>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--green);">
+      <div class="label">Infra & DevOps</div>
+      <p style="margin:2mm 0 0; font-size:10pt;">Docker Compose · Kubernetes · GitHub Actions (Backend / Frontend / Docker Build CI)</p>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--orange);">
+      <div class="label">Observability & Test</div>
+      <p style="margin:2mm 0 0; font-size:10pt;">Prometheus · Grafana · Loki · Jaeger · AlertManager · JUnit 5 · Testcontainers · Vitest · Playwright · k6</p>
+    </div>
+  </div>
+
+  <p style="text-align:center; margin-top:14mm; color:var(--muted); font-size:10pt;">
+    감사합니다.<br>
+    <strong style="color:var(--primary);">E-Commerce Microservices Platform</strong>
+  </p>
+</section>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Noto Sans KR, sans-serif',
+      primaryColor: '#dbeafe',
+      primaryTextColor: '#0f172a',
+      primaryBorderColor: '#2563eb',
+      lineColor: '#64748b',
+      tertiaryColor: '#f8fafc'
+    },
+    flowchart: { htmlLabels: true, curve: 'basis', padding: 12 },
+    sequence: { actorMargin: 60, messageFontFamily: 'Noto Sans KR' }
+  });
+  await mermaid.run();
+  // Signal that diagrams are rendered
+  document.body.setAttribute('data-mermaid-ready', 'true');
+  const marker = document.createElement('div');
+  marker.id = 'render-complete';
+  document.body.appendChild(marker);
+</script>
+
+</body>
+</html>

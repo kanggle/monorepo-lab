@@ -1,0 +1,65 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Common
+    implementation project(':libs:java-common')
+
+    // Web (common exception primitives)
+    implementation project(':libs:java-web')
+
+    // API Documentation
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
+    // Messaging (Outbox pattern)
+    implementation project(':libs:java-messaging')
+
+    // Observability
+    implementation project(':libs:java-observability')
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Web
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Flyway
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+test {
+    environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
+    jvmArgs '-Dapi.version=1.44'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.20.4"
+    }
+}

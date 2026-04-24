@@ -1,0 +1,54 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: batch-worker-netpol
+  namespace: ecommerce
+spec:
+  podSelector:
+    matchLabels:
+      app: batch-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow kubelet health probes (liveness/readiness/startup).
+    # Most CNIs (Calico, Cilium) exempt host traffic by default,
+    # but this explicit rule ensures probes work regardless of CNI.
+    - ports:
+        - protocol: TCP
+          port: 8088
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: product-service
+      ports:
+        - protocol: TCP
+          port: 8082
+    - to:
+        - podSelector:
+            matchLabels:
+              app: order-service
+      ports:
+        - protocol: TCP
+          port: 8086
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: infra
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 9092
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
