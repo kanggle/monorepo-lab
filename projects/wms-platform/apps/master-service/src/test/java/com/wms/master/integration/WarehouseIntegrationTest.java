@@ -166,10 +166,12 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
         // still be settling — a transient 500 has been observed on GitHub
         // shared runners while Micrometer-registered Kafka client meters
         // re-attach to a healthy broker. Passes immediately in WSL2.
-        // Retry the scrape for up to 10 s so the endpoint has time to
-        // stabilise; the assertion remains real (three outbox metrics must
-        // appear in a 200 response body). TASK-BE-019.
-        await().atMost(Duration.ofSeconds(10))
+        // Retry the scrape for up to 30 s so the endpoint has time to
+        // stabilise on slower CI runners (previous 10 s was insufficient —
+        // see PR #54 CI run 24876437082); the assertion remains real
+        // (three outbox metrics must appear in a 200 response body).
+        // TASK-BE-019 (timeout bumped in PR that followed).
+        await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     ResponseEntity<String> response =
