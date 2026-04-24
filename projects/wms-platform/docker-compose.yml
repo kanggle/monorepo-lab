@@ -28,7 +28,7 @@ services:
     container_name: wms-postgres
     restart: unless-stopped
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${PORT_PREFIX:-2}5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:-postgres}
@@ -58,7 +58,7 @@ services:
     container_name: wms-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${PORT_PREFIX:-2}6379:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -79,14 +79,14 @@ services:
     container_name: wms-kafka
     restart: unless-stopped
     ports:
-      - "${KAFKA_EXTERNAL_PORT:-9093}:9093"
+      - "${PORT_PREFIX:-2}9093:9093"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
       CLUSTER_ID: ${KAFKA_KRAFT_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qg}
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9093}
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${PORT_PREFIX:-2}9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -195,7 +195,7 @@ services:
     container_name: wms-kafka-ui
     restart: unless-stopped
     ports:
-      - "${KAFKA_UI_PORT:-8090}:8080"
+      - "${PORT_PREFIX:-2}8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: wms-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
@@ -220,7 +220,7 @@ services:
     container_name: wms-prometheus
     restart: unless-stopped
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${PORT_PREFIX:-2}9090:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -246,7 +246,7 @@ services:
     container_name: wms-alertmanager
     restart: unless-stopped
     ports:
-      - "${ALERTMANAGER_PORT:-9095}:9093"
+      - "${PORT_PREFIX:-2}9095:9093"
     volumes:
       - ./infra/alertmanager:/etc/alertmanager:ro
     command:
@@ -262,7 +262,7 @@ services:
     container_name: wms-loki
     restart: unless-stopped
     ports:
-      - "${LOKI_PORT:-3100}:3100"
+      - "${PORT_PREFIX:-2}3100:3100"
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
       - ./infra/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
@@ -295,7 +295,7 @@ services:
     container_name: wms-grafana
     restart: unless-stopped
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "${PORT_PREFIX:-2}3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
