@@ -6,6 +6,7 @@ import com.example.user.domain.repository.UserProfileRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
+@Tag("integration")
 @Testcontainers
 @DisplayName("UserSignedUp 이벤트 소비 통합 테스트")
 class UserSignedUpConsumerIntegrationTest {

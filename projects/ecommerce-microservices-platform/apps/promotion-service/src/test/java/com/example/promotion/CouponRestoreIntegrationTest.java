@@ -5,6 +5,7 @@ import com.example.promotion.interfaces.event.OrderCancelledEvent.OrderCancelled
 import com.example.promotion.interfaces.event.OrderCancelledEventConsumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc
 @EmbeddedKafka(partitions = 1)

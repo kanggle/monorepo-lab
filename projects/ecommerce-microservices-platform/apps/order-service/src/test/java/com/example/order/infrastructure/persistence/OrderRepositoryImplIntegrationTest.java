@@ -12,6 +12,7 @@ import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
@@ -40,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "spring.jpa.properties.hibernate.generate_statistics=true"
 })
+@Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
 @DisplayName("OrderRepositoryImpl save() 최적화 통합 테스트")

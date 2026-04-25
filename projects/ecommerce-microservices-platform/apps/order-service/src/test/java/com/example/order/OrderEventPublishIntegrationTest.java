@@ -6,6 +6,7 @@ import com.example.order.domain.repository.OrderRepository;
 import com.example.messaging.outbox.OutboxPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "outbox.polling.interval-ms=500"
 })
+@Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc
 @EmbeddedKafka(partitions = 1)
