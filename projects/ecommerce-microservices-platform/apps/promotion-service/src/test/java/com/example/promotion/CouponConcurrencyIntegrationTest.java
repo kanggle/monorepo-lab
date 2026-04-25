@@ -11,6 +11,7 @@ import com.example.promotion.domain.promotion.Promotion;
 import com.example.promotion.domain.promotion.PromotionRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
@@ -35,6 +36,7 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
 @DisplayName("쿠폰 동시성 통합 테스트")

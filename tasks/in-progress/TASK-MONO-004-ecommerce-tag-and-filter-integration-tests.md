@@ -123,6 +123,107 @@ None.
   `test` was never invoked from root before), the failure is real
   and requires a fix in this PR — record in Outcome.
 
-## Outcome
+## Outcome (2026-04-26) — scope reduced
 
-(To be filled in after implementation.)
+### Plumbing landed
+
+1. **47 ecommerce test classes** carry `@Tag("integration")` and the
+   `org.junit.jupiter.api.Tag` import. A bash loop using
+   `grep -l "^@Testcontainers"` enumerated the targets and a `sed`
+   pass inserted both the annotation and the import. One sed-glitch
+   created an `nimport` (literal `n` + `import`) line in
+   `batch-worker/src/test/java/com/example/batch/AbstractIntegrationTest.java`
+   when its file lacked an existing `org.junit.jupiter.api.Test`
+   import; manually corrected. Net: 47 classes annotated.
+2. **`projects/ecommerce-microservices-platform/build.gradle`** —
+   the existing `subprojects { test { useJUnitPlatform() ... } }`
+   block now passes `excludeTags 'integration'` to
+   `useJUnitPlatform`, applying the filter once across all 12 apps.
+   Comment in the file records why and points at TASK-MONO-003.
+3. Pre-existing `OrderApiContractTest` `@SpringBootConfiguration`
+   ambiguity fix — `@ContextConfiguration(classes = TestOrderServiceApplication.class)`
+   added so the slice no longer picks between
+   `OrderServiceApplication` (main) and `TestOrderServiceApplication`
+   (test). This was a real, latent bug uncovered by running
+   order-service's `test` task for the first time from root; the
+   class still has a separate contract-drift failure that is out of
+   scope (see below).
+
+### CI extension dropped from this task
+
+The original AC #3 ("extend `.github/workflows/ci.yml` to include 12
+ecommerce service `:test` tasks") cannot land in this PR. Verification
+via `./gradlew --continue` for all 12 services revealed pre-existing
+failures whose fix requires per-service domain decisions:
+
+| Service | After plumbing | Notes |
+|---|---|---|
+| auth-service | ✅ 45/45 (300 methods) | Full pass |
+| batch-worker | ✅ pass after sed-glitch fix | |
+| gateway-service | ✅ 6/6 | |
+| notification-service | ✅ 18/18 | |
+| order-service | ❌ 1 failure | Contract drift: spec says GET /api/orders content[] is `[orderId, status, itemCount, createdAt, totalPrice]`, impl returns `[createdAt, orderId, totalPrice, firstItemName, status, itemCount]`. The `firstItemName` field is unspec'd and order is reversed. Fix is a contract decision (update spec or remove field), not a CI concern. |
+| payment-service | ✅ 21/21 | |
+| product-service | ❌ 3 failures | `ProductApiContractTest` cannot load `TestProductServiceApplication` for reasons that go beyond the SpringBootConfiguration ambiguity (a `@ContextConfiguration(classes = ...)` patch was attempted and reverted — context still fails). Cascading "failure threshold exceeded" on the two slice tests that depend on the same context. |
+| promotion-service | ✅ 10/10 | |
+| review-service | ✅ 11/11 | |
+| search-service | ❌ 2 failures | `IndexInitializer` unit tests (no Docker dependency). Mockito setup or production-code drift. |
+| shipping-service | ✅ 8/8 | |
+| user-service | ✅ 52/52 | |
+
+8 of 12 services pass after plumbing. The 4 that fail block CI
+extension — adding their `:test` tasks to root build-and-test would
+turn the wms baseline red. Each failure is a per-service domain
+problem unrelated to TASK-MONO-004's CI plumbing scope.
+
+### What this PR delivers
+
+- Convention: ecommerce now has the same "tag-and-filter" discipline
+  as wms. Future contributors writing a Testcontainers test in any
+  ecommerce service tag it `@Tag("integration")` so the default
+  `test` task stays Docker-free.
+- 8 services would now pass cleanly under root CI if/when the scope
+  is extended.
+- The 4 failing services have a clear, scoped pull list of
+  pre-existing issues to fix.
+
+### Follow-up tasks (TASK-MONO-005 family)
+
+Each blocking failure is a candidate for its own short task. My
+recommendation is one task per service so per-service CI extension
+can be incremental:
+
+- **TASK-MONO-005 — order-service contract drift (`firstItemName`
+  field + ordering).** Likely a one-line spec amendment + test
+  update (or a one-line API change to drop the field). Then add
+  order-service `:test` to root CI in the same PR.
+- **TASK-MONO-006 — product-service `TestProductServiceApplication`
+  context load.** Investigate why `@ContextConfiguration(classes =
+  TestProductServiceApplication.class)` does not by itself unblock
+  the slice — likely missing `@AutoConfigure*` or a bean override.
+  Then add product-service `:test` to root CI.
+- **TASK-MONO-007 — search-service `IndexInitializer` unit test
+  failures.** Read the assertion failure, check Mockito stubbing /
+  production code. Then add search-service `:test` to root CI.
+- **TASK-MONO-008 — extend root CI to cover the 8 already-passing
+  services + the 3 unblocked above.** Single `.github/workflows/ci.yml`
+  change: add 11 ecommerce `:test` task entries to the build-and-test
+  job. The 12th (whichever fails last) waits for its own follow-up.
+
+### Acceptance criteria status
+
+- AC #1 ✅ (47 classes tagged with imports)
+- AC #2 ✅ (build.gradle filter applied at ecommerce-platform level)
+- AC #3 ❌ — **dropped from this task** (CI extension waits for
+  follow-ups; see "CI extension dropped" above)
+- AC #4 ✅ (auth-service: 300 test methods, 0 failures)
+- AC #5 ⚠️ partial — order-service runs 36 of 37 test classes
+  (Testcontainers excluded by tag); the 37th class
+  (`OrderApiContractTest`) loads Spring context successfully after
+  the new `@ContextConfiguration` but still fails the GET
+  `/api/orders` contract drift assertion. The plumbing achievement
+  (test runs, integration tests excluded) holds; the assertion
+  failure is the pre-existing bug that TASK-MONO-005 addresses.
+- AC #6 ⚠️ — CI Build & Test job currently still scoped to
+  wms+libs (ci.yml unchanged), so it stays green. After TASK-MONO-008
+  lands, CI Build & Test will gate ecommerce too.

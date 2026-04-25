@@ -1,5 +1,6 @@
 package com.example.order.contract;
 
+import com.example.order.TestOrderServiceApplication;
 import com.example.order.application.dto.CancelOrderResult;
 import com.example.order.application.dto.OrderDetail;
 import com.example.order.application.dto.OrderSummary;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -39,8 +41,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * order-service API 응답 스키마 컨트랙트 검증 테스트.
  * 검증 근거: specs/contracts/http/order-api.md
+ *
+ * <p>{@link ContextConfiguration} pins the test bootstrap to
+ * {@link TestOrderServiceApplication} so Spring's {@code AnnotatedClassFinder}
+ * does not pick between {@code OrderServiceApplication} (main) and
+ * {@code TestOrderServiceApplication} (test) — both carry
+ * {@code @SpringBootApplication}, and without an explicit pin the slice
+ * fails with "Found multiple @SpringBootConfiguration annotated classes".
  */
 @WebMvcTest(OrderController.class)
+@ContextConfiguration(classes = TestOrderServiceApplication.class)
 @Import(GlobalExceptionHandler.class)
 @DisplayName("Order API 컨트랙트 테스트 — specs/contracts/http/order-api.md")
 class OrderApiContractTest {

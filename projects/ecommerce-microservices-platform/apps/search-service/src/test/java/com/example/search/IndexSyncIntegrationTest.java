@@ -13,6 +13,7 @@ import com.example.search.adapter.inbound.event.StockChangedEvent;
 import com.example.search.adapter.outbound.elasticsearch.IndexProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
@@ -29,6 +30,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
 @DisplayName("인덱스 동기화 통합 테스트")

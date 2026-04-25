@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch.indices.ExistsRequest;
 import com.example.search.adapter.outbound.elasticsearch.IndexProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -17,6 +18,7 @@ import org.testcontainers.utility.DockerImageName;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@Tag("integration")
 @Testcontainers
 @DisplayName("Elasticsearch 연결 통합 테스트")
 class ElasticsearchConnectionTest {
