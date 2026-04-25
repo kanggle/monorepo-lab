@@ -1,10 +1,14 @@
 # TASK-BE-020 — OutboxMetrics: eager strong-reference registration
 
-> **Outcome (2026-04-25, PR #59 CI):** PARTIAL FIX. The strong-reference changes are kept (they
-> are correct on their own merits) but the CI guard had to be restored — see the new "Outcome"
-> section at the bottom. The failure mode in CI turned out to be in scrape-body composition,
-> not in gauge-function GC eligibility, so removing `@DisabledIfEnvironmentVariable` is being
-> deferred to a follow-up that addresses the real cause.
+> **Outcome (2026-04-25):** RESOLVED via two complementary changes.
+> 1. PR #59 — `Gauge.builder().strongReference(true)` + `@Autowired OutboxMetrics` field on
+>    `MasterServiceIntegrationBase` (kept; correct on their own merits, but not the actual fix).
+> 2. Follow-up PR — extracted the prometheus scrape assertion into a new
+>    `OutboxPrometheusScrapeIntegrationTest` class with `@DirtiesContext(BEFORE_CLASS)` so it
+>    runs against a fresh Spring context that did not share micrometer-kafka client meter state
+>    with `PublisherResilienceIntegrationTest`'s Kafka pause/unpause cycle. The
+>    `@DisabledIfEnvironmentVariable("CI")` guard is now removed.
+> See the "Outcome" section at the bottom for full diagnosis.
 
 ## Goal
 
@@ -108,3 +112,33 @@ candidates:
 
 The follow-up is non-blocking for the ecommerce import or any current PR; the CI guard keeps
 the wms baseline green.
+
+## Resolution (2026-04-25, follow-up)
+
+Picked option 3 from the candidate list — context isolation via `@DirtiesContext` rather than
+trying to pin down which exact step of the prometheus collection drops the outbox family in
+mid-Kafka-reconnect. Concretely:
+
+- Created `OutboxPrometheusScrapeIntegrationTest` (new file, same package) holding only the
+  prometheus scrape assertion.
+- Annotated the new class with `@DirtiesContext(classMode = ClassMode.BEFORE_CLASS)`. JUnit 5
+  reads this before the class runs; Spring's test context cache evicts the shared context and
+  rebuilds a fresh one — Postgres + Kafka + Redis containers stay running (they are static),
+  but the Spring `ApplicationContext` is new and micrometer-kafka client meters are in their
+  initial, healthy state, regardless of whether `PublisherResilienceIntegrationTest` ran first.
+- Removed the assertion + `@DisabledIfEnvironmentVariable` from `WarehouseIntegrationTest`.
+  Cleaned up the now-unused `ADMIN_ROLE` constant (only the prometheus test had used it).
+- Cost: one extra context refresh per integration suite run (~10–30 s on local, similar on CI
+  runners). Acceptable for the determinism gain.
+
+The `OutboxMetrics.java` `Gauge.builder().strongReference(true)` change and the
+`MasterServiceIntegrationBase` `@Autowired OutboxMetrics` field stay in place — they are still
+the right registration idiom for an outbox-pending gauge whose function captures `this`, and
+they remove a real (just non-causal in this incident) WeakReference-collection failure mode.
+
+Why not the other candidates:
+
+- (1) and (2) would require either a custom `MeterFilter` or a `CompositeMeterRegistry` split
+  across contexts. Both are bigger surgeries against framework internals; option (3) sidesteps
+  the unknown by isolating the test rather than fighting the platform. If a future test needs
+  the same isolation, we just annotate it the same way.
