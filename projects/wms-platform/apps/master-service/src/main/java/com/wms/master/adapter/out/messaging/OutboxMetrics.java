@@ -1,8 +1,8 @@
 package com.wms.master.adapter.out.messaging;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
@@ -31,7 +31,9 @@ public class OutboxMetrics {
 
     public OutboxMetrics(MeterRegistry meterRegistry, TransactionTemplate transactionTemplate) {
         this.transactionTemplate = transactionTemplate;
-        meterRegistry.gauge(PENDING_COUNT, Tags.empty(), this, OutboxMetrics::pendingCount);
+        Gauge.builder(PENDING_COUNT, this, OutboxMetrics::pendingCount)
+                .strongReference(true)
+                .register(meterRegistry);
         this.publishFailureCounter = Counter.builder(PUBLISH_FAILURE_TOTAL)
                 .description("Outbox rows that failed to publish to Kafka")
                 .register(meterRegistry);

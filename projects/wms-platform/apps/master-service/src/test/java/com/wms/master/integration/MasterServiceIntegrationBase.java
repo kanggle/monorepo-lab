@@ -1,10 +1,12 @@
 package com.wms.master.integration;
 
 import com.redis.testcontainers.RedisContainer;
+import com.wms.master.adapter.out.messaging.OutboxMetrics;
 import com.wms.master.integration.support.JwtTestHelper;
 import java.time.Duration;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ApplicationContextInitializer;
@@ -64,6 +66,13 @@ public abstract class MasterServiceIntegrationBase {
                     .withNetworkAliases("redis");
 
     protected static final JwtTestHelper JWT = startJwt();
+
+    // Holds a direct strong reference to the OutboxMetrics bean so that the
+    // Gauge's StrongReferenceGaugeFunction is redundantly anchored here too,
+    // and the bean is guaranteed to be initialised before any test method runs.
+    @Autowired
+    @SuppressWarnings("unused")
+    private OutboxMetrics outboxMetrics;
 
     static {
         POSTGRES.start();
