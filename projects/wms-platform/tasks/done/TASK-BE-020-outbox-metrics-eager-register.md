@@ -76,13 +76,24 @@ suspenders approach).
 ## Outcome (2026-04-25)
 
 PR #59 CI revealed that the GC-eligibility theory was incorrect. With `strongReference(true)` +
-the `@Autowired` test-base reference both in place, `WarehouseIntegrationTest.prometheusEndpoint`
-still fails on GitHub-hosted runners with `AssertionFailedError` after the 30 s Awaitility retry.
-The scrape returns HTTP 200 but the three outbox meter family lines (`outbox_pending_count`,
-`outbox_publish_success_total`, `outbox_publish_failure_total`) are absent from the response body
-during the window between `PublisherResilienceIntegrationTest`'s Kafka pause/unpause and the next
-scrape — the gauge function itself is alive (verified by unit test), but the Prometheus exporter
-fails to include the meter family in the scrape output.
+the `@Autowired` test-base reference both in place,
+`WarehouseIntegrationTest.prometheusEndpoint` still fails on GitHub-hosted runners with
+`AssertionFailedError` after the 30 s Awaitility retry — but the assertion that fires first is
+the HTTP status check, **not** the body-contains check. The downloaded JUnit XML reports
+the actual response: `expected: 200 OK but was: 500 INTERNAL_SERVER_ERROR`, on every retry of
+the 30-second window. The earlier "scrape-body composition" framing was reading the failure
+line number wrong; the real symptom is the endpoint itself returning 500.
+
+A follow-up attempt (PR #62, fix/wms-prometheus-scrape-isolation) tried to sidestep the
+suspected Kafka-context-pollution race by extracting the assertion into its own
+`OutboxPrometheusScrapeIntegrationTest` class with `@DirtiesContext(BEFORE_CLASS)`. The
+isolated test still failed on CI with the same HTTP 500 across all 30 retries, confirming
+the issue is environmental rather than test-suite ordering. Gradle's integration test report
+HTML and CI job logs do not capture the Spring Boot application's server-side stack trace
+(logback config in test scope routes only to the console, which Gradle silently drops),
+so the actual cause of the 500 cannot be diagnosed from the artifacts available.
+
+PR #62 was closed without merging. Branch deleted.
 
 **Decision:**
 
@@ -91,20 +102,25 @@ fails to include the meter family in the scrape output.
   collection failure mode.
 - Keep the `@Autowired OutboxMetrics outboxMetrics` field on `MasterServiceIntegrationBase`. It
   costs nothing and does provide the belt-and-suspenders guarantee originally intended.
-- **Restore the `@DisabledIfEnvironmentVariable("CI")` guard on
-  `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics`** with an updated
-  `disabledReason` that points at scrape-body composition (not gauge GC) as the actual cause.
+- Keep the `@DisabledIfEnvironmentVariable("CI")` guard on
+  `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics`. The guard is what is
+  actually currently in effect on `main`.
+- **Update `disabledReason`** to point at the corrected diagnosis (`/actuator/prometheus`
+  returns HTTP 500 in CI; root cause not yet characterized) — left for a future PR alongside
+  the real fix; not worth a single-line doc commit on its own.
 
-**Real follow-up (separate task, deferred):** characterize the scrape-body race. Likely
-candidates:
+**Real follow-up (deferred until needed):** characterize why `/actuator/prometheus` returns
+HTTP 500 on GitHub-hosted Ubuntu runners but works locally on WSL2. This is environmental,
+specific to CI, and not blocking any portfolio-critical signal. To diagnose, a future PR
+needs at least one of:
 
-1. `micrometer-registry-prometheus` collecting from a Kafka-client `MeterRegistry` view that is
-   transiently empty during broker reconnect, suppressing the rest of the family list.
-2. `CompositeMeterRegistry` composition order — if Kafka client meters and our outbox meters
-   live in the same composite, a partial collection failure could omit later families.
-3. Test-suite ordering: moving `prometheusEndpoint_exposesOutboxMetrics` to a separate
-   integration suite that does not share Spring context with the Kafka pause/unpause tests
-   would sidestep the race entirely.
+1. A logback config that pipes server logs to a file-on-failure so they can be uploaded as
+   a CI artifact (`actions/upload-artifact` already gathers `**/build/test-results/` and
+   reports; adding a logs path is a one-line change).
+2. A diagnostic endpoint or test-time `try/catch` that captures the prometheus-scrape
+   exception body for inclusion in the assertion message.
+3. A controlled CI repro that runs only `OutboxPrometheusScrapeIntegrationTest` with
+   `--info --debug` Gradle logging to surface the underlying Micrometer / Spring Boot
+   actuator stack trace.
 
-The follow-up is non-blocking for the ecommerce import or any current PR; the CI guard keeps
-the wms baseline green.
+The follow-up is non-blocking for any current PR; the CI guard keeps the wms baseline green.
