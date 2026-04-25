@@ -98,6 +98,21 @@ None.
   path from the gradle invocation as a hotfix and open a focused
   follow-up. Do not remove all 9 — that loses signal for the others.
 
-## Outcome
+## Outcome (2026-04-26)
 
-(To be filled in after implementation.)
+`.github/workflows/ci.yml` Build & Test step renamed to "Build and
+test (libs + wms-platform + ecommerce subset)" and the gradle
+invocation list extended with 9 ecommerce service `:check` tasks.
+
+Step comment block updated to enumerate the 3 deferred services
+(order, product, search) and reference TASK-MONO-005/006/007 by
+ID so the omission is discoverable.
+
+Local verify: `./gradlew :projects:ecommerce-microservices-platform:apps:auth-service:check`
+runs `:test` + `:jacocoTestReport` and reports BUILD SUCCESSFUL with
+all tasks UP-TO-DATE on a warm cache. CI will exercise the cold path.
+
+Acceptance criteria 1, 2, 3 met by the diff. AC #4 / #5 verified
+once the PR's CI run completes; expect the build-and-test job time
+to grow from ~1.5 min to ~3-4 min as forecast in the Edge Cases
+section.

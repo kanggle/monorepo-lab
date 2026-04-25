@@ -40,15 +40,21 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Build and test (libs + wms-platform only)
-        # ecommerce-microservices-platform was previously imported as a Gradle
-        # composite build (`includeBuild`), so its `check` task did not cascade
-        # from a root `./gradlew check`. After the libs consolidation switched
-        # ecommerce to direct-include, root `check` started running every
-        # ecommerce subproject's tests too — including integration tests that
-        # need a Docker stack the monorepo CI does not yet provision. Until
-        # ecommerce-specific CI is designed (frontend + Docker compose +
-        # integration suites), explicitly scope the wms-only task graph.
+      - name: Build and test (libs + wms-platform + ecommerce subset)
+        # Scope rationale:
+        # - libs/* and wms-platform/* always run (the wms baseline).
+        # - ecommerce-microservices-platform/* run on a per-service basis after
+        #   TASK-MONO-004 added @Tag("integration") to Testcontainers-backed
+        #   classes and made the default :test task Docker-free.
+        # - 9 ecommerce services pass cleanly today; the 3 deferred services
+        #   below are blocked by pre-existing per-service failures and join
+        #   this list as their fix tasks land:
+        #     • order-service     — TASK-MONO-005 (GET /api/orders contract drift)
+        #     • product-service   — TASK-MONO-006 (TestProductServiceApplication
+        #                           context load failure)
+        #     • search-service    — TASK-MONO-007 (IndexInitializer unit tests)
+        # Use :check (not :test) on every entry — matches the wms style, and
+        # picks up jacoco / lint where defined.
         run: >-
           ./gradlew
           :libs:java-common:check
@@ -64,6 +70,15 @@ jobs:
           :projects:wms-platform:apps:master-service:check
           :projects:wms-platform:apps:notification-service:check
           :projects:wms-platform:apps:admin-service:check
+          :projects:ecommerce-microservices-platform:apps:auth-service:check
+          :projects:ecommerce-microservices-platform:apps:batch-worker:check
+          :projects:ecommerce-microservices-platform:apps:gateway-service:check
+          :projects:ecommerce-microservices-platform:apps:notification-service:check
+          :projects:ecommerce-microservices-platform:apps:payment-service:check
+          :projects:ecommerce-microservices-platform:apps:promotion-service:check
+          :projects:ecommerce-microservices-platform:apps:review-service:check
+          :projects:ecommerce-microservices-platform:apps:shipping-service:check
+          :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
 
       - name: Upload test reports on failure
