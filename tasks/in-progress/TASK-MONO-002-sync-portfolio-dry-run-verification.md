@@ -122,6 +122,97 @@ None.
   shape — task surfaces it and recommends a follow-up; not a blocker
   for closing this task itself.
 
-## Outcome
+## Outcome (2026-04-26)
 
-(To be filled in once the dry-runs run.)
+Both dry-runs completed cleanly. No bash error, no validation rejection.
+
+### Inspection results
+
+| Inspection point | Status | Notes |
+|---|---|---|
+| Correct `PROJECT_TYPES` | ✅ | Both report `Type: direct-include` (post-PR #61) |
+| Correct `PROJECT_REMOTES` | ✅ | wms → `kanggle/wms-platform.git`, ecommerce → `kanggle/ecommerce-microservices-platform.git` |
+| `SHARED_PATHS` complete vs current repo | ✅ with note | All 19 listed paths still exist at repo root |
+| Removed paths still listed | ✅ | No false positives — every listed path actually exists |
+| Drift: paths exist but not enumerated | ⚠️ minor | See "New repo-root paths since SHARED_PATHS was last updated" below |
+
+### Captured dry-run output
+
+`./scripts/sync-portfolio.sh --dry-run wms-platform` and the equivalent for
+ecommerce both print:
+
+```
+[sync] Project:  <project-name>
+[sync] Remote:   https://github.com/kanggle/<project-name>.git
+[sync] Type:     direct-include
+[sync] Source:   /c/Users/kangdow/dev/project/ai-project/monorepo-lab
+[sync] Workdir:  /tmp/portfolio-sync/<project-name>
+[sync] [dry-run] Would clone monorepo, run filter-repo, force-push to https://github.com/kanggle/<project-name>.git
+[sync] [dry-run] Kept paths:
+             libs/
+             platform/
+             rules/
+             .claude/
+             tasks/templates/
+             docs/guides/
+             build.gradle
+             settings.gradle
+             gradle/
+             gradlew
+             gradlew.bat
+             gradle.properties
+             .gitignore
+             .gitattributes
+             .dockerignore
+             .editorconfig
+             .github/
+             CLAUDE.md
+             TEMPLATE.md
+             projects/<project-name>/
+```
+
+### New repo-root paths since `SHARED_PATHS` was last updated
+
+PR #65 introduced `tasks/INDEX.md` and `tasks/{ready,in-progress,review,done}/`
+at the monorepo root. None of these are in `SHARED_PATHS`. Other root
+paths NOT in `SHARED_PATHS`: `README.md`, `package.json`, `scripts/`,
+`build/` (gradle output, intentionally excluded).
+
+### Why current `SHARED_PATHS` is correct without modification
+
+For each non-enumerated root path, the extraction outcome is what we
+actually want:
+
+| Path | Why exclusion is correct |
+|---|---|
+| `tasks/INDEX.md` (root) | Project's own `projects/<name>/tasks/INDEX.md` gets path-renamed to `<extracted>/tasks/INDEX.md` and survives. Root one would only leak monorepo-specific MONO task vocabulary into the standalone. |
+| `tasks/ready/`, `tasks/in-progress/`, `tasks/review/`, `tasks/done/` (root) | Same reasoning — project's own lifecycle dirs hoist to `<extracted>/tasks/{...}/` and the standalone gets its TASK-BE/INT/FE/DOC history. The root MONO history stays in the monorepo. |
+| `README.md` (root) | Portfolio-hub README referencing all projects. Project's own `projects/<name>/README.md` hoists to `<extracted>/README.md`. Filter-repo's path-rename overwrites the root one. |
+| `package.json` (root) | Monorepo convenience scripts (`wms:up`, `ecommerce:up` etc.) tied to `projects/<name>/` paths that disappear after hoisting. ecommerce has its own `projects/ecommerce-.../package.json` (turbo/pnpm workspace) which hoists to root in its standalone. wms has no project-level package.json (backend only) — that is correct for the standalone. |
+| `scripts/` (root) | Contains `sync-portfolio.sh` itself plus `README.md` for monorepo tooling. Each project has its own `projects/<name>/scripts/` for project-specific helpers, which hoists to `<extracted>/scripts/`. |
+
+### Recommendation
+
+**Policy (a) — strip root `tasks/` lifecycle from extraction (current
+behavior, no script change needed).** The script as-is implements this
+implicitly by only listing `tasks/templates/` in `SHARED_PATHS`. The
+templates survive (they're universal); the lifecycle dirs and INDEX
+do not. The standalone gets its own project-level lifecycle dirs and
+INDEX through the path-rename of `projects/<name>/tasks/`.
+
+No change to `scripts/sync-portfolio.sh`. No follow-up task is needed
+to update `SHARED_PATHS`. Future repo-root additions should be
+evaluated against the same "should this leak into a standalone repo?"
+question — and added to `SHARED_PATHS` only if the answer is yes.
+
+### What this task does NOT validate
+
+- Whether the post-process `direct_include` step still produces a
+  buildable standalone after the hoisting. That requires a real
+  filter-repo run (live or in a throwaway local repo), which is the
+  job of a future TASK-MONO-003 (live extraction validation).
+- Whether `kanggle/wms-platform` and `kanggle/ecommerce-microservices-platform`
+  in their current state (last force-push date unknown) can be
+  overwritten by a fresh extraction without losing in-flight work. The
+  user should confirm there is no unmerged content on those remotes
+  before any live run.
