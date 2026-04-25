@@ -14,6 +14,11 @@
     "ecommerce:ps": "docker compose --project-directory projects/ecommerce-microservices-platform ps",
     "ecommerce:logs": "docker compose --project-directory projects/ecommerce-microservices-platform logs -f",
     "ecommerce:docker": "docker compose --project-directory projects/ecommerce-microservices-platform",
-    "ecommerce:pnpm": "pnpm --dir projects/ecommerce-microservices-platform"
+    "ecommerce:pnpm": "pnpm --dir projects/ecommerce-microservices-platform",
+    "wms:up": "docker compose --project-directory projects/wms-platform up -d",
+    "wms:down": "docker compose --project-directory projects/wms-platform down",
+    "wms:ps": "docker compose --project-directory projects/wms-platform ps",
+    "wms:logs": "docker compose --project-directory projects/wms-platform logs -f",
+    "wms:docker": "docker compose --project-directory projects/wms-platform"
   }
 }

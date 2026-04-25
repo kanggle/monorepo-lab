@@ -162,35 +162,31 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
             named = "CI",
             matches = "true",
             disabledReason =
-                    "OutboxMetrics (outbox.pending_count / outbox.publish_success_total / "
-                            + "outbox.publish_failure_total) are registered lazily — they do not "
-                            + "appear in the Prometheus scrape body until the outbox has emitted "
-                            + "or observed at least one publish on the shared Spring context. On "
-                            + "GitHub shared runners the surrounding tests (notably "
-                            + "PublisherResilienceIntegrationTest) sometimes finish before those "
-                            + "meters are re-attached to the restarted Kafka broker, so the body "
-                            + ".contains(...) assertion fails independently of any timeout. "
-                            + "Passes locally (WSL2 / Linux dev). Re-enable after TASK-BE-019 "
-                            + "follow-up that pre-registers the three OutboxMetrics meters at "
-                            + "context init so the scrape body is deterministic. Tracked as a "
-                            + "separate task; not blocking the ecommerce import PR chain.")
+                    "TASK-BE-020 added strongReference(true) on the outbox.pending_count "
+                            + "gauge and an @Autowired OutboxMetrics field on "
+                            + "MasterServiceIntegrationBase, which removes the GC-eligibility "
+                            + "race for the gauge function. That alone is not enough on "
+                            + "GitHub-hosted runners: when this test runs after "
+                            + "PublisherResilienceIntegrationTest pauses + unpauses the Kafka "
+                            + "container, the /actuator/prometheus scrape body comes back with "
+                            + "HTTP 200 but the three outbox meter family lines are missing for "
+                            + "a window, and the contains(...) assertion fails despite the 30s "
+                            + "Awaitility budget. The deeper cause appears to be in scrape-body "
+                            + "composition while micrometer-kafka re-attaches its client meters "
+                            + "to the restarted broker, not in our gauge's lifecycle. Passes "
+                            + "locally (WSL2). Re-enable once the scrape-body race is "
+                            + "characterized — likely needs either test-suite ordering, a "
+                            + "CompositeMeterRegistry split, or moving the assertion to a "
+                            + "dedicated suite that does not share context with the Kafka "
+                            + "pause/unpause tests. Tracked as a follow-up to TASK-BE-020.")
     void prometheusEndpoint_exposesOutboxMetrics() {
         // Permit-all endpoint per SecurityConfig — no auth.
-        //
-        // CI-only flakiness (now gated above via @DisabledIfEnvironmentVariable):
-        // when this test runs right after PublisherResilienceIntegrationTest
-        // (which pauses + unpauses the Kafka container), the shared Spring
-        // context's KafkaTemplate may still be settling — a transient 500 has
-        // been observed on GitHub shared runners while Micrometer-registered
-        // Kafka client meters re-attach to a healthy broker. The deeper issue
-        // is that OutboxMetrics meters are registered lazily on first observe,
-        // so the scrape body can return 200 OK without the three expected
-        // meter names, and no amount of Awaitility waiting would surface
-        // them. Fix is a test-setup-level pre-registration, not a timeout
-        // bump. Passes immediately in WSL2.
-        // Retry the scrape for up to 30 s so the endpoint has time to
-        // stabilise on slower CI runners; the assertion remains real (three
-        // outbox metrics must appear in a 200 response body). TASK-BE-019.
+        // Retry for up to 30 s to let the endpoint stabilise after
+        // PublisherResilienceIntegrationTest unpauses the Kafka container.
+        // OutboxMetrics meters are now registered with strongReference(true) and
+        // the base class holds an @Autowired reference, so the gauge function
+        // itself can no longer disappear due to GC pressure (TASK-BE-020) — but
+        // see the @DisabledIfEnvironmentVariable above for why CI still gates.
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
