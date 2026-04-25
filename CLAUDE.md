@@ -17,7 +17,7 @@ This is a **monorepo** containing the shared library layer at the repo root and 
 ├── rules/                    ← rule library: domains/, traits/ (shared)
 ├── .claude/                  ← AI agent config: skills/, agents/, commands/, config/ (shared)
 ├── libs/                     ← shared Java libraries
-├── tasks/templates/          ← task templates (shared)
+├── tasks/                    ← monorepo-level task lifecycle: INDEX.md + ready/, in-progress/, review/, done/, templates/ (shared templates)
 ├── docs/guides/              ← human-oriented guides (shared)
 ├── build.gradle, settings.gradle, gradle/ ...
 └── projects/
@@ -35,8 +35,8 @@ This is a **monorepo** containing the shared library layer at the repo root and 
 
 **Shared vs project content** (strict boundary):
 
-- **Shared (at repo root)**: `platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md` — must remain project-agnostic. No project-specific service names, API paths, domain entities.
-- **Project-specific (under `projects/<project-name>/`)**: `PROJECT.md`, `apps/`, `specs/`, `tasks/` (except `templates/`), `knowledge/`, `docs/` (except `guides/`), `infra/`.
+- **Shared (at repo root)**: `platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `tasks/INDEX.md` + `tasks/{ready,in-progress,review,done}/` (monorepo-level lifecycle), `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md` — must remain project-agnostic. No project-specific service names, API paths, domain entities.
+- **Project-specific (under `projects/<project-name>/`)**: `PROJECT.md`, `apps/`, `specs/`, `tasks/` (project lifecycle, distinct from root `tasks/`), `knowledge/`, `docs/` (except `guides/`), `infra/`.
 
 Violating this boundary blocks Template extraction and creates drift across projects. See `TEMPLATE.md` for the Discovery → Distribution strategy.
 
@@ -123,11 +123,13 @@ Conflict resolution between layers 2–4: common wins unless a domain/trait file
 # Task Rules
 
 - Do not implement work without a task.
-- Do not implement tasks outside the target project's `tasks/ready/`.
+- **Project-internal work** (changes inside a single `projects/<name>/`): the task must live in that project's `tasks/ready/` and follow `projects/<name>/tasks/INDEX.md`.
+- **Monorepo-level work** (changes to shared library `libs/`, `platform/`, `rules/`, `.claude/`, `tasks/templates/`, `docs/guides/`, root `build.gradle`/`settings.gradle`/`.github/workflows/`/`scripts/`/`package.json`/`CLAUDE.md`/`TEMPLATE.md`, or cross-project structural changes): the task must live in repo-root `tasks/ready/` and follow `tasks/INDEX.md`. See the "When to Use Root vs Project Tasks" decision table in that file.
+- Do not implement tasks outside the appropriate `tasks/ready/`.
 - If a task conflicts with specs, specs win.
 - If implementation requires spec or contract changes, update them first.
 - Tasks missing required sections must not be implemented.
-- Review and lifecycle rules are defined in the target project's `tasks/INDEX.md`.
+- Review and lifecycle rules are defined in the relevant `tasks/INDEX.md` (root or project).
 
 Required task sections:
 
@@ -146,16 +148,29 @@ Required task sections:
 For any implementation task:
 
 1. Read `CLAUDE.md` (this file)
-2. Identify the target project (see "Identify the Target Project" above)
-3. Read the target project's `PROJECT.md` and load the rule layers determined by its `domain` and `traits` (see "Project Classification" above)
-4. Read the target task in `<project>/tasks/ready/`
-5. Follow `platform/entrypoint.md` for spec reading order
-6. Determine the target service's `Service Type` from `<project>/specs/services/<service>/architecture.md` and read the matching `platform/service-types/<type>.md` (exactly one file)
-7. Read `.claude/skills/INDEX.md` and matched skill files for implementation guidance
-8. Use `<project>/knowledge/` for design judgment only
-9. Read existing code in the target service to understand current patterns, conventions, and structure
-10. Implement and test
-11. Prepare for review
+2. Decide whether the task is **project-internal** or **monorepo-level** (see Task Rules above and the decision table in `tasks/INDEX.md`).
+
+**For project-internal work:**
+
+3. Identify the target project (see "Identify the Target Project" above)
+4. Read the target project's `PROJECT.md` and load the rule layers determined by its `domain` and `traits` (see "Project Classification" above)
+5. Read the target task in `<project>/tasks/ready/`
+6. Follow `platform/entrypoint.md` for spec reading order
+7. Determine the target service's `Service Type` from `<project>/specs/services/<service>/architecture.md` and read the matching `platform/service-types/<type>.md` (exactly one file)
+8. Read `.claude/skills/INDEX.md` and matched skill files for implementation guidance
+9. Use `<project>/knowledge/` for design judgment only
+10. Read existing code in the target service to understand current patterns, conventions, and structure
+11. Implement and test
+12. Prepare for review
+
+**For monorepo-level work:**
+
+3. Read the target task in repo-root `tasks/ready/` and confirm its scope is monorepo-level per `tasks/INDEX.md` § "When to Use Root vs Project Tasks"
+4. Read the relevant shared file(s) the task targets (`libs/`, `platform/`, `rules/`, `.claude/`, root `build.gradle`/`settings.gradle`/`.github/workflows/`, `scripts/`, etc.)
+5. If the change has implications for any `projects/<name>/`, enumerate them in the task and verify each affected project's tests after implementation
+6. Read `.claude/skills/INDEX.md` and matched skill files only if a skill applies (most monorepo-level work is build/CI/docs without a skill match)
+7. Implement and verify (typically: `./gradlew check` for build changes, dry-run for script changes, doc lint for documentation changes)
+8. Prepare for review
 
 ---
 
