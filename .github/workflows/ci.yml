@@ -179,7 +179,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wms-boot-jars
-          path: .
+          path: artifact-staging
+
+      - name: Restore boot jar paths
+        # actions/upload-artifact@v4 strips the longest common prefix when
+        # multiple paths are uploaded, so the wms-boot-jars artifact contains
+        # `master-service/build/libs/master-service.jar` and
+        # `gateway-service/build/libs/gateway-service.jar` (with the
+        # `projects/wms-platform/apps/` prefix removed). The e2e harness's
+        # locateFile() in E2EBase.java expects the original
+        # `apps/<service>/build/libs/<service>.jar` layout when resolving
+        # paths from gateway-service's project directory, so move the
+        # jars back to their canonical locations before invoking Gradle.
+        run: |
+          mkdir -p projects/wms-platform/apps/master-service/build/libs/
+          mkdir -p projects/wms-platform/apps/gateway-service/build/libs/
+          mv artifact-staging/master-service/build/libs/master-service.jar \
+             projects/wms-platform/apps/master-service/build/libs/master-service.jar
+          mv artifact-staging/gateway-service/build/libs/gateway-service.jar \
+             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info

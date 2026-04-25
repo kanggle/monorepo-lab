@@ -1,5 +1,11 @@
 # TASK-BE-020 — OutboxMetrics: eager strong-reference registration
 
+> **Outcome (2026-04-25, PR #59 CI):** PARTIAL FIX. The strong-reference changes are kept (they
+> are correct on their own merits) but the CI guard had to be restored — see the new "Outcome"
+> section at the bottom. The failure mode in CI turned out to be in scrape-body composition,
+> not in gauge-function GC eligibility, so removing `@DisabledIfEnvironmentVariable` is being
+> deferred to a follow-up that addresses the real cause.
+
 ## Goal
 
 Fix the `prometheusEndpoint_exposesOutboxMetrics` integration test so it runs reliably on CI
@@ -66,3 +72,39 @@ suspenders approach).
 - If `Gauge.builder().strongReference(true)` API is unavailable in the Micrometer version on the
   classpath (Spring Boot 3.4.1 → Micrometer 1.14.x), the build will fail to compile. Resolution:
   confirm the API in `DefaultGauge` / `Gauge.Builder` javadoc for 1.14.x before merging.
+
+## Outcome (2026-04-25)
+
+PR #59 CI revealed that the GC-eligibility theory was incorrect. With `strongReference(true)` +
+the `@Autowired` test-base reference both in place, `WarehouseIntegrationTest.prometheusEndpoint`
+still fails on GitHub-hosted runners with `AssertionFailedError` after the 30 s Awaitility retry.
+The scrape returns HTTP 200 but the three outbox meter family lines (`outbox_pending_count`,
+`outbox_publish_success_total`, `outbox_publish_failure_total`) are absent from the response body
+during the window between `PublisherResilienceIntegrationTest`'s Kafka pause/unpause and the next
+scrape — the gauge function itself is alive (verified by unit test), but the Prometheus exporter
+fails to include the meter family in the scrape output.
+
+**Decision:**
+
+- Keep the `OutboxMetrics` `Gauge.builder().strongReference(true)` change. It is the correct
+  registration idiom in its own right, and removes the (real, just non-causal) WeakReference
+  collection failure mode.
+- Keep the `@Autowired OutboxMetrics outboxMetrics` field on `MasterServiceIntegrationBase`. It
+  costs nothing and does provide the belt-and-suspenders guarantee originally intended.
+- **Restore the `@DisabledIfEnvironmentVariable("CI")` guard on
+  `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics`** with an updated
+  `disabledReason` that points at scrape-body composition (not gauge GC) as the actual cause.
+
+**Real follow-up (separate task, deferred):** characterize the scrape-body race. Likely
+candidates:
+
+1. `micrometer-registry-prometheus` collecting from a Kafka-client `MeterRegistry` view that is
+   transiently empty during broker reconnect, suppressing the rest of the family list.
+2. `CompositeMeterRegistry` composition order — if Kafka client meters and our outbox meters
+   live in the same composite, a partial collection failure could omit later families.
+3. Test-suite ordering: moving `prometheusEndpoint_exposesOutboxMetrics` to a separate
+   integration suite that does not share Spring context with the Kafka pause/unpause tests
+   would sidestep the race entirely.
+
+The follow-up is non-blocking for the ecommerce import or any current PR; the CI guard keeps
+the wms baseline green.

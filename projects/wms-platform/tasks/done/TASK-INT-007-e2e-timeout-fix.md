@@ -1,5 +1,16 @@
 # TASK-INT-007 — E2E job: artifact reuse + timeout increase
 
+> **Outcome (2026-04-25, PR #59 CI):** the timeout fix landed but exposed a path-resolution bug
+> in the artifact step. `actions/upload-artifact@v4` strips the longest common prefix when
+> multiple paths are uploaded, so the `wms-boot-jars` artifact contains
+> `master-service/build/libs/master-service.jar` (without the `projects/wms-platform/apps/`
+> prefix). `E2EBase.locateJar()` walks ancestor directories looking for
+> `apps/master-service/build/libs/master-service.jar` and never matches the LCP-stripped
+> location, fails with `IllegalStateException`. **Resolution:** added a "Restore boot jar paths"
+> step to the e2e-tests job that `mv`s the artifact contents back to their canonical
+> `projects/wms-platform/apps/<service>/build/libs/` locations before the Gradle invocation.
+> See "Outcome" section at the bottom for details.
+
 ## Goal
 
 Stop the `e2e-tests` CI job from being CANCELLED at the 20-minute wall-clock limit.
@@ -59,3 +70,44 @@ None.
 - If the restored jars are somehow absent (download step skipped), `e2eTest` will fail at
   `E2EBase.locateJar()` with a clear `IllegalStateException` naming the missing path — not a
   silent timeout.
+
+## Outcome (2026-04-25)
+
+The original Edge Case ("`actions/download-artifact@v4` restores files to their original
+workspace-relative paths") turned out to be incorrect for the multi-path upload case.
+`actions/upload-artifact@v4` strips the longest common path prefix when given multiple paths,
+so the artifact only carries `master-service/build/libs/...` and `gateway-service/build/libs/...`
+(the `projects/wms-platform/apps/` part is gone). PR #59 CI's e2e-tests job failed in 31 s with:
+
+```
+java.lang.IllegalStateException: Expected boot jar not found at
+/home/runner/.../projects/wms-platform/apps/gateway-service/apps/master-service/build/libs/master-service.jar
+```
+
+— `E2EBase.locateFile()`'s ancestor walk could not bridge the cwd-relative
+`apps/master-service/build/libs/...` lookup against the artifact-stripped layout.
+
+**Resolution:** download into a staging directory and `mv` the jars back to their canonical
+in-repo locations. Self-contained CI step, no test code or upload-artifact change needed:
+
+```yaml
+- name: Download boot jars
+  uses: actions/download-artifact@v4
+  with:
+    name: wms-boot-jars
+    path: artifact-staging
+
+- name: Restore boot jar paths
+  run: |
+    mkdir -p projects/wms-platform/apps/master-service/build/libs/
+    mkdir -p projects/wms-platform/apps/gateway-service/build/libs/
+    mv artifact-staging/master-service/build/libs/master-service.jar \
+       projects/wms-platform/apps/master-service/build/libs/master-service.jar
+    mv artifact-staging/gateway-service/build/libs/gateway-service.jar \
+       projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
+```
+
+The original Acceptance Criteria still hold; the path-restore step is an implementation detail
+of #2 ("Add an `actions/download-artifact@v4` step that restores `wms-boot-jars` to the
+workspace root preserving relative paths") whose original wording assumed a behavior
+upload-artifact@v4 does not actually provide.
