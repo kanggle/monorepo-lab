@@ -129,7 +129,7 @@ Does a standalone git repo for this project already exist?
 | Uses root `libs/` | Yes (shared) | Project keeps its own nested `libs/` |
 | Path rewrites on import | N/A (greenfield) | None — project's `project(':libs:x')` refs resolve within its own build |
 | PROJECT_TYPES in sync-portfolio.sh | `direct-include` | `composite-build` |
-| Examples in this monorepo | `wms-platform` | `ecommerce-microservices-platform` |
+| Examples in this monorepo | `wms-platform`, `ecommerce-microservices-platform` | (retained as fallback only — no current examples) |
 
 Use Option A unless Option B's benefit (zero rewrites of many existing internal Gradle references) genuinely outweighs the cost of running two Gradle builds and managing a nested `libs/` stack.
 
@@ -190,7 +190,7 @@ PROJECT_TYPES["<new-project>"]="direct-include"
 
 ### Option B — Import an existing standalone repo (composite-build)
 
-Use this path when the incoming repo already has its own `settings.gradle`, `build.gradle`, and nested `libs/` stack that you want to preserve without rewriting every internal `project(':libs:…')` reference. The `ecommerce-microservices-platform` import (commits `0956dc6` → `dad3b41`) is the worked example.
+Use this path when the incoming repo already has its own `settings.gradle`, `build.gradle`, and nested `libs/` stack that you want to preserve without rewriting every internal `project(':libs:…')` reference. The `ecommerce-microservices-platform` import (commits `0956dc6` → `dad3b41`) was originally done this way; it has since been consolidated onto Option A (PR #58, 2026-04-25) once its libs were merged into root `libs/`. Treat Option B as a fallback for the rare case where library-naming conflicts genuinely block direct-include.
 
 #### 1. Import the subtree
 
