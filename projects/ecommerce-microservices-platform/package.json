@@ -8,7 +8,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "start": "docker-compose up -d",
     "stop": "docker-compose down && docker builder prune -f --filter 'until=24h' && docker image prune -f && docker container prune -f",
-    "clean": "docker-compose down && docker system prune -a --volumes -f && ./gradlew --stop && rm -rf .gradle/ apps/*/build/ apps/*/.next/ .turbo/ .claude/worktrees/ && find . -name 'hs_err_pid*.log' -delete && find . -name 'replay_pid*.log' -delete && echo 'Clean complete.'"
+    "clean": "docker-compose down && docker system prune -a --volumes -f && ../../gradlew --stop && rm -rf .gradle/ apps/*/build/ apps/*/.next/ .turbo/ .claude/worktrees/ && find . -name 'hs_err_pid*.log' -delete && find . -name 'replay_pid*.log' -delete && echo 'Clean complete.'"
   },
   "devDependencies": {
     "prettier": "^3.2.5",
