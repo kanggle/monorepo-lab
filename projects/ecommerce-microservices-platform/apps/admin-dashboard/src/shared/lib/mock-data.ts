@@ -64,7 +64,7 @@ const PRODUCTS: ProductDetail[] = [
     price: 28000,
     categoryId: 'cat-coffee',
     thumbnailUrl: 'https://picsum.photos/seed/coffee1/300/300',
-    images: ['https://picsum.photos/seed/coffee1/800/600'],
+    images: [{ imageId: 'img-1001-1', url: 'https://picsum.photos/seed/coffee1/800/600', sortOrder: 0, isPrimary: true }],
     variants: [
       { id: 'v-1', optionName: '분쇄(홀빈)', stock: 48, additionalPrice: 0 },
       { id: 'v-2', optionName: '에스프레소용 분쇄', stock: 22, additionalPrice: 0 },
