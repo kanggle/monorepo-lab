@@ -10,6 +10,9 @@ public class RouteService {
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
     public boolean isPublicRoute(HttpMethod method, String path) {
+        if (HttpMethod.OPTIONS.equals(method)) {
+            return true;
+        }
         if (HttpMethod.POST.equals(method)) {
             return "/api/auth/signup".equals(path)
                     || "/api/auth/login".equals(path)

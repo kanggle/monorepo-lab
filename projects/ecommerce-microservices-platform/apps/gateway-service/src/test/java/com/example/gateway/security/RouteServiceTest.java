@@ -21,7 +21,10 @@ class RouteServiceTest {
             "GET, /api/products/42",
             "GET, /api/products",
             "GET, /api/search/products?q=shoes",
-            "GET, /actuator/health"
+            "GET, /actuator/health",
+            "OPTIONS, /api/wishlists",
+            "OPTIONS, /api/orders",
+            "OPTIONS, /api/payments"
     })
     @DisplayName("공개 경로는 true를 반환한다")
     void isPublicRoute_publicPaths_returnsTrue(String method, String path) {

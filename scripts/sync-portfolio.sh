@@ -54,9 +54,16 @@ declare -A PROJECT_REMOTES=(
 #                     and only strips the orphan monorepo `includeBuild(...)`
 #                     line if filter-repo preserved it.
 # Default (unmapped): direct-include — preserves backwards compatibility.
+#
+# Note: ecommerce-microservices-platform was originally imported as
+# composite-build (commit 0956dc6) but consolidated onto direct-include
+# in 2026-04-25 (PR #58) once its nested libs/ stack was merged into
+# root libs/. The composite-build code path below is retained for
+# future imports where library-naming conflicts make direct-include
+# infeasible.
 declare -A PROJECT_TYPES=(
     ["wms-platform"]="direct-include"
-    ["ecommerce-microservices-platform"]="composite-build"
+    ["ecommerce-microservices-platform"]="direct-include"
 )
 
 # Shared paths kept at extracted repo root.

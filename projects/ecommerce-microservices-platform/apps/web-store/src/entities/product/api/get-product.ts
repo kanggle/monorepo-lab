@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/config/api';
 import { createProductApi } from '@repo/api-client';
-import type { ProductDetail } from '@repo/types';
+import type { ProductDetail, ProductImageSummary } from '@repo/types';
 import { fallbackImages } from './fallback-images';
 
 const productApi = createProductApi(apiClient);
@@ -16,15 +16,14 @@ const productApi = createProductApi(apiClient);
 export async function getProduct(id: string): Promise<ProductDetail | null> {
   const product = await productApi.getProduct(id);
   if (!product) return null;
-  if (product.images?.length) {
-    // API returns image objects {imageId, url, sortOrder, isPrimary} — extract URLs
-    product.images = (product.images as any[]).map((img: any) =>
-      typeof img === 'string' ? img : img.url
-    );
-  } else {
-    product.images = product.thumbnailUrl
-      ? [product.thumbnailUrl]
-      : fallbackImages(product.name);
+  if (!product.images?.length) {
+    const urls = product.thumbnailUrl ? [product.thumbnailUrl] : fallbackImages(product.name);
+    product.images = urls.map((url, i): ProductImageSummary => ({
+      imageId: `fallback-${i}`,
+      url,
+      sortOrder: i,
+      isPrimary: i === 0,
+    }));
   }
   return product;
 }

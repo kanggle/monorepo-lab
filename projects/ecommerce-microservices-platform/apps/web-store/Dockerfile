@@ -14,6 +14,8 @@ RUN pnpm install --frozen-lockfile
 COPY apps/web-store/ apps/web-store/
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_TOSS_CLIENT_KEY
+ENV NEXT_PUBLIC_TOSS_CLIENT_KEY=$NEXT_PUBLIC_TOSS_CLIENT_KEY
 RUN pnpm --filter web-store build
 RUN mkdir -p /app/apps/web-store/public
 
