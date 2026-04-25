@@ -32,8 +32,9 @@ describe('OAuthButton', () => {
     await user.click(screen.getByRole('button'));
 
     const expectedCallback = encodeURIComponent('http://localhost:3000/oauth/callback');
+    const expectedBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
     expect(window.location.href).toBe(
-      `http://localhost:8080/api/auth/oauth/google?callbackUrl=${expectedCallback}`,
+      `${expectedBase}/api/auth/oauth/google?callbackUrl=${expectedCallback}`,
     );
   });
 
