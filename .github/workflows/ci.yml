@@ -40,8 +40,31 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Build and test
-        run: ./gradlew check --no-daemon --stacktrace
+      - name: Build and test (libs + wms-platform only)
+        # ecommerce-microservices-platform was previously imported as a Gradle
+        # composite build (`includeBuild`), so its `check` task did not cascade
+        # from a root `./gradlew check`. After the libs consolidation switched
+        # ecommerce to direct-include, root `check` started running every
+        # ecommerce subproject's tests too — including integration tests that
+        # need a Docker stack the monorepo CI does not yet provision. Until
+        # ecommerce-specific CI is designed (frontend + Docker compose +
+        # integration suites), explicitly scope the wms-only task graph.
+        run: >-
+          ./gradlew
+          :libs:java-common:check
+          :libs:java-messaging:check
+          :libs:java-observability:check
+          :libs:java-security:check
+          :libs:java-test-support:check
+          :libs:java-web:check
+          :projects:wms-platform:apps:gateway-service:check
+          :projects:wms-platform:apps:inbound-service:check
+          :projects:wms-platform:apps:inventory-service:check
+          :projects:wms-platform:apps:outbound-service:check
+          :projects:wms-platform:apps:master-service:check
+          :projects:wms-platform:apps:notification-service:check
+          :projects:wms-platform:apps:admin-service:check
+          --no-daemon --stacktrace
 
       - name: Upload test reports on failure
         if: failure()

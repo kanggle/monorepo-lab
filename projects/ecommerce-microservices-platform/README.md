@@ -15,10 +15,6 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-![Backend CI](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/backend-ci.yml/badge.svg?branch=master)
-![Frontend CI](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/frontend-ci.yml/badge.svg?branch=master)
-![Docker Build](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/docker-build.yml/badge.svg?branch=master)
-
 ---
 
 ## Overview
