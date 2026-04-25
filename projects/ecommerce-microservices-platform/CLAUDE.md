@@ -18,13 +18,14 @@ This project was imported into `monorepo-lab` via `git subtree` and now particip
 - `.claude/` — **fully removed**. All agent / skill / command / hook / template / workflow resolution now happens at root `.claude/` unconditionally. The three files Phase 4 kept as "project-specific overrides" were removed in Phase 5 after re-examination: `coordinator.md` and `process-tasks.md` differed from root only in example-string content (no functional value), and `frontend-engineer.md`'s `domains: [web-store, admin-dashboard]` override contradicted root `.claude/agents/domain/README.md` L18 which classifies `frontend-engineer` as domain-agnostic and forbids project-scoped overrides. Any future ecommerce-specific agent routing (which frontend apps, which services) must be captured in `PROJECT.md` or per-service `specs/services/<name>/architecture.md`, not in nested agent frontmatter.
 - Historical task records in `tasks/done/` may contain broken `specs/rules/...` / `specs/platform/...` links — preserved as immutable history; rewrite is not planned.
 
+**Library consolidation (2026-04-25):** project-internal `libs/` and `settings.gradle` were removed; ecommerce now references the monorepo's shared `libs/` directly via root `settings.gradle` `include(...)`, matching the wms-platform pattern. The earlier composite-build isolation was an artifact of the import process, not a deliberate boundary — root libs is the single source.
+
 ## What lives here
 
 Only project-specific content (per monorepo boundary rule):
 
 - `PROJECT.md` — domain/traits classification
 - `apps/` — service implementations
-- `libs/` — **project-internal** shared libraries (not to be confused with root `libs/`)
 - `specs/contracts/`, `specs/services/`, `specs/features/`, `specs/use-cases/`
 - `tasks/` — project task lifecycle (except `templates/` which is shared at root)
 - `knowledge/`, `docs/` (excluding `docs/guides/` which is shared at root)
