@@ -5,6 +5,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
+    "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "start": "docker-compose up -d",
     "stop": "docker-compose down && docker builder prune -f --filter 'until=24h' && docker image prune -f && docker container prune -f",

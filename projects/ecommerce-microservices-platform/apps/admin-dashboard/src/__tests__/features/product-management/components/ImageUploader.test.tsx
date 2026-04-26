@@ -17,7 +17,7 @@ describe('ImageUploader', () => {
   it('업로드 영역을 렌더링한다', () => {
     render(<ImageUploader {...defaultProps} />);
 
-    expect(screen.getByText(/이미지를 드래그하거나 클릭하여 선택하세요/)).toBeInTheDocument();
+    expect(screen.getByText(/이미지를 드래그하거나 클릭하여 선택/)).toBeInTheDocument();
     expect(screen.getByText(/JPEG, PNG, WebP/)).toBeInTheDocument();
     expect(screen.getByText('파일 선택')).toBeInTheDocument();
   });

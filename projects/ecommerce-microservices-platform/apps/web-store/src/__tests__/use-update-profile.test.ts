@@ -98,7 +98,6 @@ describe('useUpdateProfile', () => {
 
     const wrapper = ({ children }: { children: ReactNode }) =>
       React.createElement(QueryClientProvider, { client: queryClient }, children);
-  return Wrapper;
 
     const { result } = renderHook(() => useUpdateProfile(), { wrapper });
 
