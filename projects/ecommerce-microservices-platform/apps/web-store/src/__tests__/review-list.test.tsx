@@ -37,14 +37,12 @@ import { useAuth } from '@/shared/lib/auth-context';
 import {
   getProductReviews,
   getProductReviewSummary,
-  createReview,
 } from '@/features/review/api/review-api';
 import { ReviewList } from '@/features/review/ui/ReviewList';
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockGetProductReviews = vi.mocked(getProductReviews);
 const mockGetProductReviewSummary = vi.mocked(getProductReviewSummary);
-const mockCreateReview = vi.mocked(createReview);
 
 const MOCK_REVIEWS: ReviewItem[] = [
   {

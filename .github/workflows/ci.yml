@@ -167,6 +167,39 @@ jobs:
             projects/wms-platform/apps/master-service/build/test-results/integrationTest/
           retention-days: 7
 
+  frontend-checks:
+    name: Frontend lint & build (ecommerce)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: projects/ecommerce-microservices-platform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.0'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
   e2e-tests:
     name: E2E (gateway-master live-pair, Testcontainers)
     runs-on: ubuntu-latest

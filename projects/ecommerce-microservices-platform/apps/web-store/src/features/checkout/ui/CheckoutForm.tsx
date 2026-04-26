@@ -14,7 +14,7 @@ import { PriceDisplay } from '@/shared/ui';
 
 export function CheckoutForm({ items, totalAmount, discountAmount = 0, onOrderComplete }: CheckoutFormProps) {
   const finalAmount = totalAmount - discountAmount;
-  const { isReady: paymentReady, requestPayment } = useTossPayment();
+  const { requestPayment } = useTossPayment();
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 

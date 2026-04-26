@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCartSelection } from '@/features/cart/model/use-cart-selection';
 import type { CartItem } from '@/features/cart/model/types';

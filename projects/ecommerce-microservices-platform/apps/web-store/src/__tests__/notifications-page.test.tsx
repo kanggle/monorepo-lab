@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import type { NotificationSummary, NotificationDetail, PaginatedResponse } from '@repo/types';
+import type { NotificationSummary, NotificationDetail } from '@repo/types';
 import { TestQueryProvider } from './test-utils';
 
 const mockSearchParams = new URLSearchParams();
