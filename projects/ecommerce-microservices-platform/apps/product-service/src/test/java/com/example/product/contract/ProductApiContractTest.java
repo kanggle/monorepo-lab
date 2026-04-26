@@ -1,5 +1,6 @@
 package com.example.product.contract;
 
+import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
@@ -7,11 +8,14 @@ import com.example.product.application.dto.ProductSummary;
 import com.example.product.application.dto.VariantDetail;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
+import com.example.product.application.service.ProductImageService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
+import com.example.product.application.service.VariantManagementService;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.model.ProductStatus;
+import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import com.example.product.presentation.controller.AdminProductController;
 import com.example.product.presentation.controller.ProductController;
@@ -23,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -43,8 +48,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * product-service API 응답 스키마 컨트랙트 검증 테스트.
  * 검증 근거: specs/contracts/http/product-api.md
+ *
+ * <p>{@link ContextConfiguration} pins the test bootstrap to
+ * {@link TestProductServiceApplication} so Spring's {@code AnnotatedClassFinder}
+ * does not pick between {@code ProductServiceApplication} (main) and
+ * {@code TestProductServiceApplication} (test) — both carry
+ * {@code @SpringBootApplication}, and without an explicit pin the slice
+ * fails with "Found multiple @SpringBootConfiguration annotated classes".
  */
 @WebMvcTest(controllers = {ProductController.class, AdminProductController.class})
+@ContextConfiguration(classes = TestProductServiceApplication.class)
 @Import(GlobalExceptionHandler.class)
 @DisplayName("Product API 컨트랙트 테스트 — specs/contracts/http/product-api.md")
 class ProductApiContractTest {
@@ -59,6 +72,12 @@ class ProductApiContractTest {
     private QueryProductService queryProductService;
 
     @MockitoBean
+    private ProductImageService productImageService;
+
+    @MockitoBean
+    private MediaUrlResolver mediaUrlResolver;
+
+    @MockitoBean
     private RegisterProductService registerProductService;
 
     @MockitoBean
@@ -69,6 +88,9 @@ class ProductApiContractTest {
 
     @MockitoBean
     private AdjustStockService adjustStockService;
+
+    @MockitoBean
+    private VariantManagementService variantManagementService;
 
     private static final String SPEC_REF = "specs/contracts/http/product-api.md";
 
@@ -113,7 +135,7 @@ class ProductApiContractTest {
         String json = result.getResponse().getContentAsString();
         JsonNode root = objectMapper.readTree(json);
 
-        assertFieldsMatch(root, Set.of("id", "name", "description", "status", "price", "categoryId", "variants"),
+        assertFieldsMatch(root, Set.of("id", "name", "description", "status", "price", "categoryId", "thumbnailUrl", "images", "variants"),
                 SPEC_REF + " GET /api/products/{productId} 200");
 
         JsonNode variant = root.get("variants").get(0);

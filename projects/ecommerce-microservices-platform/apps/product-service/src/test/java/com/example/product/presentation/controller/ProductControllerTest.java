@@ -7,12 +7,14 @@ import com.example.product.application.dto.ProductSummary;
 import com.example.product.application.dto.VariantDetail;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
+import com.example.product.application.service.ProductImageService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
 import com.example.product.application.service.VariantManagementService;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.model.ProductStatus;
+import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,12 @@ class ProductControllerTest {
 
     @MockitoBean
     private QueryProductService queryProductService;
+
+    @MockitoBean
+    private ProductImageService productImageService;
+
+    @MockitoBean
+    private MediaUrlResolver mediaUrlResolver;
 
     @MockitoBean
     private RegisterProductService registerProductService;
