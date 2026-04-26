@@ -10,7 +10,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
   return (
     <div className={styles.layout}>
       <ProductImage
-        images={product.images?.length ? product.images.map((img: any) => typeof img === 'string' ? img : img.url) : [`/images/products/${product.id}.jpg`]}
+        images={product.images?.length ? product.images.map((img) => img.url) : [`/images/products/${product.id}.jpg`]}
         alt={product.name}
       />
       <div className={styles.info}>

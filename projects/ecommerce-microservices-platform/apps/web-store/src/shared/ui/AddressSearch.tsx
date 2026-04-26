@@ -15,7 +15,7 @@ interface AddressSearchProps {
 }
 
 function isDaumLoaded(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).daum?.Postcode;
+  return typeof window !== 'undefined' && !!(window as Window & { daum?: { Postcode: unknown } }).daum?.Postcode;
 }
 
 export function AddressSearch({ onSelect }: AddressSearchProps) {

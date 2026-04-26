@@ -38,7 +38,7 @@ export function ProductDetailWithCart({ product }: ProductDetailWithCartProps) {
   const images = useMemo(
     () => {
       if (!product.images?.length) return [`/images/products/${product.id}.jpg`];
-      return product.images.map((img: any) => (typeof img === 'string' ? img : img.url));
+      return product.images.map((img) => img.url);
     },
     [product.images, product.id],
   );

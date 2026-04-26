@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { EditProduct } from '@/features/product-management/components/EditProduct';
 
 const mockRefetch = vi.fn();

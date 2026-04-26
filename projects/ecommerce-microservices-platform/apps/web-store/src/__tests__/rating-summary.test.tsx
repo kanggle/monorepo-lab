@@ -79,7 +79,7 @@ describe('RatingSummary', () => {
   it('에러 발생 시 아무것도 표시하지 않는다', async () => {
     mockGetSummary.mockRejectedValueOnce(new Error('fail'));
 
-    const { container } = render(
+    render(
       <TestQueryProvider>
         <RatingSummary productId="product-1" />
       </TestQueryProvider>,

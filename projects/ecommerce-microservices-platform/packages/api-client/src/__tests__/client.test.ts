@@ -750,7 +750,7 @@ describe('ApiClient', () => {
       // 첫 번째 401 → refresh 시작
       const p1 = onRejected(makeError('/api/orders'));
       // 두 번째 401 → subscriber 큐에 등록
-      const p2 = onRejected(makeError('/api/orders/2'));
+      void onRejected(makeError('/api/orders/2'));
 
       // timeout 발생
       vi.advanceTimersByTime(10000);
