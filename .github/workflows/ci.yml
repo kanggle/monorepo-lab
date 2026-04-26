@@ -46,10 +46,9 @@ jobs:
         # - ecommerce-microservices-platform/* run on a per-service basis after
         #   TASK-MONO-004 added @Tag("integration") to Testcontainers-backed
         #   classes and made the default :test task Docker-free.
-        # - 9 ecommerce services pass cleanly today; the 3 deferred services
+        # - 10 ecommerce services pass cleanly today; the 2 deferred services
         #   below are blocked by pre-existing per-service failures and join
         #   this list as their fix tasks land:
-        #     • order-service     — TASK-MONO-005 (GET /api/orders contract drift)
         #     • product-service   — TASK-MONO-006 (TestProductServiceApplication
         #                           context load failure)
         #     • search-service    — TASK-MONO-007 (IndexInitializer unit tests)
@@ -74,6 +73,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:batch-worker:check
           :projects:ecommerce-microservices-platform:apps:gateway-service:check
           :projects:ecommerce-microservices-platform:apps:notification-service:check
+          :projects:ecommerce-microservices-platform:apps:order-service:check
           :projects:ecommerce-microservices-platform:apps:payment-service:check
           :projects:ecommerce-microservices-platform:apps:promotion-service:check
           :projects:ecommerce-microservices-platform:apps:review-service:check

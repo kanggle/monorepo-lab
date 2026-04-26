@@ -108,7 +108,7 @@ class OrderApiContractTest {
                 SPEC_REF + " GET /api/orders 200");
 
         JsonNode content = objectMapper.readTree(json).get("content").get(0);
-        assertFieldsMatch(content, Set.of("orderId", "status", "totalPrice", "itemCount", "createdAt"),
+        assertFieldsMatch(content, Set.of("orderId", "status", "totalPrice", "itemCount", "firstItemName", "createdAt"),
                 SPEC_REF + " GET /api/orders 200 content[]");
     }
 
