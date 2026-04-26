@@ -258,32 +258,45 @@ sync_project() {
     log "Cloning monorepo..."
     GIT_CLONE_PROTECTION_ACTIVE=false git clone --no-local --quiet "$MONOREPO_DIR" "$workdir"
 
-    # ── Step 2: Build filter-repo args + run inside Docker ──
+    # ── Step 2: Build filter-repo args + write runner script ──
     log "Running git-filter-repo in Docker (this takes ~1 min)..."
 
-    # Build --path arguments. Quote each path.
-    local path_args=""
-    for p in "${SHARED_PATHS[@]}" "projects/$project/"; do
-        path_args+="--path '$p' "
-    done
-    # Path rename: projects/<project>/ -> (empty, hoists to root)
-    local rename_arg="--path-rename 'projects/$project/:'"
+    # Write a shell script into the workdir so Docker can execute it.
+    # This avoids multi-level quoting issues when passing filter-repo args
+    # through sh -c "..." variable substitution.
+    local runner="$workdir/_filter_repo_run.sh"
+    {
+        printf '#!/bin/sh\n'
+        printf 'apk add --no-cache git >/dev/null 2>&1\n'
+        printf 'pip install --quiet git-filter-repo\n'
+        printf "git config --global user.email 'sync@portfolio'\n"
+        printf "git config --global user.name 'Portfolio Sync'\n"
+        # Step 1 (direct-include only): pre-remove projects/<name>/settings.gradle
+        # from ALL historical commits. Root settings.gradle is in SHARED_PATHS; the
+        # project-level copy existed in old commits (composite-build era) and causes
+        # a collision when --path-rename hoists it to the same root path. Removing it
+        # first lets Step 2 proceed without collision. --force bypasses the
+        # "fresh clone" guard since filter-repo was not run before.
+        if [ "$ptype" = "direct-include" ]; then
+            printf "git filter-repo --force --path 'projects/%s/settings.gradle' --invert-paths\n" "$project"
+        fi
+        # Step 2: main extraction — keep SHARED_PATHS + project dir, hoist project to root.
+        printf 'git filter-repo --force'
+        for p in "${SHARED_PATHS[@]}" "projects/$project/"; do
+            printf " --path '%s'" "$p"
+        done
+        printf " --path-rename 'projects/%s/:'" "$project"
+        printf '\n'
+    } > "$runner"
 
     # Run the filter inside a container. Mount workdir as /repo.
     # MSYS_NO_PATHCONV=1 stops Git Bash from mangling the /repo paths into
-    # C:/Program Files/Git/repo. --force because fresh clone has a remote,
-    # filter-repo refuses by default.
+    # C:/Program Files/Git/repo.
     MSYS_NO_PATHCONV=1 docker run --rm \
         -v "$(cygpath -w "$workdir" 2>/dev/null || echo "$workdir"):/repo" \
         -w /repo \
         "$FILTER_REPO_IMAGE" \
-        sh -c "
-            apk add --no-cache git >/dev/null 2>&1 && \
-            pip install --quiet git-filter-repo && \
-            git config --global user.email 'sync@portfolio' && \
-            git config --global user.name 'Portfolio Sync' && \
-            git filter-repo --force $path_args $rename_arg
-        "
+        sh /repo/_filter_repo_run.sh
 
     cd "$workdir"
 
