@@ -40,16 +40,14 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Build and test (libs + wms-platform + ecommerce subset)
+      - name: Build and test (libs + wms-platform + ecommerce backend)
         # Scope rationale:
         # - libs/* and wms-platform/* always run (the wms baseline).
         # - ecommerce-microservices-platform/* run on a per-service basis after
         #   TASK-MONO-004 added @Tag("integration") to Testcontainers-backed
         #   classes and made the default :test task Docker-free.
-        # - 11 ecommerce services pass cleanly today; the 1 deferred service
-        #   below is blocked by pre-existing failures and joins this list
-        #   as its fix task lands:
-        #     • search-service    — TASK-MONO-007 (IndexInitializer unit tests)
+        # - All 12 ecommerce backend services run (TASK-MONO-005/006/007
+        #   closed the last per-service blockers).
         # Use :check (not :test) on every entry — matches the wms style, and
         # picks up jacoco / lint where defined.
         run: >-
@@ -76,6 +74,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:product-service:check
           :projects:ecommerce-microservices-platform:apps:promotion-service:check
           :projects:ecommerce-microservices-platform:apps:review-service:check
+          :projects:ecommerce-microservices-platform:apps:search-service:check
           :projects:ecommerce-microservices-platform:apps:shipping-service:check
           :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
