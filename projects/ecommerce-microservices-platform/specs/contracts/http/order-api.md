@@ -72,6 +72,7 @@ List orders for the authenticated user.
       "status": "PENDING",
       "totalPrice": 30000,
       "itemCount": 2,
+      "firstItemName": "string | null",
       "createdAt": "string (ISO 8601)"
     }
   ],
@@ -80,6 +81,9 @@ List orders for the authenticated user.
   "totalElements": 5
 }
 ```
+
+`firstItemName` is the product name of the first line item in the order
+(used by clients for list previews). It is `null` when the order has no items.
 
 **Error responses**
 | Status | Code | Reason |
@@ -221,6 +225,7 @@ List all orders (admin view).
       "status": "PENDING",
       "totalPrice": 30000,
       "itemCount": 2,
+      "firstItemName": "string | null",
       "createdAt": "string (ISO 8601)"
     }
   ],
