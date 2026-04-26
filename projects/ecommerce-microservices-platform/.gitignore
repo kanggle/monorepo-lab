@@ -48,5 +48,7 @@ apps/*/coverage/
 
 # Playwright E2E artifacts
 apps/*/test-results/
+apps/*/test-results-smoke/
 apps/*/playwright-report/
+apps/*/playwright-report-smoke/
 apps/*/playwright/.cache/
