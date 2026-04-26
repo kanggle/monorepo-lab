@@ -124,6 +124,47 @@ jobs:
             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
           retention-days: 7
 
+  ecommerce-boot-jars:
+    name: Package boot jars (ecommerce, verify-only)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 15
+    # Verify-only packaging check for the 12 ecommerce backend services.
+    # Catches Spring Boot autoconfig / fat-jar classpath / runtime-dep
+    # issues that :check (compile + unit tests) does not surface. No
+    # artifact upload — there is no downstream e2e/docker job consuming
+    # ecommerce jars yet (TASK-MONO-012).
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build ecommerce boot jars
+        run: >-
+          ./gradlew
+          :projects:ecommerce-microservices-platform:apps:auth-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:batch-worker:bootJar
+          :projects:ecommerce-microservices-platform:apps:gateway-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:notification-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:order-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:payment-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:product-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:promotion-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:review-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:search-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:shipping-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:user-service:bootJar
+          --no-daemon --stacktrace
+
   frontend-unit-tests:
     name: Frontend unit tests (ecommerce, vitest)
     runs-on: ubuntu-latest
