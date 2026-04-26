@@ -23,7 +23,7 @@ const baseProduct: ProductDetailType = {
   status: 'ON_SALE',
   price: 29900,
   categoryId: 'cat-1',
-  images: ['/img/1.jpg'],
+  images: [{ imageId: 'img-1', url: '/img/1.jpg', sortOrder: 0, isPrimary: true }],
   variants: [],
 };
 

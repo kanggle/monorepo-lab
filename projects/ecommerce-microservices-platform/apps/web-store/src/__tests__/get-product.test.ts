@@ -59,7 +59,10 @@ describe('getProduct', () => {
     const result = await getProduct('22222222-2222-2222-2222-222222222222');
 
     expect(result).not.toBeNull();
-    expect(result!.images).toEqual(['fallback-이미지없는상품-1.jpg', 'fallback-이미지없는상품-2.jpg']);
+    expect(result!.images).toEqual([
+      { imageId: 'fallback-0', url: 'fallback-이미지없는상품-1.jpg', sortOrder: 0, isPrimary: true },
+      { imageId: 'fallback-1', url: 'fallback-이미지없는상품-2.jpg', sortOrder: 1, isPrimary: false },
+    ]);
   });
 
   it('API 응답이 null이면 null을 반환한다', async () => {

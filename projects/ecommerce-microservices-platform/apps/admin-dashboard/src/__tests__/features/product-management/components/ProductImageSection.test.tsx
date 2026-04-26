@@ -45,9 +45,8 @@ describe('ProductImageSection', () => {
       wrapper: createWrapper(),
     });
 
-    // Initially shows loading, then the uploader
     expect(
-      await screen.findByTestId('image-uploader'),
+      await screen.findByText(/이미지를 드래그하거나 클릭하여 선택/),
     ).toBeInTheDocument();
   });
 
