@@ -433,6 +433,10 @@ jobs:
           EOF
 
       - name: Build web-store (Next.js prod build)
+        # NEXT_PUBLIC_* vars are baked into the bundle at build time, not runtime.
+        # Set the gateway URL here so browser-side API calls reach port 18080.
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:18080
         run: pnpm --filter web-store build
 
       - name: Start docker compose stack (backends + infra, no observability)
