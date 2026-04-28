@@ -547,18 +547,17 @@ Strategy: Flyway `V99__seed_dev_data.sql`, active only under profile `dev` or
 
 ## Open Items
 
-- `specs/services/inbound-service/state-machines/asn-status.md` — ASN state
-  machine diagram (standalone file; referenced in `architecture.md`)
-- `specs/services/inbound-service/workflows/inbound-flow.md` — full lifecycle
-  narrative (required artifact per `rules/domains/wms.md` §3)
-- `specs/services/inbound-service/idempotency.md` — REST + webhook dual-layer
-  dedupe strategy (architecture.md Open Items)
-- `specs/services/inbound-service/external-integrations.md` — ERP webhook
-  catalog (per `integration-heavy` Required Artifact 1)
-- `platform/error-handling.md` — register codes not yet in catalog:
-  `WAREHOUSE_MISMATCH`, `PUTAWAY_QUANTITY_EXCEEDED`, `PARTNER_INVALID_TYPE`,
-  `LOT_REQUIRED`, `INSPECTION_INCOMPLETE`, `WEBHOOK_SIGNATURE_INVALID`,
-  `WEBHOOK_REPLAY_DETECTED`, `WEBHOOK_TIMESTAMP_INVALID`
+> **Status (2026-04-28)**: all sibling spec dependencies of this domain
+> model are landed. See `architecture.md` § Open Items for the
+> consolidated checklist.
+
+All previously-listed Open Items are resolved:
+
+- ✅ `specs/services/inbound-service/state-machines/asn-status.md`
+- ✅ `specs/services/inbound-service/workflows/inbound-flow.md`
+- ✅ `specs/services/inbound-service/idempotency.md`
+- ✅ `specs/services/inbound-service/external-integrations.md`
+- ✅ `platform/error-handling.md` — all referenced codes registered
 
 ---
 

@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-029-inbound-service-bootstrap.md` — Hexagonal skeleton, V1–V7 Flyway schema (incl. webhook inbox/dedupe + role-grant W2 invariants), 6 master snapshot consumers (Warehouse/Zone/Location/SKU/Lot/Partner) with version guard + EventDedupePort, ErpAsnWebhookController (HMAC + timestamp + dedupe + inbox write), inbox processor stub, Redis IdempotencyStore (`inbound:idempotency:` prefix pinned), JWT/security wiring, Kafka DLT error handler. First implementation task targeting `inbound-service`; unblocked by PR #90 spec set.
 
 ## in-progress
 

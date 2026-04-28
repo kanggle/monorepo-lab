@@ -80,11 +80,76 @@ com.wms.gateway/
 | Path prefix | Target | Auth | Rate Limit |
 |---|---|---|---|
 | `/api/v1/master/**` | `master-service:8081` | required (any authenticated role) | standard (100 rpm/IP) |
+| `/api/v1/inventory/**` | `inventory-service:8083` | required (any authenticated role) | standard (100 rpm/IP) |
+| `/api/v1/inbound/**` | `inbound-service:8082` | required (any authenticated role) | standard (100 rpm/IP) |
+| `/webhooks/erp/asn` | `inbound-service:8082` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
-All other paths return `404 NOT_FOUND`. Routes for inbound/inventory/outbound/
-admin/notification-service arrive in subsequent `TASK-INT-*` tickets.
+All other paths return `404 NOT_FOUND`. Routes for outbound/admin/
+notification-service arrive in subsequent `TASK-INT-*` tickets.
+
+### Inbound Service Route
+
+The `/api/v1/inbound/**` prefix routes manual ASN entry, inspection
+recording, putaway confirmation, and admin endpoints to `inbound-service`
+per [`specs/contracts/http/inbound-service-api.md`](../../contracts/http/inbound-service-api.md).
+JWT enforcement, header stripping, and rate-limiting follow the same pattern
+as `/api/v1/master/**`.
+
+### ERP Webhook Route
+
+The `/webhooks/erp/asn` route is **deliberately separate** from the
+`/api/v1/inbound/**` route because:
+
+- **No JWT**: HMAC signature on the body replaces token-based auth — the
+  `SecurityConfig` permits this path through `permitAll()` and the
+  `IdentityHeaderStripFilter` is skipped.
+- **No identity headers**: `X-User-Id`, `X-User-Role` etc. are NOT injected
+  on this route — webhook origin is `system:erp-webhook`, set by
+  inbound-service on inbox-row write.
+- **Higher rate-limit tier**: ERP retries can be bursty; the webhook route
+  uses key resolver `(clientIp, "webhook:erp")` with replenish 300/min,
+  burst 600. Per `platform/api-gateway-policy.md` defaults for webhook
+  endpoints.
+- **Path passthrough**: gateway forwards body bytes verbatim — no
+  re-serialization of the JSON payload, since the ERP signature is over the
+  raw bytes (`specs/contracts/webhooks/erp-asn-webhook.md` § Signature
+  Computation).
+- **CORS**: `OPTIONS` preflight not exposed (ERP is a server-to-server
+  caller, not a browser).
+
+The route is configured in `application.yml`:
+
+```yaml
+spring.cloud.gateway.routes:
+  - id: erp-asn-webhook
+    uri: http://inbound-service:8082
+    predicates:
+      - Path=/webhooks/erp/asn
+      - Method=POST
+    filters:
+      - StripPrefix=0  # /webhooks/erp/asn → /webhooks/erp/asn (no prefix strip)
+      - name: RequestRateLimiter
+        args:
+          redis-rate-limiter.replenishRate: 300
+          redis-rate-limiter.burstCapacity: 600
+          key-resolver: "#{@webhookKeyResolver}"
+```
+
+`WebhookKeyResolver` returns `webhook:erp:{clientIp}` so the bucket is
+isolated from regular API traffic.
+
+Authentication enforcement is set in `SecurityConfig` to permit
+`/webhooks/erp/asn` without auth — HMAC verification happens at
+inbound-service:
+
+```java
+http.authorizeExchange(spec -> spec
+    .pathMatchers("/actuator/health", "/actuator/info").permitAll()
+    .pathMatchers("/webhooks/erp/asn").permitAll()  // HMAC at downstream
+    .anyExchange().authenticated());
+```
 
 ---
 
@@ -176,4 +241,7 @@ Per `platform/security-rules.md` and master-service's config:
 - `platform/error-handling.md`
 - `platform/service-types/rest-api.md`
 - `specs/services/master-service/architecture.md` (downstream target)
+- `specs/services/inventory-service/architecture.md` (downstream target)
+- `specs/services/inbound-service/architecture.md` (downstream target — `/api/v1/inbound/**` and `/webhooks/erp/asn`)
+- `specs/contracts/webhooks/erp-asn-webhook.md` (webhook wire-level contract)
 - `rules/traits/integration-heavy.md` (circuit-breaker / retry patterns)
