@@ -2,60 +2,60 @@
 
 [![CI](https://github.com/kanggle/wms-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/wms-platform/actions/workflows/ci.yml?query=branch%3Amain)
 
-> **Warehouse Management System backend** — production-oriented, spec-driven, AI-assisted
+> **창고 관리 시스템 백엔드** — 프로덕션 기준으로 설계한 포트폴리오 프로젝트
 
-Spring Boot 3 microservices: master data, inventory mutation, and an edge gateway for a warehouse's authoritative system of record. Built as a portfolio project, engineered to production standards: hexagonal architecture, transactional outbox, two-phase reservation, idempotency keys, JWT + rate limiting, contract harness, live-pair end-to-end tests.
+Spring Boot 3 마이크로서비스: 마스터 데이터 관리, 재고 변이 처리, 엣지 게이트웨이로 구성된 창고 운영의 핵심 시스템입니다. 헥사고날 아키텍처, 트랜잭셔널 아웃박스, 2단계 예약(재고 선점), 멱등성 키, JWT + 요청 제한, 컨트랙트 하네스, 실 컨테이너 E2E 테스트까지 프로덕션 수준의 구현을 목표로 했습니다.
 
-> **What's intentionally v2** — `inbound`, `outbound`, `admin` services are fully designed (`specs/services/<name>/`) but not implemented. See [Scope-honest v1](#-scope-honest-v1) — depth over breadth was a deliberate choice.
+> **v2로 미룬 범위** — `inbound`, `outbound`, `admin` 서비스는 스펙(`specs/services/<name>/`)만 완성된 상태입니다. 넓이보다 깊이를 택한 의도적인 선택입니다 — [Scope-honest v1](#-scope-honest-v1) 참고.
 
 ---
 
-## 📍 Status — v1: master + inventory + gateway
+## 📍 현황 — v1: master + inventory + gateway
 
 ### master-service
 
-| Aggregate | Production | Tests (unit/slice/H2/Testcontainers) | Events | Contract harness |
+| Aggregate | 구현 | 테스트 (unit/slice/H2/Testcontainers) | 이벤트 | 컨트랙트 하네스 |
 |---|---|---|---|---|
 | **Warehouse** | ✅ | ✅ | ✅ | ✅ |
 | **Zone** | ✅ | ✅ | ✅ | ✅ |
 | **Location** | ✅ | ✅ | ✅ | ✅ |
 | **SKU** | ✅ | ✅ | ✅ | ✅ |
 | **Lot** | ✅ | ✅ | ✅ | ✅ |
-| Partner | deferred (Lot's `supplierPartnerId` soft-validated) | — | — | — |
+| Partner | 유예 (Lot의 `supplierPartnerId`는 소프트 검증) | — | — | — |
 
 ### inventory-service
 
-| Aggregate / Capability | Production | Tests | Events |
+| Aggregate / 기능 | 구현 | 테스트 | 이벤트 |
 |---|---|---|---|
-| `Inventory` + `InventoryMovement` (W2 append-only ledger) | ✅ | ✅ | `inventory.received` |
-| `Reservation` — W4/W5 two-phase, state machine `RESERVED → CONFIRMED / RELEASED` | ✅ | ✅ | `inventory.reserved` · `.released` · `.confirmed` |
+| `Inventory` + `InventoryMovement` (W2 append-only 원장) | ✅ | ✅ | `inventory.received` |
+| `Reservation` — W4/W5 2단계, 상태 머신 `RESERVED → CONFIRMED / RELEASED` | ✅ | ✅ | `inventory.reserved` · `.released` · `.confirmed` |
 | `StockAdjustment` — REGULAR · MARK_DAMAGED · WRITE_OFF_DAMAGED | ✅ | ✅ | `inventory.adjusted` |
-| `StockTransfer` — W1 atomic id-ascending lock order | ✅ | ✅ | `inventory.transferred` |
-| `LowStockDetection` — threshold + 1h Redis SETNX debounce, fail-open | ✅ | ✅ | `inventory.low-stock-detected` |
-| Outbound-saga consumers (PickingRequested · PickingCancelled · ShippingConfirmed · PutawayCompleted) | ✅ | ✅ | (inbound; eventId dedupe in same TX) |
+| `StockTransfer` — W1 원자적 이전, id 오름차순 잠금 순서 | ✅ | ✅ | `inventory.transferred` |
+| `LowStockDetection` — 임계값 + Redis SETNX 1h 디바운스, fail-open | ✅ | ✅ | `inventory.low-stock-detected` |
+| 아웃바운드 사가 컨슈머 (PickingRequested · PickingCancelled · ShippingConfirmed · PutawayCompleted) | ✅ | ✅ | (인바운드; 동일 TX 내 eventId 중복 제거) |
 
 ### gateway-service
 
-JWT validation · Redis rate-limit (`{ip, routeId}` compound, fail-open decorator) · header enrichment (`X-User-Id`, `X-User-Role`) · live-pair e2e against master.
+JWT 검증 · Redis 요청 제한 (`{ip, routeId}` 복합 키, fail-open 데코레이터) · 헤더 보강 (`X-User-Id`, `X-User-Role`) · master-service와 실 컨테이너 E2E 테스트 5시나리오.
 
 ---
 
-## Platform baseline
+## 플랫폼 기반
 
-- **Hexagonal everywhere except gateway** — domain free of Spring/JPA. Gateway is Layered (no rich domain).
-- **Transactional outbox** — every state change writes an outbox row in the same DB tx; `OutboxPublisher` (`@Scheduled`, exp backoff + jitter) forwards to Kafka with `pending`/`lag.seconds`/`failure.count` metrics.
-- **eventId dedupe on every consumer** — `inventory_event_dedupe(event_id, outcome)` written via `Propagation.MANDATORY` in the same TX as the domain effect. Layered with aggregate-state short-circuits as inner guard.
-- **Idempotency-Key filter** — Redis-backed (24h TTL); replay returns byte-identical cached response. Storage key conformant to `idempotency.md`.
-- **Optimistic-lock retry with id-ascending lock order** — `ReserveStockService` retries up to 3× with 100–300ms jitter on `OptimisticLockingFailureException`; multi-row locks taken in id-ascending order.
-- **Authorization in the application layer** — services receive caller roles via the command record (`Set<String> callerRoles`); controllers populate from `Authentication.getAuthorities()`. No `SecurityContextHolder` reach-back inside services.
-- **Schedulers** — Lot expiration (daily cron, master) · `ReservationExpiryJob` (`@Scheduled` per-row TX boundary, inventory).
-- **Testing** — `@WebMvcTest` slices · H2 fast tests · Testcontainers (Postgres / Kafka / Redis) · JSON Schema contract harness · gateway↔master live-pair e2e (5 scenarios) · 122-test inventory-service unit suite.
+- **헥사고날 아키텍처 (gateway 제외)** — 도메인이 Spring/JPA에 의존하지 않음. Gateway는 Layered (도메인 없음).
+- **트랜잭셔널 아웃박스** — 모든 상태 변경은 같은 DB 트랜잭션 안에서 아웃박스 행을 기록; `OutboxPublisher`(`@Scheduled`, 지수 백오프 + 지터)가 Kafka로 전달. `pending`/`lag.seconds`/`failure.count` 메트릭 제공.
+- **모든 컨슈머에 eventId 중복 제거** — `inventory_event_dedupe(event_id, outcome)` 행을 `Propagation.MANDATORY`로 도메인 효과와 같은 TX에 기록. Aggregate 상태 단락(short-circuit)을 내부 가드로 계층화.
+- **Idempotency-Key 필터** — Redis 기반 (24h TTL); 재전송 요청 시 바이트 동일 응답 반환. 키 규약은 `idempotency.md` 준수.
+- **낙관적 잠금 재시도 + id 오름차순 잠금 순서** — `ReserveStockService`는 `OptimisticLockingFailureException` 발생 시 100–300ms 지터로 최대 3회 재시도; 다중 행 잠금은 id 오름차순으로 획득.
+- **애플리케이션 계층에서 인가 처리** — 서비스는 커맨드 레코드(`Set<String> callerRoles`)로 호출자 역할을 수신; 컨트롤러가 `Authentication.getAuthorities()`에서 채워줌. 서비스 내부에서 `SecurityContextHolder` 직접 참조 없음.
+- **스케줄러** — Lot 만료 (일별 cron, master) · `ReservationExpiryJob` (`@Scheduled` 행 단위 TX 경계, inventory).
+- **테스트** — `@WebMvcTest` 슬라이스 · H2 빠른 테스트 · Testcontainers (Postgres / Kafka / Redis) · JSON Schema 컨트랙트 하네스 · gateway↔master 실 컨테이너 E2E 5시나리오 · inventory-service 유닛 테스트 122개.
 
 ---
 
-## 🏛️ Architecture
+## 🏛️ 아키텍처
 
-### System view (v1)
+### 시스템 전체 뷰 (v1)
 
 ```mermaid
 flowchart LR
@@ -111,7 +111,7 @@ flowchart LR
     style AD fill:#fafafa,stroke:#bdbdbd
 ```
 
-### Putaway → `inventory.received` (cross-service event flow)
+### Putaway → `inventory.received` (서비스 간 이벤트 흐름)
 
 ```mermaid
 sequenceDiagram
@@ -146,7 +146,7 @@ sequenceDiagram
     PG-->>K2: OutboxPublisher polls<br/>publishes envelope
 ```
 
-### Picking saga participation — `outbound.picking.requested` → reserve → `inventory.reserved`
+### Picking 사가 참여 — `outbound.picking.requested` → 예약 → `inventory.reserved`
 
 ```mermaid
 sequenceDiagram
@@ -184,7 +184,7 @@ sequenceDiagram
     K2-->>OB: outbound saga advances RESERVED state
 ```
 
-### Master-service internal — Hexagonal
+### Master-service 내부 — Hexagonal
 
 ```mermaid
 flowchart TB
@@ -228,7 +228,7 @@ flowchart TB
     style Lib fill:#e8f5e9,stroke:#388e3c
 ```
 
-### Mutation flow (POST / PATCH / deactivate)
+### 변경 요청 흐름 (POST / PATCH / deactivate)
 
 ```mermaid
 sequenceDiagram
@@ -266,173 +266,173 @@ sequenceDiagram
 
 ---
 
-### Services
+### 서비스 목록
 
-| Service | Service Type | Responsibility | v1 Status |
+| 서비스 | 서비스 타입 | 책임 | v1 상태 |
 |---|---|---|---|
-| `gateway-service` | `rest-api` | External routing, JWT validation, rate limiting, header enrichment | ✅ implemented |
-| `master-service` | `rest-api` | Master data: warehouses, zones, locations, SKUs, lots | ✅ implemented |
-| `inventory-service` | `rest-api` + `event-consumer` | Location-based stock; W4/W5 reservations; adjustments / transfers / low-stock alerts; outbound-saga participation | ✅ implemented |
-| `inbound-service` | `rest-api` | ASN management, inspection, putaway | 📐 specs only — v2 |
-| `outbound-service` | `rest-api` + `event-consumer` (saga orchestrator) | Outbound orders, picking, packing, shipping; outbound saga | 📐 specs only — v2 |
-| `admin-service` | `rest-api` + `event-consumer` (CQRS read-model) | Dashboards, KPIs, user/permission management | 📐 specs only — v2 |
+| `gateway-service` | `rest-api` | 외부 라우팅, JWT 검증, 요청 제한, 헤더 보강 | ✅ 구현 완료 |
+| `master-service` | `rest-api` | 마스터 데이터: 창고, 구역, 위치, SKU, Lot | ✅ 구현 완료 |
+| `inventory-service` | `rest-api` + `event-consumer` | 위치 기반 재고; W4/W5 예약; 조정·이전·부족 알림; 아웃바운드 사가 참여 | ✅ 구현 완료 |
+| `inbound-service` | `rest-api` | ASN 관리, 검수, 적치 | 📐 스펙만 — v2 |
+| `outbound-service` | `rest-api` + `event-consumer` (사가 오케스트레이터) | 출고 주문, 피킹, 포장, 배송; 아웃바운드 사가 | 📐 스펙만 — v2 |
+| `admin-service` | `rest-api` + `event-consumer` (CQRS 읽기 모델) | 대시보드, KPI, 사용자/권한 관리 | 📐 스펙만 — v2 |
 
-Each service declares its own internal architecture in `specs/services/<service>/architecture.md`. Write-heavy services (master / inventory / inbound / outbound) use **Hexagonal (Ports & Adapters)**. Gateway and admin are Layered (admin is a documented `## Overrides` since it is read-side / CQRS-shaped — see `specs/services/admin-service/architecture.md`).
+각 서비스의 내부 아키텍처는 `specs/services/<service>/architecture.md`에 선언되어 있습니다. 쓰기 집약적 서비스(master / inventory / inbound / outbound)는 **헥사고날(Ports & Adapters)**을 적용합니다. Gateway와 admin은 Layered입니다(admin은 읽기 전용 / CQRS 형태로 문서화된 `## Overrides` 적용).
 
-### Bounded Contexts (per `rules/domains/wms.md`)
+### 바운디드 컨텍스트 (`rules/domains/wms.md` 기준)
 
-- **Master Data** — warehouse, zone, location, SKU, partner, lot (v1 implemented; partner deferred)
-- **Inbound** — ASN, inspection, putaway
-- **Inventory** — location-based stock, transfers, adjustments
-- **Outbound** — orders, picking, packing, shipping
-- **Admin / Operations** — dashboards, KPIs, user management
+- **마스터 데이터** — warehouse, zone, location, SKU, partner, lot (v1 구현; partner 유예)
+- **인바운드** — ASN, 검수, 적치
+- **재고** — 위치 기반 재고, 이전, 조정
+- **아웃바운드** — 주문, 피킹, 포장, 배송
+- **Admin / 운영** — 대시보드, KPI, 사용자 관리
 
-### Traits applied
+### 적용 Trait
 
-- **`transactional`** — mutating paths use `Idempotency-Key`, state machines, optimistic locking, transactional outbox
-- **`integration-heavy`** — future ERP / TMS / scanner integrations via dedicated ports, circuit breakers, bulkhead patterns
+- **`transactional`** — 변경 경로에 `Idempotency-Key`, 상태 머신, 낙관적 잠금, 트랜잭셔널 아웃박스 적용
+- **`integration-heavy`** — ERP / TMS / 스캐너 연동을 전용 포트, 서킷 브레이커, 벌크헤드 패턴으로 대비
 
-See [`rules/traits/transactional.md`](rules/traits/transactional.md) and [`rules/traits/integration-heavy.md`](rules/traits/integration-heavy.md).
-
----
-
-## 🛠️ Tech Stack
-
-- **Language**: Java 21
-- **Framework**: Spring Boot 3.4
-- **Build**: Gradle 8.14 (multi-module)
-- **Persistence**: PostgreSQL 16 + Flyway (per-service DB; no shared DB)
-- **Messaging**: Apache Kafka (KRaft mode, transactional outbox)
-- **Cache**: Redis (idempotency key storage, rate limit counters)
-- **Observability**: Micrometer + Actuator (Prometheus-ready)
-- **Test**: JUnit 5 · AssertJ · Testcontainers · JSON Schema (networknt) · Nimbus JOSE JWT (JWKS stand-in) · MockWebServer
-- **Local dev**: Docker Compose
+[`rules/traits/transactional.md`](rules/traits/transactional.md) · [`rules/traits/integration-heavy.md`](rules/traits/integration-heavy.md) 참고.
 
 ---
 
-## 🚀 Getting Started
+## 🛠️ 기술 스택
 
-### Prerequisites
+- **언어**: Java 21
+- **프레임워크**: Spring Boot 3.4
+- **빌드**: Gradle 8.14 (멀티 모듈)
+- **영속성**: PostgreSQL 16 + Flyway (서비스별 독립 DB; 공유 DB 없음)
+- **메시징**: Apache Kafka (KRaft 모드, 트랜잭셔널 아웃박스)
+- **캐시**: Redis (멱등성 키 저장, 요청 제한 카운터)
+- **관측성**: Micrometer + Actuator (Prometheus 연동 가능)
+- **테스트**: JUnit 5 · AssertJ · Testcontainers · JSON Schema (networknt) · Nimbus JOSE JWT (JWKS 모의) · MockWebServer
+- **로컬 개발**: Docker Compose
 
-- Java 21 (Temurin recommended)
-- Docker (for Testcontainers and the local stack)
+---
 
-### Boot the local stack
+## 🚀 시작하기
+
+### 사전 요구사항
+
+- Java 21 (Temurin 권장)
+- Docker (Testcontainers 및 로컬 스택용)
+
+### 로컬 스택 실행
 
 ```bash
-cp .env.example .env    # fill in values
+cp .env.example .env    # 값 입력
 docker-compose up -d    # Postgres, Kafka, Redis
 ```
 
-### Run a service
+### 서비스 실행
 
 ```bash
-# Default ports: gateway :8080, master :8081, inventory :8082
+# 기본 포트: gateway :8080, master :8081, inventory :8082
 ./gradlew :apps:gateway-service:bootRun
 ./gradlew :apps:master-service:bootRun
 ./gradlew :apps:inventory-service:bootRun
 ```
 
-> **Cross-project port namespace** — services use `${PORT_PREFIX:-2}XXXX`; `2` is the WMS prefix, allowing parallel runs alongside other portfolio projects (e.g., `1` = ecommerce). Override via env var when running multiple platforms locally.
+> **크로스 프로젝트 포트 네임스페이스** — 서비스는 `${PORT_PREFIX:-2}XXXX` 패턴 사용; `2`는 WMS 접두사로, 다른 포트폴리오 프로젝트(예: ecommerce = `1`)와 동시에 실행 가능. 로컬에서 여러 플랫폼을 함께 띄울 때 환경 변수로 재정의하세요.
 
-### Run tests
+### 테스트 실행
 
 ```bash
 ./gradlew :apps:master-service:check       # unit + slice + H2 + Testcontainers
 ./gradlew :apps:inventory-service:check    # unit + slice + Testcontainers (Postgres/Kafka/Redis)
 ./gradlew :apps:gateway-service:check
-./gradlew check                             # everything
+./gradlew check                             # 전체
 ```
 
-**Testcontainers on Windows**: run tests from WSL2 (Ubuntu + Docker Desktop WSL integration). Windows-native test runs skip Testcontainers via `@Testcontainers(disabledWithoutDocker = true)`.
+**Windows에서 Testcontainers 실행**: WSL2(Ubuntu + Docker Desktop WSL 통합)에서 테스트를 실행하세요. Windows 네이티브 환경에서는 `@Testcontainers(disabledWithoutDocker = true)`로 Testcontainers 테스트가 자동으로 건너뜁니다.
 
 ---
 
-## 🎯 Demo — golden-path E2E with curl
+## 🎯 데모 — curl로 실행하는 황금 경로 E2E
 
-The flow exercises master-data setup, the **putaway-completed → inventory.received** consumer path (simulating a future inbound-service publisher), and the **W4/W5 reservation lifecycle**. Run after `docker compose up -d`.
+마스터 데이터 설정부터 **putaway-completed → inventory.received** 컨슈머 경로(미래의 inbound-service 퍼블리셔 시뮬레이션), **W4/W5 예약 라이프사이클**을 전부 실행합니다. `docker compose up -d` 이후 실행하세요.
 
 ```bash
-# Boot stack + services
+# 스택 + 서비스 실행
 docker compose up -d                          # postgres, kafka, redis
 ./gradlew :apps:gateway-service:bootRun &     # :20080
 ./gradlew :apps:master-service:bootRun &      # :20081
 ./gradlew :apps:inventory-service:bootRun &   # :20082
 
-# Resolve a JWT (configure your IdP or use the seed token from infra/seed-token.txt)
+# JWT 취득 (IdP 설정 또는 infra/seed-token.txt 사용)
 TOKEN=$(cat infra/seed-token.txt)
 H_AUTH="-H Authorization: Bearer $TOKEN"
 H_IDEM(){ echo "-H Idempotency-Key: $(uuidgen)"; }
 H_JSON="-H Content-Type: application/json"
 
-# 1) Create warehouse → POST /api/v1/master/warehouses
+# 1) 창고 생성 → POST /api/v1/master/warehouses
 WH=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/master/warehouses \
   -d '{"code":"WH-001","name":"Seoul DC","status":"ACTIVE"}' | jq -r .id)
 
-# 2) Create zone, location, SKU (similar; see specs/contracts/http/master-service-api.md)
-# ... (omitted for brevity)
+# 2) 구역, 위치, SKU 생성 (동일 패턴; specs/contracts/http/master-service-api.md 참고)
+# ... (생략)
 
-# 3) Simulate inbound-service publishing wms.inbound.putaway.completed.v1
+# 3) wms.inbound.putaway.completed.v1 이벤트 발행 (inbound-service 시뮬레이션)
 docker exec wms-kafka kafka-console-producer \
   --bootstrap-server localhost:9092 \
   --topic wms.inbound.putaway.completed.v1 < demo/putaway-completed.json
-# inventory-service's PutawayCompletedConsumer picks up, calls ReceiveStockUseCase,
-# writes Inventory + InventoryMovement (W2 ledger), emits inventory.received via outbox.
+# inventory-service의 PutawayCompletedConsumer가 수신 → ReceiveStockUseCase 호출
+# → Inventory + InventoryMovement(W2 원장) 기록 → 아웃박스 통해 inventory.received 발행
 
-# 4) Query inventory → GET /api/v1/inventory
+# 4) 재고 조회 → GET /api/v1/inventory
 curl -s $H_AUTH "http://localhost:20080/api/v1/inventory?warehouseId=$WH" | jq
 
-# 5) Reserve stock → POST /api/v1/reservations (W4: AVAILABLE → RESERVED)
+# 5) 재고 예약 → POST /api/v1/reservations (W4: AVAILABLE → RESERVED)
 RESV=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/reservations \
   -d "$(cat demo/reserve-request.json)" | jq -r .id)
 
-# 6) Confirm shipping (W5: consume RESERVED, AVAILABLE untouched)
+# 6) 출고 확정 (W5: RESERVED 소비, AVAILABLE 유지)
 curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST \
   "http://localhost:20080/api/v1/reservations/$RESV/confirm" \
   -d "$(cat demo/confirm-request.json)"
 
-# 7) Verify all 4 events landed on Kafka
+# 7) Kafka에 이벤트 4건 확인
 docker exec wms-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic wms.inventory.received.v1,wms.inventory.reserved.v1,wms.inventory.confirmed.v1 \
   --from-beginning --max-messages 3
 ```
 
-> Demo payload templates live under `demo/` (committed sample JSON for putaway / reserve / confirm). The script is the same flow exercised by `PutawayCompletedConsumerIntegrationTest` and `PickingFlowIntegrationTest` — those Testcontainers tests are the authoritative version.
+> 데모 페이로드 템플릿은 `demo/` 디렉터리에 있습니다 (putaway / reserve / confirm 샘플 JSON). 이 스크립트의 흐름은 `PutawayCompletedConsumerIntegrationTest`와 `PickingFlowIntegrationTest`가 Testcontainers로 검증하는 것과 동일합니다.
 
 ---
 
-## 📁 Directory Structure
+## 📁 디렉터리 구조
 
 ```
 wms-platform/
 ├── PROJECT.md              ← domain=wms, traits=[transactional, integration-heavy]
-├── README.md               ← this file
-├── CLAUDE.md               ← rule-driven development instructions
-├── TEMPLATE.md              ← framework extraction guide (for reuse across projects)
-├── build.gradle            ← root Gradle config (plugins + subprojects)
-├── settings.gradle         ← module composition
-├── docker-compose.yml      ← local stack
-├── .github/workflows/      ← GitHub Actions (check + boot-jar artifacts + e2e job)
+├── README.md               ← 이 파일
+├── CLAUDE.md               ← 규칙 기반 개발 지침 (AI 에이전트 운영 규칙)
+├── TEMPLATE.md             ← 프레임워크 추출 가이드 (프로젝트 간 재사용)
+├── build.gradle            ← 루트 Gradle 설정 (플러그인 + 서브프로젝트)
+├── settings.gradle         ← 모듈 구성
+├── docker-compose.yml      ← 로컬 스택
+├── .github/workflows/      ← GitHub Actions (check + boot-jar 아티팩트 + e2e 잡)
 │
-├── libs/                   ← shared libraries (project-agnostic)
-│   ├── java-common/        ← base types, exceptions
-│   ├── java-messaging/     ← outbox publisher, event envelope, Kafka abstractions
-│   ├── java-observability/ ← Micrometer setup, logging
-│   ├── java-security/      ← JWT validation, OAuth2 setup
+├── libs/                   ← 공유 라이브러리 (프로젝트 무관)
+│   ├── java-common/        ← 기반 타입, 예외
+│   ├── java-messaging/     ← 아웃박스 퍼블리셔, 이벤트 봉투, Kafka 추상화
+│   ├── java-observability/ ← Micrometer 설정, 로깅
+│   ├── java-security/      ← JWT 검증, OAuth2 설정
 │   ├── java-test-support/
 │   └── java-web/
-├── platform/               ← platform-level policies (error handling, testing strategy, service types)
-├── rules/                  ← rule taxonomy (common + domains/wms + traits)
-├── .claude/                ← AI agent config: skills/, agents/, commands/, config/
+├── platform/               ← 플랫폼 정책 (에러 처리, 테스트 전략, 서비스 타입)
+├── rules/                  ← 규칙 분류 체계 (common + domains/wms + traits)
+├── .claude/                ← AI 에이전트 설정: skills/, agents/, commands/, config/
 │
-├── apps/                   ← service modules
+├── apps/                   ← 서비스 모듈
 │   ├── gateway-service/    ← v1 ✅
 │   ├── master-service/     ← v1 ✅
 │   ├── inventory-service/  ← v1 ✅
-│   ├── inbound-service/    ← v2 (specs only)
-│   ├── outbound-service/   ← v2 (specs only)
-│   └── admin-service/      ← v2 (specs only)
+│   ├── inbound-service/    ← v2 (스펙만)
+│   ├── outbound-service/   ← v2 (스펙만)
+│   └── admin-service/      ← v2 (스펙만)
 │
 ├── specs/
 │   ├── contracts/
@@ -441,162 +441,162 @@ wms-platform/
 │   ├── services/
 │   │   ├── master-service/    ← architecture, domain-model, idempotency
 │   │   ├── inventory-service/ ← architecture, domain-model, idempotency, sagas, state-machines
-│   │   ├── inbound-service/   ← architecture, domain-model (v2 — specs ahead of code)
+│   │   ├── inbound-service/   ← architecture, domain-model (v2 — 코드 선행 스펙)
 │   │   ├── outbound-service/  ← architecture, domain-model (v2)
 │   │   └── admin-service/     ← architecture, domain-model (v2)
 │   ├── features/
 │   └── use-cases/
 ├── tasks/
-│   ├── INDEX.md            ← lifecycle rules
-│   ├── templates/          ← task templates (shared)
-│   └── done/               ← 32 tasks from v1 development
+│   ├── INDEX.md            ← 태스크 라이프사이클 규칙
+│   ├── templates/          ← 태스크 템플릿 (공유)
+│   └── done/               ← v1 개발에서 완료된 태스크 32개
 ├── knowledge/
-│   └── adr/                ← architecture decision records
-├── docs/                   ← operational docs + shared guides
-├── infra/                  ← Prometheus, Grafana, Loki configs
-└── docker/                 ← Docker build contexts (DB init, etc.)
+│   └── adr/                ← 아키텍처 결정 기록
+├── docs/                   ← 운영 문서 + 공유 가이드
+├── infra/                  ← Prometheus, Grafana, Loki 설정
+└── docker/                 ← Docker 빌드 컨텍스트 (DB 초기화 등)
 ```
 
 ---
 
-## 📐 Key Design Decisions
+## 📐 핵심 설계 결정
 
-### v1 Entity Scope (Master Data)
+### v1 엔티티 범위 (마스터 데이터)
 
-5 aggregates implemented: **Warehouse · Zone · Location · SKU · Lot**. Partner deferred (Lot's `supplierPartnerId` is soft-validated in v1). Common fields (`id`, `*_code`, `name`, `status`, `version`, timestamps, actor ids). Soft deactivation only (no hard deletes in v1). Details: [specs/services/master-service/domain-model.md](specs/services/master-service/domain-model.md).
+5개 Aggregate 구현: **Warehouse · Zone · Location · SKU · Lot**. Partner 유예 (Lot의 `supplierPartnerId`는 v1에서 소프트 검증). 공통 필드: `id`, `*_code`, `name`, `status`, `version`, 타임스탬프, 행위자 ID. 소프트 비활성화만 지원 (v1에서 하드 삭제 없음). 상세: [specs/services/master-service/domain-model.md](specs/services/master-service/domain-model.md).
 
-### Cross-Aggregate Invariants (the interesting one)
+### 크로스 Aggregate 불변 조건 (핵심 설계)
 
-Lot requires its parent SKU to have `trackingType == LOT` AND `status == ACTIVE`. Conversely, SKU deactivation is blocked while active Lots exist under it (`REFERENCE_INTEGRITY_VIOLATION` 409). Zone deactivation is blocked while active Locations exist. Warehouse deactivation is blocked while active Zones exist. Each guard is a port method (`hasActive*For(...)`) implemented as a real JPA `existsBy*AndStatus` query — not a stub.
+Lot 생성 시 부모 SKU의 `trackingType == LOT` AND `status == ACTIVE` 조건을 모두 검증합니다. 반대로, 활성 Lot이 존재하는 SKU의 비활성화는 차단됩니다(`REFERENCE_INTEGRITY_VIOLATION` 409). Zone 비활성화는 활성 Location이 있으면 차단, Warehouse 비활성화는 활성 Zone이 있으면 차단. 각 가드는 `hasActive*For(...)` 포트 메서드로 구현 — 실제 JPA `existsBy*AndStatus` 쿼리이며 스텁이 아닙니다.
 
-### Hexagonal Architecture for Write-Heavy Services
+### 쓰기 집약적 서비스에 헥사고날 아키텍처 적용
 
-Master uses Hexagonal to isolate domain logic from infrastructure. Gateway is Layered (no rich domain). Rationale: external integration variety (ERP, TMS, scanners) matches the Ports & Adapters metaphor naturally. Details: [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md).
+Master는 헥사고날로 도메인 로직을 인프라와 분리합니다. Gateway는 Layered (풍부한 도메인 없음). 선택 이유: ERP, TMS, 스캐너 등 다양한 외부 통합의 다양성이 Ports & Adapters 은유와 자연스럽게 맞기 때문입니다. 상세: [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md).
 
-### Transactional Outbox for Event Publication
+### 이벤트 발행을 위한 트랜잭셔널 아웃박스
 
-Every state change writes an outbox row in the same DB transaction; a separate publisher (`OutboxPollingScheduler` in `libs/java-messaging`) forwards rows to Kafka. Guarantees exactly-one publish per committed change. At-least-once delivery; consumers must be idempotent keyed by `eventId`.
+모든 상태 변경은 같은 DB 트랜잭션에서 아웃박스 행을 기록하고, 별도 퍼블리셔(`libs/java-messaging`의 `OutboxPollingScheduler`)가 Kafka로 전달합니다. 커밋된 변경당 정확히 한 번 발행을 보장합니다. 최소 한 번 전달이므로 컨슈머는 `eventId`로 멱등성을 유지해야 합니다.
 
-### Error Envelope with `timestamp`
+### `timestamp`를 포함한 에러 봉투
 
-All error responses carry `{code, message, timestamp}` (ISO 8601 UTC) per `platform/error-handling.md`. `STATE_TRANSITION_INVALID` → 422 (unprocessable business rule). `REFERENCE_INTEGRITY_VIOLATION` → 409. `IMMUTABLE_FIELD` attempts → 422. Version conflicts → 409. Schema validated by `HttpContractTest` / `EventContractTest` via JSON Schema.
+모든 에러 응답은 `platform/error-handling.md`에 따라 `{code, message, timestamp}` (ISO 8601 UTC)를 포함합니다. `STATE_TRANSITION_INVALID` → 422, `REFERENCE_INTEGRITY_VIOLATION` → 409, `IMMUTABLE_FIELD` 시도 → 422, 버전 충돌 → 409. `HttpContractTest` / `EventContractTest`에서 JSON Schema로 검증합니다.
 
-### Idempotency-Key on All Mutating Endpoints
+### 모든 변경 엔드포인트에 Idempotency-Key 적용
 
-Client-supplied UUID + method + path scope. Redis-backed storage with 24h TTL. Fail-closed on Redis outage (503). Details: [specs/services/master-service/idempotency.md](specs/services/master-service/idempotency.md).
+클라이언트 제공 UUID + 메서드 + 경로 스코프. Redis 기반 저장, 24h TTL. Redis 장애 시 fail-closed (503). 상세: [specs/services/master-service/idempotency.md](specs/services/master-service/idempotency.md).
 
-### Gateway Rate-Limit — Compound Key + Fail-Open
+### Gateway 요청 제한 — 복합 키 + Fail-Open
 
-Key is `{clientIp}:{routeId}` (not IP-only — future `/inventory/**` route won't share master's bucket). `FailOpenRateLimiter` decorator wraps `RedisRateLimiter`: Redis unavailable → request passes + WARN log (per `platform/api-gateway-policy.md`).
+키는 `{clientIp}:{routeId}` (IP 단독이 아님 — 미래의 `/inventory/**` 라우트가 master 버킷을 공유하지 않도록). `FailOpenRateLimiter` 데코레이터가 `RedisRateLimiter`를 감쌉니다: Redis 불가 → 요청 통과 + WARN 로그 (`platform/api-gateway-policy.md` 기준).
 
-### Local-Only Referential Integrity (v1)
+### v1 로컬 참조 무결성
 
-Master-service checks only its own child records on deactivation. Cross-service inventory / order references are out of scope for v1 (would require a `deactivation.requested` saga). Known limitation, documented in the contract.
+Master-service는 비활성화 시 자신의 하위 레코드만 확인합니다. 서비스 간 재고·주문 참조는 v1 범위 밖입니다 (처리하려면 `deactivation.requested` 사가가 필요). 알려진 제한 사항으로 컨트랙트에 문서화되어 있습니다.
 
-### W4 / W5 Two-Phase Reservation (inventory-service)
+### W4 / W5 2단계 예약 (inventory-service)
 
-Reserve never decrements `AVAILABLE` — it deducts `AVAILABLE → RESERVED`. Confirm consumes `RESERVED`, `AVAILABLE` untouched. State machine: `RESERVED → CONFIRMED / RELEASED`. Effects:
+Reserve는 `AVAILABLE`을 직접 감소시키지 않고 `AVAILABLE → RESERVED`로 이동시킵니다. Confirm은 `RESERVED`를 소비하며 `AVAILABLE`은 그대로 유지합니다. 상태 머신: `RESERVED → CONFIRMED / RELEASED`. 효과:
 
-- **Reserve is idempotent under retry** — the post-condition (`reservation in RESERVED state`) is unchanged by replay.
-- **Confirm is immune to broken-pipe between reserve and ship** — the reserved bucket holds the commitment until shipping confirmation arrives.
-- The same shape supports cancel / TTL release without touching `AVAILABLE` more than once.
+- **Reserve는 재시도에 멱등** — 재전송 후에도 사후 조건(`예약이 RESERVED 상태`)은 동일.
+- **Confirm은 브로큰 파이프에 면역** — 예약 버킷이 출고 확인 도착 전까지 약속을 유지.
+- 같은 구조로 취소 / TTL 해제 처리 시 `AVAILABLE`을 한 번만 건드림.
 
-Code: `Inventory.reserve / release / confirm`, `ReserveStockService`, `ConfirmReservationService`. Domain rule W4/W5 in [`rules/domains/wms.md`](rules/domains/wms.md).
+코드: `Inventory.reserve / release / confirm`, `ReserveStockService`, `ConfirmReservationService`. 도메인 규칙 W4/W5는 [`rules/domains/wms.md`](rules/domains/wms.md).
 
-### Optimistic-Lock Retry With Id-Ascending Lock Order
+### 낙관적 잠금 재시도 + id 오름차순 잠금 순서
 
-`ReserveStockService` retries up to 3 times on `OptimisticLockingFailureException` with 100–300ms jitter. Multi-row updates take rows in id-ascending order via `compareTo` so two concurrent reservations on overlapping rows do not application-deadlock. Postgres-level deadlocks are still possible and handled by retry — the ordering eliminates the easy-to-prevent application case.
+`ReserveStockService`는 `OptimisticLockingFailureException` 발생 시 100–300ms 지터로 최대 3회 재시도합니다. 다중 행 업데이트는 `compareTo`로 id 오름차순으로 잠금을 획득해, 겹치는 행을 가진 두 예약이 동시 실행되어도 애플리케이션 수준 교착 상태가 발생하지 않습니다. Postgres 수준 교착 상태는 재시도로 처리하며, 이 순서 전략은 회피하기 쉬운 애플리케이션 수준 케이스를 제거합니다.
 
-Per-trait T5 (optimistic-lock first; pessimistic locks forbidden). [`ReserveStockService`](apps/inventory-service/src/main/java/com/wms/inventory/application/service/ReserveStockService.java).
+Trait T5 (낙관적 잠금 우선; 비관적 잠금 금지). [`ReserveStockService`](apps/inventory-service/src/main/java/com/wms/inventory/application/service/ReserveStockService.java).
 
-### W1 Atomic Transfer (id-ascending lock order)
+### W1 원자적 이전 (id 오름차순 잠금 순서)
 
-`TransferStockService` updates source and target inventory rows in one TX, locks taken in id-ascending order to prevent reciprocal deadlocks (`T1 → T2` lock {a, b} vs `T2 → T1` lock {b, a}). Target is upsert (created if absent) with a `wasCreated` flag propagating to the `inventory.transferred` event payload. Cross-warehouse transfers rejected via `MasterReadModelPort` lookup.
+`TransferStockService`는 하나의 TX에서 출발·도착 재고 행을 업데이트하며, id 오름차순으로 잠금을 획득해 상호 교착 상태를 방지합니다. 도착지는 없으면 생성하는 upsert (`wasCreated` 플래그가 `inventory.transferred` 이벤트 페이로드에 전파). 창고 간 이전은 `MasterReadModelPort` 조회로 거부됩니다.
 
-### Low-Stock Alert Debouncing (fail-open)
+### 부족 재고 알림 디바운싱 (fail-open)
 
-`LowStockDetectionService` evaluates threshold on every `AVAILABLE` reduction. When threshold crossed, debounced via Redis `SETNX` keyed by `inventoryId` with 1h TTL. **Fail-open**: if Redis errors during the SETNX, the alert fires anyway — debounce is a perf hint, not a safety property. The `inventory.low-stock-detected` event flows through the same outbox path as every other domain event.
+`LowStockDetectionService`는 `AVAILABLE` 감소마다 임계값을 평가합니다. 임계값 초과 시 `inventoryId` 키, 1h TTL의 Redis `SETNX`로 디바운싱합니다. **Fail-open**: SETNX 중 Redis 오류 발생 시 알림은 그대로 발송됩니다 — 디바운스는 성능 힌트이지 안전 속성이 아닙니다. `inventory.low-stock-detected` 이벤트는 다른 도메인 이벤트와 동일한 아웃박스 경로를 사용합니다.
 
-### eventId Dedupe on Every Consumer (T8)
+### 모든 컨슈머에 eventId 중복 제거 (T8)
 
-Every Kafka consumer (`PutawayCompletedConsumer`, `PickingRequestedConsumer`, `PickingCancelledConsumer`, `ShippingConfirmedConsumer`, plus the master-snapshot trio) writes an `inventory_event_dedupe(event_id, outcome)` row in the same transaction as the domain effect, via `EventDedupePersistenceAdapter` declaring `Propagation.MANDATORY`. Layered with aggregate-state short-circuits as the inner guard (e.g., terminal-reservation no-op).
+모든 Kafka 컨슈머(`PutawayCompletedConsumer`, `PickingRequestedConsumer`, `PickingCancelledConsumer`, `ShippingConfirmedConsumer`, 마스터 스냅샷 트리오 포함)는 `Propagation.MANDATORY`를 선언한 `EventDedupePersistenceAdapter`를 통해 도메인 효과와 같은 TX에서 `inventory_event_dedupe(event_id, outcome)` 행을 기록합니다. Aggregate 상태 단락(예: 종료 상태 예약 no-op)을 내부 가드로 계층화합니다.
 
-This split — eventId outer, business-state inner — handles two distinct races: Kafka redelivery (outer) and cross-consumer mutation (inner, e.g., a manual REST cancel arriving between the message and the handler).
+이 분리 — eventId 외부 가드, 비즈니스 상태 내부 가드 — 는 두 가지 서로 다른 경쟁 상태를 처리합니다: Kafka 재전달 (외부)과 크로스 컨슈머 뮤테이션 (내부, 예: 메시지와 핸들러 사이에 도착하는 수동 REST 취소).
 
-### Authorization in the Application Layer
+### 애플리케이션 계층에서 인가 처리
 
-Inventory mutation services receive caller roles via the command record (`Set<String> callerRoles` on `AdjustStockCommand`). Controllers populate them from `Authentication.getAuthorities()`. Services decide policy and throw `AccessDeniedException` (mapped to 403 by `GlobalExceptionHandler`).
+재고 변이 서비스는 커맨드 레코드(`AdjustStockCommand`의 `Set<String> callerRoles`)로 호출자 역할을 수신합니다. 컨트롤러가 `Authentication.getAuthorities()`에서 채워주고, 서비스가 정책을 결정하여 `AccessDeniedException`을 던집니다(`GlobalExceptionHandler`가 403으로 매핑).
 
-Controllers no longer reach into raw JWT claims. Rationale: services stay framework-agnostic and the authorization decision lives where the business invariant lives. Per `architecture.md` §Security.
+컨트롤러는 더 이상 JWT 클레임을 직접 파싱하지 않습니다. 이유: 서비스가 프레임워크에 독립적으로 유지되고, 인가 결정이 비즈니스 불변 조건이 있는 곳에 위치합니다. `architecture.md` §Security 기준.
 
 ---
 
 ## 🎯 Scope-honest v1
 
-| Service | architecture.md | domain-model.md | contracts | implementation | tests |
+| 서비스 | architecture.md | domain-model.md | 컨트랙트 | 구현 | 테스트 |
 |---|:---:|:---:|:---:|:---:|:---:|
-| `gateway-service` | ✅ | (n/a) | (gateway-routes spec) | ✅ | ✅ |
+| `gateway-service` | ✅ | (해당 없음) | (gateway-routes 스펙) | ✅ | ✅ |
 | `master-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `inventory-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `inbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `outbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `admin-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
-`inbound`, `outbound`, and `admin` services have full architecture and domain-model specifications under `specs/services/<name>/`, but contracts / implementation / tests are intentionally **v2 scope**. Each architecture.md ends with an "Open Items" section listing the missing artefacts before its first implementation task may move to `tasks/ready/`.
+`inbound`, `outbound`, `admin` 서비스는 `specs/services/<name>/`에 아키텍처와 도메인 모델 스펙이 완전히 작성되어 있지만, 컨트랙트 / 구현 / 테스트는 의도적으로 **v2 범위**입니다. 각 `architecture.md`는 첫 번째 구현 태스크가 `tasks/ready/`로 이동하기 전에 완성해야 할 항목을 "Open Items" 섹션으로 나열합니다.
 
-**Why the deliberate scope choice**: depth over breadth. master + inventory together exercise every architectural pattern declared in the rule set — Hexagonal layout, transactional outbox, eventId dedupe, two-phase saga participation, optimistic-lock retry, idempotency, JWT + role-based authorization, observability metrics, contract harness. Adding three more half-built services would dilute review value without surfacing new patterns.
+**범위를 의도적으로 좁힌 이유**: 넓이보다 깊이. master + inventory만으로 규칙 세트에 선언된 모든 아키텍처 패턴을 실행합니다 — 헥사고날 레이아웃, 트랜잭셔널 아웃박스, eventId 중복 제거, 2단계 사가 참여, 낙관적 잠금 재시도, 멱등성, JWT + 역할 기반 인가, 관측성 메트릭, 컨트랙트 하네스. 반쯤 구현된 서비스 3개를 추가하면 새로운 패턴 없이 리뷰 가치만 희석됩니다.
 
-The `inventory-service.PutawayCompletedConsumer` consumes `wms.inbound.putaway.completed.v1` from a real Kafka topic; for end-to-end demos the event is published directly by the demo script (see [Demo](#-demo--golden-path-e2e-with-curl)). When inbound-service is implemented in v2 it slots in as the producer of that exact event without any inventory-service change required.
-
----
-
-## 🧭 How this was built
-
-> **Full walk-through** (rule layers · `/process-tasks` pipeline · review discipline · concrete artifacts): [docs/guides/development-process.md](docs/guides/development-process.md)
-
-This project follows a rule-driven, task-centric workflow assisted by **[Claude Code](https://claude.com/claude-code)**:
-
-- **Specs first**: contracts, architecture, and domain model authored before any implementation.
-- **Taxonomy-activated rules**: `PROJECT.md` declares `domain=wms, traits=[transactional, integration-heavy]`. The AI loads `rules/common.md` + `rules/domains/wms.md` + `rules/traits/*` for each declared trait — no other rules consulted.
-- **Skills + agents**: 80+ reusable skills under `.claude/skills/` (Hexagonal structure, outbox pattern, idempotent consumer, testing strategy, etc.) and specialized subagents (`architect`, `backend-engineer`, `code-reviewer`, `qa-engineer`, `api-designer`) in `.claude/agents/`.
-- **Task lifecycle**: `ready → in-progress → review → done`. Only `tasks/ready/` items are implemented. Every task goes through Plan → Implement → Test → Review.
-- **/process-tasks**: the top-level pipeline command — batch-implements everything in `ready/` via worktree-isolated subagents, then parallel-reviews everything in `review/`.
-- **Review discipline**: every implementation gets an independent review pass. Review outcomes are `APPROVE` or `FIX NEEDED` → new fix ticket. All recorded in `tasks/INDEX.md` with verdict + follow-up.
-
-The full development history (60+ commits across 19 completed tasks) lives at **[kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab)** — this repo is a snapshot extracted from there via `scripts/sync-portfolio.sh`.
+`inventory-service.PutawayCompletedConsumer`는 실제 Kafka 토픽에서 `wms.inbound.putaway.completed.v1`을 소비합니다; E2E 데모에서는 이벤트를 데모 스크립트가 직접 발행합니다([데모](#-데모--curl로-실행하는-황금-경로-e2e) 참고). v2에서 inbound-service가 구현되면 inventory-service 변경 없이 그 이벤트의 퍼블리셔로 연결됩니다.
 
 ---
 
-## 🔗 Related
+## 🧭 개발 방식
 
-- **Development workspace**: [kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab) — where tasks are authored, reviewed, and merged
-- **Portfolio hub**: [github.com/kanggle](https://github.com/kanggle) — other projects
+> **전체 과정** (규칙 레이어 · `/process-tasks` 파이프라인 · 리뷰 규율 · 구체적 아티팩트): [docs/guides/development-process.md](docs/guides/development-process.md)
 
-### Specs (in this repo)
+이 프로젝트는 **[Claude Code](https://claude.com/claude-code)** 기반의 규칙 주도, 태스크 중심 워크플로우를 따릅니다:
 
-- [PROJECT.md](PROJECT.md) — domain/traits declaration, service map, out-of-scope list
+- **스펙 선행**: 컨트랙트, 아키텍처, 도메인 모델을 구현 전에 먼저 작성.
+- **분류 체계 기반 규칙 활성화**: `PROJECT.md`가 `domain=wms, traits=[transactional, integration-heavy]`를 선언. AI는 각 선언된 trait에 맞는 `rules/common.md` + `rules/domains/wms.md` + `rules/traits/*`를 로드 — 다른 규칙은 참조하지 않음.
+- **Skills + Agents**: `.claude/skills/`에 80개 이상의 재사용 가능한 스킬 (헥사고날 구조, 아웃박스 패턴, 멱등 컨슈머, 테스트 전략 등)과 `.claude/agents/`에 전문 서브에이전트(`architect`, `backend-engineer`, `code-reviewer`, `qa-engineer`, `api-designer`).
+- **태스크 라이프사이클**: `ready → in-progress → review → done`. `tasks/ready/` 항목만 구현. 모든 태스크는 Plan → Implement → Test → Review를 거침.
+- **/process-tasks**: 최상위 파이프라인 커맨드 — `ready/`의 모든 항목을 워크트리 격리 서브에이전트로 일괄 구현, 이후 `review/`의 모든 항목을 병렬 리뷰.
+- **리뷰 규율**: 모든 구현은 독립적인 리뷰 패스를 거침. 결과는 `APPROVE` 또는 `FIX NEEDED` → 새 수정 티켓. 전부 `tasks/INDEX.md`에 판정 + 후속 조치와 함께 기록.
 
-**v1 — implemented:**
+전체 개발 이력 (19개 완료 태스크, 60개 이상의 커밋)은 **[kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab)** 에 있습니다 — 이 레포는 `scripts/sync-portfolio.sh`를 통해 추출한 스냅샷입니다.
+
+---
+
+## 🔗 관련 링크
+
+- **개발 워크스페이스**: [kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab) — 태스크 작성, 리뷰, 머지가 이루어지는 원본 레포
+- **포트폴리오 허브**: [github.com/kanggle](https://github.com/kanggle) — 다른 프로젝트
+
+### 스펙 (이 레포 안에 있음)
+
+- [PROJECT.md](PROJECT.md) — domain/traits 선언, 서비스 맵, 범위 외 목록
+
+**v1 — 구현 완료:**
 - [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md) · [domain-model.md](specs/services/master-service/domain-model.md) · [idempotency.md](specs/services/master-service/idempotency.md)
 - [specs/services/inventory-service/architecture.md](specs/services/inventory-service/architecture.md) · [domain-model.md](specs/services/inventory-service/domain-model.md) · [idempotency.md](specs/services/inventory-service/idempotency.md)
 - [specs/services/gateway-service/architecture.md](specs/services/gateway-service/architecture.md) · [public-routes.md](specs/services/gateway-service/public-routes.md)
 - [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md) · [inventory-service-api.md](specs/contracts/http/inventory-service-api.md)
 - [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md) · [inventory-events.md](specs/contracts/events/inventory-events.md)
 
-**v2 — specs only:**
+**v2 — 스펙만:**
 - [specs/services/inbound-service/architecture.md](specs/services/inbound-service/architecture.md) · [domain-model.md](specs/services/inbound-service/domain-model.md)
 - [specs/services/outbound-service/architecture.md](specs/services/outbound-service/architecture.md) · [domain-model.md](specs/services/outbound-service/domain-model.md)
 - [specs/services/admin-service/architecture.md](specs/services/admin-service/architecture.md) · [domain-model.md](specs/services/admin-service/domain-model.md)
 
-### Rules
+### 규칙
 
-- [rules/common.md](rules/common.md) — always-loaded rule index
-- [rules/domains/wms.md](rules/domains/wms.md) — WMS domain rules (W1–W6)
+- [rules/common.md](rules/common.md) — 항상 로드되는 규칙 인덱스
+- [rules/domains/wms.md](rules/domains/wms.md) — WMS 도메인 규칙 (W1–W6)
 - [rules/traits/transactional.md](rules/traits/transactional.md) — T1–T8
 - [rules/traits/integration-heavy.md](rules/traits/integration-heavy.md) — I1–I10
 
 ---
 
-## 📄 License
+## 📄 라이선스
 
-License pending. Not open source at this time.
+라이선스 미정. 현재 오픈 소스 아님.
