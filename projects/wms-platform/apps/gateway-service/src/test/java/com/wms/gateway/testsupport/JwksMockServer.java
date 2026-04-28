@@ -1,6 +1,7 @@
 package com.wms.gateway.testsupport;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -33,7 +34,11 @@ public final class JwksMockServer implements AutoCloseable {
                 return new MockResponse().setResponseCode(404);
             }
         });
-        this.server.start();
+        // Bind to all interfaces so containers can reach this server via
+        // host.docker.internal (which resolves to the Docker bridge IP, not
+        // loopback). MockWebServer.start() default binds to 127.0.0.1 only,
+        // which is unreachable from inside Docker containers on Linux CI.
+        this.server.start(InetAddress.getByName("0.0.0.0"), 0);
     }
 
     /**
