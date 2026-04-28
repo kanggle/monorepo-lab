@@ -157,14 +157,27 @@ Owned by `master-service`. See `specs/services/master-service/`.
 
 ## Inbound  `[domain: wms]`
 
-Owned by `inbound-service` (future). See `rules/domains/wms.md`.
+Owned by `inbound-service`. See `rules/domains/wms.md` and
+`specs/services/inbound-service/`.
 
 | Code | HTTP | Description |
 |---|---|---|
 | ASN_NOT_FOUND | 404 | Advance Shipment Notice (ASN) does not exist |
-| ASN_ALREADY_CLOSED | 422 | Operation attempted on an already-closed ASN |
-| INSPECTION_QUANTITY_MISMATCH | 422 | Inspected quantity does not match the ASN quantity |
-| PUTAWAY_LOCATION_FULL | 422 | Target location has insufficient remaining capacity |
+| ASN_NO_DUPLICATE | 409 | `asnNo` is already taken globally |
+| ASN_ALREADY_CLOSED | 422 | Operation attempted on an already-closed or already-cancelled ASN (specifically: cancellation attempted from `IN_PUTAWAY` or beyond, or any mutation on `CLOSED`/`CANCELLED`) |
+| INSPECTION_NOT_FOUND | 404 | Inspection does not exist for the given id or ASN |
+| INSPECTION_QUANTITY_MISMATCH | 422 | `qtyPassed + qtyDamaged + qtyShort` exceeds the ASN line's `expectedQty` |
+| INSPECTION_INCOMPLETE | 422 | ASN cannot transition forward — at least one `InspectionDiscrepancy` is unacknowledged |
+| PUTAWAY_INSTRUCTION_NOT_FOUND | 404 | PutawayInstruction does not exist for the given id or ASN |
+| PUTAWAY_LINE_NOT_FOUND | 404 | PutawayLine does not exist within the given instruction |
+| PUTAWAY_QUANTITY_EXCEEDED | 422 | Sum of `qtyToPutaway` for an AsnLine exceeds the corresponding `qtyPassed` from inspection |
+| PUTAWAY_LOCATION_FULL | 422 | Target location has insufficient remaining capacity (advisory in v1; reserved for v2 hard-guard) |
+| WAREHOUSE_MISMATCH | 422 | Destination location belongs to a different warehouse than the ASN |
+| PARTNER_INVALID_TYPE | 422 | Supplier resolved by `supplierPartnerId/Code` is not `ACTIVE` and of `partner_type ∈ {SUPPLIER, BOTH}` |
+| LOT_REQUIRED | 422 | LOT-tracked SKU received without `lotId` or `lotNo` at inspection |
+| WEBHOOK_SIGNATURE_INVALID | 401 | ERP webhook HMAC signature missing, malformed, or mismatched |
+| WEBHOOK_TIMESTAMP_INVALID | 401 | ERP webhook `X-Erp-Timestamp` header missing, unparseable, or outside the ±5-minute window |
+| WEBHOOK_REPLAY_DETECTED | 401 | Reserved for future webhook-source replay protection (not used in v1; v1 returns 200 `ignored_duplicate` for repeat `X-Erp-Event-Id`) |
 
 ## Inventory  `[domain: wms]`
 

@@ -475,29 +475,24 @@ saga.
 
 ## Open Items (Before First Implementation Task)
 
-These must be completed before any `TASK-BE-*` targeting `inbound-service` is
-moved to `tasks/ready/`:
+> **Status (2026-04-28)**: all 10 spec gaps below are resolved. The first
+> `TASK-BE-*` targeting `inbound-service` may now move to `tasks/ready/`.
 
-1. `specs/services/inbound-service/domain-model.md` — entities, fields,
-   relationships, invariants, state per entity (ASN, AsnLine, Inspection,
-   InspectionDiscrepancy, PutawayInstruction, PutawayConfirmation)
-2. `specs/contracts/http/inbound-service-api.md` — REST endpoints
-3. `specs/contracts/webhooks/erp-asn-webhook.md` — webhook signature, headers,
-   body schema, dedupe contract
-4. `specs/contracts/events/inbound-events.md` — published event schemas
-5. `specs/services/inbound-service/idempotency.md` — REST + webhook + event-dedupe
-6. `specs/services/inbound-service/external-integrations.md` — per
-   `integration-heavy` Required Artifact 1 (ERP catalog: timeouts, circuit
-   breakers, retry policy)
-7. `specs/services/inbound-service/workflows/inbound-flow.md` — per
-   `rules/domains/wms.md` Required Artifact 3 (ASN → Inspection → Putaway → Close)
-8. `specs/services/inbound-service/state-machines/asn-status.md` — ASN state machine
-9. Register new error codes in `platform/error-handling.md`:
-   `WAREHOUSE_MISMATCH`, `PUTAWAY_QUANTITY_EXCEEDED`, `PARTNER_INVALID_TYPE`,
-   `LOT_REQUIRED`, `INSPECTION_INCOMPLETE`, `WEBHOOK_SIGNATURE_INVALID`,
-   `WEBHOOK_REPLAY_DETECTED`, `WEBHOOK_TIMESTAMP_INVALID`
-10. Add a gateway route for `inbound-service` (REST) and a separate HMAC-only
-    route for `/webhooks/erp/asn` in `gateway-service`
+These were the gaps that blocked any `TASK-BE-*` for `inbound-service`. All
+are now landed:
+
+| # | Spec | Status |
+|---|---|---|
+| 1 | `specs/services/inbound-service/domain-model.md` — entities, fields, relationships, invariants, state per entity | ✅ in repo |
+| 2 | `specs/contracts/http/inbound-service-api.md` — REST endpoints | ✅ landed |
+| 3 | `specs/contracts/webhooks/erp-asn-webhook.md` — webhook signature, headers, body schema, dedupe contract | ✅ landed |
+| 4 | `specs/contracts/events/inbound-events.md` — published event schemas | ✅ landed |
+| 5 | `specs/services/inbound-service/idempotency.md` — REST + webhook + event-dedupe strategy | ✅ landed |
+| 6 | `specs/services/inbound-service/external-integrations.md` — ERP catalog: timeouts, circuit breakers, retry policy (per `integration-heavy` Required Artifact 1) | ✅ landed |
+| 7 | `specs/services/inbound-service/workflows/inbound-flow.md` — ASN → Inspection → Putaway → Close narrative (per `rules/domains/wms.md` Required Artifact 3) | ✅ landed |
+| 8 | `specs/services/inbound-service/state-machines/asn-status.md` — ASN state machine | ✅ landed |
+| 9 | Error codes registered in `platform/error-handling.md`: `WAREHOUSE_MISMATCH`, `PUTAWAY_QUANTITY_EXCEEDED`, `PARTNER_INVALID_TYPE`, `LOT_REQUIRED`, `INSPECTION_INCOMPLETE`, `WEBHOOK_SIGNATURE_INVALID`, `WEBHOOK_REPLAY_DETECTED`, `WEBHOOK_TIMESTAMP_INVALID` (plus `ASN_NO_DUPLICATE`, `INSPECTION_NOT_FOUND`, `PUTAWAY_INSTRUCTION_NOT_FOUND`, `PUTAWAY_LINE_NOT_FOUND` added during contract authoring) | ✅ landed |
+| 10 | Gateway routes for `/api/v1/inbound/**` (JWT) and `/webhooks/erp/asn` (HMAC-only) in `specs/services/gateway-service/architecture.md` | ✅ landed |
 
 ---
 
