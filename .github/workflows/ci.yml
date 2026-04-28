@@ -125,15 +125,14 @@ jobs:
           retention-days: 7
 
   ecommerce-boot-jars:
-    name: Package boot jars (ecommerce, verify-only)
+    name: Package boot jars (ecommerce)
     runs-on: ubuntu-latest
     needs: build-and-test
     timeout-minutes: 15
-    # Verify-only packaging check for the 12 ecommerce backend services.
-    # Catches Spring Boot autoconfig / fat-jar classpath / runtime-dep
-    # issues that :check (compile + unit tests) does not surface. No
-    # artifact upload — there is no downstream e2e/docker job consuming
-    # ecommerce jars yet (TASK-MONO-012).
+    # Packages all 12 ecommerce backend services and uploads the JARs as an
+    # artifact consumed by the frontend-e2e job (TASK-MONO-014). Also catches
+    # Spring Boot autoconfig / fat-jar classpath / runtime-dep issues that
+    # :check (compile + unit tests) does not surface.
 
     steps:
       - name: Checkout
@@ -164,6 +163,29 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:shipping-service:bootJar
           :projects:ecommerce-microservices-platform:apps:user-service:bootJar
           --no-daemon --stacktrace
+
+      - name: Upload ecommerce boot jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-boot-jars
+          # upload-artifact@v4 strips the longest common prefix from multi-path
+          # uploads. All 12 paths share `projects/ecommerce-microservices-platform/apps/`
+          # so the artifact root contains `<service>/build/libs/<service>.jar`.
+          # The frontend-e2e job restores them to their canonical locations.
+          path: |
+            projects/ecommerce-microservices-platform/apps/auth-service/build/libs/auth-service.jar
+            projects/ecommerce-microservices-platform/apps/batch-worker/build/libs/batch-worker.jar
+            projects/ecommerce-microservices-platform/apps/gateway-service/build/libs/gateway-service.jar
+            projects/ecommerce-microservices-platform/apps/notification-service/build/libs/notification-service.jar
+            projects/ecommerce-microservices-platform/apps/order-service/build/libs/order-service.jar
+            projects/ecommerce-microservices-platform/apps/payment-service/build/libs/payment-service.jar
+            projects/ecommerce-microservices-platform/apps/product-service/build/libs/product-service.jar
+            projects/ecommerce-microservices-platform/apps/promotion-service/build/libs/promotion-service.jar
+            projects/ecommerce-microservices-platform/apps/review-service/build/libs/review-service.jar
+            projects/ecommerce-microservices-platform/apps/search-service/build/libs/search-service.jar
+            projects/ecommerce-microservices-platform/apps/shipping-service/build/libs/shipping-service.jar
+            projects/ecommerce-microservices-platform/apps/user-service/build/libs/user-service.jar
+          retention-days: 1
 
   frontend-unit-tests:
     name: Frontend unit tests (ecommerce, vitest)
@@ -320,6 +342,151 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  frontend-e2e:
+    name: Frontend E2E full-stack (web-store, Playwright + docker compose)
+    runs-on: ubuntu-latest
+    needs: [ecommerce-boot-jars, frontend-checks]
+    timeout-minutes: 60
+    # Full-stack Playwright suite: docker compose starts 12 Spring Boot backends
+    # + Postgres ×10 + Kafka + Redis + Elasticsearch (Nori) + MinIO; Playwright
+    # webServer starts web-store via `pnpm start` pointing at the gateway on
+    # localhost:18080 (PORT_PREFIX=1 default). Observability services (Jaeger,
+    # Prometheus, AlertManager, Grafana, Loki, Promtail) are excluded to fit
+    # within the runner's 7 GB RAM. OTEL exporters in the backend services will
+    # log connection errors against the absent Jaeger endpoint; these are
+    # non-blocking and do not affect test correctness.
+    #
+    # Scoped to kanggle/monorepo-lab: extracted portfolio repos have no backend
+    # stack and the smoke job (frontend-e2e-smoke) covers them instead.
+    # TASK-MONO-014.
+    if: github.repository == 'kanggle/monorepo-lab'
+    defaults:
+      run:
+        working-directory: projects/ecommerce-microservices-platform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.0'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download ecommerce boot jars
+        uses: actions/download-artifact@v4
+        with:
+          name: ecommerce-boot-jars
+          path: projects/ecommerce-microservices-platform/artifact-staging
+
+      - name: Restore ecommerce boot jar paths
+        # upload-artifact@v4 strips the common prefix so the artifact contains
+        # `<service>/build/libs/<service>.jar`. Restore to the canonical
+        # `apps/<service>/build/libs/<service>.jar` layout that each Dockerfile
+        # expects (COPY apps/<service>/build/libs/*.jar app.jar).
+        working-directory: ${{ github.workspace }}
+        run: |
+          services=(auth-service batch-worker gateway-service notification-service \
+            order-service payment-service product-service promotion-service \
+            review-service search-service shipping-service user-service)
+          for svc in "${services[@]}"; do
+            mkdir -p "projects/ecommerce-microservices-platform/apps/${svc}/build/libs/"
+            mv "projects/ecommerce-microservices-platform/artifact-staging/${svc}/build/libs/${svc}.jar" \
+               "projects/ecommerce-microservices-platform/apps/${svc}/build/libs/${svc}.jar"
+          done
+
+      - name: Create .env for docker compose
+        # Synthetic test values — no real secrets needed.
+        # Toss and OAuth keys are placeholders (tests stop before payment/OAuth).
+        run: |
+          cat << 'EOF' > .env
+          JWT_SECRET=ci-e2e-test-secret-key-32-chars-minimum
+          AUTH_DB_PASSWORD=ci_auth_pass
+          PRODUCT_DB_PASSWORD=ci_product_pass
+          ORDER_DB_PASSWORD=ci_order_pass
+          PAYMENT_DB_PASSWORD=ci_payment_pass
+          USER_DB_PASSWORD=ci_user_pass
+          BATCH_DB_PASSWORD=ci_batch_pass
+          SHIPPING_DB_PASSWORD=ci_shipping_pass
+          REVIEW_DB_PASSWORD=ci_review_pass
+          PROMOTION_DB_PASSWORD=ci_promotion_pass
+          NOTIFICATION_DB_PASSWORD=ci_notification_pass
+          TOSS_PAYMENTS_SECRET_KEY=test_sk_ci_placeholder
+          NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_ci_placeholder
+          MINIO_ROOT_USER=minioadmin
+          MINIO_ROOT_PASSWORD=minioadmin
+          PRODUCT_IMAGES_BUCKET=firstproject-local-product-images
+          GRAFANA_ADMIN_PASSWORD=admin
+          CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+          OAUTH_CALLBACK_ALLOWLIST=http://localhost:3000/oauth/callback
+          EOF
+
+      - name: Build web-store (Next.js prod build)
+        # NEXT_PUBLIC_* vars are baked into the bundle at build time, not runtime.
+        # Set the gateway URL here so browser-side API calls reach port 18080.
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:18080
+        run: pnpm --filter web-store build
+
+      - name: Start docker compose stack (backends + infra, no observability)
+        run: |
+          docker compose up --build -d \
+            kafka redis elasticsearch minio minio-init \
+            auth-postgres product-postgres order-postgres payment-postgres \
+            user-postgres batch-postgres shipping-postgres review-postgres \
+            promotion-postgres notification-postgres \
+            auth-service product-service search-service user-service \
+            order-service payment-service batch-worker shipping-service \
+            review-service promotion-service notification-service \
+            gateway-service
+
+      - name: Wait for gateway health
+        # PORT_PREFIX=1 (default) → gateway host port = 18080.
+        # Backends have start_period=360s in compose healthchecks; allow 7 min.
+        run: |
+          echo "Waiting for gateway-service to be healthy (up to 7 min)..."
+          for i in $(seq 1 42); do
+            if curl -sf http://localhost:18080/actuator/health > /dev/null 2>&1; then
+              echo "Gateway healthy after $((i * 10))s"
+              exit 0
+            fi
+            echo "  attempt $i/42 (${i}0s elapsed), retrying in 10s..."
+            sleep 10
+          done
+          echo "Gateway did not become healthy within 7 minutes"
+          docker compose logs --tail=50 gateway-service
+          exit 1
+
+      - name: Install Playwright browsers (chromium, with system deps)
+        run: pnpm --filter web-store exec playwright install --with-deps chromium
+
+      - name: Run full-stack E2E
+        run: pnpm --filter web-store run e2e
+
+      - name: Stop docker compose stack
+        if: always()
+        run: docker compose down
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-fullstack
+          path: |
+            projects/ecommerce-microservices-platform/apps/web-store/playwright-report/
+            projects/ecommerce-microservices-platform/apps/web-store/test-results/
+          retention-days: 7
 
   e2e-tests:
     name: E2E (gateway-master live-pair, Testcontainers)
