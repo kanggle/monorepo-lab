@@ -151,7 +151,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant OB as outbound-service (v2;<br/>simulated by demo script)
+    participant OB as outbound-service<br/>(v2 — simulated by demo)
     participant K as Kafka<br/>wms.outbound.picking.requested.v1
     participant C as PickingRequestedConsumer
     participant ED as EventDedupePort
