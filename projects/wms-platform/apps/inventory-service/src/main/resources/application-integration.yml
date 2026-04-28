@@ -1,0 +1,15 @@
+# Integration profile — activated by Testcontainers and e2e harnesses that need
+# to peek at inventory-service internals (request counters, gauges) without
+# relaxing the production actuator surface.
+#
+# Production `application.yml` exposes only health, info, prometheus. The
+# `metrics` actuator endpoint is INTENTIONALLY omitted there — exposing it on
+# a production instance would leak request-shape and timing data through an
+# unauthenticated channel. This profile adds `metrics` for test inspection only.
+#
+# Guardrail: do NOT copy the `metrics` entry into the default profile.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
