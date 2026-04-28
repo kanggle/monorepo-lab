@@ -16,7 +16,8 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 | Project | Domain | Tech | Status | Standalone repo |
 |---|---|---|---|---|
-| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3 · Postgres · Kafka · Redis · Hexagonal | ✅ master-service v1 complete (5/6 aggregates + gateway + outbox + contract harness + live-pair e2e) | [kanggle/wms-platform](https://github.com/kanggle/wms-platform) |
+| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3.4 · Postgres · Kafka · Redis · Hexagonal | ✅ **v1 complete — 3 services**: master (5 aggregates + Lot expiry) · inventory (W4/W5 reservations · 4 outbound-saga consumers · low-stock alerts · 122-test unit suite) · gateway (JWT · rate-limit). inbound/outbound/admin: specs only (v2). | [kanggle/wms-platform](https://github.com/kanggle/wms-platform) |
+| [ecommerce-microservices-platform](projects/ecommerce-microservices-platform/) | E-commerce | Java 21 · Spring Boot 3.4 · Next.js 15 · React 19 · Postgres · Kafka · Redis · Elasticsearch · MinIO | ✅ End-to-end full-stack: 12 backend microservices + Next.js storefront + admin dashboard. Saga orchestration, outbox, JWT, ES product search, MinIO uploads, Playwright E2E. | [kanggle/ecommerce-microservices-platform](https://github.com/kanggle/ecommerce-microservices-platform) |
 
 Each project is extracted to its own standalone repo via [`scripts/sync-portfolio.sh`](scripts/sync-portfolio.sh) for easier discovery. This monorepo retains the full development history and shared library development.
 
