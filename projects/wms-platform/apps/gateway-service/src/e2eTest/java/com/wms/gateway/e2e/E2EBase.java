@@ -66,6 +66,14 @@ public abstract class E2EBase {
     protected static final int GATEWAY_PORT = 8080;
     protected static final int MASTER_PORT = 8081;
 
+    // Dedicated internal port for container-to-container Kafka client access.
+    // KafkaContainer advertises the PLAINTEXT listener as localhost:MAPPED_PORT
+    // (unreachable from inside other containers). withListener() adds a second
+    // listener (TC-0://e2e-kafka:KAFKA_INTERNAL_PORT) that's resolvable inside
+    // the Docker network and used by master-service as its bootstrap address.
+    // Ports 9092-9094 are already claimed by PLAINTEXT/BROKER/CONTROLLER.
+    private static final int KAFKA_INTERNAL_PORT = 9095;
+
     // Paths are relative to the wms-platform project root. locateFile() walks
     // up from the current working directory until it finds the prefix — this
     // works in both the monorepo (cwd deep under projects/wms-platform/) and
@@ -111,7 +119,8 @@ public abstract class E2EBase {
 
         kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE))
                 .withNetwork(network)
-                .withNetworkAliases(KAFKA_ALIAS);
+                .withNetworkAliases(KAFKA_ALIAS)
+                .withListener(KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT);
         kafka.waitingFor(Wait.forLogMessage(".*Kafka Server started.*", 1)
                 .withStartupTimeout(Duration.ofMinutes(2)));
         kafka.start();
@@ -135,12 +144,11 @@ public abstract class E2EBase {
                 .withEnv("DB_PASSWORD", "master")
                 .withEnv("REDIS_HOST", REDIS_ALIAS)
                 .withEnv("REDIS_PORT", "6379")
-                // Peer-container bootstrap port: Testcontainers' KafkaContainer
-                // (apache/kafka image, KRaft mode) exposes PLAINTEXT on 9092.
-                // Port 9093 is the internal BROKER listener reserved for
-                // inter-broker traffic — wiring a client to it silently fails
-                // to consume advertised listeners.
-                .withEnv("KAFKA_BOOTSTRAP_SERVERS", KAFKA_ALIAS + ":9092")
+                // Uses the dedicated container-to-container listener on
+                // KAFKA_INTERNAL_PORT (TC-0 protocol, PLAINTEXT security).
+                // The default PLAINTEXT listener (9092) is advertised as
+                // localhost:MAPPED_PORT — unreachable from inside a container.
+                .withEnv("KAFKA_BOOTSTRAP_SERVERS", KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT)
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("SERVER_PORT", String.valueOf(MASTER_PORT))
                 .waitingFor(Wait.forHttp("/actuator/health")
@@ -230,9 +238,9 @@ public abstract class E2EBase {
 
     /**
      * Kafka bootstrap servers reachable from the host JVM (the test process).
-     * Peer containers — including master-service — use {@code KAFKA_ALIAS:9092}
-     * instead, see the {@code KAFKA_BOOTSTRAP_SERVERS} env on the master
-     * container above.
+     * Peer containers — including master-service — use
+     * {@code KAFKA_ALIAS:KAFKA_INTERNAL_PORT} (the TC-0 listener) instead,
+     * see the {@code KAFKA_BOOTSTRAP_SERVERS} env on the master container above.
      */
     protected String kafkaBootstrapForHost() {
         return kafka.getBootstrapServers();
