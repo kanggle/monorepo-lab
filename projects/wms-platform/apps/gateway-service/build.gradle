@@ -126,6 +126,13 @@ tasks.register('e2eTest', Test) {
     // WSL2 / colima setups).
     systemProperty 'testcontainers.reuse.enable', System.getProperty('testcontainers.reuse.enable', 'false')
 
+    // Forward pre-built image names when set by CI (avoids ImageFromDockerfile
+    // which hangs on Docker 28 due to BuildKit gRPC incompatibility).
+    ['wms.e2e.masterImage', 'wms.e2e.gatewayImage'].each { prop ->
+        def val = System.getProperty(prop)
+        if (val) systemProperty prop, val
+    }
+
     // A generous single-test timeout catches hung containers without masking
     // real assertion failures.
     testLogging {

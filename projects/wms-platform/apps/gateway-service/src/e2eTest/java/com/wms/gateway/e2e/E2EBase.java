@@ -31,12 +31,12 @@ import org.testcontainers.utility.DockerImageName;
  *       gateway-service (SCG rate-limit counters).</li>
  *   <li>Kafka (KRaft) — master-service publishes outbox events; optional
  *       consumer helper available for assertions.</li>
- *   <li>master-service — built from its existing Dockerfile via
- *       {@link ImageFromDockerfile}. Gradle {@code dependsOn} ensures the
- *       {@code master-service.jar} exists before this test class runs.</li>
- *   <li>gateway-service — built from its Dockerfile; env vars point at the
- *       in-network master hostname, the shared Redis, and the host-local
- *       MockWebServer serving JWKS.</li>
+ *   <li>master-service — image resolved from system property
+ *       {@code wms.e2e.masterImage} when set (CI pre-build path), otherwise
+ *       built on-the-fly via {@link ImageFromDockerfile} (local dev path).</li>
+ *   <li>gateway-service — same dual-path strategy via
+ *       {@code wms.e2e.gatewayImage}; env vars point at the in-network master
+ *       hostname, the shared Redis, and the host-local MockWebServer JWKS.</li>
  * </ul>
  *
  * <p>The MockWebServer (JWKS stand-in) lives in the JVM running the tests —
@@ -122,7 +122,7 @@ public abstract class E2EBase {
         jwt = new JwtTestHelper();
         jwks = new JwksMockServer(jwt);
 
-        master = buildServiceContainer(MASTER_JAR, MASTER_DOCKERFILE, MASTER_PORT)
+        master = buildServiceContainer("wms.e2e.masterImage", MASTER_JAR, MASTER_DOCKERFILE, MASTER_PORT)
                 .withNetwork(network)
                 .withNetworkAliases(MASTER_ALIAS)
                 .withExtraHost("host.docker.internal", "host-gateway")
@@ -148,7 +148,7 @@ public abstract class E2EBase {
                         .withStartupTimeout(Duration.ofMinutes(3)));
         master.start();
 
-        gateway = buildServiceContainer(GATEWAY_JAR, GATEWAY_DOCKERFILE, GATEWAY_PORT)
+        gateway = buildServiceContainer("wms.e2e.gatewayImage", GATEWAY_JAR, GATEWAY_DOCKERFILE, GATEWAY_PORT)
                 .withNetwork(network)
                 .withNetworkAliases(GATEWAY_ALIAS)
                 .withExtraHost("host.docker.internal", "host-gateway")
@@ -190,15 +190,30 @@ public abstract class E2EBase {
         }
     }
 
-    /** Builds the ephemeral image for a service boot jar. */
-    private static GenericContainer<?> buildServiceContainer(Path jar, Path dockerfile, int exposedPort) {
+    /**
+     * Builds the container for a service.
+     *
+     * <p>When {@code prebuiltImageProp} is set as a system property (CI path),
+     * skips {@link ImageFromDockerfile} entirely and uses the pre-built image
+     * name directly. This avoids the Docker 28 BuildKit gRPC hang that occurs
+     * when Testcontainers' Docker Java client calls the REST {@code /build}
+     * endpoint. On Docker 28 the REST path always routes through BuildKit and
+     * hangs indefinitely; the CLI-built image sidesteps the issue.
+     *
+     * <p>When the property is absent (local dev path), falls back to
+     * {@link ImageFromDockerfile} so developers without a pre-built image can
+     * still run the suite with a plain {@code ./gradlew e2eTest}.
+     */
+    private static GenericContainer<?> buildServiceContainer(
+            String prebuiltImageProp, Path jar, Path dockerfile, int exposedPort) {
+        String prebuiltImage = System.getProperty(prebuiltImageProp);
+        if (prebuiltImage != null && !prebuiltImage.isBlank()) {
+            return new GenericContainer<>(DockerImageName.parse(prebuiltImage))
+                    .withExposedPorts(exposedPort);
+        }
         ImageFromDockerfile image = new ImageFromDockerfile()
                 .withDockerfile(dockerfile)
-                // Copy the bootJar into the build context under the same relative
-                // path the Dockerfile expects.
-                .withFileFromPath("build/libs/" + jar.getFileName().toString(),
-                        jar)
-                // Copy the Dockerfile itself too so COPY lines inside resolve.
+                .withFileFromPath("build/libs/" + jar.getFileName().toString(), jar)
                 .withFileFromPath("Dockerfile", dockerfile);
         return new GenericContainer<>(image).withExposedPorts(exposedPort);
     }
