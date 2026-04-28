@@ -601,6 +601,15 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
+      - name: Pre-pull base image (warm Docker layer cache)
+        # ImageFromDockerfile builds master-service and gateway-service images
+        # from eclipse-temurin:21-jre-alpine. On a cold CI runner, Docker must
+        # pull this ~150 MB base image before docker build can proceed —
+        # consuming 20–25 minutes and consistently hitting the 30-minute job
+        # timeout. Pre-pulling here warms the layer cache so both subsequent
+        # docker build calls complete in seconds (TASK-MONO-015).
+        run: docker pull eclipse-temurin:21-jre-alpine
+
       - name: Build service images for e2e
         # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
         # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
