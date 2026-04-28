@@ -131,6 +131,6 @@ tasks.register('e2eTest', Test) {
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
-        showStandardStreams = false
+        showStandardStreams = true
     }
 }
