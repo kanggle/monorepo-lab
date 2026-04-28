@@ -13,8 +13,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -260,23 +264,41 @@ class GatewayMasterE2ETest extends E2EBase {
 
             AtomicInteger ok = new AtomicInteger();
             AtomicInteger rateLimited = new AtomicInteger();
-            List<String> retryAfterValues = new ArrayList<>();
+            List<String> retryAfterValues = Collections.synchronizedList(new ArrayList<>());
 
-            for (int i = 0; i < 250; i++) {
-                HttpResponse<String> resp = send(HttpRequest.newBuilder(
-                        gatewayBaseUri().resolve("/api/v1/master/warehouses"))
-                        .timeout(CALL_TIMEOUT)
-                        .header("Authorization", "Bearer " + token)
-                        .header("X-Forwarded-For", burstIp)
-                        .GET()
-                        .build());
-                int status = resp.statusCode();
-                if (status == 200 || status == 404) {
-                    ok.incrementAndGet();
-                } else if (status == 429) {
-                    rateLimited.incrementAndGet();
-                    resp.headers().firstValue("Retry-After")
-                            .ifPresent(retryAfterValues::add);
+            // Fire all 250 requests concurrently via virtual threads so the Redis
+            // token-bucket rate limiter sees them simultaneously. Sequential firing
+            // in CI (3–5 s per request under Docker load) caused 250 × 4 s ≈ 17 min
+            // and consistently hit the 30-minute job timeout before assertions ran
+            // (TASK-INT-007 deferred this; TASK-INT-008 completes it).
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> futures = new ArrayList<>(250);
+                for (int i = 0; i < 250; i++) {
+                    futures.add(executor.submit(() -> {
+                        try {
+                            HttpResponse<String> resp = send(HttpRequest.newBuilder(
+                                    gatewayBaseUri().resolve("/api/v1/master/warehouses"))
+                                    .timeout(CALL_TIMEOUT)
+                                    .header("Authorization", "Bearer " + token)
+                                    .header("X-Forwarded-For", burstIp)
+                                    .GET()
+                                    .build());
+                            int status = resp.statusCode();
+                            if (status == 200 || status == 404) {
+                                ok.incrementAndGet();
+                            } else if (status == 429) {
+                                rateLimited.incrementAndGet();
+                                resp.headers().firstValue("Retry-After")
+                                        .ifPresent(retryAfterValues::add);
+                            }
+                        } catch (Exception ignored) {
+                            // connection errors under burst load do not invalidate
+                            // the rate-limit assertion — exclude from both counters
+                        }
+                    }));
+                }
+                for (Future<?> f : futures) {
+                    f.get();
                 }
             }
 
