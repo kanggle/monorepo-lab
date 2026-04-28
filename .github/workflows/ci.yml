@@ -601,14 +601,24 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Pre-pull base image (warm Docker layer cache)
-        # ImageFromDockerfile builds master-service and gateway-service images
-        # from eclipse-temurin:21-jre-alpine. On a cold CI runner, Docker must
-        # pull this ~150 MB base image before docker build can proceed —
-        # consuming 20–25 minutes and consistently hitting the 30-minute job
-        # timeout. Pre-pulling here warms the layer cache so both subsequent
-        # docker build calls complete in seconds (TASK-MONO-015).
-        run: docker pull eclipse-temurin:21-jre-alpine
+      - name: Disable Docker BuildKit (prevents ImageFromDockerfile hang)
+        # Docker 27 enables BuildKit by default. Testcontainers' ImageFromDockerfile
+        # calls dockerClient.buildImageCmd() via the Docker REST API — not the CLI —
+        # so DOCKER_BUILDKIT=0 has no effect. The REST /build endpoint routes through
+        # the BuildKit daemon and hangs indefinitely (58-min diagnostic run confirmed
+        # zero progress after the "Pre-emptively checking" log line).
+        # Disabling BuildKit at the daemon level fixes both CLI and REST API paths.
+        run: |
+          echo '{"features":{"buildkit":false}}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl reload docker
+          sleep 3
+
+      - name: Pre-pull base images (warm Docker layer cache for legacy builder)
+        run: |
+          docker pull eclipse-temurin:21-jre-alpine
+          docker pull postgres:16-alpine
+          docker pull redis:7-alpine
+          docker pull apache/kafka:3.7.0
 
       - name: Build service images for e2e
         # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
@@ -627,12 +637,6 @@ jobs:
             projects/wms-platform/apps/gateway-service/
 
       - name: Run gateway-master e2e suite
-        # DOCKER_BUILDKIT=0: force legacy Docker builder so ImageFromDockerfile
-        # uses the pre-pulled image from the local image store rather than
-        # re-pulling via BuildKit's own resolver (which ignores `docker pull`
-        # cache and may hang on CI runners — TASK-MONO-015).
-        env:
-          DOCKER_BUILDKIT: "0"
         run: >-
           ./gradlew
           :projects:wms-platform:apps:gateway-service:e2eTest
