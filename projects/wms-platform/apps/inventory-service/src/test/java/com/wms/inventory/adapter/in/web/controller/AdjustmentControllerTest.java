@@ -13,6 +13,7 @@ import com.wms.inventory.application.port.in.QueryAdjustmentUseCase;
 import com.wms.inventory.application.result.AdjustmentResult;
 import com.wms.inventory.application.result.AdjustmentView;
 import com.wms.inventory.config.SecurityConfig;
+import org.springframework.security.access.AccessDeniedException;
 import com.wms.inventory.domain.exception.InsufficientStockException;
 import com.wms.inventory.domain.model.Bucket;
 import com.wms.inventory.domain.model.ReasonCode;
@@ -92,6 +93,8 @@ class AdjustmentControllerTest {
 
     @Test
     void createAdjustmentReservedBucketWriteRoleForbidden() throws Exception {
+        when(adjustStock.adjust(any())).thenThrow(
+                new AccessDeniedException("RESERVED-bucket adjustment requires INVENTORY_ADMIN"));
         String body = "{\"inventoryId\":\"" + INV + "\","
                 + "\"bucket\":\"RESERVED\","
                 + "\"delta\":-5,"
