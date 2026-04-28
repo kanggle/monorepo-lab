@@ -546,6 +546,12 @@ jobs:
         run: docker pull eclipse-temurin:21-jre-alpine
 
       - name: Run gateway-master e2e suite
+        # DOCKER_BUILDKIT=0: force legacy Docker builder so ImageFromDockerfile
+        # uses the pre-pulled image from the local image store rather than
+        # re-pulling via BuildKit's own resolver (which ignores `docker pull`
+        # cache and may hang on CI runners — TASK-MONO-015).
+        env:
+          DOCKER_BUILDKIT: "0"
         run: >-
           ./gradlew
           :projects:wms-platform:apps:gateway-service:e2eTest
