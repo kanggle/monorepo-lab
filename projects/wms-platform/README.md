@@ -4,11 +4,15 @@
 
 > **Warehouse Management System backend** — production-oriented, spec-driven, AI-assisted
 
-Spring Boot 3 microservices for a warehouse's master-data and ingress path. Built as a portfolio project, engineered to production standards: hexagonal architecture, transactional outbox, idempotency keys, JWT + rate limiting, contract harness, live-pair end-to-end tests.
+Spring Boot 3 microservices: master data, inventory mutation, and an edge gateway for a warehouse's authoritative system of record. Built as a portfolio project, engineered to production standards: hexagonal architecture, transactional outbox, two-phase reservation, idempotency keys, JWT + rate limiting, contract harness, live-pair end-to-end tests.
+
+> **What's intentionally v2** — `inbound`, `outbound`, `admin` services are fully designed (`specs/services/<name>/`) but not implemented. See [Scope-honest v1](#-scope-honest-v1) — depth over breadth was a deliberate choice.
 
 ---
 
-## 📍 Status — master-service v1 complete
+## 📍 Status — v1: master + inventory + gateway
+
+### master-service
 
 | Aggregate | Production | Tests (unit/slice/H2/Testcontainers) | Events | Contract harness |
 |---|---|---|---|---|
@@ -19,55 +23,165 @@ Spring Boot 3 microservices for a warehouse's master-data and ingress path. Buil
 | **Lot** | ✅ | ✅ | ✅ | ✅ |
 | Partner | deferred (Lot's `supplierPartnerId` soft-validated) | — | — | — |
 
-**Platform baseline**:
-- Gateway: Spring Cloud Gateway · JWT (OAuth2 Resource Server) · Redis rate-limit (`{ip,routeId}` compound key, fail-open decorator) · JWT header enrichment
-- Master: Hexagonal (ports & adapters) · Flyway + Postgres · Transactional outbox → Kafka · Idempotency-Key filter · PSQLException constraint-name translation
-- Ops: Actuator `metrics` (profile-scoped) · Outbox publisher backpressure gauges · Lot expiration scheduler (daily cron)
-- Testing: `@WebMvcTest` slices · H2 fast tests · Testcontainers Postgres/Kafka/Redis · JSON Schema contract harness (HTTP + events) · gateway↔master live-pair e2e (5 scenarios)
+### inventory-service
+
+| Aggregate / Capability | Production | Tests | Events |
+|---|---|---|---|
+| `Inventory` + `InventoryMovement` (W2 append-only ledger) | ✅ | ✅ | `inventory.received` |
+| `Reservation` — W4/W5 two-phase, state machine `RESERVED → CONFIRMED / RELEASED` | ✅ | ✅ | `inventory.reserved` · `.released` · `.confirmed` |
+| `StockAdjustment` — REGULAR · MARK_DAMAGED · WRITE_OFF_DAMAGED | ✅ | ✅ | `inventory.adjusted` |
+| `StockTransfer` — W1 atomic id-ascending lock order | ✅ | ✅ | `inventory.transferred` |
+| `LowStockDetection` — threshold + 1h Redis SETNX debounce, fail-open | ✅ | ✅ | `inventory.low-stock-detected` |
+| Outbound-saga consumers (PickingRequested · PickingCancelled · ShippingConfirmed · PutawayCompleted) | ✅ | ✅ | (inbound; eventId dedupe in same TX) |
+
+### gateway-service
+
+JWT validation · Redis rate-limit (`{ip, routeId}` compound, fail-open decorator) · header enrichment (`X-User-Id`, `X-User-Role`) · live-pair e2e against master.
+
+---
+
+## Platform baseline
+
+- **Hexagonal everywhere except gateway** — domain free of Spring/JPA. Gateway is Layered (no rich domain).
+- **Transactional outbox** — every state change writes an outbox row in the same DB tx; `OutboxPublisher` (`@Scheduled`, exp backoff + jitter) forwards to Kafka with `pending`/`lag.seconds`/`failure.count` metrics.
+- **eventId dedupe on every consumer** — `inventory_event_dedupe(event_id, outcome)` written via `Propagation.MANDATORY` in the same TX as the domain effect. Layered with aggregate-state short-circuits as inner guard.
+- **Idempotency-Key filter** — Redis-backed (24h TTL); replay returns byte-identical cached response. Storage key conformant to `idempotency.md`.
+- **Optimistic-lock retry with id-ascending lock order** — `ReserveStockService` retries up to 3× with 100–300ms jitter on `OptimisticLockingFailureException`; multi-row locks taken in id-ascending order.
+- **Authorization in the application layer** — services receive caller roles via the command record (`Set<String> callerRoles`); controllers populate from `Authentication.getAuthorities()`. No `SecurityContextHolder` reach-back inside services.
+- **Schedulers** — Lot expiration (daily cron, master) · `ReservationExpiryJob` (`@Scheduled` per-row TX boundary, inventory).
+- **Testing** — `@WebMvcTest` slices · H2 fast tests · Testcontainers (Postgres / Kafka / Redis) · JSON Schema contract harness · gateway↔master live-pair e2e (5 scenarios) · 122-test inventory-service unit suite.
 
 ---
 
 ## 🏛️ Architecture
 
-### System view
+### System view (v1)
 
 ```mermaid
 flowchart LR
     Client(["Client<br/>(web · mobile · ERP)"])
 
     subgraph Edge["Edge"]
-        GW["gateway-service<br/>:8080<br/><br/>• JWT validate<br/>• rate-limit<br/>  (ip,routeId) fail-open<br/>• header enrich<br/>  X-User-Id, X-User-Role"]
+        GW["gateway-service<br/>:8080<br/><br/>• JWT validate<br/>• rate-limit<br/>  (ip,routeId) fail-open<br/>• header enrich"]
     end
 
     subgraph App["Application"]
-        MS["master-service<br/>:8081<br/><br/>• Hexagonal<br/>• Idempotency filter<br/>• Outbox publisher<br/>• Lot expiry scheduler"]
+        MS["master-service<br/>:8081<br/><br/>• Hexagonal<br/>• Idempotency filter<br/>• Lot expiry sched"]
+        IS["inventory-service<br/>:8082<br/><br/>• Hexagonal<br/>• 4 outbound-saga<br/>  consumers<br/>• Reservation TTL job<br/>• Low-stock detector"]
     end
 
     subgraph Infra["Infrastructure"]
-        PG[("Postgres 16<br/>master DB + outbox")]
-        KF[["Kafka (KRaft)<br/>wms.master.*.v1"]]
-        RD[("Redis<br/>idempotency +<br/>rate-limit counters")]
+        PG[("Postgres 16<br/>per-service DB +<br/>outbox + dedupe")]
+        KF[["Kafka (KRaft)<br/>wms.master.*.v1<br/>wms.inventory.*.v1"]]
+        RD[("Redis<br/>idempotency<br/>rate-limit<br/>low-stock debounce")]
     end
 
-    Consumer(["Event Consumers<br/>inventory · notification<br/>· admin · future ERP"])
+    subgraph V2["📐 v2 — specs only"]
+        IB["inbound-service"]
+        OB["outbound-service"]
+        AD["admin-service"]
+    end
 
     Client -->|HTTPS| GW
-    GW -->|"HTTP + JWT<br/>+ X-User-*"| MS
-    GW -.->|session<br/>rate-limit| RD
-    MS -->|JPA| PG
-    MS -.->|Idempotency-Key<br/>cache| RD
-    MS -->|outbox row<br/>(same tx)| PG
-    PG -->|polling| MS
+    GW -->|JWT + X-User-*| MS
+    GW -->|JWT + X-User-*| IS
+    GW -.-> RD
+    MS --> PG
+    IS --> PG
+    MS -.-> RD
+    IS -.-> RD
+    MS -->|outbox| PG
+    IS -->|outbox| PG
     MS -->|publish| KF
-    KF --> Consumer
+    IS -->|publish| KF
+    KF -->|consume<br/>(eventId dedupe)| IS
+
+    KF -.-> V2
 
     style Client fill:#e1f5ff,stroke:#0288d1
-    style Consumer fill:#e1f5ff,stroke:#0288d1
     style GW fill:#fff3e0,stroke:#f57c00
     style MS fill:#f3e5f5,stroke:#7b1fa2
+    style IS fill:#e3f2fd,stroke:#1976d2
     style PG fill:#e8f5e9,stroke:#388e3c
     style KF fill:#e8f5e9,stroke:#388e3c
     style RD fill:#e8f5e9,stroke:#388e3c
+    style V2 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:5 5
+    style IB fill:#fafafa,stroke:#bdbdbd
+    style OB fill:#fafafa,stroke:#bdbdbd
+    style AD fill:#fafafa,stroke:#bdbdbd
+```
+
+### Putaway → `inventory.received` (cross-service event flow)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Pub as External publisher<br/>(future inbound-service)
+    participant K as Kafka<br/>wms.inbound.putaway.completed.v1
+    participant C as PutawayCompletedConsumer
+    participant ED as EventDedupePort
+    participant S as ReceiveStockService
+    participant PG as Postgres
+    participant K2 as Kafka<br/>wms.inventory.received.v1
+
+    Pub->>K: publish PutawayCompleted<br/>(eventId, putaway lines)
+    K->>C: deliver<br/>(at-least-once)
+    activate C
+    Note over C: @Transactional begin
+    C->>ED: process(eventId, eventType)
+    alt First delivery
+        ED->>PG: INSERT inventory_event_dedupe<br/>(outcome=APPLIED)
+        C->>S: receive(line) per ASN line
+        S->>S: master-ref validation<br/>(MasterReadModel)
+        S->>PG: INSERT/UPDATE inventory<br/>(append InventoryMovement, W2)
+        S->>PG: INSERT outbox<br/>inventory.received envelope
+        Note over C: @Transactional commit
+    else Duplicate eventId
+        ED-->>C: short-circuit, no-op
+        Note over C: @Transactional commit (empty)
+    end
+    deactivate C
+
+    Note over PG,K2: Separate tx, async
+    PG-->>K2: OutboxPublisher polls<br/>publishes envelope
+```
+
+### Picking saga participation — `outbound.picking.requested` → reserve → `inventory.reserved`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OB as outbound-service (v2;<br/>simulated by demo script)
+    participant K as Kafka<br/>wms.outbound.picking.requested.v1
+    participant C as PickingRequestedConsumer
+    participant ED as EventDedupePort
+    participant S as ReserveStockService
+    participant PG as Postgres
+    participant K2 as Kafka<br/>wms.inventory.reserved.v1
+
+    OB->>K: outbound.picking.requested<br/>(sagaId, pickingRequestId, lines)
+    K->>C: deliver
+    activate C
+    Note over C: @Transactional begin
+    C->>ED: process(eventId, eventType)
+    alt First delivery
+        ED->>PG: INSERT dedupe (APPLIED)
+        C->>S: reserve(command, callerRoles)
+        loop up to 3 retries on OptimisticLockingFailureException
+            S->>S: load Inventory rows<br/>(id-ascending lock order)
+            S->>PG: UPDATE inventory<br/>(deduct AVAILABLE → RESERVED)<br/>append InventoryMovement
+            S->>PG: INSERT reservation<br/>(picking_request_id UNIQUE)
+            S->>PG: INSERT outbox<br/>inventory.reserved envelope
+        end
+        Note over C: @Transactional commit
+    else Duplicate (eventId or pickingRequestId)
+        ED-->>C: short-circuit (eventId)
+        S-->>C: idempotent return (pickingRequestId)
+    end
+    deactivate C
+
+    PG-->>K2: OutboxPublisher → inventory.reserved
+    K2-->>OB: outbound saga advances RESERVED state
 ```
 
 ### Master-service internal — Hexagonal
@@ -156,15 +270,14 @@ sequenceDiagram
 
 | Service | Service Type | Responsibility | v1 Status |
 |---|---|---|---|
-| `gateway-service` | `rest-api` | External routing, JWT validation, rate limiting, header enrichment | ✅ |
-| `master-service` | `rest-api` | Master data: warehouses, zones, locations, SKUs, lots | ✅ |
-| `inbound-service` | `rest-api` | ASN management, inspection, putaway | scaffold |
-| `inventory-service` | `rest-api` | Location-based inventory, transfers, adjustments | scaffold |
-| `outbound-service` | `rest-api` | Outbound orders, picking, packing, shipping | scaffold |
-| `notification-service` | `event-consumer` | Kafka consumer for operational alerts (Slack, email) | scaffold |
-| `admin-service` | `rest-api` | Dashboards, KPIs, user/permission management | scaffold |
+| `gateway-service` | `rest-api` | External routing, JWT validation, rate limiting, header enrichment | ✅ implemented |
+| `master-service` | `rest-api` | Master data: warehouses, zones, locations, SKUs, lots | ✅ implemented |
+| `inventory-service` | `rest-api` + `event-consumer` | Location-based stock; W4/W5 reservations; adjustments / transfers / low-stock alerts; outbound-saga participation | ✅ implemented |
+| `inbound-service` | `rest-api` | ASN management, inspection, putaway | 📐 specs only — v2 |
+| `outbound-service` | `rest-api` + `event-consumer` (saga orchestrator) | Outbound orders, picking, packing, shipping; outbound saga | 📐 specs only — v2 |
+| `admin-service` | `rest-api` + `event-consumer` (CQRS read-model) | Dashboards, KPIs, user/permission management | 📐 specs only — v2 |
 
-Each service declares its own internal architecture in `specs/services/<service>/architecture.md`. Write-heavy services (master / inventory / inbound / outbound) use **Hexagonal (Ports & Adapters)**. Gateway is Layered.
+Each service declares its own internal architecture in `specs/services/<service>/architecture.md`. Write-heavy services (master / inventory / inbound / outbound) use **Hexagonal (Ports & Adapters)**. Gateway and admin are Layered (admin is a documented `## Overrides` since it is read-side / CQRS-shaped — see `specs/services/admin-service/architecture.md`).
 
 ### Bounded Contexts (per `rules/domains/wms.md`)
 
@@ -214,20 +327,78 @@ docker-compose up -d    # Postgres, Kafka, Redis
 ### Run a service
 
 ```bash
-# master-service on :8081, gateway-service on :8080
-./gradlew :apps:master-service:bootRun
+# Default ports: gateway :8080, master :8081, inventory :8082
 ./gradlew :apps:gateway-service:bootRun
+./gradlew :apps:master-service:bootRun
+./gradlew :apps:inventory-service:bootRun
 ```
+
+> **Cross-project port namespace** — services use `${PORT_PREFIX:-2}XXXX`; `2` is the WMS prefix, allowing parallel runs alongside other portfolio projects (e.g., `1` = ecommerce). Override via env var when running multiple platforms locally.
 
 ### Run tests
 
 ```bash
 ./gradlew :apps:master-service:check       # unit + slice + H2 + Testcontainers
+./gradlew :apps:inventory-service:check    # unit + slice + Testcontainers (Postgres/Kafka/Redis)
 ./gradlew :apps:gateway-service:check
 ./gradlew check                             # everything
 ```
 
 **Testcontainers on Windows**: run tests from WSL2 (Ubuntu + Docker Desktop WSL integration). Windows-native test runs skip Testcontainers via `@Testcontainers(disabledWithoutDocker = true)`.
+
+---
+
+## 🎯 Demo — golden-path E2E with curl
+
+The flow exercises master-data setup, the **putaway-completed → inventory.received** consumer path (simulating a future inbound-service publisher), and the **W4/W5 reservation lifecycle**. Run after `docker compose up -d`.
+
+```bash
+# Boot stack + services
+docker compose up -d                          # postgres, kafka, redis
+./gradlew :apps:gateway-service:bootRun &     # :20080
+./gradlew :apps:master-service:bootRun &      # :20081
+./gradlew :apps:inventory-service:bootRun &   # :20082
+
+# Resolve a JWT (configure your IdP or use the seed token from infra/seed-token.txt)
+TOKEN=$(cat infra/seed-token.txt)
+H_AUTH="-H Authorization: Bearer $TOKEN"
+H_IDEM(){ echo "-H Idempotency-Key: $(uuidgen)"; }
+H_JSON="-H Content-Type: application/json"
+
+# 1) Create warehouse → POST /api/v1/master/warehouses
+WH=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/master/warehouses \
+  -d '{"code":"WH-001","name":"Seoul DC","status":"ACTIVE"}' | jq -r .id)
+
+# 2) Create zone, location, SKU (similar; see specs/contracts/http/master-service-api.md)
+# ... (omitted for brevity)
+
+# 3) Simulate inbound-service publishing wms.inbound.putaway.completed.v1
+docker exec wms-kafka kafka-console-producer \
+  --bootstrap-server localhost:9092 \
+  --topic wms.inbound.putaway.completed.v1 < demo/putaway-completed.json
+# inventory-service's PutawayCompletedConsumer picks up, calls ReceiveStockUseCase,
+# writes Inventory + InventoryMovement (W2 ledger), emits inventory.received via outbox.
+
+# 4) Query inventory → GET /api/v1/inventory
+curl -s $H_AUTH "http://localhost:20080/api/v1/inventory?warehouseId=$WH" | jq
+
+# 5) Reserve stock → POST /api/v1/reservations (W4: AVAILABLE → RESERVED)
+RESV=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/reservations \
+  -d "$(cat demo/reserve-request.json)" | jq -r .id)
+
+# 6) Confirm shipping (W5: consume RESERVED, AVAILABLE untouched)
+curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST \
+  "http://localhost:20080/api/v1/reservations/$RESV/confirm" \
+  -d "$(cat demo/confirm-request.json)"
+
+# 7) Verify all 4 events landed on Kafka
+docker exec wms-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic wms.inventory.received.v1,wms.inventory.reserved.v1,wms.inventory.confirmed.v1 \
+  --from-beginning --max-messages 3
+```
+
+> Demo payload templates live under `demo/` (committed sample JSON for putaway / reserve / confirm). The script is the same flow exercised by `PutawayCompletedConsumerIntegrationTest` and `PickingFlowIntegrationTest` — those Testcontainers tests are the authoritative version.
 
 ---
 
@@ -256,26 +427,29 @@ wms-platform/
 ├── .claude/                ← AI agent config: skills/, agents/, commands/, config/
 │
 ├── apps/                   ← service modules
-│   ├── gateway-service/
-│   ├── master-service/
-│   ├── inbound-service/    ← scaffold
-│   ├── inventory-service/  ← scaffold
-│   ├── outbound-service/   ← scaffold
-│   ├── notification-service/  ← scaffold
-│   └── admin-service/      ← scaffold
+│   ├── gateway-service/    ← v1 ✅
+│   ├── master-service/     ← v1 ✅
+│   ├── inventory-service/  ← v1 ✅
+│   ├── inbound-service/    ← v2 (specs only)
+│   ├── outbound-service/   ← v2 (specs only)
+│   └── admin-service/      ← v2 (specs only)
 │
 ├── specs/
 │   ├── contracts/
-│   │   ├── http/master-service-api.md
-│   │   └── events/master-events.md
+│   │   ├── http/{master,inventory}-service-api.md
+│   │   └── events/{master,inventory}-events.md
 │   ├── services/
-│   │   └── master-service/ ← architecture, domain-model, idempotency
+│   │   ├── master-service/    ← architecture, domain-model, idempotency
+│   │   ├── inventory-service/ ← architecture, domain-model, idempotency, sagas, state-machines
+│   │   ├── inbound-service/   ← architecture, domain-model (v2 — specs ahead of code)
+│   │   ├── outbound-service/  ← architecture, domain-model (v2)
+│   │   └── admin-service/     ← architecture, domain-model (v2)
 │   ├── features/
 │   └── use-cases/
 ├── tasks/
 │   ├── INDEX.md            ← lifecycle rules
 │   ├── templates/          ← task templates (shared)
-│   └── done/               ← 19 tasks from v1 development
+│   └── done/               ← 32 tasks from v1 development
 ├── knowledge/
 │   └── adr/                ← architecture decision records
 ├── docs/                   ← operational docs + shared guides
@@ -319,6 +493,61 @@ Key is `{clientIp}:{routeId}` (not IP-only — future `/inventory/**` route won'
 
 Master-service checks only its own child records on deactivation. Cross-service inventory / order references are out of scope for v1 (would require a `deactivation.requested` saga). Known limitation, documented in the contract.
 
+### W4 / W5 Two-Phase Reservation (inventory-service)
+
+Reserve never decrements `AVAILABLE` — it deducts `AVAILABLE → RESERVED`. Confirm consumes `RESERVED`, `AVAILABLE` untouched. State machine: `RESERVED → CONFIRMED / RELEASED`. Effects:
+
+- **Reserve is idempotent under retry** — the post-condition (`reservation in RESERVED state`) is unchanged by replay.
+- **Confirm is immune to broken-pipe between reserve and ship** — the reserved bucket holds the commitment until shipping confirmation arrives.
+- The same shape supports cancel / TTL release without touching `AVAILABLE` more than once.
+
+Code: `Inventory.reserve / release / confirm`, `ReserveStockService`, `ConfirmReservationService`. Domain rule W4/W5 in [`rules/domains/wms.md`](rules/domains/wms.md).
+
+### Optimistic-Lock Retry With Id-Ascending Lock Order
+
+`ReserveStockService` retries up to 3 times on `OptimisticLockingFailureException` with 100–300ms jitter. Multi-row updates take rows in id-ascending order via `compareTo` so two concurrent reservations on overlapping rows do not application-deadlock. Postgres-level deadlocks are still possible and handled by retry — the ordering eliminates the easy-to-prevent application case.
+
+Per-trait T5 (optimistic-lock first; pessimistic locks forbidden). [`ReserveStockService`](apps/inventory-service/src/main/java/com/wms/inventory/application/service/ReserveStockService.java).
+
+### W1 Atomic Transfer (id-ascending lock order)
+
+`TransferStockService` updates source and target inventory rows in one TX, locks taken in id-ascending order to prevent reciprocal deadlocks (`T1 → T2` lock {a, b} vs `T2 → T1` lock {b, a}). Target is upsert (created if absent) with a `wasCreated` flag propagating to the `inventory.transferred` event payload. Cross-warehouse transfers rejected via `MasterReadModelPort` lookup.
+
+### Low-Stock Alert Debouncing (fail-open)
+
+`LowStockDetectionService` evaluates threshold on every `AVAILABLE` reduction. When threshold crossed, debounced via Redis `SETNX` keyed by `inventoryId` with 1h TTL. **Fail-open**: if Redis errors during the SETNX, the alert fires anyway — debounce is a perf hint, not a safety property. The `inventory.low-stock-detected` event flows through the same outbox path as every other domain event.
+
+### eventId Dedupe on Every Consumer (T8)
+
+Every Kafka consumer (`PutawayCompletedConsumer`, `PickingRequestedConsumer`, `PickingCancelledConsumer`, `ShippingConfirmedConsumer`, plus the master-snapshot trio) writes an `inventory_event_dedupe(event_id, outcome)` row in the same transaction as the domain effect, via `EventDedupePersistenceAdapter` declaring `Propagation.MANDATORY`. Layered with aggregate-state short-circuits as the inner guard (e.g., terminal-reservation no-op).
+
+This split — eventId outer, business-state inner — handles two distinct races: Kafka redelivery (outer) and cross-consumer mutation (inner, e.g., a manual REST cancel arriving between the message and the handler).
+
+### Authorization in the Application Layer
+
+Inventory mutation services receive caller roles via the command record (`Set<String> callerRoles` on `AdjustStockCommand`). Controllers populate them from `Authentication.getAuthorities()`. Services decide policy and throw `AccessDeniedException` (mapped to 403 by `GlobalExceptionHandler`).
+
+Controllers no longer reach into raw JWT claims. Rationale: services stay framework-agnostic and the authorization decision lives where the business invariant lives. Per `architecture.md` §Security.
+
+---
+
+## 🎯 Scope-honest v1
+
+| Service | architecture.md | domain-model.md | contracts | implementation | tests |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `gateway-service` | ✅ | (n/a) | (gateway-routes spec) | ✅ | ✅ |
+| `master-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `inventory-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `inbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `outbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `admin-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
+
+`inbound`, `outbound`, and `admin` services have full architecture and domain-model specifications under `specs/services/<name>/`, but contracts / implementation / tests are intentionally **v2 scope**. Each architecture.md ends with an "Open Items" section listing the missing artefacts before its first implementation task may move to `tasks/ready/`.
+
+**Why the deliberate scope choice**: depth over breadth. master + inventory together exercise every architectural pattern declared in the rule set — Hexagonal layout, transactional outbox, eventId dedupe, two-phase saga participation, optimistic-lock retry, idempotency, JWT + role-based authorization, observability metrics, contract harness. Adding three more half-built services would dilute review value without surfacing new patterns.
+
+The `inventory-service.PutawayCompletedConsumer` consumes `wms.inbound.putaway.completed.v1` from a real Kafka topic; for end-to-end demos the event is published directly by the demo script (see [Demo](#-demo--golden-path-e2e-with-curl)). When inbound-service is implemented in v2 it slots in as the producer of that exact event without any inventory-service change required.
+
 ---
 
 ## 🧭 How this was built
@@ -346,11 +575,18 @@ The full development history (60+ commits across 19 completed tasks) lives at **
 ### Specs (in this repo)
 
 - [PROJECT.md](PROJECT.md) — domain/traits declaration, service map, out-of-scope list
-- [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md)
-- [specs/services/master-service/domain-model.md](specs/services/master-service/domain-model.md)
-- [specs/services/master-service/idempotency.md](specs/services/master-service/idempotency.md)
-- [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md)
-- [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md)
+
+**v1 — implemented:**
+- [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md) · [domain-model.md](specs/services/master-service/domain-model.md) · [idempotency.md](specs/services/master-service/idempotency.md)
+- [specs/services/inventory-service/architecture.md](specs/services/inventory-service/architecture.md) · [domain-model.md](specs/services/inventory-service/domain-model.md) · [idempotency.md](specs/services/inventory-service/idempotency.md)
+- [specs/services/gateway-service/architecture.md](specs/services/gateway-service/architecture.md) · [public-routes.md](specs/services/gateway-service/public-routes.md)
+- [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md) · [inventory-service-api.md](specs/contracts/http/inventory-service-api.md)
+- [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md) · [inventory-events.md](specs/contracts/events/inventory-events.md)
+
+**v2 — specs only:**
+- [specs/services/inbound-service/architecture.md](specs/services/inbound-service/architecture.md) · [domain-model.md](specs/services/inbound-service/domain-model.md)
+- [specs/services/outbound-service/architecture.md](specs/services/outbound-service/architecture.md) · [domain-model.md](specs/services/outbound-service/domain-model.md)
+- [specs/services/admin-service/architecture.md](specs/services/admin-service/architecture.md) · [domain-model.md](specs/services/admin-service/domain-model.md)
 
 ### Rules
 
