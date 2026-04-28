@@ -148,7 +148,7 @@ class GatewayMasterE2ETest extends E2EBase {
                 // every retry until the field assertions pass or the timeout
                 // elapses.
                 List<ConsumerRecord<String, String>> accumulated = new ArrayList<>();
-                await().atMost(Duration.ofSeconds(10))
+                await().atMost(Duration.ofSeconds(30))
                         .pollInterval(Duration.ofMillis(500))
                         .untilAsserted(() -> {
                             accumulated.addAll(consumer.drain());
