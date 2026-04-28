@@ -94,7 +94,7 @@ flowchart LR
     IS -->|outbox| PG
     MS -->|publish| KF
     IS -->|publish| KF
-    KF -->|consume<br/>(eventId dedupe)| IS
+    KF -->|consume<br/>eventId dedupe| IS
 
     KF -.-> V2
 
