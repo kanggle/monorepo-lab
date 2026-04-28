@@ -601,24 +601,21 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Disable Docker BuildKit (prevents ImageFromDockerfile hang)
-        # Docker 27 enables BuildKit by default. Testcontainers' ImageFromDockerfile
-        # calls dockerClient.buildImageCmd() via the Docker REST API — not the CLI —
-        # so DOCKER_BUILDKIT=0 has no effect. The REST /build endpoint routes through
-        # the BuildKit daemon and hangs indefinitely (58-min diagnostic run confirmed
-        # zero progress after the "Pre-emptively checking" log line).
-        # Disabling BuildKit at the daemon level fixes both CLI and REST API paths.
+      - name: Build service images for e2e
+        # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
+        # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
+        # through BuildKit's gRPC session mechanism and hangs indefinitely with the
+        # Docker Java client bundled in Testcontainers 1.21.3 — 58-min and 60-min
+        # diagnostic runs confirmed zero progress after the image-check log line.
+        # Pre-building here and passing the image names via -Dwms.e2e.* lets
+        # E2EBase.java skip ImageFromDockerfile and use GenericContainer directly.
         run: |
-          echo '{"features":{"buildkit":false}}' | sudo tee /etc/docker/daemon.json
-          sudo systemctl reload docker
-          sleep 3
-
-      - name: Pre-pull base images (warm Docker layer cache for legacy builder)
-        run: |
-          docker pull eclipse-temurin:21-jre-alpine
-          docker pull postgres:16-alpine
-          docker pull redis:7-alpine
-          docker pull apache/kafka:3.7.0
+          docker build -t wms-master-service:e2e \
+            -f projects/wms-platform/apps/master-service/Dockerfile \
+            projects/wms-platform/apps/master-service/
+          docker build -t wms-gateway-service:e2e \
+            -f projects/wms-platform/apps/gateway-service/Dockerfile \
+            projects/wms-platform/apps/gateway-service/
 
       - name: Build service images for e2e
         # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
