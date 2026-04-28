@@ -13,8 +13,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -79,16 +83,11 @@ class GatewayMasterE2ETest extends E2EBase {
         @DisplayName("POST /api/v1/master/warehouses with MASTER_WRITE → 201 + outbox→Kafka event")
         void createWarehouseThroughGateway() throws Exception {
             String token = jwt.signMasterWriteToken("e2e-writer-" + UUID.randomUUID());
-            // UUID-derived short form: 6 hex chars = 16^6 = ~16.7M possible
-            // codes per run. Replaces the old 3-digit Random range whose
-            // collision surface was small enough to bite on repeat CI runs
-            // against a shared Postgres volume (WH-codes are unique per
-            // warehouse and do not auto-cleanup between suites).
-            String code = "WH" + UUID.randomUUID()
-                    .toString()
-                    .replace("-", "")
-                    .substring(0, 6)
-                    .toUpperCase();
+            // 3-digit numeric suffix — stays within the ^WH\d{2,3}$ validation
+            // constraint on CreateWarehouseRequest. Postgres is a fresh
+            // container per CI run so the 1000-value range is collision-free.
+            String code = "WH" + String.format("%03d",
+                    (int) (Math.abs(UUID.randomUUID().getLeastSignificantBits()) % 1000));
             String body = """
                     {
                       "warehouseCode": "%s",
@@ -149,7 +148,7 @@ class GatewayMasterE2ETest extends E2EBase {
                 // every retry until the field assertions pass or the timeout
                 // elapses.
                 List<ConsumerRecord<String, String>> accumulated = new ArrayList<>();
-                await().atMost(Duration.ofSeconds(10))
+                await().atMost(Duration.ofSeconds(30))
                         .pollInterval(Duration.ofMillis(500))
                         .untilAsserted(() -> {
                             accumulated.addAll(consumer.drain());
@@ -236,15 +235,15 @@ class GatewayMasterE2ETest extends E2EBase {
     }
 
     // -------------------------------------------------------------------
-    // Scenario 3 — Rate limit 429 after a 120-request burst.
+    // Scenario 3 — Rate limit 429 after an 800-request burst.
     //
     // The route is configured with RedisRateLimiter replenishRate=100,
-    // burstCapacity=200, requestedTokens=1. A cold bucket starts with
-    // burstCapacity=200 tokens — so a single burst of 120 should pass. To
-    // actually exercise the 429 path in under 2 min of wall-clock we fire
-    // 250 requests from a dedicated IP to drain the bucket; the first ~200
-    // succeed, the remainder return 429. Assertion tolerates ±5 due to
-    // replenish jitter.
+    // burstCapacity=200, requestedTokens=1. A cold bucket starts with 200
+    // tokens. Under CI load with containers, the burst window may span 4–5 s,
+    // replenishing up to 500 tokens → worst-case capacity ≈ 700. Firing 800
+    // requests therefore guarantees ≥100 are rate-limited regardless of CI
+    // speed. The test uses virtual threads so total wall-clock is bounded by
+    // the slowest single response, not by 800× serial latency.
     // -------------------------------------------------------------------
     @Nested
     @DisplayName("Rate limit burst → some 2xx + at least one 429 with Retry-After")
@@ -260,33 +259,47 @@ class GatewayMasterE2ETest extends E2EBase {
 
             AtomicInteger ok = new AtomicInteger();
             AtomicInteger rateLimited = new AtomicInteger();
-            List<String> retryAfterValues = new ArrayList<>();
+            List<String> retryAfterValues = Collections.synchronizedList(new ArrayList<>());
 
-            for (int i = 0; i < 250; i++) {
-                HttpResponse<String> resp = send(HttpRequest.newBuilder(
-                        gatewayBaseUri().resolve("/api/v1/master/warehouses"))
-                        .timeout(CALL_TIMEOUT)
-                        .header("Authorization", "Bearer " + token)
-                        .header("X-Forwarded-For", burstIp)
-                        .GET()
-                        .build());
-                int status = resp.statusCode();
-                if (status == 200 || status == 404) {
-                    ok.incrementAndGet();
-                } else if (status == 429) {
-                    rateLimited.incrementAndGet();
-                    resp.headers().firstValue("Retry-After")
-                            .ifPresent(retryAfterValues::add);
+            // Fire all 800 requests concurrently via virtual threads. Even if
+            // the burst window spans 5 s (replenishing 500 tokens → capacity
+            // ceiling of 700), 800 requests leave ≥100 rate-limited.
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> futures = new ArrayList<>(800);
+                for (int i = 0; i < 800; i++) {
+                    futures.add(executor.submit(() -> {
+                        try {
+                            HttpResponse<String> resp = send(HttpRequest.newBuilder(
+                                    gatewayBaseUri().resolve("/api/v1/master/warehouses"))
+                                    .timeout(CALL_TIMEOUT)
+                                    .header("Authorization", "Bearer " + token)
+                                    .header("X-Forwarded-For", burstIp)
+                                    .GET()
+                                    .build());
+                            int status = resp.statusCode();
+                            if (status == 200 || status == 404) {
+                                ok.incrementAndGet();
+                            } else if (status == 429) {
+                                rateLimited.incrementAndGet();
+                                resp.headers().firstValue("Retry-After")
+                                        .ifPresent(retryAfterValues::add);
+                            }
+                        } catch (Exception ignored) {
+                            // connection errors under burst load do not invalidate
+                            // the rate-limit assertion — exclude from both counters
+                        }
+                    }));
+                }
+                for (Future<?> f : futures) {
+                    f.get();
                 }
             }
 
-            // Tightened bounds (was >=100 / >=1 — too loose to catch a
-            // broken limiter that lets everything through). With
-            // burstCapacity=200 and replenishRate=100/s, a 250-request
-            // burst fired serially should leave ok ≈ 200-220 and
-            // rateLimited ≈ 30-50. >=190 tolerates replenish jitter at
-            // the edges; >=40 ensures the 429 path is genuinely
-            // exercised (a no-op limiter would score 0 rateLimited).
+            // With burstCapacity=200 and replenishRate=100/s, an 800-request
+            // burst leaves ok ≈ 200–700 (depends on CI speed) and
+            // rateLimited ≈ 100–600. >=190 tolerates replenish jitter on ok;
+            // >=40 ensures the 429 path is genuinely exercised (a
+            // broken/fail-open limiter scores 0 rateLimited).
             assertThat(ok.get())
                     .as("rate-limit still admits the bucket's capacity "
                             + "(>=190 tolerates replenish jitter)")

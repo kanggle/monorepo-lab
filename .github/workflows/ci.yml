@@ -492,7 +492,7 @@ jobs:
     name: E2E (gateway-master live-pair, Testcontainers)
     runs-on: ubuntu-latest
     needs: [build-and-test, boot-jars]
-    timeout-minutes: 30
+    timeout-minutes: 60
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
     if: github.repository == 'kanggle/monorepo-lab'
 
@@ -536,12 +536,30 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
+      - name: Build service images for e2e
+        # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
+        # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
+        # through BuildKit's gRPC session mechanism and hangs indefinitely with the
+        # Docker Java client bundled in Testcontainers 1.21.3 — 58-min and 60-min
+        # diagnostic runs confirmed zero progress after the image-check log line.
+        # Pre-building here and passing the image names via -Dwms.e2e.* lets
+        # E2EBase.java skip ImageFromDockerfile and use GenericContainer directly.
+        run: |
+          docker build -t wms-master-service:e2e \
+            -f projects/wms-platform/apps/master-service/Dockerfile \
+            projects/wms-platform/apps/master-service/
+          docker build -t wms-gateway-service:e2e \
+            -f projects/wms-platform/apps/gateway-service/Dockerfile \
+            projects/wms-platform/apps/gateway-service/
+
       - name: Run gateway-master e2e suite
         run: >-
           ./gradlew
           :projects:wms-platform:apps:gateway-service:e2eTest
           -x :projects:wms-platform:apps:master-service:bootJar
           -x :projects:wms-platform:apps:gateway-service:bootJar
+          -Dwms.e2e.masterImage=wms-master-service:e2e
+          -Dwms.e2e.gatewayImage=wms-gateway-service:e2e
           --no-daemon --stacktrace
 
       - name: Upload e2e test reports on failure
