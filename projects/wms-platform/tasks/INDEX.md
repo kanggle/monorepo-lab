@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-INT-009-fix-TASK-INT-008.md` — Fix silent exception swallow in parallelised burst test, update method name/Javadoc to reflect 800-request burst, replace new Random() with ThreadLocalRandom.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-INT-009-fix-TASK-INT-008.md` — Fix silent exception swallow in parallelised burst test, update method name/Javadoc to reflect 800-request burst, replace new Random() with ThreadLocalRandom.
 
 ## done
 

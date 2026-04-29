@@ -19,11 +19,14 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Live-pair end-to-end test: gateway-service ↔ master-service running in a
@@ -36,12 +39,14 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li>Happy path — GET + POST through gateway with a valid JWT</li>
  *   <li>401 without JWT — gateway short-circuits, master never receives</li>
- *   <li>Rate limit 429 — 120-request burst trips SCG's RedisRateLimiter</li>
+ *   <li>Rate limit 429 — 800-request burst trips SCG's RedisRateLimiter</li>
  *   <li>503 when master down — pause the master container mid-test</li>
  *   <li>Trace propagation — deferred; see note in the nested class</li>
  * </ol>
  */
 class GatewayMasterE2ETest extends E2EBase {
+
+    private static final Logger log = LoggerFactory.getLogger(GatewayMasterE2ETest.class);
 
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
     private static final String WAREHOUSE_TOPIC = "wms.master.warehouse.v1";
@@ -250,12 +255,12 @@ class GatewayMasterE2ETest extends E2EBase {
     class RateLimit {
 
         @Test
-        void burstFrom250RequestsTripsRateLimiter() throws Exception {
+        void burstFrom800RequestsTripsRateLimiter() throws Exception {
             String token = jwt.signMasterReadToken("e2e-burst");
             // Unique IP per test run so concurrent suites don't collide in
             // the same Redis bucket.
-            String burstIp = "10.0." + (50 + new java.util.Random().nextInt(150))
-                    + "." + (1 + new java.util.Random().nextInt(250));
+            String burstIp = "10.0." + (50 + ThreadLocalRandom.current().nextInt(150))
+                    + "." + (1 + ThreadLocalRandom.current().nextInt(250));
 
             AtomicInteger ok = new AtomicInteger();
             AtomicInteger rateLimited = new AtomicInteger();
@@ -284,9 +289,10 @@ class GatewayMasterE2ETest extends E2EBase {
                                 resp.headers().firstValue("Retry-After")
                                         .ifPresent(retryAfterValues::add);
                             }
-                        } catch (Exception ignored) {
+                        } catch (Exception e) {
                             // connection errors under burst load do not invalidate
                             // the rate-limit assertion — exclude from both counters
+                            log.warn("burst request failed: {}", e.getMessage(), e);
                         }
                     }));
                 }
@@ -305,7 +311,7 @@ class GatewayMasterE2ETest extends E2EBase {
                             + "(>=190 tolerates replenish jitter)")
                     .isGreaterThanOrEqualTo(190);
             assertThat(rateLimited.get())
-                    .as("the 250-request burst must drain the bucket and "
+                    .as("the 800-request burst must drain the bucket and "
                             + "yield a decisive block count (>=40 catches "
                             + "a broken limiter that returns few or no 429s)")
                     .isGreaterThanOrEqualTo(40);
