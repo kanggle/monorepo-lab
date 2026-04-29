@@ -15,6 +15,9 @@ Choose one primary domain for each service.
 
 ## Available Domains
 
+### Identity & Security
+- identity-platform
+
 ### Commerce & Transactions
 - ecommerce
 - marketplace

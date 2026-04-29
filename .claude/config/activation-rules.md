@@ -244,6 +244,20 @@ Activate:
 
 ---
 
+### identity-platform
+Activate:
+- account type enforcement rules (CONSUMER vs OPERATOR)
+- JWT issuance and validation rules
+- JWKS key management rules
+- SSO scope rules
+- social login integration rules
+- token lifecycle and rotation rules
+- audit logging for all auth events
+
+→ Detailed rules: *(file to be created when a project declares this domain)*
+
+---
+
 > **Other domains** (reservation, erp, groupware, accounting-system, analytics, bi, reporting, ad-platform, cdp, dmp, sns, forum, content-platform, ott, media-streaming, live-streaming, saas, collaboration-tool, crm, developer-platform, pg, banking, securities, wms, delivery-platform, fleet-management, edtech, lms, online-course, game-platform, game-backoffice) — listed in [`domains.md`](domains.md) catalog; activation mapping and detailed rules files will be added on-demand when a project declares them.
 
 ---

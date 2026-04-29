@@ -24,8 +24,8 @@ Two distinct account types exist within the same identity service:
 
 | Type | Purpose | Examples | Social Login | Session | Target Platforms |
 |---|---|---|---|---|---|
-| `CONSUMER` | Self-registered B2C users | Ecommerce shoppers, fan-site members | Allowed (Google, Naver, etc.) | Long-lived refresh tokens | ecommerce, fan-platform |
-| `OPERATOR` | Company-provisioned B2B users | Warehouse staff, ERP clerks, MES operators | Not allowed | Short sessions | wms, erp, mes, scm |
+| `CONSUMER` | Self-registered B2C users | Ecommerce shoppers, fan-site members | Allowed (Google, Naver, etc.) | Long-lived refresh tokens | ecommerce (customer), fan-platform |
+| `OPERATOR` | Company-provisioned B2B users | Warehouse staff, ERP clerks, MES operators, ecommerce admins | Not allowed | Short sessions | wms, erp, mes, scm, ecommerce (admin) |
 
 **Constraint:** A single account cannot hold both account types. One person requiring both roles must provision separate accounts.
 
@@ -86,6 +86,7 @@ CONSUMER accounts have only one active role per platform. Multi-role support is 
 - Examples:
   - WMS: `["WMS_OPERATOR", "OUTBOUND_MANAGER"]`
   - SCM: `["SCM_OPERATOR", "BUYER"]`
+  - ecommerce (admin): `["ADMIN"]`
   - An operator with both: `aud: wms` token has `roles: ["WMS_OPERATOR"]`; same account with `aud: scm` has `roles: ["SCM_OPERATOR"]`
 
 ---
@@ -125,8 +126,11 @@ Every platform gateway MUST implement the following validation and injection log
 5. **Validate audience:** Reject if `aud` does not match the gateway's own platform identifier
 
 6. **Validate account type:**
-   - ecommerce and fan gateways: reject if `account_type != CONSUMER`
-   - Wms, erp, mes, scm gateways: reject if `account_type != OPERATOR`
+   - fan gateway: reject if `account_type != CONSUMER`
+   - ecommerce gateway: path-based account type enforcement:
+     - `/api/admin/**` paths: reject if `account_type != OPERATOR`
+     - All other paths: reject if `account_type != CONSUMER`
+   - wms, erp, mes, scm gateways: reject if `account_type != OPERATOR`
 
 ### Post-Validation Injection
 
@@ -259,12 +263,12 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Validate `aud = "wms"` against expected `"ecommerce"` ✗
 - Respond: HTTP 403 Forbidden — token is for a different platform
 
-### Example 5: Invalid Token (Wrong Account Type)
+### Example 5: Invalid Token (Wrong Account Type — non-admin path)
 
 ```json
 {
   "sub": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "account_type": "OPERATOR",  // mismatch for ecommerce (CONSUMER only)
+  "account_type": "OPERATOR",  // mismatch for ecommerce non-admin path (CONSUMER required)
   "aud": "ecommerce",
   "roles": ["WMS_OPERATOR"],
   "email": "operator@company.com",
@@ -274,10 +278,54 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 }
 ```
 
-**Gateway Behavior (ecommerce):**
+**Gateway Behavior (ecommerce — `/api/products` path):**
 - Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
-- Validate `account_type = CONSUMER` (got `OPERATOR`) ✗
-- Respond: HTTP 403 Forbidden — operator accounts cannot access consumer platforms
+- Path is not `/api/admin/**` → validate `account_type = CONSUMER` (got `OPERATOR`) ✗
+- Respond: HTTP 403 Forbidden — operator accounts cannot access consumer paths
+
+### Example 6: ecommerce OPERATOR (Admin)
+
+```json
+{
+  "sub": "7f3d2c1b-0000-4abc-8def-111122223333",
+  "account_type": "OPERATOR",
+  "aud": "ecommerce",
+  "roles": ["ADMIN"],
+  "email": "admin@company.com",
+  "iss": "https://account.example.com",
+  "iat": 1746000000,
+  "exp": 1746001800,
+  "jti": "token-uuid-6",
+  "kid": "key-v1"
+}
+```
+
+**Gateway Behavior (ecommerce — `/api/admin/products` path):**
+- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
+- Path `/api/admin/**` → validate `account_type = OPERATOR` (got `OPERATOR`) ✓
+- Inject: `X-User-Id: 7f3d2c1b-0000-4abc-8def-111122223333`, `X-User-Role: ADMIN`, `X-User-Email: admin@company.com`, `X-Account-Type: OPERATOR`
+
+### Example 7: Invalid Token (CONSUMER accessing admin path)
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
+  "account_type": "CONSUMER",
+  "aud": "ecommerce",
+  "roles": ["CUSTOMER"],
+  "email": "shopper@example.com",
+  "iss": "https://account.example.com",
+  "iat": 1746000000,
+  "exp": 1746003600,
+  "jti": "token-uuid-7",
+  "kid": "key-v1"
+}
+```
+
+**Gateway Behavior (ecommerce — `/api/admin/products` path):**
+- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
+- Path `/api/admin/**` → validate `account_type = OPERATOR` (got `CONSUMER`) ✗
+- Respond: HTTP 403 Forbidden — consumer accounts cannot access admin paths
 
 ---
 
