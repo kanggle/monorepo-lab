@@ -246,3 +246,21 @@ Conventional Commit scopes help reviewers understand the surface:
 - Breaking changes use `!` suffix or `BREAKING CHANGE:` footer
 
 See `docs/guides/` for the full commit-message convention and cross-project workflow.
+
+---
+
+# Port Namespace Convention
+
+When adding or modifying `docker-compose.yml` host ports across projects, apply the `PORT_PREFIX` convention to prevent collisions when multiple projects run simultaneously on one machine.
+
+Pattern: `${PORT_PREFIX:-N}XXXX:YYYY` where `N` is the project's assigned prefix digit.
+
+| Prefix | Project |
+|---|---|
+| 1 | ecommerce-microservices-platform |
+| 2 | wms-platform |
+| 3 | reserved — global-account-platform |
+
+5-digit source ports (e.g., `16686`) cannot use this pattern — keep them as-is or use a per-service variable.
+
+Full convention and verification commands: `TEMPLATE.md` § "Port Namespace Convention (PORT_PREFIX)".

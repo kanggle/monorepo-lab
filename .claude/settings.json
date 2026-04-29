@@ -7,7 +7,10 @@
       "Edit(/.claude/skills/infra/**)",
       "Edit(/.claude/skills/search/**)",
       "Edit(/.claude/skills/testing/**)",
-      "Edit(/.claude/skills/service-types/**)"
+      "Edit(/.claude/skills/service-types/**)",
+      "Bash(pnpm --filter web-store exec playwright --version)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm --filter web-store run e2e:smoke)"
     ]
   },
   "hooks": {
