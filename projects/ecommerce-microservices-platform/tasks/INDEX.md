@@ -74,7 +74,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-BE-131 | ecommerce gateway-service JWT 검증 방식을 HS256 → JWKS/RSA(RS256)로 교체 | gateway-service | code, security, test |
 | TASK-BE-132 | ecommerce auth-service 폐기 — Global Account Platform 이관 후 제거 | auth-service | code, security |
 
 ## in-progress
@@ -89,6 +88,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-131 | ecommerce gateway-service JWT 검증 방식을 HS256 → JWKS/RSA(RS256)로 교체 | gateway-service | code, security, test |
 | TASK-BE-130 | [Security P2] ReviewController sort 파라미터 허용 값 화이트리스트 검증 추가 | review-service | code, security, test |
 | TASK-BE-129 | [Security P1] SearchAdminController admin role check 누락 수정 | search-service | code, security, test |
 | TASK-BE-126-fix-002 | TASK-BE-126-fix-001 리뷰 수정 — register / addVariant / updateVariant / deleteVariant role 검증 테스트 누락 추가 | product-service | code, test, security |

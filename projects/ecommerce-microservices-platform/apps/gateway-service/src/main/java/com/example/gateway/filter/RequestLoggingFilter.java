@@ -39,6 +39,7 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
                     latency);
 
             String targetService = routeService.resolveTargetService(request.getPath().value());
+            gatewayMetrics.incrementRequestsRouted(targetService);
             if (statusCode == 429) {
                 gatewayMetrics.incrementRateLimited(targetService);
             }

@@ -1,11 +1,12 @@
 package com.example.gateway;
 
+import com.example.gateway.testsupport.JwksMockServer;
+import com.example.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -16,19 +17,30 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
-import java.util.Date;
+import java.util.List;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("integration")
 @Testcontainers
 @ActiveProfiles("integration-test")
-@DisplayName("Gateway 통합 테스트")
+@DisplayName("Gateway 통합 테스트 (RSA/JWKS)")
 class GatewayIntegrationTest {
 
-    private static final String JWT_SECRET = "integration-test-jwt-secret-key-minimum-32-chars!!";
-    private static final SecretKey KEY = Keys.hmacShaKeyFor(JWT_SECRET.getBytes(StandardCharsets.UTF_8));
+    private static final JwtTestHelper jwtHelper = new JwtTestHelper();
+    private static final JwksMockServer jwksMockServer;
+
+    static {
+        try {
+            jwksMockServer = new JwksMockServer(jwtHelper);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    @AfterAll
+    static void stopJwksMockServer() throws Exception {
+        jwksMockServer.close();
+    }
 
     @Container
     static RedisContainer redis = new RedisContainer(DockerImageName.parse("redis:7-alpine"));
@@ -37,20 +49,16 @@ class GatewayIntegrationTest {
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-        registry.add("jwt.secret", () -> JWT_SECRET);
+        registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
+                jwksMockServer::hostJwksUrl);
     }
 
     @Autowired
     private WebTestClient webTestClient;
 
-    private String validToken() {
-        return Jwts.builder()
-                .subject("user-123")
-                .claim("email", "user@example.com")
-                .expiration(new Date(System.currentTimeMillis() + 3600_000))
-                .signWith(KEY)
-                .compact();
-    }
+    // -----------------------------------------------------------------------
+    // 401 scenarios
+    // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("인증 토큰 없이 보호된 경로 요청 시 401을 반환한다")
@@ -78,59 +86,15 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("유효한 JWT로 보호된 경로 요청 시 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
-    void protectedRoute_validToken_passesJwtFilter() {
-        webTestClient.get()
-                .uri("/api/orders/123")
-                .header("Authorization", "Bearer " + validToken())
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
-    }
-
-    @Test
-    @DisplayName("공개 경로 POST /api/auth/login은 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
-    void publicRoute_login_passesWithoutToken() {
-        webTestClient.post()
-                .uri("/api/auth/login")
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
-    }
-
-    @Test
-    @DisplayName("공개 경로 GET /api/products/**는 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
-    void publicRoute_products_passesWithoutToken() {
-        webTestClient.get()
-                .uri("/api/products/42")
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
-    }
-
-    @Test
-    @DisplayName("/actuator/health 는 인증 없이 UP 상태를 반환한다")
-    void actuatorHealth_returnsUp() {
-        webTestClient.get()
-                .uri("/actuator/health")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.status").isEqualTo("UP");
-    }
-
-    @Test
     @DisplayName("만료된 JWT로 보호된 경로 요청 시 401을 반환한다")
     void protectedRoute_expiredToken_returns401() {
-        String expiredToken = Jwts.builder()
-                .subject("user-123")
-                .claim("email", "user@example.com")
-                .expiration(new Date(System.currentTimeMillis() - 1000))
-                .signWith(KEY)
-                .compact();
+        // signToken with -1 second TTL → already expired
+        String expiredToken = jwtHelper.signToken(
+                "user-123", null, -1L,
+                java.util.Map.of(
+                        "aud", List.of("ecommerce"),
+                        "account_type", "CONSUMER",
+                        "email", "user@example.com"));
 
         webTestClient.get()
                 .uri("/api/orders/123")
@@ -142,26 +106,54 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("공개 경로 POST /api/auth/refresh는 토큰 없이 JWT 필터를 통과한다")
-    void publicRoute_refresh_passesWithoutToken() {
-        webTestClient.post()
-                .uri("/api/auth/refresh")
+    @DisplayName("audience가 일치하지 않는 JWT로 보호된 경로 요청 시 401을 반환한다")
+    void protectedRoute_wrongAudience_returns401() {
+        // No aud claim → Spring Security rejects it when audiences is configured
+        String noAudToken = jwtHelper.signToken(
+                "user-123", "BUYER", 300L,
+                java.util.Map.of("account_type", "CONSUMER", "email", "user@example.com"));
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + noAudToken)
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    // -----------------------------------------------------------------------
+    // Valid CONSUMER token scenarios
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("유효한 CONSUMER JWT로 보호된 경로 요청 시 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
+    void protectedRoute_validConsumerToken_passesJwtFilter() {
+        String token = jwtHelper.signConsumerToken("user-123", List.of("BUYER"));
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
     }
 
     @Test
-    @DisplayName("공개 경로 GET /api/search/**는 토큰 없이 JWT 필터를 통과한다")
-    void publicRoute_search_passesWithoutToken() {
+    @DisplayName("CONSUMER 토큰으로 /api/admin/ 경로 접근 시 403을 반환한다")
+    void adminRoute_consumerToken_returns403() {
+        String token = jwtHelper.signConsumerToken("user-123", List.of("BUYER"));
+
         webTestClient.get()
-                .uri("/api/search/products?q=shoes")
+                .uri("/api/admin/products/42")
+                .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("FORBIDDEN");
     }
+
+    // -----------------------------------------------------------------------
+    // Spoofed identity header scenarios
+    // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("보호된 경로에 스푸핑된 X-User-Id 헤더가 전달되어도 토큰 없으면 401을 반환한다")
@@ -175,6 +167,20 @@ class GatewayIntegrationTest {
                 .expectStatus().isUnauthorized();
     }
 
+    // -----------------------------------------------------------------------
+    // Public route scenarios
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("공개 경로 POST /api/auth/login은 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
+    void publicRoute_login_passesWithoutToken() {
+        webTestClient.post()
+                .uri("/api/auth/login")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
     @Test
     @DisplayName("공개 경로 POST /api/auth/signup은 토큰 없이 JWT 필터를 통과한다")
     void publicRoute_signup_passesWithoutToken() {
@@ -182,7 +188,47 @@ class GatewayIntegrationTest {
                 .uri("/api/auth/signup")
                 .exchange()
                 .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .isNotEqualTo(401));
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("공개 경로 POST /api/auth/refresh는 토큰 없이 JWT 필터를 통과한다")
+    void publicRoute_refresh_passesWithoutToken() {
+        webTestClient.post()
+                .uri("/api/auth/refresh")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("공개 경로 GET /api/products/**는 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
+    void publicRoute_products_passesWithoutToken() {
+        webTestClient.get()
+                .uri("/api/products/42")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("공개 경로 GET /api/search/**는 토큰 없이 JWT 필터를 통과한다")
+    void publicRoute_search_passesWithoutToken() {
+        webTestClient.get()
+                .uri("/api/search/products?q=shoes")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("/actuator/health 는 인증 없이 UP 상태를 반환한다")
+    void actuatorHealth_returnsUp() {
+        webTestClient.get()
+                .uri("/actuator/health")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("UP");
     }
 }

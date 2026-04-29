@@ -44,9 +44,6 @@ spring:
           predicates:
             - Path=/api/shippings/**
 
-jwt:
-  secret: standalone-dev-jwt-secret-key-must-be-at-least-32chars!
-
 management:
   health:
     redis:
