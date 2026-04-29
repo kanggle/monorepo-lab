@@ -93,6 +93,29 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     @Test
+    void injectsAccountTypeHeader() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("account_type", "OPERATOR")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Account-Type")).isEqualTo("OPERATOR");
+    }
+
+    @Test
+    void omitsAccountTypeHeaderWhenClaimAbsent() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Account-Type")).isNull();
+    }
+
+    @Test
     void passesThroughWhenNoSecurityContext() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/master/warehouses").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);

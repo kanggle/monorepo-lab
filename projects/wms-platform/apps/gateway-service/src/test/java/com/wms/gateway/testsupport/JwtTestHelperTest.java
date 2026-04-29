@@ -36,6 +36,8 @@ class JwtTestHelperTest {
         assertThat(claims.getStringListClaim("roles"))
                 .containsExactlyInAnyOrder("MASTER_WRITE", "MASTER_READ");
         assertThat(claims.getStringClaim("email")).isEqualTo("user-42@test.local");
+        assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat(claims.getAudience()).containsExactly("wms");
         assertThat(claims.getIssuer()).isEqualTo("https://test.local/issuer");
         assertThat(claims.getExpirationTime()).isAfter(new java.util.Date());
     }
@@ -46,6 +48,8 @@ class JwtTestHelperTest {
         JWTClaimsSet claims = decodeAndVerify(token);
         assertThat(claims.getStringClaim("role")).isEqualTo("MASTER_READ");
         assertThat(claims.getStringListClaim("roles")).containsExactly("MASTER_READ");
+        assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat(claims.getAudience()).containsExactly("wms");
     }
 
     @Test

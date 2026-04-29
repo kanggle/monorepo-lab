@@ -21,6 +21,7 @@ class IdentityHeaderStripFilterTest {
                 .header("X-User-Email", "forged@example.com")
                 .header("X-User-Role", "MASTER_ADMIN")
                 .header("X-Actor-Id", "forged-actor")
+                .header("X-Account-Type", "OPERATOR")
                 .header("Authorization", "Bearer xyz")
                 .header("X-Request-Id", "req-123")
                 .build();
@@ -35,6 +36,7 @@ class IdentityHeaderStripFilterTest {
         assertThat(forwarded.getHeaders().get("X-User-Email")).isNull();
         assertThat(forwarded.getHeaders().get("X-User-Role")).isNull();
         assertThat(forwarded.getHeaders().get("X-Actor-Id")).isNull();
+        assertThat(forwarded.getHeaders().get("X-Account-Type")).isNull();
         // Non-identity headers remain untouched
         assertThat(forwarded.getHeaders().getFirst("Authorization")).isEqualTo("Bearer xyz");
         assertThat(forwarded.getHeaders().getFirst("X-Request-Id")).isEqualTo("req-123");

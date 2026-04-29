@@ -53,6 +53,10 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         // and deny access; leaving the header absent would let a buggy service
         // fall through to a default.
         builder.header("X-User-Role", role);
+        String accountType = jwt.getClaimAsString("account_type");
+        if (accountType != null) {
+            builder.header("X-Account-Type", accountType);
+        }
         return exchange.mutate().request(builder.build()).build();
     }
 
