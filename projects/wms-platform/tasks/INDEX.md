@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-INT-009-fix-TASK-INT-008.md` — Fix silent exception swallow in parallelised burst test, update method name/Javadoc to reflect 800-request burst, replace new Random() with ThreadLocalRandom.
 
 ## in-progress
 
@@ -75,10 +75,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 (250-request burst) parallelised to fix CI timeout exceeding 30 min.
+(empty)
 
 ## done
 
+- `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 parallelised (virtual thread executor, 800 requests). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-INT-009 (1 critical: silent catch; 2 warnings: method name/Javadoc out of sync with 800-request count).
 - `TASK-BE-036-fix-TASK-BE-035.md` — Populate outcome column in EventDedupePersistenceAdapter (4-arg constructor, outcome="APPLIED"); ArgumentCaptor assertion added in test. Review verdict 2026-04-29: **APPROVED**
 - `TASK-BE-035-fix-TASK-BE-034.md` — Fix webhook processing order (secret→timestamp→HMAC), outbound_outbox schema alignment (aggregate_type/event_version/partition_key via V9), outbound_event_dedupe outcome column (via V9). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-036 (1 warning: EventDedupePersistenceAdapter does not populate outcome column despite V9 adding it).
 - `TASK-BE-034-outbound-service-bootstrap.md` — outbound-service Hexagonal skeleton, V1–V8 Flyway migrations, 6 MasterReadModel consumers, ERP order webhook ingest, saga/TMS/outbox stubs, Redis IdempotencyStore, JWT wiring. Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-035 (1 critical: webhook processing order; 2 warnings: outbound_outbox/outbound_event_dedupe schema gaps vs domain-model.md).
