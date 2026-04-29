@@ -49,16 +49,14 @@ public class InMemoryIdempotencyStore implements IdempotencyStore {
     public boolean tryAcquireLock(String storageKey, Duration ttl) {
         long now = clock.millis();
         long expiresAt = now + ttl.toMillis();
-        Long existing = locks.get(storageKey);
-        if (existing != null && existing > now) {
-            return false;
-        }
-        Long prev = locks.put(storageKey, expiresAt);
-        if (prev != null && prev > now) {
-            locks.put(storageKey, prev);
-            return false;
-        }
-        return true;
+        // compute() is atomic per-key: the lambda runs without concurrent interference.
+        Long result = locks.compute(storageKey, (k, existing) -> {
+            if (existing != null && existing > now) {
+                return existing; // lock is held — do not overwrite
+            }
+            return expiresAt; // acquire or renew expired lock
+        });
+        return result.longValue() == expiresAt;
     }
 
     @Override

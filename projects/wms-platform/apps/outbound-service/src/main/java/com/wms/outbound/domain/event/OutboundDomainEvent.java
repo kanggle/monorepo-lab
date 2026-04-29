@@ -9,20 +9,22 @@ import java.util.UUID;
  * serialise the JSON payload defined in
  * {@code specs/contracts/events/outbound-events.md}.
  *
- * <p>Permitted events for TASK-BE-037 scope:
+ * <p>Permitted events:
  * <ul>
  *   <li>{@link OrderReceivedEvent}</li>
  *   <li>{@link OrderCancelledEvent}</li>
  *   <li>{@link PickingRequestedEvent}</li>
  *   <li>{@link PickingCancelledEvent}</li>
+ *   <li>{@link PickingCompletedEvent}</li>
+ *   <li>{@link PackingCompletedEvent}</li>
+ *   <li>{@link ShippingConfirmedEvent}</li>
  * </ul>
- *
- * <p>Picking-completed / packing-completed / shipping-confirmed land in
- * TASK-BE-038.
  */
 public sealed interface OutboundDomainEvent
         permits OrderReceivedEvent, OrderCancelledEvent,
-                PickingRequestedEvent, PickingCancelledEvent {
+                PickingRequestedEvent, PickingCancelledEvent,
+                PickingCompletedEvent, PackingCompletedEvent,
+                ShippingConfirmedEvent {
 
     UUID aggregateId();
 

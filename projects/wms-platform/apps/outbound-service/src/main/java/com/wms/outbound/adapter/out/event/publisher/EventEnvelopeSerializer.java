@@ -6,8 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.outbound.domain.event.OrderCancelledEvent;
 import com.wms.outbound.domain.event.OrderReceivedEvent;
 import com.wms.outbound.domain.event.OutboundDomainEvent;
+import com.wms.outbound.domain.event.PackingCompletedEvent;
 import com.wms.outbound.domain.event.PickingCancelledEvent;
+import com.wms.outbound.domain.event.PickingCompletedEvent;
 import com.wms.outbound.domain.event.PickingRequestedEvent;
+import com.wms.outbound.domain.event.ShippingConfirmedEvent;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +69,9 @@ public class EventEnvelopeSerializer {
             case OrderCancelledEvent e -> orderCancelledPayload(e);
             case PickingRequestedEvent e -> pickingRequestedPayload(e);
             case PickingCancelledEvent e -> pickingCancelledPayload(e);
+            case PickingCompletedEvent e -> pickingCompletedPayload(e);
+            case PackingCompletedEvent e -> packingCompletedPayload(e);
+            case ShippingConfirmedEvent e -> shippingConfirmedPayload(e);
         };
     }
 
@@ -129,6 +135,81 @@ public class EventEnvelopeSerializer {
         p.put("pickingRequestId", e.reservationId().toString());
         p.put("orderId", e.orderId().toString());
         p.put("reason", e.reason());
+        return p;
+    }
+
+    private static Map<String, Object> pickingCompletedPayload(PickingCompletedEvent e) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("sagaId", e.sagaId().toString());
+        p.put("orderId", e.orderId().toString());
+        p.put("pickingConfirmationId", e.pickingConfirmationId().toString());
+        p.put("confirmedBy", e.confirmedBy());
+        p.put("confirmedAt", e.confirmedAt().toString());
+        List<Map<String, Object>> lines = e.lines().stream().map(l -> {
+            Map<String, Object> lm = new LinkedHashMap<>();
+            lm.put("orderLineId", l.orderLineId().toString());
+            lm.put("skuId", l.skuId().toString());
+            lm.put("lotId", l.lotId() != null ? l.lotId().toString() : null);
+            lm.put("actualLocationId", l.actualLocationId().toString());
+            lm.put("qtyConfirmed", l.qtyConfirmed());
+            return lm;
+        }).toList();
+        p.put("lines", lines);
+        return p;
+    }
+
+    private static Map<String, Object> packingCompletedPayload(PackingCompletedEvent e) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("orderId", e.orderId().toString());
+        p.put("orderNo", e.orderNo());
+        p.put("warehouseId", e.warehouseId().toString());
+        p.put("completedAt", e.completedAt().toString());
+        List<Map<String, Object>> units = e.packingUnits().stream().map(u -> {
+            Map<String, Object> um = new LinkedHashMap<>();
+            um.put("packingUnitId", u.packingUnitId().toString());
+            um.put("cartonNo", u.cartonNo());
+            um.put("packingType", u.packingType());
+            um.put("weightGrams", u.weightGrams());
+            um.put("lengthMm", u.lengthMm());
+            um.put("widthMm", u.widthMm());
+            um.put("heightMm", u.heightMm());
+            List<Map<String, Object>> ulines = u.lines().stream().map(l -> {
+                Map<String, Object> lm = new LinkedHashMap<>();
+                lm.put("orderLineId", l.orderLineId().toString());
+                lm.put("skuId", l.skuId().toString());
+                lm.put("lotId", l.lotId() != null ? l.lotId().toString() : null);
+                lm.put("qty", l.qty());
+                return lm;
+            }).toList();
+            um.put("lines", ulines);
+            return um;
+        }).toList();
+        p.put("packingUnits", units);
+        p.put("totalCartonCount", e.totalCartonCount());
+        p.put("totalWeightGrams", e.totalWeightGrams());
+        return p;
+    }
+
+    private static Map<String, Object> shippingConfirmedPayload(ShippingConfirmedEvent e) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("sagaId", e.sagaId().toString());
+        p.put("reservationId", e.reservationId().toString());
+        p.put("orderId", e.orderId().toString());
+        p.put("shipmentId", e.shipmentId().toString());
+        p.put("shipmentNo", e.shipmentNo());
+        p.put("warehouseId", e.warehouseId().toString());
+        p.put("shippedAt", e.shippedAt().toString());
+        p.put("carrierCode", e.carrierCode());
+        List<Map<String, Object>> lines = e.lines().stream().map(l -> {
+            Map<String, Object> lm = new LinkedHashMap<>();
+            lm.put("orderLineId", l.orderLineId().toString());
+            lm.put("skuId", l.skuId().toString());
+            lm.put("lotId", l.lotId() != null ? l.lotId().toString() : null);
+            lm.put("locationId", l.locationId() != null ? l.locationId().toString() : null);
+            lm.put("qtyConfirmed", l.qtyConfirmed());
+            return lm;
+        }).toList();
+        p.put("lines", lines);
         return p;
     }
 

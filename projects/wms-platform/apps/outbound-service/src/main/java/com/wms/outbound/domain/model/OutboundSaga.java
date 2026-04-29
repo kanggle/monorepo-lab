@@ -179,6 +179,64 @@ public final class OutboundSaga {
         this.lastTransitionAt = now;
     }
 
+    /**
+     * Operator confirmed picking (REST): {@code RESERVED → PICKING_CONFIRMED}.
+     */
+    public void onPickingConfirmed(Instant now) {
+        if (status == SagaStatus.PICKING_CONFIRMED) {
+            return;
+        }
+        if (status != SagaStatus.RESERVED) {
+            throw new StateTransitionInvalidException(status.name(), SagaStatus.PICKING_CONFIRMED.name());
+        }
+        this.status = SagaStatus.PICKING_CONFIRMED;
+        this.lastTransitionAt = now;
+    }
+
+    /**
+     * All packing units sealed (REST): {@code PICKING_CONFIRMED → PACKING_CONFIRMED}.
+     */
+    public void onPackingConfirmed(Instant now) {
+        if (status == SagaStatus.PACKING_CONFIRMED) {
+            return;
+        }
+        if (status != SagaStatus.PICKING_CONFIRMED) {
+            throw new StateTransitionInvalidException(status.name(), SagaStatus.PACKING_CONFIRMED.name());
+        }
+        this.status = SagaStatus.PACKING_CONFIRMED;
+        this.lastTransitionAt = now;
+    }
+
+    /**
+     * TMS push exhausted (after-commit): {@code SHIPPED → SHIPPED_NOT_NOTIFIED}
+     * (non-terminal alert state).
+     */
+    public void onTmsNotifyFailed(String reason, Instant now) {
+        if (status == SagaStatus.SHIPPED_NOT_NOTIFIED) {
+            return;
+        }
+        if (status != SagaStatus.SHIPPED) {
+            throw new StateTransitionInvalidException(status.name(), SagaStatus.SHIPPED_NOT_NOTIFIED.name());
+        }
+        this.status = SagaStatus.SHIPPED_NOT_NOTIFIED;
+        this.failureReason = reason;
+        this.lastTransitionAt = now;
+    }
+
+    /**
+     * Bind the freshly-created PickingRequest's id to the saga so subsequent
+     * inventory replies (which carry {@code reservationId == picking_request.id})
+     * can be correlated. Called once when {@code PickingRequest} is materialised.
+     *
+     * <p>Until TASK-BE-038, the saga's {@code pickingRequestId} was bootstrapped
+     * to the saga id ({@link #newRequested}); once the real PickingRequest
+     * aggregate is created, the application service may swap the value in via
+     * this method without bumping the saga's logical state.
+     */
+    public void bindPickingRequest(UUID pickingRequestId) {
+        this.pickingRequestId = Objects.requireNonNull(pickingRequestId, "pickingRequestId");
+    }
+
     public UUID sagaId() {
         return sagaId;
     }

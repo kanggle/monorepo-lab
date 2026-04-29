@@ -26,13 +26,21 @@ public interface MasterReadModelPort {
 
     Optional<WarehouseSnapshot> findWarehouse(UUID id);
 
+    Optional<WarehouseSnapshot> findWarehouseByCode(String warehouseCode);
+
     Optional<ZoneSnapshot> findZone(UUID id);
 
     Optional<LocationSnapshot> findLocation(UUID id);
 
     Optional<SkuSnapshot> findSku(UUID id);
 
+    Optional<SkuSnapshot> findSkuByCode(String skuCode);
+
     Optional<LotSnapshot> findLot(UUID id);
 
+    Optional<LotSnapshot> findLotBySkuAndLotNo(UUID skuId, String lotNo);
+
     Optional<PartnerSnapshot> findPartner(UUID id);
+
+    Optional<PartnerSnapshot> findPartnerByCode(String partnerCode);
 }

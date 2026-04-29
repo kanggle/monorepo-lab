@@ -101,6 +101,10 @@ logging:
 inbound:
   idempotency:
     ttl-seconds: 86400
+  outbox:
+    poll-ms: 1000
+    initial-delay-ms: 5000
+    batch-size: 100
   webhook:
     erp:
       timestamp-window-seconds: 300

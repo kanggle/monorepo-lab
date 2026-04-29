@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS wiring
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS post-commit wiring (V11 schema align)
 
 ## done
 

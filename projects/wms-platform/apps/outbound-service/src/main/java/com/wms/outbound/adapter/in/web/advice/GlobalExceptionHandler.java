@@ -5,6 +5,9 @@ import com.wms.outbound.domain.exception.OrderAlreadyShippedException;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.OutboundDomainException;
+import com.wms.outbound.domain.exception.PackingUnitNotFoundException;
+import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
+import com.wms.outbound.domain.exception.ShipmentNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,6 +40,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ApiErrorEnvelope> handleOrderNotFound(OrderNotFoundException e) {
+        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(PickingRequestNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handlePickingRequestNotFound(PickingRequestNotFoundException e) {
+        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(PackingUnitNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handlePackingUnitNotFound(PackingUnitNotFoundException e) {
+        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ShipmentNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleShipmentNotFound(ShipmentNotFoundException e) {
         return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
     }
 

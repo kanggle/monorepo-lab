@@ -111,6 +111,73 @@ public class OutboundSagaCoordinator {
     }
 
     /**
+     * Operator confirmed picking (REST): {@code RESERVED → PICKING_CONFIRMED}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onPickingConfirmed(UUID sagaId) {
+        OutboundSaga saga = sagaPersistence.findById(sagaId).orElse(null);
+        if (saga == null) {
+            log.warn("onPickingConfirmed for unknown sagaId={}; skipping", sagaId);
+            return;
+        }
+        Instant now = clock.instant();
+        saga.onPickingConfirmed(now);
+        sagaPersistence.save(saga);
+        log.info("saga_picking_confirmed sagaId={}", sagaId);
+    }
+
+    /**
+     * All packing units sealed and confirmed (REST):
+     * {@code PICKING_CONFIRMED → PACKING_CONFIRMED}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onPackingConfirmed(UUID sagaId) {
+        OutboundSaga saga = sagaPersistence.findById(sagaId).orElse(null);
+        if (saga == null) {
+            log.warn("onPackingConfirmed for unknown sagaId={}; skipping", sagaId);
+            return;
+        }
+        Instant now = clock.instant();
+        saga.onPackingConfirmed(now);
+        sagaPersistence.save(saga);
+        log.info("saga_packing_confirmed sagaId={}", sagaId);
+    }
+
+    /**
+     * Confirm-shipping use-case (REST): {@code PACKING_CONFIRMED → SHIPPED}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onShippingConfirmed(UUID sagaId) {
+        OutboundSaga saga = sagaPersistence.findById(sagaId).orElse(null);
+        if (saga == null) {
+            log.warn("onShippingConfirmed for unknown sagaId={}; skipping", sagaId);
+            return;
+        }
+        Instant now = clock.instant();
+        saga.onShippingConfirmed(now);
+        sagaPersistence.save(saga);
+        log.info("saga_shipping_confirmed sagaId={}", sagaId);
+    }
+
+    /**
+     * TMS push exhausted (after-commit): {@code SHIPPED → SHIPPED_NOT_NOTIFIED}.
+     * Called from a separate TX (post-commit listener); the alert metric fires
+     * downstream from this transition.
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void onTmsNotifyFailed(UUID sagaId, String reason) {
+        OutboundSaga saga = sagaPersistence.findById(sagaId).orElse(null);
+        if (saga == null) {
+            log.warn("onTmsNotifyFailed for unknown sagaId={}; skipping", sagaId);
+            return;
+        }
+        Instant now = clock.instant();
+        saga.onTmsNotifyFailed(reason, now);
+        sagaPersistence.save(saga);
+        log.warn("saga_shipped_not_notified sagaId={} reason={}", sagaId, reason);
+    }
+
+    /**
      * Reserve-failed compensation: saga {@code REQUESTED → RESERVE_FAILED};
      * order to {@code BACKORDERED}.
      */

@@ -89,6 +89,80 @@ class OutboundSagaTest {
         assertThat(saga.status()).isEqualTo(SagaStatus.CANCELLED);
     }
 
+    // -- TASK-BE-038 transitions ---------------------------------------
+
+    @Test
+    void onPickingConfirmedFromReservedAdvances() {
+        OutboundSaga saga = newRequested();
+        saga.onInventoryReserved(T0);
+        saga.onPickingConfirmed(T0);
+        assertThat(saga.status()).isEqualTo(SagaStatus.PICKING_CONFIRMED);
+    }
+
+    @Test
+    void onPickingConfirmedFromUnexpectedStateThrows() {
+        OutboundSaga saga = newRequested();
+        assertThatThrownBy(() -> saga.onPickingConfirmed(T0))
+                .isInstanceOf(StateTransitionInvalidException.class);
+    }
+
+    @Test
+    void onPickingConfirmedReDeliveryIsIdempotent() {
+        OutboundSaga saga = sagaIn(SagaStatus.PICKING_CONFIRMED);
+        saga.onPickingConfirmed(T0); // no throw
+        assertThat(saga.status()).isEqualTo(SagaStatus.PICKING_CONFIRMED);
+    }
+
+    @Test
+    void onPackingConfirmedFromPickingConfirmedAdvances() {
+        OutboundSaga saga = sagaIn(SagaStatus.PICKING_CONFIRMED);
+        saga.onPackingConfirmed(T0);
+        assertThat(saga.status()).isEqualTo(SagaStatus.PACKING_CONFIRMED);
+    }
+
+    @Test
+    void onPackingConfirmedFromUnexpectedStateThrows() {
+        OutboundSaga saga = sagaIn(SagaStatus.RESERVED);
+        assertThatThrownBy(() -> saga.onPackingConfirmed(T0))
+                .isInstanceOf(StateTransitionInvalidException.class);
+    }
+
+    @Test
+    void onShippingConfirmedFromPackingConfirmedAdvances() {
+        OutboundSaga saga = sagaIn(SagaStatus.PACKING_CONFIRMED);
+        saga.onShippingConfirmed(T0);
+        assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED);
+    }
+
+    @Test
+    void onShippingConfirmedFromUnexpectedStateThrows() {
+        OutboundSaga saga = newRequested();
+        assertThatThrownBy(() -> saga.onShippingConfirmed(T0))
+                .isInstanceOf(StateTransitionInvalidException.class);
+    }
+
+    @Test
+    void onTmsNotifyFailedFromShippedAdvancesToShippedNotNotified() {
+        OutboundSaga saga = sagaIn(SagaStatus.SHIPPED);
+        saga.onTmsNotifyFailed("timeout", T0);
+        assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED_NOT_NOTIFIED);
+        assertThat(saga.failureReason()).isEqualTo("timeout");
+    }
+
+    @Test
+    void onTmsNotifyFailedFromUnexpectedStateThrows() {
+        OutboundSaga saga = sagaIn(SagaStatus.RESERVED);
+        assertThatThrownBy(() -> saga.onTmsNotifyFailed("x", T0))
+                .isInstanceOf(StateTransitionInvalidException.class);
+    }
+
+    @Test
+    void onTmsNotifyFailedReDeliveryIsIdempotent() {
+        OutboundSaga saga = sagaIn(SagaStatus.SHIPPED_NOT_NOTIFIED);
+        saga.onTmsNotifyFailed("x", T0); // no throw
+        assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED_NOT_NOTIFIED);
+    }
+
     private static OutboundSaga newRequested() {
         return OutboundSaga.newRequested(UUID.randomUUID(), UUID.randomUUID(), T0);
     }
