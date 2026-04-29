@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-036-fix-TASK-BE-035.md` — Populate `outcome` column in `EventDedupePersistenceAdapter`; new rows must never have outcome=NULL per domain-model.md §8.
 
 ## in-progress
 
@@ -75,11 +75,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-BE-035-fix-TASK-BE-034.md` — Fix webhook processing order (spec: secret→timestamp→HMAC; code inverts steps 1&2 — Critical), outbound_outbox missing aggregate_type/event_version/partition_key columns (Warning), outbound_event_dedupe missing outcome column (Warning).
 - `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 (250-request burst) parallelised to fix CI timeout exceeding 30 min.
 
 ## done
 
+- `TASK-BE-035-fix-TASK-BE-034.md` — Fix webhook processing order (secret→timestamp→HMAC), outbound_outbox schema alignment (aggregate_type/event_version/partition_key via V9), outbound_event_dedupe outcome column (via V9). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-036 (1 warning: EventDedupePersistenceAdapter does not populate outcome column despite V9 adding it).
 - `TASK-BE-034-outbound-service-bootstrap.md` — outbound-service Hexagonal skeleton, V1–V8 Flyway migrations, 6 MasterReadModel consumers, ERP order webhook ingest, saga/TMS/outbox stubs, Redis IdempotencyStore, JWT wiring. Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-035 (1 critical: webhook processing order; 2 warnings: outbound_outbox/outbound_event_dedupe schema gaps vs domain-model.md).
 - `TASK-BE-033-fix-TASK-BE-032.md` — GlobalExceptionHandlerTest MethodArgumentNotValidException 테스트 추가 + InMemoryIdempotencyStore.tryAcquireLock() ConcurrentHashMap.compute() 원자적 구현. Review verdict 2026-04-29: **APPROVED**
 - `TASK-BE-032-fix-TASK-BE-031.md` — inbound-service 에러 코드 세분화(16개 도메인 예외 → 계약 정의 code 문자열) + REST Idempotency-Key 필터 구현(InboundIdempotencyFilter: Redis lookup/cache/lock, body hash 비교, DUPLICATE_REQUEST 409). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-033 (2 warnings: MethodArgumentNotValidException 테스트 누락, InMemoryIdempotencyStore 비원자적 경쟁조건).
