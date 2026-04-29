@@ -5,10 +5,10 @@ import com.wms.outbound.adapter.in.web.dto.response.PickingConfirmationResponse;
 import com.wms.outbound.application.command.ConfirmPickingCommand;
 import com.wms.outbound.application.command.ConfirmPickingLineCommand;
 import com.wms.outbound.application.port.in.ConfirmPickingUseCase;
-import com.wms.outbound.application.port.out.PickingPersistencePort;
+import com.wms.outbound.application.port.in.QueryPickingRequestUseCase;
 import com.wms.outbound.application.result.PickingConfirmationResult;
+import com.wms.outbound.application.result.PickingRequestResult;
 import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
-import com.wms.outbound.domain.model.PickingRequest;
 import jakarta.validation.Valid;
 import java.util.HashSet;
 import java.util.Set;
@@ -33,18 +33,24 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code POST /api/v1/outbound/picking-requests/{id}/confirmations}</li>
  * </ul>
+ *
+ * <p>The controller depends only on application-layer in-ports
+ * ({@link ConfirmPickingUseCase} + {@link QueryPickingRequestUseCase}); the
+ * persistence out-port ({@code PickingPersistencePort}) was removed in
+ * TASK-BE-040 (AC-04) so the adapter layer cannot bypass the application
+ * service for read access.
  */
 @RestController
 @RequestMapping("/api/v1/outbound/picking-requests")
 public class PickingController {
 
     private final ConfirmPickingUseCase confirmPicking;
-    private final PickingPersistencePort pickingPersistence;
+    private final QueryPickingRequestUseCase queryPickingRequest;
 
     public PickingController(ConfirmPickingUseCase confirmPicking,
-                             PickingPersistencePort pickingPersistence) {
+                             QueryPickingRequestUseCase queryPickingRequest) {
         this.confirmPicking = confirmPicking;
-        this.pickingPersistence = pickingPersistence;
+        this.queryPickingRequest = queryPickingRequest;
     }
 
     @PostMapping("/{id}/confirmations")
@@ -57,11 +63,11 @@ public class PickingController {
         requireIdempotencyKey(idempotencyKey);
 
         // Resolve orderId via the picking-request id; the use-case operates by orderId.
-        PickingRequest pickingRequest = pickingPersistence.findById(id)
+        PickingRequestResult pickingRequest = queryPickingRequest.findById(id)
                 .orElseThrow(() -> new PickingRequestNotFoundException(id));
 
         ConfirmPickingCommand command = new ConfirmPickingCommand(
-                pickingRequest.getOrderId(),
+                pickingRequest.orderId(),
                 request.notes(),
                 request.lines().stream()
                         .map(l -> new ConfirmPickingLineCommand(

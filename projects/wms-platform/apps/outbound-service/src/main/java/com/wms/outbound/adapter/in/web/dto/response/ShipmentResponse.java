@@ -17,7 +17,8 @@ public record ShipmentResponse(
         String orderStatus,
         String sagaState,
         long version,
-        Instant createdAt
+        Instant createdAt,
+        String createdBy
 ) {
 
     public static ShipmentResponse from(ShipmentResult r) {
@@ -34,6 +35,7 @@ public record ShipmentResponse(
                 r.orderStatus(),
                 r.sagaState(),
                 r.version(),
-                r.createdAt());
+                r.createdAt(),
+                r.createdBy());
     }
 }

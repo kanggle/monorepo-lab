@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -140,6 +141,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 null,
                 0L,
                 now,
+                command.actorId(),
                 now);
         Shipment savedShipment = shipmentPersistence.save(shipment);
 
@@ -205,13 +207,24 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 savedOrder.getStatus().name(),
                 SagaStatus.SHIPPED.name(),
                 savedShipment.getVersion(),
-                savedShipment.getCreatedAt());
+                savedShipment.getCreatedAt(),
+                savedShipment.getCreatedBy());
     }
 
+    /**
+     * Generates a {@code shipment_no} of the form
+     * {@code SHP-YYYYMMDD-NNNN}. Format matches
+     * {@code outbound-service-api.md} §4.1 example. The trailing {@code NNNN}
+     * is a 4-digit suffix from {@link ThreadLocalRandom}; uniqueness is
+     * enforced by the {@code idx_shipment_shipment_no} unique index (V11
+     * migration), so on the rare collision the persistence layer raises a
+     * constraint violation and the caller retries with the same
+     * Idempotency-Key.
+     */
     private static String generateShipmentNo(Instant now) {
         String date = SHIPMENT_DATE_FMT.format(LocalDate.ofInstant(now, ZoneOffset.UTC));
-        String suffix = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        return "SHIP-" + date + "-" + suffix;
+        int suffix = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return "SHP-" + date + "-" + suffix;
     }
 
     private static void requireAnyRole(Set<String> roles, String... required) {

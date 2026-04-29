@@ -108,7 +108,9 @@ class ConfirmShippingServiceTest {
         assertThat(result.orderStatus()).isEqualTo(OrderStatus.SHIPPED.name());
         assertThat(result.sagaState()).isEqualTo(SagaStatus.SHIPPED.name());
         assertThat(result.tmsStatus()).isEqualTo(TmsStatus.PENDING.name());
-        assertThat(result.shipmentNo()).startsWith("SHIP-");
+        // shipment_no format aligned to outbound-service-api.md §4.1 example
+        // (SHP-YYYYMMDD-NNNN) per TASK-BE-040 AC-06.
+        assertThat(result.shipmentNo()).startsWith("SHP-");
         assertThat(shipmentPersistence.count()).isEqualTo(1);
         assertThat(outboxWriter.countByType("outbound.shipping.confirmed")).isEqualTo(1);
         assertThat(eventPublisher.published).hasSize(1);

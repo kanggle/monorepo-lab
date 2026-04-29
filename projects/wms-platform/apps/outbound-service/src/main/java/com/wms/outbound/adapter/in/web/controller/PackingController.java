@@ -14,12 +14,11 @@ import com.wms.outbound.application.command.CreatePackingUnitLineCommand;
 import com.wms.outbound.application.command.SealPackingUnitCommand;
 import com.wms.outbound.application.port.in.ConfirmPackingUseCase;
 import com.wms.outbound.application.port.in.CreatePackingUnitUseCase;
+import com.wms.outbound.application.port.in.QueryPackingUnitUseCase;
 import com.wms.outbound.application.port.in.SealPackingUnitUseCase;
-import com.wms.outbound.application.port.out.PackingPersistencePort;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.application.result.PackingUnitResult;
 import com.wms.outbound.domain.exception.PackingUnitNotFoundException;
-import com.wms.outbound.domain.model.PackingUnit;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -38,10 +37,13 @@ import org.springframework.web.bind.annotation.RestController;
  * Packing endpoints per {@code outbound-service-api.md} §3:
  * <ul>
  *   <li>{@code POST /api/v1/outbound/orders/{id}/packing-units}</li>
- *   <li>{@code PATCH /api/v1/outbound/packing-units/{id}} — seals the unit
- *       (the v2 add-lines variant in §3.2 is omitted in v1; lines are supplied
- *       at creation time)</li>
- *   <li>{@code POST /api/v1/outbound/orders/{id}/packing/confirm}</li>
+ *   <li>{@code PATCH /api/v1/outbound/packing-units/{id}} — seals the unit.
+ *       The {@link SealPackingUnitCommand#orderId()} is resolved via the
+ *       {@link QueryPackingUnitUseCase} read in-port so the controller does
+ *       not import the persistence out-port (TASK-BE-040 AC-04).</li>
+ *   <li>{@code POST /api/v1/outbound/orders/{id}/packing/confirm} — fallback
+ *       when bulk confirmation is preferred over the canonical
+ *       seal-completes-packing path on the last unit.</li>
  * </ul>
  */
 @RestController
@@ -50,16 +52,16 @@ public class PackingController {
     private final CreatePackingUnitUseCase createPackingUnit;
     private final SealPackingUnitUseCase sealPackingUnit;
     private final ConfirmPackingUseCase confirmPacking;
-    private final PackingPersistencePort packingPersistence;
+    private final QueryPackingUnitUseCase queryPackingUnit;
 
     public PackingController(CreatePackingUnitUseCase createPackingUnit,
                              SealPackingUnitUseCase sealPackingUnit,
                              ConfirmPackingUseCase confirmPacking,
-                             PackingPersistencePort packingPersistence) {
+                             QueryPackingUnitUseCase queryPackingUnit) {
         this.createPackingUnit = createPackingUnit;
         this.sealPackingUnit = sealPackingUnit;
         this.confirmPacking = confirmPacking;
-        this.packingPersistence = packingPersistence;
+        this.queryPackingUnit = queryPackingUnit;
     }
 
     @PostMapping("/api/v1/outbound/orders/{orderId}/packing-units")
@@ -97,11 +99,12 @@ public class PackingController {
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
         requireIdempotencyKey(idempotencyKey);
-        // Resolve orderId via the unit lookup so the use-case can validate.
-        PackingUnit unit = packingPersistence.findById(packingUnitId)
+        // Resolve orderId via the read in-port; the controller never touches
+        // the persistence out-port (AC-04 of TASK-BE-040).
+        PackingUnitResult unit = queryPackingUnit.findById(packingUnitId)
                 .orElseThrow(() -> new PackingUnitNotFoundException(packingUnitId));
         SealPackingUnitCommand command = new SealPackingUnitCommand(
-                unit.getOrderId(),
+                unit.orderId(),
                 packingUnitId,
                 request.version(),
                 actorId(jwt),

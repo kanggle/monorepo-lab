@@ -144,6 +144,21 @@ public class PackingService implements CreatePackingUnitUseCase,
     //  SealPackingUnitUseCase
     // ------------------------------------------------------------------
 
+    /**
+     * Seals a single PackingUnit and, when this is the last open unit AND the
+     * sum of {@code PackingUnitLine.qty} per {@code orderLineId} covers every
+     * {@code OrderLine.qtyOrdered}, atomically:
+     * <ul>
+     *   <li>transitions the {@link Order} {@code PACKING → PACKED} via
+     *       {@link Order#completePacking}</li>
+     *   <li>advances the saga {@code PICKING_CONFIRMED → PACKING_CONFIRMED} via
+     *       {@link OutboundSagaCoordinator#onPackingConfirmed}</li>
+     *   <li>writes the {@code outbound.packing.completed} outbox row in the
+     *       same TX</li>
+     * </ul>
+     * Otherwise the unit is sealed and the call returns without any
+     * order/saga transition or outbox emission. AC-01 / AC-02 of TASK-BE-040.
+     */
     @Override
     @Transactional
     public PackingUnitResult seal(SealPackingUnitCommand command) {
@@ -166,7 +181,95 @@ public class PackingService implements CreatePackingUnitUseCase,
         PackingUnit saved = packingPersistence.save(unit);
 
         log.info("packing_unit_sealed orderId={} unitId={}", order.getId(), saved.getId());
+
+        // AC-01: if the order is in PACKING and ALL units are now SEALED and
+        // the per-orderLineId qty sum covers every orderLine.qtyOrdered, drive
+        // the implicit completion in the same TX.
+        if (order.getStatus() == OrderStatus.PACKING
+                && allUnitsCoverAllLines(command.orderId(), order)) {
+            completePackingFromSeal(order, command.actorId(), now);
+            // Reload the unit so the response reflects the post-completion
+            // orderStatus (PACKED) — the saved PackingUnit itself is unchanged.
+            return toResult(saved, OrderStatus.PACKED.name());
+        }
         return toResult(saved, order.getStatus().name());
+    }
+
+    /**
+     * Returns {@code true} when every PackingUnit for {@code orderId} is
+     * SEALED AND the sum of {@code PackingUnitLine.qty} per
+     * {@code orderLineId} is &ge; every {@code OrderLine.qtyOrdered}.
+     */
+    private boolean allUnitsCoverAllLines(UUID orderId, Order order) {
+        List<PackingUnit> units = packingPersistence.findByOrderId(orderId);
+        if (units.isEmpty()) {
+            return false;
+        }
+        for (PackingUnit u : units) {
+            if (!u.isSealed()) {
+                return false;
+            }
+        }
+        Map<UUID, Long> sumByOrderLine = new HashMap<>();
+        for (PackingUnit u : units) {
+            for (PackingUnitLine l : u.getLines()) {
+                sumByOrderLine.merge(l.getOrderLineId(), (long) l.getQty(), Long::sum);
+            }
+        }
+        for (OrderLine ol : order.getLines()) {
+            long packed = sumByOrderLine.getOrDefault(ol.getId(), 0L);
+            if (packed < ol.getQtyOrdered()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Drives the contract-canonical packing-completion path in the seal TX.
+     * Mirrors {@link #confirm} but assumes preconditions have already been
+     * validated by the caller.
+     */
+    private void completePackingFromSeal(Order order, String actorId, Instant now) {
+        OutboundSaga saga = sagaPersistence.findByOrderId(order.getId())
+                .orElseThrow(() -> new OrderNotFoundException(order.getId()));
+
+        order.completePacking(now, actorId);
+        Order savedOrder = orderPersistence.save(order);
+
+        sagaCoordinator.onPackingConfirmed(saga.sagaId());
+
+        List<PackingUnit> units = packingPersistence.findByOrderId(order.getId());
+        List<PackingCompletedEvent.Unit> unitPayloads = new ArrayList<>(units.size());
+        long totalCartons = 0L;
+        Integer totalWeight = null;
+        for (PackingUnit u : units) {
+            totalCartons++;
+            if (u.getWeightGrams() != null) {
+                totalWeight = (totalWeight == null ? 0 : totalWeight) + u.getWeightGrams();
+            }
+            List<PackingCompletedEvent.Line> lineP = u.getLines().stream()
+                    .map(l -> new PackingCompletedEvent.Line(
+                            l.getOrderLineId(), l.getSkuId(), l.getLotId(), l.getQty()))
+                    .toList();
+            unitPayloads.add(new PackingCompletedEvent.Unit(
+                    u.getId(), u.getCartonNo(), u.getPackingType().name(),
+                    u.getWeightGrams(), u.getLengthMm(), u.getWidthMm(), u.getHeightMm(),
+                    lineP));
+        }
+        outboxWriter.publish(new PackingCompletedEvent(
+                savedOrder.getId(),
+                savedOrder.getOrderNo(),
+                savedOrder.getWarehouseId(),
+                now,
+                unitPayloads,
+                (int) totalCartons,
+                totalWeight,
+                now,
+                actorId));
+
+        log.info("packing_completed_via_seal orderId={} units={}",
+                savedOrder.getId(), units.size());
     }
 
     // ------------------------------------------------------------------

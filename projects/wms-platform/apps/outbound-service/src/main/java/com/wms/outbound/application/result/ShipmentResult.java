@@ -20,6 +20,7 @@ public record ShipmentResult(
         String orderStatus,
         String sagaState,
         long version,
-        Instant createdAt
+        Instant createdAt,
+        String createdBy
 ) {
 }

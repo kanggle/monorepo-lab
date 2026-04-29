@@ -29,6 +29,7 @@ public final class Shipment {
     private UUID tmsRequestId;
     private long version;
     private final Instant createdAt;
+    private final String createdBy;
     private Instant updatedAt;
 
     public Shipment(UUID id,
@@ -42,6 +43,7 @@ public final class Shipment {
                     UUID tmsRequestId,
                     long version,
                     Instant createdAt,
+                    String createdBy,
                     Instant updatedAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.orderId = Objects.requireNonNull(orderId, "orderId");
@@ -54,6 +56,7 @@ public final class Shipment {
         this.tmsRequestId = tmsRequestId;
         this.version = version;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
+        this.createdBy = Objects.requireNonNull(createdBy, "createdBy");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
     }
 
@@ -132,6 +135,10 @@ public final class Shipment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
     }
 
     public Instant getUpdatedAt() {

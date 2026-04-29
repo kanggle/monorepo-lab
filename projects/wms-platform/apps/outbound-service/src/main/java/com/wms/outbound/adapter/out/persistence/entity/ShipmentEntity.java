@@ -53,6 +53,9 @@ public class ShipmentEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "created_by", nullable = false, length = 100)
+    private String createdBy;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -66,7 +69,7 @@ public class ShipmentEntity {
     public ShipmentEntity(UUID id, UUID orderId, String shipmentNo, String carrierCode,
                           String trackingNo, Instant shippedAt, String tmsStatus,
                           Instant tmsNotifiedAt, UUID tmsRequestId,
-                          Instant createdAt, Instant updatedAt) {
+                          Instant createdAt, String createdBy, Instant updatedAt) {
         this.id = id;
         this.orderId = orderId;
         this.shipmentNo = shipmentNo;
@@ -78,6 +81,7 @@ public class ShipmentEntity {
         this.tmsNotifiedAt = tmsNotifiedAt;
         this.tmsRequestId = tmsRequestId;
         this.createdAt = createdAt;
+        this.createdBy = createdBy;
         this.updatedAt = updatedAt;
     }
 
@@ -91,6 +95,7 @@ public class ShipmentEntity {
     public Instant getTmsNotifiedAt() { return tmsNotifiedAt; }
     public UUID getTmsRequestId() { return tmsRequestId; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getCreatedBy() { return createdBy; }
     public Instant getUpdatedAt() { return updatedAt; }
     public long getVersion() { return version; }
 

@@ -39,6 +39,7 @@ public class ShipmentPersistenceAdapter implements ShipmentPersistencePort {
                     shipment.getTmsNotifiedAt(),
                     shipment.getTmsRequestId(),
                     shipment.getCreatedAt(),
+                    shipment.getCreatedBy(),
                     shipment.getUpdatedAt());
         } else {
             entity = existing.get();
@@ -78,6 +79,7 @@ public class ShipmentPersistenceAdapter implements ShipmentPersistencePort {
                 e.getTmsRequestId(),
                 e.getVersion(),
                 e.getCreatedAt(),
+                e.getCreatedBy() != null ? e.getCreatedBy() : "system",
                 e.getUpdatedAt());
     }
 }

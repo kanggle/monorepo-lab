@@ -109,10 +109,13 @@ public class EventEnvelopeSerializer {
     }
 
     private static Map<String, Object> pickingRequestedPayload(PickingRequestedEvent e) {
+        // Field set per outbound-events.md §3:
+        // sagaId, reservationId, orderId, warehouseId, lines[].
+        // The legacy `pickingRequestId` duplicate is intentionally omitted —
+        // contracts.events §3 declares only `reservationId` (= PickingRequest.id).
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("sagaId", e.sagaId().toString());
         p.put("reservationId", e.reservationId().toString());
-        p.put("pickingRequestId", e.reservationId().toString());
         p.put("orderId", e.orderId().toString());
         p.put("warehouseId", e.warehouseId().toString());
         List<Map<String, Object>> lines = e.lines().stream().map(l -> {
@@ -129,10 +132,13 @@ public class EventEnvelopeSerializer {
     }
 
     private static Map<String, Object> pickingCancelledPayload(PickingCancelledEvent e) {
+        // Field set per outbound-events.md §4:
+        // sagaId, reservationId, orderId, reason.
+        // The legacy `pickingRequestId` duplicate is intentionally omitted —
+        // contracts.events §4 declares only `reservationId` (= PickingRequest.id).
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("sagaId", e.sagaId().toString());
         p.put("reservationId", e.reservationId().toString());
-        p.put("pickingRequestId", e.reservationId().toString());
         p.put("orderId", e.orderId().toString());
         p.put("reason", e.reason());
         return p;
