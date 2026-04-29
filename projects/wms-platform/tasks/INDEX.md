@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-029-inbound-service-bootstrap.md` — Hexagonal skeleton, V1–V7 Flyway schema (incl. webhook inbox/dedupe + role-grant W2 invariants), 6 master snapshot consumers (Warehouse/Zone/Location/SKU/Lot/Partner) with version guard + EventDedupePort, ErpAsnWebhookController (HMAC + timestamp + dedupe + inbox write), inbox processor stub, Redis IdempotencyStore (`inbound:idempotency:` prefix pinned), JWT/security wiring, Kafka DLT error handler. First implementation task targeting `inbound-service`; unblocked by PR #90 spec set.
+(empty)
 
 ## in-progress
 
@@ -75,9 +75,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-034-outbound-service-bootstrap.md` — outbound-service Hexagonal 스켈레톤, V1–V8 Flyway 스키마(전 테이블), MasterReadModel 6개 컨슈머, ERP order 웹훅 인제스트, OutboundSaga/ShipmentNotification/OutboxWriter 스텁, Redis IdempotencyStore, JWT/보안 배선.
 
 ## done
+
+- `TASK-BE-033-fix-TASK-BE-032.md` — GlobalExceptionHandlerTest MethodArgumentNotValidException 테스트 추가 + InMemoryIdempotencyStore.tryAcquireLock() ConcurrentHashMap.compute() 원자적 구현. Review verdict 2026-04-29: **APPROVED**
+- `TASK-BE-032-fix-TASK-BE-031.md` — inbound-service 에러 코드 세분화(16개 도메인 예외 → 계약 정의 code 문자열) + REST Idempotency-Key 필터 구현(InboundIdempotencyFilter: Redis lookup/cache/lock, body hash 비교, DUPLICATE_REQUEST 409). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-033 (2 warnings: MethodArgumentNotValidException 테스트 누락, InMemoryIdempotencyStore 비원자적 경쟁조건).
 
 - `TASK-BE-001-master-service-bootstrap.md` — Warehouse CRUD vertical slice. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-BE-008
 - `TASK-INT-001-gateway-master-service-route.md` — gateway route + JWT + rate-limit + header enrichment. Review verdict 2026-04-20: FIX NEEDED → follow-up in TASK-INT-003
@@ -109,3 +112,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-BE-026-receive-query-hardening.md` — `ReceiveStockService.isFreshlyCreated` + stale "thread-local flag" comment removed, `InventoryMovement.restore` documented as Policy B (trust persisted data) with class-level Javadoc cross-referencing sibling `restore` factories, `ReceiveStockServiceTest.existingInventoryRowGetsIncremented` tightened with `insertCalls`/`updateCalls` counters on `FakeInventoryRepo` so a buggy "always-insert" implementation now fails deterministically. Build green. Self-verdict 2026-04-28: **APPROVED**.
 - `TASK-BE-027-eventid-dedupe-on-outbound-consumers.md` — `EventDedupePort` wired into all three outbound-saga consumers (`PickingRequestedConsumer`, `PickingCancelledConsumer`, `ShippingConfirmedConsumer`); each consumer is now `@Transactional` with the dedupe write joining the TX via `Propagation.MANDATORY`. Layered-idempotency Javadoc explains outer (eventId) + inner (terminal-state / pickingRequestId) guards. The third consumer (`ShippingConfirmedConsumer`) was completed manually after the implementing agent hit the rate limit; pattern mirrored from `PickingCancelledConsumer`. Existing `PickingFlowIntegrationTest` covers the wiring end-to-end. Build green. Self-verdict 2026-04-28: **APPROVED** (1 non-blocking note: dedicated unit tests for the three consumers were not added; integration test provides coverage. Future cleanup task can split unit-level dedupe assertions out).
 - `TASK-BE-028-reserved-bucket-admin-guard-relocation.md` — Pattern B chosen: `AdjustStockCommand` extended with `Set<String> callerRoles`, populated in `AdjustmentController` from `Authentication.getAuthorities()`, consumed in `AdjustStockService.doAdjust()` which throws `AccessDeniedException` (mapped to 403 by GlobalExceptionHandler) when bucket=RESERVED and roles lack `ROLE_INVENTORY_ADMIN`. Raw `jwt.getClaim("role")` inspection removed from the controller (residual `jwt.getSubject()` / `jwt.getClaimAsString("actorId")` calls retain actor-identification only — not authorization). Build green. Self-verdict 2026-04-28: **APPROVED**.
+- `TASK-BE-029-inbound-service-bootstrap.md` — Hexagonal skeleton, V1–V7 Flyway schema (incl. webhook inbox/dedupe + role-grant W2 invariants), 6 master snapshot consumers (Warehouse/Zone/Location/SKU/Lot/Partner) with version guard + EventDedupePort, ErpAsnWebhookController (HMAC + timestamp + dedupe + inbox write), inbox processor stub, Redis IdempotencyStore (`inbound:idempotency:` prefix pinned), JWT/security wiring, Kafka DLT error handler. Self-verdict 2026-04-29: **APPROVED**.
+- `TASK-BE-030-inbound-asn-receive-inspect.md` — Full ASN domain (Asn/AsnLine/Inspection/InspectionLine/InspectionDiscrepancy), ReceiveAsn/StartInspection/RecordInspection/AcknowledgeDiscrepancy/CancelAsn/QueryAsn use cases + services, JPA persistence adapters, AsnController + InspectionController REST endpoints, OutboxWriterAdapter (real) + OutboxPublisher (@Scheduled), ErpWebhookInboxProcessor full implementation. Events: inbound.asn.received, inbound.asn.cancelled, inbound.inspection.completed. Self-verdict 2026-04-29: **APPROVED**.
+- `TASK-BE-031-inbound-putaway-close.md` — PutawayInstruction/PutawayLine/PutawayConfirmation domain, InstructPutaway/ConfirmPutawayLine/SkipPutawayLine/CloseAsn use cases + services, PutawayController REST endpoints + AsnController:close, PutawayPersistenceAdapter. Events: inbound.putaway.instructed, inbound.putaway.completed (cross-service ⚠️), inbound.asn.closed. Asn.instructPutaway/completePutaway/close state transitions added. 143 unit/slice tests pass. Review verdict 2026-04-29: **APPROVED** (2 non-blocking warnings: error code granularity pre-existing; idempotency-key replay cache not wired — domain uniqueness constraints serve as substitute).

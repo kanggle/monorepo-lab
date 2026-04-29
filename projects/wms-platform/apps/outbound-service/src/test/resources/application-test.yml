@@ -1,0 +1,15 @@
+# Test profile — disables scheduling and provides default test overrides.
+# Activated by Testcontainers and slice tests via @ActiveProfiles("test").
+
+spring:
+  task:
+    scheduling:
+      enabled: false
+
+outbound:
+  webhook:
+    erp:
+      timestamp-window-seconds: 300
+    inbox:
+      processor:
+        enabled: false
