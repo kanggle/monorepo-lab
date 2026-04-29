@@ -68,6 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS wiring
+- `TASK-BE-039-fix-TASK-BE-037.md` — Add OrderQueryService/InventoryReleased/InventoryConfirmed consumer unit tests; fix cancel response shape (previousStatus/cancelledReason/cancelledAt/cancelledBy); eliminate N+1 in list endpoint; enforce expectedVersion in CancelOrderService; clean up SecurityConfig dead-code path matchers; OrderMapper visibility
 
 ## in-progress
 
@@ -75,10 +76,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-BE-037-outbound-order-domain-receive-cancel-query.md` — Order aggregate + OutboundSaga real transitions + ReceiveOrder/Cancel/Query use cases + saga consumers (inventory-reserved/released/confirmed) + real OutboxPublisher
+(empty)
 
 ## done
 
+- `TASK-BE-037-outbound-order-domain-receive-cancel-query.md` — Order aggregate + OutboundSaga real transitions + ReceiveOrder/Cancel/Query use cases + saga consumers (inventory-reserved/released/confirmed) + real OutboxPublisher. 91 unit tests pass. Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-039 (2 critical: missing AC-16 unit tests for OrderQueryService/InventoryReleasedConsumer/InventoryConfirmedConsumer, cancel response missing previousStatus/cancelledReason/cancelledAt/cancelledBy required by api §1.4; 4 warnings: N+1 in OrderQueryService.list, expectedVersion never compared, SecurityConfig dead path matchers, OrderMapper public visibility).
 - `TASK-INT-009-fix-TASK-INT-008.md` — Fix silent catch (WARN log added), rename burst method to burstFrom800Requests, update class Javadoc, ThreadLocalRandom. Review verdict 2026-04-29: **APPROVED**
 - `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 parallelised (virtual thread executor, 800 requests). Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-INT-009 (1 critical: silent catch; 2 warnings: method name/Javadoc out of sync with 800-request count).
 - `TASK-BE-036-fix-TASK-BE-035.md` — Populate outcome column in EventDedupePersistenceAdapter (4-arg constructor, outcome="APPLIED"); ArgumentCaptor assertion added in test. Review verdict 2026-04-29: **APPROVED**
