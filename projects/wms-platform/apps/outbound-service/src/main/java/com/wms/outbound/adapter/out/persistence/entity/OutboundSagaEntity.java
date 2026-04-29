@@ -11,8 +11,9 @@ import java.util.UUID;
 /**
  * JPA entity backing {@code outbound_saga}.
  *
- * <p>TASK-BE-034 stub: the table exists and the entity carries identity +
- * status fields. Saga-step consumer wiring lands in TASK-BE-036.
+ * <p>Aligned with {@code specs/services/outbound-service/domain-model.md} §6
+ * after TASK-BE-037. Status is the spec-canonical
+ * {@code OutboundSaga.SagaStatus} name.
  */
 @Entity
 @Table(name = "outbound_saga")
@@ -53,10 +54,14 @@ public class OutboundSagaEntity {
     }
 
     public OutboundSagaEntity(UUID id, UUID orderId, String status,
+                              UUID pickingRequestId,
+                              String failureReason,
                               Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.orderId = orderId;
         this.status = status;
+        this.pickingRequestId = pickingRequestId;
+        this.failureReason = failureReason;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -99,5 +104,21 @@ public class OutboundSagaEntity {
 
     public long getVersion() {
         return version;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public void setFailureReason(String failureReason) {
+        this.failureReason = failureReason;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setPickingRequestId(UUID pickingRequestId) {
+        this.pickingRequestId = pickingRequestId;
     }
 }

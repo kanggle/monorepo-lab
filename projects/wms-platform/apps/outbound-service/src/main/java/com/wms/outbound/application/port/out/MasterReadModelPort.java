@@ -17,10 +17,16 @@ import java.util.UUID;
  * an {@code ACTIVE} resource and to enrich query responses with display fields.
  * Returns {@link Optional#empty()} when the snapshot has not yet been populated
  * (startup race) — the caller decides whether to fail or fall back.
+ *
+ * <p>{@code findXxxByCode} variants exist for the ERP webhook ingest path
+ * which receives business codes (e.g. {@code SKU-APPLE-001}) rather than
+ * UUIDs.
  */
 public interface MasterReadModelPort {
 
     Optional<WarehouseSnapshot> findWarehouse(UUID id);
+
+    Optional<WarehouseSnapshot> findWarehouseByCode(String warehouseCode);
 
     Optional<ZoneSnapshot> findZone(UUID id);
 
@@ -28,7 +34,13 @@ public interface MasterReadModelPort {
 
     Optional<SkuSnapshot> findSku(UUID id);
 
+    Optional<SkuSnapshot> findSkuByCode(String skuCode);
+
     Optional<LotSnapshot> findLot(UUID id);
 
+    Optional<LotSnapshot> findLotBySkuAndLotNo(UUID skuId, String lotNo);
+
     Optional<PartnerSnapshot> findPartner(UUID id);
+
+    Optional<PartnerSnapshot> findPartnerByCode(String partnerCode);
 }

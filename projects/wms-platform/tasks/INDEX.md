@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS wiring
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-037-outbound-order-domain-receive-cancel-query.md` — Order aggregate + OutboundSaga real transitions + ReceiveOrder/Cancel/Query use cases + saga consumers (inventory-reserved/released/confirmed) + real OutboxPublisher
 
 ## done
 

@@ -74,6 +74,13 @@ public class MasterReadModelPersistenceAdapter
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<WarehouseSnapshot> findWarehouseByCode(String warehouseCode) {
+        return warehouseRepo.findByWarehouseCode(warehouseCode)
+                .map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<ZoneSnapshot> findZone(UUID id) {
         return zoneRepo.findById(id).map(MasterReadModelPersistenceAdapter::toDomain);
     }
@@ -92,14 +99,34 @@ public class MasterReadModelPersistenceAdapter
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<SkuSnapshot> findSkuByCode(String skuCode) {
+        return skuRepo.findBySkuCode(skuCode).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<LotSnapshot> findLot(UUID id) {
         return lotRepo.findById(id).map(MasterReadModelPersistenceAdapter::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<LotSnapshot> findLotBySkuAndLotNo(UUID skuId, String lotNo) {
+        return lotRepo.findBySkuIdAndLotNo(skuId, lotNo)
+                .map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<PartnerSnapshot> findPartner(UUID id) {
         return partnerRepo.findById(id).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PartnerSnapshot> findPartnerByCode(String partnerCode) {
+        return partnerRepo.findByPartnerCode(partnerCode)
+                .map(MasterReadModelPersistenceAdapter::toDomain);
     }
 
     // ---- Write side ----------------------------------------------------------

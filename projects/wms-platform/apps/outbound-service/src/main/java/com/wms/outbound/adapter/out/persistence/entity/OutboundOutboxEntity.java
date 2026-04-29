@@ -144,4 +144,13 @@ public class OutboundOutboxEntity {
     public int getRetryCount() {
         return retryCount;
     }
+
+    public void markPublished(Instant at) {
+        this.publishedAt = at;
+        this.status = "PUBLISHED";
+    }
+
+    public void incrementRetry() {
+        this.retryCount++;
+    }
 }

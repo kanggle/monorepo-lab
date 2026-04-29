@@ -1,8 +1,13 @@
 package com.wms.outbound.adapter.in.web.advice;
 
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.wms.outbound.domain.exception.OrderAlreadyShippedException;
+import com.wms.outbound.domain.exception.OrderNoDuplicateException;
+import com.wms.outbound.domain.exception.OrderNotFoundException;
+import com.wms.outbound.domain.exception.OutboundDomainException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,26 +19,62 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * Maps framework + (future) domain exceptions to the {@link ApiErrorEnvelope}
+ * Maps framework + outbound domain exceptions to the {@link ApiErrorEnvelope}
  * shape declared in {@code platform/error-handling.md}.
  *
- * <p>This is the bootstrap version — TASK-BE-034 only ships the webhook
- * controller and shared infrastructure paths. Future tasks introduce
- * outbound domain exceptions and add per-exception mappings.
- *
- * <p>Unknown exceptions surface as {@code 500 INTERNAL_ERROR} with the cause
- * logged but not returned to the caller.
+ * <p>Domain exceptions extend {@link OutboundDomainException} and each
+ * override {@link OutboundDomainException#errorCode()} with the
+ * contract-defined string from {@code outbound-service-api.md} § Error Codes.
+ * This handler reads {@code exception.errorCode()} so the envelope's
+ * {@code code} is always the granular contract-defined string.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    // ---- 404 -------------------------------------------------------------
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleOrderNotFound(OrderNotFoundException e) {
+        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
+    }
+
+    // ---- 409 -------------------------------------------------------------
+
+    @ExceptionHandler(OrderNoDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleOrderNoDuplicate(OrderNoDuplicateException e) {
+        return body(HttpStatus.CONFLICT, e.errorCode(), e.getMessage());
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiErrorEnvelope> handleConflict(OptimisticLockingFailureException e) {
         return body(HttpStatus.CONFLICT, "CONFLICT",
                 "Optimistic lock conflict — retry with fresh state");
     }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleIntegrity(DataIntegrityViolationException e) {
+        // Unique constraint violations on orderNo etc. surface as 409 CONFLICT.
+        log.debug("data integrity violation: {}", e.getMessage());
+        return body(HttpStatus.CONFLICT, "CONFLICT",
+                "Resource already exists or violates a constraint");
+    }
+
+    // ---- 422 — domain rule violations -----------------------------------
+
+    @ExceptionHandler(OrderAlreadyShippedException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleAlreadyShipped(OrderAlreadyShippedException e) {
+        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
+    }
+
+    /** Catch-all for outbound domain exceptions → 422 with the granular code. */
+    @ExceptionHandler(OutboundDomainException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {
+        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
+    }
+
+    // ---- 403 / 400 / 500 -------------------------------------------------
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
     public ResponseEntity<ApiErrorEnvelope> handleForbidden(RuntimeException e) {
