@@ -4,6 +4,7 @@ import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.result.OrderSummaryResult;
 import com.wms.outbound.domain.model.Order;
+import com.wms.outbound.domain.model.OrderLine;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +36,29 @@ public class FakeOrderPersistencePort implements OrderPersistencePort {
 
     @Override
     public List<OrderSummaryResult> findSummaries(OrderQueryCommand q) {
-        return new ArrayList<>();
+        // Project every stored order into a summary row. Tests can preload
+        // orders via save() and observe how list() consumes them.
+        List<OrderSummaryResult> rows = new ArrayList<>(store.size());
+        for (Order o : store.values()) {
+            long totalQty = 0L;
+            for (OrderLine l : o.getLines()) {
+                totalQty += l.getQtyOrdered();
+            }
+            rows.add(new OrderSummaryResult(
+                    o.getId(),
+                    o.getOrderNo(),
+                    o.getSource().name(),
+                    o.getCustomerPartnerId(),
+                    o.getWarehouseId(),
+                    o.getStatus().name(),
+                    null,
+                    o.getLines().size(),
+                    totalQty,
+                    o.getRequiredShipDate(),
+                    o.getCreatedAt(),
+                    o.getUpdatedAt()));
+        }
+        return rows;
     }
 
     @Override

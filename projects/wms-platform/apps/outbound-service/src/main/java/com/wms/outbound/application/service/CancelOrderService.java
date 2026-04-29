@@ -19,6 +19,7 @@ import java.util.EnumSet;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +87,14 @@ public class CancelOrderService implements CancelOrderUseCase {
             requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
         }
 
+        // Optimistic lock check (T5 + outbound-service-api.md §1.4):
+        // surface 409 CONFLICT before mutating state and writing the outbox,
+        // not at JPA's deferred flush. expectedVersion < 0 means the caller
+        // opted out of the early check (kept for legacy callers/tests).
+        if (command.expectedVersion() >= 0 && order.getVersion() != command.expectedVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Order.class, command.orderId());
+        }
+
         Instant now = clock.instant();
         // Domain.cancel enforces the SHIPPED guard (→ OrderAlreadyShippedException).
         order.cancel(command.reason(), now, command.actorId());
@@ -130,7 +139,12 @@ public class CancelOrderService implements CancelOrderUseCase {
 
         log.info("order_cancelled orderId={} previousStatus={} reservationHeld={}",
                 saved.getId(), previousStatus, reservationHeld);
-        return OrderResultMapper.toResult(saved, saga);
+        return OrderResultMapper.toResult(
+                saved, saga,
+                previousStatus.name(),
+                command.reason(),
+                now,
+                command.actorId());
     }
 
     private static void requireRole(Set<String> roles, String required) {

@@ -68,7 +68,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS wiring
-- `TASK-BE-039-fix-TASK-BE-037.md` — Add OrderQueryService/InventoryReleased/InventoryConfirmed consumer unit tests; fix cancel response shape (previousStatus/cancelledReason/cancelledAt/cancelledBy); eliminate N+1 in list endpoint; enforce expectedVersion in CancelOrderService; clean up SecurityConfig dead-code path matchers; OrderMapper visibility
 
 ## in-progress
 
@@ -76,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-039-fix-TASK-BE-037.md` — Added OrderQueryService/InventoryReleased/InventoryConfirmed consumer unit tests (port fakes only); cancel response now includes previousStatus/cancelledReason/cancelledAt/cancelledBy via OrderResult cancel-aware mapper + extended OrderResponse; list endpoint N+1 eliminated via SagaPersistencePort.findSagaStatesByOrderIds + OrderLineRepository.findLineSummariesByOrderIds bulk queries; CancelOrderService raises ObjectOptimisticLockingFailureException early on stale expectedVersion; SecurityConfig dead-code path matchers removed (role enforcement happens in application services); OrderMapper relocated to adapter package and made package-private. 100 tests pass.
 
 ## done
 

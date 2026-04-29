@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 
 class CancelOrderServiceTest {
@@ -104,6 +105,51 @@ class CancelOrderServiceTest {
         OrderResult result = service.cancel(cmdWithAdmin);
         assertThat(result.status()).isEqualTo("CANCELLED");
         assertThat(outboxWriter.countByType("outbound.picking.cancelled")).isEqualTo(1);
+    }
+
+    @Test
+    void cancelResultPopulatesContractCancelFields() {
+        // AC-02: response body must carry previousStatus, cancelledReason,
+        // cancelledAt, cancelledBy per outbound-service-api.md §1.4.
+        Order order = orderInState(OrderStatus.PICKING);
+        orderPersistence.save(order);
+        OutboundSaga saga = OutboundSaga.newRequested(UUID.randomUUID(), order.getId(), T0);
+        sagaPersistence.save(saga);
+
+        CancelOrderCommand cmd = new CancelOrderCommand(
+                order.getId(), "customer requested", 0L, "user-42",
+                Set.of("ROLE_OUTBOUND_WRITE"));
+
+        OrderResult result = service.cancel(cmd);
+
+        assertThat(result.previousStatus()).isEqualTo("PICKING");
+        assertThat(result.cancelledReason()).isEqualTo("customer requested");
+        assertThat(result.cancelledAt()).isEqualTo(T0);
+        assertThat(result.cancelledBy()).isEqualTo("user-42");
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        assertThat(result.sagaState()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void cancelWithStaleVersionRaisesOptimisticLockingFailure() {
+        // AC-04: expectedVersion mismatch must surface 409 CONFLICT BEFORE
+        // any state mutation or outbox write.
+        Order order = orderInState(OrderStatus.PICKING); // version=0
+        orderPersistence.save(order);
+        sagaPersistence.save(OutboundSaga.newRequested(
+                UUID.randomUUID(), order.getId(), T0));
+
+        CancelOrderCommand staleCmd = new CancelOrderCommand(
+                order.getId(), "stale", 99L /* != current 0 */, "user-1",
+                Set.of("ROLE_OUTBOUND_WRITE"));
+
+        assertThatThrownBy(() -> service.cancel(staleCmd))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+
+        // No outbox row written, no domain mutation.
+        assertThat(outboxWriter.published).isEmpty();
+        assertThat(orderPersistence.findById(order.getId()).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PICKING);
     }
 
     @Test

@@ -68,9 +68,12 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
-                        // Cancel + TMS retry → ADMIN
-                        .requestMatchers(HttpMethod.POST, "/api/v1/orders/*/cancel").hasRole("OUTBOUND_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/shipments/*/retry-tms-notify").hasRole("OUTBOUND_ADMIN")
+                        // NOTE: granular role enforcement (e.g. OUTBOUND_ADMIN
+                        // for post-pick cancel + TMS retry) happens in the
+                        // application services (CancelOrderService, etc.) where
+                        // the role decision is data-dependent on order/saga
+                        // state. The filter chain below only enforces the
+                        // coarse READ/WRITE/ADMIN gate per HTTP method.
                         // Read-only paths
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("OUTBOUND_READ", "OUTBOUND_WRITE", "OUTBOUND_ADMIN")
                         // Mutating paths default to WRITE

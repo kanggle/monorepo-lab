@@ -2,8 +2,8 @@ package com.wms.outbound.adapter.out.persistence.adapter;
 
 import com.wms.outbound.adapter.out.persistence.entity.OrderEntity;
 import com.wms.outbound.adapter.out.persistence.entity.OrderLineEntity;
-import com.wms.outbound.adapter.out.persistence.mapper.OrderMapper;
 import com.wms.outbound.adapter.out.persistence.repository.OrderLineRepository;
+import com.wms.outbound.adapter.out.persistence.repository.OrderLineRepository.OrderLineSummaryRow;
 import com.wms.outbound.adapter.out.persistence.repository.OrderRepository;
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
@@ -11,7 +11,10 @@ import com.wms.outbound.application.result.OrderSummaryResult;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
  * insert vs update branching. Lines are immutable after creation in this
  * scope (TASK-BE-037), so on save we either insert all lines (new aggregate)
  * or skip line writes entirely (existing aggregate).
+ *
+ * <p>The list path uses a single bulk line-summary query (count + sum keyed
+ * by {@code orderId}) so the read endpoint runs O(1) DB queries irrespective
+ * of page size (AC-03 of TASK-BE-039).
  */
 @Component
 public class OrderPersistenceAdapter implements OrderPersistencePort {
@@ -107,7 +114,36 @@ public class OrderPersistenceAdapter implements OrderPersistencePort {
                 q.requiredShipAfter(), q.requiredShipBefore(),
                 q.createdAfter(), q.createdBefore(),
                 PageRequest.of(q.page(), q.size()));
-        return entities.stream().map(this::toSummary).toList();
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        // Bulk line aggregate keyed by orderId — eliminates per-row N+1 query.
+        List<UUID> orderIds = new ArrayList<>(entities.size());
+        for (OrderEntity e : entities) {
+            orderIds.add(e.getId());
+        }
+        Map<UUID, long[]> lineSummaries = new HashMap<>(orderIds.size());
+        for (OrderLineSummaryRow row : lineRepo.findLineSummariesByOrderIds(orderIds)) {
+            lineSummaries.put(row.getOrderId(), new long[]{row.getLineCount(), row.getTotalQty()});
+        }
+        List<OrderSummaryResult> out = new ArrayList<>(entities.size());
+        for (OrderEntity e : entities) {
+            long[] summary = lineSummaries.getOrDefault(e.getId(), new long[]{0L, 0L});
+            out.add(new OrderSummaryResult(
+                    e.getId(),
+                    e.getOrderNo(),
+                    e.getSource(),
+                    e.getCustomerPartnerId(),
+                    e.getWarehouseId(),
+                    e.getStatus(),
+                    null /* sagaState — joined separately by query service */,
+                    (int) summary[0],
+                    summary[1],
+                    e.getRequestedShipDate(),
+                    e.getCreatedAt(),
+                    e.getUpdatedAt()));
+        }
+        return out;
     }
 
     @Override
@@ -118,23 +154,5 @@ public class OrderPersistenceAdapter implements OrderPersistencePort {
                 q.source(), q.orderNo(),
                 q.requiredShipAfter(), q.requiredShipBefore(),
                 q.createdAfter(), q.createdBefore());
-    }
-
-    private OrderSummaryResult toSummary(OrderEntity e) {
-        List<OrderLineEntity> ls = lineRepo.findByOrderIdOrderByLineNumberAsc(e.getId());
-        long totalQty = ls.stream().mapToLong(OrderLineEntity::getRequestedQty).sum();
-        return new OrderSummaryResult(
-                e.getId(),
-                e.getOrderNo(),
-                e.getSource(),
-                e.getCustomerPartnerId(),
-                e.getWarehouseId(),
-                e.getStatus(),
-                null /* sagaState — joined separately by query service */,
-                ls.size(),
-                totalQty,
-                e.getRequestedShipDate(),
-                e.getCreatedAt(),
-                e.getUpdatedAt());
     }
 }

@@ -1,4 +1,4 @@
-package com.wms.outbound.adapter.out.persistence.mapper;
+package com.wms.outbound.adapter.out.persistence.adapter;
 
 import com.wms.outbound.adapter.out.persistence.entity.OrderEntity;
 import com.wms.outbound.adapter.out.persistence.entity.OrderLineEntity;
@@ -10,15 +10,17 @@ import java.util.List;
 
 /**
  * Package-private mapper between {@link OrderEntity}/{@link OrderLineEntity}
- * and the domain model. Lives inside the persistence package per the
- * Hexagonal rule "mappers are package-private inside persistence adapter".
+ * and the domain model. Lives in the same package as
+ * {@link OrderPersistenceAdapter} per the Hexagonal rule "mappers are
+ * package-private inside persistence adapter" (architecture.md §Layer Rules
+ * item 5).
  */
-public final class OrderMapper {
+final class OrderMapper {
 
     private OrderMapper() {
     }
 
-    public static Order toDomain(OrderEntity e, List<OrderLineEntity> lineEntities) {
+    static Order toDomain(OrderEntity e, List<OrderLineEntity> lineEntities) {
         List<OrderLine> lines = lineEntities.stream()
                 .map(OrderMapper::toLineDomain)
                 .toList();
@@ -39,7 +41,7 @@ public final class OrderMapper {
                 lines);
     }
 
-    public static OrderLine toLineDomain(OrderLineEntity e) {
+    static OrderLine toLineDomain(OrderLineEntity e) {
         return new OrderLine(
                 e.getId(),
                 e.getOrderId(),

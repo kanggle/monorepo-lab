@@ -6,6 +6,9 @@ import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
 import com.wms.outbound.domain.model.SagaStatus;
 import java.time.Clock;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -68,6 +71,19 @@ public class SagaPersistenceAdapter implements SagaPersistencePort {
     public Optional<OutboundSaga> findByPickingRequestId(UUID pickingRequestId) {
         return repo.findByPickingRequestId(pickingRequestId)
                 .map(SagaPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, String> findSagaStatesByOrderIds(Collection<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> result = new HashMap<>();
+        for (OutboundSagaEntity e : repo.findByOrderIdIn(orderIds)) {
+            result.put(e.getOrderId(), e.getStatus());
+        }
+        return result;
     }
 
     private static OutboundSaga toDomain(OutboundSagaEntity e) {

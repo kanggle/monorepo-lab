@@ -4,6 +4,7 @@ import com.wms.outbound.application.result.OrderLineResult;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OutboundSaga;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -16,6 +17,20 @@ public final class OrderResultMapper {
     }
 
     public static OrderResult toResult(Order order, OutboundSaga saga) {
+        return toResult(order, saga, null, null, null, null);
+    }
+
+    /**
+     * Cancel-aware variant: populates the §1.4 cancel response fields
+     * ({@code previousStatus}, {@code cancelledReason}, {@code cancelledAt},
+     * {@code cancelledBy}) when the caller is {@code CancelOrderService}.
+     */
+    public static OrderResult toResult(Order order,
+                                       OutboundSaga saga,
+                                       String previousStatus,
+                                       String cancelledReason,
+                                       Instant cancelledAt,
+                                       String cancelledBy) {
         List<OrderLineResult> lines = order.getLines().stream()
                 .map(l -> new OrderLineResult(
                         l.getId(),
@@ -40,6 +55,10 @@ public final class OrderResultMapper {
                 order.getUpdatedBy(),
                 lines,
                 saga != null ? saga.sagaId() : null,
-                saga != null ? saga.status().name() : null);
+                saga != null ? saga.status().name() : null,
+                previousStatus,
+                cancelledReason,
+                cancelledAt,
+                cancelledBy);
     }
 }
