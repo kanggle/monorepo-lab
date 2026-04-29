@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-040-fix-TASK-BE-038.md` - Follow-up fix for TASK-BE-038: contract-compliant packing.completed via PATCH seal flow, ShipmentNotificationListener self-invocation TX fix, controller out-port-leak fix, event payload field cleanup, shipment_no format alignment.
 
 ## in-progress
 
@@ -75,10 +75,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-BE-038-outbound-pick-pack-ship-domain.md` — PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS post-commit wiring (V11 schema align)
+(empty)
 
 ## done
 
+- `TASK-BE-038-outbound-pick-pack-ship-domain.md` - PickingRequest/Confirmation/PackingUnit/Shipment aggregates + ConfirmPicking/Packing/Shipping use cases + REST controllers + TMS post-commit wiring (V11 schema align). Review verdict 2026-04-29: FIX NEEDED -> follow-up in TASK-BE-040 (2 critical: PATCH seal endpoint does not emit packing.completed per outbound-service-api.md section 3.2; ShipmentNotificationListener Transactional(REQUIRES_NEW) annotations bypassed by self-invocation; 3 warnings: PickingController/PackingController inject out-ports directly violating Hexagonal layer rule, EventEnvelopeSerializer adds non-contract pickingRequestId field, shipment_no format inconsistent across spec/task/impl).
 - `TASK-BE-039-fix-TASK-BE-037.md` — Added OrderQueryService/InventoryReleased/InventoryConfirmed consumer unit tests (port fakes only); cancel response now includes previousStatus/cancelledReason/cancelledAt/cancelledBy via OrderResult cancel-aware mapper + extended OrderResponse; list endpoint N+1 eliminated via SagaPersistencePort.findSagaStatesByOrderIds + OrderLineRepository.findLineSummariesByOrderIds bulk queries; CancelOrderService raises ObjectOptimisticLockingFailureException early on stale expectedVersion; SecurityConfig dead-code path matchers removed (role enforcement happens in application services); OrderMapper relocated to adapter package and made package-private. 100 tests pass. Review verdict 2026-04-29: **APPROVED**.
 - `TASK-BE-037-outbound-order-domain-receive-cancel-query.md` — Order aggregate + OutboundSaga real transitions + ReceiveOrder/Cancel/Query use cases + saga consumers (inventory-reserved/released/confirmed) + real OutboxPublisher. 91 unit tests pass. Review verdict 2026-04-29: FIX NEEDED → follow-up in TASK-BE-039 (2 critical: missing AC-16 unit tests for OrderQueryService/InventoryReleasedConsumer/InventoryConfirmedConsumer, cancel response missing previousStatus/cancelledReason/cancelledAt/cancelledBy required by api §1.4; 4 warnings: N+1 in OrderQueryService.list, expectedVersion never compared, SecurityConfig dead path matchers, OrderMapper public visibility).
 - `TASK-INT-009-fix-TASK-INT-008.md` — Fix silent catch (WARN log added), rename burst method to burstFrom800Requests, update class Javadoc, ThreadLocalRandom. Review verdict 2026-04-29: **APPROVED**
