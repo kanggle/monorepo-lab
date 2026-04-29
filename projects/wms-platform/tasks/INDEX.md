@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-040-fix-TASK-BE-038.md` - Follow-up fix for TASK-BE-038: contract-compliant packing.completed via PATCH seal flow, ShipmentNotificationListener self-invocation TX fix, controller out-port-leak fix, event payload field cleanup, shipment_no format alignment.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-040-fix-TASK-BE-038.md` — Follow-up fix for TASK-BE-038: PATCH seal now drives packing-completed (Order PACKING→PACKED, Saga PICKING_CONFIRMED→PACKING_CONFIRMED, outbox row) when last unit sealed AND qty covers all order lines (AC-01/AC-02); ShipmentNotificationPersistence component holds REQUIRES_NEW markNotified/markFailed (AC-03); PickingController/PackingController consume QueryPickingRequestUseCase/QueryPackingUnitUseCase in-ports only — out-port injection removed (AC-04); EventEnvelopeSerializer drops non-contract pickingRequestId from picking.requested/cancelled (AC-05); shipment_no format aligned to SHP-YYYYMMDD-NNNN per contract §4.1 (AC-06); Shipment.createdBy populated through to ShipmentResponse (AC-07); 130 tests pass including 3 new seal-completion tests + 4 ShipmentNotificationListener/Persistence tests.
 
 ## done
 
