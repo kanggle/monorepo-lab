@@ -300,7 +300,7 @@ a `PACKED` order. Triggers:
 |---|---|---|---|
 | `id` | UUID | no | |
 | `order_id` | UUID (FK) | no | 1:1 with Order in v1 |
-| `shipment_no` | String (40) | no | Auto-generated. **Globally unique** |
+| `shipment_no` | String (40) | no | Auto-generated. Format: `SHP-YYYYMMDD-NNNN` where `NNNN` is a random 4-digit numeric suffix (1000–9999). **Globally unique**, enforced by `idx_shipment_shipment_no`. See generation strategy in Invariants. Example: `SHP-20260429-0001` (see `outbound-service-api.md §4.1`). |
 | `carrier_code` | String (40) | yes | Carrier identifier for TMS (may be assigned after TMS notification) |
 | `tracking_no` | String (100) | yes | Carrier-assigned tracking number; populated from TMS ack |
 | `shipped_at` | Instant | no | Wall-clock at `ConfirmShippingUseCase` execution |
@@ -312,7 +312,11 @@ a `PACKED` order. Triggers:
 ### Invariants
 
 - One Shipment per Order in v1; `order_id` unique.
-- `shipment_no` globally unique; immutable after creation.
+- `shipment_no` format: `SHP-YYYYMMDD-NNNN` (16 chars; fits within `String(40)` for future prefix headroom).
+  `NNNN` is a randomly drawn 4-digit suffix (range 1000–9999) generated at the instant of `ConfirmShippingUseCase` execution.
+  Uniqueness is enforced by the `idx_shipment_shipment_no` unique index.
+  On a duplicate-key violation the use case retries with the same `Idempotency-Key` (retry-on-collision semantics — see `ConfirmShippingService.generateShipmentNo`).
+  The field is immutable after creation.
 - `Shipment` is the anchor for the `outbound.shipping.confirmed` outbox event.
   The event carries `reservation_id` (= `picking_request.id`) and per-line
   confirmed quantities so inventory-service can `confirm()` each line.
