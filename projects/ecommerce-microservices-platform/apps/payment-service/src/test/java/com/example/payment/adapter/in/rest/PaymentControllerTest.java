@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -98,12 +99,13 @@ class PaymentControllerTest {
     class CreatePayment {
 
         @Test
-        @DisplayName("정상 생성 요청 시 201 반환")
+        @DisplayName("X-User-Id 헤더 기반으로 결제를 생성하고 201을 반환한다 (요청 바디의 userId 무시)")
         void createPayment_validRequest_returns201() throws Exception {
             mockMvc.perform(post("/api/payments")
+                            .header("X-User-Id", "user-1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"orderId":"order-1","userId":"user-1","amount":30000}
+                                    {"orderId":"order-1","amount":30000}
                                     """))
                     .andExpect(status().isCreated());
 
@@ -111,9 +113,54 @@ class PaymentControllerTest {
         }
 
         @Test
+        @DisplayName("요청 바디에 userId가 포함되어도 X-User-Id 헤더 값으로만 결제가 생성된다")
+        void createPayment_bodyUserIdIgnored_usesHeaderUserId() throws Exception {
+            mockMvc.perform(post("/api/payments")
+                            .header("X-User-Id", "header-user")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"orderId":"order-1","userId":"body-user","amount":30000}
+                                    """))
+                    .andExpect(status().isCreated());
+
+            // 바디의 "body-user"가 아닌 헤더의 "header-user"가 전달되어야 한다
+            verify(paymentProcessingService).processPayment("order-1", "header-user", 30000L);
+        }
+
+        @Test
+        @DisplayName("X-User-Id 헤더 누락 시 400 / INVALID_PAYMENT_REQUEST 반환")
+        void createPayment_missingUserIdHeader_returns400() throws Exception {
+            mockMvc.perform(post("/api/payments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"orderId":"order-1","amount":30000}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
+        }
+
+        @Test
+        @DisplayName("타인 orderId 접근 시(소유권 불일치) 403 / ACCESS_DENIED 반환")
+        void createPayment_foreignOrderId_returns403() throws Exception {
+            doThrow(new UnauthorizedPaymentAccessException())
+                    .when(paymentProcessingService)
+                    .processPayment(eq("order-1"), eq("attacker"), eq(30000L));
+
+            mockMvc.perform(post("/api/payments")
+                            .header("X-User-Id", "attacker")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"orderId":"order-1","amount":30000}
+                                    """))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
         @DisplayName("깨진 JSON 본문이면 400 / VALIDATION_ERROR 반환")
         void createPayment_malformedBody_returns400() throws Exception {
             mockMvc.perform(post("/api/payments")
+                            .header("X-User-Id", "user-1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"orderId\":"))
                     .andExpect(status().isBadRequest())

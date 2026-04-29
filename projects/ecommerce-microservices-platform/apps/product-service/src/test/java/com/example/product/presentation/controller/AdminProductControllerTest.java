@@ -69,6 +69,108 @@ class AdminProductControllerTest {
     @MockitoBean
     private VariantManagementService variantManagementService;
 
+    // ─── POST /api/admin/products ─────────────────────────────────────
+
+    @Test
+    @DisplayName("POST /api/admin/products - USER 역할 시 403 반환")
+    void register_userRole_returns403() throws Exception {
+        mockMvc.perform(post("/api/admin/products")
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products - X-User-Role 헤더 미포함 시 403 반환")
+    void register_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(post("/api/admin/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    // ─── POST /api/admin/products/{id}/variants ────────────────────────
+
+    @Test
+    @DisplayName("POST /api/admin/products/{id}/variants - USER 역할 시 403 반환")
+    void addVariant_userRole_returns403() throws Exception {
+        mockMvc.perform(post("/api/admin/products/{id}/variants", UUID.randomUUID())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products/{id}/variants - X-User-Role 헤더 미포함 시 403 반환")
+    void addVariant_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(post("/api/admin/products/{id}/variants", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    // ─── PATCH /api/admin/products/{id}/variants/{variantId} ───────────
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/variants/{variantId} - USER 역할 시 403 반환")
+    void updateVariant_userRole_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "optionName": "옵션A", "additionalPrice": 0 }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/variants/{variantId} - X-User-Role 헤더 미포함 시 403 반환")
+    void updateVariant_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "optionName": "옵션A", "additionalPrice": 0 }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    // ─── DELETE /api/admin/products/{id}/variants/{variantId} ──────────
+
+    @Test
+    @DisplayName("DELETE /api/admin/products/{id}/variants/{variantId} - USER 역할 시 403 반환")
+    void deleteVariant_userRole_returns403() throws Exception {
+        mockMvc.perform(delete("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/admin/products/{id}/variants/{variantId} - X-User-Role 헤더 미포함 시 403 반환")
+    void deleteVariant_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(delete("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    // ─── PATCH /api/admin/products/{id} ────────────────────────────────
+
     @Test
     @DisplayName("PATCH /api/admin/products/{id} - 수정 성공 시 200과 id 반환")
     void update_success_returns200() throws Exception {
@@ -76,6 +178,7 @@ class AdminProductControllerTest {
         given(updateProductService.update(any())).willReturn(productId);
 
         mockMvc.perform(patch("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "수정된 상품명", "price": 20000 }
@@ -85,9 +188,35 @@ class AdminProductControllerTest {
     }
 
     @Test
+    @DisplayName("PATCH /api/admin/products/{id} - USER 역할 시 403 반환")
+    void update_userRole_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}", UUID.randomUUID())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "수정된 상품명" }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id} - X-User-Role 헤더 미포함 시 403 반환")
+    void update_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "수정된 상품명" }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
     @DisplayName("PATCH /api/admin/products/{id} - 깨진 JSON 본문 시 400 / VALIDATION_ERROR")
     void update_malformedBody_returns400() throws Exception {
         mockMvc.perform(patch("/api/admin/products/{id}", UUID.randomUUID())
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":"))
                 .andExpect(status().isBadRequest())
@@ -102,6 +231,7 @@ class AdminProductControllerTest {
         given(updateProductService.update(any())).willReturn(productId);
 
         mockMvc.perform(patch("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -115,6 +245,7 @@ class AdminProductControllerTest {
         given(updateProductService.update(any())).willThrow(new ProductNotFoundException(productId));
 
         mockMvc.perform(patch("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "이름" }
@@ -123,14 +254,34 @@ class AdminProductControllerTest {
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
 
+    // ─── DELETE /api/admin/products/{id} ───────────────────────────────
+
     @Test
     @DisplayName("DELETE /api/admin/products/{id} - 삭제 성공 시 204 반환")
     void delete_success_returns204() throws Exception {
         UUID productId = UUID.randomUUID();
         willDoNothing().given(deleteProductService).delete(productId);
 
-        mockMvc.perform(delete("/api/admin/products/{id}", productId))
+        mockMvc.perform(delete("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/admin/products/{id} - USER 역할 시 403 반환")
+    void delete_userRole_returns403() throws Exception {
+        mockMvc.perform(delete("/api/admin/products/{id}", UUID.randomUUID())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/admin/products/{id} - X-User-Role 헤더 미포함 시 403 반환")
+    void delete_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(delete("/api/admin/products/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     @Test
@@ -139,7 +290,8 @@ class AdminProductControllerTest {
         UUID productId = UUID.randomUUID();
         willThrow(new ProductNotFoundException(productId)).given(deleteProductService).delete(productId);
 
-        mockMvc.perform(delete("/api/admin/products/{id}", productId))
+        mockMvc.perform(delete("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
@@ -150,6 +302,7 @@ class AdminProductControllerTest {
         UUID productId = UUID.randomUUID();
 
         mockMvc.perform(patch("/api/admin/products/{id}", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "상품명", "price": -1000 }
@@ -157,6 +310,8 @@ class AdminProductControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
+
+    // ─── PATCH /api/admin/products/{id}/stock ──────────────────────────
 
     @Test
     @DisplayName("PATCH /api/admin/products/{id}/stock - 재고 조정 성공 시 200과 variantId, currentStock 반환")
@@ -166,6 +321,7 @@ class AdminProductControllerTest {
         given(adjustStockService.adjust(any())).willReturn(new AdjustStockResult(variantId, 150));
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -176,11 +332,37 @@ class AdminProductControllerTest {
     }
 
     @Test
+    @DisplayName("PATCH /api/admin/products/{id}/stock - USER 역할 시 403 반환")
+    void adjustStock_userRole_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", UUID.randomUUID())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/stock - X-User-Role 헤더 미포함 시 403 반환")
+    void adjustStock_missingRoleHeader_returns403() throws Exception {
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
     @DisplayName("PATCH /api/admin/products/{id}/stock - variantId 누락 시 400 반환")
     void adjustStock_missingVariantId_returns400() throws Exception {
         UUID productId = UUID.randomUUID();
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "quantity": 50, "reason": "RESTOCK" }
@@ -197,6 +379,7 @@ class AdminProductControllerTest {
         given(adjustStockService.adjust(any())).willThrow(new VariantNotFoundException(variantId));
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -213,6 +396,7 @@ class AdminProductControllerTest {
         given(adjustStockService.adjust(any())).willThrow(new ProductNotFoundException(productId));
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -230,6 +414,7 @@ class AdminProductControllerTest {
                 .willThrow(new OptimisticLockingFailureException("Version conflict"));
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }

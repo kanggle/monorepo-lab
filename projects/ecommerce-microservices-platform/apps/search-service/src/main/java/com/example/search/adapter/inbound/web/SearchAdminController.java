@@ -1,11 +1,13 @@
 package com.example.search.adapter.inbound.web;
 
 import com.example.search.application.port.in.ReindexAllUseCase;
+import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,9 +37,17 @@ public class SearchAdminController {
      */
     @PostMapping("/reindex")
     public ResponseEntity<Map<String, Object>> reindex(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(defaultValue = "50") @Positive(message = "batchSize must be positive") int batchSize
     ) {
+        validateAdminRole(userRole);
         int indexed = reindexAllUseCase.reindexAll(batchSize);
         return ResponseEntity.ok(Map.of("indexed", indexed, "batchSize", batchSize));
+    }
+
+    private void validateAdminRole(String userRole) {
+        if (!"ADMIN".equalsIgnoreCase(userRole)) {
+            throw new AccessDeniedException();
+        }
     }
 }

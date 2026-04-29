@@ -124,6 +124,10 @@ management:
     tags:
       service: ${spring.application.name}
 
+# admin.seeder: AdminAccountSeeder is restricted to local/standalone profiles via @Profile.
+# In prod, this bean is NOT registered — no hardcoded admin account is seeded automatically.
+# To create the initial admin account in prod, run a bootstrap script or INSERT directly into the DB.
+
 logging:
   level:
     com.example.auth: INFO

@@ -288,4 +288,14 @@ class ReviewControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
+
+    @Test
+    @DisplayName("GET /api/reviews/products/{productId} - 허용되지 않은 sort 필드 시 400 반환")
+    void getProductReviews_invalidSortField_returns400() throws Exception {
+        mockMvc.perform(get("/api/reviews/products/{productId}", PRODUCT_ID)
+                        .param("sort", "invalidField,desc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REVIEW_REQUEST"));
+    }
+
 }
