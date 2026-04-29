@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 
 class EventDedupePersistenceAdapterTest {
@@ -54,7 +55,10 @@ class EventDedupePersistenceAdapterTest {
 
         assertThat(outcome).isEqualTo(EventDedupePort.Outcome.APPLIED);
         assertThat(counter.get()).isEqualTo(1);
-        verify(repository, times(1)).save(any(OutboundEventDedupe.class));
+
+        ArgumentCaptor<OutboundEventDedupe> captor = ArgumentCaptor.forClass(OutboundEventDedupe.class);
+        verify(repository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getOutcome()).isEqualTo("APPLIED");
         verify(entityManager, times(1)).flush();
     }
 

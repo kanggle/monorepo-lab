@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-036-fix-TASK-BE-035.md` — Populate `outcome` column in `EventDedupePersistenceAdapter`; new rows must never have outcome=NULL per domain-model.md §8.
+(empty)
 
 ## in-progress
 
@@ -76,6 +76,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## review
 
 - `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 (250-request burst) parallelised to fix CI timeout exceeding 30 min.
+- `TASK-BE-036-fix-TASK-BE-035.md` — Populate `outcome` column in `EventDedupePersistenceAdapter`; new rows must never have outcome=NULL per domain-model.md §8.
 
 ## done
 

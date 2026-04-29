@@ -48,7 +48,8 @@ public class EventDedupePersistenceAdapter implements EventDedupePort {
             throw new IllegalArgumentException("eventId must not be null");
         }
         try {
-            OutboundEventDedupe row = new OutboundEventDedupe(eventId, eventType, clock.instant());
+            OutboundEventDedupe row = new OutboundEventDedupe(
+                    eventId, eventType, clock.instant(), Outcome.APPLIED.name());
             repository.save(row);
             // Force the constraint check before running the side-effect so the
             // duplicate signal arrives at the catch site, not at TX commit.
