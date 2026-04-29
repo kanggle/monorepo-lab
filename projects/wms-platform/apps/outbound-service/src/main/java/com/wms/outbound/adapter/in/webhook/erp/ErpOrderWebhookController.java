@@ -31,11 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Authoritative wire contract:
  * {@code specs/contracts/webhooks/erp-order-webhook.md}.
  *
- * <h2>Processing order (security-first)</h2>
+ * <h2>Processing order (spec: erp-order-webhook.md § Processing Order)</h2>
  *
  * <ol>
  *   <li>Resolve secret via {@link WebhookSecretPort} from {@code X-Erp-Source}.
- *       Missing secret → 401 {@code WEBHOOK_SIGNATURE_INVALID}.</li>
+ *       Unknown source → 401 {@code WEBHOOK_SIGNATURE_INVALID} before timestamp
+ *       is evaluated.</li>
  *   <li>{@code X-Erp-Timestamp} window check. Out-of-window → 401
  *       {@code WEBHOOK_TIMESTAMP_INVALID}.</li>
  *   <li>HMAC verification over <em>raw request bytes</em>. Mismatch → 401
@@ -94,14 +95,8 @@ public class ErpOrderWebhookController {
             MDC.put("source", source);
         }
         try {
-            // Step 1: timestamp window check.
-            if (!timestampValidator.isWithinWindow(timestampHeader)) {
-                log.warn("webhook_timestamp_invalid eventId={} source={}", eventId, source);
-                return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_TIMESTAMP_INVALID",
-                        "X-Erp-Timestamp missing or outside acceptance window");
-            }
-
-            // Step 2: secret + HMAC.
+            // Step 1: resolve secret from X-Erp-Source.
+            // Unknown source → 401 WEBHOOK_SIGNATURE_INVALID before timestamp is evaluated.
             Optional<String> secret = secretPort.getSecret(source);
             if (secret.isEmpty()) {
                 log.warn("webhook_signature_invalid eventId={} source={} reason=secret_missing",
@@ -109,6 +104,15 @@ public class ErpOrderWebhookController {
                 return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_SIGNATURE_INVALID",
                         "HMAC signature mismatch");
             }
+
+            // Step 2: timestamp window check.
+            if (!timestampValidator.isWithinWindow(timestampHeader)) {
+                log.warn("webhook_timestamp_invalid eventId={} source={}", eventId, source);
+                return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_TIMESTAMP_INVALID",
+                        "X-Erp-Timestamp missing or outside acceptance window");
+            }
+
+            // Step 3: HMAC verification over raw body.
             byte[] body = rawBody == null ? new byte[0] : rawBody;
             if (!hmacVerifier.verify(body, secret.get(), signatureHeader)) {
                 log.warn("webhook_signature_invalid eventId={} source={}", eventId, source);
@@ -116,7 +120,7 @@ public class ErpOrderWebhookController {
                         "HMAC signature mismatch");
             }
 
-            // Step 3: parse + validate body schema.
+            // Step 4: parse + validate body schema.
             ErpOrderWebhookRequest parsed;
             try {
                 parsed = objectMapper.readValue(body, ErpOrderWebhookRequest.class);
@@ -135,7 +139,7 @@ public class ErpOrderWebhookController {
                 return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", message);
             }
 
-            // Step 4: dedupe + inbox in one TX.
+            // Step 5: dedupe + inbox in one TX.
             String rawPayloadJson = new String(body, StandardCharsets.UTF_8);
             WebhookInboxPersistenceAdapter.Result result = inboxAdapter.ingest(
                     eventId, rawPayloadJson, source);

@@ -315,6 +315,27 @@ class ErpOrderWebhookControllerTest {
     }
 
     @Test
+    @DisplayName("Case 10b: unknown source + expired timestamp → 401 WEBHOOK_SIGNATURE_INVALID (secret check before timestamp)")
+    void case10b_unknownSourceExpiredTimestampReturnsSignatureInvalid() throws Exception {
+        // Secret is unknown for any source — MUST return SIGNATURE_INVALID, NOT TIMESTAMP_INVALID,
+        // even though the timestamp is also expired. Processing order: secret → timestamp → HMAC.
+        mockSecretPortMissing();
+        Instant stale = FIXED_NOW.minus(Duration.ofMinutes(6));
+
+        mockMvc.perform(post("/webhooks/erp/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Erp-Event-Id", "evt-10b")
+                        .header("X-Erp-Source", "erp-unknown")
+                        .header("X-Erp-Timestamp", stale.toString())
+                        .header("X-Erp-Signature", hmacFor(VALID_BODY, SECRET))
+                        .content(VALID_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("WEBHOOK_SIGNATURE_INVALID"));
+
+        verify(inboxAdapter, never()).ingest(anyString(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("Case 11: backend slow → still returns 200 fast (commit is fast)")
     void case11_backendSlowStillFastResponse() throws Exception {
         mockSecretPortFor(SOURCE);

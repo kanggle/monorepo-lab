@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-035-fix-TASK-BE-034.md` — Fix webhook processing order (spec: secret→timestamp→HMAC; code inverts steps 1&2 — Critical), outbound_outbox missing aggregate_type/event_version/partition_key columns (Warning), outbound_event_dedupe missing outcome column (Warning).
+(empty)
 
 ## in-progress
 
@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-BE-035-fix-TASK-BE-034.md` — Fix webhook processing order (spec: secret→timestamp→HMAC; code inverts steps 1&2 — Critical), outbound_outbox missing aggregate_type/event_version/partition_key columns (Warning), outbound_event_dedupe missing outcome column (Warning).
 - `TASK-INT-008-e2e-rate-limit-burst-parallelise.md` — E2E rate-limit scenario 3 (250-request burst) parallelised to fix CI timeout exceeding 30 min.
 
 ## done
