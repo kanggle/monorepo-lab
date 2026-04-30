@@ -1,5 +1,6 @@
 import { clientEnv } from '@/shared/config/env';
-import { DashboardTabs, DASHBOARD_TABS, type DashboardTabId } from './_components/DashboardTabs';
+import { DashboardTabs } from './_components/DashboardTabs';
+import { DASHBOARD_TABS, type DashboardTabId } from './_components/tabs';
 
 export const metadata = { title: '대시보드 — Admin Console' };
 

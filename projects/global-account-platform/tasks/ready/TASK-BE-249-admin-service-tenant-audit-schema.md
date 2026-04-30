@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-BE-235
+TASK-BE-249
 
 # Title
 
@@ -75,7 +75,7 @@ backend
 
 ## Out of Scope
 
-- 테넌트 자체의 CRUD (POST `/api/admin/tenants`) — TASK-BE-236에서 처리
+- 테넌트 자체의 CRUD (POST `/api/admin/tenants`) — TASK-BE-250에서 처리
 - 운영자 UI(admin-web) 변경 — 별도 frontend task
 - `target_tenant_id`가 와일드카드인 경우(platform-wide audit row) — 본 태스크는 단일 target만, 와일드카드는 후속
 
