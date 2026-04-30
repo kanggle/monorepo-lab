@@ -52,7 +52,11 @@ account:
   auth-service:
     base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
     connect-timeout-ms: 3000
-    read-timeout-ms: 5000
+    # TASK-BE-247: raised from 5000 to 15000 to mask auth-service cold-start / GC pauses.
+    # This reduces the race window where auth-service commits after account-service times out
+    # and rolls back (half-commit producing an orphan credential). 15s is the agreed UX ceiling;
+    # beyond that, async signup redesign would be required.
+    read-timeout-ms: 15000
 
 outbox:
   polling:

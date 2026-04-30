@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-BE-236
+TASK-BE-250
 
 # Title
 
@@ -64,7 +64,7 @@ backend
   - `specs/contracts/http/account-internal-tenants.yaml` (account-service internal — 신규/갱신)
 - audit 통합:
   - `admin_actions.action_code` enum에 `TENANT_CREATE`, `TENANT_SUSPEND`, `TENANT_REACTIVATE` 추가
-  - 각 동작은 TASK-BE-235 의 `target_tenant_id` 컬럼을 사용 (cross-tenant action으로 기록)
+  - 각 동작은 TASK-BE-249 의 `target_tenant_id` 컬럼을 사용 (cross-tenant action으로 기록)
 - 권한:
   - SUPER_ADMIN만 호출 가능 (PermissionEvaluator로 gate)
 - resilience:
@@ -144,7 +144,7 @@ backend
 - **`Idempotency-Key` 헤더**: `POST /api/admin/tenants` 는 idempotent해야 함. 이미 존재하는 `tenantId`로 재요청 시 200 (또는 409, 정책에 따라). 운영자가 retry할 때 중복 audit row를 만들지 않도록 idempotency store 활용.
 - **TenantType enum**: `B2C_CONSUMER`, `B2B_ENTERPRISE` (spec § Tenant 엔터티). request body에서 받음.
 - **수동 등록만 허용**: self-service 가입 없음. `gateway-service`의 일반 routing path가 아닌 `/api/admin/tenants` 만 사용.
-- **SUPER_ADMIN 검증**: PermissionEvaluator (TASK-BE-235)에서 `operator.tenantId == '*'` 체크. 없으면 403.
+- **SUPER_ADMIN 검증**: PermissionEvaluator (TASK-BE-249)에서 `operator.tenantId == '*'` 체크. 없으면 403.
 
 ---
 

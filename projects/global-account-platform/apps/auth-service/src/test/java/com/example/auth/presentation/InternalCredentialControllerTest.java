@@ -71,6 +71,28 @@ class InternalCredentialControllerTest {
     }
 
     @Test
+    @DisplayName("POST /internal/auth/credentials — idempotent retry returns 200 OK (TASK-BE-247)")
+    void idempotentRetry_returns200() throws Exception {
+        Instant createdAt = Instant.parse("2026-04-30T10:00:00Z");
+        // wasIdempotent=true → use-case signals this is a retry of an existing row
+        given(createCredentialUseCase.execute(any(CreateCredentialCommand.class)))
+                .willReturn(new CreateCredentialResult("acc-1", createdAt, true));
+
+        mockMvc.perform(post("/internal/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountId": "acc-1",
+                                  "email": "user@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value("acc-1"))
+                .andExpect(jsonPath("$.createdAt").value("2026-04-30T10:00:00Z"));
+    }
+
+    @Test
     @DisplayName("POST /internal/auth/credentials with duplicate accountId returns 409 CREDENTIAL_ALREADY_EXISTS")
     void duplicateAccountReturns409() throws Exception {
         given(createCredentialUseCase.execute(any(CreateCredentialCommand.class)))

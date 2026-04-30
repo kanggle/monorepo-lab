@@ -34,6 +34,13 @@ public class InternalCredentialController {
     private final CreateCredentialUseCase createCredentialUseCase;
     private final ForceLogoutUseCase forceLogoutUseCase;
 
+    /**
+     * Creates a credential row or returns success for an idempotent retry.
+     *
+     * <p>TASK-BE-247: returns 201 for a new row and 200 for an idempotent re-try of the same
+     * (accountId, email) — enabling account-service to recover from half-commit scenarios where
+     * auth-service committed after account-service timed out and rolled back.</p>
+     */
     @PostMapping("/credentials")
     public ResponseEntity<CreateCredentialResponse> createCredential(
             @Valid @RequestBody CreateCredentialRequest request) {
@@ -45,7 +52,8 @@ public class InternalCredentialController {
                         request.tenantId()  // TASK-BE-229: pass optional tenant context
                 )
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(CreateCredentialResponse.from(result));
+        HttpStatus status = result.wasIdempotent() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(CreateCredentialResponse.from(result));
     }
 
     @PostMapping("/accounts/{accountId}/force-logout")

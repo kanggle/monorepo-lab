@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-BE-234
+TASK-BE-248
 
 # Title
 
@@ -78,7 +78,7 @@ backend
 ## Out of Scope
 
 - `tenant_id` 와일드카드(`'*'`) 또는 platform-scope detection (cross-tenant 통합 모니터링) — 별도 ADR + 후속 태스크
-- 테넌트별 detection threshold **설정 UI** — admin-service의 tenant management 후속 (TASK-BE-236 이후)
+- 테넌트별 detection threshold **설정 UI** — admin-service의 tenant management 후속 (TASK-BE-250 이후)
 - 기존 production 데이터의 backfill 자동화 스크립트 — staging/local에서는 default value로 migration 처리, production migration 절차는 별도 runbook
 
 ---

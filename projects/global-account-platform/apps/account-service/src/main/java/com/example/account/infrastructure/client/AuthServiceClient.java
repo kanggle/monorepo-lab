@@ -36,7 +36,7 @@ public class AuthServiceClient implements AuthServicePort {
     public AuthServiceClient(
             @Value("${account.auth-service.base-url:http://localhost:8081}") String baseUrl,
             @Value("${account.auth-service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${account.auth-service.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${account.auth-service.read-timeout-ms:15000}") int readTimeoutMs) {
         this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("authService");
         this.retry = ResilienceClientFactory.buildRetry("authService");

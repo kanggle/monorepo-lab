@@ -50,6 +50,14 @@ outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+  # TASK-BE-235: OutboxProperties.topicMapping은 @NotEmpty로 검증되므로
+  # security-service가 발행하는 모든 이벤트 타입을 명시한다.
+  # 키는 OutboxEvent.event_type, 값은 Kafka topic 이름.
+  # specs/contracts/events/security-events.md 의 3개 이벤트와 1:1로 매칭.
+  topic-mapping:
+    security.suspicious.detected: security.suspicious.detected
+    security.auto.lock.triggered: security.auto.lock.triggered
+    security.auto.lock.pending: security.auto.lock.pending
 
 server:
   port: 8084
