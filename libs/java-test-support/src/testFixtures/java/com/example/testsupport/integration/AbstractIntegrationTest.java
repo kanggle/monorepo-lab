@@ -2,6 +2,7 @@ package com.example.testsupport.integration;
 
 import java.time.Duration;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -66,6 +67,7 @@ import org.testcontainers.utility.DockerImageName;
  *
  * @see <a href="file:../../../../../../../../../platform/testing-strategy.md">platform/testing-strategy.md</a>
  */
+@Tag("integration")
 @ExtendWith(DockerAvailableCondition.class)
 public abstract class AbstractIntegrationTest {
 

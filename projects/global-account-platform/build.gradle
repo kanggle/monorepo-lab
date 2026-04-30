@@ -30,14 +30,44 @@ subprojects {
         testAnnotationProcessor 'org.projectlombok:lombok:1.18.36'
     }
 
+    // Default `test` task runs unit + slice tests only — Testcontainers-backed
+    // classes carry `@Tag("integration")` (either directly or via the
+    // `AbstractIntegrationTest` base in `libs/java-test-support`) and are
+    // excluded so the root CI `:check` stays Docker-free. The dedicated
+    // `:integrationTest` task below opts back in for environments that have
+    // Docker available (CI gap-integration-tests job, local developer runs).
     test {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            excludeTags 'integration'
+        }
         jvmArgs '-XX:+EnableDynamicAgentLoading'
 
         // Forward Testcontainers-relevant env/system props into the forked test JVM.
         // On Windows + Docker Desktop, named-pipe auto-detection can fail; developers
         // set DOCKER_HOST=tcp://localhost:2375 (requires the "Expose daemon on tcp"
         // option). See docs/guides/local-integration-testing.md.
+        def dockerHost = System.getenv('DOCKER_HOST') ?: System.getProperty('docker.host')
+        if (dockerHost) {
+            environment 'DOCKER_HOST', dockerHost
+            systemProperty 'docker.host', dockerHost
+        }
+    }
+
+    // Opt-in task for `@Tag("integration")` tests. Requires Docker.
+    // Runs the same source set as `test` (no separate compile / classpath) and
+    // raises the per-test timeout because Spring context boot + container
+    // startup can exceed the default.
+    tasks.register('integrationTest', Test) {
+        description = 'Runs only @Tag("integration") tests (Testcontainers required).'
+        group = 'verification'
+        useJUnitPlatform {
+            includeTags 'integration'
+        }
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        jvmArgs '-XX:+EnableDynamicAgentLoading'
+        systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+
         def dockerHost = System.getenv('DOCKER_HOST') ?: System.getProperty('docker.host')
         if (dockerHost) {
             environment 'DOCKER_HOST', dockerHost

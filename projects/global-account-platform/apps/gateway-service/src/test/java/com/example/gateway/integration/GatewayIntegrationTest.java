@@ -1,5 +1,6 @@
 package com.example.gateway.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -30,6 +31,7 @@ import java.util.Date;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 @ExtendWith(DockerAvailableCondition.class)

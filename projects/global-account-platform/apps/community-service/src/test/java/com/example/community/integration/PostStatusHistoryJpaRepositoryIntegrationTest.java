@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaEntity;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Validates: 시간 오름차순 정렬, append-only DB 트리거 (UPDATE/DELETE 거부).
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("PostStatusHistoryJpaRepository 통합 테스트")
 class PostStatusHistoryJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {

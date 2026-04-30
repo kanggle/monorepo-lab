@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.feed.FeedSubscription;
 import com.example.community.domain.feed.FeedSubscriptionRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Repository slice integration tests for {@link FeedSubscriptionRepository} (TASK-BE-149).
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("FeedSubscriptionRepository 통합 테스트")
 class FeedSubscriptionRepositoryIntegrationTest extends CommunityIntegrationTestBase {

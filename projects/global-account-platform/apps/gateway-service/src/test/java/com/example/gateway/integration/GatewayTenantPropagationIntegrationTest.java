@@ -1,5 +1,6 @@
 package com.example.gateway.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for TASK-BE-230: tenant_id propagation, rate limit key patterns,
  * fallback toggle, and internal route tenant scope validation.
  */
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 @ExtendWith(DockerAvailableCondition.class)

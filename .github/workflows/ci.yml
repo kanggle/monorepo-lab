@@ -79,42 +79,21 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
 
-      - name: Compile GAP backend (no integration tests yet)
-        # global-account-platform was imported via TASK-MONO-017 / TASK-MONO-018
-        # but its integration tests have not yet been split into a separate
-        # `:integrationTest` task (Testcontainers-backed). Until that work
-        # lands (separate follow-up task), the GAP CI gate is limited to
-        # `:compileJava + :compileTestJava` for the 7 backend services plus
-        # an explicit `--tests *OutboxPollingScheduler*` run that exercises
-        # the new outbox scheduler subclasses without booting a Spring
-        # ApplicationContext.
+      - name: Build and check GAP backend (Docker-free)
+        # GAP integration tests carry @Tag("integration") (either directly or
+        # via AbstractIntegrationTest base) and are excluded from `:test` /
+        # `:check` by `projects/global-account-platform/build.gradle`. They
+        # run in the dedicated `gap-integration-tests` job below. This step
+        # therefore stays Docker-free.
         run: >-
           ./gradlew
-          :projects:global-account-platform:apps:auth-service:compileJava
-          :projects:global-account-platform:apps:auth-service:compileTestJava
-          :projects:global-account-platform:apps:account-service:compileJava
-          :projects:global-account-platform:apps:account-service:compileTestJava
-          :projects:global-account-platform:apps:admin-service:compileJava
-          :projects:global-account-platform:apps:admin-service:compileTestJava
-          :projects:global-account-platform:apps:community-service:compileJava
-          :projects:global-account-platform:apps:community-service:compileTestJava
-          :projects:global-account-platform:apps:gateway-service:compileJava
-          :projects:global-account-platform:apps:gateway-service:compileTestJava
-          :projects:global-account-platform:apps:membership-service:compileJava
-          :projects:global-account-platform:apps:membership-service:compileTestJava
-          :projects:global-account-platform:apps:security-service:compileJava
-          :projects:global-account-platform:apps:security-service:compileTestJava
-          --no-daemon --stacktrace
-
-      - name: Run GAP outbox scheduler unit tests
-        run: >-
-          ./gradlew
-          :projects:global-account-platform:apps:auth-service:test --tests "com.example.auth.infrastructure.event.AuthOutboxPollingSchedulerTest"
-          :projects:global-account-platform:apps:account-service:test --tests "com.example.account.infrastructure.event.AccountOutboxPollingSchedulerTest"
-          :projects:global-account-platform:apps:admin-service:test --tests "com.example.admin.infrastructure.event.AdminOutboxPollingSchedulerTest"
-          :projects:global-account-platform:apps:community-service:test --tests "com.example.community.infrastructure.event.CommunityOutboxPollingSchedulerTest"
-          :projects:global-account-platform:apps:membership-service:test --tests "com.example.membership.infrastructure.event.MembershipOutboxPollingSchedulerTest"
-          :projects:global-account-platform:apps:security-service:test --tests "com.example.security.infrastructure.event.SecurityOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:auth-service:check
+          :projects:global-account-platform:apps:account-service:check
+          :projects:global-account-platform:apps:admin-service:check
+          :projects:global-account-platform:apps:community-service:check
+          :projects:global-account-platform:apps:gateway-service:check
+          :projects:global-account-platform:apps:membership-service:check
+          :projects:global-account-platform:apps:security-service:check
           --no-daemon --stacktrace
 
       - name: Upload test reports on failure
@@ -346,6 +325,54 @@ jobs:
           path: |
             projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
             projects/wms-platform/apps/master-service/build/test-results/integrationTest/
+          retention-days: 7
+
+  gap-integration-tests:
+    name: Integration (global-account-platform, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 30
+    # GAP integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
+    # via Testcontainers. Scoped to monorepo-lab; the standalone repo
+    # extraction relies on its own Docker-free `check` signal.
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run GAP integration suites
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:apps:auth-service:integrationTest
+          :projects:global-account-platform:apps:account-service:integrationTest
+          :projects:global-account-platform:apps:admin-service:integrationTest
+          :projects:global-account-platform:apps:community-service:integrationTest
+          :projects:global-account-platform:apps:gateway-service:integrationTest
+          :projects:global-account-platform:apps:membership-service:integrationTest
+          :projects:global-account-platform:apps:security-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload GAP integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gap-integration-test-reports
+          path: |
+            projects/global-account-platform/apps/*/build/reports/tests/integrationTest/
+            projects/global-account-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:

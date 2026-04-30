@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
@@ -33,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * membership-service 503 fail-closed semantics, DELETED post 404, and
  * non-existent post 404.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("GetPostUseCase 통합 테스트")

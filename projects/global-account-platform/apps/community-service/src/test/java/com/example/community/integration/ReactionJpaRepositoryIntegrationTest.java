@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.reaction.Reaction;
 import com.example.community.infrastructure.persistence.ReactionJpaRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Validates: 복합 PK 조회, (post_id, account_id) UNIQUE 제약, 카운트 쿼리.
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("ReactionJpaRepository 통합 테스트")
 class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
