@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.comment.Comment;
 import com.example.community.infrastructure.persistence.CommentJpaRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Validates: soft-delete 제외 카운트, 그룹별 카운트.
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("CommentJpaRepository 통합 테스트")
 class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {

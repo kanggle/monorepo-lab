@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.feed.FeedSubscription;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostRepository;
@@ -31,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Uses real MySQL via {@link com.example.testsupport.integration.AbstractIntegrationTest}.
  * Validates: PUBLISHED 필터, 팔로우 범위, soft-delete 제외, 페이지네이션.
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("PostRepository.findFeedForFan 통합 테스트")
 class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {

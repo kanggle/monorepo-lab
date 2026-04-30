@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
@@ -31,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Verifies PATCH /api/community/posts/{postId}: happy path (DB persistence),
  * non-author 403, and not-found 404.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("UpdatePostUseCase 통합 테스트")

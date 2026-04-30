@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.feed.FeedSubscription;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostType;
@@ -33,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Verifies that the feed includes only PUBLISHED posts from followed artists and that
  * DELETED and HIDDEN posts are excluded regardless of the follow relationship.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("GetFeedUseCase 통합 테스트")
