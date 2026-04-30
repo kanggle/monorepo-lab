@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.infrastructure.persistence.PostJpaRepository;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaEntity;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaRepository;
@@ -30,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Exercises HTTP -> controller -> use-case -> JPA persistence -> outbox writer.
  * Verifies post row, status history row, and outbox row all land in MySQL.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("PublishPostUseCase 통합 테스트")

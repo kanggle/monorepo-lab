@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.application.ActorContext;
 import com.example.community.application.AddCommentUseCase;
 import com.example.community.application.AddReactionUseCase;
@@ -44,6 +45,7 @@ import static org.awaitility.Awaitility.await;
  * and {@code community.reaction.added} are relayed from the outbox to Kafka with the
  * standard envelope format.
  */
+@Tag("integration")
 @SpringBootTest
 @DisplayName("CommunityOutboxRelay 통합 테스트")
 class CommunityOutboxRelayIntegrationTest extends CommunityIntegrationTestBase {

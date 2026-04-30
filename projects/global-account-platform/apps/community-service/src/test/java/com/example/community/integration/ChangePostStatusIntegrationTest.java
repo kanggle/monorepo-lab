@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
@@ -33,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Verifies PATCH /api/community/posts/{postId}/status: DRAFT→PUBLISHED history,
  * PUBLISHED→DELETED history, invalid transition 422, non-author 403, and not-found 404.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("ChangePostStatusUseCase 통합 테스트")

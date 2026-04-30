@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.Tag;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
@@ -35,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Verifies upsert dedup (same emoji twice → 1 row), emoji replacement (different emoji → 1 row
  * with updated code), and the happy path (new reaction → 200 + outbox entry).
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("AddReactionUseCase 통합 테스트")
