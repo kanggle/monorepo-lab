@@ -3,6 +3,13 @@ plugins {
 }
 
 dependencies {
+    // Spring Web (for RestClient, JdkClientHttpRequestFactory, HttpClientErrorException in ResilienceClientFactory)
+    implementation 'org.springframework:spring-web'
+
+    // Resilience4j (CircuitBreaker + Retry — used by ResilienceClientFactory)
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
