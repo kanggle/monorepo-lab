@@ -19,6 +19,17 @@
     "wms:down": "docker compose --project-directory projects/wms-platform down",
     "wms:ps": "docker compose --project-directory projects/wms-platform ps",
     "wms:logs": "docker compose --project-directory projects/wms-platform logs -f",
-    "wms:docker": "docker compose --project-directory projects/wms-platform"
+    "wms:docker": "docker compose --project-directory projects/wms-platform",
+    "gap:install": "pnpm --dir projects/global-account-platform install",
+    "gap:dev": "pnpm --dir projects/global-account-platform dev",
+    "gap:build": "pnpm --dir projects/global-account-platform build",
+    "gap:lint": "pnpm --dir projects/global-account-platform lint",
+    "gap:admin-web": "pnpm --dir projects/global-account-platform --filter admin-web dev",
+    "gap:up": "docker compose --project-directory projects/global-account-platform up -d",
+    "gap:down": "docker compose --project-directory projects/global-account-platform down",
+    "gap:ps": "docker compose --project-directory projects/global-account-platform ps",
+    "gap:logs": "docker compose --project-directory projects/global-account-platform logs -f",
+    "gap:docker": "docker compose --project-directory projects/global-account-platform",
+    "gap:pnpm": "pnpm --dir projects/global-account-platform"
   }
 }

@@ -38,6 +38,7 @@ set -euo pipefail
 declare -A PROJECT_REMOTES=(
     ["wms-platform"]="https://github.com/kanggle/wms-platform.git"
     ["ecommerce-microservices-platform"]="https://github.com/kanggle/ecommerce-microservices-platform.git"
+    ["global-account-platform"]="https://github.com/kanggle/global-account-platform.git"
 )
 
 # Project → integration type. Governs how post-process rewrites gradle files.
@@ -64,6 +65,7 @@ declare -A PROJECT_REMOTES=(
 declare -A PROJECT_TYPES=(
     ["wms-platform"]="direct-include"
     ["ecommerce-microservices-platform"]="direct-include"
+    ["global-account-platform"]="direct-include"
 )
 
 # Shared paths kept at extracted repo root.
