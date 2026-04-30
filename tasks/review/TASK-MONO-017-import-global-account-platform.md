@@ -52,10 +52,10 @@ ecommerce-microservices-platform 이관(TASK-MONO Phase 2~8) 과 동일한 `dire
 
 ## Acceptance Criteria
 
-- [ ] `./gradlew :projects:global-account-platform:apps:auth-service:compileJava` PASS
-- [ ] `./gradlew :projects:global-account-platform:apps:account-service:compileJava` PASS
-- [ ] `./gradlew :projects:wms-platform:apps:master-service:compileJava` PASS (wms 회귀 없음)
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:auth-service:compileJava` PASS (ecommerce 회귀 없음)
+- [x] `./gradlew :projects:global-account-platform:apps:auth-service:compileJava` PASS
+- [x] `./gradlew :projects:global-account-platform:apps:account-service:compileJava` PASS
+- [x] `./gradlew :projects:wms-platform:apps:master-service:compileJava` PASS (wms 회귀 없음)
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:auth-service:compileJava` PASS (ecommerce 회귀 없음)
 - [x] `projects/global-account-platform/` 하위에 `platform/`, `rules/`, `.claude/`, `libs/`, `scripts/`, `.github/` 디렉토리 없음
 - [x] root `rules/domains/saas.md`, `rules/traits/regulated.md`, `rules/traits/audit-heavy.md` 존재
 - [x] `scripts/sync-portfolio.sh`에 global-account-platform remote 등록됨
@@ -86,6 +86,6 @@ ecommerce-microservices-platform 이관(TASK-MONO Phase 2~8) 과 동일한 `dire
 ## Definition of Done
 
 - [x] Implementation completed
-- [ ] Compile checks passing (Acceptance Criteria)
-- [ ] PR created
+- [x] Compile checks passing (Acceptance Criteria)
+- [x] PR created (#93)
 - [x] docs/migration-notes.md 작성됨
