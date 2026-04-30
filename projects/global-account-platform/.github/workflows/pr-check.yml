@@ -1,0 +1,78 @@
+# PR Quality Gate — Global Account Platform
+#
+# Fast feedback for pull requests: compile + unit test + frontend build.
+# Runs only on PRs targeting main/master (pushes are handled by ci.yml).
+
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-build:
+    name: Compile, Test & Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Backend ----
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile and run unit tests
+        run: ./gradlew compileJava test --no-daemon
+        env:
+          GRADLE_OPTS: "-Xmx2g"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-test-reports
+          path: |
+            apps/*/build/reports/tests/
+            libs/*/build/reports/tests/
+          retention-days: 3
+
+      # ---- Frontend ----
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: apps/admin-web
+        run: pnpm run build

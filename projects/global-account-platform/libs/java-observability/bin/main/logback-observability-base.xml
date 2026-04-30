@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Shared Logback base configuration for all services.
+  Include this file in each service's logback-spring.xml:
+
+    <configuration>
+      <include resource="logback-observability-base.xml"/>
+    </configuration>
+
+  Security: Never log passwords, tokens, card numbers, or PII.
+  Use MDC key "traceId" for distributed trace correlation.
+-->
+
+<included>
+    <property name="SERVICE_NAME" value="${spring.application.name:-unknown}"/>
+
+    <!-- JSON appender for production -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <level>level</level>
+                <logger>logger</logger>
+                <message>message</message>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+            <customFields>{"service":"${SERVICE_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>eventId</includeMdcKeyName>
+            <includeMdcKeyName>eventType</includeMdcKeyName>
+            <timeZone>UTC</timeZone>
+        </encoder>
+    </appender>
+
+    <!-- Console appender for local development -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId} eventId=%X{eventId:-} eventType=%X{eventType:-}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+</included>

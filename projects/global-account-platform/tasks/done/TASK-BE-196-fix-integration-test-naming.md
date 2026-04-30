@@ -1,0 +1,62 @@
+---
+id: TASK-BE-196
+title: membership·security-service integration 테스트 파일명 IntegrationTest 규칙 준수
+status: ready
+type: TASK-BE
+target_service: membership-service, security-service
+---
+
+## Goal
+
+`platform/testing-strategy.md` Naming Conventions 기준상, full-flow integration 테스트 클래스명은
+`{Feature}IntegrationTest` 이어야 한다. 아래 2개 파일이 `integration/` 패키지에 위치하고
+`@SpringBootTest` 기반임에도 `*Test` 로 끝나 규칙을 위반하고 있다.
+
+## Scope
+
+아래 2개 파일의 클래스명·파일명을 `*IntegrationTest` 로 변경한다:
+
+### membership-service — integration (1개)
+
+| 현재 파일명 | 변경 후 파일명 |
+|---|---|
+| `SubscriptionExpirySchedulerTest.java` | `SubscriptionExpirySchedulerIntegrationTest.java` |
+
+경로: `apps/membership-service/src/test/java/com/example/membership/integration/`
+
+### security-service — integration (1개)
+
+| 현재 파일명 | 변경 후 파일명 |
+|---|---|
+| `LoginHistoryImmutabilityTest.java` | `LoginHistoryImmutabilityIntegrationTest.java` |
+
+경로: `apps/security-service/src/test/java/com/example/security/integration/`
+
+파일 내 class 선언부도 각각 `*IntegrationTest` 로 수정한다.
+
+## Acceptance Criteria
+
+- 2개 파일이 `*IntegrationTest.java` 로 rename됨 (git mv 사용)
+- 각 파일 내 class 명도 `*IntegrationTest` 로 수정됨
+- `./gradlew :apps:membership-service:test` BUILD SUCCESSFUL, failures=0
+- `./gradlew :apps:security-service:test` BUILD SUCCESSFUL, failures=0
+
+## Related Specs
+
+- `platform/testing-strategy.md` — Naming Conventions 섹션
+- `specs/services/membership-service/architecture.md`
+- `specs/services/security-service/architecture.md`
+
+## Related Contracts
+
+없음
+
+## Edge Cases
+
+- `@DisplayName` 는 한국어 서술 내용이므로 변경 불필요
+- 파일 rename 시 반드시 `git mv` 사용 (히스토리 보존)
+- 생성자가 있는 경우 생성자명도 함께 수정
+
+## Failure Scenarios
+
+- git mv 없이 신규 파일 생성 시 히스토리 단절

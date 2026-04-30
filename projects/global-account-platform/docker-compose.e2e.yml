@@ -1,0 +1,288 @@
+# =============================================================================
+# Global Account Platform — E2E Compose (TASK-BE-041a foundation)
+# =============================================================================
+# Brings up 4 platform services + MySQL/Redis/Kafka in an isolated network for
+# smoke testing. Scenario tests (041c) build on this file.
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml build
+#   docker compose -f docker-compose.e2e.yml up -d
+#   docker compose -f docker-compose.e2e.yml ps
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# NOTE: The embedded ADMIN_JWT_V1_PEM / ADMIN_TOTP_V1_KEY are FIXED TEST
+# VALUES, also used by admin-service unit tests. DO NOT use in production.
+# =============================================================================
+
+name: global-account-platform-e2e
+
+x-service-env: &service-env
+  SPRING_PROFILES_ACTIVE: e2e
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ""
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  # TASK-BE-044: disable Java DNS negative caching.
+  # Docker Desktop's embedded DNS (127.0.0.11) occasionally returns NXDOMAIN for
+  # sibling service names during partial `up -d <svc>` when the target container
+  # hasn't re-registered yet. Default Java behavior caches negative lookups for
+  # 10s, which poisons the JVM for its entire startup window and surfaces as
+  # `java.net.UnknownHostException: mysql: Temporary failure in name resolution`.
+  # Setting both TTLs to 0 forces every InetAddress.getByName() to re-query
+  # Docker's DNS, so a transient miss self-heals within one retry.
+  JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+
+# TASK-BE-046: `restart: on-failure:5` (previously added by BE-044) was rolled
+# back. Runtime verification showed the retry loop worsens half-committed state:
+# security-service's V0002 trigger migration gets flagged as "failed migration"
+# on retry, and admin-service's V0014 dev seed hits uk_admin_roles_name duplicate
+# key errors. On failure, containers now stay Exited so the operator can run
+# `docker compose down -v && up -d` for a clean cold start. JAVA_TOOL_OPTIONS
+# (DNS TTL=0) from BE-044 remains in effect above.
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL — reuses the same init script as local dev (creates 4 DBs + users)
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    # TASK-BE-045: raise max_connections so 4 services' HikariCP pools + flyway
+    # probes during simultaneous cold start don't exhaust MySQL's default (151).
+    command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      AUTH_DB_PASSWORD: auth_pass
+      ACCOUNT_DB_PASSWORD: account_pass
+      SECURITY_DB_PASSWORD: security_pass
+      ADMIN_DB_PASSWORD: admin_pass
+      COMMUNITY_DB_PASSWORD: community_pass
+      MEMBERSHIP_DB_PASSWORD: membership_pass
+    volumes:
+      - ./docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports: ["13306:3306"]
+    networks: [gap-e2e]
+
+  # ---------------------------------------------------------------------------
+  # Redis (no password for e2e simplicity)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports: ["16379:6379"]
+    networks: [gap-e2e]
+
+  # ---------------------------------------------------------------------------
+  # Kafka KRaft single-node
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.7.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qg
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    ports: ["19092:19092"]
+    networks: [gap-e2e]
+
+  # ---------------------------------------------------------------------------
+  # Kafka Topic Initializer — creates main + DLQ topics
+  # ---------------------------------------------------------------------------
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        sleep 3
+        KAFKA_BIN="/opt/kafka/bin"
+        BOOTSTRAP="kafka:9092"
+        TOPICS=(
+          "auth.login.attempted" "auth.login.failed" "auth.login.succeeded"
+          "auth.token.refreshed" "auth.token.reuse.detected"
+          "account.created" "account.status.changed" "account.locked"
+          "account.unlocked" "account.deleted"
+          "session.revoked"
+          "security.suspicious.detected" "security.auto.lock.triggered"
+          "admin.action.performed"
+        )
+        for t in "$${TOPICS[@]}"; do
+          $$KAFKA_BIN/kafka-topics.sh --bootstrap-server $$BOOTSTRAP \
+            --create --if-not-exists --topic "$$t" --partitions 3 --replication-factor 1 \
+            --config retention.ms=604800000 2>/dev/null && echo "Created: $$t"
+          $$KAFKA_BIN/kafka-topics.sh --bootstrap-server $$BOOTSTRAP \
+            --create --if-not-exists --topic "$$t.dlq" --partitions 1 --replication-factor 1 \
+            --config retention.ms=2592000000 2>/dev/null && echo "Created: $$t.dlq"
+        done
+        echo "=== Topic init complete ==="
+    restart: "no"
+    networks: [gap-e2e]
+
+  # ---------------------------------------------------------------------------
+  # Platform services
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    environment:
+      <<: *service-env
+      DB_NAME: auth_db
+      DB_USERNAME: auth_user
+      DB_PASSWORD: auth_pass
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    ports: ["18081:8081"]
+    networks: [gap-e2e]
+
+  account-service:
+    build:
+      context: .
+      dockerfile: apps/account-service/Dockerfile
+    environment:
+      <<: *service-env
+      DB_NAME: account_db
+      DB_USERNAME: account_user
+      DB_PASSWORD: account_pass
+      # TASK-BE-142: /internal/** is fail-closed when token is unset. Must match
+      # the value used by sibling services (admin-service, security-service).
+      INTERNAL_API_TOKEN: e2e-internal-token
+    # TASK-BE-045: stagger startup (auth -> account -> admin -> security) to
+    # spread initial HikariCP checkFailFast connection bursts on MySQL.
+    depends_on:
+      mysql: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18082:8082"]
+    networks: [gap-e2e]
+
+  security-service:
+    build:
+      context: .
+      dockerfile: apps/security-service/Dockerfile
+    environment:
+      <<: *service-env
+      DB_NAME: security_db
+      DB_USERNAME: security_user
+      DB_PASSWORD: security_pass
+      # TASK-BE-142: token used for outbound calls to account-service /internal/**.
+      # Must match account-service's INTERNAL_API_TOKEN.
+      INTERNAL_SERVICE_TOKEN: e2e-internal-token
+    # TASK-BE-045: last in the startup chain (auth -> account -> admin -> security).
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      admin-service: { condition: service_started }
+    ports: ["18084:8084"]
+    networks: [gap-e2e]
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: apps/admin-service/Dockerfile
+    environment:
+      <<: *service-env
+      DB_NAME: admin_db
+      DB_USERNAME: admin_user
+      DB_PASSWORD: admin_pass
+      AUTH_SERVICE_URL: http://auth-service:8081
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      SECURITY_SERVICE_URL: http://security-service:8084
+      INTERNAL_API_TOKEN: e2e-internal-token
+      # Fixed test keys (same PEM as admin-service unit tests). DO NOT use in prod.
+      ADMIN_JWT_V1_PEM: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwpwO4oW86ahUt
+        7qzFCSMA0fdzc6ehRRJgwsNekNaf9lcBC0kFmShJQQzoaWZXW9g/Qfdq8rIGpO0Q
+        +1I2s8U8xFlNunEdW/rzI0H1aKONIduiv/lN/u66+TZrRspeaH1vpuya7+YFEw1N
+        DMpjtEmuOwMi10RY5hMK/o7PJjRTq9EVacMErQOdchvrZOztlLugt3Y8K1BNxQ8B
+        ++fFSxGAstoI4QXWtnUpGpmaR0DUEj5wMAg9pr/doj22hR4WYjiC0Cixias/uLOu
+        XXTLQPk4Z/oM6Y783hpX+KDE0inwMhxj3uKD1+o9ceveIt4EyA0OqiNBlvFmTc82
+        xk5UmMQvAgMBAAECggEAG0y0NoQ8PDrIqyCHcqvGzQmlxCHLdhDGlk2DA8o+YNog
+        9/hWgJb6stdqt0ASoM2AzcXUBqMbAAvc1xL/0ZRWlt2BL5HwiSj9zzVTrClPnS/u
+        UWh5jqQnIJ4C2vFFtPFQ8UBKsGcClSYsmAux+1aRTGuyQGAkH9jueHR+fWTaEVPq
+        Zhmahubd62eATcPR5b5nTTAiEwWAV5AgpSkaD3vrQZEwud/lrbW4376xyVc3cJRK
+        inrjry4kBybeRIM9ElsOMI4EIfsyseLubG/bO5c/cSTnYeHLnPMyH8OA3CePx9a+
+        Oyp2FkKnwf/EgdWLJNolsSO3MYUXjIcH6/AowVzTgQKBgQDcnnycIxQy9B9ypKxm
+        JV1MUh6SagQ5oCHLZJWt3VBupYVUCMqvqgTQ9SiSQDddFSK5Kstpd6N049yiytyD
+        HBmigU0m8g2L94fJJ/M56a3xB2qzj4lkhTk1GSV5YBgT3XgGG3EexCiCM0MxfMlO
+        XDQPzqrmumIsPP2vgGZusmIujQKBgQDM+3ngGCiq/h1ixgKLZLiFQd9HOrT0x+nU
+        q07KEXvHuORDzLWw026+wbTsDWYDGARE/7HpVliLjLTjBk//Ih20C1BV3jzp+Mgp
+        oY4HomvtsRTrujYrTtPU/mEXOaUosRiRlXQ0KQTKMm9FdiA1nR7YKYQUwyeZcVYT
+        6Lkh661cqwKBgCRc8wkBNykW18AbqFbFvdUAjA1x7/RXknplv84CdmlmWs15DX9a
+        tKSEZAWHFBkBjNGcXh6qG4T+sbUbXrE1hnwkd8T9jIIPcJAVR5+6BnN913Z1KB4r
+        XzyDQov47L8Jd+j5yPFbP5oGPQMBIGUMCYC5fa299sR34RB2R2vjdw9ZAoGBAJfO
+        xnwIaFX6zJiSPOAvP9iw6ENAXzPJuoseM8PDHwDTFXqA6S6D58iufOc1JQ+1gbP4
+        CjLdF8aB9pUL38L76TOmDWEKreI5tUPfueg9ieEG/I934RZB0vAzVIR21LJGNgPb
+        w6u9lSaKI4415bTPIEDGvmMCBRnGrhEgkbtlZ4bxAoGAX7D0UjhAe2Md/uNxqdfY
+        UWRS9HKqjiVS8DFMw++9luj+rHaX6lhUarKb5vw1qf5T5HPPFHi2uDECXn7XMgxn
+        sGtyQkkPOviswzBjWzt6cGdi9D4SFrygtr0cpBOXM3UuHm7hfSwKg9O5UoWYs8JV
+        fOIvQyaNDTvxW+mx0Ds4Huo=
+        -----END PRIVATE KEY-----
+      ADMIN_TOTP_V1_KEY: REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=
+    # TASK-BE-045: third in the startup chain (auth -> account -> admin -> security).
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      account-service: { condition: service_started }
+    ports: ["18085:8085"]
+    networks: [gap-e2e]
+
+  # ---------------------------------------------------------------------------
+  # Gateway — edge proxy; routes to auth/account/admin services
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: .
+      dockerfile: apps/gateway-service/Dockerfile
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:8081
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      ADMIN_SERVICE_URL: http://admin-service:8085
+      JWKS_URL: http://auth-service:8081/internal/auth/jwks
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      account-service: { condition: service_started }
+      admin-service: { condition: service_started }
+    ports: ["18080:8080"]
+    networks: [gap-e2e]
+
+networks:
+  gap-e2e:
+    driver: bridge

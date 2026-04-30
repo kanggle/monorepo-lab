@@ -1,0 +1,18 @@
+rootProject.name = 'global-account-platform'
+
+include(
+    'libs:java-common',
+    'libs:java-messaging',
+    'libs:java-observability',
+    'libs:java-security',
+    'libs:java-test-support',
+    'libs:java-web',
+    'apps:account-service',
+    'apps:auth-service',
+    'apps:gateway-service',
+    'apps:security-service',
+    'apps:admin-service',
+    'apps:community-service',
+    'apps:membership-service',
+    'tests:e2e'
+)

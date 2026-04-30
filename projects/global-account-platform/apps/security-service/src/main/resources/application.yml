@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: security-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/security_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:security_user}
+    password: ${DB_PASSWORD:security_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 100ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    consumer:
+      group-id: security-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        max.poll.records: 100
+        max.poll.interval.ms: 300000
+        # ErrorHandlingDeserializer delegates: key is plain String, value is strict JSON validator.
+        # Malformed payloads raise DeserializationException, handled by DefaultErrorHandler + DLQ.
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: com.example.security.infrastructure.kafka.StrictJsonStringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+
+server:
+  port: 8084
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+
+security-service:
+  dedup:
+    redis-ttl-seconds: ${DEDUP_REDIS_TTL:86400}
+  internal-token: ${INTERNAL_SERVICE_TOKEN:}
+
+security:
+  detection:
+    velocity:
+      threshold: ${DETECT_VELOCITY_THRESHOLD:10}
+      window-seconds: ${DETECT_VELOCITY_WINDOW_SECONDS:3600}
+      score-weight: ${DETECT_VELOCITY_SCORE_WEIGHT:80}
+    geo:
+      speed-km-per-hour: ${DETECT_GEO_MAX_SPEED:900}
+      min-score: ${DETECT_GEO_MIN_SCORE:85}
+      score-slope: ${DETECT_GEO_SCORE_SLOPE:15}
+    device:
+      score: ${DETECT_DEVICE_SCORE:50}
+      alert-on-new: ${DETECT_DEVICE_ALERT_ON_NEW:true}
+    auto-lock:
+      account-service-base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}
+      max-attempts: ${AUTO_LOCK_MAX_ATTEMPTS:3}
+      initial-backoff-ms: ${AUTO_LOCK_INITIAL_BACKOFF_MS:200}
+      connect-timeout-ms: ${AUTO_LOCK_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${AUTO_LOCK_READ_TIMEOUT_MS:10000}
+    geoip:
+      db-path: ${GEOIP_DB_PATH:}
+    impossible-travel:
+      time-window-seconds: ${DETECT_IMPOSSIBLE_TRAVEL_WINDOW_SECONDS:3600}
+      score: ${DETECT_IMPOSSIBLE_TRAVEL_SCORE:70}
+    ip-reputation:
+      score: ${DETECT_IP_REPUTATION_SCORE:60}
+      suspicious-cidrs: ${DETECT_IP_REPUTATION_CIDRS:}

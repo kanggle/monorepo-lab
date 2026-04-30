@@ -1,0 +1,185 @@
+spring:
+  application:
+    name: admin-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/admin_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:admin_user}
+    password: ${DB_PASSWORD:admin_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    # Default (dev/local) locations include migration-dev which holds seed-only
+    # migrations (e.g. V0014 dev SUPER_ADMIN password). The prod profile
+    # overrides this to classpath:db/migration only. See application-prod.yml.
+    locations: classpath:db/migration,classpath:db/migration-dev
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 1s
+      connect-timeout: 1s
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+  topic-mapping:
+    admin.action.performed: admin.action.performed
+
+server:
+  port: 8085
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers,circuitbreakerevents
+  endpoint:
+    health:
+      group:
+        circuitbreakers:
+          include: circuitBreakers
+  health:
+    circuitbreakers:
+      enabled: true
+
+admin:
+  permission-cache:
+    ttl-seconds: ${ADMIN_PERM_CACHE_TTL_SECONDS:10}
+    key-prefix: ${ADMIN_PERM_CACHE_KEY_PREFIX:admin:operator:perm:}
+  jwt:
+    # Active kid used for newly minted operator tokens. Rotation: register a
+    # new kid under signing-keys, flip active-signing-kid, retire old kid
+    # once no tokens remain.
+    active-signing-kid: ${ADMIN_JWT_ACTIVE_KID:v1}
+    # kid -> PKCS#8 PEM private key. Override per environment.
+    signing-keys:
+      v1: ${ADMIN_JWT_V1_PEM:dev-only-placeholder-pkcs8}
+    issuer: ${ADMIN_JWT_ISSUER:admin-service}
+    expected-token-type: ${JWT_EXPECTED_TOKEN_TYPE:admin}
+    # Operator access token TTL (seconds). 029-3 default 1 hour.
+    access-token-ttl-seconds: ${ADMIN_JWT_ACCESS_TTL:3600}
+    # Operator refresh token TTL (seconds). 040 default 30 days.
+    refresh-token-ttl-seconds: ${ADMIN_JWT_REFRESH_TTL:2592000}
+    refresh-token-type: ${ADMIN_JWT_REFRESH_TYPE:admin_refresh}
+  totp:
+    # otpauth issuer label presented to the operator's authenticator app.
+    issuer: ${ADMIN_TOTP_ISSUER:admin-service}
+    # Active AES-GCM key kid used for NEW writes. Rotation: register a new
+    # kid under encryption-keys, flip encryption-key-id, retire old kid
+    # once no rows reference it (see security.md §Rotation Procedure).
+    encryption-key-id: ${ADMIN_TOTP_ACTIVE_KID:v1}
+    # kid -> base64 32-byte AES key. Override per environment (KMS/Vault
+    # in prod). dev placeholder is a fixed 32B key for local boot only.
+    encryption-keys:
+      v1: ${ADMIN_TOTP_V1_KEY:REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=}
+  downstream:
+    connect-timeout-ms: ${DOWNSTREAM_CONNECT_TIMEOUT:3000}
+    read-timeout-ms: ${DOWNSTREAM_READ_TIMEOUT:10000}
+    internal-token: ${INTERNAL_API_TOKEN:}
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+  security-service:
+    base-url: ${SECURITY_SERVICE_URL:http://localhost:8084}
+
+resilience4j:
+  retry:
+    instances:
+      accountService:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Integration-heavy I3: randomize backoff to avoid retry storms
+        # (thundering herd on downstream recovery).
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException
+      authService:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException
+      securityService:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5s
+    instances:
+      accountService:
+        base-config: default
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5s
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException
+      authService:
+        base-config: default
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5s
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException
+      securityService:
+        base-config: default
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5s
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - com.example.admin.application.exception.NonRetryableDownstreamException

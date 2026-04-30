@@ -1,0 +1,68 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Internal libs
+    implementation project(':libs:java-common')
+    implementation project(':libs:java-web')
+    implementation project(':libs:java-messaging')
+    implementation project(':libs:java-security')
+    implementation project(':libs:java-observability')
+
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Flyway
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
+
+    // MySQL
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // Jackson
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // JJWT (for parsing refresh tokens)
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // Resilience4j (circuit breaker + retry)
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+
+    // RestClient (Spring 6.1+)
+
+    // Test
+    // TASK-BE-078: AbstractIntegrationTest lives in testFixtures source set so
+    // Testcontainers classes stay out of the production classpath.
+    testImplementation testFixtures(project(':libs:java-test-support'))
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+    testImplementation 'org.testcontainers:kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation 'com.jayway.jsonpath:json-path'
+    testImplementation 'org.awaitility:awaitility'
+    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}
