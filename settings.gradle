@@ -37,3 +37,14 @@ include(
     'projects:ecommerce-microservices-platform:apps:shipping-service',
     'projects:ecommerce-microservices-platform:apps:user-service'
 )
+
+// Project: global-account-platform
+include(
+    'projects:global-account-platform:apps:account-service',
+    'projects:global-account-platform:apps:admin-service',
+    'projects:global-account-platform:apps:auth-service',
+    'projects:global-account-platform:apps:community-service',
+    'projects:global-account-platform:apps:gateway-service',
+    'projects:global-account-platform:apps:membership-service',
+    'projects:global-account-platform:apps:security-service'
+)
