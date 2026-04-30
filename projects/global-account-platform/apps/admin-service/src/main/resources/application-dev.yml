@@ -1,0 +1,48 @@
+# DEV PROFILE ONLY — FIXED TEST VALUES, never deploy to production
+#
+# Activated via `--spring.profiles.active=dev` (or SPRING_PROFILES_ACTIVE=dev).
+# Bakes in the JWT signing PEM / TOTP AES key so developers can run
+# `./gradlew :apps:admin-service:bootRun --args='--spring.profiles.active=dev'`
+# without exporting ADMIN_JWT_V1_PEM / ADMIN_TOTP_V1_KEY via shell.
+#
+# These are the exact same fixed test values embedded in docker-compose.e2e.yml
+# and admin-service unit tests. They are intentionally public. DO NOT reuse in
+# any deployed (staging/prod) environment — prod uses application-prod.yml and
+# real secret injection (env vars backed by Vault/KMS).
+admin:
+  jwt:
+    active-signing-kid: v1
+    signing-keys:
+      v1: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwpwO4oW86ahUt
+        7qzFCSMA0fdzc6ehRRJgwsNekNaf9lcBC0kFmShJQQzoaWZXW9g/Qfdq8rIGpO0Q
+        +1I2s8U8xFlNunEdW/rzI0H1aKONIduiv/lN/u66+TZrRspeaH1vpuya7+YFEw1N
+        DMpjtEmuOwMi10RY5hMK/o7PJjRTq9EVacMErQOdchvrZOztlLugt3Y8K1BNxQ8B
+        ++fFSxGAstoI4QXWtnUpGpmaR0DUEj5wMAg9pr/doj22hR4WYjiC0Cixias/uLOu
+        XXTLQPk4Z/oM6Y783hpX+KDE0inwMhxj3uKD1+o9ceveIt4EyA0OqiNBlvFmTc82
+        xk5UmMQvAgMBAAECggEAG0y0NoQ8PDrIqyCHcqvGzQmlxCHLdhDGlk2DA8o+YNog
+        9/hWgJb6stdqt0ASoM2AzcXUBqMbAAvc1xL/0ZRWlt2BL5HwiSj9zzVTrClPnS/u
+        UWh5jqQnIJ4C2vFFtPFQ8UBKsGcClSYsmAux+1aRTGuyQGAkH9jueHR+fWTaEVPq
+        Zhmahubd62eATcPR5b5nTTAiEwWAV5AgpSkaD3vrQZEwud/lrbW4376xyVc3cJRK
+        inrjry4kBybeRIM9ElsOMI4EIfsyseLubG/bO5c/cSTnYeHLnPMyH8OA3CePx9a+
+        Oyp2FkKnwf/EgdWLJNolsSO3MYUXjIcH6/AowVzTgQKBgQDcnnycIxQy9B9ypKxm
+        JV1MUh6SagQ5oCHLZJWt3VBupYVUCMqvqgTQ9SiSQDddFSK5Kstpd6N049yiytyD
+        HBmigU0m8g2L94fJJ/M56a3xB2qzj4lkhTk1GSV5YBgT3XgGG3EexCiCM0MxfMlO
+        XDQPzqrmumIsPP2vgGZusmIujQKBgQDM+3ngGCiq/h1ixgKLZLiFQd9HOrT0x+nU
+        q07KEXvHuORDzLWw026+wbTsDWYDGARE/7HpVliLjLTjBk//Ih20C1BV3jzp+Mgp
+        oY4HomvtsRTrujYrTtPU/mEXOaUosRiRlXQ0KQTKMm9FdiA1nR7YKYQUwyeZcVYT
+        6Lkh661cqwKBgCRc8wkBNykW18AbqFbFvdUAjA1x7/RXknplv84CdmlmWs15DX9a
+        tKSEZAWHFBkBjNGcXh6qG4T+sbUbXrE1hnwkd8T9jIIPcJAVR5+6BnN913Z1KB4r
+        XzyDQov47L8Jd+j5yPFbP5oGPQMBIGUMCYC5fa299sR34RB2R2vjdw9ZAoGBAJfO
+        xnwIaFX6zJiSPOAvP9iw6ENAXzPJuoseM8PDHwDTFXqA6S6D58iufOc1JQ+1gbP4
+        CjLdF8aB9pUL38L76TOmDWEKreI5tUPfueg9ieEG/I934RZB0vAzVIR21LJGNgPb
+        w6u9lSaKI4415bTPIEDGvmMCBRnGrhEgkbtlZ4bxAoGAX7D0UjhAe2Md/uNxqdfY
+        UWRS9HKqjiVS8DFMw++9luj+rHaX6lhUarKb5vw1qf5T5HPPFHi2uDECXn7XMgxn
+        sGtyQkkPOviswzBjWzt6cGdi9D4SFrygtr0cpBOXM3UuHm7hfSwKg9O5UoWYs8JV
+        fOIvQyaNDTvxW+mx0Ds4Huo=
+        -----END PRIVATE KEY-----
+  totp:
+    encryption-key-id: v1
+    encryption-keys:
+      v1: REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=

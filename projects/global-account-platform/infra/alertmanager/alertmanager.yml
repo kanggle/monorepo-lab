@@ -1,0 +1,56 @@
+# ============================================================
+# AlertManager 설정
+# 외부 알림 채널 연동은 Out of Scope — 설정 포인트만 제공
+# ============================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: 'critical'
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers:
+        - severity="warning"
+      receiver: 'warning'
+      repeat_interval: 4h
+
+receivers:
+  - name: 'default'
+    # 외부 알림 채널 연동 포인트
+    # Slack 예시:
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ'
+    #     channel: '#alerts'
+    #     send_resolved: true
+
+  - name: 'critical'
+    # CRITICAL 알림용 — PagerDuty, Slack 등 연동 가능
+    # pagerduty_configs:
+    #   - service_key: '<service-key>'
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ'
+    #     channel: '#alerts-critical'
+    #     send_resolved: true
+
+  - name: 'warning'
+    # WARNING 알림용
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ'
+    #     channel: '#alerts-warning'
+    #     send_resolved: true
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'service']

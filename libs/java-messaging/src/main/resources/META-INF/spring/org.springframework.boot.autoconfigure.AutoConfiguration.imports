@@ -1,1 +1,2 @@
 com.example.messaging.outbox.OutboxAutoConfiguration
+com.example.messaging.outbox.OutboxMetricsAutoConfiguration

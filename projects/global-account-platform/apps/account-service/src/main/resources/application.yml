@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: account-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/account_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:account_user}
+    password: ${DB_PASSWORD:account_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 50ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    consumer:
+      # TASK-BE-103: account-service consumes auth.login.succeeded to update
+      # accounts.last_login_succeeded_at. The group ID is independent from
+      # security-service's "security-service" group so both services receive
+      # every event.
+      group-id: account-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        "[enable.idempotence]": true
+        "[max.in.flight.requests.per.connection]": 1
+
+server:
+  port: 8082
+
+account:
+  deletion:
+    grace-period-days: ${DELETION_GRACE_PERIOD_DAYS:30}
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+  topic-mapping:
+    account.created: account.created
+    account.status.changed: account.status.changed
+    account.locked: account.locked
+    account.unlocked: account.unlocked
+    account.deleted: account.deleted
+
+internal:
+  api:
+    # Token used to authenticate /internal/** requests from sibling services. MUST be set in
+    # production; when unset and bypass-when-unconfigured=false (default), all /internal/**
+    # requests are rejected with 401 (fail-closed). The bypass flag is intended for
+    # @WebMvcTest slice tests and local development only — never enable in production.
+    token: ${INTERNAL_API_TOKEN:}
+    bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}

@@ -6,9 +6,21 @@ dependencies {
     // Jackson for JSON serialization support
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
+    // Spring Web (for CommonGlobalExceptionHandler @ExceptionHandler / ResponseEntity / web exceptions)
+    implementation 'org.springframework:spring-web'
+    implementation 'org.springframework:spring-webmvc'
+    implementation 'org.springframework:spring-orm'
+
+    // Jakarta Servlet API (transitively required by spring-web for ServletException type)
+    implementation 'jakarta.servlet:jakarta.servlet-api'
+
+    // SLF4J for @Slf4j logger (Lombok-generated)
+    implementation 'org.slf4j:slf4j-api'
+
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
 }
 
 dependencyManagement {

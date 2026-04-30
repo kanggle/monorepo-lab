@@ -1,0 +1,11 @@
+# Production overrides for admin-service.
+#
+# Key security invariant: db/migration-dev/** (which holds V0014 dev
+# SUPER_ADMIN password seed and any other dev-only seeds) MUST NOT be loaded
+# in production. This profile pins spring.flyway.locations to the canonical
+# schema-only path.
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false

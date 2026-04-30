@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: community-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/community_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:community_user}
+    password: ${DB_PASSWORD:community_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+
+  cache:
+    type: caffeine
+    cache-names: accountProfiles
+    caffeine:
+      spec: maximumSize=10000,expireAfterWrite=5m
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+
+server:
+  port: 8086
+
+community:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:classpath:keys/public.pem}
+    # TASK-BE-143: enforce iss claim. Must match auth.jwt.issuer in auth-service.
+    expected-issuer: ${JWT_EXPECTED_ISSUER:global-account-platform}
+  membership-service:
+    base-url: ${MEMBERSHIP_SERVICE_URL:http://localhost:8087}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      membershipService:
+        failure-rate-threshold: 50
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true

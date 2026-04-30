@@ -12,6 +12,15 @@ dependencies {
     // Spring Boot Autoconfigure (for @AutoConfiguration, @ConditionalOn*)
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
 
+    // Jackson (for BaseEventPublisher event serialization)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Bean Validation (for @ConfigurationProperties @NotEmpty in OutboxProperties)
+    implementation 'jakarta.validation:jakarta.validation-api'
+
+    // Micrometer (compileOnly — OutboxMetricsAutoConfiguration is conditional on MeterRegistry)
+    compileOnly 'io.micrometer:micrometer-core'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
@@ -21,6 +30,7 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'io.micrometer:micrometer-core'
 }
 
 dependencyManagement {
