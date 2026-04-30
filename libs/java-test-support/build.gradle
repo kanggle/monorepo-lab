@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+    id 'java-test-fixtures'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Testcontainers / spring-test must NOT leak into the production classpath
+    // of consumers. They live in the `java-test-fixtures` source set so the
+    // main `jar` of this module is empty (no Testcontainers classes) and
+    // consuming services pick up the base class via
+    //   testImplementation testFixtures(project(':libs:java-test-support'))
+    testFixturesApi 'org.springframework:spring-test'
+    testFixturesApi 'org.testcontainers:testcontainers'
+    testFixturesApi 'org.testcontainers:mysql'
+    testFixturesApi 'org.testcontainers:kafka'
+    // DockerAvailableCondition implements JUnit 5 ExecutionCondition; expose the
+    // API so consuming services pick up the extension transitively when they
+    // wire AbstractIntegrationTest.
+    testFixturesApi 'org.junit.jupiter:junit-jupiter-api'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}

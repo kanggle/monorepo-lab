@@ -79,6 +79,44 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
 
+      - name: Compile GAP backend (no integration tests yet)
+        # global-account-platform was imported via TASK-MONO-017 / TASK-MONO-018
+        # but its integration tests have not yet been split into a separate
+        # `:integrationTest` task (Testcontainers-backed). Until that work
+        # lands (separate follow-up task), the GAP CI gate is limited to
+        # `:compileJava + :compileTestJava` for the 7 backend services plus
+        # an explicit `--tests *OutboxPollingScheduler*` run that exercises
+        # the new outbox scheduler subclasses without booting a Spring
+        # ApplicationContext.
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:apps:auth-service:compileJava
+          :projects:global-account-platform:apps:auth-service:compileTestJava
+          :projects:global-account-platform:apps:account-service:compileJava
+          :projects:global-account-platform:apps:account-service:compileTestJava
+          :projects:global-account-platform:apps:admin-service:compileJava
+          :projects:global-account-platform:apps:admin-service:compileTestJava
+          :projects:global-account-platform:apps:community-service:compileJava
+          :projects:global-account-platform:apps:community-service:compileTestJava
+          :projects:global-account-platform:apps:gateway-service:compileJava
+          :projects:global-account-platform:apps:gateway-service:compileTestJava
+          :projects:global-account-platform:apps:membership-service:compileJava
+          :projects:global-account-platform:apps:membership-service:compileTestJava
+          :projects:global-account-platform:apps:security-service:compileJava
+          :projects:global-account-platform:apps:security-service:compileTestJava
+          --no-daemon --stacktrace
+
+      - name: Run GAP outbox scheduler unit tests
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:apps:auth-service:test --tests "com.example.auth.infrastructure.event.AuthOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:account-service:test --tests "com.example.account.infrastructure.event.AccountOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:admin-service:test --tests "com.example.admin.infrastructure.event.AdminOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:community-service:test --tests "com.example.community.infrastructure.event.CommunityOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:membership-service:test --tests "com.example.membership.infrastructure.event.MembershipOutboxPollingSchedulerTest"
+          :projects:global-account-platform:apps:security-service:test --tests "com.example.security.infrastructure.event.SecurityOutboxPollingSchedulerTest"
+          --no-daemon --stacktrace
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
