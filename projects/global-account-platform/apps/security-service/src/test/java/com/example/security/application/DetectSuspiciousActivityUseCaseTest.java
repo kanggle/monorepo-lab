@@ -1,6 +1,7 @@
 package com.example.security.application;
 
 import com.example.security.application.event.SecurityEventPublisher;
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.*;
 import com.example.security.domain.suspicious.SuspiciousEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -32,7 +33,8 @@ class DetectSuspiciousActivityUseCaseTest {
     @Mock SuspiciousActivityRule quietRule;
 
     private EvaluationContext ctx() {
-        return new EvaluationContext("evt-1", "auth.login.succeeded", "acc-1",
+        return new EvaluationContext(Tenants.DEFAULT_TENANT_ID,
+                "evt-1", "auth.login.succeeded", "acc-1",
                 "1.2.3.***", "fp-1", "US", Instant.now(), null);
     }
 
@@ -45,6 +47,7 @@ class DetectSuspiciousActivityUseCaseTest {
                     DetectionResult w = agg.winner();
                     return SuspiciousEvent.create(
                             UUID.randomUUID().toString(),
+                            c.tenantId() != null ? c.tenantId() : Tenants.DEFAULT_TENANT_ID,
                             c.accountId(),
                             w.ruleCode(),
                             w.riskScore(),

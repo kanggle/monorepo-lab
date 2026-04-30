@@ -36,6 +36,7 @@ public class SuspiciousEventRepositoryImpl implements SuspiciousEventRepository 
         }
         SuspiciousEventJpaEntity entity = SuspiciousEventJpaEntity.create(
                 event.getId(),
+                event.getTenantId(),
                 event.getAccountId(),
                 event.getRuleCode(),
                 event.getRiskScore(),
@@ -54,9 +55,11 @@ public class SuspiciousEventRepositoryImpl implements SuspiciousEventRepository 
     }
 
     @Override
-    public List<SuspiciousEvent> findByAccountAndRange(String accountId, Instant from, Instant to, int limit) {
+    public List<SuspiciousEvent> findByAccountAndRange(String tenantId, String accountId,
+                                                       Instant from, Instant to, int limit) {
         return jpaRepository
-                .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(accountId, from, to)
+                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                        tenantId, accountId, from, to)
                 .stream()
                 .limit(limit <= 0 ? 100 : limit)
                 .map(this::toDomain)
@@ -66,7 +69,7 @@ public class SuspiciousEventRepositoryImpl implements SuspiciousEventRepository 
     private SuspiciousEvent toDomain(SuspiciousEventJpaEntity e) {
         Map<String, Object> evidence = readEvidence(e.getEvidence());
         SuspiciousEvent event = SuspiciousEvent.create(
-                e.getId(), e.getAccountId(), e.getRuleCode(), e.getRiskScore(),
+                e.getId(), e.getTenantId(), e.getAccountId(), e.getRuleCode(), e.getRiskScore(),
                 RiskLevel.valueOf(e.getActionTaken()), evidence, e.getTriggerEventId(), e.getDetectedAt());
         return event.withLockRequestResult(e.getLockRequestResult());
     }

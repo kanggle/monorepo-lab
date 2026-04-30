@@ -22,6 +22,11 @@ public class AccountLockHistoryJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // TASK-BE-248: tenant_id leads
+    // idx_account_lock_history_tenant_account_occurred (V0008 migration).
+    @Column(name = "tenant_id", nullable = false, length = 32)
+    private String tenantId;
+
     @Column(name = "event_id", nullable = false, unique = true, length = 36)
     private String eventId;
 
@@ -43,10 +48,11 @@ public class AccountLockHistoryJpaEntity {
     @Column(name = "received_at", nullable = false, insertable = false, updatable = false)
     private Instant receivedAt;
 
-    public static AccountLockHistoryJpaEntity create(String eventId, String accountId,
+    public static AccountLockHistoryJpaEntity create(String tenantId, String eventId, String accountId,
                                                       String reason, String lockedBy,
                                                       String source, Instant occurredAt) {
         AccountLockHistoryJpaEntity e = new AccountLockHistoryJpaEntity();
+        e.tenantId = tenantId;
         e.eventId = eventId;
         e.accountId = accountId;
         e.reason = reason;

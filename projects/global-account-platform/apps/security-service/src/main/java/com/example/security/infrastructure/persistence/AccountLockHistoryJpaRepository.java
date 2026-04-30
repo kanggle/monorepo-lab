@@ -9,5 +9,10 @@ public interface AccountLockHistoryJpaRepository extends JpaRepository<AccountLo
 
     Optional<AccountLockHistoryJpaEntity> findByEventId(String eventId);
 
-    List<AccountLockHistoryJpaEntity> findByAccountIdOrderByOccurredAtDesc(String accountId);
+    /**
+     * TASK-BE-248: tenant-scoped account history. Uses the V0008 leading
+     * {@code (tenant_id, account_id, occurred_at DESC)} index.
+     */
+    List<AccountLockHistoryJpaEntity> findByTenantIdAndAccountIdOrderByOccurredAtDesc(
+            String tenantId, String accountId);
 }

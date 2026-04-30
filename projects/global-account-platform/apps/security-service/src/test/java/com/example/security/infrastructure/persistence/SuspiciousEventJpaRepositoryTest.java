@@ -1,5 +1,6 @@
 package com.example.security.infrastructure.persistence;
 
+import com.example.security.domain.Tenants;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,8 +71,8 @@ class SuspiciousEventJpaRepositoryTest {
         repo.saveAndFlush(event(accountId, t2));
 
         List<SuspiciousEventJpaEntity> result = repo
-                .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                        accountId, t1.minusSeconds(1), t3.plusSeconds(1));
+                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                        Tenants.DEFAULT_TENANT_ID, accountId, t1.minusSeconds(1), t3.plusSeconds(1));
 
         assertThat(result).hasSize(3);
         assertThat(result.get(0).getDetectedAt()).isEqualTo(t3);
@@ -88,8 +89,8 @@ class SuspiciousEventJpaRepositoryTest {
         repo.saveAndFlush(event(accountId, now.plusSeconds(200)));
 
         List<SuspiciousEventJpaEntity> result = repo
-                .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                        accountId, now.minusSeconds(100), now.plusSeconds(100));
+                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                        Tenants.DEFAULT_TENANT_ID, accountId, now.minusSeconds(100), now.plusSeconds(100));
 
         assertThat(result).isEmpty();
     }
@@ -103,8 +104,8 @@ class SuspiciousEventJpaRepositoryTest {
         repo.saveAndFlush(event(accountA, now));
 
         List<SuspiciousEventJpaEntity> result = repo
-                .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                        accountB, now.minusSeconds(60), now.plusSeconds(60));
+                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                        Tenants.DEFAULT_TENANT_ID, accountB, now.minusSeconds(60), now.plusSeconds(60));
 
         assertThat(result).isEmpty();
     }
@@ -113,8 +114,8 @@ class SuspiciousEventJpaRepositoryTest {
     @DisplayName("findByAccountIdAndDetectedAtBetween — 이벤트 없음 → 빈 목록")
     void findByAccountIdAndDetectedAtBetween_noEvents_returnsEmpty() {
         Instant now = Instant.now();
-        assertThat(repo.findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                uuid(), now.minusSeconds(60), now)).isEmpty();
+        assertThat(repo.findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                Tenants.DEFAULT_TENANT_ID, uuid(), now.minusSeconds(60), now)).isEmpty();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ class SuspiciousEventJpaRepositoryTest {
     private static SuspiciousEventJpaEntity event(String accountId, Instant detectedAt) {
         return SuspiciousEventJpaEntity.create(
                 UUID.randomUUID().toString(),
+                Tenants.DEFAULT_TENANT_ID,
                 accountId,
                 "BRUTE_FORCE",
                 70,

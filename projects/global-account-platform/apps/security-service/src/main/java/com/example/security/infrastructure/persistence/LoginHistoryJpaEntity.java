@@ -17,6 +17,11 @@ public class LoginHistoryJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // TASK-BE-248: tenant_id is the leading column on the per-account indexes
+    // (idx_login_history_tenant_account / _outcome) — see V0008 migration.
+    @Column(name = "tenant_id", nullable = false, length = 32)
+    private String tenantId;
+
     @Column(name = "event_id", nullable = false, unique = true)
     private String eventId;
 
@@ -44,11 +49,12 @@ public class LoginHistoryJpaEntity {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
-    public static LoginHistoryJpaEntity from(String eventId, String accountId, String outcome,
+    public static LoginHistoryJpaEntity from(String tenantId, String eventId, String accountId, String outcome,
                                               String ipMasked, String userAgentFamily,
                                               String deviceFingerprint, String geoCountry,
                                               Instant occurredAt) {
         LoginHistoryJpaEntity entity = new LoginHistoryJpaEntity();
+        entity.tenantId = tenantId;
         entity.eventId = eventId;
         entity.accountId = accountId;
         entity.outcome = outcome;

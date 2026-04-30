@@ -1,5 +1,6 @@
 package com.example.security.infrastructure.client;
 
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.AccountLockClient.LockResult;
 import com.example.security.domain.detection.AccountLockClient.Status;
 import com.example.security.domain.detection.RiskLevel;
@@ -133,6 +134,7 @@ class AccountServiceClientUnitTest {
     private static SuspiciousEvent buildEvent(String accountId) {
         return SuspiciousEvent.create(
                 "evt-test-1",
+                Tenants.DEFAULT_TENANT_ID,
                 accountId,
                 "CREDENTIAL_STUFFING",
                 90,

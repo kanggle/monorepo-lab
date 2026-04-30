@@ -1,5 +1,6 @@
 package com.example.security.query;
 
+import com.example.security.domain.Tenants;
 import com.example.security.infrastructure.persistence.LoginHistoryJpaEntity;
 import com.example.security.infrastructure.persistence.LoginHistoryJpaRepository;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaEntity;
@@ -34,15 +35,19 @@ public class SecurityQueryService {
 
     public Page<SuspiciousEventView> findSuspiciousEvents(
             String accountId, Instant from, Instant to, String ruleCode, Pageable pageable) {
+        // TASK-BE-248 Phase 1: query routes are not yet tenant-scoped at the
+        // controller layer. Default to Tenants.DEFAULT_TENANT_ID; Phase 2 will
+        // thread X-Tenant-Id from the gateway through to the JPA finder.
+        String tenantId = Tenants.DEFAULT_TENANT_ID;
         Page<SuspiciousEventJpaEntity> page;
         if (ruleCode != null && !ruleCode.isBlank()) {
             page = suspiciousEventJpaRepository
-                    .findByAccountIdAndRuleCodeAndDetectedAtBetweenOrderByDetectedAtDesc(
-                            accountId, ruleCode, from, to, pageable);
+                    .findByTenantIdAndAccountIdAndRuleCodeAndDetectedAtBetweenOrderByDetectedAtDesc(
+                            tenantId, accountId, ruleCode, from, to, pageable);
         } else {
             page = suspiciousEventJpaRepository
-                    .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                            accountId, from, to, pageable);
+                    .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                            tenantId, accountId, from, to, pageable);
         }
         return page.map(this::toView);
     }
@@ -63,8 +68,10 @@ public class SecurityQueryService {
 
     public Page<LoginHistoryView> findLoginHistory(String accountId, Instant from, Instant to,
                                                     String outcome, Pageable pageable) {
-        Page<LoginHistoryJpaEntity> page = loginHistoryJpaRepository.findByAccountIdAndFilters(
-                accountId, from, to, outcome, pageable);
+        // TASK-BE-248 Phase 1 placeholder — see findSuspiciousEvents above.
+        String tenantId = Tenants.DEFAULT_TENANT_ID;
+        Page<LoginHistoryJpaEntity> page = loginHistoryJpaRepository.findByTenantAndAccountAndFilters(
+                tenantId, accountId, from, to, outcome, pageable);
 
         return page.map(this::toView);
     }

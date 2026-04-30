@@ -50,7 +50,7 @@ public class ImpossibleTravelRule implements SuspiciousActivityRule {
         }
 
         Optional<LoginHistoryEntry> maybePrevious =
-                loginHistoryRepository.findLatestSuccessByAccountId(ctx.accountId());
+                loginHistoryRepository.findLatestSuccessByAccountId(ctx.tenantId(), ctx.accountId());
         if (maybePrevious.isEmpty()) {
             return DetectionResult.NONE;
         }

@@ -1,6 +1,7 @@
 package com.example.security.application.event;
 
 import com.example.messaging.outbox.OutboxWriter;
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.AccountLockClient;
 import com.example.security.domain.detection.RiskLevel;
 import com.example.security.domain.suspicious.SuspiciousEvent;
@@ -51,6 +52,7 @@ class SecurityEventPublisherTest {
         evidence.put("country", "KR");
         return SuspiciousEvent.create(
                 "evt-" + UUID.randomUUID(),
+                Tenants.DEFAULT_TENANT_ID,
                 accountId,
                 "RULE_GEO_VELOCITY",
                 75,
