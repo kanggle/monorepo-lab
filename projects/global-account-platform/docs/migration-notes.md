@@ -52,3 +52,35 @@ already has an abstract version used by WMS and ecommerce. The new supporting cl
 
 The concrete scheduler for global-account apps is deferred to TASK-MONO-018 (CI wiring),
 where each app will register a project-level `@Configuration` that wires the scheduler.
+
+## Standalone catch-up (2026-04-30, post-TASK-MONO-017)
+
+The original TASK-MONO-017 import captured standalone commit `9830ecb` (TASK-BE-230
+review approval). After the import, work on the standalone progressed to commit
+`34ef5e9` adding TASK-BE-234..247 + TASK-FE-025..026 (e2e platform fixes, OAuth client
+hardening, signup half-commit idempotency, admin-web env schema, dashboard tab boundary).
+
+To preserve that work without losing it on the next `sync-portfolio.sh` force-push,
+the 39 changed `apps/*`, `specs/*`, `tasks/done/*` files were copied forward from
+standalone master into `projects/global-account-platform/`.
+
+### Skipped during catch-up
+
+- `libs/java-messaging/.../OutboxPollingScheduler.java` — standalone applied
+  `ApplicationReadyEvent`-based lifecycle + idempotency guard (TASK-BE-243, BE-245)
+  to the standalone's *concrete* scheduler. The monorepo's libs class is
+  *abstract* with `@Scheduled`-driven polling (subclasses extend per-service in
+  TASK-MONO-018). The race condition that TASK-BE-243 fixes does not apply to
+  `@Scheduled`-driven invocation — Spring waits for context init before firing
+  scheduled methods. Kept the monorepo design; recorded the design difference here.
+- `platform/testing-strategy.md` — monorepo has its own root `platform/` copy.
+  Standalone's edits to this file were intended for the standalone-local platform/
+  folder, which Phase 4 of TASK-MONO-017 deleted.
+- `.github/dependabot.yml` — monorepo has its own root `.github/` configuration.
+
+### Renumbered
+
+PR #96 originally drafted `TASK-BE-234`, `TASK-BE-235`, `TASK-BE-236` for the
+multi-tenancy gap-fill work. Those IDs are now occupied by standalone fix tasks.
+Renumbered to `TASK-BE-248`, `TASK-BE-249`, `TASK-BE-250` to start fresh after the
+standalone's last assigned number (`TASK-BE-247`).

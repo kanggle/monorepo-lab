@@ -133,6 +133,7 @@ services:
           "account.unlocked" "account.deleted"
           "session.revoked"
           "security.suspicious.detected" "security.auto.lock.triggered"
+          "security.auto.lock.pending"
           "admin.action.performed"
         )
         for t in "$${TOPICS[@]}"; do
@@ -176,6 +177,11 @@ services:
       DB_NAME: account_db
       DB_USERNAME: account_user
       DB_PASSWORD: account_pass
+      # TASK-BE-246: account-service delegates credential write to auth-service
+      # during signup. Without this, application.yml falls back to
+      # http://localhost:8081 which targets the account container itself in
+      # Docker, causing all signup attempts to fail with AUTH_SERVICE_UNAVAILABLE.
+      AUTH_SERVICE_URL: http://auth-service:8081
       # TASK-BE-142: /internal/** is fail-closed when token is unset. Must match
       # the value used by sibling services (admin-service, security-service).
       INTERNAL_API_TOKEN: e2e-internal-token

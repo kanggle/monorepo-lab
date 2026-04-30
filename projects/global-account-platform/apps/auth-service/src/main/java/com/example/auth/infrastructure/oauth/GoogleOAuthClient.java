@@ -4,6 +4,7 @@ import com.example.auth.domain.oauth.OAuthProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -29,6 +30,15 @@ public class GoogleOAuthClient implements OAuthClient {
     private final ObjectMapper objectMapper;
     private final OidcJwksVerifier idTokenVerifier;
 
+    /**
+     * Production constructor — Spring uses this one. The {@code @Autowired}
+     * annotation is required because this class declares a second
+     * (package-private) constructor for testability; with multiple constructors
+     * Spring 6.x cannot auto-select one and falls back to looking for a no-arg
+     * constructor, which fails ({@code "No default constructor found"}).
+     * See TASK-BE-237.
+     */
+    @Autowired
     public GoogleOAuthClient(OAuthProperties oAuthProperties, ObjectMapper objectMapper) {
         this(oAuthProperties, objectMapper, RestClient.builder().build());
     }

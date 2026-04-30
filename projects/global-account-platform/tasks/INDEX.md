@@ -72,7 +72,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — first task set will be TASK-BE-001 ~ TASK-BE-007)
+Multi-tenancy gap-fill (post `multi-tenant` trait adoption on 2026-04-29):
+
+- `TASK-BE-248-security-service-tenant-events.md` — security-service `tenant_id` 페이로드/스키마/per-tenant detection
+- `TASK-BE-249-admin-service-tenant-audit-schema.md` — admin schema `tenant_id` + tenant-scoped audit query
+- `TASK-BE-250-admin-service-tenant-management-api.md` — `POST/PATCH /api/admin/tenants` lifecycle API
+
+Recommended order: 248 → 249 → 250 (security events first because they unblock per-tenant detection; admin schema next because TASK-BE-250 depends on it).
 
 ## in-progress
 
@@ -84,4 +90,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
-(empty — this project started fresh, no completed tasks yet)
+247 backend tasks + 26 frontend tasks completed (latest standalone-master commit
+captured: `34ef5e9` on 2026-04-30, post-`9830ecb` catch-up sync). Latest BE:
+TASK-BE-247 (signup half-commit idempotency); latest FE: TASK-FE-026 (DashboardTabs
+server/client boundary). Numbers TASK-BE-238/239/240/244 were not assigned.
