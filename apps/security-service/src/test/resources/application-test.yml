@@ -1,0 +1,101 @@
+spring:
+  application:
+    name: security-service-test
+
+  # TASK-BE-075: Hikari validation options for Testcontainers MySQL.
+  # Rationale: CI observed stale pool connections reused across context
+  # boundaries, surfacing as Communications link failure inside
+  # OutboxPollingScheduler. These options force validation and aggressive
+  # recycling during the short test lifetime.
+  # Invariants: max-lifetime > keepalive-time (Hikari requirement).
+  datasource:
+    hikari:
+      validation-timeout: 3000
+      connection-test-query: SELECT 1
+      max-lifetime: 60000
+      keepalive-time: 30000
+      leak-detection-threshold: 10000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  kafka:
+    consumer:
+      group-id: security-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # TASK-BE-075: reconnect backoff tuning for Testcontainers Kafka.
+      # CI sees random port assignment between container restarts; aggressive
+      # reconnect helps the Consumer recover from transient broker drops.
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # TASK-BE-070: extend reconnect backoff and request timeout so producer
+      # tests tolerate slow Testcontainers Kafka startup / transient broker drops.
+      # TASK-BE-075: add reconnect.backoff.max.ms + tighten reconnect.backoff.ms.
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+
+outbox:
+  polling:
+    interval-ms: 60000
+    batch-size: 10
+
+server:
+  port: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+security-service:
+  dedup:
+    redis-ttl-seconds: 60
+  internal-token: test-internal-token
+
+# TASK-BE-032: override detection thresholds for test runs.
+# Demonstrates that rule behaviour is config-driven and can be tuned
+# without code changes. Values are intentionally close to defaults so
+# integration tests remain deterministic.
+security:
+  detection:
+    velocity:
+      threshold: 5
+      window-seconds: 600
+      score-weight: 80
+    geo:
+      speed-km-per-hour: 900
+      min-score: 85
+      score-slope: 15
+    device:
+      score: 50
+      alert-on-new: true
+    auto-lock:
+      account-service-base-url: http://localhost:0
+      max-attempts: 2
+      initial-backoff-ms: 50
+      connect-timeout-ms: 500
+      read-timeout-ms: 2000
+    geoip:
+      db-path: ""

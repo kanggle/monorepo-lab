@@ -1,0 +1,40 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Jackson (for BaseEventPublisher payload serialization)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Spring Data JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Spring Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Spring Boot Autoconfigure (for @AutoConfiguration, @ConditionalOn*)
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // Bean Validation (for @NotEmpty on OutboxProperties)
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Micrometer — compileOnly for @ConditionalOnClass; services supply runtime dependency
+    compileOnly 'io.micrometer:micrometer-core'
+    testImplementation 'io.micrometer:micrometer-core'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}

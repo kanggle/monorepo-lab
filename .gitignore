@@ -1,0 +1,44 @@
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Cryptographic keys — production main resources only.
+# Test fixture keys under src/test/resources/keys/ remain tracked.
+apps/*/src/main/resources/keys/*.pem
+apps/*/src/main/resources/keys/*.key
+!apps/*/src/main/resources/keys/*.pem.example
+!apps/*/src/main/resources/keys/*.key.example
+
+# Local H2 database files
+/data/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+.gradle/
+.next/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/worktrees/
+.turbo/
+*/data/*.mv.db
+*/data/*.lock.db

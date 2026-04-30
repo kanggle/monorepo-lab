@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: membership-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/membership_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:membership_user}
+    password: ${DB_PASSWORD:membership_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 50ms
+
+server:
+  port: 8087
+
+outbox:
+  topic-mapping:
+    membership.subscription.activated: membership.subscription.activated
+    membership.subscription.expired: membership.subscription.expired
+    membership.subscription.cancelled: membership.subscription.cancelled
+
+internal:
+  api:
+    # Shared secret for X-Internal-Token on /internal/** routes. MUST be set in
+    # production; when unset and bypass-when-unconfigured=false (default), all
+    # /internal/** requests are rejected with 401 (fail-closed).
+    token: ${INTERNAL_API_TOKEN:}
+    # Bypass token enforcement when the expected token is unconfigured. Intended
+    # for local development and slice tests; production must keep this false.
+    bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}
+
+membership:
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+    connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:2000}
+    read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:3000}
+    internal-token: ${ACCOUNT_SERVICE_INTERNAL_TOKEN:}
+  idempotency:
+    ttl-seconds: ${IDEMPOTENCY_TTL_SECONDS:86400}
+  scheduler:
+    expiry-fixed-delay-ms: ${EXPIRY_SCHEDULER_DELAY_MS:3600000}
+    expiry-batch-size: ${EXPIRY_SCHEDULER_BATCH_SIZE:100}

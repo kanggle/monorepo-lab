@@ -1,0 +1,66 @@
+{
+  "uid": "system-overview",
+  "title": "System Overview — All Services",
+  "tags": ["overview", "platform"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service Health (up)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "up", "legendFormat": "{{job}}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+    },
+    {
+      "id": 2,
+      "title": "Error Rate % (5xx) by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) by (service) / sum(rate(http_server_requests_seconds_count[5m])) by (service) * 100",
+        "legendFormat": "{{service}}",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "percent" } }
+    },
+    {
+      "id": 3,
+      "title": "P99 Latency heatmap",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_bucket[5m])) by (le)",
+        "format": "heatmap",
+        "legendFormat": "{{le}}",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Request Rate by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (service)",
+        "legendFormat": "{{service}}",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    }
+  ]
+}

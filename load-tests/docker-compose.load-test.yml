@@ -1,0 +1,82 @@
+# k6 부하 테스트 실행용 docker-compose
+# 사용법: docker-compose -f docker-compose.load-test.yml run --rm k6-auth
+#
+# 전제조건: 메인 docker-compose.yml 스택이 실행 중이어야 합니다.
+# network_mode: host를 사용하여 호스트의 localhost:8080(gateway)에 접근합니다.
+
+services:
+
+  k6-auth:
+    image: grafana/k6:0.50.0
+    container_name: k6-auth
+    volumes:
+      - ./scenarios:/load-tests/scenarios
+      - ./lib:/load-tests/lib
+      - ./results:/results
+    environment:
+      - BASE_URL=http://localhost:8080
+      - K6_OUT=json=/results/auth-result.json
+    command: run /load-tests/scenarios/auth-load-test.js
+    network_mode: host
+    profiles:
+      - auth
+
+  k6-search:
+    image: grafana/k6:0.50.0
+    container_name: k6-search
+    volumes:
+      - ./scenarios:/load-tests/scenarios
+      - ./lib:/load-tests/lib
+      - ./results:/results
+    environment:
+      - BASE_URL=http://localhost:8080
+      - K6_OUT=json=/results/search-result.json
+    command: run /load-tests/scenarios/search-load-test.js
+    network_mode: host
+    profiles:
+      - search
+
+  k6-order:
+    image: grafana/k6:0.50.0
+    container_name: k6-order
+    volumes:
+      - ./scenarios:/load-tests/scenarios
+      - ./lib:/load-tests/lib
+      - ./results:/results
+    environment:
+      - BASE_URL=http://localhost:8080
+      - K6_OUT=json=/results/order-result.json
+    command: run /load-tests/scenarios/order-load-test.js
+    network_mode: host
+    profiles:
+      - order
+
+  k6-payment:
+    image: grafana/k6:0.50.0
+    container_name: k6-payment
+    volumes:
+      - ./scenarios:/load-tests/scenarios
+      - ./lib:/load-tests/lib
+      - ./results:/results
+    environment:
+      - BASE_URL=http://localhost:8080
+      - K6_OUT=json=/results/payment-result.json
+    command: run /load-tests/scenarios/payment-load-test.js
+    network_mode: host
+    profiles:
+      - payment
+
+  k6-e2e:
+    image: grafana/k6:0.50.0
+    container_name: k6-e2e
+    volumes:
+      - ./scenarios:/load-tests/scenarios
+      - ./lib:/load-tests/lib
+      - ./results:/results
+    environment:
+      - BASE_URL=http://localhost:8080
+      - K6_OUT=json=/results/e2e-result.json
+    command: run /load-tests/scenarios/e2e-flow-load-test.js
+    network_mode: host
+    profiles:
+      - e2e

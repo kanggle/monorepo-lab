@@ -1,0 +1,111 @@
+spring:
+  application:
+    name: auth-service
+  config:
+    import: optional:classpath:application-defaults.yml
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:auth_user}
+    password: ${DB_PASSWORD:auth_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 50ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+  topic-mapping:
+    auth.login.attempted: auth.login.attempted
+    auth.login.failed: auth.login.failed
+    auth.login.succeeded: auth.login.succeeded
+    auth.token.refreshed: auth.token.refreshed
+    auth.token.reuse.detected: auth.token.reuse.detected
+    auth.session.created: auth.session.created
+    auth.session.revoked: auth.session.revoked
+
+server:
+  port: 8081
+
+oauth:
+  google:
+    client-id: ${OAUTH_GOOGLE_CLIENT_ID:test-google-client-id}
+    client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:test-google-client-secret}
+    redirect-uri: ${OAUTH_GOOGLE_REDIRECT_URI:http://localhost:3000/oauth/callback}
+    # Server-side allowlist of redirect URIs (exact-string match). Comma-separated env var.
+    allowed-redirect-uris: ${OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    scopes: openid,email,profile
+    token-uri: https://oauth2.googleapis.com/token
+    auth-uri: https://accounts.google.com/o/oauth2/v2/auth
+    # TASK-BE-145: id_token signature + iss + aud + exp verification.
+    # Google publishes both 'https://accounts.google.com' and 'accounts.google.com' as iss.
+    jwks-uri: ${OAUTH_GOOGLE_JWKS_URI:https://www.googleapis.com/oauth2/v3/certs}
+    expected-issuer-pattern: ${OAUTH_GOOGLE_ISSUER_PATTERN:^(https://)?accounts\.google\.com$}
+  kakao:
+    client-id: ${OAUTH_KAKAO_CLIENT_ID:test-kakao-client-id}
+    client-secret: ${OAUTH_KAKAO_CLIENT_SECRET:test-kakao-client-secret}
+    redirect-uri: ${OAUTH_KAKAO_REDIRECT_URI:http://localhost:3000/oauth/callback}
+    allowed-redirect-uris: ${OAUTH_KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    scopes: account_email,profile_nickname
+    token-uri: https://kauth.kakao.com/oauth/token
+    auth-uri: https://kauth.kakao.com/oauth/authorize
+    user-info-uri: https://kapi.kakao.com/v2/user/me
+    # Kakao does not return an id_token — JWKS verification is not applied.
+  microsoft:
+    client-id: ${OAUTH_MICROSOFT_CLIENT_ID:test-microsoft-client-id}
+    client-secret: ${OAUTH_MICROSOFT_CLIENT_SECRET:test-microsoft-client-secret}
+    redirect-uri: ${OAUTH_MICROSOFT_REDIRECT_URI:http://localhost:3000/oauth/callback}
+    allowed-redirect-uris: ${OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    scopes: openid,email,profile
+    token-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT:common}/oauth2/v2.0/token
+    auth-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT:common}/oauth2/v2.0/authorize
+    # TASK-BE-145: id_token JWKS verification. Microsoft tenant=common returns
+    # iss containing the actual user tenant guid — regex pattern below allows that.
+    jwks-uri: ${OAUTH_MICROSOFT_JWKS_URI:https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT:common}/discovery/v2.0/keys}
+    expected-issuer-pattern: ${OAUTH_MICROSOFT_ISSUER_PATTERN:^https://login\.microsoftonline\.com/[^/]+/v2\.0$}
+
+auth:
+  jwt:
+    issuer: global-account-platform
+    access-token-ttl-seconds: ${JWT_ACCESS_TTL:1800}
+    refresh-token-ttl-seconds: ${JWT_REFRESH_TTL:604800}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:classpath:keys/private.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:classpath:keys/public.pem}
+    kid: ${JWT_KID:key-2026-04-01}
+  login:
+    max-failure-count: ${LOGIN_MAX_FAILURES:5}
+    failure-window-seconds: ${LOGIN_FAILURE_WINDOW:900}
+  password-reset:
+    rate-limit:
+      # TASK-BE-144: per-email reset request flood protection (silent drop on overflow,
+      # 204 response shape preserved to avoid account-existence leaks).
+      window-seconds: ${PASSWORD_RESET_WINDOW:900}
+      max-attempts: ${PASSWORD_RESET_MAX_ATTEMPTS:3}
+  device-session:
+    max-active-sessions: ${AUTH_MAX_ACTIVE_SESSIONS:10}
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+    connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:3000}
+    read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:5000}

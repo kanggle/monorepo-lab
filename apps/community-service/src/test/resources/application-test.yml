@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: community-service
+  datasource:
+    hikari:
+      validation-timeout: 3000
+      connection-test-query: SELECT 1
+      max-lifetime: 60000
+      keepalive-time: 30000
+      leak-detection-threshold: 10000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+  kafka:
+    bootstrap-servers: placeholder
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+    consumer:
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+  cache:
+    type: caffeine
+    cache-names: accountProfiles
+    caffeine:
+      spec: maximumSize=10000,expireAfterWrite=5m
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 0
+
+outbox:
+  polling:
+    interval-ms: 500
+    batch-size: 50
+
+community:
+  jwt:
+    public-key-path: classpath:keys/public.pem
+    expected-issuer: global-account-platform
+  membership-service:
+    base-url: http://localhost:18083
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+  account-service:
+    base-url: http://localhost:18084
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      membershipService:
+        failure-rate-threshold: 50
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true

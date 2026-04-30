@@ -1,0 +1,17 @@
+# E2E profile — docker-compose.e2e.yml driven overrides.
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+gateway:
+  jwt:
+    jwks-url: ${JWKS_URL:http://auth-service:8081/internal/auth/jwks}
+
+logging:
+  level:
+    root: INFO
+  file:
+    name: ""

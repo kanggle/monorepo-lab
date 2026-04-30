@@ -1,0 +1,8 @@
+# Enforce LF line endings for shell scripts and SQL migrations.
+# Flyway delimiter directives (e.g. `--flyway:delimiter=//`) break when files
+# are checked out with CRLF: the trailing `\r` becomes part of the delimiter
+# value and MySQL fails parsing the next statement. Force LF for all *.sql
+# regardless of core.autocrlf on Windows clients.
+
+*.sh  text eol=lf
+*.sql text eol=lf

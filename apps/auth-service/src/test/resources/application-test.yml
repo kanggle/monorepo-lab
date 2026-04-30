@@ -1,0 +1,110 @@
+spring:
+  application:
+    name: auth-service
+
+  # TASK-BE-075: Hikari validation options for Testcontainers MySQL.
+  # Rationale: CI observed stale pool connections reused across context
+  # boundaries, surfacing as Communications link failure inside
+  # OutboxPollingScheduler. These options force validation and aggressive
+  # recycling during the short test lifetime.
+  # Invariants: max-lifetime > keepalive-time (Hikari requirement).
+  datasource:
+    hikari:
+      validation-timeout: 3000
+      connection-test-query: SELECT 1
+      max-lifetime: 60000
+      keepalive-time: 30000
+      leak-detection-threshold: 10000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      # TASK-BE-070: extend reconnect backoff and request timeout so producer
+      # tests tolerate slow Testcontainers Kafka startup / transient broker drops.
+      # TASK-BE-075: add reconnect.backoff.max.ms + tighten reconnect.backoff.ms
+      # — CI sees random port assignment between container restarts; aggressive
+      # reconnect helps the Producer recover.
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+    consumer:
+      # TASK-BE-075: reconnect backoff tuning for Testcontainers Kafka.
+      properties:
+        reconnect.backoff.ms: 500
+        reconnect.backoff.max.ms: 10000
+        request.timeout.ms: 60000
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+outbox:
+  polling:
+    interval-ms: 500
+    batch-size: 50
+
+oauth:
+  google:
+    client-id: test-google-client-id
+    client-secret: test-google-client-secret
+    redirect-uri: http://localhost:3000/oauth/callback
+    scopes: openid,email,profile
+    token-uri: https://oauth2.googleapis.com/token
+    auth-uri: https://accounts.google.com/o/oauth2/v2/auth
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    expected-issuer-pattern: ^(https://)?accounts\.google\.com$
+  kakao:
+    client-id: test-kakao-client-id
+    client-secret: test-kakao-client-secret
+    redirect-uri: http://localhost:3000/oauth/callback
+    scopes: account_email,profile_nickname
+    token-uri: https://kauth.kakao.com/oauth/token
+    auth-uri: https://kauth.kakao.com/oauth/authorize
+    user-info-uri: https://kapi.kakao.com/v2/user/me
+  microsoft:
+    client-id: test-microsoft-client-id
+    client-secret: test-microsoft-client-secret
+    redirect-uri: http://localhost:3000/oauth/callback
+    scopes: openid,email,profile
+    token-uri: https://login.microsoftonline.com/common/oauth2/v2.0/token
+    auth-uri: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+    jwks-uri: https://login.microsoftonline.com/common/discovery/v2.0/keys
+    expected-issuer-pattern: ^https://login\.microsoftonline\.com/[^/]+/v2\.0$
+
+server:
+  port: 0
+
+auth:
+  jwt:
+    issuer: global-account-platform
+    access-token-ttl-seconds: 1800
+    refresh-token-ttl-seconds: 604800
+    private-key-path: classpath:keys/private.pem
+    public-key-path: classpath:keys/public.pem
+    kid: test-key-001
+  login:
+    max-failure-count: 5
+    failure-window-seconds: 900
+  account-service:
+    base-url: http://localhost:18082
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
