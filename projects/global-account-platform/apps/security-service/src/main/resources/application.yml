@@ -10,6 +10,15 @@ spring:
     password: ${DB_PASSWORD:security_pass}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  jpa:
+    properties:
+      hibernate:
+        # Force Hibernate to write/read Instant via UTC for DATETIME(6) columns.
+        # Without this, JVM default TZ leaks into the DB representation, causing
+        # Instant↔DATETIME(6) round-trip equality to drift (TASK-MONO-020).
+        jdbc:
+          time_zone: UTC
+
   flyway:
     enabled: true
     locations: classpath:db/migration

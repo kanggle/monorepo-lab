@@ -14,7 +14,7 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
 
     boolean existsByRotatedFrom(String jti);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE RefreshTokenJpaEntity r SET r.revoked = true WHERE r.accountId = :accountId AND r.revoked = false")
     int revokeAllByAccountId(@Param("accountId") String accountId);
 
@@ -26,7 +26,7 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
     @Query("SELECT r.jti FROM RefreshTokenJpaEntity r WHERE r.deviceId = :deviceId AND r.revoked = false")
     List<String> findActiveJtisByDeviceId(@Param("deviceId") String deviceId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE RefreshTokenJpaEntity r SET r.revoked = true WHERE r.deviceId = :deviceId AND r.revoked = false")
     int revokeAllByDeviceId(@Param("deviceId") String deviceId);
 }

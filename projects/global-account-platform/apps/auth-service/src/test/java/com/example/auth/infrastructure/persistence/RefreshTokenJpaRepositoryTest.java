@@ -116,7 +116,6 @@ class RefreshTokenJpaRepositoryTest {
     // ── revokeAllByAccountId ─────────────────────────────────────────────────
 
     @Test
-    @Disabled("TASK-MONO-020 follow-up: @Modifying query lacks clearAutomatically=true, persistence context returns stale (pre-revoke) entities on re-query")
     @DisplayName("revokeAllByAccountId — 활성 토큰만 revoke, 이미 revoked 는 건드리지 않음")
     void revokeAllByAccountId_revokesActiveOnly() {
         String accountId = uuid();
