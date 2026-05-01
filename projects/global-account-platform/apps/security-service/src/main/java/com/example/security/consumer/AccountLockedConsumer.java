@@ -1,5 +1,6 @@
 package com.example.security.consumer;
 
+import com.example.security.domain.Tenants;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaEntity;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -75,8 +76,16 @@ public class AccountLockedConsumer {
 
             Instant occurredAt = resolveOccurredAt(root, payload);
 
+            // TASK-BE-248 Phase 1: tenantId required on lock history. account.locked
+            // payload may not yet carry it; default to Tenants.DEFAULT_TENANT_ID until
+            // Phase 2 makes upstream events tenant-aware.
+            String tenantId = firstNonBlank(
+                    root.path("tenantId").asText(null),
+                    payload.path("tenantId").asText(null),
+                    Tenants.DEFAULT_TENANT_ID);
+
             AccountLockHistoryJpaEntity entity = AccountLockHistoryJpaEntity.create(
-                    eventId, accountId, truncate(reason, 255), lockedBy, source, occurredAt);
+                    tenantId, eventId, accountId, truncate(reason, 255), lockedBy, source, occurredAt);
 
             try {
                 repository.save(entity);

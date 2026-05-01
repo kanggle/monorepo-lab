@@ -1,6 +1,7 @@
 package com.example.security.application;
 
 import com.example.security.application.event.SecurityEventPublisher;
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.AccountLockClient;
 import com.example.security.domain.detection.RiskLevel;
 import com.example.security.domain.suspicious.SuspiciousEvent;
@@ -31,7 +32,7 @@ class IssueAutoLockCommandUseCaseTest {
     @InjectMocks IssueAutoLockCommandUseCase useCase;
 
     private SuspiciousEvent event() {
-        return SuspiciousEvent.create(UUID.randomUUID().toString(), "acc-1",
+        return SuspiciousEvent.create(UUID.randomUUID().toString(), Tenants.DEFAULT_TENANT_ID, "acc-1",
                 "GEO_ANOMALY", 92, RiskLevel.AUTO_LOCK, null, "evt-1", Instant.now());
     }
 

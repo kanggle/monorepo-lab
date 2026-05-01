@@ -12,6 +12,11 @@ public interface SuspiciousEventRepository {
 
     Optional<SuspiciousEvent> findById(String id);
 
-    /** Reverse-chronological by detectedAt, bounded by accountId and [from, to). */
-    List<SuspiciousEvent> findByAccountAndRange(String accountId, Instant from, Instant to, int limit);
+    /**
+     * Reverse-chronological by detectedAt, bounded by (tenantId, accountId)
+     * and {@code [from, to)}. TASK-BE-248: tenantId is required to keep
+     * suspicious-event analytics tenant-isolated.
+     */
+    List<SuspiciousEvent> findByAccountAndRange(String tenantId, String accountId,
+                                                 Instant from, Instant to, int limit);
 }

@@ -1,5 +1,6 @@
 package com.example.security.infrastructure.persistence;
 
+import com.example.security.domain.Tenants;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -82,7 +83,8 @@ class AccountLockHistoryJpaRepositoryTest {
         save(entity("44444444-4444-4444-4444-444444444444", "acc-other", "ADMIN_LOCK",
                 "op-9", "admin", t0.plusSeconds(1000)));
 
-        List<AccountLockHistoryJpaEntity> rows = repo.findByAccountIdOrderByOccurredAtDesc("acc-1");
+        List<AccountLockHistoryJpaEntity> rows = repo.findByTenantIdAndAccountIdOrderByOccurredAtDesc(
+                Tenants.DEFAULT_TENANT_ID, "acc-1");
 
         assertThat(rows).extracting(AccountLockHistoryJpaEntity::getEventId)
                 .containsExactly(
@@ -113,6 +115,7 @@ class AccountLockHistoryJpaRepositoryTest {
     private static AccountLockHistoryJpaEntity entity(String eventId, String accountId,
                                                        String reason, String lockedBy,
                                                        String source, Instant occurredAt) {
-        return AccountLockHistoryJpaEntity.create(eventId, accountId, reason, lockedBy, source, occurredAt);
+        return AccountLockHistoryJpaEntity.create(Tenants.DEFAULT_TENANT_ID, eventId, accountId,
+                reason, lockedBy, source, occurredAt);
     }
 }

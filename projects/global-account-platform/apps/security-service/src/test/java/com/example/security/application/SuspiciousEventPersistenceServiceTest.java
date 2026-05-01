@@ -1,5 +1,6 @@
 package com.example.security.application;
 
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.DetectionResult;
 import com.example.security.domain.detection.EvaluationContext;
 import com.example.security.domain.detection.RiskLevel;
@@ -42,6 +43,7 @@ class SuspiciousEventPersistenceServiceTest {
                 new RiskScoreAggregator.Aggregated(winner, List.of(winner));
         SuspiciousEvent result = service.recordSuspiciousEvent(ctx, aggregated, RiskLevel.AUTO_LOCK);
 
+        assertThat(result.getTenantId()).isEqualTo(Tenants.DEFAULT_TENANT_ID);
         assertThat(result.getAccountId()).isEqualTo("acc-1");
         assertThat(result.getRuleCode()).isEqualTo("VELOCITY");
         assertThat(result.getRiskScore()).isEqualTo(80);
@@ -70,7 +72,7 @@ class SuspiciousEventPersistenceServiceTest {
     @DisplayName("updateLockResult — save 1회 호출 검증")
     void updateLockResult_callsSaveOnce() {
         SuspiciousEvent event = SuspiciousEvent.create(
-                "evt-id", "acc-3", "VELOCITY", 80, RiskLevel.AUTO_LOCK,
+                "evt-id", Tenants.DEFAULT_TENANT_ID, "acc-3", "VELOCITY", 80, RiskLevel.AUTO_LOCK,
                 Map.of(), "trigger-1", Instant.now());
         SuspiciousEvent updated = event.withLockRequestResult("SUCCESS");
 
@@ -83,6 +85,7 @@ class SuspiciousEventPersistenceServiceTest {
 
     private static EvaluationContext evaluationContext(String accountId, String eventId) {
         return new EvaluationContext(
+                Tenants.DEFAULT_TENANT_ID,
                 eventId, "auth.login.failed", accountId,
                 "1.2.3.x", "fp-abc", "KR", Instant.now(), 5);
     }

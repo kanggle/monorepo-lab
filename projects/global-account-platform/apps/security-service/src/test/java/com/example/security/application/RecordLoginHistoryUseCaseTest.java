@@ -1,6 +1,7 @@
 package com.example.security.application;
 
 import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.security.domain.Tenants;
 import com.example.security.domain.history.LoginHistoryEntry;
 import com.example.security.domain.history.LoginOutcome;
 import com.example.security.domain.repository.LoginHistoryRepository;
@@ -32,6 +33,7 @@ class RecordLoginHistoryUseCaseTest {
 
     private LoginHistoryEntry createEntry(String eventId) {
         return new LoginHistoryEntry(
+                Tenants.DEFAULT_TENANT_ID,
                 eventId, "acc-001", LoginOutcome.SUCCESS,
                 "192.168.1.***", "Chrome 120", "abcdef123456",
                 "KR", Instant.now()

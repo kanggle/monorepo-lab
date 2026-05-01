@@ -34,6 +34,7 @@ public class SuspiciousEventPersistenceService {
         DetectionResult winner = aggregated.winner();
         SuspiciousEvent event = SuspiciousEvent.create(
                 UUID.randomUUID().toString(),
+                ctx.tenantId(),
                 ctx.accountId(),
                 winner.ruleCode(),
                 winner.riskScore(),

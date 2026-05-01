@@ -7,6 +7,7 @@ import java.time.Instant;
  * Pure domain type — no framework imports.
  */
 public record EvaluationContext(
+        String tenantId,
         String eventId,
         String eventType,
         String accountId,
@@ -23,6 +24,9 @@ public record EvaluationContext(
      * Backward-compatible constructor for call sites that predate the TASK-BE-025
      * device_id payload extension. Defaults {@code deviceId} and {@code isNewDevice}
      * to null so legacy tests and rule evaluation fall back to the fingerprint path.
+     * Also defaults {@code tenantId} to null — TASK-BE-248 Phase 2 will require
+     * non-null tenantId at construction time for production paths; tests still
+     * use this overload.
      */
     public EvaluationContext(
             String eventId,
@@ -33,7 +37,24 @@ public record EvaluationContext(
             String geoCountry,
             Instant occurredAt,
             Integer failCount) {
-        this(eventId, eventType, accountId, ipMasked, deviceFingerprint, geoCountry,
+        this(null, eventId, eventType, accountId, ipMasked, deviceFingerprint, geoCountry,
+                occurredAt, failCount, null, null);
+    }
+
+    /**
+     * Tenant-aware constructor for callers that have tenantId but no device fields.
+     */
+    public EvaluationContext(
+            String tenantId,
+            String eventId,
+            String eventType,
+            String accountId,
+            String ipMasked,
+            String deviceFingerprint,
+            String geoCountry,
+            Instant occurredAt,
+            Integer failCount) {
+        this(tenantId, eventId, eventType, accountId, ipMasked, deviceFingerprint, geoCountry,
                 occurredAt, failCount, null, null);
     }
 
