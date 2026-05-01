@@ -55,13 +55,22 @@ public class CreateOperatorUseCase {
         boolean actorIsPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(actorTenantId);
 
         // Defense-in-depth: non-platform-scope operators cannot create platform-scope operators.
+        // TASK-BE-262: record a best-effort DENIED audit row before throwing.
         if (AdminOperator.PLATFORM_TENANT_ID.equals(tenantId) && !actorIsPlatformScope) {
+            auditor.recordCrossTenantDenied(
+                    actor,
+                    actorTenantId,
+                    ActionCode.OPERATOR_CREATE,
+                    "operator.create",
+                    tenantId);
             throw new TenantScopeDeniedException(
                     "Only platform-scope operators may create operators with tenantId='*'");
         }
 
+        // TASK-BE-262: use per-tenant check matching the (tenant_id, email) composite unique index
+        // introduced by V0023. Same email in a different tenant is a separate, valid operator.
         String normalizedEmail = email == null ? null : email.trim().toLowerCase();
-        if (normalizedEmail != null && operatorRepository.existsByEmail(normalizedEmail)) {
+        if (normalizedEmail != null && operatorRepository.existsByTenantIdAndEmail(tenantId, normalizedEmail)) {
             throw new OperatorEmailConflictException("Operator email already exists");
         }
 

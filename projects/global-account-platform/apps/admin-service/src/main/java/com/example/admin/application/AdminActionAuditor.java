@@ -8,6 +8,8 @@ import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -97,6 +99,7 @@ public class AdminActionAuditor {
     private final AdminActionJpaRepository repository;
     private final AdminOperatorJpaRepository operatorRepository;
     private final AdminEventPublisher eventPublisher;
+    private final MeterRegistry meterRegistry;
 
     /**
      * Projection record carrying both the internal BIGINT PK and the operator's
@@ -303,6 +306,96 @@ public class AdminActionAuditor {
             log.error("Failed to write DENIED admin_actions row (fail-closed): operatorId={} permission={}",
                     operatorId, resolvedPermission, ex);
             throw new AuditFailureException("Failed to record DENIED admin action audit", ex);
+        }
+    }
+
+    /**
+     * Best-effort DENIED audit row for cross-tenant scope violations.
+     *
+     * <p>TASK-BE-262: audit-heavy A1 requires all policy denials to be auditable.
+     * Per spec §Tenant Scope Enforcement:
+     * <ul>
+     *   <li>{@code tenant_id = operator.tenantId} — the deny event is logged in
+     *       the operator's own tenant scope.</li>
+     *   <li>{@code target_tenant_id = operator.tenantId} — same as tenant_id per
+     *       the architecture spec line 231: "크로스 테넌트 거부도 자기 테넌트 기록".</li>
+     *   <li>The attempted target tenant is captured in {@code downstream_detail}
+     *       for forensic analysis (the schema has no separate column for this).</li>
+     * </ul>
+     *
+     * <p>Decision: best-effort, NOT fail-closed (A10 override for cross-tenant deny path).
+     * Rationale: fail-closed here would let an attacker trigger DB outages by spamming
+     * cross-tenant requests, since each deny would attempt a write. The actual
+     * security action (deny + 403) succeeds regardless. Failures increment
+     * {@code admin.audit.cross_tenant_deny_failure} counter for observability.
+     *
+     * @param operator        the operator whose request is being denied
+     * @param operatorTenantId the operator's own tenantId (already resolved by the caller)
+     * @param actionCode      the action that was denied
+     * @param permissionUsed  the permission key associated with the denied action
+     * @param attemptedTenantId the tenantId the operator attempted to access
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordCrossTenantDenied(OperatorContext operator,
+                                        String operatorTenantId,
+                                        ActionCode actionCode,
+                                        String permissionUsed,
+                                        String attemptedTenantId) {
+        try {
+            OperatorResolved resolved = resolveOperator(operator.operatorId());
+            String effectiveTenantId = resolved.tenantId() != null ? resolved.tenantId() : operatorTenantId;
+
+            Instant now = Instant.now();
+            String auditId = UUID.randomUUID().toString();
+            String targetType = targetTypeFor(actionCode);
+            String detail = "TENANT_SCOPE_DENIED attempted_tenant_id=" + attemptedTenantId;
+
+            AdminActionJpaEntity entity = AdminActionJpaEntity.create(
+                    auditId,
+                    actionCode.name(),
+                    operator.operatorId(),
+                    "UNKNOWN",
+                    resolved.pk(),
+                    permissionUsed != null ? permissionUsed : Permission.MISSING,
+                    targetType,
+                    operator.operatorId(),       // targetId: self (no external resource targeted)
+                    "<cross_tenant_deny>",        // reason: synthetic constant
+                    null,
+                    "denied:" + auditId,
+                    Outcome.DENIED.name(),
+                    detail,
+                    now,
+                    now,
+                    effectiveTenantId,
+                    effectiveTenantId); // DENIED rows: both tenant_id and target_tenant_id = operator's own tenant
+            repository.save(entity);
+
+            eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
+                    operator.operatorId(),
+                    operator.jti(),
+                    permissionUsed != null ? permissionUsed : Permission.MISSING,
+                    currentEndpoint(),
+                    currentMethod(),
+                    targetType,
+                    operator.operatorId(),
+                    Outcome.DENIED,
+                    detail,
+                    now));
+        } catch (RuntimeException ex) {
+            // Best-effort: log + metric, do NOT rethrow. The 403 denial still succeeds.
+            log.warn("Failed to write cross-tenant DENIED audit row (best-effort): " +
+                            "operatorId={} action={} attemptedTenant={}",
+                    operator.operatorId(), actionCode, attemptedTenantId, ex);
+            try {
+                Counter counter = Counter.builder("admin.audit.cross_tenant_deny_failure")
+                        .tag("action", actionCode != null ? actionCode.name() : "UNKNOWN")
+                        .register(meterRegistry);
+                if (counter != null) {
+                    counter.increment();
+                }
+            } catch (RuntimeException metricEx) {
+                log.debug("Failed to increment cross_tenant_deny_failure counter", metricEx);
+            }
         }
     }
 

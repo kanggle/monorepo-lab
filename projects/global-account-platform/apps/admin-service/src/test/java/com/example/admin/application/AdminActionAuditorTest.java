@@ -6,6 +6,7 @@ import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +20,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -38,6 +40,9 @@ class AdminActionAuditorTest {
 
     @Mock
     AdminEventPublisher publisher;
+
+    @Mock
+    MeterRegistry meterRegistry;
 
     @InjectMocks
     AdminActionAuditor auditor;
@@ -170,6 +175,44 @@ class AdminActionAuditorTest {
 
         assertThatThrownBy(() -> auditor.recordCompletion(done))
                 .isInstanceOf(AuditFailureException.class);
+
+        verify(publisher, never()).publishAdminActionPerformed(any());
+    }
+
+    // ── TASK-BE-262: recordCrossTenantDenied ─────────────────────────────────
+
+    @Test
+    void recordCrossTenantDenied_inserts_denied_row_with_own_tenant_and_emits_event() {
+        stubOperatorResolution();
+        when(operatorEntity.getTenantId()).thenReturn("fan-platform");
+
+        OperatorContext actor = op();
+        auditor.recordCrossTenantDenied(
+                actor, "fan-platform", ActionCode.AUDIT_QUERY, "audit.read", "other-tenant");
+
+        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
+        verify(repo).save(captor.capture());
+        AdminActionJpaEntity saved = captor.getValue();
+        assertThat(saved.getOutcome()).isEqualTo("DENIED");
+        assertThat(saved.getPermissionUsed()).isEqualTo("audit.read");
+        assertThat(saved.getTenantId()).isEqualTo("fan-platform");
+        assertThat(saved.getTargetTenantId()).isEqualTo("fan-platform"); // both = operator's own tenant per spec
+        assertThat(saved.getDownstreamDetail()).contains("other-tenant");
+        verify(publisher).publishAdminActionPerformed(any());
+    }
+
+    @Test
+    void recordCrossTenantDenied_bestEffort_swallows_db_failure_and_does_not_throw() {
+        stubOperatorResolution();
+        when(operatorEntity.getTenantId()).thenReturn("fan-platform");
+        doThrow(new RuntimeException("db down")).when(repo).save(any());
+
+        // Must NOT throw — best-effort swallows the exception
+        OperatorContext actor = op();
+        assertThatCode(() ->
+                auditor.recordCrossTenantDenied(
+                        actor, "fan-platform", ActionCode.OPERATOR_CREATE, "operator.create", "*")
+        ).doesNotThrowAnyException();
 
         verify(publisher, never()).publishAdminActionPerformed(any());
     }

@@ -203,6 +203,23 @@ class AuditQueryUseCaseTest {
                 .hasMessageContaining("Operator not found");
     }
 
+    // ── TASK-BE-262: cross-tenant deny audit row ──────────────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-262: cross-tenant request denied → auditor.recordCrossTenantDenied() 호출")
+    void query_crossTenantRequest_denied_calls_auditor_recordCrossTenantDenied() {
+        // "op-1" belongs to "fan-platform" — requesting "other-platform" → denied
+        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "other-platform")))
+                .isInstanceOf(TenantScopeDeniedException.class);
+
+        verify(auditor).recordCrossTenantDenied(
+                any(), anyString(),
+                any(ActionCode.class), anyString(), anyString());
+        // meta-audit must NOT be recorded (deny happened before the query executed)
+        verify(auditor, never()).record(any());
+        verify(auditor, never()).reserveAuditId();
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static QueryAuditCommand cmd(String operatorId, String accountId, String source,

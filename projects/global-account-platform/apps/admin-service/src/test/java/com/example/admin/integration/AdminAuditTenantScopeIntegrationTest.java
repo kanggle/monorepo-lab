@@ -120,10 +120,18 @@ class AdminAuditTenantScopeIntegrationTest extends AbstractIntegrationTest {
 
     /**
      * Scenario 1: tenantA operator requests audit data for tenantB → 403 TENANT_SCOPE_DENIED.
+     *
+     * <p>TASK-BE-262: also asserts the cross-tenant deny audit row is written
+     * (best-effort write; admin_actions row outcome=DENIED, tenant_id=operator's,
+     * downstream_detail captures the attempted target tenant).
      */
     @Test
-    @DisplayName("1. tenantA operator queries tenantId=tenant-b → 403 TENANT_SCOPE_DENIED")
+    @DisplayName("1. tenantA operator queries tenantId=tenant-b → 403 TENANT_SCOPE_DENIED + DENIED audit row")
     void tenantA_queriesTenantB_returns403() throws Exception {
+        Integer beforeCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND operator_id = ?",
+                Integer.class, TENANT_A_OP_UUID);
+
         mockMvc.perform(get("/api/admin/audit")
                         .header("Authorization", bearerToken(TENANT_A_OP_UUID))
                         .header("X-Operator-Reason", "audit-test")
@@ -131,6 +139,19 @@ class AdminAuditTenantScopeIntegrationTest extends AbstractIntegrationTest {
                         .param("tenantId", "tenant-b"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+
+        Integer afterCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND operator_id = ?",
+                Integer.class, TENANT_A_OP_UUID);
+        org.assertj.core.api.Assertions.assertThat(afterCount).isEqualTo(beforeCount + 1);
+
+        String latestDetail = jdbcTemplate.queryForObject(
+                "SELECT downstream_detail FROM admin_actions " +
+                        "WHERE outcome = 'DENIED' AND operator_id = ? " +
+                        "ORDER BY started_at DESC LIMIT 1",
+                String.class, TENANT_A_OP_UUID);
+        org.assertj.core.api.Assertions.assertThat(latestDetail)
+                .contains("attempted_tenant_id=tenant-b");
     }
 
     /**

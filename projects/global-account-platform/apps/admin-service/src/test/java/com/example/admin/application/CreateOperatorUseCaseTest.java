@@ -65,7 +65,8 @@ class CreateOperatorUseCaseTest {
     @Test
     @DisplayName("운영자 생성 성공 시 비밀번호 해시 저장 + 감사 기록이 모두 수행된다")
     void createOperator_success_persists_hash_and_audits() {
-        when(operatorRepository.existsByEmail("new@example.com")).thenReturn(false);
+        // TASK-BE-262: use per-tenant check (tenant_id, email)
+        when(operatorRepository.existsByTenantIdAndEmail("fan-platform", "new@example.com")).thenReturn(false);
         when(roleRepository.findByNameIn(List.of("SUPER_ADMIN")))
                 .thenReturn(List.of(role(1L, "SUPER_ADMIN")));
         when(passwordHasher.hash("StrongPass1!")).thenReturn("hash-value");
@@ -106,7 +107,8 @@ class CreateOperatorUseCaseTest {
     @Test
     @DisplayName("이메일이 이미 존재하면 INSERT 전에 충돌 예외를 던진다")
     void createOperator_duplicate_email_throws_conflict_before_persist() {
-        when(operatorRepository.existsByEmail("dup@example.com")).thenReturn(true);
+        // TASK-BE-262: per-tenant check — same tenant, same email → conflict
+        when(operatorRepository.existsByTenantIdAndEmail("fan-platform", "dup@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> useCase.createOperator(
                 "dup@example.com", "Dup", "StrongPass1!", List.of(), actor(), "reason", "fan-platform"))
@@ -119,7 +121,7 @@ class CreateOperatorUseCaseTest {
     @Test
     @DisplayName("알 수 없는 role 이름이 포함되면 RoleNotFoundException 으로 거부한다")
     void createOperator_unknown_role_throws_role_not_found() {
-        when(operatorRepository.existsByEmail(anyString())).thenReturn(false);
+        when(operatorRepository.existsByTenantIdAndEmail(anyString(), anyString())).thenReturn(false);
         when(roleRepository.findByNameIn(List.of("DOES_NOT_EXIST"))).thenReturn(List.of());
 
         assertThatThrownBy(() -> useCase.createOperator(
@@ -133,7 +135,7 @@ class CreateOperatorUseCaseTest {
     @Test
     @DisplayName("role 목록이 비어 있어도 생성은 허용된다")
     void createOperator_empty_roles_is_allowed() {
-        when(operatorRepository.existsByEmail(anyString())).thenReturn(false);
+        when(operatorRepository.existsByTenantIdAndEmail(anyString(), anyString())).thenReturn(false);
         when(passwordHasher.hash(anyString())).thenReturn("h");
         when(operatorRepository.saveAndFlush(any(AdminOperatorJpaEntity.class)))
                 .thenAnswer(inv -> {
@@ -173,7 +175,8 @@ class CreateOperatorUseCaseTest {
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
                 .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
 
-        when(operatorRepository.existsByEmail("super@example.com")).thenReturn(false);
+        // TASK-BE-262: per-tenant check — platform-scope tenant '*', email unique within '*'
+        when(operatorRepository.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
         when(roleRepository.findByNameIn(List.of("SUPER_ADMIN")))
                 .thenReturn(List.of(role(1L, "SUPER_ADMIN")));
         when(passwordHasher.hash(anyString())).thenReturn("h");
@@ -192,5 +195,63 @@ class CreateOperatorUseCaseTest {
                 List.of("SUPER_ADMIN"), actor(), "bootstrap", "*");
 
         assertThat(result.tenantId()).isEqualTo("*");
+    }
+
+    // ── TASK-BE-262: new tests ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-262: 동일 이메일이 다른 tenantId에 존재하면 정상 생성 진행 (새 동작)")
+    void createOperator_same_email_different_tenant_proceeds_to_create() {
+        // Same email exists in "other-tenant", but we are creating in "fan-platform" → allowed
+        when(operatorRepository.existsByTenantIdAndEmail("fan-platform", "shared@example.com")).thenReturn(false);
+        when(roleRepository.findByNameIn(List.of("SUPPORT_LOCK")))
+                .thenReturn(List.of(role(2L, "SUPPORT_LOCK")));
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorRepository.saveAndFlush(any(AdminOperatorJpaEntity.class)))
+                .thenAnswer(inv -> {
+                    AdminOperatorJpaEntity e = inv.getArgument(0);
+                    setField(e, "id", 77L);
+                    return e;
+                });
+        when(operatorRepository.findByOperatorId("actor-uuid")).thenReturn(Optional.empty());
+        when(auditor.newAuditId()).thenReturn("audit-cross");
+
+        CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
+                "shared@example.com", "Shared Email Op", "StrongPass1!",
+                List.of("SUPPORT_LOCK"), actor(), "reason", "fan-platform");
+
+        assertThat(result.email()).isEqualTo("shared@example.com");
+        assertThat(result.tenantId()).isEqualTo("fan-platform");
+        verify(operatorRepository).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-262: 동일 이메일 + 동일 tenantId → OperatorEmailConflictException (기존 동작 유지)")
+    void createOperator_same_email_same_tenant_throws_conflict() {
+        when(operatorRepository.existsByTenantIdAndEmail("fan-platform", "conflict@example.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "conflict@example.com", "Conflict", "StrongPass1!",
+                List.of(), actor(), "reason", "fan-platform"))
+                .isInstanceOf(OperatorEmailConflictException.class);
+
+        verify(operatorRepository, never()).saveAndFlush(any());
+        verify(auditor, never()).record(any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-262: TenantScopeDeniedException 발생 시 auditor.recordCrossTenantDenied() 호출")
+    void createOperator_tenantScopeDenied_calls_auditor_record_cross_tenant_denied() {
+        // actor is fan-platform (non-platform-scope) — attempting to create tenantId='*' operator → denied
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "super@example.com", "Super", "StrongPass1!",
+                List.of("SUPER_ADMIN"), actor(), "reason", "*"))
+                .isInstanceOf(TenantScopeDeniedException.class);
+
+        verify(auditor).recordCrossTenantDenied(
+                any(), anyString(),
+                any(ActionCode.class), anyString(), anyString());
+        verify(operatorRepository, never()).saveAndFlush(any());
     }
 }

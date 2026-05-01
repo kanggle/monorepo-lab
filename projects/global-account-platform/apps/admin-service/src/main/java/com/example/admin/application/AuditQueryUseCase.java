@@ -63,7 +63,14 @@ public class AuditQueryUseCase {
         }
 
         // Tenant-scope gate: non-platform-scope operators may only query their own tenant.
+        // TASK-BE-262: record a best-effort DENIED audit row before throwing.
         if (!isPlatformScope && !operatorTenantId.equals(requestedTenantId)) {
+            auditor.recordCrossTenantDenied(
+                    cmd.operator(),
+                    operatorTenantId,
+                    ActionCode.AUDIT_QUERY,
+                    "audit.read",
+                    requestedTenantId);
             throw new TenantScopeDeniedException(
                     "Operator tenantId=" + operatorTenantId
                             + " cannot query tenantId=" + requestedTenantId);
