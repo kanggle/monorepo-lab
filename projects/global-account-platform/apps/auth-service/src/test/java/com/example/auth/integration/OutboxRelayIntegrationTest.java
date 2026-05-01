@@ -146,7 +146,8 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
 
         try (KafkaConsumer<String, String> consumer = createConsumer("auth.login.failed")) {
             transactionTemplate.executeWithoutResult(status ->
-                    authEventPublisher.publishLoginFailed(accountId, emailHash, "CREDENTIALS_INVALID", 3, ctx));
+                    authEventPublisher.publishLoginFailed(accountId, emailHash, "fan-platform",
+                            "CREDENTIALS_INVALID", 3, ctx));
 
             await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
@@ -167,6 +168,7 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
                 JsonNode payload = envelope.get("payload");
                 assertThat(payload.get("failureReason").asText()).isEqualTo("CREDENTIALS_INVALID");
                 assertThat(payload.get("failCount").asInt()).isEqualTo(3);
+                assertThat(payload.get("tenantId").asText()).isEqualTo("fan-platform");
             });
         }
     }
@@ -181,20 +183,27 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
         try (KafkaConsumer<String, String> consumer = createConsumer("auth.login.attempted", "auth.login.succeeded")) {
             // Write two events for the same account
             transactionTemplate.executeWithoutResult(status -> {
-                authEventPublisher.publishLoginAttempted(accountId, "hash-order", ctx);
+                authEventPublisher.publishLoginAttempted(accountId, "hash-order", "fan-platform", ctx);
                 authEventPublisher.publishLoginSucceeded(accountId, "jti-order", ctx);
             });
 
             Set<Integer> partitions = new HashSet<>();
+            List<ConsumerRecord<String, String>> attemptedRecords = new ArrayList<>();
             await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
                 for (ConsumerRecord<String, String> record : records) {
                     if (record.key().equals(accountId)) {
                         partitions.add(record.partition());
+                        if (record.topic().equals("auth.login.attempted")) {
+                            attemptedRecords.add(record);
+                        }
                     }
                 }
                 // Both events should be in the same partition since they share the same key
                 assertThat(partitions).hasSizeLessThanOrEqualTo(1);
+                assertThat(attemptedRecords).isNotEmpty();
+                JsonNode envelope = objectMapper.readTree(attemptedRecords.get(0).value());
+                assertThat(envelope.get("payload").get("tenantId").asText()).isEqualTo("fan-platform");
             });
         }
     }
