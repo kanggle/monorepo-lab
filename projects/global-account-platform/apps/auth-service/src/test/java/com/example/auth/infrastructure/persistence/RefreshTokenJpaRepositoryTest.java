@@ -117,7 +117,7 @@ class RefreshTokenJpaRepositoryTest {
     @Test
     @DisplayName("revokeAllByAccountId — 활성 토큰만 revoke, 이미 revoked 는 건드리지 않음")
     void revokeAllByAccountId_revokesActiveOnly() {
-        String accountId = "acc-" + uuid();
+        String accountId = uuid();
         String jti1 = uuid();
         String jti2 = uuid();
         String jtiRevoked = uuid();
@@ -142,7 +142,7 @@ class RefreshTokenJpaRepositoryTest {
     @Test
     @DisplayName("findActiveJtisByAccountId — revoked 행 제외 active JTI 목록")
     void findActiveJtisByAccountId_excludesRevoked() {
-        String accountId = "acc-" + uuid();
+        String accountId = uuid();
         String activeJti = uuid();
         String revokedJti = uuid();
 
@@ -160,7 +160,7 @@ class RefreshTokenJpaRepositoryTest {
     @DisplayName("findActiveJtisByDeviceId — device 단위 active JTI, revoked 제외")
     void findActiveJtisByDeviceId_excludesRevoked() {
         String deviceId = "dev-" + uuid();
-        String accountId = "acc-" + uuid();
+        String accountId = uuid();
         String activeJti = uuid();
         String revokedJti = uuid();
 
@@ -178,7 +178,7 @@ class RefreshTokenJpaRepositoryTest {
     @DisplayName("revokeAllByDeviceId — device 단위 active 토큰 bulk revoke")
     void revokeAllByDeviceId_revokesActiveOnly() {
         String deviceId = "dev-" + uuid();
-        String accountId = "acc-" + uuid();
+        String accountId = uuid();
         String jti1 = uuid();
         String jti2 = uuid();
         String jtiAlreadyRevoked = uuid();
