@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.config;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -48,5 +49,25 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    /**
+     * Registers {@link DeprecatedApiHeaderFilter} as a servlet filter so that RFC 8594
+     * {@code Deprecation} and RFC 9745 {@code Sunset} headers are injected on every
+     * response to {@code POST /api/auth/login} — including error responses handled by
+     * the exception handler.
+     *
+     * <p>A servlet filter is used (rather than setting headers inside the controller
+     * method) because Spring MVC exception handlers can replace the response object,
+     * which discards headers set earlier in the controller. Wrapping at the servlet
+     * layer avoids this issue.
+     */
+    @Bean
+    public FilterRegistrationBean<DeprecatedApiHeaderFilter> deprecatedApiHeaderFilter() {
+        FilterRegistrationBean<DeprecatedApiHeaderFilter> registration =
+                new FilterRegistrationBean<>(new DeprecatedApiHeaderFilter());
+        registration.addUrlPatterns("/api/auth/login");
+        registration.setOrder(Integer.MIN_VALUE); // run before Spring Security
+        return registration;
     }
 }

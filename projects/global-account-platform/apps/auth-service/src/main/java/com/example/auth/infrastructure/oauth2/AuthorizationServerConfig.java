@@ -41,12 +41,24 @@ import java.time.Duration;
 import java.util.UUID;
 
 /**
- * Spring Authorization Server configuration — Phase 2b (TASK-BE-251).
+ * Spring Authorization Server configuration — Phase 2c (TASK-BE-251).
  *
  * <p>Exposes the full OIDC discovery endpoint, JWKS endpoint, token endpoint,
- * and userinfo endpoint. The SAS filter chain takes {@code @Order(1)} and matches
- * only the SAS-managed request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
+ * userinfo endpoint, revocation endpoint, and introspection endpoint.
+ * The SAS filter chain takes {@code @Order(1)} and matches only the SAS-managed
+ * request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
  * leaving the existing security filter chain ({@code @Order(2)}) fully intact.
+ *
+ * <p>Phase 2c additions over Phase 2b:
+ * <ul>
+ *   <li>Token revocation endpoint ({@code POST /oauth2/revoke}, RFC 7009) — enabled explicitly.
+ *       When a token is revoked, {@link DomainSyncOAuth2AuthorizationService#remove} is called,
+ *       which in turn marks the corresponding domain {@link RefreshToken} as revoked in the JPA
+ *       store. Access tokens are also removed from the SAS in-memory store.</li>
+ *   <li>Token introspection endpoint ({@code POST /oauth2/introspect}, RFC 7662) — enabled
+ *       explicitly with a custom {@link TenantIntrospectionCustomizer} that appends
+ *       {@code tenant_id} and {@code tenant_type} to the standard response payload.</li>
+ * </ul>
  *
  * <p>Phase 2b additions over Phase 2a:
  * <ul>
@@ -105,6 +117,14 @@ public class AuthorizationServerConfig {
      * that integrates domain reuse-detection. The provider is added to the token endpoint
      * authentication manager; it takes priority over SAS's built-in refresh_token provider
      * because it is added first.
+     *
+     * <p>Phase 2c: explicitly enables token revocation ({@code POST /oauth2/revoke}, RFC 7009)
+     * and token introspection ({@code POST /oauth2/introspect}, RFC 7662). The introspection
+     * endpoint is configured with a {@link TenantIntrospectionCustomizer} that appends
+     * {@code tenant_id} and {@code tenant_type} extension claims to the standard response.
+     * Revocation is handled by the SAS built-in revocation provider which calls
+     * {@link OAuth2AuthorizationService#remove}, triggering
+     * {@link DomainSyncOAuth2AuthorizationService#remove} to revoke the token in the JPA store.
      */
     @Bean
     @Order(1)
@@ -115,6 +135,8 @@ public class AuthorizationServerConfig {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
+
+        TenantIntrospectionCustomizer introspectionCustomizer = new TenantIntrospectionCustomizer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
@@ -129,7 +151,17 @@ public class AuthorizationServerConfig {
                                 // Customizer that captures http to resolve the generator lazily.
                                 .tokenEndpoint(tokenEndpoint ->
                                         tokenEndpoint.authenticationProvider(
-                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService))))
+                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
+                                // Phase 2c: token revocation endpoint (RFC 7009).
+                                // SAS default revocation provider calls authorizationService.remove(),
+                                // which triggers DomainSyncOAuth2AuthorizationService to revoke the
+                                // token in the JPA domain store. No custom provider needed.
+                                .tokenRevocationEndpoint(revocation -> { /* use SAS defaults */ })
+                                // Phase 2c: token introspection endpoint (RFC 7662).
+                                // Custom introspectionResponseHandler enriches the response with
+                                // tenant_id and tenant_type extension claims.
+                                .tokenIntrospectionEndpoint(introspection ->
+                                        introspection.introspectionResponseHandler(introspectionCustomizer)))
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
                 // Redirect to /api/auth/login when unauthenticated — for authorization_code flow

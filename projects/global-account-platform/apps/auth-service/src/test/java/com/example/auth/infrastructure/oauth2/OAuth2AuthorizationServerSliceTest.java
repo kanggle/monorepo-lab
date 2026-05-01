@@ -357,4 +357,134 @@ class OAuth2AuthorizationServerSliceTest {
                 .as("404 means SAS swallowed /api/auth/login — not acceptable")
                 .isNotEqualTo(404);
     }
+
+    // -----------------------------------------------------------------------
+    // 7. Phase 2c — /oauth2/revoke endpoint is active
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(8)
+    @DisplayName("POST /oauth2/revoke → 200 (SAS revocation endpoint active)")
+    void revokeEndpoint_isActive() throws Exception {
+        // First obtain a token to revoke
+        MvcResult tokenResult = mockMvc.perform(post("/oauth2/token")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "account.read"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = objectMapper.readTree(tokenResult.getResponse().getContentAsString())
+                .get("access_token").asText();
+
+        // Revoke: RFC 7009 — server returns 200 regardless of whether token was found
+        mockMvc.perform(post("/oauth2/revoke")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("token", accessToken))
+                .andExpect(status().isOk());
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. Phase 2c — /oauth2/introspect endpoint returns active + tenant claims
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(9)
+    @DisplayName("POST /oauth2/introspect → 200 active=true + tenant_id + tenant_type")
+    void introspectEndpoint_returnsActiveWithTenantClaims() throws Exception {
+        // Issue token
+        MvcResult tokenResult = mockMvc.perform(post("/oauth2/token")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "account.read"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = objectMapper.readTree(tokenResult.getResponse().getContentAsString())
+                .get("access_token").asText();
+
+        // Introspect
+        MvcResult introspectResult = mockMvc.perform(post("/oauth2/introspect")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("token", accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(true))
+                .andReturn();
+
+        String body = introspectResult.getResponse().getContentAsString();
+        assertThat(body).contains("\"active\":true");
+        // Phase 2c: tenant extension claims from TenantIntrospectionCustomizer
+        assertThat(body)
+                .as("introspect response must contain tenant_id (TenantIntrospectionCustomizer)")
+                .contains("tenant_id");
+        assertThat(body).contains("fan-platform");
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. Phase 2c — revoke → introspect → active=false (slice-level E2E)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(10)
+    @DisplayName("revoke then introspect → active=false (slice-level RFC 7009 + RFC 7662 E2E)")
+    void revoke_thenIntrospect_returnsInactive() throws Exception {
+        // Issue
+        MvcResult tokenResult = mockMvc.perform(post("/oauth2/token")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "account.read"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = objectMapper.readTree(tokenResult.getResponse().getContentAsString())
+                .get("access_token").asText();
+
+        // Revoke
+        mockMvc.perform(post("/oauth2/revoke")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("token", accessToken))
+                .andExpect(status().isOk());
+
+        // Introspect — must be inactive
+        mockMvc.perform(post("/oauth2/introspect")
+                        .header("Authorization", BASIC_AUTH)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("token", accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. Phase 2c — POST /api/auth/login returns Deprecation header
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(11)
+    @DisplayName("POST /api/auth/login → Deprecation and Sunset headers present (RFC 8594, RFC 9745)")
+    void legacyLogin_returnsDeprecationHeaders() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"deprecation-test@example.com","password":"any"}
+                                """))
+                .andReturn();
+
+        int status = result.getResponse().getStatus();
+        assertThat(status).isBetween(400, 499);
+        assertThat(status).isNotEqualTo(404);
+
+        // Deprecation headers must be present regardless of auth success/failure
+        assertThat(result.getResponse().getHeader("Deprecation"))
+                .as("Deprecation header must be 'true' (RFC 8594)")
+                .isEqualTo("true");
+        assertThat(result.getResponse().getHeader("Sunset"))
+                .as("Sunset header must be present and reference 2026-08-01 (RFC 9745)")
+                .contains("2026");
+    }
 }

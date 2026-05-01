@@ -8,7 +8,14 @@
 
 | Public Path | Target Service | 인증 필요 | 비고 |
 |---|---|---|---|
-| `POST /api/auth/login` | auth-service | No | — |
+| `GET /.well-known/openid-configuration` | auth-service | No | OIDC Discovery (TASK-BE-251 Phase 2c) |
+| `GET /oauth2/jwks` | auth-service | No | JWKS (TASK-BE-251 Phase 2c) |
+| `GET /oauth2/authorize` | auth-service | No (SAS 처리) | Authorization Code PKCE (TASK-BE-251 Phase 2c) |
+| `POST /oauth2/token` | auth-service | No (SAS 처리) | Token endpoint — authorization_code / client_credentials / refresh_token (TASK-BE-251 Phase 2c) |
+| `GET /oauth2/userinfo` | auth-service | No (SAS 처리) | UserInfo — Bearer token SAS 내부 검증 (TASK-BE-251 Phase 2c) |
+| `POST /oauth2/revoke` | auth-service | No (SAS 처리) | Token Revocation RFC 7009 (TASK-BE-251 Phase 2c) |
+| `POST /oauth2/introspect` | auth-service | No (SAS 처리) | Token Introspection RFC 7662 (TASK-BE-251 Phase 2c) |
+| `POST /api/auth/login` | auth-service | No | **DEPRECATED 2026-05-01, 제거 목표 2026-08-01** — `POST /oauth2/token` 으로 이전 |
 | `POST /api/auth/logout` | auth-service | Yes (access token) | — |
 | `POST /api/auth/refresh` | auth-service | No (refresh token in body) | — |
 | `POST /api/accounts/signup` | account-service | No | — |
@@ -26,6 +33,15 @@
 | `GET /api/admin/audit` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `GET /actuator/health` | gateway 자체 | No | 헬스체크 |
 | `/internal/tenants/{tenantId}/**` | account-service | Yes (JWT) | path `{tenantId}` ↔ JWT `tenant_id` 검사. 불일치 시 403 `TENANT_SCOPE_DENIED`. 외부 노출 금지 |
+
+### OIDC / OAuth2 라우팅 정책 (TASK-BE-251 Phase 2c)
+
+`/oauth2/**` 및 `/.well-known/openid-configuration` 경로는 gateway JWT 검증 미수행(public-paths 선언).
+auth-service 내부의 SAS 필터 체인이 해당 엔드포인트별 인증을 담당한다.
+
+- `id: auth-service-oidc` 라우트가 `/oauth2/**`, `/.well-known/openid-configuration`를 `AUTH_SERVICE_URL`로 forward
+- 기존 `id: auth-service` 라우트(`/api/auth/**`)와 분리 운영 — 상호 영향 없음
+- `POST /oauth2/token` 경로는 rate-limit scope `refresh`에 매핑 (brute-force 보호)
 
 ---
 

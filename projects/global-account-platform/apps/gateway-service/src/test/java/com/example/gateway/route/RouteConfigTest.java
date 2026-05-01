@@ -122,4 +122,105 @@ class RouteConfigTest {
 
         assertThat(config.isPublicRoute(null, "/api/admin/auth/login")).isFalse();
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-251 Phase 2c: OAuth2 / OIDC standard endpoint routing (public paths)
+    // -----------------------------------------------------------------------
+
+    private static final List<String> OIDC_PUBLIC_PATHS = List.of(
+            "GET:/oauth2/**",
+            "POST:/oauth2/**",
+            "GET:/.well-known/openid-configuration"
+    );
+
+    @ParameterizedTest(name = "OIDC/OAuth2 표준 경로 {0} {1} → public (JWT 검증 없이 통과)")
+    @org.junit.jupiter.params.provider.CsvSource({
+            // Discovery + JWKS
+            "GET,  /.well-known/openid-configuration",
+            "GET,  /oauth2/jwks",
+            // Token endpoint (client_credentials, authorization_code, refresh_token)
+            "POST, /oauth2/token",
+            // Revocation (RFC 7009)
+            "POST, /oauth2/revoke",
+            // Introspection (RFC 7662)
+            "POST, /oauth2/introspect",
+            // UserInfo
+            "GET,  /oauth2/userinfo",
+            // Authorization endpoint
+            "GET,  /oauth2/authorize"
+    })
+    @DisplayName("OIDC/OAuth2 표준 경로는 gateway JWT 검증 없이 통과 — auth-service(SAS)가 인증 처리")
+    void oidcOAuth2Paths_arePublic(String method, String path) {
+        RouteConfig config = routeConfigWith(OIDC_PUBLIC_PATHS);
+
+        boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
+
+        assertThat(isPublic)
+                .as("OIDC/OAuth2 endpoint %s %s must be public in gateway (auth-service handles auth)"
+                        .formatted(method.trim(), path.trim()))
+                .isTrue();
+    }
+
+    @ParameterizedTest(name = "OIDC 경로 {0} {1} — method 불일치 시 public 아님")
+    @org.junit.jupiter.params.provider.CsvSource({
+            // POST /.well-known/openid-configuration is not listed — only GET is public
+            "POST, /.well-known/openid-configuration",
+            // DELETE on oauth2 paths is not declared
+            "DELETE, /oauth2/token"
+    })
+    @DisplayName("OIDC public-paths 는 선언된 method만 통과")
+    void oidcPaths_wrongMethod_isNotPublic(String method, String path) {
+        RouteConfig config = routeConfigWith(OIDC_PUBLIC_PATHS);
+
+        boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
+
+        assertThat(isPublic).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("OIDC public-paths 추가 후 기존 /api/auth/login 등 public 경로 회귀 없음")
+    void oidcPublicPaths_regression_existingPublicPathsUnaffected() {
+        List<String> combined = new java.util.ArrayList<>(OIDC_PUBLIC_PATHS);
+        combined.addAll(List.of(
+                "POST:/api/auth/login",
+                "POST:/api/accounts/signup",
+                "POST:/api/auth/refresh",
+                "GET:/api/auth/oauth/authorize",
+                "POST:/api/auth/oauth/callback"
+        ));
+        RouteConfig config = routeConfigWith(combined);
+
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/login")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/accounts/signup")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/refresh")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.GET, "/api/auth/oauth/authorize")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/oauth/callback")).isTrue();
+        // OIDC paths also present
+        assertThat(config.isPublicRoute(HttpMethod.GET, "/.well-known/openid-configuration")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/oauth2/token")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/oauth2/revoke")).isTrue();
+        assertThat(config.isPublicRoute(HttpMethod.POST, "/oauth2/introspect")).isTrue();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("/oauth2/token 경로는 rate-limit 스코프 'refresh' 에 매핑됨")
+    void oauth2TokenPath_rateLimitScope_isRefresh() {
+        EdgeGatewayProperties props = new EdgeGatewayProperties();
+        RouteConfig config = new RouteConfig(props);
+
+        assertThat(config.resolveRateLimitScope("/oauth2/token"))
+                .as("/oauth2/token must use the 'refresh' rate-limit bucket")
+                .isEqualTo("refresh");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("/oauth2/revoke 경로는 global rate-limit 스코프 (null 반환)")
+    void oauth2RevokePath_rateLimitScope_isGlobal() {
+        EdgeGatewayProperties props = new EdgeGatewayProperties();
+        RouteConfig config = new RouteConfig(props);
+
+        assertThat(config.resolveRateLimitScope("/oauth2/revoke"))
+                .as("/oauth2/revoke uses global rate-limit (null scope)")
+                .isNull();
+    }
 }
