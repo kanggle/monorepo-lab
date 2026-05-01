@@ -24,6 +24,7 @@ import com.example.admin.application.exception.TotpNotEnrolledException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.application.exception.ReasonRequiredException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.presentation.dto.EnrollmentRequiredResponse;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -50,6 +51,13 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePermission(PermissionDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("PERMISSION_DENIED", e.getMessage()));
+    }
+
+    // TASK-BE-249 — tenant scope violation
+    @ExceptionHandler(TenantScopeDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleTenantScopeDenied(TenantScopeDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("TENANT_SCOPE_DENIED", e.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

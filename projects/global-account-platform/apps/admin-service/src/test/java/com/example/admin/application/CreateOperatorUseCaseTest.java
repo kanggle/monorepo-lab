@@ -2,11 +2,14 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.RoleNotFoundException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
+import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaRepository;
 import com.gap.security.password.PasswordHasher;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,14 +46,20 @@ class CreateOperatorUseCaseTest {
     @Mock AdminRoleJpaRepository roleRepository;
     @Mock AdminActionAuditor auditor;
     @Mock PasswordHasher passwordHasher;
+    @Mock OperatorLookupPort operatorLookupPort;
 
     CreateOperatorUseCase useCase;
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void initUseCase() {
         OperatorRoleResolver resolver = newResolver(operatorRepository, roleRepository);
         useCase = new CreateOperatorUseCase(
-                operatorRepository, operatorRoleRepository, auditor, passwordHasher, resolver);
+                operatorRepository, operatorRoleRepository, auditor, passwordHasher,
+                resolver, operatorLookupPort);
+
+        // Default: actor is fan-platform (non-platform-scope)
+        when(operatorLookupPort.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "fan-platform")));
     }
 
     @Test
@@ -72,13 +81,14 @@ class CreateOperatorUseCaseTest {
 
         CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
                 "new@example.com", "New Op", "StrongPass1!",
-                List.of("SUPER_ADMIN"), actor(), "provisioning");
+                List.of("SUPER_ADMIN"), actor(), "provisioning", "fan-platform");
 
         assertThat(result.email()).isEqualTo("new@example.com");
         assertThat(result.status()).isEqualTo("ACTIVE");
         assertThat(result.roles()).containsExactly("SUPER_ADMIN");
         assertThat(result.totpEnrolled()).isFalse();
         assertThat(result.auditId()).isEqualTo("audit-new");
+        assertThat(result.tenantId()).isEqualTo("fan-platform");
 
         verify(passwordHasher, times(1)).hash("StrongPass1!");
         verify(operatorRoleRepository, times(1)).saveAll(anyList());
@@ -90,6 +100,7 @@ class CreateOperatorUseCaseTest {
         assertThat(captor.getValue().targetType()).isEqualTo("OPERATOR");
         assertThat(captor.getValue().outcome()).isEqualTo(Outcome.SUCCESS);
         assertThat(captor.getValue().reason()).isEqualTo("provisioning");
+        assertThat(captor.getValue().targetTenantId()).isEqualTo("fan-platform");
     }
 
     @Test
@@ -98,7 +109,7 @@ class CreateOperatorUseCaseTest {
         when(operatorRepository.existsByEmail("dup@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> useCase.createOperator(
-                "dup@example.com", "Dup", "StrongPass1!", List.of(), actor(), "reason"))
+                "dup@example.com", "Dup", "StrongPass1!", List.of(), actor(), "reason", "fan-platform"))
                 .isInstanceOf(OperatorEmailConflictException.class);
 
         verify(operatorRepository, never()).saveAndFlush(any());
@@ -113,7 +124,7 @@ class CreateOperatorUseCaseTest {
 
         assertThatThrownBy(() -> useCase.createOperator(
                 "ok@example.com", "Op", "StrongPass1!",
-                List.of("DOES_NOT_EXIST"), actor(), "reason"))
+                List.of("DOES_NOT_EXIST"), actor(), "reason", "fan-platform"))
                 .isInstanceOf(RoleNotFoundException.class);
 
         verify(operatorRepository, never()).saveAndFlush(any());
@@ -135,9 +146,51 @@ class CreateOperatorUseCaseTest {
 
         CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
                 "empty@example.com", "Empty", "StrongPass1!",
-                List.of(), actor(), "reason");
+                List.of(), actor(), "reason", "fan-platform");
 
         assertThat(result.roles()).isEmpty();
         verify(operatorRoleRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-249: non-platform-scope actor cannot create platform-scope operator")
+    void createOperator_non_platform_scope_actor_cannot_create_platform_scope_operator() {
+        // actor is fan-platform (non-platform-scope) — set up by @BeforeEach
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "super@example.com", "Super", "StrongPass1!",
+                List.of("SUPER_ADMIN"), actor(), "reason", "*"))
+                .isInstanceOf(TenantScopeDeniedException.class)
+                .hasMessageContaining("platform-scope");
+
+        verify(operatorRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-249: platform-scope actor can create platform-scope operator")
+    void createOperator_platform_scope_actor_can_create_platform_scope_operator() {
+        // Override: actor is platform-scope (SUPER_ADMIN)
+        when(operatorLookupPort.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+
+        when(operatorRepository.existsByEmail("super@example.com")).thenReturn(false);
+        when(roleRepository.findByNameIn(List.of("SUPER_ADMIN")))
+                .thenReturn(List.of(role(1L, "SUPER_ADMIN")));
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorRepository.saveAndFlush(any(AdminOperatorJpaEntity.class)))
+                .thenAnswer(inv -> {
+                    AdminOperatorJpaEntity e = inv.getArgument(0);
+                    setField(e, "id", 100L);
+                    return e;
+                });
+        when(operatorRepository.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(operator(99L, "actor-uuid", "a@ex.com", "ACTIVE")));
+        when(auditor.newAuditId()).thenReturn("audit-sa");
+
+        CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
+                "super@example.com", "Super Admin", "StrongPass1!",
+                List.of("SUPER_ADMIN"), actor(), "bootstrap", "*");
+
+        assertThat(result.tenantId()).isEqualTo("*");
     }
 }

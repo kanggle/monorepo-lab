@@ -126,17 +126,18 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
                 Integer.class, SUPER_ADMIN_UUID);
         if (existing == null || existing == 0) {
+            // TASK-BE-249: include tenant_id='*' for SUPER_ADMIN
             jdbcTemplate.update("""
                     INSERT INTO admin_operators
-                      (operator_id, email, password_hash, display_name, status,
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
                        created_at, updated_at, version)
-                    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    VALUES (?, '*', ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
                     """,
                     SUPER_ADMIN_UUID, "super@example.com", "x", "Super Admin");
         }
         jdbcTemplate.update("""
-                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, granted_at, granted_by)
-                SELECT o.id, r.id, NOW(6), NULL
+                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, granted_at, granted_by, tenant_id)
+                SELECT o.id, r.id, NOW(6), NULL, o.tenant_id
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'SUPER_ADMIN'
                 """, SUPER_ADMIN_UUID);
@@ -163,7 +164,8 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                   "email": "%s",
                   "displayName": "Fresh Op",
                   "password": "StrongPass1!",
-                  "roles": ["SUPPORT_LOCK"]
+                  "roles": ["SUPPORT_LOCK"],
+                  "tenantId": "fan-platform"
                 }
                 """.formatted(createdEmail);
 
@@ -249,7 +251,8 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                   "email": "%s",
                   "displayName": "First",
                   "password": "StrongPass1!",
-                  "roles": []
+                  "roles": [],
+                  "tenantId": "fan-platform"
                 }
                 """.formatted(duplicateEmail);
 
@@ -343,11 +346,12 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
                 Integer.class, operatorUuid);
         if (existing == null || existing == 0) {
+            // TASK-BE-249: include tenant_id
             jdbcTemplate.update("""
                     INSERT INTO admin_operators
-                      (operator_id, email, password_hash, display_name, status,
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
                        created_at, updated_at, version)
-                    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    VALUES (?, 'fan-platform', ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
                     """,
                     operatorUuid, email, passwordHash, displayName);
         } else {

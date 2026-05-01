@@ -173,13 +173,14 @@ class OperatorAdminControllerTest {
 
     @Test
     void create_operator_returns_201() throws Exception {
+        // TASK-BE-249: use 7-arg method signature
         when(createOperatorUseCase.createOperator(
-                anyString(), anyString(), anyString(), any(), any(), anyString()))
+                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(new CreateOperatorUseCase.CreateOperatorResult(
                         "op-new", "new@example.com", "New", "ACTIVE",
                         List.of("SUPPORT_LOCK"), false,
                         Instant.parse("2026-04-24T10:00:00Z"),
-                        "audit-new"));
+                        "audit-new", "fan-platform"));
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -191,18 +192,21 @@ class OperatorAdminControllerTest {
                                   "email": "new@example.com",
                                   "displayName": "New",
                                   "password": "StrongPass1!",
-                                  "roles": ["SUPPORT_LOCK"]
+                                  "roles": ["SUPPORT_LOCK"],
+                                  "tenantId": "fan-platform"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.operatorId").value("op-new"))
-                .andExpect(jsonPath("$.auditId").value("audit-new"));
+                .andExpect(jsonPath("$.auditId").value("audit-new"))
+                .andExpect(jsonPath("$.tenantId").value("fan-platform"));
     }
 
     @Test
     void create_operator_duplicate_email_returns_409() throws Exception {
         doThrow(new OperatorEmailConflictException("dup"))
-                .when(createOperatorUseCase).createOperator(anyString(), anyString(), anyString(), any(), any(), anyString());
+                .when(createOperatorUseCase).createOperator(
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -214,7 +218,8 @@ class OperatorAdminControllerTest {
                                   "email": "dup@example.com",
                                   "displayName": "Dup",
                                   "password": "StrongPass1!",
-                                  "roles": []
+                                  "roles": [],
+                                  "tenantId": "fan-platform"
                                 }
                                 """))
                 .andExpect(status().isConflict())
@@ -224,7 +229,8 @@ class OperatorAdminControllerTest {
     @Test
     void create_operator_unknown_role_returns_400() throws Exception {
         doThrow(new RoleNotFoundException("GHOST"))
-                .when(createOperatorUseCase).createOperator(anyString(), anyString(), anyString(), any(), any(), anyString());
+                .when(createOperatorUseCase).createOperator(
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -236,7 +242,8 @@ class OperatorAdminControllerTest {
                                   "email": "new@example.com",
                                   "displayName": "X",
                                   "password": "StrongPass1!",
-                                  "roles": ["GHOST"]
+                                  "roles": ["GHOST"],
+                                  "tenantId": "fan-platform"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -255,11 +262,57 @@ class OperatorAdminControllerTest {
                                   "email": "new@example.com",
                                   "displayName": "X",
                                   "password": "short",
+                                  "roles": [],
+                                  "tenantId": "fan-platform"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void create_operator_missing_tenant_id_returns_400() throws Exception {
+        // TASK-BE-249: tenantId is now required
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "idemp-5a")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "new@example.com",
+                                  "displayName": "X",
+                                  "password": "StrongPass1!",
                                   "roles": []
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void create_operator_tenant_scope_denied_returns_403() throws Exception {
+        // TASK-BE-249: non-platform-scope actor trying to create tenantId='*' → 403
+        doThrow(new com.example.admin.application.exception.TenantScopeDeniedException("platform-scope only"))
+                .when(createOperatorUseCase).createOperator(
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
+
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "idemp-ts-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "super@example.com",
+                                  "displayName": "Super",
+                                  "password": "StrongPass1!",
+                                  "roles": ["SUPER_ADMIN"],
+                                  "tenantId": "*"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
     }
 
     @Test
@@ -273,7 +326,8 @@ class OperatorAdminControllerTest {
                                   "email": "new@example.com",
                                   "displayName": "X",
                                   "password": "StrongPass1!",
-                                  "roles": []
+                                  "roles": [],
+                                  "tenantId": "fan-platform"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())

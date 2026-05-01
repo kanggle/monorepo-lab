@@ -139,17 +139,18 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
                 Integer.class, OPERATOR_UUID);
         if (existing == null || existing == 0) {
+            // TASK-BE-249: SUPER_ADMIN operator carries platform-scope sentinel tenant_id='*'
             jdbcTemplate.update("""
                     INSERT INTO admin_operators
-                      (operator_id, email, password_hash, display_name, status,
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
                        created_at, updated_at, version)
-                    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    VALUES (?, '*', ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
                     """,
                     OPERATOR_UUID, "integ@example.com", "x", "Integ Op");
         }
         jdbcTemplate.update("""
-                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, granted_at, granted_by)
-                SELECT o.id, r.id, NOW(6), NULL
+                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+                SELECT o.id, r.id, '*', NOW(6), NULL
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'SUPER_ADMIN'
                 """, OPERATOR_UUID);

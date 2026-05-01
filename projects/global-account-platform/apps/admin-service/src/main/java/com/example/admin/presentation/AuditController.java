@@ -36,6 +36,17 @@ public class AuditController {
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
 
+    /**
+     * TASK-BE-249: {@code tenantId} query param added.
+     * <ul>
+     *   <li>Omitted → operator's own tenant (use-case default).</li>
+     *   <li>{@code tenantId=*} → cross-tenant view; only allowed when operator is SUPER_ADMIN.</li>
+     *   <li>{@code tenantId=foo} → allowed when operator.tenantId == "foo" OR operator is SUPER_ADMIN.</li>
+     * </ul>
+     * Tenant-scope enforcement is performed inside {@link AuditQueryUseCase} which
+     * throws {@link com.example.admin.application.exception.TenantScopeDeniedException}
+     * → mapped to 403 {@code TENANT_SCOPE_DENIED} by {@code AdminExceptionHandler}.
+     */
     @GetMapping
     @RequiresPermission(Permission.AUDIT_READ)
     public ResponseEntity<AuditQueryResponse> query(
@@ -44,6 +55,7 @@ public class AuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(required = false) String source,
+            @RequestParam(required = false) String tenantId,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -76,7 +88,7 @@ public class AuditController {
 
         var cmd = new QueryAuditCommand(
                 accountId, actionCode, from, to, source,
-                page, size, idempotencyKey, reason, op);
+                page, size, idempotencyKey, reason, op, tenantId);
 
         return ResponseEntity.ok(AuditQueryResponse.from(useCase.query(cmd)));
     }

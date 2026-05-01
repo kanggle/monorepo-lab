@@ -44,9 +44,27 @@
 - **결과**: →DELETED (30일 유예) + 전체 세션 revoke + 감사 기록
 
 ### Audit Query
-- **입력**: accountId, actionCode, from, to, source, page, size
+- **입력**: accountId, actionCode, from, to, source, tenantId (TASK-BE-249), page, size
 - **실행**: admin → security-service query + 자체 admin_actions 조회 → 통합 응답
 - **결과**: 통합 감사 뷰 + **조회 자체를 meta-audit로 기록**
+- **테넌트 스코프**: `tenantId` 파라미터 생략 시 운영자 자신의 테넌트 기본값. 일반 운영자가 다른 테넌트를 지정하면 `403 TENANT_SCOPE_DENIED`.
+
+### Operator Create
+- **입력**: email, displayName, password, roles, tenantId (TASK-BE-249), reason, idempotency-key
+- **검증**: 비-플랫폼 스코프 운영자는 `tenantId='*'` 운영자를 생성할 수 없다 (방어-심층 체크 → `403 TENANT_SCOPE_DENIED`).
+
+## Cross-Tenant Semantics (TASK-BE-249)
+
+admin_actions 행은 `tenant_id`(운영자 테넌트)와 `target_tenant_id`(대상 테넌트)를 모두 기록한다.
+
+| 운영자 유형 | `admin_actions.tenant_id` | `admin_actions.target_tenant_id` |
+|---|---|---|
+| 일반 운영자 | `operator.tenantId` | `operator.tenantId` |
+| SUPER_ADMIN | `'*'` | `<대상 테넌트 ID>` |
+
+SUPER_ADMIN(`tenant_id='*'`)이 아닌 운영자가 다른 테넌트 데이터에 접근 시도하면 `TenantScopeDeniedException` → HTTP 403 `TENANT_SCOPE_DENIED`.
+
+ADR: [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)
 
 ## Business Rules
 

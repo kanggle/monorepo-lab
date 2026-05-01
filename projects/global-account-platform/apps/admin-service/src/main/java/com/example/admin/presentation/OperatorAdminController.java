@@ -98,7 +98,8 @@ public class OperatorAdminController {
                 body.password(),
                 body.roles(),
                 OperatorContextHolder.require(),
-                reason);
+                reason,
+                body.tenantId());  // TASK-BE-249
 
         CreateOperatorResponse response = new CreateOperatorResponse(
                 result.operatorId(),
@@ -108,7 +109,8 @@ public class OperatorAdminController {
                 result.roles(),
                 result.totpEnrolled(),
                 result.createdAt(),
-                result.auditId());
+                result.auditId(),
+                result.tenantId());  // TASK-BE-249
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

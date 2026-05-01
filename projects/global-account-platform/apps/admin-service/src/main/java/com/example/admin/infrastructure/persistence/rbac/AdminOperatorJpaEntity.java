@@ -30,6 +30,11 @@ public class AdminOperatorJpaEntity {
     @Column(name = "operator_id", length = 36, nullable = false, unique = true)
     private String operatorId;
 
+    // TASK-BE-249: tenant_id for multi-tenant row-level isolation.
+    // SUPER_ADMIN sentinel value is '*' (AdminOperator.PLATFORM_TENANT_ID).
+    @Column(name = "tenant_id", length = 32, nullable = false)
+    private String tenantId;
+
     @Column(name = "email", length = 255, nullable = false)
     private String email;
 
@@ -76,14 +81,39 @@ public class AdminOperatorJpaEntity {
      * must supply a pre-computed Argon2id hash; the entity never sees the
      * plaintext password.
      */
+    /**
+     * Factory for {@code POST /api/admin/operators} (TASK-BE-083).
+     *
+     * @deprecated Use {@link #create(String, String, String, String, String, String, Instant)}
+     *             which requires {@code tenantId}. This overload defaults to {@code "fan-platform"}
+     *             for backward-compat with legacy call sites that predate TASK-BE-249.
+     */
+    @Deprecated
     public static AdminOperatorJpaEntity create(String operatorId,
                                                 String email,
                                                 String passwordHash,
                                                 String displayName,
                                                 String status,
                                                 Instant now) {
+        return create(operatorId, email, passwordHash, displayName, status, "fan-platform", now);
+    }
+
+    /**
+     * Factory for {@code POST /api/admin/operators} (TASK-BE-083 / TASK-BE-249).
+     * Callers must supply a pre-computed Argon2id hash; the entity never sees the
+     * plaintext password. {@code tenantId} is required (use
+     * {@link com.example.admin.domain.rbac.AdminOperator#PLATFORM_TENANT_ID} for SUPER_ADMIN).
+     */
+    public static AdminOperatorJpaEntity create(String operatorId,
+                                                String email,
+                                                String passwordHash,
+                                                String displayName,
+                                                String status,
+                                                String tenantId,
+                                                Instant now) {
         AdminOperatorJpaEntity e = new AdminOperatorJpaEntity();
         e.operatorId = operatorId;
+        e.tenantId = tenantId;
         e.email = email;
         e.passwordHash = passwordHash;
         e.displayName = displayName;
