@@ -142,7 +142,7 @@ public class LoginUseCase {
         // Login success — register/touch the device_session BEFORE issuing tokens so the
         // device_id is available as a JWT claim and as a refresh_tokens.device_id stamp.
         RegisterDeviceSessionResult sessionResult =
-                registerOrUpdateDeviceSessionUseCase.execute(accountId, ctx);
+                registerOrUpdateDeviceSessionUseCase.execute(accountId, resolvedTenantId, ctx);
         String deviceId = sessionResult.deviceId();
 
         TokenPair tokenPair = tokenGeneratorPort.generateTokenPair(accountId, "user", deviceId,
@@ -169,7 +169,7 @@ public class LoginUseCase {
                 ctx, deviceId, sessionResult.newSession());
         if (sessionResult.newSession()) {
             authEventPublisher.publishAuthSessionCreated(
-                    accountId, deviceId, refreshJti,
+                    accountId, resolvedTenantId, deviceId, refreshJti,
                     fingerprintHash(ctx.deviceFingerprint()),
                     ctx.userAgentFamily(),
                     ctx.ipMasked(),

@@ -82,6 +82,7 @@ class LogoutUseCaseTest {
 
         verify(authEventPublisher).publishAuthSessionRevoked(
                 eq(ACCOUNT_ID),
+                anyString(),
                 eq(DEVICE_ID),
                 eq(RevokeReason.USER_REQUESTED.name()),
                 eq(List.of(JTI)),
@@ -106,7 +107,7 @@ class LogoutUseCaseTest {
 
         verify(deviceSessionRepository).save(any(DeviceSession.class));
         verify(authEventPublisher).publishAuthSessionRevoked(
-                eq(ACCOUNT_ID), eq(DEVICE_ID), eq("USER_REQUESTED"),
+                eq(ACCOUNT_ID), anyString(), eq(DEVICE_ID), eq("USER_REQUESTED"),
                 eq(List.of(JTI)), any(Instant.class), eq("USER"), eq(ACCOUNT_ID));
     }
 
@@ -125,7 +126,7 @@ class LogoutUseCaseTest {
         verify(refreshTokenRepository).save(any(RefreshToken.class));
         verify(deviceSessionRepository, never()).save(any(DeviceSession.class));
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
-                anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
+                anyString(), anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
     }
 
     @Test
@@ -140,7 +141,7 @@ class LogoutUseCaseTest {
 
         verify(tokenBlacklist, never()).blacklist(anyString(), anyLong());
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
-                anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
+                anyString(), anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
     }
 
     @Test
@@ -153,6 +154,6 @@ class LogoutUseCaseTest {
 
         verify(refreshTokenRepository, never()).findByJti(anyString());
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
-                anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
+                anyString(), anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
     }
 }

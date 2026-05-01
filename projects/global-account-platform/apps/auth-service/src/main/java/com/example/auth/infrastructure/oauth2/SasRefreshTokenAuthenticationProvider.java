@@ -372,6 +372,11 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 revokedCount
         );
 
+        // TASK-BE-248 Phase 2b: tenantId from the reused token's DB record (authoritative).
+        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
+                ? existingToken.getTenantId()
+                : "fan-platform"; // SAS flow default per persistRotation fallback
+
         for (DeviceSession session : activeSessions) {
             if (session.isRevoked()) {
                 continue;
@@ -381,6 +386,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             deviceSessionRepository.save(session);
             authEventPublisher.publishAuthSessionRevoked(
                     accountId,
+                    tenantId,
                     session.getDeviceId(),
                     RevokeReason.TOKEN_REUSE.name(),
                     deviceJtis,

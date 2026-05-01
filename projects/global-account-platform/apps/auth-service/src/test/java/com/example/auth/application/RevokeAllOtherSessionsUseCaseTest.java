@@ -65,7 +65,7 @@ class RevokeAllOtherSessionsUseCaseTest {
         assertThat(current.isRevoked()).isFalse();
         verify(deviceSessionRepository, times(2)).save(any(DeviceSession.class));
         verify(authEventPublisher, times(2)).publishAuthSessionRevoked(
-                anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), anyString());
+                anyString(), anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), anyString());
     }
 
     @Test

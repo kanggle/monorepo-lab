@@ -88,7 +88,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
-        when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), any(SessionContext.class)))
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),
                 any(TenantContext.class)))
@@ -120,7 +120,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
-        when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), any(SessionContext.class)))
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),
                 any(TenantContext.class)))

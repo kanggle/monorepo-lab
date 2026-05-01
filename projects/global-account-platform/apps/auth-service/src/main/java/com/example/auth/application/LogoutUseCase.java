@@ -97,6 +97,7 @@ public class LogoutUseCase {
 
         authEventPublisher.publishAuthSessionRevoked(
                 accountId,
+                tenantId,
                 deviceId,
                 RevokeReason.USER_REQUESTED.name(),
                 List.of(jti),

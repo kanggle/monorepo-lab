@@ -17,6 +17,18 @@ public class AuthEventPublisher extends BaseEventPublisher {
     private static final String AGGREGATE_TYPE = "auth";
     private static final String SOURCE = "auth-service";
 
+    /**
+     * TASK-BE-248 Phase 2b: guard used by all publish methods that require a non-blank
+     * tenantId. Throws {@link IllegalArgumentException} rather than silently passing null
+     * downstream, so callers get a compile-time-equivalent runtime failure early.
+     */
+    private static String requireTenantId(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("tenantId required");
+        }
+        return tenantId;
+    }
+
     public AuthEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
         super(outboxWriter, objectMapper);
     }
@@ -95,10 +107,14 @@ public class AuthEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * Full form with tenantId (TASK-BE-229).
+     * Full form with tenantId (TASK-BE-229 / TASK-BE-248).
+     *
+     * <p>TASK-BE-248 Phase 2b: tenantId is required. A null or blank value throws
+     * {@link IllegalArgumentException}.
      */
     public void publishLoginSucceeded(String accountId, String sessionJti, String tenantId,
                                       SessionContext ctx, String deviceId, Boolean isNewDevice) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = buildLoginSucceededBase(accountId, sessionJti, tenantId, ctx);
         Object timestamp = payload.remove("timestamp");
         payload.put("deviceId", deviceId);
@@ -108,8 +124,11 @@ public class AuthEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * Extended form carrying {@code loginMethod} for OAuth social logins.
+     * Extended form carrying {@code loginMethod} for OAuth social logins (legacy — no tenantId).
+     *
+     * @deprecated Use {@link #publishLoginSucceeded(String, String, String, SessionContext, String, Boolean, String)}.
      */
+    @Deprecated
     public void publishLoginSucceeded(String accountId, String sessionJti, SessionContext ctx,
                                       String deviceId, Boolean isNewDevice, String loginMethod) {
         Map<String, Object> payload = buildLoginSucceededBase(accountId, sessionJti, null, ctx);
@@ -122,7 +141,32 @@ public class AuthEventPublisher extends BaseEventPublisher {
     }
 
     /**
+     * Full form with tenantId and loginMethod for OAuth social logins (TASK-BE-248).
+     *
+     * <p>TASK-BE-248 Phase 2b: tenantId is required. A null or blank value throws
+     * {@link IllegalArgumentException}.
+     */
+    public void publishLoginSucceeded(String accountId, String sessionJti, String tenantId,
+                                      SessionContext ctx, String deviceId, Boolean isNewDevice,
+                                      String loginMethod) {
+        requireTenantId(tenantId);
+        Map<String, Object> payload = buildLoginSucceededBase(accountId, sessionJti, tenantId, ctx);
+        Object timestamp = payload.remove("timestamp");
+        payload.put("deviceId", deviceId);
+        payload.put("isNewDevice", isNewDevice);
+        payload.put("loginMethod", loginMethod);
+        payload.put("timestamp", timestamp);
+        write("auth.login.succeeded", accountId, payload);
+    }
+
+    /**
      * Builds the common base fields for login.succeeded including tenantId (TASK-BE-229).
+     *
+     * <p>TASK-BE-248 Phase 2b: tenantId is always required for login.succeeded. The legacy
+     * 3-arg form passes null intentionally (backwards-compat); all other callers must supply
+     * a non-null, non-blank value — the null is rendered as an absent key only for the legacy
+     * path which is {@code @Deprecated}. For the full-form paths the caller must pass a valid
+     * tenantId or the requireTenantId guard will throw before reaching here.
      */
     private Map<String, Object> buildLoginSucceededBase(String accountId, String sessionJti,
                                                          String tenantId, SessionContext ctx) {
@@ -141,10 +185,14 @@ public class AuthEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * Publishes auth.token.refreshed with tenantId (TASK-BE-229).
+     * Publishes auth.token.refreshed with tenantId (TASK-BE-229 / TASK-BE-248).
+     *
+     * <p>TASK-BE-248 Phase 2b: tenantId is required. A null or blank value throws
+     * {@link IllegalArgumentException}.
      */
     public void publishTokenRefreshed(String accountId, String tenantId,
                                        String previousJti, String newJti, SessionContext ctx) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         payload.put("tenantId", tenantId);
@@ -211,15 +259,23 @@ public class AuthEventPublisher extends BaseEventPublisher {
      * Publishes {@code auth.session.created} when a new device session is registered on
      * login. Spec: specs/contracts/events/auth-events.md.
      *
+     * <p>TASK-BE-248 Phase 2b: {@code tenantId} is now a required field. Callers must pass
+     * the resolved tenant from the login flow. A null or blank value throws
+     * {@link IllegalArgumentException} at publish time.
+     *
+     * @param tenantId         the tenant that owns the session (required, non-blank)
      * @param evictedDeviceIds device_ids that were evicted in the same transaction by the
      *                         concurrent-session limit; empty list if none
      */
-    public void publishAuthSessionCreated(String accountId, String deviceId, String sessionJti,
+    public void publishAuthSessionCreated(String accountId, String tenantId, String deviceId,
+                                          String sessionJti,
                                           String deviceFingerprintHash, String userAgentFamily,
                                           String ipMasked, String geoCountry, Instant issuedAt,
                                           List<String> evictedDeviceIds) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
+        payload.put("tenantId", tenantId);
         payload.put("deviceId", deviceId);
         payload.put("sessionJti", sessionJti);
         payload.put("deviceFingerprintHash", deviceFingerprintHash);
@@ -236,16 +292,23 @@ public class AuthEventPublisher extends BaseEventPublisher {
      * Publishes {@code auth.session.revoked} for a single device session per the
      * (TASK-BE-022) payload shape. Spec: specs/contracts/events/auth-events.md.
      *
-     * @param reason       canonical {@code RevokeReason} name
-     * @param revokedJtis  jtis of refresh_tokens flipped from active to revoked in this op
-     * @param actorType    {@code USER | ADMIN | SYSTEM}
+     * <p>TASK-BE-248 Phase 2b: {@code tenantId} is now a required field. A null or blank
+     * value throws {@link IllegalArgumentException} at publish time.
+     *
+     * @param tenantId       the tenant that owns the session (required, non-blank)
+     * @param reason         canonical {@code RevokeReason} name
+     * @param revokedJtis    jtis of refresh_tokens flipped from active to revoked in this op
+     * @param actorType      {@code USER | ADMIN | SYSTEM}
      * @param actorAccountId actor identifier (null for SYSTEM)
      */
-    public void publishAuthSessionRevoked(String accountId, String deviceId, String reason,
+    public void publishAuthSessionRevoked(String accountId, String tenantId, String deviceId,
+                                          String reason,
                                           List<String> revokedJtis, Instant revokedAt,
                                           String actorType, String actorAccountId) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
+        payload.put("tenantId", tenantId);
         payload.put("deviceId", deviceId);
         payload.put("reason", reason);
         payload.put("revokedJtis", revokedJtis != null ? revokedJtis : List.of());

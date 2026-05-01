@@ -245,6 +245,11 @@ public class RefreshTokenUseCase {
                 revokedCount
         );
 
+        // TASK-BE-248 Phase 2b: tenantId from the reused token's DB record.
+        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
+                ? existingToken.getTenantId()
+                : TenantContext.DEFAULT_TENANT_ID;
+
         for (DeviceSession session : activeSessions) {
             if (session.isRevoked()) {
                 continue;
@@ -254,6 +259,7 @@ public class RefreshTokenUseCase {
             deviceSessionRepository.save(session);
             authEventPublisher.publishAuthSessionRevoked(
                     accountId,
+                    tenantId,
                     session.getDeviceId(),
                     RevokeReason.TOKEN_REUSE.name(),
                     deviceJtis,

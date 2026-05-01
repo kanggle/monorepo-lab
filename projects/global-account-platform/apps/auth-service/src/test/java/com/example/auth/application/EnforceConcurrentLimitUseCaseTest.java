@@ -50,17 +50,19 @@ class EnforceConcurrentLimitUseCaseTest {
         ReflectionTestUtils.setField(useCase, "maxActiveSessions", 10);
     }
 
+    private static final String TENANT_ID = "fan-platform";
+
     @Test
     @DisplayName("no-op when active count + 1 still fits the limit")
     void noopWhenWithinLimit() {
         when(deviceSessionRepository.countActiveByAccountId(ACCOUNT_ID)).thenReturn(8L);
 
-        List<String> evicted = useCase.enforce(ACCOUNT_ID);
+        List<String> evicted = useCase.enforce(ACCOUNT_ID, TENANT_ID);
 
         assertThat(evicted).isEmpty();
         verify(deviceSessionRepository, never()).findOldestActiveByAccountId(anyString(), anyInt());
         verify(authEventPublisher, never())
-                .publishAuthSessionRevoked(anyString(), anyString(), anyString(),
+                .publishAuthSessionRevoked(anyString(), anyString(), anyString(), anyString(),
                         anyList(), any(Instant.class), anyString(), any());
     }
 
@@ -76,7 +78,7 @@ class EnforceConcurrentLimitUseCaseTest {
         when(refreshTokenRepository.findActiveJtisByDeviceId("dev-oldest"))
                 .thenReturn(List.of("jti-A"));
 
-        List<String> evicted = useCase.enforce(ACCOUNT_ID);
+        List<String> evicted = useCase.enforce(ACCOUNT_ID, TENANT_ID);
 
         assertThat(evicted).containsExactly("dev-oldest");
         assertThat(oldest.getRevokeReason()).isEqualTo(RevokeReason.EVICTED_BY_LIMIT);
@@ -86,7 +88,7 @@ class EnforceConcurrentLimitUseCaseTest {
 
         ArgumentCaptor<List<String>> jtisCaptor = jtisCaptor();
         verify(authEventPublisher).publishAuthSessionRevoked(
-                eq(ACCOUNT_ID), eq("dev-oldest"),
+                eq(ACCOUNT_ID), eq(TENANT_ID), eq("dev-oldest"),
                 eq(RevokeReason.EVICTED_BY_LIMIT.name()),
                 jtisCaptor.capture(), any(Instant.class),
                 eq("SYSTEM"), eq(null));
@@ -104,13 +106,13 @@ class EnforceConcurrentLimitUseCaseTest {
         when(refreshTokenRepository.findActiveJtisByDeviceId(anyString()))
                 .thenReturn(List.of());
 
-        List<String> evicted = useCase.enforce(ACCOUNT_ID);
+        List<String> evicted = useCase.enforce(ACCOUNT_ID, TENANT_ID);
 
         assertThat(evicted).containsExactly("dev-a", "dev-b");
         verify(refreshTokenRepository, times(1)).revokeAllByDeviceId("dev-a");
         verify(refreshTokenRepository, times(1)).revokeAllByDeviceId("dev-b");
         verify(authEventPublisher, times(2))
-                .publishAuthSessionRevoked(eq(ACCOUNT_ID), anyString(),
+                .publishAuthSessionRevoked(eq(ACCOUNT_ID), eq(TENANT_ID), anyString(),
                         eq(RevokeReason.EVICTED_BY_LIMIT.name()),
                         anyList(), any(Instant.class), eq("SYSTEM"), eq(null));
     }

@@ -109,7 +109,7 @@ class AuthEventPublisherTest {
 
         // when
         authEventPublisher.publishAuthSessionRevoked(
-                ACCOUNT_ID, "dev-1", "USER_REQUESTED",
+                ACCOUNT_ID, "fan-platform", "dev-1", "USER_REQUESTED",
                 revokedJtis, revokedAt, "USER", ACCOUNT_ID);
 
         // then
@@ -128,6 +128,7 @@ class AuthEventPublisherTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) envelope.get("payload");
         assertThat(payload).containsEntry("accountId", ACCOUNT_ID);
+        assertThat(payload).containsEntry("tenantId", "fan-platform");
         assertThat(payload).containsEntry("deviceId", "dev-1");
         assertThat(payload).containsEntry("reason", "USER_REQUESTED");
         assertThat(payload).containsEntry("revokedJtis", revokedJtis);

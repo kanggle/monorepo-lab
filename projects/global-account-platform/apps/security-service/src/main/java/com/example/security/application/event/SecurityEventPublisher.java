@@ -32,7 +32,21 @@ public class SecurityEventPublisher extends BaseEventPublisher {
         super(outboxWriter, objectMapper);
     }
 
+    /**
+     * TASK-BE-248 Phase 2b: every publish method must carry a non-blank tenantId.
+     * {@link SuspiciousEvent} already rejects null tenantId at construction time, so
+     * this guard is a final defence against a blank-string edge case.
+     */
+    private static void requireTenantId(SuspiciousEvent event) {
+        String tenantId = event.getTenantId();
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "tenantId required for SecurityEvent publish (eventId=" + event.getId() + ")");
+        }
+    }
+
     public void publishSuspiciousDetected(SuspiciousEvent event) {
+        requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
         payload.put("actionTaken", event.getActionTaken().name());
         payload.put("evidence", event.getEvidence());
@@ -42,6 +56,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
     }
 
     public void publishAutoLockTriggered(SuspiciousEvent event, AccountLockClient.Status status) {
+        requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
         payload.put("lockRequestResult", mapStatus(status));
         payload.put("lockRequestedAt", Instant.now().toString());
@@ -53,6 +68,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
      * by the operator manual-intervention path.
      */
     public void publishAutoLockPending(SuspiciousEvent event) {
+        requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
         payload.put("reason", "ACCOUNT_SERVICE_UNREACHABLE");
         payload.put("raisedAt", Instant.now().toString());
@@ -67,9 +83,8 @@ public class SecurityEventPublisher extends BaseEventPublisher {
      * {@code AuthEventPublisher#buildLoginSucceededBase} pattern (TASK-BE-131).
      *
      * <p>TASK-BE-248 Phase 1: {@code tenant_id} is now always included in the outbox
-     * payload so downstream consumers can validate the field presence. Null tenantId
-     * is rejected at the {@link com.example.security.domain.suspicious.SuspiciousEvent}
-     * constructor, so it is safe to include directly here.
+     * payload so downstream consumers can validate the field presence. Null/blank tenantId
+     * is rejected by {@link #requireTenantId(SuspiciousEvent)} before this is called.
      */
     private Map<String, Object> buildSuspiciousEventBase(SuspiciousEvent event) {
         Map<String, Object> payload = new LinkedHashMap<>();

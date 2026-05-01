@@ -31,8 +31,17 @@ public class RegisterOrUpdateDeviceSessionUseCase {
     private final DeviceSessionRepository deviceSessionRepository;
     private final EnforceConcurrentLimitUseCase enforceConcurrentLimitUseCase;
 
+    /**
+     * Registers or updates a device session within the caller's transaction.
+     *
+     * <p>TASK-BE-248 Phase 2b: {@code tenantId} is now required so that any eviction
+     * events ({@code auth.session.revoked}) carry the correct tenant context.
+     *
+     * @param tenantId the tenant that owns the account (required, non-blank)
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public RegisterDeviceSessionResult execute(String accountId, SessionContext ctx) {
+    public RegisterDeviceSessionResult execute(String accountId, String tenantId,
+                                               SessionContext ctx) {
         String fingerprint = normalizeFingerprint(ctx.deviceFingerprint());
         Instant now = Instant.now();
 
@@ -51,7 +60,7 @@ public class RegisterOrUpdateDeviceSessionUseCase {
         }
 
         // New device — enforce concurrent limit BEFORE inserting (D4 step 2).
-        List<String> evicted = enforceConcurrentLimitUseCase.enforce(accountId);
+        List<String> evicted = enforceConcurrentLimitUseCase.enforce(accountId, tenantId);
 
         String deviceId = UuidV7.randomString();
         DeviceSession created = DeviceSession.create(

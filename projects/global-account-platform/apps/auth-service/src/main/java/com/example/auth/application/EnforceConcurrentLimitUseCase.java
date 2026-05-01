@@ -46,10 +46,14 @@ public class EnforceConcurrentLimitUseCase {
      * at most {@code maxActiveSessions - 1} sessions remain (the caller is about to
      * insert one more).
      *
+     * <p>TASK-BE-248 Phase 2b: {@code tenantId} is now required so that the
+     * {@code auth.session.revoked} event payload carries the correct tenant context.
+     *
+     * @param tenantId the tenant that owns the account (required, non-blank)
      * @return device_ids that were evicted. Empty list if none.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<String> enforce(String accountId) {
+    public List<String> enforce(String accountId, String tenantId) {
         long activeCount = deviceSessionRepository.countActiveByAccountId(accountId);
         // Caller will insert one new session, so we must end with <= max - 1 active.
         long target = (long) maxActiveSessions - 1;
@@ -72,6 +76,7 @@ public class EnforceConcurrentLimitUseCase {
 
             authEventPublisher.publishAuthSessionRevoked(
                     accountId,
+                    tenantId,
                     victim.getDeviceId(),
                     RevokeReason.EVICTED_BY_LIMIT.name(),
                     revokedJtis,
