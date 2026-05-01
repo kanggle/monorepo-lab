@@ -254,6 +254,29 @@ sync_project() {
         return 0
     fi
 
+    # ── Step 0: Source-state guard ──
+    # The clone in Step 1 uses local refs (--no-local copies all refs but the
+    # default HEAD follows the source's local `main`). If local main has drifted
+    # from origin/main, the sync would publish the wrong state to the standalone
+    # repo. Refuse to proceed unless local main exactly matches origin/main.
+    log "Verifying source repo main matches origin/main..."
+    git -C "$MONOREPO_DIR" fetch origin main --quiet 2>/dev/null || \
+        warn "  could not fetch origin main; comparing against last-known origin/main"
+    local main_sha origin_sha
+    main_sha=$(git -C "$MONOREPO_DIR" rev-parse main 2>/dev/null || echo "")
+    origin_sha=$(git -C "$MONOREPO_DIR" rev-parse origin/main 2>/dev/null || echo "")
+    if [ -z "$main_sha" ] || [ -z "$origin_sha" ]; then
+        fail "  could not resolve main / origin/main in $MONOREPO_DIR. Ensure both refs exist."
+    fi
+    if [ "$main_sha" != "$origin_sha" ]; then
+        local ahead behind
+        ahead=$(git -C "$MONOREPO_DIR" rev-list --count "$origin_sha..$main_sha" 2>/dev/null || echo "?")
+        behind=$(git -C "$MONOREPO_DIR" rev-list --count "$main_sha..$origin_sha" 2>/dev/null || echo "?")
+        fail "  source repo's local main has diverged from origin/main (ahead $ahead, behind $behind).
+                Run 'git -C $MONOREPO_DIR fetch origin main && git -C $MONOREPO_DIR merge --ff-only origin/main' first,
+                or sync from a fresh clone (git clone https://github.com/<owner>/<monorepo>)."
+    fi
+
     # ── Step 1: Clone ──
     rm -rf "$workdir"
     mkdir -p "$TEMP_ROOT"
@@ -301,6 +324,11 @@ sync_project() {
         sh /repo/_filter_repo_run.sh
 
     cd "$workdir"
+
+    # The filter-repo runner script leaked into the workdir. Remove it before
+    # the post-process commit picks it up via `git add -A`, otherwise it ends
+    # up force-pushed to the standalone repo as an orphan file at the root.
+    rm -f _filter_repo_run.sh
 
     # ── Step 3: Post-process ──
     log "Post-processing for $ptype project..."
