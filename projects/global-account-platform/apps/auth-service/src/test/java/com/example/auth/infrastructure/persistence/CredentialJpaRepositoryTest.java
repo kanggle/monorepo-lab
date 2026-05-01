@@ -102,8 +102,8 @@ class CredentialJpaRepositoryTest {
 
     private void insertCredential(String accountId, String email) {
         jdbc.update(
-                "INSERT INTO credentials (account_id, email, credential_hash, hash_algorithm, created_at, updated_at, version)" +
-                " VALUES (?, ?, ?, ?, NOW(6), NOW(6), 0)",
+                "INSERT INTO credentials (account_id, tenant_id, email, credential_hash, hash_algorithm, created_at, updated_at, version)" +
+                " VALUES (?, 'fan-platform', ?, ?, ?, NOW(6), NOW(6), 0)",
                 accountId, email, "$argon2id$placeholder", "argon2id");
     }
 
