@@ -24,7 +24,7 @@ class DeviceChangeRuleTest {
     }
 
     private EvaluationContext succeededCtxWithDevice(String fp, String deviceId, Boolean isNewDevice) {
-        return new EvaluationContext("evt-1", "auth.login.succeeded", "acc-1",
+        return new EvaluationContext(null, "evt-1", "auth.login.succeeded", "acc-1",
                 "1.2.3.***", fp, "KR", Instant.now(), null, deviceId, isNewDevice);
     }
 

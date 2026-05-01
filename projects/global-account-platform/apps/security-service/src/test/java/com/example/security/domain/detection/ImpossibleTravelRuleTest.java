@@ -1,5 +1,6 @@
 package com.example.security.domain.detection;
 
+import com.example.security.domain.Tenants;
 import com.example.security.domain.history.LoginHistoryEntry;
 import com.example.security.domain.history.LoginOutcome;
 import com.example.security.domain.repository.LoginHistoryRepository;
@@ -23,12 +24,14 @@ class ImpossibleTravelRuleTest {
     private final DetectionThresholds thresholds = DetectionThresholds.defaults();
 
     private EvaluationContext succeededCtx(String geoCountry, Instant at) {
-        return new EvaluationContext("evt-1", "auth.login.succeeded", "acc-1",
+        return new EvaluationContext(Tenants.DEFAULT_TENANT_ID,
+                "evt-1", "auth.login.succeeded", "acc-1",
                 "1.2.3.***", "fp-1", geoCountry, at, null);
     }
 
     private LoginHistoryEntry previousLogin(String geoCountry, Instant at) {
-        return new LoginHistoryEntry("evt-0", "acc-1", LoginOutcome.SUCCESS,
+        return new LoginHistoryEntry(Tenants.DEFAULT_TENANT_ID,
+                "evt-0", "acc-1", LoginOutcome.SUCCESS,
                 "1.2.3.***", "Chrome", "fp-1", geoCountry, at);
     }
 
@@ -38,7 +41,7 @@ class ImpossibleTravelRuleTest {
         Instant now = Instant.parse("2026-04-18T10:00:00Z");
         Instant prev = Instant.parse("2026-04-18T09:30:00Z");
 
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin("KR", prev)));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -53,7 +56,7 @@ class ImpossibleTravelRuleTest {
         Instant now = Instant.parse("2026-04-18T10:00:00Z");
         Instant prev = Instant.parse("2026-04-18T09:30:00Z"); // 30 min ago, within 1h window
 
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin("KR", prev)));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -73,7 +76,7 @@ class ImpossibleTravelRuleTest {
         Instant now = Instant.parse("2026-04-18T12:00:00Z");
         Instant prev = Instant.parse("2026-04-18T10:00:00Z"); // 2 hours ago, outside 1h window
 
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin("KR", prev)));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -85,7 +88,7 @@ class ImpossibleTravelRuleTest {
     @Test
     @DisplayName("No previous login → no alert")
     void noPreviousLoginDoesNotFire() {
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.empty());
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -107,7 +110,7 @@ class ImpossibleTravelRuleTest {
     @Test
     @DisplayName("Null geoCountry on previous login → no alert")
     void nullPreviousCountryDoesNotFire() {
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin(null, Instant.now().minusSeconds(600))));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -119,7 +122,8 @@ class ImpossibleTravelRuleTest {
     @Test
     @DisplayName("Non-succeeded event type → skip")
     void nonSucceededEventSkipped() {
-        EvaluationContext failedCtx = new EvaluationContext("evt-1", "auth.login.failed",
+        EvaluationContext failedCtx = new EvaluationContext(Tenants.DEFAULT_TENANT_ID,
+                "evt-1", "auth.login.failed",
                 "acc-1", "1.2.3.***", "fp-1", "US", Instant.now(), null);
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -135,7 +139,7 @@ class ImpossibleTravelRuleTest {
         Instant now = Instant.parse("2026-04-18T10:00:00Z");
         Instant prev = Instant.parse("2026-04-18T09:30:00Z");
 
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin("kr", prev)));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
@@ -152,7 +156,7 @@ class ImpossibleTravelRuleTest {
         DetectionThresholds strict = new DetectionThresholds(
                 10, 3600, 80, 900, 85, 15, 50, true, 3600, 85, 60);
 
-        when(loginHistoryRepository.findLatestSuccessByAccountId("acc-1"))
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
                 .thenReturn(Optional.of(previousLogin("KR", prev)));
 
         DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, strict)

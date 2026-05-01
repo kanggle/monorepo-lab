@@ -1,5 +1,6 @@
 package com.example.security.consumer;
 
+import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.EvaluationContext;
 import com.example.security.domain.history.LoginHistoryEntry;
 import com.example.security.domain.history.LoginOutcome;
@@ -35,8 +36,17 @@ public final class AuthEventMapper {
             occurredAt = Instant.parse(envelope.path("occurredAt").asText());
         }
 
+        // TASK-BE-248 Phase 1: tenantId is required on LoginHistoryEntry but
+        // upstream auth events do not yet carry it on the payload. Default to
+        // Tenants.DEFAULT_TENANT_ID; Phase 2 will replace this with the
+        // tenantId field from the event envelope/payload.
+        String tenantId = firstNonBlank(
+                nullableText(envelope, "tenantId"),
+                nullableText(payload, "tenantId"),
+                Tenants.DEFAULT_TENANT_ID);
+
         return new LoginHistoryEntry(
-                eventId, accountId, outcome,
+                tenantId, eventId, accountId, outcome,
                 ipMasked, userAgentFamily, deviceFingerprint, geoCountry,
                 occurredAt
         );
@@ -89,8 +99,15 @@ public final class AuthEventMapper {
             isNewDevice = ind.asBoolean();
         }
 
+        // TASK-BE-248 Phase 1: extract tenantId from envelope/payload; default to
+        // Tenants.DEFAULT_TENANT_ID until upstream auth events always carry it.
+        String tenantId = firstNonBlank(
+                nullableText(envelope, "tenantId"),
+                nullableText(payload, "tenantId"),
+                Tenants.DEFAULT_TENANT_ID);
+
         return new EvaluationContext(
-                eventId, eventType, accountId, ipMasked, deviceFingerprint, geoCountry,
+                tenantId, eventId, eventType, accountId, ipMasked, deviceFingerprint, geoCountry,
                 occurredAt, failCount, deviceId, isNewDevice);
     }
 
@@ -100,5 +117,14 @@ public final class AuthEventMapper {
             return null;
         }
         return value.asText();
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
     }
 }

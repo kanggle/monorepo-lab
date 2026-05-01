@@ -17,6 +17,11 @@ public class SuspiciousEventJpaEntity {
     @Column(name = "id", length = 36, nullable = false)
     private String id;
 
+    // TASK-BE-248: leads (tenant_id, account_id, detected_at) on
+    // idx_suspicious_tenant_account_detected (V0008 migration).
+    @Column(name = "tenant_id", length = 32, nullable = false)
+    private String tenantId;
+
     @Column(name = "account_id", length = 36, nullable = false)
     private String accountId;
 
@@ -44,12 +49,13 @@ public class SuspiciousEventJpaEntity {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
-    public static SuspiciousEventJpaEntity create(String id, String accountId, String ruleCode,
+    public static SuspiciousEventJpaEntity create(String id, String tenantId, String accountId, String ruleCode,
                                                    int riskScore, String actionTaken,
                                                    String evidenceJson, String triggerEventId,
                                                    Instant detectedAt, String lockRequestResult) {
         SuspiciousEventJpaEntity e = new SuspiciousEventJpaEntity();
         e.id = id;
+        e.tenantId = tenantId;
         e.accountId = accountId;
         e.ruleCode = ruleCode;
         e.riskScore = riskScore;

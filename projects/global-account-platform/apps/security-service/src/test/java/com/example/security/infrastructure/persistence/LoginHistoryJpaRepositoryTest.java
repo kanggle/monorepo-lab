@@ -1,5 +1,6 @@
 package com.example.security.infrastructure.persistence;
 
+import com.example.security.domain.Tenants;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -88,7 +89,8 @@ class LoginHistoryJpaRepositoryTest {
         repo.saveAndFlush(entryAt(uuid(), accountId, "FAILURE", newer.plusSeconds(30)));
 
         Optional<LoginHistoryJpaEntity> result =
-                repo.findFirstByAccountIdAndOutcomeOrderByOccurredAtDesc(accountId, "SUCCESS");
+                repo.findFirstByTenantIdAndAccountIdAndOutcomeOrderByOccurredAtDesc(
+                        Tenants.DEFAULT_TENANT_ID, accountId, "SUCCESS");
 
         assertThat(result).isPresent();
         assertThat(result.get().getOccurredAt()).isEqualTo(newer.truncatedTo(ChronoUnit.MICROS));
@@ -107,8 +109,8 @@ class LoginHistoryJpaRepositoryTest {
         repo.saveAndFlush(entryAt(uuid(), accountId, "FAILURE", base.plusSeconds(30)));
         repo.saveAndFlush(entryAt(uuid(), "other-acc", "SUCCESS", base)); // 다른 계정
 
-        Page<LoginHistoryJpaEntity> page = repo.findByAccountIdAndFilters(
-                accountId, null, null, null, PageRequest.of(0, 10));
+        Page<LoginHistoryJpaEntity> page = repo.findByTenantAndAccountAndFilters(
+                Tenants.DEFAULT_TENANT_ID, accountId, null, null, null, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent())
@@ -126,8 +128,8 @@ class LoginHistoryJpaRepositoryTest {
         repo.saveAndFlush(entryAt(uuid(), accountId, "FAILURE", base.plusSeconds(10)));
         repo.saveAndFlush(entryAt(uuid(), accountId, "FAILURE", base.plusSeconds(20)));
 
-        Page<LoginHistoryJpaEntity> page = repo.findByAccountIdAndFilters(
-                accountId, null, null, "FAILURE", PageRequest.of(0, 10));
+        Page<LoginHistoryJpaEntity> page = repo.findByTenantAndAccountAndFilters(
+                Tenants.DEFAULT_TENANT_ID, accountId, null, null, "FAILURE", PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent())
@@ -152,8 +154,8 @@ class LoginHistoryJpaRepositoryTest {
         Instant from = tOld.plusSeconds(1);
         Instant to   = tNew.minusSeconds(1);
 
-        Page<LoginHistoryJpaEntity> page = repo.findByAccountIdAndFilters(
-                accountId, from, to, null, PageRequest.of(0, 10));
+        Page<LoginHistoryJpaEntity> page = repo.findByTenantAndAccountAndFilters(
+                Tenants.DEFAULT_TENANT_ID, accountId, from, to, null, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(1);
         assertThat(page.getContent().get(0).getOccurredAt())
@@ -171,10 +173,10 @@ class LoginHistoryJpaRepositoryTest {
                     base.plusSeconds(i * 10L)));
         }
 
-        Page<LoginHistoryJpaEntity> page0 = repo.findByAccountIdAndFilters(
-                accountId, null, null, null, PageRequest.of(0, 2));
-        Page<LoginHistoryJpaEntity> page1 = repo.findByAccountIdAndFilters(
-                accountId, null, null, null, PageRequest.of(1, 2));
+        Page<LoginHistoryJpaEntity> page0 = repo.findByTenantAndAccountAndFilters(
+                Tenants.DEFAULT_TENANT_ID, accountId, null, null, null, PageRequest.of(0, 2));
+        Page<LoginHistoryJpaEntity> page1 = repo.findByTenantAndAccountAndFilters(
+                Tenants.DEFAULT_TENANT_ID, accountId, null, null, null, PageRequest.of(1, 2));
 
         assertThat(page0.getTotalElements()).isEqualTo(5);
         assertThat(page0.getContent()).hasSize(2);
@@ -196,6 +198,7 @@ class LoginHistoryJpaRepositoryTest {
     private LoginHistoryJpaEntity entryAt(String eventId, String accountId,
                                            String outcome, Instant occurredAt) {
         return LoginHistoryJpaEntity.from(
+                Tenants.DEFAULT_TENANT_ID,
                 eventId, accountId, outcome,
                 "1.2.3.x", "Chrome", "fp-" + eventId.substring(0, 8), "KR",
                 occurredAt);

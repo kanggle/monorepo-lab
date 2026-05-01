@@ -17,6 +17,7 @@ public class LoginHistoryRepositoryImpl implements LoginHistoryRepository {
     @Override
     public void save(LoginHistoryEntry entry) {
         LoginHistoryJpaEntity entity = LoginHistoryJpaEntity.from(
+                entry.getTenantId(),
                 entry.getEventId(),
                 entry.getAccountId(),
                 entry.getOutcome().name(),
@@ -35,10 +36,11 @@ public class LoginHistoryRepositoryImpl implements LoginHistoryRepository {
     }
 
     @Override
-    public Optional<LoginHistoryEntry> findLatestSuccessByAccountId(String accountId) {
-        return jpaRepository.findFirstByAccountIdAndOutcomeOrderByOccurredAtDesc(
-                accountId, LoginOutcome.SUCCESS.name()
+    public Optional<LoginHistoryEntry> findLatestSuccessByAccountId(String tenantId, String accountId) {
+        return jpaRepository.findFirstByTenantIdAndAccountIdAndOutcomeOrderByOccurredAtDesc(
+                tenantId, accountId, LoginOutcome.SUCCESS.name()
         ).map(entity -> new LoginHistoryEntry(
+                entity.getTenantId(),
                 entity.getEventId(),
                 entity.getAccountId(),
                 LoginOutcome.valueOf(entity.getOutcome()),

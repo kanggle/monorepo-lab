@@ -2,6 +2,7 @@ package com.example.security.integration;
 
 import com.example.messaging.outbox.OutboxJpaEntity;
 import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.security.domain.Tenants;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaEntity;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -126,8 +127,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         // Wait until a SuspiciousEvent with AUTO_LOCK action is persisted for this account.
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
             List<SuspiciousEventJpaEntity> rows = suspiciousEventJpaRepository
-                    .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                            accountId, Instant.now().minusSeconds(600), Instant.now().plusSeconds(60));
+                    .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                            Tenants.DEFAULT_TENANT_ID, accountId,
+                            Instant.now().minusSeconds(600), Instant.now().plusSeconds(60));
             assertThat(rows).as("suspicious_events row with AUTO_LOCK").isNotEmpty();
             SuspiciousEventJpaEntity row = rows.get(0);
             assertThat(row.getActionTaken()).isEqualTo("AUTO_LOCK");
@@ -137,8 +139,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
 
         // WireMock received the lock call with Idempotency-Key header set to the suspicious event id.
         List<SuspiciousEventJpaEntity> rows = suspiciousEventJpaRepository
-                .findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                        accountId, Instant.now().minusSeconds(600), Instant.now().plusSeconds(60));
+                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+                        Tenants.DEFAULT_TENANT_ID, accountId,
+                        Instant.now().minusSeconds(600), Instant.now().plusSeconds(60));
         String suspiciousEventId = rows.get(0).getId();
 
         wireMockServer.verify(

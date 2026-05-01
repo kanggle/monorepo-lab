@@ -16,6 +16,7 @@ import java.util.Objects;
 public final class SuspiciousEvent {
 
     private final String id;
+    private final String tenantId;
     private final String accountId;
     private final String ruleCode;
     private final int riskScore;
@@ -25,10 +26,18 @@ public final class SuspiciousEvent {
     private final Instant detectedAt;
     private final String lockRequestResult; // null | SUCCESS | FAILURE | ALREADY_LOCKED | PENDING
 
-    private SuspiciousEvent(String id, String accountId, String ruleCode, int riskScore,
+    private SuspiciousEvent(String id, String tenantId, String accountId, String ruleCode, int riskScore,
                             RiskLevel actionTaken, Map<String, Object> evidence,
                             String triggerEventId, Instant detectedAt, String lockRequestResult) {
         this.id = Objects.requireNonNull(id);
+        // TASK-BE-248: tenant isolation requires a non-blank tenant_id on every
+        // suspicious event. Validation lives here (not just at the JPA layer)
+        // so detection rules can rely on the field being safe to use as a
+        // Redis key segment, log MDC value, and event payload field.
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        this.tenantId = tenantId;
         this.accountId = Objects.requireNonNull(accountId);
         this.ruleCode = Objects.requireNonNull(ruleCode);
         this.riskScore = riskScore;
@@ -41,20 +50,21 @@ public final class SuspiciousEvent {
         this.lockRequestResult = lockRequestResult;
     }
 
-    public static SuspiciousEvent create(String id, String accountId, String ruleCode,
+    public static SuspiciousEvent create(String id, String tenantId, String accountId, String ruleCode,
                                          int riskScore, RiskLevel actionTaken,
                                          Map<String, Object> evidence,
                                          String triggerEventId, Instant detectedAt) {
-        return new SuspiciousEvent(id, accountId, ruleCode, riskScore, actionTaken,
+        return new SuspiciousEvent(id, tenantId, accountId, ruleCode, riskScore, actionTaken,
                 evidence, triggerEventId, detectedAt, null);
     }
 
     public SuspiciousEvent withLockRequestResult(String result) {
-        return new SuspiciousEvent(id, accountId, ruleCode, riskScore, actionTaken,
+        return new SuspiciousEvent(id, tenantId, accountId, ruleCode, riskScore, actionTaken,
                 evidence, triggerEventId, detectedAt, result);
     }
 
     public String getId() { return id; }
+    public String getTenantId() { return tenantId; }
     public String getAccountId() { return accountId; }
     public String getRuleCode() { return ruleCode; }
     public int getRiskScore() { return riskScore; }
