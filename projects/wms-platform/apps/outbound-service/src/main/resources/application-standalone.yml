@@ -1,0 +1,35 @@
+# Standalone profile: in-memory fallbacks for local development without external infra.
+# Activated with SPRING_PROFILES_ACTIVE=standalone.
+#
+# Disables Kafka, Redis, and Postgres dependencies. Substitutes in-memory beans
+# via @Profile("standalone") configuration.
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+
+  datasource:
+    url: jdbc:h2:mem:outbound_standalone;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+outbound:
+  idempotency:
+    store: in-memory
+  webhook:
+    inbox:
+      processor:
+        enabled: false

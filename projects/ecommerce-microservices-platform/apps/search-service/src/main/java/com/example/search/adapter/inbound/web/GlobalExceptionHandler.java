@@ -2,6 +2,7 @@ package com.example.search.adapter.inbound.web;
 
 import com.example.search.application.exception.SearchException;
 import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleAccessDenied(AccessDeniedException ex) {
+        return ErrorResponse.of("ACCESS_DENIED", ex.getMessage());
+    }
 
     @ExceptionHandler(ConstraintViolationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

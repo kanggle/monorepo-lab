@@ -72,7 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-132 | ecommerce auth-service 폐기 — Global Account Platform 이관 후 제거 | auth-service | code, security |
 
 ## in-progress
 
@@ -86,6 +88,14 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-131 | ecommerce gateway-service JWT 검증 방식을 HS256 → JWKS/RSA(RS256)로 교체 | gateway-service | code, security, test |
+| TASK-BE-130 | [Security P2] ReviewController sort 파라미터 허용 값 화이트리스트 검증 추가 | review-service | code, security, test |
+| TASK-BE-129 | [Security P1] SearchAdminController admin role check 누락 수정 | search-service | code, security, test |
+| TASK-BE-126-fix-002 | TASK-BE-126-fix-001 리뷰 수정 — register / addVariant / updateVariant / deleteVariant role 검증 테스트 누락 추가 | product-service | code, test, security |
+| TASK-BE-126-fix-001 | TASK-BE-126 리뷰 수정 — 기존 테스트 X-User-Role 헤더 누락 및 role 검증 신규 테스트 추가 | product-service | code, test, security |
+| TASK-BE-126 | [Security P0] AdminProductController / AdminProductImageController admin role check 누락 수정 | product-service | code, security, test |
+| TASK-BE-128 | [Security P0] POST /api/payments userId 요청 바디 신뢰 취약점 수정 | payment-service | code, security, api, test |
+| TASK-BE-127 | [Security P0] AdminAccountSeeder prod 프로파일 노출 수정 — 하드코딩 관리자 계정 씨딩 제거 | auth-service | code, security, test |
 | TASK-FE-066 | admin-dashboard 상품 등록/수정 폼 이미지 업로드 UI — 다중 업로드, 미리보기, 순서 변경, 삭제 | admin-dashboard | code, api |
 | TASK-BE-125-fix-001 | TASK-BE-125 리뷰 수정 — 계약 위반 13건 + 최적화 4건 | product-service, search-service | code, api, event |
 | TASK-BE-125 | product-service 상품 이미지 업로드/삭제 API + ProductImagesUpdated 이벤트 | product-service, search-service | code, api, event |

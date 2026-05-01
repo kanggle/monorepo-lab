@@ -11,7 +11,7 @@ import com.wms.inbound.application.port.out.EventDedupePort;
 import com.wms.inbound.application.port.out.IdempotencyStore;
 import com.wms.inbound.application.port.out.MasterReadModelPort;
 import com.wms.inbound.application.port.out.MasterReadModelWriterPort;
-import com.wms.inbound.application.port.out.OutboxWriter;
+import com.wms.inbound.application.port.out.InboundEventPort;
 import com.wms.inbound.application.port.out.WebhookSecretPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +51,7 @@ class ApplicationContextSmokeTest {
         assertThat(context.getBean(MasterReadModelPort.class)).isNotNull();
         assertThat(context.getBean(MasterReadModelWriterPort.class)).isNotNull();
         assertThat(context.getBean(IdempotencyStore.class)).isNotNull();
-        assertThat(context.getBean(OutboxWriter.class)).isNotNull();
+        assertThat(context.getBean(InboundEventPort.class)).isNotNull();
     }
 
     @Test

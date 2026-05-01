@@ -10,6 +10,7 @@ import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.StorageUnavailableException;
 import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.AccessDeniedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleUnreadable(HttpMessageNotReadableException ex) {
         return ErrorResponse.of("VALIDATION_ERROR", "Malformed request body");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleAccessDenied(AccessDeniedException ex) {
+        return ErrorResponse.of("ACCESS_DENIED", ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

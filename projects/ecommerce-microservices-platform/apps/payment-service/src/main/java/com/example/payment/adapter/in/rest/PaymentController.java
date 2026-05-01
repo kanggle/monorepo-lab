@@ -38,10 +38,14 @@ public class PaymentController {
 
     @PostMapping
     public ResponseEntity<Void> createPayment(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody PaymentCreateRequest request
     ) {
+        // userId is sourced from the X-User-Id header only — never from the request body.
+        // See TASK-BE-128 / specs/contracts/http/payment-api.md.
+        requireUserId(userId);
         paymentProcessingService.processPayment(
-                request.orderId(), request.userId(), request.amount()
+                request.orderId(), userId, request.amount()
         );
         return ResponseEntity.status(201).build();
     }

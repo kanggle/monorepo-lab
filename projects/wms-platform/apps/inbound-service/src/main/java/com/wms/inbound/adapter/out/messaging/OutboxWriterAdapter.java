@@ -1,19 +1,42 @@
 package com.wms.inbound.adapter.out.messaging;
 
-import com.wms.inbound.application.port.out.OutboxWriter;
+import com.wms.inbound.adapter.out.persistence.outbox.InboundOutboxJpaEntity;
+import com.wms.inbound.adapter.out.persistence.outbox.InboundOutboxJpaRepository;
+import com.wms.inbound.application.port.out.InboundEventPort;
+import com.wms.inbound.domain.event.InboundDomainEvent;
+import java.time.Clock;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Stub adapter for {@link OutboxWriter}.
- *
- * <p>TASK-BE-029 scope creates the {@code inbound_outbox} table and the port,
- * but no domain mutation writes outbox rows yet. The real implementation lands
- * in TASK-BE-030 alongside {@code ReceiveAsnUseCase}.
- *
- * <p>The bean exists so future use-case services can declare an
- * {@link OutboxWriter} dependency without rewiring at the moment of first use.
- */
 @Component
-public class OutboxWriterAdapter implements OutboxWriter {
-    // No-op until TASK-BE-030.
+public class OutboxWriterAdapter implements InboundEventPort {
+
+    private final InboundOutboxJpaRepository repository;
+    private final InboundEventEnvelopeSerializer serializer;
+    private final Clock clock;
+
+    public OutboxWriterAdapter(InboundOutboxJpaRepository repository,
+                                InboundEventEnvelopeSerializer serializer,
+                                Clock clock) {
+        this.repository = repository;
+        this.serializer = serializer;
+        this.clock = clock;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publish(InboundDomainEvent event) {
+        InboundEventEnvelopeSerializer.Serialised serialised = serializer.serialise(event);
+        InboundOutboxJpaEntity row = new InboundOutboxJpaEntity(
+                serialised.eventId(),
+                event.aggregateType(),
+                event.aggregateId(),
+                event.eventType(),
+                serialised.eventVersion(),
+                serialised.json(),
+                event.partitionKey(),
+                clock.instant());
+        repository.save(row);
+    }
 }

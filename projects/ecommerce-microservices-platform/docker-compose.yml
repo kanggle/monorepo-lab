@@ -595,6 +595,7 @@ services:
       - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
       - NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
       - OAUTH_CALLBACK_ALLOWLIST=${OAUTH_CALLBACK_ALLOWLIST}
+      - ADMIN_INITIAL_PASSWORD=${ADMIN_INITIAL_PASSWORD:-}
     ports:
       - "${PORT_PREFIX:-1}8081:8081"
     deploy:
@@ -1016,7 +1017,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_JWKS_URI=http://auth-service:8081/auth/.well-known/jwks.json
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - AUTH_SERVICE_URL=http://auth-service:8081
       - PRODUCT_SERVICE_URL=http://product-service:8082

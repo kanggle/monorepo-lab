@@ -37,7 +37,7 @@
 
 ---
 
-## Domains (38)
+## Domains (39)
 
 **선택 원칙**: 각 프로젝트는 **정확히 하나의 primary domain**을 선언한다. 여러 도메인의 특성이 섞여 있으면 **핵심 비즈니스가 무엇으로 규정되는가**를 기준으로 고르고, 나머지는 traits 또는 서브시스템 수준에서 다룬다.
 
@@ -57,6 +57,13 @@
 - **정의**: 시간·좌석·자원을 예약하고 취소/변경을 관리하는 시스템 (호텔, 항공, 식당, 병원 등)
 - **전형 서브시스템**: Inventory Calendar, Booking, Cancellation, Overbooking Control, Refund
 - **언제 고르는가**: 상품이 "한정된 슬롯"이고 재고가 시간에 묶여 있을 때
+
+### Identity & Security
+
+#### identity-platform
+- **정의**: 플랫폼 전체 계정·인증·인가를 중앙 관리하는 Identity Provider. JWT 발급, JWKS 노출, SSO, 소셜 로그인, 계정 프로비저닝
+- **전형 서브시스템**: Account, Authentication, Token Issuance, JWKS, Social Login, SSO, Key Rotation, Audit
+- **언제 고르는가**: 여러 플랫폼/서비스의 인증을 통합 관리하는 단일 Identity 서비스일 때
 
 ### Enterprise & Internal Systems
 
@@ -329,6 +336,7 @@
 - **lms + internal-system + multi-tenant + content-heavy** → 기업 교육 플랫폼
 - **cdp + data-intensive + batch-heavy + integration-heavy** → 고객 데이터 플랫폼
 - **game-backoffice + internal-system + audit-heavy** → 게임 운영 콘솔
+- **identity-platform + regulated + audit-heavy + integration-heavy** → 다중 플랫폼 IAM (소셜 로그인, OIDC, 감사)
 
 ---
 

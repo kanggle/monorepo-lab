@@ -1,9 +1,10 @@
 package com.example.payment.application.service;
 
+import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
+import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.domain.model.Payment;
 import com.example.payment.domain.model.PaymentStatus;
-import com.example.payment.application.port.out.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,13 +57,28 @@ class PaymentProcessingServiceTest {
     }
 
     @Test
-    @DisplayName("동일 orderId에 대해 이미 Payment가 존재하면 처리를 생략한다 (멱등)")
-    void processPayment_duplicateOrder_skipsProcessing() {
+    @DisplayName("동일 orderId에 대해 동일 userId로 재시도 시 처리를 생략한다 (멱등)")
+    void processPayment_duplicateOrderSameOwner_skipsProcessing() {
         Payment existing = Payment.create("order-1", "user-1", 30000L);
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(existing));
 
         paymentProcessingService.processPayment("order-1", "user-1", 30000L);
 
         verify(paymentRepository, never()).save(any());
+        verify(paymentMetricRecorder, never()).incrementPaymentCreated();
+    }
+
+    @Test
+    @DisplayName("동일 orderId에 대해 다른 userId가 결제를 생성하려 하면 UnauthorizedPaymentAccessException 발생 (TASK-BE-128)")
+    void processPayment_duplicateOrderDifferentOwner_throwsUnauthorized() {
+        Payment existing = Payment.create("order-1", "victim-user", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(existing));
+
+        assertThatThrownBy(() ->
+                paymentProcessingService.processPayment("order-1", "attacker", 30000L)
+        ).isInstanceOf(UnauthorizedPaymentAccessException.class);
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentMetricRecorder, never()).incrementPaymentCreated();
     }
 }

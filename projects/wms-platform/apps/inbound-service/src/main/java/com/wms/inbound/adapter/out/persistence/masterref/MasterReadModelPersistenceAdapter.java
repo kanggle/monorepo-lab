@@ -95,6 +95,30 @@ public class MasterReadModelPersistenceAdapter
         return partnerRepo.findById(id).map(MasterReadModelPersistenceAdapter::toDomain);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<WarehouseSnapshot> findWarehouseByCode(String warehouseCode) {
+        return warehouseRepo.findByWarehouseCode(warehouseCode).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PartnerSnapshot> findPartnerByCode(String partnerCode) {
+        return partnerRepo.findByPartnerCode(partnerCode).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SkuSnapshot> findSkuByCode(String skuCode) {
+        return skuRepo.findBySkuCode(skuCode).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<LotSnapshot> findLotBySkuAndLotNo(UUID skuId, String lotNo) {
+        return lotRepo.findBySkuIdAndLotNo(skuId, lotNo).map(MasterReadModelPersistenceAdapter::toDomain);
+    }
+
     // ---- Write side ----------------------------------------------------------
 
     @Override

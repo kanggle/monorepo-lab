@@ -24,21 +24,38 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
     implementation 'org.apache.commons:commons-pool2'
 
-    // JWT
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    // Spring Security OAuth2 Resource Server (JWKS/RS256)
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
     testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.37.3'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
 test {
     environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
     jvmArgs '-Dapi.version=1.44'
+}
+
+// Runs @Tag("integration") tests (Testcontainers/Redis) — excluded from `check`.
+// Requires Docker: invoke via ./gradlew :...:gateway-service:integrationTest
+tasks.register('integrationTest', Test) {
+    description = 'Runs @Tag("integration") Testcontainers-backed tests (requires Docker).'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
+    jvmArgs '-Dapi.version=1.44'
+    jvmArgs '-XX:+EnableDynamicAgentLoading'
+    shouldRunAfter tasks.named('test')
 }
 
 dependencyManagement {

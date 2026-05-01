@@ -17,6 +17,7 @@ Every service declared under `specs/services/<service>/architecture.md` MUST dec
 | `graphql-service` | Synchronous GraphQL | The service aggregates data from multiple sources for clients with flexible query needs |
 | `ml-pipeline` | Mixed (batch + serving) | The service trains, hosts, or serves ML models |
 | `frontend-app` | Server-side rendering / SPA | The service is a Next.js application that serves UI to end users |
+| `identity-platform` | OIDC / JWT issuance | The service issues and manages JWT tokens, exposes JWKS, and handles authentication for platform gateways |
 
 ---
 

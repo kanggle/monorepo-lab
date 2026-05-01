@@ -1,5 +1,11 @@
 # 통합 테스트 프로파일: Rate Limiter 없이 라우트 설정 (다운스트림 불필요 경로 테스트용)
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          audiences: ecommerce
+
   cloud:
     gateway:
       routes:
@@ -27,6 +33,11 @@ spring:
           uri: http://localhost:19999
           predicates:
             - Path=/api/users/**,/api/admin/users/**
+
+        - id: admin-product-service-test
+          uri: http://localhost:19999
+          predicates:
+            - Path=/api/admin/products/**
 
         - id: payment-service-test
           uri: http://localhost:19999

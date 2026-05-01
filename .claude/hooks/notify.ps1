@@ -7,7 +7,9 @@ param(
 
 # 소리
 try {
-    [console]::beep(900, 300)
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Media.SystemSounds]::Beep.Play()
+    Start-Sleep -Milliseconds 400
 }
 catch {}
 
