@@ -1,5 +1,6 @@
 package com.example.security.consumer;
 
+import com.example.security.consumer.MissingTenantIdException;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaEntity;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +57,7 @@ class AccountLockedConsumerUnitTest {
               "partitionKey": "acc-1",
               "payload": {
                 "accountId": "acc-1",
+                "tenantId": "fan-platform",
                 "reasonCode": "ADMIN_LOCK",
                 "actorType": "operator",
                 "actorId": "op-42",
@@ -85,6 +87,7 @@ class AccountLockedConsumerUnitTest {
             {
               "eventId": "55555555-5555-5555-5555-555555555555",
               "accountId": "acc-2",
+              "tenantId": "fan-platform",
               "reasonCode": "AUTO_DETECT",
               "actorType": "system",
               "lockedAt": "2026-04-14T11:00:00Z"
@@ -131,7 +134,7 @@ class AccountLockedConsumerUnitTest {
 
         String json = """
             {"eventId":"22222222-2222-2222-2222-222222222222",
-             "payload":{"accountId":"acc-3","reasonCode":"ADMIN_LOCK",
+             "payload":{"accountId":"acc-3","tenantId":"fan-platform","reasonCode":"ADMIN_LOCK",
                         "actorType":"operator","actorId":"op-1","lockedAt":"2026-04-14T12:00:00Z"}}
             """;
 
@@ -165,7 +168,7 @@ class AccountLockedConsumerUnitTest {
     void explicitSourceWins() {
         String json = """
             {"eventId":"44444444-4444-4444-4444-444444444444",
-             "payload":{"accountId":"acc-4","reason":"manual","lockedBy":"op-9",
+             "payload":{"accountId":"acc-4","tenantId":"fan-platform","reason":"manual","lockedBy":"op-9",
                         "source":"admin","occurredAt":"2026-04-14T13:00:00Z"}}
             """;
 
@@ -176,5 +179,18 @@ class AccountLockedConsumerUnitTest {
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getSource()).isEqualTo("admin");
         assertThat(captor.getValue().getLockedBy()).isEqualTo("op-9");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: account.locked payload missing tenantId throws MissingTenantIdException (Phase 2b strict mode)")
+    void missingTenantIdThrows() {
+        String json = """
+            {"eventId":"66666666-6666-6666-6666-666666666666",
+             "payload":{"accountId":"acc-no-tenant","reasonCode":"ADMIN_LOCK",
+                        "actorType":"operator","actorId":"op-1","lockedAt":"2026-04-14T10:00:00Z"}}
+            """;
+        assertThatThrownBy(() -> newConsumer().onMessage(record(json)))
+                .isInstanceOf(MissingTenantIdException.class);
+        verifyNoInteractions(repository);
     }
 }

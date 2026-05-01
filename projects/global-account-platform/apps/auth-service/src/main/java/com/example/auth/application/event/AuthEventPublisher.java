@@ -35,6 +35,7 @@ public class AuthEventPublisher extends BaseEventPublisher {
 
     public void publishLoginAttempted(String accountId, String emailHash, String tenantId,
                                        SessionContext ctx) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         payload.put("emailHash", emailHash);
@@ -52,13 +53,14 @@ public class AuthEventPublisher extends BaseEventPublisher {
      * @deprecated Use {@link #publishLoginAttempted(String, String, String, SessionContext)}.
      *             Retained for backwards compatibility; omits tenantId from payload.
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public void publishLoginAttempted(String accountId, String emailHash, SessionContext ctx) {
         publishLoginAttempted(accountId, emailHash, null, ctx);
     }
 
     public void publishLoginFailed(String accountId, String emailHash, String tenantId,
                                     String failureReason, int failCount, SessionContext ctx) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         payload.put("emailHash", emailHash);
@@ -78,7 +80,7 @@ public class AuthEventPublisher extends BaseEventPublisher {
      * @deprecated Use {@link #publishLoginFailed(String, String, String, String, int, SessionContext)}.
      *             Retained for backwards compatibility; omits tenantId from payload.
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public void publishLoginFailed(String accountId, String emailHash, String failureReason,
                                     int failCount, SessionContext ctx) {
         publishLoginFailed(accountId, emailHash, null, failureReason, failCount, ctx);

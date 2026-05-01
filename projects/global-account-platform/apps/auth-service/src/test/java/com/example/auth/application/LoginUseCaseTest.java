@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -155,6 +156,28 @@ class LoginUseCaseTest {
         // No password verification should happen
         verify(passwordHasher, never()).verify(anyString(), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: LOGIN_TENANT_AMBIGUOUS path publishes auth.login.failed with non-null tenantId (uses rate-limit fallback)")
+    void ambiguousEmail_publishesFailedEventWithNonNullTenantId() {
+        // given: command with no explicit tenantId; two credentials match the same email
+        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        Credential cred1 = credential(ACCOUNT_ID, "fan-platform", EMAIL, HASH);
+        Credential cred2 = credential("acc-456", "wms", EMAIL, HASH);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred1, cred2));
+
+        // when
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
+                .isInstanceOf(LoginTenantAmbiguousException.class);
+
+        // then: publishLoginFailed called with non-null tenantId (fan-platform fallback)
+        ArgumentCaptor<String> tenantIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(authEventPublisher).publishLoginFailed(
+                eq(null), anyString(), tenantIdCaptor.capture(),
+                eq("LOGIN_TENANT_AMBIGUOUS"), eq(0), any(SessionContext.class));
+        assertThat(tenantIdCaptor.getValue()).isNotNull().isNotBlank();
+        assertThat(tenantIdCaptor.getValue()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
     }
 
     @Test

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
@@ -146,7 +147,7 @@ class AuthEventPublisherTest {
         SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
 
         // when
-        authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", ctx);
+        authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", "fan-platform", ctx);
 
         // then
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
@@ -167,7 +168,7 @@ class AuthEventPublisherTest {
         SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "US");
 
         // when
-        authEventPublisher.publishLoginFailed(ACCOUNT_ID, "email-hash", "CREDENTIALS_INVALID", 3, ctx);
+        authEventPublisher.publishLoginFailed(ACCOUNT_ID, "email-hash", "fan-platform", "CREDENTIALS_INVALID", 3, ctx);
 
         // then
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
@@ -340,7 +341,7 @@ class AuthEventPublisherTest {
         SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123");
 
         // when
-        authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", ctx);
+        authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", "fan-platform", ctx);
 
         // then
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
@@ -352,5 +353,47 @@ class AuthEventPublisherTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) envelope.get("payload");
         assertThat(payload).containsEntry("geoCountry", "XX");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: publishLoginAttempted — tenantId null → IllegalArgumentException")
+    void publishLoginAttempted_nullTenantId_throws() {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        assertThatThrownBy(() ->
+                authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", null, ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: publishLoginAttempted — tenantId blank → IllegalArgumentException")
+    void publishLoginAttempted_blankTenantId_throws() {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        assertThatThrownBy(() ->
+                authEventPublisher.publishLoginAttempted(ACCOUNT_ID, "email-hash", "  ", ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: publishLoginFailed — tenantId null → IllegalArgumentException")
+    void publishLoginFailed_nullTenantId_throws() {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        assertThatThrownBy(() ->
+                authEventPublisher.publishLoginFailed(ACCOUNT_ID, "email-hash", null,
+                        "CREDENTIALS_INVALID", 1, ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-260: publishLoginFailed — tenantId blank → IllegalArgumentException")
+    void publishLoginFailed_blankTenantId_throws() {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        assertThatThrownBy(() ->
+                authEventPublisher.publishLoginFailed(ACCOUNT_ID, "email-hash", "",
+                        "CREDENTIALS_INVALID", 1, ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
     }
 }

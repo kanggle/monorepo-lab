@@ -36,10 +36,9 @@ public final class AuthEventMapper {
             occurredAt = Instant.parse(envelope.path("occurredAt").asText());
         }
 
-        // TASK-BE-248 Phase 1: tenantId is required on LoginHistoryEntry but
-        // upstream auth events do not yet carry it on the payload. Default to
-        // Tenants.DEFAULT_TENANT_ID; Phase 2 will replace this with the
-        // tenantId field from the event envelope/payload.
+        // TASK-BE-248 Phase 2a: AbstractAuthEventConsumer.processEvent strictly rejects events
+        // without tenant_id before reaching this mapper. The firstNonBlank chain is defensive
+        // dead code in production; kept for structural robustness and test isolation.
         String tenantId = firstNonBlank(
                 nullableText(envelope, "tenantId"),
                 nullableText(payload, "tenantId"),
@@ -99,8 +98,9 @@ public final class AuthEventMapper {
             isNewDevice = ind.asBoolean();
         }
 
-        // TASK-BE-248 Phase 1: extract tenantId from envelope/payload; default to
-        // Tenants.DEFAULT_TENANT_ID until upstream auth events always carry it.
+        // TASK-BE-248 Phase 2a: AbstractAuthEventConsumer.processEvent strictly rejects events
+        // without tenant_id before reaching this mapper. The firstNonBlank chain is defensive
+        // dead code in production; kept for structural robustness and test isolation.
         String tenantId = firstNonBlank(
                 nullableText(envelope, "tenantId"),
                 nullableText(payload, "tenantId"),

@@ -102,7 +102,7 @@ public class LoginUseCase {
                 // Multiple tenants have the same email — require explicit tenantId
                 log.info("LOGIN_TENANT_AMBIGUOUS: email matches {} tenants; emailHash={}",
                         credentials.size(), emailHash);
-                authEventPublisher.publishLoginFailed(null, emailHash, null,
+                authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
                         "LOGIN_TENANT_AMBIGUOUS", 0, ctx);
                 throw new LoginTenantAmbiguousException();
             }
