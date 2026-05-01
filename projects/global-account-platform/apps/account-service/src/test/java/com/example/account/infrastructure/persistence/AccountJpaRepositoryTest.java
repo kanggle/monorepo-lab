@@ -18,6 +18,7 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -86,8 +87,8 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) " +
                 "VALUES (?, ?, ?, 'ACTIVE', ?, ?, 0)",
                 id, tenantId, email,
-                Instant.now().toString(),
-                Instant.now().toString()
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now())
         );
     }
 
@@ -188,9 +189,9 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, last_login_succeeded_at, version) " +
                 "VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, 0)",
                 id, TENANT_FAN, id + "@ex.com",
-                threshold.minus(365, ChronoUnit.DAYS).toString(),
-                threshold.minus(365, ChronoUnit.DAYS).toString(),
-                threshold.minus(1, ChronoUnit.DAYS).toString()
+                Timestamp.from(threshold.minus(365, ChronoUnit.DAYS)),
+                Timestamp.from(threshold.minus(365, ChronoUnit.DAYS)),
+                Timestamp.from(threshold.minus(1, ChronoUnit.DAYS))
         );
 
         List<AccountJpaEntity> candidates = accountRepo.findActiveDormantCandidates(threshold);
@@ -209,9 +210,9 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, last_login_succeeded_at, version) " +
                 "VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, 0)",
                 id, TENANT_FAN, id + "@ex.com",
-                Instant.now().minus(400, ChronoUnit.DAYS).toString(),
-                Instant.now().toString(),
-                Instant.now().minus(1, ChronoUnit.DAYS).toString()
+                Timestamp.from(Instant.now().minus(400, ChronoUnit.DAYS)),
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS))
         );
 
         List<AccountJpaEntity> candidates = accountRepo.findActiveDormantCandidates(threshold);
@@ -230,8 +231,8 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) " +
                 "VALUES (?, ?, ?, 'ACTIVE', ?, ?, 0)",
                 id, TENANT_FAN, id + "@ex.com",
-                threshold.minus(365, ChronoUnit.DAYS).toString(),
-                Instant.now().toString()
+                Timestamp.from(threshold.minus(365, ChronoUnit.DAYS)),
+                Timestamp.from(Instant.now())
         );
 
         List<AccountJpaEntity> candidates = accountRepo.findActiveDormantCandidates(threshold);
@@ -252,14 +253,14 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, deleted_at, version) " +
                 "VALUES (?, ?, ?, 'DELETED', ?, ?, ?, 0)",
                 id, TENANT_FAN, id + "@ex.com",
-                Instant.now().minus(60, ChronoUnit.DAYS).toString(),
-                graceCutoff.minus(1, ChronoUnit.DAYS).toString(),
-                graceCutoff.minus(10, ChronoUnit.DAYS).toString()
+                Timestamp.from(Instant.now().minus(60, ChronoUnit.DAYS)),
+                Timestamp.from(graceCutoff.minus(1, ChronoUnit.DAYS)),
+                Timestamp.from(graceCutoff.minus(10, ChronoUnit.DAYS))
         );
         // maskedAt=null 프로파일
         jdbc.update(
                 "INSERT INTO profiles (account_id, tenant_id, locale, timezone, updated_at) VALUES (?, ?, 'ko-KR', 'Asia/Seoul', ?)",
-                id, TENANT_FAN, Instant.now().toString()
+                id, TENANT_FAN, Timestamp.from(Instant.now())
         );
 
         List<AccountJpaEntity> candidates = accountRepo.findAnonymizationCandidates(graceCutoff);
@@ -278,9 +279,9 @@ class AccountJpaRepositoryTest {
                 "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, deleted_at, version) " +
                 "VALUES (?, ?, ?, 'DELETED', ?, ?, ?, 0)",
                 id, TENANT_FAN, id + "@ex.com",
-                Instant.now().minus(15, ChronoUnit.DAYS).toString(),
-                Instant.now().toString(),
-                Instant.now().minus(10, ChronoUnit.DAYS).toString()
+                Timestamp.from(Instant.now().minus(15, ChronoUnit.DAYS)),
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now().minus(10, ChronoUnit.DAYS))
         );
 
         List<AccountJpaEntity> candidates = accountRepo.findAnonymizationCandidates(graceCutoff);

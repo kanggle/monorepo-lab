@@ -150,8 +150,8 @@ class AccountStatusHistoryJpaRepositoryTest {
 
     private void seedAccount(String accountId) {
         jdbc.update(
-                "INSERT INTO accounts (id, email, status, created_at, updated_at, version) " +
-                "VALUES (?, ?, 'ACTIVE', NOW(), NOW(), 0)",
+                "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) " +
+                "VALUES (?, 'fan-platform', ?, 'ACTIVE', NOW(), NOW(), 0)",
                 accountId, accountId + "@ex.com");
     }
 
