@@ -4,6 +4,7 @@ import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.token.RefreshToken;
@@ -273,25 +274,24 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     }
 
     /**
-     * Extracts tenant_id from the registered client's clientName metadata.
-     * Convention: {@code "<tenantId>|<tenantType>"}
+     * Extracts tenant_id from the registered client.
+     *
+     * <p>Reads from {@link org.springframework.security.oauth2.server.authorization.settings.ClientSettings}
+     * custom keys set by {@link OAuthClientMapper} (Option B, TASK-BE-252).
+     * Falls back to the legacy {@code clientName = "tenantId|tenantType"} format
+     * for RegisteredClient instances not originating from the JPA mapper.
      */
     private String extractClientTenantId(RegisteredClient client) {
+        Object tenantId = client.getClientSettings().getSetting(OAuthClientMapper.SETTING_TENANT_ID);
+        if (tenantId instanceof String tid && !tid.isBlank()) {
+            return tid;
+        }
+        // Legacy fallback: clientName = "tenantId|tenantType"
         String clientName = client.getClientName();
         if (clientName != null && clientName.contains("|")) {
-            String[] parts = clientName.split("\\|", 2);
-            return parts[0].trim();
+            return clientName.split("\\|", 2)[0].trim();
         }
         return null;
-    }
-
-    private String extractClientTenantType(RegisteredClient client) {
-        String clientName = client.getClientName();
-        if (clientName != null && clientName.contains("|")) {
-            String[] parts = clientName.split("\\|", 2);
-            return parts.length > 1 ? parts[1].trim() : "UNKNOWN";
-        }
-        return "UNKNOWN";
     }
 
     /**

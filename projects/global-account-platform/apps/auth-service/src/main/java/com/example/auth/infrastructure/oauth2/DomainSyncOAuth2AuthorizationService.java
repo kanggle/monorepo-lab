@@ -4,7 +4,6 @@ import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RefreshToken;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
-import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
@@ -12,11 +11,11 @@ import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import java.time.Instant;
 
 /**
- * Decorator around {@link InMemoryOAuth2AuthorizationService} that synchronises
+ * Decorator around any {@link OAuth2AuthorizationService} delegate that synchronises
  * SAS refresh-token issuance events into the domain {@link RefreshTokenRepository}.
  *
  * <h3>Motivation</h3>
- * <p>SAS's in-memory authorization service tracks the full OAuth 2.0 authorization
+ * <p>SAS's authorization service tracks the full OAuth 2.0 authorization
  * (including refresh tokens) but is isolated from the existing JPA-backed
  * {@link RefreshTokenRepository}. Phase 2b requires that <em>both</em> the legacy
  * {@code POST /api/auth/refresh} and the SAS {@code POST /oauth2/token
@@ -46,11 +45,11 @@ import java.time.Instant;
 @Slf4j
 public class DomainSyncOAuth2AuthorizationService implements OAuth2AuthorizationService {
 
-    private final InMemoryOAuth2AuthorizationService delegate;
+    private final OAuth2AuthorizationService delegate;
     private final RefreshTokenRepository refreshTokenRepository;
 
     public DomainSyncOAuth2AuthorizationService(
-            InMemoryOAuth2AuthorizationService delegate,
+            OAuth2AuthorizationService delegate,
             RefreshTokenRepository refreshTokenRepository) {
         this.delegate = delegate;
         this.refreshTokenRepository = refreshTokenRepository;

@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.*;
@@ -10,12 +11,20 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.Duration;
 import java.util.Base64;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -66,6 +75,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.data.redis.timeout=1ms",
         // Disable outbox polling to avoid Redis/Kafka connection errors in tests
         "outbox.polling.interval-ms=99999999",
+        // Create oauth2_authorization table for JdbcOAuth2AuthorizationService.
+        // Flyway is disabled so the V0008 Flyway migration does not run;
+        // Hibernate ddl-auto only creates @Entity-mapped tables.
+        // JdbcOAuth2AuthorizationService needs the SAS canonical JDBC table.
+        "spring.sql.init.schema-locations=classpath:db/h2/oauth2-authorization-schema.sql",
+        "spring.sql.init.mode=always",
         // Account-service stub (not called in SAS tests)
         "auth.account-service.base-url=http://localhost:19999",
         // SAS issuer
@@ -90,6 +105,70 @@ class OAuth2AuthorizationServerSliceTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /**
+     * Seeds the two placeholder clients into the JPA-backed RegisteredClientRepository.
+     *
+     * <p>In the slice test, Flyway is disabled (H2 + ddl-auto=create-drop), so the
+     * V0008 seed-data INSERT statements are not executed. We replicate the two clients
+     * here to ensure that the token-endpoint tests (which depend on test-internal-client
+     * and demo-spa-client) still pass without Flyway.
+     *
+     * <p>The secret "{noop}secret" is accepted by DelegatingPasswordEncoder (noop prefix)
+     * for this test environment only — production clients carry BCrypt hashes from Flyway.
+     */
+    @Autowired
+    private RegisteredClientRepository registeredClientRepository;
+
+    @BeforeEach
+    void seedClientsIfAbsent() {
+        if (registeredClientRepository.findByClientId(CLIENT_ID) == null) {
+            RegisteredClient testInternalClient = RegisteredClient.withId("test-internal-client-id")
+                    .clientId("test-internal-client")
+                    .clientSecret("{noop}secret")
+                    .clientName("Test Internal Client")
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .scope("account.read")
+                    .scope("openid")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(false)
+                            .setting(OAuthClientMapper.SETTING_TENANT_ID, "fan-platform")
+                            .setting(OAuthClientMapper.SETTING_TENANT_TYPE, "B2C")
+                            .build())
+                    .tokenSettings(TokenSettings.builder()
+                            .accessTokenTimeToLive(Duration.ofMinutes(30))
+                            .build())
+                    .build();
+            registeredClientRepository.save(testInternalClient);
+        }
+
+        if (registeredClientRepository.findByClientId("demo-spa-client") == null) {
+            RegisteredClient demoPkceClient = RegisteredClient.withId("demo-spa-client-id")
+                    .clientId("demo-spa-client")
+                    .clientName("Demo SPA Client")
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                    .redirectUri("http://localhost:3000/callback")
+                    .scope("openid")
+                    .scope("profile")
+                    .scope("email")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(true)
+                            .requireAuthorizationConsent(false)
+                            .setting(OAuthClientMapper.SETTING_TENANT_ID, "fan-platform")
+                            .setting(OAuthClientMapper.SETTING_TENANT_TYPE, "B2C")
+                            .build())
+                    .tokenSettings(TokenSettings.builder()
+                            .accessTokenTimeToLive(Duration.ofMinutes(30))
+                            .refreshTokenTimeToLive(Duration.ofDays(30))
+                            .reuseRefreshTokens(false)
+                            .build())
+                    .build();
+            registeredClientRepository.save(demoPkceClient);
+        }
+    }
 
     // -----------------------------------------------------------------------
     // 1. OIDC Discovery

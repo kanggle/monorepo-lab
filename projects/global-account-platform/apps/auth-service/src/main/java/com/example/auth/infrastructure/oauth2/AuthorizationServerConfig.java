@@ -5,6 +5,8 @@ import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.TokenReuseDetector;
+import com.example.auth.infrastructure.oauth2.persistence.JpaOAuth2AuthorizationService;
+import org.springframework.jdbc.core.JdbcOperations;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
@@ -18,30 +20,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2Token;
-import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
-import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
-import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.time.Duration;
-import java.util.UUID;
 
 /**
- * Spring Authorization Server configuration — Phase 2c (TASK-BE-251).
+ * Spring Authorization Server configuration — Phase 2c (TASK-BE-251) + TASK-BE-252.
  *
  * <p>Exposes the full OIDC discovery endpoint, JWKS endpoint, token endpoint,
  * userinfo endpoint, revocation endpoint, and introspection endpoint.
@@ -49,40 +41,22 @@ import java.util.UUID;
  * request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
  * leaving the existing security filter chain ({@code @Order(2)}) fully intact.
  *
- * <p>Phase 2c additions over Phase 2b:
+ * <p>TASK-BE-252 changes:
  * <ul>
- *   <li>Token revocation endpoint ({@code POST /oauth2/revoke}, RFC 7009) — enabled explicitly.
- *       When a token is revoked, {@link DomainSyncOAuth2AuthorizationService#remove} is called,
- *       which in turn marks the corresponding domain {@link RefreshToken} as revoked in the JPA
- *       store. Access tokens are also removed from the SAS in-memory store.</li>
- *   <li>Token introspection endpoint ({@code POST /oauth2/introspect}, RFC 7662) — enabled
- *       explicitly with a custom {@link TenantIntrospectionCustomizer} that appends
- *       {@code tenant_id} and {@code tenant_type} to the standard response payload.</li>
- * </ul>
- *
- * <p>Phase 2b additions over Phase 2a:
- * <ul>
- *   <li>{@link SasRefreshTokenAuthenticationProvider} — custom refresh_token grant provider
- *       that integrates with the existing domain {@link RefreshTokenRepository} and
- *       {@link TokenReuseDetector}. Replaces SAS's default
- *       {@code OAuth2RefreshTokenAuthenticationProvider}.</li>
- *   <li>{@link DomainSyncOAuth2AuthorizationService} — wraps
- *       {@link InMemoryOAuth2AuthorizationService} to synchronise SAS-issued refresh tokens
- *       into the JPA domain store on every {@code save()} call.</li>
+ *   <li>Removed in-memory {@code RegisteredClientRepository} placeholder bean.
+ *       {@link com.example.auth.infrastructure.oauth2.persistence.JpaRegisteredClientRepository}
+ *       is picked up automatically as a {@code @Component}.</li>
+ *   <li>{@link DomainSyncOAuth2AuthorizationService} now wraps
+ *       {@link com.example.auth.infrastructure.oauth2.persistence.JpaOAuth2AuthorizationService}
+ *       (JDBC-backed) instead of {@code InMemoryOAuth2AuthorizationService}.
+ *       Server restart no longer drops in-flight tokens.</li>
  * </ul>
  *
  * <p><b>Bean ordering note (Phase 2b):</b> {@code OAuth2TokenGenerator} is an internal SAS bean
- * created during the SAS configurer's {@code init()} phase (part of
- * {@link OAuth2AuthorizationServerConfigurer}). It is available as a shared object on
+ * created during the SAS configurer's {@code init()} phase. It is available as a shared object on
  * {@link HttpSecurity} only <em>after</em> SAS configurer initialization. Therefore
  * {@link SasRefreshTokenAuthenticationProvider} is NOT registered as a standalone {@code @Bean}
- * — doing so would cause a {@code NoSuchBeanDefinitionException} at context load time because
- * Spring tries to resolve {@code OAuth2TokenGenerator} before the SAS configurers have run.
- * Instead, the provider is created lazily within
- * {@link #authorizationServerSecurityFilterChain} using the shared object after SAS init.
- *
- * <p>The {@link RegisteredClientRepository} is an in-memory placeholder.
- * // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
+ * — it is created lazily within {@link #authorizationServerSecurityFilterChain} after SAS init.
  */
 @Configuration
 public class AuthorizationServerConfig {
@@ -201,70 +175,6 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * In-memory registered client repository with two in-memory placeholder clients:
-     * <ol>
-     *   <li>{@code test-internal-client} — Phase 1 {@code client_credentials} client</li>
-     *   <li>{@code demo-spa-client} — Phase 2a {@code authorization_code} + PKCE B2C SPA client</li>
-     * </ol>
-     *
-     * <p>The {@code clientName} field carries tenant metadata in the format
-     * {@code "<tenantId>|<tenantType>"}. For authorization_code clients this is the fallback
-     * if the principal's authentication details do not carry tenant attributes.
-     *
-     * <p>// PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
-     */
-    @Bean
-    public RegisteredClientRepository registeredClientRepository() {
-        // Phase 1: client_credentials client (service-to-service)
-        RegisteredClient testInternalClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("test-internal-client")
-                // {noop} plain-text secret for in-memory placeholder ONLY.
-                // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
-                // (TASK-BE-252 will store BCrypt-hashed secrets from the DB)
-                .clientSecret("{noop}secret")
-                // clientName encodes "tenantId|tenantType" — read by TenantClaimTokenCustomizer
-                .clientName("fan-platform|B2C")
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .scope("account.read")
-                .scope(OidcScopes.OPENID)
-                .clientSettings(ClientSettings.builder()
-                        .requireProofKey(false) // client_credentials does not use PKCE
-                        .build())
-                .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofMinutes(30))
-                        .build())
-                .build();
-
-        // Phase 2a: authorization_code + PKCE SPA client (B2C fan-platform placeholder)
-        // PLACEHOLDER: redirect URI will be updated in TASK-BE-253 (fan-platform integration)
-        RegisteredClient demoPkceClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("demo-spa-client")
-                // Public client (SPA) — no client secret; authentication is via PKCE only
-                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri("http://localhost:3000/callback")
-                .scope(OidcScopes.OPENID)
-                .scope("profile")
-                .scope("email")
-                // clientName encodes tenant metadata for fallback in TenantClaimTokenCustomizer
-                .clientName("fan-platform|B2C")
-                .clientSettings(ClientSettings.builder()
-                        .requireProofKey(true)         // PKCE mandatory — S256 only
-                        .requireAuthorizationConsent(false) // B2C pre-approved scopes
-                        .build())
-                .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofMinutes(30))
-                        .refreshTokenTimeToLive(Duration.ofDays(30))
-                        .reuseRefreshTokens(false) // rotation enabled
-                        .build())
-                .build();
-
-        return new InMemoryRegisteredClientRepository(testInternalClient, demoPkceClient);
-    }
-
-    /**
      * JWK source backed by the existing RSA key pair from {@link com.example.auth.infrastructure.config.JwtConfig}.
      * Reuses the same private/public key already used by JwtSigner — no separate key generation.
      */
@@ -287,21 +197,23 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * {@link OAuth2AuthorizationService} — wraps the SAS in-memory store with a decorator that
-     * synchronises refresh token issuance and revocation into the domain JPA
-     * {@link RefreshTokenRepository}.
+     * {@link OAuth2AuthorizationService} bean — wraps the JPA-backed JDBC delegate with
+     * {@link DomainSyncOAuth2AuthorizationService} that synchronises SAS refresh-token
+     * issuance and revocation into the domain {@link RefreshTokenRepository}.
      *
-     * <p>Declared as a {@code @Bean} so that Spring does not auto-configure the default
-     * {@link InMemoryOAuth2AuthorizationService}. SAS picks up this bean automatically.
+     * <p>Declared explicitly so Spring does not auto-configure the default
+     * {@code InMemoryOAuth2AuthorizationService}. SAS picks up this bean automatically.
      *
-     * <p>Phase 2b — dual-store strategy for reuse detection.
+     * <p>TASK-BE-252: delegate changed from in-memory to {@link JpaOAuth2AuthorizationService}.
      */
     @Bean
     public OAuth2AuthorizationService oAuth2AuthorizationService(
+            JdbcOperations jdbcOperations,
+            RegisteredClientRepository registeredClientRepository,
             RefreshTokenRepository refreshTokenRepository) {
-        return new DomainSyncOAuth2AuthorizationService(
-                new InMemoryOAuth2AuthorizationService(),
-                refreshTokenRepository);
+        JpaOAuth2AuthorizationService jpaDelegate =
+                new JpaOAuth2AuthorizationService(jdbcOperations, registeredClientRepository);
+        return new DomainSyncOAuth2AuthorizationService(jpaDelegate, refreshTokenRepository);
     }
 
     /**

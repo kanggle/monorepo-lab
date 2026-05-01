@@ -1,11 +1,12 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.stereotype.Component;
@@ -16,35 +17,33 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>Grant-type specific behaviour</b>
  * <ul>
- *   <li>{@code client_credentials}: reads {@code tenant_id} / {@code tenant_type} from the
- *       registered client's {@link RegisteredClient#getClientName()} metadata field. The
- *       convention for Phase 1 in-memory clients is:
- *       {@code clientName = "<tenant_id>|<tenant_type>"}.
- *       If the metadata is absent or malformed the customizer fails closed with
- *       {@link IllegalStateException} — tokens without tenant context must not be issued.
+ *   <li>{@code client_credentials}: reads {@code tenant_id} / {@code tenant_type} from
+ *       {@link ClientSettings} custom keys ({@link OAuthClientMapper#SETTING_TENANT_ID},
+ *       {@link OAuthClientMapper#SETTING_TENANT_TYPE}) injected by
+ *       {@link com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper}
+ *       during client lookup. This is the Option B implementation (TASK-BE-252).
+ *       If the client was built without the JPA mapper (e.g. in unit tests that still
+ *       use the old {@code clientName = "tenantId|tenantType"} format), falls back to
+ *       the clientName split for backward compatibility.
  *   <li>{@code authorization_code}: reads tenant context from the authenticated
- *       principal's JWT attributes (the principal carries the tenant claims that were
- *       embedded in the session during the login flow). If the authenticated principal
- *       does not carry tenant attributes, falls back to the client's tenant metadata.
+ *       principal's JWT attributes. Falls back to ClientSettings if absent.
  * </ul>
  *
  * <p><b>Token types covered</b>
  * <ul>
  *   <li>{@link OAuth2TokenType#ACCESS_TOKEN} — always customized</li>
- *   <li>{@code id_token} (OIDC ID token) — also customized when {@code openid} scope is present</li>
+ *   <li>{@code id_token} (OIDC ID token) — also customized when {@code openid} scope present</li>
  *   <li>{@link OAuth2TokenType#REFRESH_TOKEN} — no-op (opaque, no claims)</li>
  * </ul>
  *
- * <p>TASK-BE-251 — Phase 2a (authorization_code + id_token tenant claims).
+ * <p>TASK-BE-251 — Phase 2a initial implementation.
+ * TASK-BE-252 — Option B: reads tenant info from ClientSettings instead of clientName.
  */
 @Slf4j
 @Component
 public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
-    /**
-     * Separator used in clientName to encode "tenantId|tenantType".
-     * Example: {@code "fan-platform|B2C"}.
-     */
+    /** Separator used in legacy clientName encoding (backward-compat fallback only). */
     private static final String METADATA_SEPARATOR = "|";
 
     /** SAS uses the string "id_token" as the token type value for ID tokens. */
@@ -54,7 +53,6 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     public void customize(JwtEncodingContext context) {
         OAuth2TokenType tokenType = context.getTokenType();
 
-        // Customize access tokens and OIDC ID tokens; skip refresh tokens and others
         boolean isAccessToken = OAuth2TokenType.ACCESS_TOKEN.equals(tokenType);
         boolean isIdToken = ID_TOKEN_TYPE_VALUE.equals(tokenType.getValue());
 
@@ -74,21 +72,44 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
     private void customizeForClientCredentials(JwtEncodingContext context) {
         RegisteredClient client = context.getRegisteredClient();
-        String clientName = client.getClientName();
         String clientId = client.getClientId();
 
+        // Option B: prefer ClientSettings custom keys (set by JPA mapper)
+        TenantInfo tenantInfo = extractTenantFromClientSettings(client);
+
+        if (tenantInfo == null) {
+            // Fallback: legacy clientName = "tenantId|tenantType" (backward compat for unit tests
+            // and any RegisteredClient not built via the JPA mapper)
+            tenantInfo = extractTenantFromClientNameOrFail(client, clientId);
+        }
+
+        context.getClaims()
+                .claim("tenant_id", tenantInfo.tenantId())
+                .claim("tenant_type", tenantInfo.tenantType());
+
+        log.debug("TenantClaimTokenCustomizer: injected tenant_id={}, tenant_type={} for clientId={}",
+                tenantInfo.tenantId(), tenantInfo.tenantType(), clientId);
+    }
+
+    /**
+     * Reads tenant info from {@code clientName = "tenantId|tenantType"} with specific
+     * fail-closed error messages for blank tenantId / tenantType.
+     * Used when the ClientSettings path found no custom keys.
+     */
+    private TenantInfo extractTenantFromClientNameOrFail(RegisteredClient client, String clientId) {
+        String clientName = client.getClientName();
         if (clientName == null || !clientName.contains(METADATA_SEPARATOR)) {
             log.error("SECURITY: client_credentials token issued without tenant metadata. " +
                     "clientId={}, clientName={}", clientId, clientName);
             throw new IllegalStateException(
                     "tenant_id is required for token issuance (fail-closed); " +
-                            "clientId=" + clientId + " has no tenant metadata in clientName. " +
+                            "clientId=" + clientId + " has no tenant metadata in ClientSettings or clientName. " +
                             "Expected format: '<tenantId>|<tenantType>'");
         }
 
         String[] parts = clientName.split("\\|", 2);
         String tenantId = parts[0].trim();
-        String tenantType = parts[1].trim();
+        String tenantType = parts.length > 1 ? parts[1].trim() : "";
 
         if (tenantId.isBlank()) {
             log.error("SECURITY: client_credentials token issued with blank tenant_id. clientId={}", clientId);
@@ -100,19 +121,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             throw new IllegalStateException(
                     "tenant_type must not be blank (fail-closed); clientId=" + clientId);
         }
-
-        context.getClaims()
-                .claim("tenant_id", tenantId)
-                .claim("tenant_type", tenantType);
-
-        log.debug("TenantClaimTokenCustomizer: injected tenant_id={}, tenant_type={} for clientId={}",
-                tenantId, tenantType, clientId);
+        return new TenantInfo(tenantId, tenantType);
     }
 
     private void customizeForAuthorizationCode(JwtEncodingContext context) {
-        // For authorization_code, the principal is the authenticated user.
-        // Our UserDetailsService embeds tenant_id / tenant_type as attributes in the
-        // Authentication object (populated during the /api/auth/login or form-login flow).
         Authentication principal = context.getPrincipal();
         String clientId = context.getRegisteredClient().getClientId();
 
@@ -126,42 +138,71 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             log.debug("TenantClaimTokenCustomizer: authorization_code — injected tenant_id={}, " +
                     "tenant_type={} from principal for clientId={}", tenantId, tenantType, clientId);
         } else {
-            // Fallback: use client-registered tenant metadata (same as client_credentials)
+            // Fallback: client metadata from ClientSettings (Option B) or clientName (legacy)
             RegisteredClient client = context.getRegisteredClient();
-            String clientName = client.getClientName();
-            if (clientName != null && clientName.contains(METADATA_SEPARATOR)) {
-                String[] parts = clientName.split("\\|", 2);
-                String fallbackTenantId = parts[0].trim();
-                String fallbackTenantType = parts[1].trim();
-                if (!fallbackTenantId.isBlank() && !fallbackTenantType.isBlank()) {
-                    context.getClaims()
-                            .claim("tenant_id", fallbackTenantId)
-                            .claim("tenant_type", fallbackTenantType);
-                    log.debug("TenantClaimTokenCustomizer: authorization_code — fallback to client " +
-                            "tenant metadata tenant_id={} for clientId={}", fallbackTenantId, clientId);
-                    return;
-                }
+            TenantInfo tenantInfo = extractTenantFromClientSettings(client);
+            if (tenantInfo == null) {
+                tenantInfo = extractTenantFromClientName(client);
             }
-            // Fail-closed: if neither principal nor client carries tenant info, reject
-            log.error("SECURITY: authorization_code token issued without tenant metadata. " +
-                    "clientId={}, principal={}", clientId, principal.getName());
-            throw new IllegalStateException(
-                    "tenant_id is required for token issuance (fail-closed); " +
-                            "neither principal attributes nor client metadata contain tenant context. " +
-                            "clientId=" + clientId);
+
+            if (tenantInfo != null && !tenantInfo.tenantId().isBlank() && !tenantInfo.tenantType().isBlank()) {
+                context.getClaims()
+                        .claim("tenant_id", tenantInfo.tenantId())
+                        .claim("tenant_type", tenantInfo.tenantType());
+                log.debug("TenantClaimTokenCustomizer: authorization_code — fallback to client " +
+                        "tenant metadata tenant_id={} for clientId={}", tenantInfo.tenantId(), clientId);
+            } else {
+                log.error("SECURITY: authorization_code token issued without tenant metadata. " +
+                        "clientId={}, principal={}", clientId, principal.getName());
+                throw new IllegalStateException(
+                        "tenant_id is required for token issuance (fail-closed); " +
+                                "neither principal attributes nor client metadata contain tenant context. " +
+                                "clientId=" + clientId);
+            }
         }
     }
 
     /**
-     * Extracts a tenant attribute from the authenticated principal.
-     * The attribute may be stored in the principal's details or as a JWT claim
-     * (depending on how the login flow populates the Authentication object).
+     * Reads tenant info from the client's {@link ClientSettings} custom keys.
+     * Returns null if either key is missing, signalling the caller to try the fallback.
+     */
+    private TenantInfo extractTenantFromClientSettings(RegisteredClient client) {
+        ClientSettings cs = client.getClientSettings();
+        Object rawTenantId = cs.getSetting(OAuthClientMapper.SETTING_TENANT_ID);
+        Object rawTenantType = cs.getSetting(OAuthClientMapper.SETTING_TENANT_TYPE);
+
+        if (rawTenantId instanceof String tid && rawTenantType instanceof String ttype
+                && !tid.isBlank() && !ttype.isBlank()) {
+            return new TenantInfo(tid.trim(), ttype.trim());
+        }
+        return null;
+    }
+
+    /**
+     * Legacy fallback: reads tenant info from {@code clientName = "tenantId|tenantType"}.
+     * Used for RegisteredClient instances built without the JPA mapper (e.g. some unit tests).
+     * Returns null if the format is absent or malformed.
+     */
+    private TenantInfo extractTenantFromClientName(RegisteredClient client) {
+        String clientName = client.getClientName();
+        if (clientName != null && clientName.contains(METADATA_SEPARATOR)) {
+            String[] parts = clientName.split("\\|", 2);
+            String tid = parts[0].trim();
+            String ttype = parts.length > 1 ? parts[1].trim() : "";
+            if (!tid.isBlank() && !ttype.isBlank()) {
+                return new TenantInfo(tid, ttype);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts a tenant attribute from the authenticated principal's details map.
      */
     private String extractTenantAttribute(Authentication principal, String attributeName) {
         if (principal == null) {
             return null;
         }
-        // Check if details is a Map (e.g., populated by our TenantAwareUserDetailsService)
         Object details = principal.getDetails();
         if (details instanceof java.util.Map<?, ?> detailsMap) {
             Object value = detailsMap.get(attributeName);
@@ -171,4 +212,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         }
         return null;
     }
+
+    /** Value object carrying the two required tenant fields. */
+    private record TenantInfo(String tenantId, String tenantType) {}
 }
