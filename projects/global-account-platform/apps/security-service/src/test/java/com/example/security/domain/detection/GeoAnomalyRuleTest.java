@@ -109,4 +109,63 @@ class GeoAnomalyRuleTest {
         assertThat(r.fired()).isFalse();
         verifyNoInteractions(geoStore);
     }
+
+    @Test
+    @DisplayName("Evidence contains tenantId on fire")
+    void evidenceContainsTenantId() {
+        Instant prevAt = Instant.parse("2026-04-12T08:00:00Z");
+        Instant nowAt  = Instant.parse("2026-04-12T08:30:00Z");
+
+        when(geoLookup.isAvailable()).thenReturn(true);
+        when(geoLookup.resolve(anyString())).thenReturn(Optional.of(NYC));
+        when(geoStore.get(eq(TENANT), eq("acc-1"))).thenReturn(Optional.of(
+                new LastKnownGeoStore.Snapshot(SEOUL.country(), SEOUL.latitude(), SEOUL.longitude(), prevAt)));
+
+        DetectionResult r = new GeoAnomalyRule(geoLookup, geoStore, thresholds).evaluate(succeededCtx(nowAt));
+        assertThat(r.fired()).isTrue();
+        assertThat(r.evidence()).containsKey("tenantId");
+        assertThat(r.evidence().get("tenantId")).isEqualTo(TENANT);
+    }
+
+    // ── TASK-BE-248 Phase 2a: Cross-Tenant Isolation ───────────────────────────
+
+    @Test
+    @DisplayName("[cross-tenant] 테넌트A geo 기준이 테넌트B의 동일 account 탐지에 영향 없음")
+    void crossTenantIsolation_tenantABaselineDoesNotAffectTenantB() {
+        String tenantA = "tenant-a";
+        String tenantB = "tenant-b";
+        Instant prevAt = Instant.parse("2026-04-12T08:00:00Z");
+        Instant nowAt  = Instant.parse("2026-04-12T08:30:00Z");
+
+        GeoAnomalyRule rule = new GeoAnomalyRule(geoLookup, geoStore, thresholds);
+
+        // tenantA: Seoul → NYC in 30 min → fires
+        EvaluationContext ctxA = new EvaluationContext(
+                tenantA, "evt-a", "auth.login.succeeded", "acc-1",
+                "1.2.3.4", "fp-1", "US", nowAt, null);
+        when(geoLookup.isAvailable()).thenReturn(true);
+        when(geoLookup.resolve(anyString())).thenReturn(Optional.of(NYC));
+        when(geoStore.get(eq(tenantA), eq("acc-1"))).thenReturn(Optional.of(
+                new LastKnownGeoStore.Snapshot(SEOUL.country(), SEOUL.latitude(), SEOUL.longitude(), prevAt)));
+        DetectionResult resultA = rule.evaluate(ctxA);
+        assertThat(resultA.fired()).isTrue();
+
+        // tenantB: no previous snapshot → does not fire
+        EvaluationContext ctxB = new EvaluationContext(
+                tenantB, "evt-b", "auth.login.succeeded", "acc-1",
+                "1.2.3.4", "fp-1", "US", nowAt, null);
+        when(geoStore.get(eq(tenantB), eq("acc-1"))).thenReturn(Optional.empty());
+        DetectionResult resultB = rule.evaluate(ctxB);
+        assertThat(resultB.fired()).isFalse();
+
+        // Each tenant's store must be called with its own key exactly once.
+        // tenantA get was called during tenantA evaluation (1 time).
+        // tenantB get was called during tenantB evaluation (1 time).
+        // Neither tenant's evaluation should bleed into the other's store key.
+        verify(geoStore, org.mockito.Mockito.times(1)).get(eq(tenantA), eq("acc-1"));
+        verify(geoStore, org.mockito.Mockito.times(1)).get(eq(tenantB), eq("acc-1"));
+        // put must be called per tenant independently
+        verify(geoStore, org.mockito.Mockito.times(1)).put(eq(tenantA), eq("acc-1"), any());
+        verify(geoStore, org.mockito.Mockito.times(1)).put(eq(tenantB), eq("acc-1"), any());
+    }
 }

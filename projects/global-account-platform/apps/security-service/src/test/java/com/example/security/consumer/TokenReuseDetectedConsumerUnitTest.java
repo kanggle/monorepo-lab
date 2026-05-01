@@ -50,6 +50,7 @@ class TokenReuseDetectedConsumerUnitTest {
                 {
                   "eventId": "evt-reuse-1",
                   "eventType": "auth.token.reuse.detected",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -76,6 +77,7 @@ class TokenReuseDetectedConsumerUnitTest {
                 {
                   "eventId": "evt-reuse-dup",
                   "eventType": "auth.token.reuse.detected",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": { "accountId": "acc-2", "timestamp": "2026-04-29T10:00:00Z" }
                 }

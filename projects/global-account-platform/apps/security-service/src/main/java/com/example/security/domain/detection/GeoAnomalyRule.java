@@ -98,6 +98,8 @@ public class GeoAnomalyRule implements SuspiciousActivityRule {
         evidence.put("timeDeltaSeconds", deltaSeconds);
         evidence.put("impliedSpeedKmH", Math.round(speedKmH));
         evidence.put("speedThresholdKmH", thresholds.geoSpeedKmPerHour());
+        // TASK-BE-248 Phase 2a: include tenantId in evidence for cross-tenant audit trail.
+        evidence.put("tenantId", tenantId);
         return new DetectionResult(CODE, score, evidence);
     }
 }

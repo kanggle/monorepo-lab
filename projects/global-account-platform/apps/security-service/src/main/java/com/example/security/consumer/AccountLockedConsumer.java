@@ -76,9 +76,11 @@ public class AccountLockedConsumer {
 
             Instant occurredAt = resolveOccurredAt(root, payload);
 
-            // TASK-BE-248 Phase 1: tenantId required on lock history. account.locked
-            // payload may not yet carry it; default to Tenants.DEFAULT_TENANT_ID until
-            // Phase 2 makes upstream events tenant-aware.
+            // TASK-BE-248 Phase 2a: extract tenantId from envelope/payload.
+            // account.locked events may not yet carry tenantId from the upstream publisher;
+            // default to Tenants.DEFAULT_TENANT_ID until Phase 2b makes upstream events
+            // fully tenant-aware. Unlike auth events, account.locked uses a lenient fallback
+            // here to avoid DLQ noise during the transition window.
             String tenantId = firstNonBlank(
                     root.path("tenantId").asText(null),
                     payload.path("tenantId").asText(null),

@@ -46,10 +46,12 @@ class LoginSucceededConsumerUnitTest {
         when(dedupService.isDuplicate("evt-ok-1")).thenReturn(false);
         when(recordLoginHistoryUseCase.execute(any(LoginHistoryEntry.class), anyString())).thenReturn(true);
 
+        // TASK-BE-248 Phase 2a: tenantId required in envelope.
         String json = """
                 {
                   "eventId": "evt-ok-1",
                   "eventType": "auth.login.succeeded",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -78,6 +80,7 @@ class LoginSucceededConsumerUnitTest {
                 {
                   "eventId": "evt-db-dup",
                   "eventType": "auth.login.succeeded",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": { "accountId": "acc-2", "timestamp": "2026-04-29T10:00:00Z" }
                 }
@@ -94,6 +97,25 @@ class LoginSucceededConsumerUnitTest {
     void onMessage_malformedJson_throwsRuntimeException() {
         assertThatThrownBy(() -> consumer().onMessage(record("{ not valid json {{{")))
                 .isInstanceOf(RuntimeException.class);
+
+        verify(recordLoginHistoryUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-248: tenant_id 누락 메시지 → MissingTenantIdException (DLQ 라우팅 트리거)")
+    void onMessage_missingTenantId_throwsMissingTenantIdException() {
+        String json = """
+                {
+                  "eventId": "evt-no-tenant-ok",
+                  "eventType": "auth.login.succeeded",
+                  "occurredAt": "2026-04-29T10:00:00Z",
+                  "payload": { "accountId": "acc-x", "timestamp": "2026-04-29T10:00:00Z" }
+                }
+                """;
+
+        assertThatThrownBy(() -> consumer().onMessage(record(json)))
+                .isInstanceOf(MissingTenantIdException.class)
+                .hasMessageContaining("evt-no-tenant-ok");
 
         verify(recordLoginHistoryUseCase, never()).execute(any(), any());
     }

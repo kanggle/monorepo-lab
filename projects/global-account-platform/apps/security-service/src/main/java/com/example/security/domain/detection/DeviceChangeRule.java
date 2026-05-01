@@ -61,9 +61,11 @@ public class DeviceChangeRule implements SuspiciousActivityRule {
         if (fp == null || fp.isBlank()) {
             return DetectionResult.NONE;
         }
-        boolean known = store.isKnown(ctx.accountId(), fp);
+        // TASK-BE-248 Phase 2a: use tenantId in store key for per-tenant device isolation.
+        String tenantId = ctx.tenantId() != null ? ctx.tenantId() : "";
+        boolean known = store.isKnown(tenantId, ctx.accountId(), fp);
         // Always remember the device, even when it fires — next time it won't fire.
-        store.remember(ctx.accountId(), fp);
+        store.remember(tenantId, ctx.accountId(), fp);
 
         if (known) {
             return DetectionResult.NONE;

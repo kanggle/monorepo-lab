@@ -1,5 +1,8 @@
 package com.example.security.infrastructure.kafka;
 
+import com.example.security.consumer.MissingTenantIdException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -22,8 +25,19 @@ import java.util.Map;
 @Configuration
 public class KafkaConsumerConfig {
 
+    /**
+     * Metric name: {@code outbox.dlq.size} — incremented every time a message is
+     * routed to a DLQ topic (either from deserialization failure or from
+     * {@code tenant_id} validation failure in the consumer layer).
+     *
+     * <p>Tag: {@code reason} distinguishes deserialization failures from tenant
+     * validation failures for operational alerting.</p>
+     */
+    public static final String DLQ_SIZE_METRIC = "outbox.dlq.size";
+
     @Bean
-    public DefaultErrorHandler errorHandler(KafkaProperties kafkaProperties) {
+    public DefaultErrorHandler errorHandler(KafkaProperties kafkaProperties,
+                                            MeterRegistry meterRegistry) {
         // DLQ recoverer needs ByteArraySerializer for values because
         // ErrorHandlingDeserializer preserves raw bytes on deserialization failures.
         Map<String, Object> producerProps = kafkaProperties.buildProducerProperties(null);
@@ -31,6 +45,20 @@ public class KafkaConsumerConfig {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         KafkaTemplate<String, byte[]> dlqTemplate = new KafkaTemplate<>(
                 new DefaultKafkaProducerFactory<>(producerProps));
+
+        // Pre-create counters per reason so they are visible in Prometheus from startup.
+        Counter deserializationDlqCounter = Counter.builder(DLQ_SIZE_METRIC)
+                .description("Number of messages routed to DLQ")
+                .tag("reason", "deserialization_failure")
+                .register(meterRegistry);
+        Counter tenantIdMissingDlqCounter = Counter.builder(DLQ_SIZE_METRIC)
+                .description("Number of messages routed to DLQ")
+                .tag("reason", "tenant_id_missing")
+                .register(meterRegistry);
+        Counter otherDlqCounter = Counter.builder(DLQ_SIZE_METRIC)
+                .description("Number of messages routed to DLQ")
+                .tag("reason", "other")
+                .register(meterRegistry);
 
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 dlqTemplate,
@@ -41,8 +69,13 @@ public class KafkaConsumerConfig {
                     String rootCause = ex.getMessage();
                     if (ex.getCause() instanceof DeserializationException de) {
                         rootCause = "DeserializationException: " + de.getMessage();
+                        deserializationDlqCounter.increment();
+                    } else if (ex instanceof MissingTenantIdException || isMissingTenantIdCause(ex)) {
+                        tenantIdMissingDlqCounter.increment();
+                    } else {
+                        otherDlqCounter.increment();
                     }
-                    log.error("Sending to DLQ: topic={}, eventKey={}, error={}",
+                    log.warn("Sending to DLQ: topic={}, eventKey={}, error={}",
                             record.topic(), record.key(), rootCause);
                     return new TopicPartition(record.topic() + ".dlq", record.partition());
                 }
@@ -55,7 +88,14 @@ public class KafkaConsumerConfig {
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
         // Deserialization failures are non-recoverable — bypass retry backoff and go straight to DLQ.
         errorHandler.addNotRetryableExceptions(DeserializationException.class);
+        // tenant_id missing is also non-recoverable — the producer must fix its payload.
+        errorHandler.addNotRetryableExceptions(MissingTenantIdException.class);
         return errorHandler;
+    }
+
+    private static boolean isMissingTenantIdCause(Throwable ex) {
+        Throwable cause = ex.getCause();
+        return cause instanceof MissingTenantIdException;
     }
 
     /**
