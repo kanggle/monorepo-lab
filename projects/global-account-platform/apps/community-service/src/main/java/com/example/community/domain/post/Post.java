@@ -79,7 +79,11 @@ public class Post {
         Instant now = Instant.now();
         p.createdAt = now;
         p.updatedAt = now;
-        p.version = 0;
+        // Leave version null so Spring Data JPA save() detects this as a new
+        // entity (default isNew() uses @Version null-check) and calls persist()
+        // instead of merge(). Setting version=0 here makes merge() the default,
+        // which fails with StaleObjectStateException since no row exists yet.
+        // Hibernate initializes @Version to 0 on persist.
         return p;
     }
 

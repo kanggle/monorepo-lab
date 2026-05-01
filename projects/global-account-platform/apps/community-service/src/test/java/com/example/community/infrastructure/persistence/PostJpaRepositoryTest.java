@@ -7,7 +7,6 @@ import com.example.community.domain.post.PostVisibility;
 import com.example.community.domain.post.status.ActorType;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,7 +67,6 @@ class PostJpaRepositoryTest {
     // ── findFeedForFan ────────────────────────────────────────────────────────
 
     @Test
-    @Disabled("TASK-MONO-020 follow-up: Post.publish() pre-persist increments @Version, causing StaleObjectStateException on saveAndFlush; needs domain entity lifecycle audit")
     @DisplayName("findFeedForFan — 구독한 아티스트의 발행 포스트 반환")
     void findFeedForFan_subscribedArtistPublishedPost_returnsPost() {
         String fan = uuid(), artist = uuid();
@@ -84,7 +82,6 @@ class PostJpaRepositoryTest {
     }
 
     @Test
-    @Disabled("TASK-MONO-020 follow-up: Post.createDraft + saveAndFlush triggers StaleObjectStateException; needs domain entity lifecycle audit")
     @DisplayName("findFeedForFan — DRAFT 포스트는 피드에서 제외")
     void findFeedForFan_draftPost_excluded() {
         String fan = uuid(), artist = uuid();
@@ -98,7 +95,6 @@ class PostJpaRepositoryTest {
     }
 
     @Test
-    @Disabled("TASK-MONO-020 follow-up: Post.publish() pre-persist + saveAndFlush triggers StaleObjectStateException; needs domain entity lifecycle audit")
     @DisplayName("findFeedForFan — 미구독 아티스트 포스트는 피드에서 제외")
     void findFeedForFan_unsubscribedArtist_excluded() {
         String fan = uuid(), artist = uuid(), other = uuid();
