@@ -1,10 +1,13 @@
 package com.example.security.domain.detection;
 
+import com.example.security.domain.Tenants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -13,10 +16,18 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+/**
+ * TASK-BE-248 Phase 1: GeoAnomalyRule now routes LastKnownGeoStore calls through
+ * (tenantId, accountId) so that geo baselines are isolated per tenant.
+ */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class GeoAnomalyRuleTest {
+
+    private static final String TENANT = Tenants.DEFAULT_TENANT_ID;
 
     @Mock GeoLookup geoLookup;
     @Mock LastKnownGeoStore geoStore;
@@ -28,8 +39,9 @@ class GeoAnomalyRuleTest {
     private static final GeoPoint NYC = new GeoPoint("US", 40.7, -74.0);
 
     private EvaluationContext succeededCtx(Instant at) {
+        // Use tenant-aware constructor (tenantId required after TASK-BE-248 Phase 1).
         return new EvaluationContext(
-                "evt-1", "auth.login.succeeded", "acc-1",
+                TENANT, "evt-1", "auth.login.succeeded", "acc-1",
                 "1.2.3.4", "fp-1", "US", at, null);
     }
 
@@ -47,11 +59,11 @@ class GeoAnomalyRuleTest {
     void firstLoginBaselinesOnly() {
         when(geoLookup.isAvailable()).thenReturn(true);
         when(geoLookup.resolve(anyString())).thenReturn(Optional.of(NYC));
-        when(geoStore.get("acc-1")).thenReturn(Optional.empty());
+        when(geoStore.get(eq(TENANT), eq("acc-1"))).thenReturn(Optional.empty());
 
         DetectionResult r = new GeoAnomalyRule(geoLookup, geoStore, thresholds).evaluate(succeededCtx(Instant.now()));
         assertThat(r.fired()).isFalse();
-        verify(geoStore).put(eq("acc-1"), any());
+        verify(geoStore).put(eq(TENANT), eq("acc-1"), any());
     }
 
     @Test
@@ -62,7 +74,7 @@ class GeoAnomalyRuleTest {
 
         when(geoLookup.isAvailable()).thenReturn(true);
         when(geoLookup.resolve(anyString())).thenReturn(Optional.of(NYC));
-        when(geoStore.get("acc-1")).thenReturn(Optional.of(
+        when(geoStore.get(eq(TENANT), eq("acc-1"))).thenReturn(Optional.of(
                 new LastKnownGeoStore.Snapshot(SEOUL.country(), SEOUL.latitude(), SEOUL.longitude(), prevAt)));
 
         DetectionResult r = new GeoAnomalyRule(geoLookup, geoStore, thresholds).evaluate(succeededCtx(nowAt));
@@ -81,7 +93,7 @@ class GeoAnomalyRuleTest {
         GeoPoint busan = new GeoPoint("KR", 35.1, 129.0);
         when(geoLookup.isAvailable()).thenReturn(true);
         when(geoLookup.resolve(anyString())).thenReturn(Optional.of(busan));
-        when(geoStore.get("acc-1")).thenReturn(Optional.of(
+        when(geoStore.get(eq(TENANT), eq("acc-1"))).thenReturn(Optional.of(
                 new LastKnownGeoStore.Snapshot("KR", SEOUL.latitude(), SEOUL.longitude(), prevAt)));
 
         DetectionResult r = new GeoAnomalyRule(geoLookup, geoStore, thresholds).evaluate(succeededCtx(nowAt));

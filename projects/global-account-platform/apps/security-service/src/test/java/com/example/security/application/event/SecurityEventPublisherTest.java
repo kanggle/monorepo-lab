@@ -85,6 +85,8 @@ class SecurityEventPublisherTest {
 
         JsonNode payload = root.get("payload");
         assertThat(payload.get("suspiciousEventId").asText()).isEqualTo(event.getId());
+        // TASK-BE-248: tenant_id must be present in every security event payload
+        assertThat(payload.get("tenantId").asText()).isEqualTo(Tenants.DEFAULT_TENANT_ID);
         assertThat(payload.get("accountId").asText()).isEqualTo("acc-1");
         assertThat(payload.get("ruleCode").asText()).isEqualTo("RULE_GEO_VELOCITY");
         assertThat(payload.get("riskScore").asInt()).isEqualTo(75);
@@ -110,6 +112,7 @@ class SecurityEventPublisherTest {
 
         JsonNode payload = objectMapper.readTree(jsonCaptor.getValue()).get("payload");
         assertThat(payload.get("suspiciousEventId").asText()).isEqualTo(event.getId());
+        assertThat(payload.get("tenantId").asText()).isEqualTo(Tenants.DEFAULT_TENANT_ID);
         assertThat(payload.get("accountId").asText()).isEqualTo("acc-2");
         assertThat(payload.get("ruleCode").asText()).isEqualTo("RULE_GEO_VELOCITY");
         assertThat(payload.get("riskScore").asInt()).isEqualTo(75);

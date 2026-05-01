@@ -60,15 +60,21 @@ public class SecurityEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * Builds the 4 common fields shared by every {@link SuspiciousEvent}-based publish
-     * method in the documented insertion order: {@code suspiciousEventId, accountId,
-     * ruleCode, riskScore}. Returned as a mutable {@link LinkedHashMap} so callers can
-     * append method-specific fields after the common prefix. Mirrors the
+     * Builds the common fields shared by every {@link SuspiciousEvent}-based publish
+     * method in the documented insertion order: {@code suspiciousEventId, tenantId,
+     * accountId, ruleCode, riskScore}. Returned as a mutable {@link LinkedHashMap} so
+     * callers can append method-specific fields after the common prefix. Mirrors the
      * {@code AuthEventPublisher#buildLoginSucceededBase} pattern (TASK-BE-131).
+     *
+     * <p>TASK-BE-248 Phase 1: {@code tenant_id} is now always included in the outbox
+     * payload so downstream consumers can validate the field presence. Null tenantId
+     * is rejected at the {@link com.example.security.domain.suspicious.SuspiciousEvent}
+     * constructor, so it is safe to include directly here.
      */
     private Map<String, Object> buildSuspiciousEventBase(SuspiciousEvent event) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("suspiciousEventId", event.getId());
+        payload.put("tenantId", event.getTenantId());
         payload.put("accountId", event.getAccountId());
         payload.put("ruleCode", event.getRuleCode());
         payload.put("riskScore", event.getRiskScore());
