@@ -107,7 +107,7 @@ public class ProvisionAccountUseCase {
             historyRepository.save(auditEntry);
 
             // 8. Publish outbox account.created event (tenant_id included in payload)
-            eventPublisher.publishAccountCreated(account, profile.getLocale());
+            eventPublisher.publishAccountCreated(account, account.getTenantId().value(), profile.getLocale());
 
             return ProvisionAccountResult.from(account, roles);
 

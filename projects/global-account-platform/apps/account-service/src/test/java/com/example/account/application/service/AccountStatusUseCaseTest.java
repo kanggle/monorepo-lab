@@ -115,9 +115,9 @@ class AccountStatusUseCaseTest {
 
         assertThat(result.previousStatus()).isEqualTo("ACTIVE");
         assertThat(result.currentStatus()).isEqualTo("LOCKED");
-        verify(eventPublisher).publishStatusChanged(any(), any(), any(), any(), any(), any());
-        verify(eventPublisher).publishAccountLocked(any(), any(), any(), any(), any());
-        verify(eventPublisher, never()).publishAccountUnlocked(any(), any(), any(), any(), any());
+        verify(eventPublisher).publishStatusChanged(any(), any(), any(), any(), any(), any(), any());
+        verify(eventPublisher).publishAccountLocked(any(), any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishAccountUnlocked(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -135,8 +135,8 @@ class AccountStatusUseCaseTest {
 
         assertThat(result.previousStatus()).isEqualTo("LOCKED");
         assertThat(result.currentStatus()).isEqualTo("ACTIVE");
-        verify(eventPublisher).publishAccountUnlocked(any(), any(), any(), any(), any());
-        verify(eventPublisher, never()).publishAccountLocked(any(), any(), any(), any(), any());
+        verify(eventPublisher).publishAccountUnlocked(any(), any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishAccountLocked(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -167,8 +167,8 @@ class AccountStatusUseCaseTest {
 
         assertThat(result.accountId()).isEqualTo("acc-5");
         assertThat(result.gracePeriodEndsAt()).isAfter(Instant.now());
-        verify(eventPublisher).publishStatusChanged(any(), any(), any(), any(), any(), any());
-        verify(eventPublisher).publishAccountDeleted(any(), any(), any(), any(), any(), any());
+        verify(eventPublisher).publishStatusChanged(any(), any(), any(), any(), any(), any(), any());
+        verify(eventPublisher).publishAccountDeleted(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

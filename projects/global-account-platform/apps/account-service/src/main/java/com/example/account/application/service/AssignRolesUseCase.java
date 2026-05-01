@@ -75,7 +75,8 @@ public class AssignRolesUseCase {
 
         // Publish outbox event
         Instant now = Instant.now();
-        eventPublisher.publishRolesChanged(account, newRoles, "provisioning_system", operatorId, now);
+        eventPublisher.publishRolesChanged(account, account.getTenantId().value(), newRoles,
+                "provisioning_system", operatorId, now);
 
         return new AssignRolesResult(command.accountId(), command.tenantId(), newRoles, now);
     }

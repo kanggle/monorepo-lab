@@ -32,12 +32,14 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **Topic**: `auth.login.attempted`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string | null (미존재 이메일이면 null)",
   "emailHash": "string (SHA256[:10])",
-  "tenantId": "string | null (테넌트 컨텍스트. 미확정 이메일이면 null)",
+  "tenantId": "string (required, 테넌트 컨텍스트. 미확정 이메일이면 known 테넌트 컨텍스트 또는 'fan-platform' 기본값 사용)",
   "ipMasked": "192.168.*.*",
   "userAgentFamily": "Chrome 120",
   "deviceFingerprint": "string (hashed)",
@@ -45,6 +47,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
   "timestamp": "2026-04-12T10:00:00Z"
 }
 ```
+
+**필드 노트** (TASK-BE-248):
+- `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다.
 
 **Consumers**: security-service
 
@@ -56,12 +61,14 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **Topic**: `auth.login.failed`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string | null",
   "emailHash": "string",
-  "tenantId": "string | null",
+  "tenantId": "string (required, TASK-BE-248)",
   "failureReason": "CREDENTIALS_INVALID | ACCOUNT_LOCKED | ACCOUNT_DORMANT | ACCOUNT_DELETED | RATE_LIMITED | LOGIN_TENANT_AMBIGUOUS",
   "failCount": 3,
   "ipMasked": "192.168.*.*",
@@ -72,6 +79,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 }
 ```
 
+**필드 노트** (TASK-BE-248):
+- `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
+
 **Consumers**: security-service (VelocityRule 평가)
 
 ---
@@ -81,6 +91,8 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 로그인 성공 시 발행.
 
 **Topic**: `auth.login.succeeded`
+
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required confirmed)
 
 **Payload**:
 ```json
@@ -117,6 +129,8 @@ Refresh token rotation 성공 시 발행.
 
 **Topic**: `auth.token.refreshed`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required confirmed)
+
 **Payload**:
 ```json
 {
@@ -137,6 +151,8 @@ Refresh token rotation 성공 시 발행.
 ## auth.token.reuse.detected
 
 이미 rotation된 refresh token의 재사용 탐지. **보안 critical 이벤트**.
+
+<!-- tenant_id pending TASK-BE-259 — 본 이벤트의 tenant_id 추가는 TASK-BE-259에서 처리 -->
 
 **Topic**: `auth.token.reuse.detected`
 
@@ -164,6 +180,8 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
 
 **Topic**: `auth.token.tenant.mismatch`
 
+**Schema version**: 2 (TASK-BE-248: tenant_id fields are inherently required)
+
 **Payload**:
 ```json
 {
@@ -187,10 +205,13 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
 
 **Topic**: `auth.session.created`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, TASK-BE-248)",
   "deviceId": "string (UUID v7, device_sessions.device_id)",
   "sessionJti": "string (이 device에 최초 발급된 refresh token의 jti)",
   "deviceFingerprintHash": "string (fingerprint SHA256, 관측용)",
@@ -216,10 +237,13 @@ device session이 revoke될 때 발행. 사용자 명시 revoke, concurrent-sess
 
 **Topic**: `auth.session.revoked`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, TASK-BE-248)",
   "deviceId": "string (UUID v7)",
   "reason": "USER_REQUESTED | EVICTED_BY_LIMIT | TOKEN_REUSE | ADMIN_FORCED | LOGOUT_OTHERS",
   "revokedJtis": ["string"],

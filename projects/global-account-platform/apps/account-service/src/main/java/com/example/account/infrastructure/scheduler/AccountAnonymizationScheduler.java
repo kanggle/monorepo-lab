@@ -155,6 +155,7 @@ public class AccountAnonymizationScheduler {
             // account-events.md §account.deleted).
             eventPublisher.publishAccountDeletedAnonymized(
                     account,
+                    account.getTenantId().value(),
                     ctx.reasonCode(),
                     ctx.actorType(),
                     ctx.actorId(),

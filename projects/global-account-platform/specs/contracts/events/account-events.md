@@ -148,6 +148,30 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 
 ---
 
+## account.roles.changed
+
+계정의 역할(role) 목록이 교체될 때 발행. provisioning API가 role set을 원자적으로 대체하는 경우.
+
+**Topic**: `account.roles.changed`
+
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
+**Payload**:
+```json
+{
+  "accountId": "string",
+  "tenantId": "string (required, TASK-BE-248)",
+  "roles": ["WAREHOUSE_ADMIN", "OPERATOR"],
+  "actorType": "provisioning_system",
+  "actorId": "string | null",
+  "occurredAt": "2026-04-12T10:00:00Z"
+}
+```
+
+**Consumers**: admin-service (권한 변경 감사), 미래 서비스 (권한 동기화)
+
+---
+
 ## Consumer Rules
 
 [auth-events.md](auth-events.md)의 Consumer Rules와 동일:

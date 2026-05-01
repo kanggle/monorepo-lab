@@ -52,7 +52,7 @@ public class SocialSignupUseCase {
             profileRepository.save(profile);
 
             // Publish account.created outbox event
-            eventPublisher.publishAccountCreated(account, profile.getLocale());
+            eventPublisher.publishAccountCreated(account, account.getTenantId().value(), profile.getLocale());
 
             return SocialSignupResult.fromNew(account);
         } catch (DataIntegrityViolationException e) {

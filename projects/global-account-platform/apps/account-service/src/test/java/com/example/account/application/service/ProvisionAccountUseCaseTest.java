@@ -104,7 +104,7 @@ class ProvisionAccountUseCaseTest {
         verify(profileRepository).save(any(Profile.class), any(TenantId.class));
         verify(accountRoleRepository).save(any(AccountRole.class));
         verify(historyRepository).save(any());
-        verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class));
+        verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class), any(String.class));
         verify(authServicePort).createCredential(any(), eq("user@example.com"), eq("Password1!"));
     }
 
