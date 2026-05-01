@@ -1,5 +1,10 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.domain.repository.BulkInvalidationStore;
+import com.example.auth.domain.repository.DeviceSessionRepository;
+import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.domain.token.TokenReuseDetector;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
@@ -7,15 +12,18 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
+import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -23,6 +31,7 @@ import org.springframework.security.oauth2.server.authorization.config.annotatio
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 
@@ -32,21 +41,33 @@ import java.time.Duration;
 import java.util.UUID;
 
 /**
- * Spring Authorization Server configuration — Phase 2a (TASK-BE-251).
+ * Spring Authorization Server configuration — Phase 2b (TASK-BE-251).
  *
  * <p>Exposes the full OIDC discovery endpoint, JWKS endpoint, token endpoint,
  * and userinfo endpoint. The SAS filter chain takes {@code @Order(1)} and matches
  * only the SAS-managed request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
  * leaving the existing security filter chain ({@code @Order(2)}) fully intact.
  *
- * <p>Phase 2a additions over Phase 1:
+ * <p>Phase 2b additions over Phase 2a:
  * <ul>
- *   <li>{@code authorization_code} grant with PKCE (S256 required)</li>
- *   <li>{@code demo-spa-client} in-memory placeholder for B2C fan-platform</li>
- *   <li>{@link OidcUserInfoMapper} wired as SAS userinfo mapper</li>
- *   <li>ID token support — {@link TenantClaimTokenCustomizer} now also
- *       customizes {@code id_token} (not just access tokens)</li>
+ *   <li>{@link SasRefreshTokenAuthenticationProvider} — custom refresh_token grant provider
+ *       that integrates with the existing domain {@link RefreshTokenRepository} and
+ *       {@link TokenReuseDetector}. Replaces SAS's default
+ *       {@code OAuth2RefreshTokenAuthenticationProvider}.</li>
+ *   <li>{@link DomainSyncOAuth2AuthorizationService} — wraps
+ *       {@link InMemoryOAuth2AuthorizationService} to synchronise SAS-issued refresh tokens
+ *       into the JPA domain store on every {@code save()} call.</li>
  * </ul>
+ *
+ * <p><b>Bean ordering note (Phase 2b):</b> {@code OAuth2TokenGenerator} is an internal SAS bean
+ * created during the SAS configurer's {@code init()} phase (part of
+ * {@link OAuth2AuthorizationServerConfigurer}). It is available as a shared object on
+ * {@link HttpSecurity} only <em>after</em> SAS configurer initialization. Therefore
+ * {@link SasRefreshTokenAuthenticationProvider} is NOT registered as a standalone {@code @Bean}
+ * — doing so would cause a {@code NoSuchBeanDefinitionException} at context load time because
+ * Spring tries to resolve {@code OAuth2TokenGenerator} before the SAS configurers have run.
+ * Instead, the provider is created lazily within
+ * {@link #authorizationServerSecurityFilterChain} using the shared object after SAS init.
  *
  * <p>The {@link RegisteredClientRepository} is an in-memory placeholder.
  * // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
@@ -60,17 +81,37 @@ public class AuthorizationServerConfig {
     @Value("${auth.jwt.kid:key-2026-04-01}")
     private String kid;
 
+    // Injected fields for SasRefreshTokenAuthenticationProvider construction
+    // (cannot use constructor injection in @Configuration class without @ComponentScan)
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+    @Autowired
+    private TokenReuseDetector tokenReuseDetector;
+    @Autowired
+    private BulkInvalidationStore bulkInvalidationStore;
+    @Autowired
+    private DeviceSessionRepository deviceSessionRepository;
+    @Autowired
+    private AuthEventPublisher authEventPublisher;
+
     /**
      * SAS security filter chain — Order(1).
      * Covers: /oauth2/**, /.well-known/openid-configuration
      *
      * <p>Phase 2a: wires {@link OidcUserInfoMapper} into the OIDC userinfo configurer.
+     *
+     * <p>Phase 2b: after SAS configurer init, retrieves {@link OAuth2TokenGenerator} from the
+     * {@link HttpSecurity} shared objects and creates a {@link SasRefreshTokenAuthenticationProvider}
+     * that integrates domain reuse-detection. The provider is added to the token endpoint
+     * authentication manager; it takes priority over SAS's built-in refresh_token provider
+     * because it is added first.
      */
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
-            OidcUserInfoMapper oidcUserInfoMapper) throws Exception {
+            OidcUserInfoMapper oidcUserInfoMapper,
+            OAuth2AuthorizationService oAuth2AuthorizationService) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -78,9 +119,17 @@ public class AuthorizationServerConfig {
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, configurer ->
-                        configurer.oidc(oidc ->
-                                oidc.userInfoEndpoint(userInfo ->
-                                        userInfo.userInfoMapper(oidcUserInfoMapper))))
+                        configurer
+                                .oidc(oidc ->
+                                        oidc.userInfoEndpoint(userInfo ->
+                                                userInfo.userInfoMapper(oidcUserInfoMapper)))
+                                // Phase 2b: add custom refresh_token provider.
+                                // OAuth2TokenGenerator is available as a shared object on HttpSecurity
+                                // after the SAS configurer has been applied via .with(). We use a
+                                // Customizer that captures http to resolve the generator lazily.
+                                .tokenEndpoint(tokenEndpoint ->
+                                        tokenEndpoint.authenticationProvider(
+                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService))))
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
                 // Redirect to /api/auth/login when unauthenticated — for authorization_code flow
@@ -90,6 +139,33 @@ public class AuthorizationServerConfig {
                                 new LoginUrlAuthenticationEntryPoint("/api/auth/login")));
 
         return http.build();
+    }
+
+    /**
+     * Builds the {@link SasRefreshTokenAuthenticationProvider} using the
+     * {@link OAuth2TokenGenerator} shared object from the {@link HttpSecurity} configurer chain.
+     *
+     * <p>This method is called from inside the SAS configurer's Customizer lambda, which means
+     * SAS has already applied its own configurers and populated the shared objects map with
+     * {@link OAuth2TokenGenerator}. Accessing it here is safe and avoids the circular
+     * dependency that would occur if we declared it as a standalone {@code @Bean}.
+     */
+    @SuppressWarnings("unchecked")
+    private SasRefreshTokenAuthenticationProvider buildRefreshTokenProvider(
+            HttpSecurity http,
+            OAuth2AuthorizationService oAuth2AuthorizationService) {
+        // SAS stores OAuth2TokenGenerator in HttpSecurity's shared objects under its own type.
+        // This is the standard SAS extension pattern used by the built-in grant providers.
+        OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator =
+                http.getSharedObject(OAuth2TokenGenerator.class);
+        return new SasRefreshTokenAuthenticationProvider(
+                oAuth2AuthorizationService,
+                tokenGenerator,
+                refreshTokenRepository,
+                tokenReuseDetector,
+                bulkInvalidationStore,
+                deviceSessionRepository,
+                authEventPublisher);
     }
 
     /**
@@ -176,6 +252,24 @@ public class AuthorizationServerConfig {
 
         JWKSet jwkSet = new JWKSet(rsaKey);
         return new ImmutableJWKSet<>(jwkSet);
+    }
+
+    /**
+     * {@link OAuth2AuthorizationService} — wraps the SAS in-memory store with a decorator that
+     * synchronises refresh token issuance and revocation into the domain JPA
+     * {@link RefreshTokenRepository}.
+     *
+     * <p>Declared as a {@code @Bean} so that Spring does not auto-configure the default
+     * {@link InMemoryOAuth2AuthorizationService}. SAS picks up this bean automatically.
+     *
+     * <p>Phase 2b — dual-store strategy for reuse detection.
+     */
+    @Bean
+    public OAuth2AuthorizationService oAuth2AuthorizationService(
+            RefreshTokenRepository refreshTokenRepository) {
+        return new DomainSyncOAuth2AuthorizationService(
+                new InMemoryOAuth2AuthorizationService(),
+                refreshTokenRepository);
     }
 
     /**
