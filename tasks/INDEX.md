@@ -90,7 +90,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-019-wms-platform-oidc-resource-server-migration.md` — wms-platform 의 모든 service 가 GAP의 표준 OIDC token 을 OAuth2 Resource Server 로 검증하도록 전환 + 내부 `client_credentials` 도입. Cross-project (`projects/global-account-platform/` + `projects/wms-platform/`). GAP의 [ADR-001](../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) ACCEPTED 결정의 후속 — `TASK-BE-251`(SAS 도입), `TASK-BE-252`(oauth schema) 머지 후 시작. 2026-05-01.
 
 ## in-progress
 
