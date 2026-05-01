@@ -19,6 +19,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    // Spring Authorization Server (OIDC / OAuth2 AS) — TASK-BE-251
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
+
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
 
@@ -59,6 +62,8 @@ dependencies {
     testImplementation 'com.jayway.jsonpath:json-path'
     testImplementation 'org.awaitility:awaitility'
     testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    // H2 for SAS slice tests (no Testcontainers MySQL required)
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 dependencyManagement {

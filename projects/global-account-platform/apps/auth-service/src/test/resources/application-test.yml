@@ -93,6 +93,10 @@ oauth:
 server:
   port: 0
 
+# TASK-BE-251: SAS issuer URL for integration tests
+oidc:
+  issuer-url: http://localhost
+
 auth:
   jwt:
     issuer: global-account-platform

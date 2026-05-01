@@ -49,6 +49,12 @@ outbox:
 server:
   port: 8081
 
+# OIDC issuer URL — externalized for gateway / production override.
+# TASK-BE-251: Spring Authorization Server discovery document uses this as the issuer claim.
+# Override with: OIDC_ISSUER_URL=https://auth.example.com (gateway-facing external URL).
+oidc:
+  issuer-url: ${OIDC_ISSUER_URL:http://localhost:8081}
+
 oauth:
   google:
     client-id: ${OAUTH_GOOGLE_CLIENT_ID:test-google-client-id}
