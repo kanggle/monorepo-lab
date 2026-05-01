@@ -52,11 +52,11 @@
 
 테넌트는 **운영자(SUPER_ADMIN)에 의해서만 등록**된다. self-service 가입 없음.
 
-- 등록 경로: admin-service의 운영자 명령 (`POST /api/admin/tenants`)
-- 등록 시 `admin_actions`에 `action_code=TENANT_CREATE` 기록 (audit-heavy)
-- 테넌트 SUSPEND/REACTIVATE도 동일하게 admin-service 경유
-
-> 운영 콘솔에서 테넌트를 생성·관리하는 구체 흐름은 별도 admin-service 스펙 갱신 시 정의한다. 본 문서는 모델·격리 규칙만 다룬다.
+- 등록 경로: admin-service의 운영자 명령 — 4개 엔드포인트 (`POST /api/admin/tenants`, `GET /api/admin/tenants`, `GET /api/admin/tenants/{id}`, `PATCH /api/admin/tenants/{id}`). 상세 contract 는 [admin-api.md § Tenant Lifecycle](../contracts/http/admin-api.md#tenant-lifecycle-task-be-256) 참조 (TASK-BE-256).
+- 등록 시 `admin_actions`에 `action_code=TENANT_CREATE` 기록 + outbox 이벤트 [tenant-events.md](../contracts/events/tenant-events.md) `tenant.created` 발행 (audit-heavy).
+- 테넌트 SUSPEND/REACTIVATE 도 동일하게 admin-service 경유 — `tenant.suspended` / `tenant.reactivated` outbox 이벤트 발행. account-service 가 이 이벤트를 소비해 SUSPENDED 테넌트의 신규 로그인·가입을 차단한다.
+- 예약어 (`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `auth`, `oauth`, `me`) 는 `tenantId` 로 등록 불가 (`400 TENANT_ID_RESERVED`).
+- 테넌트 삭제 미지원 — 감사 트레일·외부 토큰 정합으로 인해 SUSPEND 만 가능.
 
 ---
 

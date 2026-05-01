@@ -37,12 +37,14 @@ backend
 
 `admin-service`에 테넌트 lifecycle CRUD API를 구현한다. 현재는 `account-service`에 `Tenant` 도메인 + 내부 provisioning이 있지만, 운영자가 신규 테넌트를 등록·중단할 통로(spec § "테넌트 등록 방식"이 명시한 admin-service 경로)가 없다. 이 task가 그 게이트웨이를 채운다.
 
-완료 시점:
+**선행 contract** (TASK-BE-256, completed): [admin-api.md § Tenant Lifecycle](../../specs/contracts/http/admin-api.md#tenant-lifecycle-task-be-256) + [tenant-events.md](../../specs/contracts/events/tenant-events.md). 본 태스크는 이 contract 를 정확히 구현 대상으로 사용한다 — endpoint 형태 / 요청·응답 schema / 오류 코드 / status 전이 매트릭스 / 예약어 / outbox 이벤트 형태를 임의 변경 금지. contract 변경이 필요하면 본 태스크 시작 전 BE-256 의 후속 contract patch task 를 발행할 것.
 
-1. SUPER_ADMIN이 `POST /api/admin/tenants` 로 신규 테넌트 등록 (e.g. `wms`, `erp`).
-2. `PATCH /api/admin/tenants/{tenantId}/suspend` · `/reactivate` 로 상태 전이.
-3. `GET /api/admin/tenants` (목록) · `GET /api/admin/tenants/{tenantId}` (상세) 로 조회.
-4. 모든 변경은 `admin_actions`에 `action_code IN ('TENANT_CREATE', 'TENANT_SUSPEND', 'TENANT_REACTIVATE')` 로 기록.
+완료 시점 (BE-256 contract 와 일치):
+
+1. SUPER_ADMIN이 `POST /api/admin/tenants` 로 신규 테넌트 등록 (e.g. `wms`, `erp`). 예약어 차단 (`400 TENANT_ID_RESERVED`).
+2. `PATCH /api/admin/tenants/{tenantId}` 단일 endpoint 로 `displayName` 또는 `status` (또는 둘 다) 변경. status 전이 매트릭스 (ACTIVE ↔ SUSPENDED) 준수, 동일 status PATCH 는 no-op (200 + audit/event 미발행).
+3. `GET /api/admin/tenants` (목록, `status`/`tenantType` 필터) · `GET /api/admin/tenants/{tenantId}` (상세, SUPER_ADMIN 또는 본인 테넌트) 로 조회.
+4. 모든 mutation은 `admin_actions`에 `action_code IN ('TENANT_CREATE', 'TENANT_SUSPEND', 'TENANT_REACTIVATE', 'TENANT_UPDATE')` 로 기록 + outbox 이벤트 (`tenant.created`, `tenant.suspended`, `tenant.reactivated`, `tenant.updated`) 발행.
 5. admin-service는 account-service의 internal provisioning API를 호출하여 실제 tenant row를 생성/업데이트 (admin-service 자체는 tenant data를 직접 소유하지 않음 — account-service가 source of truth).
 
 ---

@@ -1001,6 +1001,171 @@ Content-Type: application/json
 
 ---
 
+## Tenant Lifecycle (TASK-BE-256)
+
+`POST /api/admin/tenants` 등 4개 엔드포인트는 SUPER_ADMIN(`tenant_id='*'`) 만 호출할 수 있다. 일반 운영자는 `403 TENANT_SCOPE_DENIED`. 모든 mutating 엔드포인트는 [admin-events.md](../events/admin-events.md) 의 `admin.action.performed` 이벤트와 함께 [tenant-events.md](../events/tenant-events.md) 의 lifecycle 이벤트를 outbox 패턴으로 발행한다.
+
+### Tenant ID 규칙
+
+- 정규식: `^[a-z][a-z0-9-]{1,31}$` ([multi-tenancy.md](../../features/multi-tenancy.md#tenantid)).
+- **예약어** (생성 거부, `400 TENANT_ID_RESERVED`):
+  `admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `auth`, `oauth`, `me`.
+- 한 번 발급된 `tenant_id` 는 변경·재할당 불가 (감사 트레일·외부 토큰 정합).
+
+### Status 전이 매트릭스
+
+| 현재 상태 | → ACTIVE (PATCH `status=ACTIVE`) | → SUSPENDED (PATCH `status=SUSPENDED`) |
+|---|---|---|
+| (none) | `POST` 로 생성 (status=ACTIVE 만 허용) | `POST` 로 직접 SUSPENDED 생성 불가 |
+| ACTIVE | no-op (200, `tenant.updated` 미발행) | reactivate-able 전이; `tenant.suspended` 발행 |
+| SUSPENDED | reactivate; `tenant.reactivated` 발행 | no-op (200, 이벤트 미발행) |
+
+SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다 (account-service consumer 가 `tenant.suspended` 이벤트 수신 시 차단 게이트 활성화 — TASK-BE-250 implementation 의 책임).
+
+### POST /api/admin/tenants
+
+신규 테넌트 등록.
+
+**Auth required**: 운영자 JWT, role = `SUPER_ADMIN`
+
+**Request**:
+```json
+{
+  "tenantId": "wms",
+  "displayName": "Warehouse Management System",
+  "tenantType": "B2B_ENTERPRISE"
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `tenantId` | string | Y | 정규식 + 예약어 미포함 |
+| `displayName` | string | Y | 1~100자, trim 후 검증 |
+| `tenantType` | enum | Y | `B2C_CONSUMER` \| `B2B_ENTERPRISE` |
+
+`Idempotency-Key` 헤더는 권장. 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지).
+
+**Response 201**:
+```json
+{
+  "tenantId": "wms",
+  "displayName": "Warehouse Management System",
+  "tenantType": "B2B_ENTERPRISE",
+  "status": "ACTIVE",
+  "createdAt": "2026-05-02T09:00:00Z",
+  "updatedAt": "2026-05-02T09:00:00Z"
+}
+```
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `tenantId` 정규식 위반, `displayName` 길이, `tenantType` enum 미일치 |
+| 400 | `TENANT_ID_RESERVED` | `tenantId` 가 예약어 목록에 포함 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 비-SUPER_ADMIN 운영자 호출 |
+| 409 | `TENANT_ALREADY_EXISTS` | 동일 `tenantId` 가 이미 존재 |
+| 503 | `INTEGRATION_UNAVAILABLE` | account-service 호출 CB open |
+
+**Side Effects**:
+- `admin_actions` 에 `action_code=TENANT_CREATE`, `tenant_id='*'` (actor), `target_tenant_id=<신규>`, `target_type='TENANT'`, `target_id=<신규 tenantId>`.
+- Outbox 이벤트 `tenant.created` 발행 ([tenant-events.md](../events/tenant-events.md)).
+
+---
+
+### GET /api/admin/tenants
+
+테넌트 목록 조회.
+
+**Auth required**: 운영자 JWT, role = `SUPER_ADMIN`
+
+**Query parameters**:
+
+| 파라미터 | 타입 | 기본값 | 설명 |
+|---|---|---|---|
+| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` 필터 |
+| `tenantType` | enum (optional) | — | `B2C_CONSUMER` \| `B2B_ENTERPRISE` 필터 |
+| `page` | int | 0 | — |
+| `size` | int | 20 (max 100) | — |
+
+**Response 200**:
+```json
+{
+  "items": [
+    {
+      "tenantId": "fan-platform",
+      "displayName": "Fan Platform",
+      "tenantType": "B2C_CONSUMER",
+      "status": "ACTIVE",
+      "createdAt": "2026-04-01T00:00:00Z",
+      "updatedAt": "2026-04-01T00:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+**Errors**: `401`, `403 PERMISSION_DENIED`, `403 TENANT_SCOPE_DENIED`, `422 VALIDATION_ERROR` (size > 100 등).
+
+---
+
+### GET /api/admin/tenants/{tenantId}
+
+단건 조회.
+
+**Auth required**: 운영자 JWT, role = `SUPER_ADMIN` 또는 `tenant.read` 권한 + `tenantId` == operator 의 `tenant_id` (자기 테넌트는 본인이 조회 가능).
+
+**Response 200**: POST 응답과 동일 schema.
+
+**Errors**: `401`, `403 PERMISSION_DENIED`, `403 TENANT_SCOPE_DENIED`, `404 TENANT_NOT_FOUND`.
+
+---
+
+### PATCH /api/admin/tenants/{tenantId}
+
+`displayName` 또는 `status` 변경. 두 필드 모두 optional 이며 최소 1개는 필요.
+
+**Auth required**: 운영자 JWT, role = `SUPER_ADMIN`
+
+**Request** (둘 중 하나 또는 둘 다):
+```json
+{
+  "displayName": "Warehouse Management System v2",
+  "status": "SUSPENDED"
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `displayName` | string (optional) | — | 1~100자 |
+| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` (status 전이 매트릭스 참조) |
+
+**Response 200**: POST 응답과 동일 schema (변경 후 상태).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, displayName 길이 위반, status enum 미일치 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 비-SUPER_ADMIN 호출 |
+| 404 | `TENANT_NOT_FOUND` | `tenantId` 미존재 |
+| 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
+
+**Side Effects** (변경 종류별):
+- `displayName` 변경 시 → `admin_actions: action_code=TENANT_UPDATE` + outbox `tenant.updated`.
+- `status: ACTIVE → SUSPENDED` → `admin_actions: action_code=TENANT_SUSPEND` + outbox `tenant.suspended`.
+- `status: SUSPENDED → ACTIVE` → `admin_actions: action_code=TENANT_REACTIVATE` + outbox `tenant.reactivated`.
+- 동일 status 로의 PATCH 는 no-op (200 반환, audit/event 미발행).
+
+---
+
 ## Common Error Format
 
 ```json
