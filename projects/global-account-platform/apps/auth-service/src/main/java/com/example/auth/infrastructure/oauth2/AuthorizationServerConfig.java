@@ -32,13 +32,21 @@ import java.time.Duration;
 import java.util.UUID;
 
 /**
- * Spring Authorization Server configuration — Phase 1 (TASK-BE-251).
+ * Spring Authorization Server configuration — Phase 2a (TASK-BE-251).
  *
- * <p>Exposes the OIDC discovery endpoint, JWKS endpoint, and token endpoint
- * for the {@code client_credentials} grant. The SAS filter chain takes
- * {@code @Order(1)} and matches only the SAS-managed request matchers
- * ({@code /oauth2/**}, {@code /.well-known/**}), leaving the existing
- * security filter chain ({@code @Order(2)}) fully intact.
+ * <p>Exposes the full OIDC discovery endpoint, JWKS endpoint, token endpoint,
+ * and userinfo endpoint. The SAS filter chain takes {@code @Order(1)} and matches
+ * only the SAS-managed request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
+ * leaving the existing security filter chain ({@code @Order(2)}) fully intact.
+ *
+ * <p>Phase 2a additions over Phase 1:
+ * <ul>
+ *   <li>{@code authorization_code} grant with PKCE (S256 required)</li>
+ *   <li>{@code demo-spa-client} in-memory placeholder for B2C fan-platform</li>
+ *   <li>{@link OidcUserInfoMapper} wired as SAS userinfo mapper</li>
+ *   <li>ID token support — {@link TenantClaimTokenCustomizer} now also
+ *       customizes {@code id_token} (not just access tokens)</li>
+ * </ul>
  *
  * <p>The {@link RegisteredClientRepository} is an in-memory placeholder.
  * // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
@@ -55,20 +63,28 @@ public class AuthorizationServerConfig {
     /**
      * SAS security filter chain — Order(1).
      * Covers: /oauth2/**, /.well-known/openid-configuration
+     *
+     * <p>Phase 2a: wires {@link OidcUserInfoMapper} into the OIDC userinfo configurer.
      */
     @Bean
     @Order(1)
-    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain authorizationServerSecurityFilterChain(
+            HttpSecurity http,
+            OidcUserInfoMapper oidcUserInfoMapper) throws Exception {
+
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, configurer ->
-                        configurer.oidc(Customizer.withDefaults()))
+                        configurer.oidc(oidc ->
+                                oidc.userInfoEndpoint(userInfo ->
+                                        userInfo.userInfoMapper(oidcUserInfoMapper))))
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
-                // Redirect to login page when unauthenticated (for authorization_code flow, Phase 2)
+                // Redirect to /api/auth/login when unauthenticated — for authorization_code flow
+                // the user will need an active session or must authenticate first.
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(
                                 new LoginUrlAuthenticationEntryPoint("/api/auth/login")));
@@ -77,18 +93,22 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * In-memory registered client repository with a single test client for
-     * Phase 1 {@code client_credentials} validation.
+     * In-memory registered client repository with two in-memory placeholder clients:
+     * <ol>
+     *   <li>{@code test-internal-client} — Phase 1 {@code client_credentials} client</li>
+     *   <li>{@code demo-spa-client} — Phase 2a {@code authorization_code} + PKCE B2C SPA client</li>
+     * </ol>
      *
-     * <p>The {@code clientName} field is used by {@link TenantClaimTokenCustomizer} to carry
-     * tenant metadata in the format {@code "<tenantId>|<tenantType>"}. For this placeholder
-     * client the tenant is {@code fan-platform} (type {@code B2C}).
+     * <p>The {@code clientName} field carries tenant metadata in the format
+     * {@code "<tenantId>|<tenantType>"}. For authorization_code clients this is the fallback
+     * if the principal's authentication details do not carry tenant attributes.
      *
-     * // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
+     * <p>// PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
      */
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
-        RegisteredClient testClient = RegisteredClient.withId(UUID.randomUUID().toString())
+        // Phase 1: client_credentials client (service-to-service)
+        RegisteredClient testInternalClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("test-internal-client")
                 // {noop} plain-text secret for in-memory placeholder ONLY.
                 // PLACEHOLDER: replaced by JpaRegisteredClientRepository in TASK-BE-252
@@ -108,7 +128,32 @@ public class AuthorizationServerConfig {
                         .build())
                 .build();
 
-        return new InMemoryRegisteredClientRepository(testClient);
+        // Phase 2a: authorization_code + PKCE SPA client (B2C fan-platform placeholder)
+        // PLACEHOLDER: redirect URI will be updated in TASK-BE-253 (fan-platform integration)
+        RegisteredClient demoPkceClient = RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("demo-spa-client")
+                // Public client (SPA) — no client secret; authentication is via PKCE only
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                .redirectUri("http://localhost:3000/callback")
+                .scope(OidcScopes.OPENID)
+                .scope("profile")
+                .scope("email")
+                // clientName encodes tenant metadata for fallback in TenantClaimTokenCustomizer
+                .clientName("fan-platform|B2C")
+                .clientSettings(ClientSettings.builder()
+                        .requireProofKey(true)         // PKCE mandatory — S256 only
+                        .requireAuthorizationConsent(false) // B2C pre-approved scopes
+                        .build())
+                .tokenSettings(TokenSettings.builder()
+                        .accessTokenTimeToLive(Duration.ofMinutes(30))
+                        .refreshTokenTimeToLive(Duration.ofDays(30))
+                        .reuseRefreshTokens(false) // rotation enabled
+                        .build())
+                .build();
+
+        return new InMemoryRegisteredClientRepository(testInternalClient, demoPkceClient);
     }
 
     /**

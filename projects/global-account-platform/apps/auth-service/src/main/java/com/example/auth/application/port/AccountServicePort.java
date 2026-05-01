@@ -1,5 +1,6 @@
 package com.example.auth.application.port;
 
+import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 
@@ -37,4 +38,20 @@ public interface AccountServicePort {
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
     SocialSignupResult socialSignup(String email, String provider, String providerUserId, String displayName);
+
+    /**
+     * Retrieves the full profile of an account for OIDC userinfo response construction.
+     *
+     * <p>Called by {@link com.example.auth.infrastructure.oauth2.OidcUserInfoMapper} when a
+     * request hits {@code GET /oauth2/userinfo} with a valid bearer token that contains
+     * {@code scope=openid}. The returned profile is mapped to standard OIDC claims
+     * (sub, email, name, preferred_username, locale).</p>
+     *
+     * <p>TASK-BE-251 Phase 2a — authorization_code flow + /oauth2/userinfo endpoint.</p>
+     *
+     * @param accountId the account identifier (JWT {@code sub} claim)
+     * @return the account profile, or empty if the account does not exist
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
+     */
+    Optional<AccountProfileResult> getAccountProfile(String accountId);
 }

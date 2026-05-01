@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.client;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -140,6 +141,61 @@ class AccountServiceClientUnitTest {
 
         assertThatThrownBy(() -> client.socialSignup(
                 "user@example.com", "GOOGLE", "google-uid-err", "Carol"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    // ── getAccountProfile ──────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getAccountProfile — 200 응답 → AccountProfileResult 반환")
+    void getAccountProfile_200_returnsProfile() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/accounts/acc-1/profile"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "accountId": "acc-1",
+                                  "email": "user@example.com",
+                                  "emailVerified": true,
+                                  "displayName": "Hong Gildong",
+                                  "preferredUsername": "gildongh",
+                                  "locale": "ko-KR",
+                                  "tenantId": "fan-platform",
+                                  "tenantType": "B2C"
+                                }
+                                """)));
+
+        Optional<AccountProfileResult> result = client.getAccountProfile("acc-1");
+
+        assertThat(result).isPresent();
+        AccountProfileResult profile = result.get();
+        assertThat(profile.accountId()).isEqualTo("acc-1");
+        assertThat(profile.email()).isEqualTo("user@example.com");
+        assertThat(profile.emailVerified()).isTrue();
+        assertThat(profile.displayName()).isEqualTo("Hong Gildong");
+        assertThat(profile.preferredUsername()).isEqualTo("gildongh");
+        assertThat(profile.locale()).isEqualTo("ko-KR");
+        assertThat(profile.tenantId()).isEqualTo("fan-platform");
+        assertThat(profile.tenantType()).isEqualTo("B2C");
+    }
+
+    @Test
+    @DisplayName("getAccountProfile — 404 응답 → Optional.empty()")
+    void getAccountProfile_404_returnsEmpty() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/accounts/acc-999/profile"))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertThat(client.getAccountProfile("acc-999")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getAccountProfile — 네트워크 오류 → AccountServiceUnavailableException (retry 후)")
+    void getAccountProfile_networkFault_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/accounts/acc-err/profile"))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThatThrownBy(() -> client.getAccountProfile("acc-err"))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 }

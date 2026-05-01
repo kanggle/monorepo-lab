@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.client;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.common.resilience.ResilienceClientFactory;
@@ -144,6 +145,74 @@ public class AccountServiceClient implements AccountServicePort {
                     .body(requestBody)
                     .retrieve()
                     .body(SocialSignupResult.class);
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
+    @Override
+    public Optional<AccountProfileResult> getAccountProfile(String accountId) {
+        Supplier<Optional<AccountProfileResult>> supplier = () -> doGetProfile(accountId);
+
+        Supplier<Optional<AccountProfileResult>> retryingSupplier =
+                Retry.decorateSupplier(retry, supplier);
+        Supplier<Optional<AccountProfileResult>> resilientSupplier =
+                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
+
+        try {
+            return resilientSupplier.get();
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service profile lookup returned client error {}: {}",
+                    e.getStatusCode(), e.getMessage());
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            log.error("Account service profile lookup failed after retries: {}", e.getMessage());
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<AccountProfileResult> doGetProfile(String accountId) {
+        try {
+            // account-service returns:
+            //   { accountId, email, emailVerified, displayName, preferredUsername, locale,
+            //     tenantId, tenantType }
+            Map<String, Object> body = restClient.get()
+                    .uri("/internal/accounts/{id}/profile", accountId)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
+                        if (response.getStatusCode().value() == 404) {
+                            throw HttpClientErrorException.create(
+                                    response.getStatusCode(), "Not Found",
+                                    response.getHeaders(), new byte[0], null);
+                        }
+                        throw HttpClientErrorException.create(
+                                response.getStatusCode(), "Client Error",
+                                response.getHeaders(), new byte[0], null);
+                    })
+                    .body(Map.class);
+
+            if (body == null) {
+                return Optional.empty();
+            }
+
+            return Optional.of(new AccountProfileResult(
+                    (String) body.getOrDefault("accountId", accountId),
+                    (String) body.get("email"),
+                    body.get("emailVerified") instanceof Boolean b ? b :
+                            Boolean.parseBoolean(String.valueOf(body.get("emailVerified"))),
+                    (String) body.get("displayName"),
+                    (String) body.get("preferredUsername"),
+                    (String) body.get("locale"),
+                    (String) body.get("tenantId"),
+                    (String) body.get("tenantType")
+            ));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
         } catch (HttpClientErrorException e) {
             throw e;
         } catch (RuntimeException e) {
