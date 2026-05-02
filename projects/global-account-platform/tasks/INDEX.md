@@ -72,12 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 (post 270 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
-
-- `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
-
-Recommended order:
-- 257: 250 done 진입함, 즉시 시작 가능.
+(empty — TASK-BE-257 implementation complete and moved to review on 2026-05-02. GAP IdP 승급 main batch + GDPR follow-ups 모두 review/done 진입.)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
@@ -87,7 +82,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-(empty — TASK-BE-270 reviewed and moved to done on 2026-05-02)
+GAP IdP 승급 main batch 의 마지막 ready (2026-05-02, awaiting review approval):
+
+- `TASK-BE-257-bulk-provisioning-api.md` — `POST /internal/tenants/{tenantId}/accounts:bulk` (max 1000 items, per-row REQUIRES_NEW transaction, partial-success summary, N개 `account.created` outbox 발행, audit `ACCOUNT_BULK_CREATE`)
 
 ## done
 
