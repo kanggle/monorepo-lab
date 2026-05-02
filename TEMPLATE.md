@@ -286,55 +286,106 @@ The flat layout (no `projects/` level) keeps the single-project repository simpl
 
 ---
 
-## Port Namespace Convention (`PORT_PREFIX`)
+## Local Network Convention
 
-Every project's `docker-compose.yml` maps host ports through a single shared variable so multiple projects can run concurrently on one machine without manual `.env` editing.
+Per [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md), the monorepo adopts a **hostname-based routing** model for local development: a single shared Traefik reverse proxy occupies host ports `:80`/`:443`, and every project's gateway/frontend registers a hostname with Traefik. Backing services (postgres, redis, kafka, ...) stay on the docker network with no host exposure.
 
-**Pattern** (applied to every `ports:` line with a 4-digit host port):
+This replaces the legacy `PORT_PREFIX` digit-allocation scheme, which was capped at 5 usable slots (prefix 6+ overflows the 65535 host-port limit for common service ports like 6379/8080/9092). With hostname routing, the number of concurrent projects is unbounded.
+
+### Target pattern
+
+Every project gateway/frontend service uses Traefik labels — never `ports:` for inter-project traffic:
+
+```yaml
+services:
+  gateway:
+    expose: ["8080"]                             # internal-only, no host port
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.<project>.rule=Host(`<project>.local`)"
+      - "traefik.http.services.<project>.loadbalancer.server.port=8080"
+    networks:
+      - traefik-net
+      - <project>-net
+
+  postgres:
+    expose: ["5432"]                             # internal only
+    networks: [<project>-net]
+
+networks:
+  traefik-net:
+    external: true                               # shared with the global Traefik stack
+  <project>-net:
+    driver: bridge
+```
+
+A monorepo-root `infra/traefik/docker-compose.yml` runs Traefik once, on host ports `:80` and `:443`. Projects join the `traefik-net` external network so Traefik can route to them by hostname.
+
+### Hostname allocation
+
+| Hostname | Project | Status |
+|---|---|---|
+| `ecommerce.local` | ecommerce-microservices-platform | (legacy `PORT_PREFIX=1` until TASK-MONO-022) |
+| `wms.local` | wms-platform | (legacy `PORT_PREFIX=2` until TASK-MONO-022) |
+| `gap.local` | global-account-platform | (legacy `PORT_PREFIX=3` until TASK-MONO-022) |
+| `fan-platform.local` | fan-platform | hostname routing from bootstrap |
+| `scm.local` | scm-platform | hostname routing from bootstrap |
+| `erp.local` | erp-platform | hostname routing from bootstrap |
+| `mes.local` | mes-platform | hostname routing from bootstrap |
+
+New projects pick an unused `*.local` hostname and register it in this table in the bootstrap PR.
+
+### One-time developer setup
+
+Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
+
+```
+127.0.0.1  ecommerce.local wms.local gap.local fan-platform.local scm.local erp.local mes.local
+```
+
+(Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)
+
+### Adding a new project (greenfield)
+
+1. Pick an unused `*.local` hostname; add the entry to the table above in the bootstrap PR.
+2. In the project's `docker-compose.yml`, declare the gateway with Traefik labels (template above) and join `traefik-net` (external).
+3. Backing services use `expose:` only — never `ports:`.
+4. Project's `.env.example` declares `PROJECT_HOSTNAME=<name>.local` for documentation. (No `PORT_PREFIX` needed.)
+5. README documents the hostname.
+
+### Database / queue tools (DBeaver, Redis Insight, Kafka UI)
+
+External tools that need direct TCP access to backing services use one of:
+
+1. **`docker exec`** — `docker exec -it <project>-postgres psql -U ...` (no host port needed).
+2. **Per-developer `docker-compose.dev.yml` overlay** — adds `ports:` for the local machine only, never committed.
+3. **Traefik TCP routing** — declare a TCP router with a unique hostname (e.g., `wms-postgres.local:5432` via `entryPoints: [postgres]` on Traefik). Documented in `docs/guides/dev-tooling.md`.
+
+### Migration window (until TASK-MONO-022)
+
+The three existing projects (ecommerce, wms, global-account-platform) continue using legacy `PORT_PREFIX` (1, 2, 3) until TASK-MONO-022 migrates them in one batch. Their `docker-compose.yml` retains:
 
 ```yaml
 ports: ["${PORT_PREFIX:-N}XXXX:YYYY"]
 ```
 
-- `XXXX` is the original 4-digit port (unchanged from upstream defaults — `5432` for Postgres, `8080` for gateway, `3000` for web frontends, etc.).
-- `N` is the project-assigned default prefix digit (baked into each project's compose file).
-- `YYYY` is the container port — never changes.
-- A user can override the single project-wide prefix by setting `PORT_PREFIX=<digit>` in the project's `.env`, or override a specific service with a per-service variable.
+5-digit source ports (e.g. Jaeger UI `16686`) remain unprefixed during the migration window and become Traefik-internal afterward.
 
-**Allocation table** (update when adding a project):
-
-| Prefix | Project | Host port range |
-|---|---|---|
-| `1` | ecommerce-microservices-platform | 1XXXX |
-| `2` | wms-platform | 2XXXX |
-| `3` | *(reserved — likely global-account-platform)* | 3XXXX |
-| `4`–`6` | available | 4XXXX–6XXXX |
-
-Prefixes above `6` cannot be used — host port range tops out at 65535, so `7XXXX` overflows.
-
-**Exceptions**:
-
-- Host ports that already have 5 digits (e.g. Jaeger UI `16686`) cannot take a prefix (would become 6 digits). Leave them unprefixed; they are unlikely to collide because 5-digit ports are usually unique per project.
-- Rare inter-project service name collisions (Postgres `5432` vs `5432`) are resolved at the container-name level by each project prefixing its containers (`wms-postgres`, `auth-postgres`).
-
-**Adding a new project** (applies to both Option A / Greenfield and Option B / composite-build):
-
-1. Pick an unused prefix digit from the allocation table.
-2. In the project's `docker-compose.yml`, write every host port as `${PORT_PREFIX:-<prefix>}<original>:<container>`.
-3. In the project's `.env.example`, add a `PORT_PREFIX=<prefix>` line at the top with a comment explaining the convention.
-4. Update the allocation table above in the same PR.
-
-**Validation** (after any compose port change):
+### Validation
 
 ```bash
-# Single project default
-docker compose --project-directory projects/<name> config | grep published
+# After Traefik adoption, only Traefik should publish host ports
+docker compose --project-directory infra/traefik config | grep published
+# Expected: 80, 443 (and optionally 8080 for Traefik dashboard)
 
-# Cross-project collision check (monorepo root)
-comm -12 \
-  <(docker compose --project-directory projects/ecommerce-microservices-platform config | grep published | sort -u) \
-  <(docker compose --project-directory projects/wms-platform config | grep published | sort -u)
-# Expected: empty (no overlap)
+# Project-level: no published host ports (everything internal)
+docker compose --project-directory projects/<name> config | grep published
+# Expected: empty (Traefik routes by hostname)
+
+# Cross-project: hostname-based access works
+curl -i http://wms.local/actuator/health
+curl -i http://ecommerce.local/actuator/health
+# Expected: 200 OK from each
 ```
 
 ---
