@@ -72,16 +72,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 + 254/255 review fix tasks (post review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 (post 263/265 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-253-community-membership-oidc-integration.md` — community/membership-service OIDC 통합 (P1, FROZEN 예외)
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
 - `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
-- `TASK-BE-263-fix-TASK-BE-254.md` — auth-api.md OIDC discovery 응답 예시에 `revocation_endpoint` / `introspection_endpoint` 추가 (TASK-BE-254 review Warning)
-- `TASK-BE-265-fix-TASK-BE-255.md` — `account_roles` review fix: `@Size(max=50)` vs `VARCHAR(64)` 불일치, `addIfAbsent` TOCTOU 핸들링, `operatorId` `@Size(max=36)` 누락 (TASK-BE-255 review Critical 3 + Warning 2)
 
 Recommended order: P0 선행(251/252) 및 256 contract 가 모두 done 이라 잔여 ready 작업은 즉시 시작 가능.
-- 263 / 265: review fix, 작은 단위 — 우선 처리 권장.
 - 253 / TASK-MONO-019: 둘 다 251/252 의존, 서로 병렬 가능 — Resource Server 마이그레이션 끝맺음.
 - 257 / 258: ADR 과 독립, 병렬 가능. 단 257 은 250 (admin tenant lifecycle API) 가 done 진입한 후 stable. 258 은 255 가 머지된 `account-events.md` v3 위에서 작업.
 
@@ -94,7 +91,10 @@ Cross-project follow-up (root `tasks/`):
 
 ## review
 
-(empty — 254/255/259 batch reviewed and moved to done on 2026-05-02)
+254/255 review follow-up batch (2026-05-02, awaiting review approval):
+
+- `TASK-BE-263-fix-TASK-BE-254.md` — auth-api.md OIDC discovery 응답 예시에 `revocation_endpoint` / `introspection_endpoint` 추가
+- `TASK-BE-265-fix-TASK-BE-255.md` — `account_roles` review fix: role_name 길이 64 정합, `addIfAbsent` TOCTOU 핸들링, `operatorId` `@Size(max=36)`
 
 ## done
 
