@@ -152,14 +152,15 @@ Refresh token rotation 성공 시 발행.
 
 이미 rotation된 refresh token의 재사용 탐지. **보안 critical 이벤트**.
 
-<!-- tenant_id pending TASK-BE-259 — 본 이벤트의 tenant_id 추가는 TASK-BE-259에서 처리 -->
-
 **Topic**: `auth.token.reuse.detected`
+
+**Schema version**: 2 (TASK-BE-259: `tenant_id` required)
 
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, 재사용된 refresh token DB row의 tenant_id. 미존재 시 'fan-platform' 기본값)",
   "reusedJti": "string (재사용 시도된 토큰)",
   "originalRotationAt": "2026-04-12T09:50:00Z",
   "reuseAttemptAt": "2026-04-12T10:00:00Z",
@@ -169,6 +170,9 @@ Refresh token rotation 성공 시 발행.
   "revokedCount": 5
 }
 ```
+
+**필드 노트** (TASK-BE-259):
+- `tenantId`: 항상 required. publisher (`AuthEventPublisher.publishTokenReuseDetected`) 는 null/blank 시 `IllegalArgumentException` 을 던진다. consumer (security-service) 는 누락 메시지를 DLQ 로 라우팅하고, per-tenant reuse 카운터(`reuse:{tenantId}:{accountId}`)에 활용한다. 다른 auth-events 와 정합 (TASK-BE-248 시리즈).
 
 **Consumers**: security-service → 즉시 `auto.lock.triggered` 발행 (최고 우선순위)
 

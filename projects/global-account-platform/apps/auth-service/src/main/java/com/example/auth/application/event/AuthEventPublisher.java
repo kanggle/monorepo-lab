@@ -220,13 +220,22 @@ public class AuthEventPublisher extends BaseEventPublisher {
     /**
      * Publishes auth.token.reuse.detected event when a previously rotated refresh token
      * is used again. This is a security-critical event.
+     *
+     * <p>TASK-BE-259: {@code tenantId} is a required field. A null or blank value throws
+     * {@link IllegalArgumentException}. The tenant scope is needed by security-service so
+     * per-tenant reuse counters ({@code reuse:{tenantId}:{accountId}}) and alerts do not
+     * leak across tenants. Aligned with TASK-BE-248 across the rest of auth-events.
+     *
+     * @param tenantId tenant that owns the reused refresh token (required, non-blank)
      */
-    public void publishTokenReuseDetected(String accountId, String reusedJti,
+    public void publishTokenReuseDetected(String accountId, String tenantId, String reusedJti,
                                            Instant originalRotationAt, Instant reuseAttemptAt,
                                            String ipMasked, String deviceFingerprint,
                                            boolean sessionsRevoked, int revokedCount) {
+        requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
+        payload.put("tenantId", tenantId);
         payload.put("reusedJti", reusedJti);
         payload.put("originalRotationAt", originalRotationAt != null ? originalRotationAt.toString() : null);
         payload.put("reuseAttemptAt", reuseAttemptAt.toString());

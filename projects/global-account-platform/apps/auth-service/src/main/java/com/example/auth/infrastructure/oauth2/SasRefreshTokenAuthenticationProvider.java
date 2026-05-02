@@ -361,8 +361,16 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         }
 
         Instant reuseAttemptAt = Instant.now();
+
+        // TASK-BE-248 Phase 2b / TASK-BE-259: tenantId from the reused token's DB record
+        // (authoritative). Resolved before publishing so it flows into auth.token.reuse.detected.
+        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
+                ? existingToken.getTenantId()
+                : "fan-platform"; // SAS flow default per persistRotation fallback
+
         authEventPublisher.publishTokenReuseDetected(
                 accountId,
+                tenantId,
                 jti,
                 originalRotationAt,
                 reuseAttemptAt,
@@ -371,11 +379,6 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 true,
                 revokedCount
         );
-
-        // TASK-BE-248 Phase 2b: tenantId from the reused token's DB record (authoritative).
-        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
-                ? existingToken.getTenantId()
-                : "fan-platform"; // SAS flow default per persistRotation fallback
 
         for (DeviceSession session : activeSessions) {
             if (session.isRevoked()) {

@@ -38,9 +38,10 @@ class AuthEventPublisherTest {
     private static final String ACCOUNT_ID = "acc-123";
 
     @Test
-    @DisplayName("publishTokenReuseDetected writes correct payload to outbox")
+    @DisplayName("publishTokenReuseDetected writes correct payload to outbox (with tenantId, TASK-BE-259)")
     void publishTokenReuseDetected_correctPayload() throws Exception {
         // given
+        String tenantId = "fan-platform";
         String reusedJti = "reused-jti-001";
         Instant originalRotationAt = Instant.parse("2026-04-12T09:50:00Z");
         Instant reuseAttemptAt = Instant.parse("2026-04-12T10:00:00Z");
@@ -51,7 +52,7 @@ class AuthEventPublisherTest {
 
         // when
         authEventPublisher.publishTokenReuseDetected(
-                ACCOUNT_ID, reusedJti, originalRotationAt, reuseAttemptAt,
+                ACCOUNT_ID, tenantId, reusedJti, originalRotationAt, reuseAttemptAt,
                 ipMasked, deviceFingerprint, sessionsRevoked, revokedCount);
 
         // then
@@ -72,6 +73,7 @@ class AuthEventPublisherTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) envelope.get("payload");
         assertThat(payload).containsEntry("accountId", ACCOUNT_ID);
+        assertThat(payload).containsEntry("tenantId", tenantId);
         assertThat(payload).containsEntry("reusedJti", reusedJti);
         assertThat(payload).containsEntry("originalRotationAt", originalRotationAt.toString());
         assertThat(payload).containsEntry("reuseAttemptAt", reuseAttemptAt.toString());
@@ -86,7 +88,7 @@ class AuthEventPublisherTest {
     void publishTokenReuseDetected_nullOriginalRotationAt() throws Exception {
         // when
         authEventPublisher.publishTokenReuseDetected(
-                ACCOUNT_ID, "jti-001", null, Instant.now(),
+                ACCOUNT_ID, "fan-platform", "jti-001", null, Instant.now(),
                 "10.0.0.***", "fp-x", true, 3);
 
         // then
@@ -99,6 +101,60 @@ class AuthEventPublisherTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) envelope.get("payload");
         assertThat(payload.get("originalRotationAt")).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-259: publishTokenReuseDetected — tenantId null → IllegalArgumentException")
+    void publishTokenReuseDetected_nullTenantId_throws() {
+        assertThatThrownBy(() -> authEventPublisher.publishTokenReuseDetected(
+                ACCOUNT_ID, null, "jti-001", null, Instant.now(),
+                "10.0.0.***", "fp-x", true, 3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-259: publishTokenReuseDetected — tenantId blank → IllegalArgumentException")
+    void publishTokenReuseDetected_blankTenantId_throws() {
+        assertThatThrownBy(() -> authEventPublisher.publishTokenReuseDetected(
+                ACCOUNT_ID, "  ", "jti-001", null, Instant.now(),
+                "10.0.0.***", "fp-x", true, 3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-259: publishTokenReuseDetected — tenantA isolated from tenantB in payload")
+    void publishTokenReuseDetected_tenantsIsolated() throws Exception {
+        // when — emit two reuse events for the same accountId across distinct tenants
+        authEventPublisher.publishTokenReuseDetected(
+                ACCOUNT_ID, "tenant-A", "jti-A", null, Instant.now(),
+                "10.0.0.***", "fp-A", true, 1);
+        authEventPublisher.publishTokenReuseDetected(
+                ACCOUNT_ID, "tenant-B", "jti-B", null, Instant.now(),
+                "10.0.0.***", "fp-B", true, 1);
+
+        // then — each emitted payload carries its own tenantId, never mixed
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter, org.mockito.Mockito.times(2))
+                .save(eq("auth"), eq(ACCOUNT_ID), eq("auth.token.reuse.detected"),
+                        payloadCaptor.capture());
+
+        List<String> payloads = payloadCaptor.getAllValues();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> envA = objectMapper.readValue(payloads.get(0), new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> envB = objectMapper.readValue(payloads.get(1), new TypeReference<>() {});
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payloadA = (Map<String, Object>) envA.get("payload");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payloadB = (Map<String, Object>) envB.get("payload");
+
+        assertThat(payloadA).containsEntry("tenantId", "tenant-A");
+        assertThat(payloadA).containsEntry("reusedJti", "jti-A");
+        assertThat(payloadB).containsEntry("tenantId", "tenant-B");
+        assertThat(payloadB).containsEntry("reusedJti", "jti-B");
     }
 
     @Test

@@ -216,7 +216,7 @@ class RefreshTokenUseCaseTest {
         verify(refreshTokenRepository).revokeAllByAccountId(ACCOUNT_ID);
         verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, 604800L);
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(ACCOUNT_ID), eq(OLD_JTI), any(), any(Instant.class),
+                eq(ACCOUNT_ID), eq(TENANT_ID), eq(OLD_JTI), any(), any(Instant.class),
                 eq(CTX.ipMasked()), eq(CTX.deviceFingerprint()),
                 eq(true), eq(3)
         );
@@ -317,7 +317,7 @@ class RefreshTokenUseCaseTest {
 
         verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, 604800L);
         verify(authEventPublisher, never()).publishTokenReuseDetected(
-                anyString(), anyString(), any(), any(), any(), any(), anyBoolean(), anyInt());
+                anyString(), anyString(), anyString(), any(), any(), any(), any(), anyBoolean(), anyInt());
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
                 anyString(), anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), any());
         verify(deviceSessionRepository, never()).save(any());

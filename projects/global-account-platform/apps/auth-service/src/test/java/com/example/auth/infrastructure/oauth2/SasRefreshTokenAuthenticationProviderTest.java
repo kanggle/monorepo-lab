@@ -222,7 +222,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         when(refreshTokenRepository.revokeAllByAccountId("account-001")).thenReturn(1);
         doNothing().when(bulkInvalidationStore).invalidateAll(eq("account-001"), anyLong());
         doNothing().when(authEventPublisher).publishTokenReuseDetected(
-                any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt());
+                any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt());
 
         assertThatThrownBy(() -> provider.authenticate(auth))
                 .isInstanceOf(OAuth2AuthenticationException.class)
@@ -231,8 +231,10 @@ class SasRefreshTokenAuthenticationProviderTest {
 
         verify(refreshTokenRepository).revokeAllByAccountId("account-001");
         verify(bulkInvalidationStore).invalidateAll(eq("account-001"), anyLong());
+        // TASK-BE-259: tenantId is now a required arg, sourced from the reused token's DB row.
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq("account-001"), eq(tokenValue), any(), any(), any(), any(), eq(true), eq(1));
+                eq("account-001"), eq("fan-platform"), eq(tokenValue),
+                any(), any(), any(), any(), eq(true), eq(1));
     }
 
     // -----------------------------------------------------------------------
