@@ -72,16 +72,14 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 + 253 review fix (post 253 review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 (post 269 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
 - `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
-- `TASK-BE-269-fix-TASK-BE-253.md` — community-service `OAuth2WebClient` connect/read timeout 회귀 fix (TASK-BE-253 review Critical 1: `@Value` 필드만 정의되고 적용 안 됨, contract 의 caller constraint 2s/3s 위반)
 
 Recommended order:
-- 269: 1 line fix + bean 변경. 빠른 처리.
 - 258: ADR 과 독립, 즉시 시작 가능 (255 가 머지된 `account-events.md` v3 위에서 작업).
-- 257: 250 (admin tenant lifecycle API) 가 done 진입한 후 stable. 250 이 이미 done 상태라 진행 가능.
+- 257: 250 done 진입함, 즉시 시작 가능.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
@@ -93,7 +91,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 OAuth2 Resource Server 마이그레이션 (2026-05-02, awaiting review approval):
 
-(empty — TASK-BE-253 reviewed and moved to done on 2026-05-02)
+253 review follow-up (2026-05-02, awaiting review approval):
+
+- `TASK-BE-269-fix-TASK-BE-253.md` — community-service OAuth2 WebClient 에 connect/read timeout (2s/3s) 적용 + ReadTimeoutException unit test
 
 ## done
 
