@@ -6,8 +6,8 @@ import com.example.security.infrastructure.persistence.PiiMaskingLogJpaEntity;
 import com.example.security.infrastructure.persistence.PiiMaskingLogJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +43,6 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PiiMaskingService {
 
     static final List<String> MASKED_TABLES =
@@ -52,6 +51,21 @@ public class PiiMaskingService {
     private final PiiMaskingLogJpaRepository piiMaskingLogRepository;
     private final SecurityEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final String fingerprintSalt;
+
+    public PiiMaskingService(PiiMaskingLogJpaRepository piiMaskingLogRepository,
+                             SecurityEventPublisher eventPublisher,
+                             ObjectMapper objectMapper,
+                             @Value("${app.pii.masking.fingerprint-salt}") String fingerprintSalt) {
+        if (fingerprintSalt == null || fingerprintSalt.isBlank()) {
+            throw new IllegalStateException(
+                    "app.pii.masking.fingerprint-salt must be a non-blank value (TASK-BE-270)");
+        }
+        this.piiMaskingLogRepository = piiMaskingLogRepository;
+        this.eventPublisher = eventPublisher;
+        this.objectMapper = objectMapper;
+        this.fingerprintSalt = fingerprintSalt;
+    }
 
     /**
      * Mask PII for the given account in a single transaction.
@@ -71,7 +85,7 @@ public class PiiMaskingService {
         Instant maskedAt = Instant.now();
 
         // Execute per-table masking (UPDATE returns affected row count; 0 is OK).
-        int lhRows = piiMaskingLogRepository.maskLoginHistory(tenantId, accountId);
+        int lhRows = piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, fingerprintSalt);
         int seRows = piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId);
         int alRows = piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId);
 

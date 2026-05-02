@@ -21,7 +21,8 @@ import org.springframework.data.repository.query.Param;
  * <ul>
  *   <li>{@code ip_masked} → {@code '0.0.0.0'} (anonymized sentinel)</li>
  *   <li>{@code user_agent_family} → {@code 'REDACTED'}</li>
- *   <li>{@code device_fingerprint} → SHA2(account_id, 256) (irreversible, deterministic)</li>
+ *   <li>{@code device_fingerprint} → SHA2(CONCAT(account_id, salt), 256) (TASK-BE-270:
+ *       application-level fixed salt prevents pre-image attacks against the UUID space)</li>
  * </ul>
  */
 public interface PiiMaskingLogJpaRepository extends JpaRepository<PiiMaskingLogJpaEntity, Long> {
@@ -32,8 +33,9 @@ public interface PiiMaskingLogJpaRepository extends JpaRepository<PiiMaskingLogJ
 
     /**
      * Masks PII columns in {@code login_history} for the given tenant/account pair.
-     * {@code device_fingerprint} is replaced with SHA-256 of the account_id
-     * (deterministic, non-reversible). {@code tenant_id} and {@code account_id}
+     * {@code device_fingerprint} is replaced with SHA-256 of {@code accountId || salt}
+     * (deterministic, non-reversible — TASK-BE-270 added salt to defeat pre-image
+     * attacks against the UUID space). {@code tenant_id} and {@code account_id}
      * are preserved for audit integrity.
      */
     @Modifying
@@ -41,12 +43,13 @@ public interface PiiMaskingLogJpaRepository extends JpaRepository<PiiMaskingLogJ
             UPDATE login_history
                SET ip_masked          = '0.0.0.0',
                    user_agent_family  = 'REDACTED',
-                   device_fingerprint = SHA2(:accountId, 256)
+                   device_fingerprint = SHA2(CONCAT(:accountId, :salt), 256)
              WHERE tenant_id  = :tenantId
                AND account_id = :accountId
             """, nativeQuery = true)
     int maskLoginHistory(@Param("tenantId") String tenantId,
-                         @Param("accountId") String accountId);
+                         @Param("accountId") String accountId,
+                         @Param("salt") String salt);
 
     // ─── suspicious_events ────────────────────────────────────────────────
 

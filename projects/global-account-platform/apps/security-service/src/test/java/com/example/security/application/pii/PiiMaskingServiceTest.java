@@ -24,6 +24,8 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class PiiMaskingServiceTest {
 
+    private static final String TEST_SALT = "test-fingerprint-salt-TASK-BE-270";
+
     @Mock
     private PiiMaskingLogJpaRepository piiMaskingLogRepository;
 
@@ -34,7 +36,7 @@ class PiiMaskingServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper());
+        service = new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), TEST_SALT);
     }
 
     // ─── Happy path ──────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ class PiiMaskingServiceTest {
         String accountId = "acc-001";
 
         when(piiMaskingLogRepository.existsByEventId(eventId)).thenReturn(false);
-        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId)).thenReturn(3);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, TEST_SALT)).thenReturn(3);
         when(piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId)).thenReturn(1);
         when(piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId)).thenReturn(2);
         when(piiMaskingLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -55,9 +57,42 @@ class PiiMaskingServiceTest {
         boolean result = service.maskPii(eventId, tenantId, accountId);
 
         assertThat(result).isTrue();
-        verify(piiMaskingLogRepository).maskLoginHistory(tenantId, accountId);
+        verify(piiMaskingLogRepository).maskLoginHistory(tenantId, accountId, TEST_SALT);
         verify(piiMaskingLogRepository).maskSuspiciousEvents(tenantId, accountId);
         verify(piiMaskingLogRepository).touchAccountLockHistory(tenantId, accountId);
+    }
+
+    @Test
+    @DisplayName("maskLoginHistory is invoked with the configured fingerprint salt — TASK-BE-270")
+    void maskPii_passesFingerprintSaltToRepository() {
+        String eventId  = "evt-salt";
+        String tenantId = "fan-platform";
+        String accountId = "acc-salt";
+
+        when(piiMaskingLogRepository.existsByEventId(eventId)).thenReturn(false);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, TEST_SALT)).thenReturn(1);
+        when(piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId)).thenReturn(0);
+        when(piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId)).thenReturn(0);
+        when(piiMaskingLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.maskPii(eventId, tenantId, accountId);
+
+        verify(piiMaskingLogRepository).maskLoginHistory(eq(tenantId), eq(accountId), eq(TEST_SALT));
+        verify(piiMaskingLogRepository, never()).maskLoginHistory(eq(tenantId), eq(accountId), eq(""));
+    }
+
+    @Test
+    @DisplayName("Constructor rejects blank fingerprint salt — TASK-BE-270 fail-fast")
+    void constructor_blankSalt_throws() {
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), ""));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), "  "));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), null));
     }
 
     @Test
@@ -68,7 +103,7 @@ class PiiMaskingServiceTest {
         String accountId = "acc-002";
 
         when(piiMaskingLogRepository.existsByEventId(eventId)).thenReturn(false);
-        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId)).thenReturn(0);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, TEST_SALT)).thenReturn(0);
         when(piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -94,7 +129,7 @@ class PiiMaskingServiceTest {
         String accountId = "acc-003";
 
         when(piiMaskingLogRepository.existsByEventId(eventId)).thenReturn(false);
-        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId)).thenReturn(1);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, TEST_SALT)).thenReturn(1);
         when(piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -122,7 +157,7 @@ class PiiMaskingServiceTest {
         boolean result = service.maskPii(eventId, "fan-platform", "acc-dup");
 
         assertThat(result).isFalse();
-        verify(piiMaskingLogRepository, never()).maskLoginHistory(any(), any());
+        verify(piiMaskingLogRepository, never()).maskLoginHistory(any(), any(), any());
         verify(piiMaskingLogRepository, never()).maskSuspiciousEvents(any(), any());
         verify(piiMaskingLogRepository, never()).touchAccountLockHistory(any(), any());
         verify(piiMaskingLogRepository, never()).save(any());
@@ -137,7 +172,7 @@ class PiiMaskingServiceTest {
         String accountId = "acc-race";
 
         when(piiMaskingLogRepository.existsByEventId(eventId)).thenReturn(false);
-        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId)).thenReturn(1);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, TEST_SALT)).thenReturn(1);
         when(piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId)).thenReturn(0);
         when(piiMaskingLogRepository.save(any()))
@@ -147,7 +182,7 @@ class PiiMaskingServiceTest {
 
         assertThat(result).isFalse();
         // Masking UPDATEs were still executed (the race was on the log insert).
-        verify(piiMaskingLogRepository).maskLoginHistory(tenantId, accountId);
+        verify(piiMaskingLogRepository).maskLoginHistory(tenantId, accountId, TEST_SALT);
         // Event was NOT published because the log insert was treated as duplicate.
         verify(eventPublisher, never()).publishPiiMasked(any(), any());
     }
@@ -161,12 +196,11 @@ class PiiMaskingServiceTest {
         String tenantIdA  = "fan-platform";
         String accountIdA = "acc-cross";
 
-        String eventIdB   = "evt-b";
         String tenantIdB  = "wms";
         String accountIdB = "acc-cross"; // same accountId, different tenant
 
         when(piiMaskingLogRepository.existsByEventId(eventIdA)).thenReturn(false);
-        when(piiMaskingLogRepository.maskLoginHistory(tenantIdA, accountIdA)).thenReturn(2);
+        when(piiMaskingLogRepository.maskLoginHistory(tenantIdA, accountIdA, TEST_SALT)).thenReturn(2);
         when(piiMaskingLogRepository.maskSuspiciousEvents(tenantIdA, accountIdA)).thenReturn(1);
         when(piiMaskingLogRepository.touchAccountLockHistory(tenantIdA, accountIdA)).thenReturn(0);
         when(piiMaskingLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -174,7 +208,7 @@ class PiiMaskingServiceTest {
         service.maskPii(eventIdA, tenantIdA, accountIdA);
 
         // tenantB UPDATE methods must never be called.
-        verify(piiMaskingLogRepository, never()).maskLoginHistory(tenantIdB, accountIdB);
+        verify(piiMaskingLogRepository, never()).maskLoginHistory(eq(tenantIdB), eq(accountIdB), any());
         verify(piiMaskingLogRepository, never()).maskSuspiciousEvents(tenantIdB, accountIdB);
         verify(piiMaskingLogRepository, never()).touchAccountLockHistory(tenantIdB, accountIdB);
     }
