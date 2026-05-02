@@ -90,7 +90,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-023-main-baseline-integration-cleanup.md` — main 의 GAP integration / E2E (gateway-master) / Frontend E2E full-stack 잡의 누적 회귀 청소. 실패 분류 → fix 또는 sub-task 분할 → CI 게이팅 정책 결정. PR #107 grinding 중 발견된 사실: doc-only PR 도 이 잡들이 fail 처리되어 main 자체 회귀임을 확인.
+- `TASK-MONO-023a-provisioning-test-isolation.md` — TASK-MONO-023 sub-task. 4 통합 테스트 (AccountRoleProvisioning / TenantProvisioning / BulkProvisioning / SignupAuthServiceDelay) 의 격리 + downstream mock 회귀 fix.
+- `TASK-MONO-023b-oauth2-oidc-regression-family.md` — TASK-MONO-023 sub-task. 7 OAuth2/OIDC 통합 테스트 (OAuth2 4건 + OAuthLogin + AuthIntegration + RateLimit) 회귀 family fix. PR #107 SAS 도입 이후 발생한 401/REDIRECTION/503 회귀 분석.
+- `TASK-MONO-023c-anonymization-and-audit.md` — TASK-MONO-023 sub-task. AccountAnonymizationScheduler (actorType=user vs system) + AccountEventPublisher (No EntityManager) + AdminAuditTenantScope (cross-tenant deny audit row 미구현) 3 회귀 fix.
+- `TASK-MONO-023d-outbox-related-failures.md` — TASK-MONO-023 sub-task. TenantAdmin (outbox_events 테이블 누락 — Flyway) + OutboxRelay (outbox 행 미발행 — transaction commit timing) 2 회귀 fix.
+- `TASK-MONO-023e-community-jpa-test-isolation.md` — TASK-MONO-023 sub-task. CommentJpaRepository / ReactionJpaRepository 격리 회귀 (count 누수 / unique constraint 우회) fix. community-service frozen 정책 예외 (회귀 fix 만).
 - `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2**: 기존 3 프로젝트 (ecommerce / wms / GAP) 의 docker-compose 를 `${PORT_PREFIX}XXXX:YYYY` 패턴에서 `expose:` + Traefik 라벨로 일괄 마이그레이션. 전제: TASK-MONO-022 머지 완료. atomic cross-project commit. `frontend-e2e` CI 잡 수정 포함.
 
 ## in-progress
@@ -100,6 +104,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-022-traefik-hostname-routing-migration.md` — **Phase 1**: Traefik 인프라 신설 완료. `infra/traefik/` (Traefik v3 + `traefik-net`) + `pnpm traefik:up/down/ps/logs` 스크립트 + `docs/guides/dev-tooling.md` + `scripts/dev-setup.sh/.ps1` + 루트 README 갱신. 검증: docker compose up → healthy + dashboard HTTP 200. 기존 3 프로젝트 docker-compose 영향 없음 확인. 2026-05-02.
+- `TASK-MONO-023-main-baseline-integration-cleanup.md` — main 의 18 GAP integration 회귀 분류 작업 완료. 5 sub-task (023a~023e) 로 root cause 별 분할 발행. CI 게이팅 정책 = sub-task 5건 모두 머지 후 별도 작업. 2026-05-02.
 
 ## done
 
