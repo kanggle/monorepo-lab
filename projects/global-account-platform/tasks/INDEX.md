@@ -72,9 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-257 review fix:
-
-- `TASK-BE-271-fix-TASK-BE-257.md` — TASK-BE-257 review fix: bulk audit `@Transactional(readOnly=true)` → REQUIRED, `OPERATOR_PROVISIONING_STATUS_CHANGE` → `OPERATOR_PROVISIONING_CREATE` enum 추가, 1001 item 통합 테스트가 `VALIDATION_ERROR` 대신 `BULK_LIMIT_EXCEEDED` 받도록 라우팅
+(empty — TASK-BE-271 implementation complete and moved to review on 2026-05-02. GAP IdP 승급 main batch + 모든 follow-up 이 review/done 진입.)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
@@ -84,7 +82,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-(empty — TASK-BE-257 reviewed and moved to done on 2026-05-02)
+257 review follow-up (2026-05-02, awaiting review approval):
+
+- `TASK-BE-271-fix-TASK-BE-257.md` — bulk provisioning fix: `@Transactional(readOnly=true)` → `@Transactional`, `OPERATOR_PROVISIONING_CREATE` enum 추가, `BULK_LIMIT_EXCEEDED` HTTP 라우팅
 
 ## done
 
