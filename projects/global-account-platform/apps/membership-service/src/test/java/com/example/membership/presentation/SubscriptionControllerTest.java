@@ -15,8 +15,9 @@ import com.example.membership.application.result.SubscriptionResult;
 import com.example.membership.domain.account.AccountStatus;
 import com.example.membership.domain.plan.PlanLevel;
 import com.example.membership.domain.subscription.status.SubscriptionStatus;
-import com.example.membership.infrastructure.config.SecurityConfig;
 import com.example.membership.presentation.exception.GlobalExceptionHandler;
+import com.example.membership.support.MembershipJwtTestFixture;
+import com.example.membership.support.SliceTestSecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -39,9 +40,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SubscriptionController.class)
-@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class})
 @DisplayName("SubscriptionController slice tests")
 class SubscriptionControllerTest {
+
+    private static final MembershipJwtTestFixture JWT;
+
+    static {
+        JWT = new MembershipJwtTestFixture();
+        SliceTestSecurityConfig.useFixture(JWT);
+    }
+
+    private static String bearer(String accountId) {
+        return "Bearer " + JWT.token(accountId, List.of("FAN"));
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -70,6 +82,7 @@ class SubscriptionControllerTest {
                 .willReturn(ActivateSubscriptionResult.created(sampleSub()));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"k-1\"}"))
@@ -86,6 +99,7 @@ class SubscriptionControllerTest {
                 .willReturn(ActivateSubscriptionResult.replayed(sampleSub()));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"k-1\"}"))
@@ -100,6 +114,7 @@ class SubscriptionControllerTest {
                 .willThrow(new AccountNotEligibleException(AccountStatus.LOCKED));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"k-1\"}"))
@@ -114,6 +129,7 @@ class SubscriptionControllerTest {
                 .willThrow(new SubscriptionAlreadyActiveException("already active"));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"k-1\"}"))
@@ -128,6 +144,7 @@ class SubscriptionControllerTest {
                 .willThrow(new AccountStatusUnavailableException("cb open"));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"k-1\"}"))
@@ -139,6 +156,7 @@ class SubscriptionControllerTest {
     @DisplayName("POST subscription: invalid planLevel returns 400")
     void activate_invalidPlanLevel_returns400() throws Exception {
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"VIP\",\"idempotencyKey\":\"k-1\"}"))
@@ -152,6 +170,7 @@ class SubscriptionControllerTest {
         Mockito.doNothing().when(cancelSubscriptionUseCase).cancel("sub-1", "acc-1");
 
         mockMvc.perform(delete("/api/membership/subscriptions/sub-1")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isNoContent());
     }
@@ -163,6 +182,7 @@ class SubscriptionControllerTest {
                 .when(cancelSubscriptionUseCase).cancel("sub-1", "acc-1");
 
         mockMvc.perform(delete("/api/membership/subscriptions/sub-1")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
@@ -175,6 +195,7 @@ class SubscriptionControllerTest {
                 .when(cancelSubscriptionUseCase).cancel("sub-1", "acc-1");
 
         mockMvc.perform(delete("/api/membership/subscriptions/sub-1")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isNotFound());
     }
@@ -186,6 +207,7 @@ class SubscriptionControllerTest {
                 .when(cancelSubscriptionUseCase).cancel("sub-1", "acc-1");
 
         mockMvc.perform(delete("/api/membership/subscriptions/sub-1")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SUBSCRIPTION_NOT_ACTIVE"));
@@ -201,6 +223,7 @@ class SubscriptionControllerTest {
                         PlanLevel.FAN_CLUB));
 
         mockMvc.perform(get("/api/membership/subscriptions/me")
+                        .header("Authorization", bearer("acc-1"))
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value("acc-1"))

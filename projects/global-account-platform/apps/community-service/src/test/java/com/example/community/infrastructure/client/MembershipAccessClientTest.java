@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -18,7 +19,8 @@ class MembershipAccessClientTest {
     void setUp() {
         wm = new WireMockServer(wireMockConfig().dynamicPort());
         wm.start();
-        client = new MembershipAccessClient("http://localhost:" + wm.port(), 1000, 1000);
+        WebClient webClient = WebClient.builder().baseUrl("http://localhost:" + wm.port()).build();
+        client = new MembershipAccessClient(webClient);
     }
 
     @AfterEach

@@ -15,13 +15,10 @@ import com.example.community.domain.post.status.PostStatus;
 import com.example.community.presentation.exception.GlobalExceptionHandler;
 import com.example.community.support.AccountJwtTestFixture;
 import com.example.community.support.SliceTestSecurityConfig;
-import com.gap.security.jwt.JwtVerifier;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,23 +37,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = PostController.class)
-@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class, PostControllerTest.JwtBeans.class})
+@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class})
 class PostControllerTest {
 
-    private static AccountJwtTestFixture jwt;
+    private static final AccountJwtTestFixture jwt;
 
-    @BeforeAll
-    static void init() {
+    static {
         jwt = new AccountJwtTestFixture();
-    }
-
-    @org.springframework.boot.test.context.TestConfiguration
-    static class JwtBeans {
-        @Bean
-        JwtVerifier communityJwtVerifier() {
-            if (jwt == null) jwt = new AccountJwtTestFixture();
-            return jwt.verifier();
-        }
+        SliceTestSecurityConfig.useFixture(jwt);
     }
 
     @Autowired
@@ -126,6 +114,39 @@ class PostControllerTest {
                         .content("{\"type\":\"FAN_POST\",\"visibility\":\"PUBLIC\",\"body\":\"hi\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
+    @Test
+    void cross_tenant_token_returns_403() throws Exception {
+        // TASK-BE-253: tokens with tenant_id != fan-platform must be rejected.
+        String wmsToken = "Bearer " + jwt.tokenWithTenant("wms-user", List.of("ARTIST"), "wms");
+
+        mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", wmsToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"FAN_POST\",\"visibility\":\"PUBLIC\",\"body\":\"hi\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
+    }
+
+    @Test
+    void sas_issued_token_passes() throws Exception {
+        // TASK-BE-253: tokens issued by SAS (iss=http://localhost:8081) also pass.
+        PostView view = new PostView(
+                "post-2", PostType.ARTIST_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
+                "artist-2", "Artist", "t", "body",
+                0L, 0L, null, Instant.now(), Instant.now());
+        when(publishPostUseCase.execute(any(PublishPostCommand.class))).thenReturn(view);
+
+        String body = """
+                {"type":"ARTIST_POST","visibility":"PUBLIC","title":"t","body":"hello"}
+                """;
+
+        mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + jwt.sasToken("artist-2", List.of("ARTIST")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
     }
 
     @Test

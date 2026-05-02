@@ -22,6 +22,14 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 50ms
 
+  # TASK-BE-253: Standard OAuth2 Resource Server.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
+
 server:
   port: 8087
 
@@ -31,21 +39,19 @@ outbox:
     membership.subscription.expired: membership.subscription.expired
     membership.subscription.cancelled: membership.subscription.cancelled
 
-internal:
-  api:
-    # Shared secret for X-Internal-Token on /internal/** routes. MUST be set in
-    # production; when unset and bypass-when-unconfigured=false (default), all
-    # /internal/** requests are rejected with 401 (fail-closed).
-    token: ${INTERNAL_API_TOKEN:}
-    # Bypass token enforcement when the expected token is unconfigured. Intended
-    # for local development and slice tests; production must keep this false.
-    bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}
-
 membership:
+  # TASK-BE-253: OIDC Resource Server validators.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
   account-service:
     base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
     connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:2000}
     read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:3000}
+    # NOTE: membership → account is OUT of TASK-BE-253 scope (only community → * was
+    # migrated). The X-Internal-Token header is preserved here until a follow-up
+    # task migrates the membership → account call to client_credentials.
     internal-token: ${ACCOUNT_SERVICE_INTERNAL_TOKEN:}
   idempotency:
     ttl-seconds: ${IDEMPOTENCY_TTL_SECONDS:86400}

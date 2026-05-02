@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -39,6 +40,7 @@ import static org.awaitility.Awaitility.await;
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
+@Import(MembershipJwtTestSupport.JwtDecoderConfig.class)
 @DisplayName("SubscriptionExpiryScheduler — end-to-end")
 class SubscriptionExpirySchedulerIntegrationTest extends AbstractIntegrationTest {
 

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -23,8 +24,8 @@ class AccountProfileClientUnitTest {
     void setUp() {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
-        // HTTP_1_1 explicit in constructor — no h2c fix needed.
-        client = new AccountProfileClient(wireMock.baseUrl(), 3000, 5000);
+        WebClient webClient = WebClient.builder().baseUrl(wireMock.baseUrl()).build();
+        client = new AccountProfileClient(webClient);
     }
 
     @AfterEach

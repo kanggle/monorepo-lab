@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -15,6 +16,12 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Tests {@link AccountExistenceClient} with a plain {@link WebClient} (no OAuth2 filter).
+ *
+ * <p>The OAuth2 token-attachment filter is verified separately in
+ * {@link com.example.community.infrastructure.config.OAuth2WebClientConfigTest}.
+ */
 @DisplayName("AccountExistenceClient 단위 테스트")
 class AccountExistenceClientTest {
 
@@ -25,7 +32,8 @@ class AccountExistenceClientTest {
     void setUp() {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
-        client = new AccountExistenceClient(wireMock.baseUrl(), 3000, 5000);
+        WebClient webClient = WebClient.builder().baseUrl(wireMock.baseUrl()).build();
+        client = new AccountExistenceClient(webClient);
     }
 
     @AfterEach

@@ -1,53 +1,43 @@
 package com.example.community.infrastructure.client;
 
 import com.example.community.domain.access.ContentAccessChecker;
+import com.example.community.infrastructure.config.OAuth2WebClientConfig;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-
-import java.net.http.HttpClient;
-import java.time.Duration;
+import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Synchronous access check to membership-service.
- * Fail-closed: on any error (network, 5xx, CB OPEN), returns {@code false}.
+ *
+ * <p>TASK-BE-253: outbound auth switched to standard OAuth2 (see
+ * {@link OAuth2WebClientConfig}). Fail-closed semantics preserved — on any error
+ * (network, 5xx, CB OPEN), returns {@code false}.
  */
 @Slf4j
 @Component
 public class MembershipAccessClient implements ContentAccessChecker {
 
-    private final RestClient restClient;
+    private final WebClient webClient;
 
     public MembershipAccessClient(
-            @Value("${community.membership-service.base-url}") String baseUrl,
-            @Value("${community.membership-service.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${community.membership-service.read-timeout-ms:3000}") int readTimeoutMs) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .build();
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(factory)
-                .build();
+            @Qualifier(OAuth2WebClientConfig.MEMBERSHIP_WEB_CLIENT) WebClient webClient) {
+        this.webClient = webClient;
     }
 
     @Override
     @CircuitBreaker(name = "membershipService", fallbackMethod = "denyFallback")
     public boolean check(String accountId, String requiredPlanLevel) {
         try {
-            AccessResponse resp = restClient.get()
+            AccessResponse resp = webClient.get()
                     .uri(uri -> uri.path("/internal/membership/access")
                             .queryParam("accountId", accountId)
                             .queryParam("requiredPlanLevel", requiredPlanLevel)
                             .build())
                     .retrieve()
-                    .body(AccessResponse.class);
+                    .bodyToMono(AccessResponse.class)
+                    .block();
             return resp != null && Boolean.TRUE.equals(resp.allowed());
         } catch (Exception e) {
             log.warn("membership-service access check failed: {}", e.getMessage());

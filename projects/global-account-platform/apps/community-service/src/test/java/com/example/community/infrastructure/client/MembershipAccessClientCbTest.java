@@ -1,6 +1,7 @@
 package com.example.community.infrastructure.client;
 
 import com.example.community.domain.access.ContentAccessChecker;
+import com.example.community.infrastructure.config.OAuth2WebClientConfig;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
@@ -9,13 +10,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -61,10 +65,6 @@ class MembershipAccessClientCbTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("community.membership-service.base-url", () -> "http://localhost:" + wm.port());
-        // Timeouts tight enough to exercise failure path but generous enough for slow
-        // CI runners on cold start (first WireMock response can exceed 500ms in CI).
-        registry.add("community.membership-service.connect-timeout-ms", () -> "2000");
-        registry.add("community.membership-service.read-timeout-ms", () -> "3000");
         // Tighten CB so it trips quickly in the test.
         registry.add("resilience4j.circuitbreaker.instances.membershipService.sliding-window-type", () -> "COUNT_BASED");
         registry.add("resilience4j.circuitbreaker.instances.membershipService.sliding-window-size", () -> "4");
@@ -79,6 +79,10 @@ class MembershipAccessClientCbTest {
     @ImportAutoConfiguration({AopAutoConfiguration.class, CircuitBreakerAutoConfiguration.class})
     @Import(MembershipAccessClient.class)
     static class TestApp {
+        @Bean(OAuth2WebClientConfig.MEMBERSHIP_WEB_CLIENT)
+        WebClient membershipServiceWebClient() {
+            return WebClient.builder().baseUrl("http://localhost:" + wm.port()).build();
+        }
     }
 
     @Autowired

@@ -9,6 +9,8 @@ dependencies {
     implementation project(':libs:java-web')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
+    // TASK-BE-253: integration tests need Rs256JwtSigner to issue local test tokens.
+    testImplementation project(':libs:java-security')
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
@@ -19,6 +21,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    // TASK-BE-253: OIDC standard token validation (replaces X-Internal-Token + custom JWT path).
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // Flyway

@@ -45,6 +45,35 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+  # TASK-BE-253: Resource Server pulls JWKS from a stub URL; an integration test
+  # provides a JwtDecoder bean that overrides this. The values below just need to
+  # parse — they are never actually fetched in tests.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081
+          jwk-set-uri: http://localhost:8081/oauth2/jwks
+      client:
+        registration:
+          gap-account:
+            provider: gap
+            client-id: community-service-client
+            client-secret: test-secret
+            authorization-grant-type: client_credentials
+            scope: account.read
+            client-authentication-method: client_secret_basic
+          gap-membership:
+            provider: gap
+            client-id: community-service-client
+            client-secret: test-secret
+            authorization-grant-type: client_credentials
+            scope: membership.read
+            client-authentication-method: client_secret_basic
+        provider:
+          gap:
+            token-uri: http://localhost:8081/oauth2/token
+
 server:
   port: 0
 
@@ -54,9 +83,9 @@ outbox:
     batch-size: 50
 
 community:
-  jwt:
-    public-key-path: classpath:keys/public.pem
-    expected-issuer: global-account-platform
+  oauth2:
+    allowed-issuers: http://localhost:8081,global-account-platform
+    required-tenant-id: fan-platform
   membership-service:
     base-url: http://localhost:18083
     connect-timeout-ms: 2000
