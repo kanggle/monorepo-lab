@@ -72,13 +72,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 (post 263/265 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 + 265 review fix (post 263/265 review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-253-community-membership-oidc-integration.md` — community/membership-service OIDC 통합 (P1, FROZEN 예외)
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
 - `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
+- `TASK-BE-267-fix-TASK-BE-265.md` — `ProvisionStatusChangeRequest.operatorId` `@Size(max=36)` 누락 (TASK-BE-265 review Critical 1: spec 만 갱신, DTO drift)
 
 Recommended order: P0 선행(251/252) 및 256 contract 가 모두 done 이라 잔여 ready 작업은 즉시 시작 가능.
+- 267: 1 line annotation + DTO test, 빠른 처리 권장.
 - 253 / TASK-MONO-019: 둘 다 251/252 의존, 서로 병렬 가능 — Resource Server 마이그레이션 끝맺음.
 - 257 / 258: ADR 과 독립, 병렬 가능. 단 257 은 250 (admin tenant lifecycle API) 가 done 진입한 후 stable. 258 은 255 가 머지된 `account-events.md` v3 위에서 작업.
 
@@ -91,18 +93,16 @@ Cross-project follow-up (root `tasks/`):
 
 ## review
 
-254/255 review follow-up batch (2026-05-02, awaiting review approval):
-
-- `TASK-BE-263-fix-TASK-BE-254.md` — auth-api.md OIDC discovery 응답 예시에 `revocation_endpoint` / `introspection_endpoint` 추가
-- `TASK-BE-265-fix-TASK-BE-255.md` — `account_roles` review fix: role_name 길이 64 정합, `addIfAbsent` TOCTOU 핸들링, `operatorId` `@Size(max=36)`
+(empty — 263/265 batch reviewed and moved to done on 2026-05-02)
 
 ## done
 
-256 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+258 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
 TASK-BE-251 (Spring Authorization Server), TASK-BE-252 (OAuth schema),
 TASK-BE-256 (tenant onboarding API contract), and follow-ups 260/261/262.
 Newly reviewed (2026-05-02): TASK-BE-254 (consumer integration guide,
 FIX_NEEDED → 263), TASK-BE-255 (account_roles schema, FIX_NEEDED → 265),
-TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED).
+TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
+(auth-api.md discovery, APPROVED), TASK-BE-265 (255 review fix, FIX_NEEDED → 267).
 Numbers TASK-BE-238/239/240/244 were not assigned.
