@@ -90,8 +90,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-022-traefik-hostname-routing-migration.md` — Traefik 기반 호스트명 라우팅 마이그레이션 ([ADR-MONO-001](../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C 의 후속). 기존 3개 프로젝트 docker-compose 의 `${PORT_PREFIX}XXXX:YYYY` 패턴을 `expose:` + Traefik 라벨로 전환, `infra/traefik/` 신설, dev-tooling 가이드 + setup script 추가.
+- `TASK-MONO-022-traefik-hostname-routing-migration.md` — **Phase 1**: Traefik 인프라 신설 ([ADR-MONO-001](../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C). 루트 `infra/traefik/` 스택 (Traefik v3 + `traefik-net` external network) + `pnpm traefik:up/down/logs` 스크립트 + `docs/guides/dev-tooling.md` (DB 도구 접근 3가지 방법) + `scripts/dev-setup.sh/.ps1` (hosts 등록). **기존 3 프로젝트 docker-compose 는 안 건드림** — 신규 프로젝트가 day-1 부터 Traefik 패턴 사용 가능하게 unblock.
 - `TASK-MONO-023-main-baseline-integration-cleanup.md` — main 의 GAP integration / E2E (gateway-master) / Frontend E2E full-stack 잡의 누적 회귀 청소. 실패 분류 → fix 또는 sub-task 분할 → CI 게이팅 정책 결정. PR #107 grinding 중 발견된 사실: doc-only PR 도 이 잡들이 fail 처리되어 main 자체 회귀임을 확인.
+- `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2**: 기존 3 프로젝트 (ecommerce / wms / GAP) 의 docker-compose 를 `${PORT_PREFIX}XXXX:YYYY` 패턴에서 `expose:` + Traefik 라벨로 일괄 마이그레이션. 전제: TASK-MONO-022 머지 완료. atomic cross-project commit. `frontend-e2e` CI 잡 수정 포함.
 
 ## in-progress
 

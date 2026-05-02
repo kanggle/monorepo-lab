@@ -4,7 +4,7 @@ TASK-MONO-022
 
 # Title
 
-Traefik hostname-routing 마이그레이션 (PORT_PREFIX → 호스트명 기반 라우팅)
+Traefik 인프라 신설 (Phase 1) — `infra/traefik/` 스택 + dev-tooling 가이드
 
 # Status
 
@@ -36,15 +36,17 @@ backend / devops
 
 # Goal
 
-[ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) (ACCEPTED, Option C) 의 결정에 따라 monorepo 의 로컬 dev 네트워크 모델을 **PORT_PREFIX 디지털 슬롯** 에서 **Traefik reverse proxy + 호스트명 기반 라우팅** 으로 전환한다.
+[ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) (ACCEPTED, Option C) 의 Phase 1 작업: **Traefik 공유 reverse proxy 스택을 monorepo 루트에 신설** 한다. 기존 3개 프로젝트의 docker-compose 는 본 태스크에서 건드리지 않는다 (TASK-MONO-024 가 책임).
 
 이 태스크 완료 후:
 
-- 단일 공유 Traefik 컨테이너만 호스트 포트 `:80`/`:443` 을 점유
-- 모든 프로젝트의 gateway/frontend 는 `expose:` + Traefik 라벨로 hostname 등록
-- 백엔드 서비스 (postgres, redis, kafka 등) 는 호스트 포트 0개 점유 — docker network 내부에서만 접근 가능
-- 7개 프로젝트 (ecommerce + wms + GAP + fan-platform + scm + erp + mes) 모두 한 머신에서 동시 기동 가능
-- 신규 프로젝트 추가 시 PORT_PREFIX 할당 의사결정 불필요
+- 루트 `infra/traefik/docker-compose.yml` 가 단일 Traefik v3 인스턴스를 운영 (`:80`/`:443`/`:8080` dashboard)
+- 외부 docker network `traefik-net` 가 생성되어, 프로젝트들이 join 할 수 있는 상태
+- 신규 프로젝트 (fan-platform·scm·erp·mes) 가 부트스트랩 시점부터 Traefik 패턴으로 시작 가능
+- DB 도구 접근 (DBeaver / Redis Insight / Kafka UI) 의 3가지 방법 가이드 작성
+- 일회성 dev 환경 셋업 스크립트 (`/etc/hosts` 등록) 제공
+
+기존 프로젝트의 docker-compose 마이그레이션은 TASK-MONO-024 (Phase 2) 에서 다룬다.
 
 ---
 
@@ -52,47 +54,55 @@ backend / devops
 
 ## In Scope
 
-- 루트에 `infra/traefik/docker-compose.yml` 신설 — Traefik v3 single instance, dashboard `:8080` 노출, `traefik-net` external network 정의
-- 루트 `Makefile` 또는 `package.json` 스크립트에 `make traefik-up` / `make traefik-down` 추가
-- 기존 3개 프로젝트의 docker-compose 마이그레이션:
-  - `projects/ecommerce-microservices-platform/docker-compose.yml` — 모든 서비스의 `ports:` 제거, gateway 에 Traefik 라벨, `traefik-net` 외부 네트워크 join
-  - `projects/wms-platform/docker-compose.yml` — 동일
-  - `projects/global-account-platform/docker-compose.yml` — 동일
-- 각 프로젝트 `.env.example` 에서 `PORT_PREFIX=N` 라인 제거, `PROJECT_HOSTNAME=<name>.local` 추가
-- `docs/guides/dev-tooling.md` 신설 — DBeaver / Redis Insight / Kafka UI 가 내부 네트워크 서비스 접근하는 3가지 방법 (docker exec / overlay / Traefik TCP) 가이드
-- `README.md` 루트 — 일회성 dev 환경 셋업 절차에 `/etc/hosts` 등록 단계 추가
-- `scripts/dev-setup.sh` (or `.ps1`) — `*.local` 호스트명을 hosts 파일에 자동 등록하는 helper (idempotent)
-- 검증: 7개 프로젝트 (3 기존 + 4 신규는 부트스트랩 후) 동시 `docker compose up -d` 시 충돌 없이 모두 health check 통과
+- 루트에 `infra/traefik/` 디렉토리 신설:
+  - `docker-compose.yml` — Traefik v3 single instance, dashboard `:8080` 노출, docker provider 활성화 (`exposedByDefault=false`), `traefik-net` external network 정의
+  - `traefik.yml` 또는 inline command — entrypoints (`web :80`, `websecure :443`), providers (docker), api (insecure dashboard for dev)
+  - `README.md` — 기동·종료 명령, dashboard 접근 방법, 트러블슈팅
+- 루트 `package.json` 또는 `Makefile` 에 다음 스크립트 추가:
+  - `traefik:up` — `docker compose -f infra/traefik/docker-compose.yml up -d`
+  - `traefik:down` — `docker compose -f infra/traefik/docker-compose.yml down`
+  - `traefik:logs` — `docker compose -f infra/traefik/docker-compose.yml logs -f`
+- `docs/guides/dev-tooling.md` 신설 — DB 도구가 내부 네트워크 서비스에 접근하는 3가지 방법:
+  - 방법 1: `docker exec` (가장 안전, 외부 도구 불필요)
+  - 방법 2: 프로젝트별 `docker-compose.dev.yml` overlay (commit 안 하는 로컬 dev 전용 ports 노출)
+  - 방법 3: Traefik TCP 라우팅 (정식 — 프로젝트의 Traefik 라벨에 TCP entryPoint 등록)
+- `scripts/dev-setup.sh` (or `.ps1` for Windows) — `*.local` 호스트명을 `/etc/hosts` 에 idempotent 하게 등록하는 helper:
+  - `ecommerce.local`, `wms.local`, `gap.local` 우선 등록 (현재 운영 중 — Phase 2 마이그레이션 전이라도 미래 대비)
+  - 스크립트가 admin/sudo 권한 요청
+  - 이미 등록된 항목은 건너뜀
+- 루트 `README.md` 에 dev 환경 셋업 절차 단계 추가:
+  1. `bash scripts/dev-setup.sh` (1회)
+  2. `pnpm traefik:up` (Traefik 기동)
+  3. 프로젝트 띄우기
 
 ## Out of Scope
 
-- HTTPS / TLS 적용 (자체 서명 인증서 + Traefik certResolver) — TASK-MONO-024 follow-up
+- 기존 3개 프로젝트의 docker-compose 마이그레이션 — TASK-MONO-024 (Phase 2)
+- HTTPS / TLS 적용 (자체 서명 인증서 + Traefik certResolver) — TASK-MONO-025 follow-up
 - Traefik dashboard 인증 — dev 환경이라 비활성. 운영 환경 채택 시 별도
 - production K8s Ingress 매핑 — 본 태스크는 로컬 dev 만
 - service mesh (Istio/Linkerd) — overkill, 본 태스크 범위 밖
 - 5자리 host port (Jaeger UI `16686` 등) 의 Traefik 노출 — 옵션 (별도 가이드 노트)
-- 4 신규 프로젝트 (fan-platform/scm/erp/mes) 의 docker-compose 작성 — 각 프로젝트 부트스트랩 태스크 책임
+- 4 신규 프로젝트 (fan-platform/scm/erp/mes) 의 docker-compose 작성 — 각 프로젝트 부트스트랩 태스크 책임 (Traefik 인프라가 준비되어 있으니 day-1 부터 Traefik 패턴 채택)
 
 ---
 
 # Acceptance Criteria
 
 - [ ] `infra/traefik/docker-compose.yml` 가 Traefik v3 단일 인스턴스를 정의하고 `traefik-net` external network 를 생성
-- [ ] 3개 기존 프로젝트의 docker-compose.yml 에서 `${PORT_PREFIX}XXXX:YYYY` 패턴이 모두 사라짐 (`ports:` → `expose:` 또는 Traefik 라벨)
-- [ ] 각 프로젝트의 gateway 가 `traefik.http.routers.<project>.rule=Host(\`<project>.local\`)` 라벨 보유
-- [ ] `docker compose -f infra/traefik/docker-compose.yml up -d` + 3개 프로젝트 `docker compose up -d` 동시 기동 시 호스트 포트 충돌 없음
-- [ ] `curl http://ecommerce.local/actuator/health`, `http://wms.local/actuator/health`, `http://gap.local/actuator/health` 모두 200 OK 반환
-- [ ] 각 프로젝트의 `.env.example` 에서 `PORT_PREFIX` 제거, `PROJECT_HOSTNAME` 추가
-- [ ] `docs/guides/dev-tooling.md` 가 DB 도구 접근 3가지 방법을 documented
-- [ ] `scripts/dev-setup.sh` (or `.ps1`) 가 hosts 파일 등록을 idempotent 하게 처리
-- [ ] 루트 README.md 가 새로운 dev 환경 셋업 절차 (Traefik 기동 + hosts 등록) 를 안내
-- [ ] CI 의 `Frontend E2E full-stack` 잡이 새 라우팅 모델에서도 통과 (또는 별도 follow-up 태스크로 분리됨이 명시)
+- [ ] Traefik dashboard 접근 가능 (`http://localhost:8080`)
+- [ ] `pnpm traefik:up` / `pnpm traefik:down` / `pnpm traefik:logs` 스크립트 동작
+- [ ] `docs/guides/dev-tooling.md` 가 DB 도구 접근 3가지 방법을 문서화
+- [ ] `scripts/dev-setup.sh` (or `.ps1`) 가 hosts 파일 등록을 idempotent 하게 처리 (재실행 안전)
+- [ ] 루트 README.md 가 새로운 dev 환경 셋업 절차를 안내
+- [ ] 본 태스크는 **기존 3 프로젝트의 docker-compose 를 건드리지 않음** (Phase 2 와의 분리 보장)
+- [ ] Traefik 기동 후 `docker network inspect traefik-net` 으로 외부 네트워크 존재 확인
 
 ---
 
 # Related Specs
 
-- [docs/adr/ADR-MONO-001-port-prefix-scaling.md](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) — 결정 근거
+- [docs/adr/ADR-MONO-001-port-prefix-scaling.md](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) — 결정 근거 (Option C)
 - [CLAUDE.md § Local Network Convention](../../CLAUDE.md) — 정책 정의
 - [TEMPLATE.md § Local Network Convention](../../TEMPLATE.md) — 신규 프로젝트 부트스트랩 절차
 
@@ -111,38 +121,52 @@ backend / devops
 # Target Service / Component
 
 - 루트 `infra/traefik/` (신규)
-- `projects/ecommerce-microservices-platform/docker-compose.yml`
-- `projects/wms-platform/docker-compose.yml`
-- `projects/global-account-platform/docker-compose.yml`
-- `docs/guides/dev-tooling.md` (신규)
-- `scripts/dev-setup.sh` (or `.ps1`, 신규)
-- `README.md` 루트 (단계 추가)
+- 루트 `package.json` (스크립트 추가) 또는 `Makefile`
+- 루트 `docs/guides/dev-tooling.md` (신규)
+- 루트 `scripts/dev-setup.sh` (or `.ps1`, 신규)
+- 루트 `README.md` (단계 추가)
 
 ---
 
 # Architecture
 
-`docs/adr/ADR-MONO-001-port-prefix-scaling.md` § Recommendation 의 Option C 패턴을 따른다:
+`docs/adr/ADR-MONO-001-port-prefix-scaling.md` § Recommendation 의 Option C 패턴:
 
 ```yaml
+# infra/traefik/docker-compose.yml
 services:
-  gateway:
-    expose: ["8080"]
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.<project>.rule=Host(`<project>.local`)"
-      - "traefik.http.services.<project>.loadbalancer.server.port=8080"
-    networks: [traefik-net, <project>-net]
-
-  postgres:
-    expose: ["5432"]
-    networks: [<project>-net]
+  traefik:
+    image: traefik:v3
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"   # dashboard (dev only)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-net
 
 networks:
   traefik-net:
-    external: true
-  <project>-net:
+    name: traefik-net
     driver: bridge
+```
+
+신규 프로젝트가 `traefik-net` 에 join 할 때:
+
+```yaml
+# projects/<new>/docker-compose.yml
+networks:
+  default:
+    name: <project>-net
+  traefik-net:
+    external: true
 ```
 
 ---
@@ -150,28 +174,27 @@ networks:
 # Implementation Notes
 
 - Traefik v3.x 사용 (`traefik:v3` 태그). v2 와 라벨 syntax 호환되지만 v3 의 default config 가 더 sane.
-- Traefik 의 docker provider 활성화: `--providers.docker=true --providers.docker.exposedByDefault=false`. 라벨 명시한 서비스만 라우팅됨.
+- Docker provider 활성화 + `exposedByDefault=false` — 라벨 명시한 서비스만 라우팅됨 (보안 + 명시성).
 - Traefik dashboard (`:8080`) 은 dev 편의를 위해 노출하되 prod-style 인증은 생략.
-- 3개 프로젝트의 docker-compose 마이그레이션은 atomic 하게 같은 PR 에 묶음 (cross-project 변경의 정합성 보존 — `CLAUDE.md` § Cross-Project Changes).
-- `.env.example` 의 `PORT_PREFIX` 제거 시 `.env` 캐시된 값이 있으면 삭제 가이드 README 에 명시.
-- e2e-tests CI 잡 (TASK-MONO-014) 이 PORT_PREFIX 가정에 의존하면 같이 수정. 영향 분석 필수.
+- 본 태스크는 **기존 프로젝트 docker-compose 를 안 건드리는 게 핵심** — Phase 1/2 분리의 목적은 인프라 신설을 작은 PR 로 분리해 신규 프로젝트가 day-1 부터 Traefik 사용 가능하게 만드는 것.
+- `scripts/dev-setup.sh` 는 macOS/Linux 용. Windows 는 PowerShell 스크립트 (`scripts/dev-setup.ps1`) 별도. 둘 다 hosts 파일 등록만 다루고 docker 실행은 사용자가 직접.
+- `traefik-net` 이름은 `external: true` 로 참조될 때 정확히 "traefik-net" 이어야 함 — `infra/traefik/docker-compose.yml` 에 `networks.traefik-net.name: traefik-net` 명시.
 
 ---
 
 # Edge Cases
 
-- 사용자가 이미 다른 도구 (Apache, Nginx 등) 가 호스트 :80/:443 점유 중일 때 → README 에서 Traefik 포트를 `:8800`/`:8843` 등으로 override 가능함을 명시
+- 사용자가 이미 다른 도구 (Apache, Nginx 등) 가 호스트 :80/:443 점유 중일 때 → README 에서 Traefik 포트를 환경변수로 override 가능함을 명시 (`TRAEFIK_HTTP_PORT=8800`)
 - `*.local` mDNS / Bonjour 충돌 (macOS 의 `.local` reserved 영역) → 대안 도메인 (예: `.localhost` 또는 `.test`) 검토. ADR 후속 보완.
 - WSL2 + Docker Desktop 환경에서 hosts 파일 위치 (Windows 측 vs WSL 측) → setup script 가 양쪽 갱신
-- Traefik 기동 전에 프로젝트가 먼저 `traefik-net` 에 join 시도 → 외부 네트워크가 존재하지 않아 실패. 시작 순서 README 에 명시 또는 docker-compose `external: true` 의존성으로 해결
-- 기존 PORT_PREFIX 기반 e2e 테스트 (TASK-MONO-014/015) 는 docker-compose 의 `ports:` 를 가정 → 마이그레이션 시 함께 수정
+- Traefik 미기동 상태에서 프로젝트가 `traefik-net` external 참조 → 프로젝트 docker compose 가 fail. README 가이드: "프로젝트 기동 전 `pnpm traefik:up` 먼저"
+- dashboard `:8080` 이 다른 서비스와 충돌 가능 → README 에 환경변수 override (`TRAEFIK_DASHBOARD_PORT`) 명시
 
 ---
 
 # Failure Scenarios
 
 - **Traefik dashboard 노출이 운영 ENV 로 leak**: dev 환경 docker-compose 에만 dashboard `:8080` 활성화하고, prod compose 로 복제되지 않도록 분리.
-- **HTTPS 미적용 상태에서 staging URL 모방 어려움**: staging 환경은 별도 ADR 로 처리. 본 태스크는 dev 만.
 - **로컬 hosts 파일 권한 부족 (특히 Windows)**: setup script 가 admin 권한 요청 또는 manual 단계로 fallback.
 - **mDNS/.local 도메인 인식 실패 (macOS)**: 도메인 자체를 `.localhost` 로 변경하는 follow-up. 본 태스크에서 발견 시 ADR 보강.
 
@@ -179,24 +202,21 @@ networks:
 
 # Test Requirements
 
-- 통합 검증 (수동 또는 스크립트):
-  - `docker compose -f infra/traefik/docker-compose.yml up -d`
-  - 3개 프로젝트 `docker compose up -d` 동시 실행
-  - `curl http://ecommerce.local/actuator/health` → 200
-  - `curl http://wms.local/actuator/health` → 200
-  - `curl http://gap.local/actuator/health` → 200
-  - `docker port` 출력에서 호스트 포트 점유: Traefik `:80`, `:443`, `:8080` 만
-- CI 영향 검증:
-  - `frontend-e2e` (TASK-MONO-014) 잡이 새 모델에서 통과하거나 별도 follow-up 으로 분리됨
-  - `gap-integration-tests` 잡 (Testcontainers 사용 — 호스트 포트와 무관) 영향 없음 확인
+- 검증 (수동 또는 스크립트):
+  - `pnpm traefik:up` → Traefik 컨테이너 실행 + `:80`/`:443`/`:8080` 호스트 포트 점유 확인
+  - `docker network inspect traefik-net` → 네트워크 존재 + 드라이버 bridge 확인
+  - `curl http://localhost:8080/api/rawdata` → Traefik API 응답 (dashboard 동작 신호)
+  - `pnpm traefik:down` → 컨테이너 + 네트워크 정상 정리
+  - 기존 ecommerce/wms/GAP 프로젝트 `docker compose up -d` 가 영향 없이 동작 (Phase 1 의 격리성 검증)
+- CI 영향: 기본 검증 외에 별도 CI 잡 추가 불필요. Phase 2 (TASK-MONO-024) 에서 e2e 잡 영향 분석.
 
 ---
 
 # Definition of Done
 
-- [ ] Implementation completed (Traefik infra + 3개 프로젝트 docker-compose 마이그레이션 + setup script + 가이드)
-- [ ] 동시 기동 검증 통과 (3개 프로젝트 + Traefik)
-- [ ] 호스트 포트 점유 = Traefik 만 확인
+- [ ] Implementation completed (Traefik infra + setup script + 가이드 + README 갱신)
+- [ ] 검증 명령 통과
+- [ ] 기존 3 프로젝트 docker-compose 영향 없음 확인
 - [ ] Documentation (README + dev-tooling.md) 갱신
-- [ ] CI 잡 영향 분석 + 필요 수정 또는 follow-up 분리
+- [ ] TASK-MONO-024 (Phase 2) 가 본 태스크의 산출물 위에서 진행될 수 있음 명시
 - [ ] Ready for review
