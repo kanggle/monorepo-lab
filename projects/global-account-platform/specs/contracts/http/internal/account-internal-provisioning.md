@@ -74,7 +74,8 @@ Publishes outbox `account.created` event with `tenant_id` in the payload.
 | `displayName` | string | No | Max 100 chars |
 | `locale` | string | No | Default `ko-KR` |
 | `timezone` | string | No | Default `Asia/Seoul` |
-| `roles` | string[] | No | May be empty; each role ≤ 50 chars |
+| `roles` | string[] | No | May be empty; each role ≤ 64 chars |
+| `operatorId` | string | No | Caller identifier for audit; ≤ 36 chars |
 
 **Response 201 Created**:
 ```json
@@ -179,7 +180,7 @@ Replace **all** roles for the account. An empty array removes all roles.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `roles` | string[] | Yes | May be empty (removes all roles); each role matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
-| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field; ≤ 36 chars |
 
 **Response 200 OK**:
 ```json
@@ -216,7 +217,7 @@ Append a single role to the account. This avoids the TOCTOU race that the `repla
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `roleName` | string | Yes | Matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
-| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field; ≤ 36 chars |
 
 **Response 200 OK**:
 ```json
@@ -255,7 +256,7 @@ Remove a single role from the account.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `roleName` | string | Yes | Matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
-| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field; ≤ 36 chars |
 
 **Response 200 OK**:
 ```json
@@ -292,7 +293,7 @@ Change the account status. Follows `AccountStatusMachine` transition rules.
 |---|---|---|---|
 | `status` | string | Yes | `ACTIVE`, `LOCKED`, `DELETED` |
 | `reason` | string | Yes | Must be a valid `StatusChangeReason` enum value |
-| `operatorId` | string | No | Caller identifier for audit |
+| `operatorId` | string | No | Caller identifier for audit; ≤ 36 chars |
 
 **Response 200 OK**:
 ```json

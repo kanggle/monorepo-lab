@@ -205,4 +205,44 @@ class AccountRoleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[0]").value("WAREHOUSE_ADMIN"));
     }
+
+    // TASK-BE-265: operatorId length must mirror granted_by VARCHAR(36).
+
+    @Test
+    @DisplayName("PATCH roles:add operatorId 37자 → 400 VALIDATION_ERROR")
+    void addRole_operatorIdTooLong_returns400() throws Exception {
+        String operatorId = "o".repeat(37);
+
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:add",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "roleName": "ADMIN",
+                                  "operatorId": "%s"
+                                }
+                                """.formatted(operatorId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("PATCH roles:remove operatorId 37자 → 400 VALIDATION_ERROR")
+    void removeRole_operatorIdTooLong_returns400() throws Exception {
+        String operatorId = "o".repeat(37);
+
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:remove",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "roleName": "ADMIN",
+                                  "operatorId": "%s"
+                                }
+                                """.formatted(operatorId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 }

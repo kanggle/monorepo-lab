@@ -9,6 +9,10 @@ import java.util.List;
 /**
  * TASK-BE-231: Request DTO for POST /internal/tenants/{tenantId}/accounts.
  * Maps to ProvisionAccountCommand.
+ *
+ * <p>TASK-BE-265: role_name max length aligned with DB (VARCHAR(64)) /
+ * {@code AccountRoleName} validator and {@code operatorId} bounded by the
+ * {@code granted_by VARCHAR(36)} column.
  */
 public record ProvisionAccountRequest(
 
@@ -27,8 +31,9 @@ public record ProvisionAccountRequest(
 
         String timezone,
 
-        List<@Size(max = 50, message = "each role must be at most 50 characters") String> roles,
+        List<@Size(max = 64, message = "each role must be at most 64 characters") String> roles,
 
+        @Size(max = 36, message = "operatorId must be at most 36 characters")
         String operatorId
 ) {
 }
