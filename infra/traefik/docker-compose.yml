@@ -1,0 +1,41 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: monorepo-traefik
+    restart: unless-stopped
+    command:
+      # Logs
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "--accesslog=true"
+
+      # Dashboard (dev only — insecure mode, no auth)
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+
+      # Docker provider — only services with explicit Traefik labels are exposed
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network=traefik-net"
+
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/rawdata"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+networks:
+  traefik-net:
+    name: traefik-net
+    driver: bridge

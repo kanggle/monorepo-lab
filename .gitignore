@@ -26,6 +26,9 @@ dist/
 Thumbs.db
 Desktop.ini
 
+# Per-developer dev overlays (TASK-MONO-022, see docs/guides/dev-tooling.md)
+**/docker-compose.dev.yml
+
 # Claude Code local settings
 .claude/settings.local.json
 .claude/worktrees/
