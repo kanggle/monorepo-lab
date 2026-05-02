@@ -233,6 +233,8 @@ B2B 소비자가 사용자 디렉터리를 GAP에 동기화할 때:
 
 ## 6. Consequences (옵션별 후속 태스크)
 
+> D4-c 결정의 산출물로 [specs/features/consumer-integration-guide.md](../../specs/features/consumer-integration-guide.md) 가 신규 소비 서비스의 단일 진입 가이드를 제공한다 (TASK-BE-254). 이후 OIDC contract 변경 시 본 ADR과 함께 가이드도 동기 갱신한다.
+
 ### Option A 선택 시 (실제 발행된 태스크)
 
 | 우선순위 | 태스크 ID | 제목 | 의존성 |

@@ -4,6 +4,11 @@ Enterprise tenants (e.g. `wms`) manage their users through this internal provisi
 WMS backends call account-service directly over an internal network path; the gateway does not
 expose `/internal/**` to the public internet.
 
+> Onboarding a new B2B consumer? Start with the single-entry
+> [consumer-integration-guide.md](../../../features/consumer-integration-guide.md). This contract
+> is the source-of-truth for the provisioning endpoints; the guide sequences them with tenant
+> registration, OAuth client issuance, JWKS setup, and event subscription.
+
 **Path prefix**: `/internal/tenants/{tenantId}/accounts`
 **Authentication**: `X-Internal-Token` header (service-to-service token) or mTLS
 **Authorization**: Path `{tenantId}` must match the caller's JWT `tenant_id` claim,
