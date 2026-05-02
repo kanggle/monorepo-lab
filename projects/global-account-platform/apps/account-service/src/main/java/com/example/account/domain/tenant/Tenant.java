@@ -52,4 +52,50 @@ public class Tenant {
     public boolean isActive() {
         return TenantStatus.ACTIVE == this.status;
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-250: mutation support (admin-service PATCH via internal API)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Factory for creating a brand-new tenant (initial status always ACTIVE).
+     */
+    public static Tenant create(TenantId tenantId, String displayName,
+                                TenantType tenantType, java.time.Instant now) {
+        Tenant tenant = new Tenant();
+        tenant.tenantId = tenantId;
+        tenant.displayName = displayName;
+        tenant.tenantType = tenantType;
+        tenant.status = TenantStatus.ACTIVE;
+        tenant.createdAt = now;
+        tenant.updatedAt = now;
+        return tenant;
+    }
+
+    /**
+     * Updates displayName. Caller is responsible for calling {@link Tenant#reconstitute}
+     * first (i.e. always load from DB before mutating).
+     */
+    public void updateDisplayName(String newDisplayName, java.time.Instant now) {
+        if (newDisplayName == null || newDisplayName.isBlank()) {
+            throw new IllegalArgumentException("displayName must not be blank");
+        }
+        this.displayName = newDisplayName.trim();
+        this.updatedAt = now;
+    }
+
+    /**
+     * Updates status. Validates the ACTIVE ↔ SUSPENDED transition matrix.
+     * Same-status update is a no-op (returns {@code false} to indicate no change).
+     *
+     * @return {@code true} if the status actually changed, {@code false} if it was a no-op.
+     */
+    public boolean updateStatus(TenantStatus newStatus, java.time.Instant now) {
+        if (this.status == newStatus) {
+            return false; // no-op
+        }
+        this.status = newStatus;
+        this.updatedAt = now;
+        return true;
+    }
 }

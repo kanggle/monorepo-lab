@@ -73,6 +73,11 @@ public class AdminActionAuditor {
         map.put(ActionCode.OPERATOR_CREATE, "OPERATOR");
         map.put(ActionCode.OPERATOR_ROLE_CHANGE, "OPERATOR");
         map.put(ActionCode.OPERATOR_STATUS_CHANGE, "OPERATOR");
+        // TASK-BE-250 — tenant lifecycle management
+        map.put(ActionCode.TENANT_CREATE, "TENANT");
+        map.put(ActionCode.TENANT_SUSPEND, "TENANT");
+        map.put(ActionCode.TENANT_REACTIVATE, "TENANT");
+        map.put(ActionCode.TENANT_UPDATE, "TENANT");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -489,6 +494,8 @@ public class AdminActionAuditor {
             case DATA_EXPORT -> Permission.AUDIT_READ;
             // TASK-BE-083 — all operator management mutations gate on the same permission key.
             case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE -> Permission.OPERATOR_MANAGE;
+            // TASK-BE-250 — tenant lifecycle management
+            case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
         };
     }
 

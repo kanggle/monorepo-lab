@@ -5,6 +5,7 @@ import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.RateLimitedException;
+import com.example.account.application.exception.TenantAlreadyExistsException;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
@@ -80,6 +81,14 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ErrorResponse.of("AUTH_SERVICE_UNAVAILABLE",
                         "Authentication service is temporarily unavailable"));
+    }
+
+    // TASK-BE-250: tenant lifecycle — duplicate tenantId
+    @ExceptionHandler(TenantAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleTenantAlreadyExists(TenantAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_ALREADY_EXISTS",
+                        "Tenant already exists: " + e.getTenantId()));
     }
 
     // TASK-BE-231: provisioning API tenant-related exceptions

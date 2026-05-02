@@ -162,6 +162,10 @@ public class RequiresPermissionAspect {
             if ("patchStatus".equals(name)) return ActionCode.OPERATOR_STATUS_CHANGE;
             // listOperators / currentOperator are reads; fall through to null
         }
+        if ("TenantAdminController".equals(simple)) {
+            if ("createTenant".equals(name)) return ActionCode.TENANT_CREATE;
+            if ("updateTenant".equals(name)) return ActionCode.TENANT_UPDATE;
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;

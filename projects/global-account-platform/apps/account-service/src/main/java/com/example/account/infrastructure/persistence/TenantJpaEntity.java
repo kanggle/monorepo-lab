@@ -49,6 +49,18 @@ public class TenantJpaEntity {
         return entity;
     }
 
+    /** Mutate displayName (TASK-BE-250 admin PATCH support). */
+    public void updateDisplayName(String newDisplayName, java.time.Instant now) {
+        this.displayName = newDisplayName;
+        this.updatedAt = now;
+    }
+
+    /** Mutate status (TASK-BE-250 admin PATCH support). */
+    public void updateStatus(TenantStatus newStatus, java.time.Instant now) {
+        this.status = newStatus;
+        this.updatedAt = now;
+    }
+
     public Tenant toDomain() {
         return Tenant.reconstitute(
                 new TenantId(tenantId),
