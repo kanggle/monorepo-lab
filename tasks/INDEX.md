@@ -90,7 +90,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty — TASK-MONO-019 implementation complete and moved to review on 2026-05-02)
+- `TASK-MONO-022-traefik-hostname-routing-migration.md` — Traefik 기반 호스트명 라우팅 마이그레이션 ([ADR-MONO-001](../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C 의 후속). 기존 3개 프로젝트 docker-compose 의 `${PORT_PREFIX}XXXX:YYYY` 패턴을 `expose:` + Traefik 라벨로 전환, `infra/traefik/` 신설, dev-tooling 가이드 + setup script 추가.
+- `TASK-MONO-023-main-baseline-integration-cleanup.md` — main 의 GAP integration / E2E (gateway-master) / Frontend E2E full-stack 잡의 누적 회귀 청소. 실패 분류 → fix 또는 sub-task 분할 → CI 게이팅 정책 결정. PR #107 grinding 중 발견된 사실: doc-only PR 도 이 잡들이 fail 처리되어 main 자체 회귀임을 확인.
 
 ## in-progress
 
