@@ -2,6 +2,7 @@ package com.wms.outbound.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.wms.outbound.config.security.TenantClaimValidator;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,8 +16,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
@@ -84,11 +89,51 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .authenticationEntryPoint((request, response, authException) ->
-                                writeError(response, objectMapper, HttpServletResponse.SC_UNAUTHORIZED,
-                                        "UNAUTHORIZED", "Authentication required"))
+                        .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
                         .accessDeniedHandler(forbiddenHandler(objectMapper)));
         return http.build();
+    }
+
+    /**
+     * TASK-MONO-019: distinguishes cross-tenant token misuse (403
+     * {@code TENANT_FORBIDDEN}) from generic authentication failures.
+     */
+    private AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
+        return (request, response, authException) -> {
+            OAuth2Error oauthError = extractOAuth2Error(authException);
+            if (oauthError != null
+                    && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(oauthError.getErrorCode())) {
+                String message = oauthError.getDescription() != null
+                        ? oauthError.getDescription()
+                        : "Cross-tenant access denied";
+                writeError(response, objectMapper, HttpServletResponse.SC_FORBIDDEN,
+                        "TENANT_FORBIDDEN", message);
+                return;
+            }
+            writeError(response, objectMapper, HttpServletResponse.SC_UNAUTHORIZED,
+                    "UNAUTHORIZED", "Authentication required");
+        };
+    }
+
+    private static OAuth2Error extractOAuth2Error(Throwable t) {
+        Throwable cur = t;
+        OAuth2Error fallback = null;
+        while (cur != null) {
+            if (cur instanceof JwtValidationException jve) {
+                for (OAuth2Error err : jve.getErrors()) {
+                    if (err != null && err.getErrorCode() != null
+                            && !"invalid_token".equals(err.getErrorCode())) {
+                        return err;
+                    }
+                }
+            }
+            if (cur instanceof InvalidBearerTokenException ibte) {
+                OAuth2Error err = ibte.getError();
+                if (err != null) fallback = err;
+            }
+            cur = cur.getCause();
+        }
+        return fallback;
     }
 
     static JwtAuthenticationConverter jwtAuthenticationConverter() {

@@ -37,7 +37,19 @@ import okhttp3.mockwebserver.RecordedRequest;
 public final class JwtTestHelper implements AutoCloseable {
 
     private static final String KEY_ID = "master-test-key";
-    private static final String ISSUER = "master-service-integration-test";
+    /**
+     * Default issuer: matches the legacy {@code POST /api/auth/login}
+     * issuer ({@code "global-account-platform"}) — kept on the
+     * {@code AllowedIssuersValidator} allowlist while D2-b deprecation
+     * is in flight (TASK-MONO-019).
+     */
+    public static final String LEGACY_ISSUER = "global-account-platform";
+    /**
+     * Issuer that matches the SAS-issued tokens (the OIDC issuer URL).
+     * Tests that need to exercise the standard path use {@link #issueSasToken}.
+     */
+    public static final String SAS_ISSUER = "http://localhost:8081";
+    public static final String DEFAULT_TENANT_ID = "wms";
 
     private final MockWebServer jwksServer;
     private final RSAPrivateKey privateKey;
@@ -91,14 +103,39 @@ public final class JwtTestHelper implements AutoCloseable {
     }
 
     public String issueToken(String subject, List<String> roles, Duration ttl) {
+        return issueToken(subject, roles, ttl, LEGACY_ISSUER, DEFAULT_TENANT_ID);
+    }
+
+    /**
+     * Issues a token signed by the SAS-style issuer URL. Used by
+     * OidcAuthIntegrationTest to verify the standard path.
+     */
+    public String issueSasToken(String subject, List<String> roles) {
+        return issueToken(subject, roles, Duration.ofHours(1), SAS_ISSUER, DEFAULT_TENANT_ID);
+    }
+
+    /**
+     * Issues a token whose {@code tenant_id} claim is something other than
+     * {@code wms}. Used by OidcAuthIntegrationTest to verify cross-tenant
+     * tokens are rejected with 403 TENANT_FORBIDDEN.
+     */
+    public String issueTokenWithTenant(String subject, List<String> roles, String tenantId) {
+        return issueToken(subject, roles, Duration.ofHours(1), LEGACY_ISSUER, tenantId);
+    }
+
+    public String issueToken(String subject, List<String> roles, Duration ttl,
+                             String issuer, String tenantId) {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer(ISSUER)
+                .issuer(issuer)
                 .jwtID(UUID.randomUUID().toString())
                 .issueTime(Date.from(now))
                 .notBeforeTime(Date.from(now.minusSeconds(5)))
                 .expirationTime(Date.from(now.plus(ttl)));
+        if (tenantId != null) {
+            claims.claim("tenant_id", tenantId);
+        }
         if (roles == null || roles.isEmpty()) {
             // no role claim
         } else if (roles.size() == 1) {

@@ -101,6 +101,11 @@ public abstract class MasterServiceIntegrationBase {
                     "spring.data.redis.host=" + REDIS.getHost(),
                     "spring.data.redis.port=" + REDIS.getFirstMappedPort(),
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=" + JWT.jwkSetUri(),
+                    // TASK-MONO-019: integration suite issues legacy + SAS issuers
+                    // and the wms tenant by default; cross-tenant case overrides.
+                    "wms.oauth2.allowed-issuers=" + JwtTestHelper.LEGACY_ISSUER + ","
+                            + JwtTestHelper.SAS_ISSUER,
+                    "wms.oauth2.required-tenant-id=wms",
                     // Speed up the polling scheduler in tests
                     "outbox.polling.interval-ms=300",
                     "outbox.polling.batch-size=100",

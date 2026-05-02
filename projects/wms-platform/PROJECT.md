@@ -46,6 +46,10 @@ Bounded context는 [../../rules/domains/wms.md](../../rules/domains/wms.md)의 �
 
 상세 아키텍처는 각 서비스의 `specs/services/<service>/architecture.md`에서 선언���다.
 
+## GAP IdP Integration
+
+`wms-platform` 은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 wms 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=wms` claim 만 통과시킨다. 통합 상세는 [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+
 ## Out of Scope (의도적 제외)
 
 명시적으로 선언하지 않은 분류:

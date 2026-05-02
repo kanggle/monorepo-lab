@@ -28,6 +28,18 @@ import java.util.UUID;
  */
 public final class JwtTestHelper {
 
+    /**
+     * Default issuer matches the legacy {@code POST /api/auth/login} issuer
+     * ({@code "global-account-platform"}) — kept on the
+     * {@link com.wms.gateway.security.AllowedIssuersValidator} allowlist while
+     * D2-b deprecation is in flight (TASK-MONO-019).
+     */
+    public static final String LEGACY_ISSUER = "global-account-platform";
+    /** Issuer URL used by SAS-issued tokens (TASK-MONO-019). */
+    public static final String SAS_ISSUER = "http://localhost:8081";
+    /** Required tenant for the WMS gateway (TASK-MONO-019). */
+    public static final String DEFAULT_TENANT_ID = "wms";
+
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
 
@@ -66,7 +78,8 @@ public final class JwtTestHelper {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer("https://test.local/issuer")
+                .issuer(LEGACY_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());
@@ -95,7 +108,8 @@ public final class JwtTestHelper {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer("https://test.local/issuer")
+                .issuer(LEGACY_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
