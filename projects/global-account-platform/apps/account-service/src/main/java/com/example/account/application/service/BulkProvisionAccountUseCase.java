@@ -74,7 +74,7 @@ public class BulkProvisionAccountUseCase {
      * @throws TenantNotFoundException    if the tenant does not exist
      * @throws TenantSuspendedException   if the tenant is SUSPENDED
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public BulkProvisionAccountResult execute(BulkProvisionAccountCommand command) {
         List<BulkProvisionAccountCommand.Item> items =
                 command.items() != null ? command.items() : List.of();
@@ -131,7 +131,7 @@ public class BulkProvisionAccountUseCase {
                 tenantId,                                     // accountId field reused for bulk-level record
                 AccountStatus.ACTIVE,
                 AccountStatus.ACTIVE,
-                StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE,
+                StatusChangeReason.OPERATOR_PROVISIONING_CREATE,
                 "provisioning_system",
                 actorId,
                 "action=ACCOUNT_BULK_CREATE,targetCount=" + createdCount

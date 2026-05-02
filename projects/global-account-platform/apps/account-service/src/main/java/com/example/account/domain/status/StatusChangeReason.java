@@ -15,5 +15,7 @@ public enum StatusChangeReason {
     // TASK-BE-231: internal provisioning reasons (operator-initiated via WMS / enterprise tenant)
     OPERATOR_PROVISIONING_STATUS_CHANGE,
     OPERATOR_PROVISIONING_ROLES_REPLACE,
-    OPERATOR_PROVISIONING_PASSWORD_RESET
+    OPERATOR_PROVISIONING_PASSWORD_RESET,
+    // TASK-BE-271: bulk provisioning create (account-internal-provisioning.md §Audit Action Codes)
+    OPERATOR_PROVISIONING_CREATE
 }

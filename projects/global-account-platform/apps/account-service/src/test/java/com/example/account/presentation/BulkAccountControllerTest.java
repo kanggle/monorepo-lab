@@ -271,4 +271,21 @@ class BulkAccountControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BULK_LIMIT_EXCEEDED"));
     }
+
+    @Test
+    @DisplayName("1001건 items → Bean Validation 위반이 BULK_LIMIT_EXCEEDED 로 라우팅 — TASK-BE-271")
+    void bulkCreate_1001ItemsBeanValidation_returnsBulkLimitExceeded() throws Exception {
+        StringBuilder items = new StringBuilder();
+        for (int i = 0; i < 1001; i++) {
+            if (i > 0) items.append(",");
+            items.append("{\"email\":\"user").append(i).append("@example.com\"}");
+        }
+
+        mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", TENANT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"items\": [" + items + "] }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BULK_LIMIT_EXCEEDED"));
+    }
 }

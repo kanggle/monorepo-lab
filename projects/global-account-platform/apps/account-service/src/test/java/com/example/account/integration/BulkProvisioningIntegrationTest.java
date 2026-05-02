@@ -197,7 +197,7 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
     // ── 1001건 → 400 ──────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("1001건 요청 → Bean Validation @Size(max=1000) → 400 VALIDATION_ERROR")
+    @DisplayName("1001건 요청 → 400 BULK_LIMIT_EXCEEDED — TASK-BE-271 (contract 정합)")
     void bulkCreate_1001Items_returns400() throws Exception {
         StringBuilder items = new StringBuilder();
         for (int i = 0; i < 1001; i++) {
@@ -211,7 +211,7 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"items\": [" + items + "] }"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.code").value("BULK_LIMIT_EXCEEDED"));
     }
 
     // ── 빈 배열 ───────────────────────────────────────────────────────────────
