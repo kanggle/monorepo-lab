@@ -68,7 +68,7 @@ public class CreateOperatorUseCase {
         }
 
         // TASK-BE-262: use per-tenant check matching the (tenant_id, email) composite unique index
-        // introduced by V0023. Same email in a different tenant is a separate, valid operator.
+        // introduced by V0025. Same email in a different tenant is a separate, valid operator.
         String normalizedEmail = email == null ? null : email.trim().toLowerCase();
         if (normalizedEmail != null && operatorRepository.existsByTenantIdAndEmail(tenantId, normalizedEmail)) {
             throw new OperatorEmailConflictException("Operator email already exists");

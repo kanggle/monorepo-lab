@@ -17,7 +17,7 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
 
     /**
      * Per-tenant email uniqueness check. Replaces the legacy single-column
-     * {@link #existsByEmail(String)} after V0023 changed the unique index to
+     * {@link #existsByEmail(String)} after V0025 changed the unique index to
      * {@code (tenant_id, email)}.
      *
      * @param tenantId the tenant scope to check within
@@ -29,7 +29,7 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
      * @deprecated Use {@link #existsByTenantIdAndEmail(String, String)} instead.
      *             This method performs a global email check across all tenants,
      *             which contradicts the per-tenant unique constraint introduced
-     *             by V0023. Kept only until all callers are migrated.
+     *             by V0025. Kept only until all callers are migrated.
      */
     @Deprecated
     boolean existsByEmail(String email);

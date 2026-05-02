@@ -75,11 +75,11 @@ public class AdminActionJpaEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    // TASK-BE-249: tenant_id = the acting operator's tenantId (NOT NULL, backfilled by V0023).
+    // TASK-BE-249: tenant_id = the acting operator's tenantId (NOT NULL, backfilled by V0025).
     // target_tenant_id = the tenant being acted upon. Differs from tenant_id when SUPER_ADMIN
     // performs a cross-tenant action (e.g. lock account in tenantA →
     //   tenant_id='*', target_tenant_id='tenantA').
-    // target_tenant_id stays NULL-allowed: legacy rows have it set equal to tenant_id by V0023,
+    // target_tenant_id stays NULL-allowed: legacy rows have it set equal to tenant_id by V0025,
     // and cross-tenant-aware callers set it explicitly.
     @Column(name = "tenant_id", length = 32, nullable = false)
     private String tenantId;

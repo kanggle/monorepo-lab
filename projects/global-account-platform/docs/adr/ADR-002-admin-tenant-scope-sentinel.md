@@ -48,7 +48,7 @@ INSERT INTO admin_operators (..., tenant_id, ...) VALUES (..., '*', ...);
 | Null tenant_id for SUPER_ADMIN | NULL은 "미설정" 의미. NOT NULL 제약으로 null 불가 + null 처리 버그 위험. |
 | 권한(permission)만으로 크로스 테넌트 허용 | 권한 평가가 단일 체크로 확장되지 않음. 데이터 행 자체에 scope를 박아야 감사 조회 라우팅 가능. |
 
-### DB 스키마 변경 (Flyway V0023)
+### DB 스키마 변경 (Flyway V0025)
 
 3개 테이블에 `tenant_id` 컬럼 추가:
 
@@ -134,6 +134,6 @@ tenantId 파라미터 | 운영자 유형        | Repository 메서드
 - `TASK-BE-249` — 구현 작업 (tasks/review/)
 - `specs/services/admin-service/architecture.md` §Tenant Scope Enforcement
 - `specs/contracts/http/admin-api.md` §GET /api/admin/audit, §POST /api/admin/operators
-- `db/migration/V0023__add_tenant_id_to_admin_tables.sql`
+- `db/migration/V0025__add_tenant_id_to_admin_tables.sql`
 - `domain/rbac/AdminOperator.java` — `PLATFORM_TENANT_ID` constant, `isPlatformScope()`
 - `domain/rbac/PermissionEvaluator.java` — `isTenantAllowed()` default method
