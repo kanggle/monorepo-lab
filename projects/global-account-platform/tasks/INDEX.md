@@ -72,13 +72,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 (post 258 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 (post 270 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
-- `TASK-BE-270-fix-TASK-BE-258.md` — TASK-BE-258 follow-up: add salt to device_fingerprint masking SQL + create data-model.md
 
 Recommended order:
-- 270: security fix (device_fingerprint salt + data-model spec) — implement before 257.
 - 257: 250 done 진입함, 즉시 시작 가능.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
@@ -89,7 +87,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-(empty)
+258 review follow-up (2026-05-02, awaiting review approval):
+
+- `TASK-BE-270-fix-TASK-BE-258.md` — `device_fingerprint` masking SQL 에 application 수준 salt 추가 (`SHA2(CONCAT(accountId, salt), 256)`) + fail-fast salt 검증 + security-service `data-model.md` 신규 (6 tables 명시)
 
 ## done
 
