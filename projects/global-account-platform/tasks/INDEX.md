@@ -72,16 +72,18 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 (post 253 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 + 253 review fix (post 253 review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
 - `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
+- `TASK-BE-269-fix-TASK-BE-253.md` — community-service `OAuth2WebClient` connect/read timeout 회귀 fix (TASK-BE-253 review Critical 1: `@Value` 필드만 정의되고 적용 안 됨, contract 의 caller constraint 2s/3s 위반)
 
 Recommended order:
+- 269: 1 line fix + bean 변경. 빠른 처리.
 - 258: ADR 과 독립, 즉시 시작 가능 (255 가 머지된 `account-events.md` v3 위에서 작업).
-- 257: 250 (admin tenant lifecycle API) 가 done 진입한 후 stable.
+- 257: 250 (admin tenant lifecycle API) 가 done 진입한 후 stable. 250 이 이미 done 상태라 진행 가능.
 
-Cross-project (root `tasks/review/`): TASK-MONO-019 is awaiting review.
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## in-progress
 
@@ -91,17 +93,19 @@ Cross-project (root `tasks/review/`): TASK-MONO-019 is awaiting review.
 
 OAuth2 Resource Server 마이그레이션 (2026-05-02, awaiting review approval):
 
-- `TASK-BE-253-community-membership-oidc-integration.md` — community/membership-service 가 standard OAuth2 Resource Server 로 GAP JWKS URI 기반 token 검증. service-to-service `client_credentials` 도입. V0009 seed (community/membership client + scopes).
+(empty — TASK-BE-253 reviewed and moved to done on 2026-05-02)
 
 ## done
 
-259 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+260 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
-TASK-BE-251 (Spring Authorization Server), TASK-BE-252 (OAuth schema),
-TASK-BE-256 (tenant onboarding API contract), and follow-ups 260/261/262.
+TASK-BE-250 (admin tenant lifecycle API), TASK-BE-251 (Spring Authorization Server),
+TASK-BE-252 (OAuth schema), TASK-BE-256 (tenant onboarding API contract), and
+follow-ups 260/261/262/268.
 Newly reviewed (2026-05-02): TASK-BE-254 (consumer integration guide,
 FIX_NEEDED → 263), TASK-BE-255 (account_roles schema, FIX_NEEDED → 265),
 TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
 (auth-api.md discovery, APPROVED), TASK-BE-265 (255 review fix, FIX_NEEDED → 267),
-TASK-BE-267 (267 review, APPROVED).
+TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
+FIX_NEEDED → 269).
 Numbers TASK-BE-238/239/240/244 were not assigned.
