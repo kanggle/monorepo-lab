@@ -1,10 +1,18 @@
 # ADR-MONO-001 — PORT_PREFIX 슬롯 부족과 7개+ 프로젝트 동시 운영 정책
 
-**Status:** PROPOSED
-**Date:** 2026-05-02
-**Decision driver:** fan-community + scm + erp + mes 프로젝트 추가 예정 → 현행 PORT_PREFIX 정책의 사용 가능 슬롯이 부족함
+**Status:** ACCEPTED
+**Date:** 2026-05-02 (PROPOSED 2026-05-02, ACCEPTED 2026-05-02)
+**Decision driver:** fan-platform + scm + erp + mes 프로젝트 추가 예정 → 현행 PORT_PREFIX 정책의 사용 가능 슬롯이 부족함
 **Supersedes:** none (PORT_PREFIX 의 첫 monorepo-level ADR)
-**Related:** [CLAUDE.md § Port Namespace Convention](../../CLAUDE.md), [TEMPLATE.md § Port Namespace Convention](../../TEMPLATE.md)
+**Related:** [CLAUDE.md § Local Network Convention](../../CLAUDE.md), [TEMPLATE.md § Local Network Convention](../../TEMPLATE.md)
+
+**Accepted Decisions:**
+- **D1 = C** — 내부 네트워크 + Traefik reverse proxy (production-mirror)
+- **D2** — N/A (Option C 채택으로 페어드 공유 무관)
+- **D3** — N/A (PORT_PREFIX 자체가 폐지됨; 신규 프로젝트는 hostname 등록만 수행)
+- **D4 = ACCEPTED** — Follow-up 태스크 TASK-MONO-022 발행 (7개 프로젝트 docker-compose 일괄 마이그레이션 + Traefik 설정 + DNS 가이드)
+
+**Migration window**: 기존 프로젝트 (ecommerce/wms/GAP) 는 TASK-MONO-022 머지 시점까지 PORT_PREFIX (1·2·3) 유지. 신규 프로젝트 (fan-platform·scm·erp·mes) 는 부트스트랩 시점부터 hostname routing 채택.
 
 ---
 
@@ -271,3 +279,4 @@ gateway:
 | Date | Status | Note |
 |---|---|---|
 | 2026-05-02 | PROPOSED | 초안 작성. D1–D4 사용자 확인 대기. |
+| 2026-05-02 | ACCEPTED | D1=C 확정 (production-mirror Traefik 모델). D2/D3 = N/A. TASK-MONO-022 발행 예정. CLAUDE.md / TEMPLATE.md 동시 갱신. 사용자 결정 근거: 호스트 포트 슬롯 한계의 영구 해소 + production 패턴과의 정합 + 채용 시그널. |

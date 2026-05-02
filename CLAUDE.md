@@ -249,18 +249,42 @@ See `docs/guides/` for the full commit-message convention and cross-project work
 
 ---
 
-# Port Namespace Convention
+# Local Network Convention
 
-When adding or modifying `docker-compose.yml` host ports across projects, apply the `PORT_PREFIX` convention to prevent collisions when multiple projects run simultaneously on one machine.
+When adding or modifying `docker-compose.yml` host port bindings across projects, follow the **hostname-based routing** convention. This allows arbitrarily many projects to run concurrently on one machine without host-port slot exhaustion. See [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) for the rationale.
 
-Pattern: `${PORT_PREFIX:-N}XXXX:YYYY` where `N` is the project's assigned prefix digit.
+## Target pattern (after TASK-MONO-022 migration)
 
-| Prefix | Project |
-|---|---|
-| 1 | ecommerce-microservices-platform |
-| 2 | wms-platform |
-| 3 | reserved — global-account-platform |
+A single shared Traefik reverse proxy occupies host ports `:80` and `:443`. Every project's gateway/frontend registers a hostname with Traefik via docker-compose labels:
 
-5-digit source ports (e.g., `16686`) cannot use this pattern — keep them as-is or use a per-service variable.
+```yaml
+gateway:
+  expose: ["8080"]                              # internal-only, no host port
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.<project>.rule=Host(`<project>.local`)"
+    - "traefik.http.services.<project>.loadbalancer.server.port=8080"
+```
 
-Full convention and verification commands: `TEMPLATE.md` § "Port Namespace Convention (PORT_PREFIX)".
+Backing services (postgres, redis, kafka, etc.) use `expose:` without `ports:` — they are reachable only via the docker network. Developers access projects via hostname:
+
+```
+http://ecommerce.local/    → ecommerce gateway
+http://wms.local/          → wms gateway
+http://gap.local/          → global-account-platform gateway
+```
+
+`*.local` hostnames map to `127.0.0.1` via the developer's hosts file or dnsmasq (one-time machine setup).
+
+## Transitional state (until TASK-MONO-022 lands)
+
+Existing projects (ecommerce, wms, global-account-platform) continue using the legacy `PORT_PREFIX` digit (1, 2, 3 respectively) until TASK-MONO-022 migrates them. Newly bootstrapped projects (fan-platform, scm, erp, mes, …) adopt the hostname convention from day one — no `PORT_PREFIX` assignment needed.
+
+## Database tools (DBeaver, Redis Insight, Kafka UI)
+
+Direct DB access from external tools requires one of:
+1. `docker exec` into the container, OR
+2. A `docker-compose.dev.yml` overlay that adds `ports:` for the developer's machine only, OR
+3. Traefik TCP routing labels exposing specific DB ports under unique hostnames.
+
+Full specification and migration steps: `TEMPLATE.md` § "Local Network Convention".
