@@ -72,13 +72,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-GAP IdP 승급 잔여 (post 269 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
+GAP IdP 승급 잔여 (post 258 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
-- `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
 
 Recommended order:
-- 258: ADR 과 독립, 즉시 시작 가능 (255 가 머지된 `account-events.md` v3 위에서 작업).
 - 257: 250 done 진입함, 즉시 시작 가능.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
@@ -89,7 +87,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-(empty — TASK-BE-269 reviewed and moved to done on 2026-05-02)
+GDPR downstream contract (2026-05-02, awaiting review approval):
+
+- `TASK-BE-258-gdpr-deletion-downstream-contract.md` — `account.deleted(anonymized=true)` Consumer Obligations 표 (4 GAP 내부 + external) + `security.pii.masked` 신규 이벤트 + security-service reference impl (PiiMaskingService, AccountDeletedAnonymizedConsumer, V0009 멱등성 로그)
 
 ## done
 
