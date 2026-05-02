@@ -82,6 +82,7 @@ The AI treats specs as the source of truth. If specs are missing or conflicting,
 - Java 21 (Temurin recommended)
 - Docker (for Postgres/Kafka/Redis via Testcontainers and local `docker-compose`)
 - Gradle 8.14+ (wrapper included — no global install needed)
+- Node.js 20+ and pnpm (for monorepo root scripts and frontend projects)
 
 ### Clone and verify the build tree
 
@@ -92,6 +93,24 @@ cd monorepo-lab
 ./gradlew build             # build everything
 ```
 
+### One-time local dev environment setup
+
+The monorepo uses **hostname-based routing** via a shared Traefik reverse proxy ([ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md)). One-time setup:
+
+```bash
+# 1. Register *.local hostnames in your hosts file
+bash scripts/dev-setup.sh                        # Linux / macOS (uses sudo)
+# or:
+.\scripts\dev-setup.ps1                          # Windows (Run as Administrator)
+
+# 2. Start the shared Traefik proxy
+pnpm traefik:up
+```
+
+After this, projects expose themselves on hostnames like `http://wms.local/` and `http://gap.local/` instead of `localhost:<port>`. See [infra/traefik/README.md](infra/traefik/README.md) for details.
+
+> **Note**: Existing projects (ecommerce / wms / GAP) currently still use the legacy `PORT_PREFIX` scheme until [TASK-MONO-024](tasks/ready/TASK-MONO-024-existing-projects-traefik-migration.md) migrates them. Newly bootstrapped projects adopt the hostname pattern from day one.
+
 ### Work on a specific project
 
 ```bash
@@ -101,6 +120,10 @@ cd projects/wms-platform
 ```
 
 Each project's `README.md` (e.g., [projects/wms-platform/README.md](projects/wms-platform/README.md)) contains project-specific quickstart, architecture diagrams, and service lists.
+
+### Direct DB / queue tool access (DBeaver, Redis Insight, Kafka UI)
+
+Backing services intentionally don't publish host ports (production parity). See [docs/guides/dev-tooling.md](docs/guides/dev-tooling.md) for three approaches: `docker exec`, per-developer overlay, or Traefik TCP routing.
 
 ---
 
