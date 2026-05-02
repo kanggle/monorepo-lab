@@ -75,8 +75,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 GAP IdP 승급 잔여 (post 258 → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
+- `TASK-BE-270-fix-TASK-BE-258.md` — TASK-BE-258 follow-up: add salt to device_fingerprint masking SQL + create data-model.md
 
 Recommended order:
+- 270: security fix (device_fingerprint salt + data-model spec) — implement before 257.
 - 257: 250 done 진입함, 즉시 시작 가능.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
@@ -87,9 +89,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-GDPR downstream contract (2026-05-02, awaiting review approval):
-
-- `TASK-BE-258-gdpr-deletion-downstream-contract.md` — `account.deleted(anonymized=true)` Consumer Obligations 표 (4 GAP 내부 + external) + `security.pii.masked` 신규 이벤트 + security-service reference impl (PiiMaskingService, AccountDeletedAnonymizedConsumer, V0009 멱등성 로그)
+(empty)
 
 ## done
 
@@ -103,5 +103,6 @@ FIX_NEEDED → 263), TASK-BE-255 (account_roles schema, FIX_NEEDED → 265),
 TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
 (auth-api.md discovery, APPROVED), TASK-BE-265 (255 review fix, FIX_NEEDED → 267),
 TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
-FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED).
+FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED),
+TASK-BE-258 (GDPR downstream contract + security ref impl, FIX_NEEDED → 270).
 Numbers TASK-BE-238/239/240/244 were not assigned.
