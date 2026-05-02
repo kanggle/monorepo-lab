@@ -80,12 +80,23 @@ GDPR/PIPA 컴플라이언스를 위한 데이터 권리 기능. 삭제권(Right 
 
 ---
 
+## Downstream PII Masking Obligations (TASK-BE-258)
+
+account-service의 PII 마스킹은 계정 row에 한정된다. `account.deleted(anonymized=true)` 이벤트를 수신한 **다운스트림 서비스**도 각자 보유한 PII를 마스킹할 의무가 있다.
+
+소비자별 의무와 SLA는 [account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258) 참조.
+
+security-service의 reference 구현: `account.deleted(anonymized=true)` 수신 → `login_history`, `suspicious_events`, `account_lock_history` PII 마스킹 → `security.pii.masked` audit 이벤트 발행.
+`security.pii.masked` 이벤트 정의: [security-events.md § security.pii.masked](../contracts/events/security-events.md#securitypiimasked-task-be-258).
+
 ## Related Specs
 
 - [specs/services/account-service/architecture.md](../services/account-service/architecture.md)
 - [specs/services/admin-service/architecture.md](../services/admin-service/architecture.md)
 - [specs/contracts/http/admin-api.md](../contracts/http/admin-api.md)
 - [specs/contracts/http/internal/admin-to-account.md](../contracts/http/internal/admin-to-account.md)
+- [specs/contracts/events/account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258)
+- [specs/contracts/events/security-events.md § security.pii.masked](../contracts/events/security-events.md#securitypiimasked-task-be-258)
 
 ## Related Rules
 

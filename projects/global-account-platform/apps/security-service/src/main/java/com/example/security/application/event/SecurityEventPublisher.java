@@ -3,6 +3,7 @@ package com.example.security.application.event;
 import com.example.messaging.event.BaseEventPublisher;
 import com.example.messaging.outbox.OutboxWriter;
 import com.example.security.domain.detection.AccountLockClient;
+import com.example.security.domain.pii.PiiMaskingRecord;
 import com.example.security.domain.suspicious.SuspiciousEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
     public static final String TOPIC_SUSPICIOUS_DETECTED = "security.suspicious.detected";
     public static final String TOPIC_AUTO_LOCK_TRIGGERED = "security.auto.lock.triggered";
     public static final String TOPIC_AUTO_LOCK_PENDING = "security.auto.lock.pending";
+    public static final String TOPIC_PII_MASKED = "security.pii.masked";
 
     private static final String AGGREGATE_TYPE = "security";
     private static final String SOURCE = "security-service";
@@ -108,6 +110,28 @@ public class SecurityEventPublisher extends BaseEventPublisher {
             case ALREADY_LOCKED -> "ALREADY_LOCKED";
             case INVALID_TRANSITION, FAILURE -> "FAILURE";
         };
+    }
+
+    /**
+     * TASK-BE-258: Emits {@code security.pii.masked} as a GDPR compliance audit trail.
+     * Called by {@code PiiMaskingService} within the masking transaction (outbox pattern).
+     *
+     * @param record  the masking result carrying accountId, tenantId, maskedAt, tableNames
+     * @param eventId the originating {@code account.deleted} event ID (used as idempotency
+     *                reference in the outbox; the outbox writer will generate a new UUID for
+     *                the outbox row itself)
+     */
+    public void publishPiiMasked(PiiMaskingRecord record, String eventId) {
+        if (record.tenantId() == null || record.tenantId().isBlank()) {
+            throw new IllegalArgumentException(
+                    "tenantId required for PiiMasked publish (sourceEventId=" + eventId + ")");
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("accountId", record.accountId());
+        payload.put("tenantId", record.tenantId());
+        payload.put("maskedAt", record.maskedAt().toString());
+        payload.put("tableNames", record.tableNames());
+        writeEnvelope(TOPIC_PII_MASKED, record.accountId(), payload);
     }
 
     private void writeEnvelope(String eventType, String partitionKey, Map<String, Object> payload) {
