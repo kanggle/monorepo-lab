@@ -40,6 +40,85 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 | `STATE_TRANSITION_INVALID` | 409 | Requested status transition is not permitted by `AccountStatusMachine` |
 | `VALIDATION_ERROR` | 400 | Request body fails Bean Validation |
 | `UNAUTHORIZED` | 401 | `X-Internal-Token` is missing or invalid |
+| `BULK_LIMIT_EXCEEDED` | 400 | `items` array exceeds the maximum of 1 000 entries (TASK-BE-257) |
+
+---
+
+## POST /internal/tenants/{tenantId}/accounts:bulk
+
+> **TASK-BE-257**: Google AIP-136 verb path. Bulk-create up to 1 000 accounts for a tenant
+> in a single request. Partial-success model — per-row failures do not roll back other rows.
+
+**Path Parameters**:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `tenantId` | string (slug) | Target tenant. Pattern `^[a-z][a-z0-9-]{1,31}$` |
+
+**Request**:
+```json
+{
+  "items": [
+    {
+      "externalId": "erp-user-001",
+      "email": "user@example.com",
+      "phone": "+821012345678",
+      "displayName": "홍길동",
+      "roles": ["WAREHOUSE_ADMIN"],
+      "status": "ACTIVE"
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `items` | array | Yes | 1–1 000 items (`@Size(max=1000)`). Empty array returns 200 with `{requested:0, created:0, failed:0}` |
+| `items[].externalId` | string | No | Caller-side dedup key; no server-side uniqueness constraint |
+| `items[].email` | string | Yes | Valid email format |
+| `items[].phone` | string | No | Free-form phone string |
+| `items[].displayName` | string | No | Max 100 chars |
+| `items[].roles` | string[] | No | Each role matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
+| `items[].status` | string | No | `ACTIVE` (default) or `DORMANT` |
+
+**Response 200 OK** (partial-success):
+```json
+{
+  "created": [
+    { "externalId": "erp-user-001", "accountId": "01923abc-def0-7890-abcd-ef0123456789" }
+  ],
+  "failed": [
+    { "externalId": "erp-user-002", "errorCode": "EMAIL_DUPLICATE", "message": "Email already exists within the tenant" }
+  ],
+  "summary": { "requested": 1000, "created": 950, "failed": 50 }
+}
+```
+
+> Always returns 200 — the HTTP status code indicates the request was processed. Check `summary.failed` for per-row errors.
+
+**Per-row error codes** (returned in `failed[].errorCode`):
+
+| Code | Condition |
+|---|---|
+| `EMAIL_DUPLICATE` | Email already exists within the same tenant (DB uniqueness violation on `(tenant_id, email)`) |
+| `INVALID_ROLE` | A role name fails `^[A-Z][A-Z0-9_]*$` validation |
+| `VALIDATION_ERROR` | Other row-level validation failure |
+
+**Errors** (request-level — fail before per-row processing):
+
+| Code | HTTP | Condition |
+|---|---|---|
+| `BULK_LIMIT_EXCEEDED` | 400 | `items` array has more than 1 000 entries |
+| `TENANT_SCOPE_DENIED` | 403 | Caller's `X-Tenant-Id` does not match path `{tenantId}` |
+| `TENANT_NOT_FOUND` | 404 | `{tenantId}` is not registered |
+| `TENANT_SUSPENDED` | 409 | `{tenantId}` is SUSPENDED |
+| `VALIDATION_ERROR` | 400 | Request body fails top-level Bean Validation |
+
+**Outbox events**: Each successfully created row publishes one `account.created` event. N created rows → N events.
+
+**Audit**: One `account_status_history` row per bulk call with `reason_code=OPERATOR_PROVISIONING_CREATE` and `details=action=ACCOUNT_BULK_CREATE,targetCount={N}`.
+
+> **Admin-service audit obligation**: The `admin_actions` table in admin-service is not written by account-service directly. An `ACCOUNT_BULK_CREATE` action code should be added to admin-service's audit when the admin-service audit emission pattern for provisioning flows is established. As of TASK-BE-257, account-service records the audit in `account_status_history` only. See code TODO comment in `BulkAccountController`.
 
 ---
 
@@ -345,6 +424,7 @@ All mutations record an audit entry in `account_status_history` (or equivalent t
 | Operation | `reason_code` / `action_code` |
 |---|---|
 | Create account | `OPERATOR_PROVISIONING_CREATE` |
+| Bulk create accounts (TASK-BE-257) | `OPERATOR_PROVISIONING_CREATE` (`details=action=ACCOUNT_BULK_CREATE,targetCount={N}`) |
 | Replace roles | `OPERATOR_PROVISIONING_ROLES_REPLACE` |
 | Add a single role (TASK-BE-255) | `OPERATOR_PROVISIONING_ROLES_REPLACE` (`details=action=ROLE_ADD,...`) |
 | Remove a single role (TASK-BE-255) | `OPERATOR_PROVISIONING_ROLES_REPLACE` (`details=action=ROLE_REMOVE,...`) |
@@ -353,6 +433,8 @@ All mutations record an audit entry in `account_status_history` (or equivalent t
 
 Audit entry includes: `actor_type=provisioning_system`, `actor_id={operatorId or tenantId}`, `target_tenant_id`, `target_account_id`, `occurred_at`.
 
+For bulk create: one audit row per call with `target_count=N` (where N = number of successfully created rows). Individual row results are tracked via outbox events.
+
 ---
 
 ## Outbox Events
@@ -360,6 +442,7 @@ Audit entry includes: `actor_type=provisioning_system`, `actor_id={operatorId or
 | Event | Trigger |
 |---|---|
 | `account.created` | POST create — payload includes `tenant_id` |
+| `account.created` (×N) | POST accounts:bulk — N events emitted for N successfully created rows; downstream consumers process each event individually (TASK-BE-257) |
 | `account.status.changed` | PATCH status — payload includes `tenant_id` |
 | `account.roles.changed` | PATCH roles, PATCH roles:add, PATCH roles:remove — payload includes `tenant_id`, `roles`, `before_roles`, `after_roles`, `changed_by` (TASK-BE-255). Add/remove only emit when the role set actually changed (idempotent calls are silent). |
 

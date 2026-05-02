@@ -2,6 +2,7 @@ package com.example.account.presentation.advice;
 
 import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.exception.BulkLimitExceededException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.RateLimitedException;
@@ -81,6 +82,13 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ErrorResponse.of("AUTH_SERVICE_UNAVAILABLE",
                         "Authentication service is temporarily unavailable"));
+    }
+
+    // TASK-BE-257: bulk provisioning — items array over the 1 000 limit
+    @ExceptionHandler(BulkLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleBulkLimitExceeded(BulkLimitExceededException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", e.getMessage()));
     }
 
     // TASK-BE-250: tenant lifecycle — duplicate tenantId

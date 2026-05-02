@@ -23,7 +23,7 @@ admin-service가 발행하는 Kafka 이벤트. 모든 운영자 행위의 감사
 ```json
 {
   "auditId": "string (admin_actions.id)",
-  "actionCode": "ACCOUNT_LOCK | ACCOUNT_UNLOCK | ACCOUNT_DELETE | SESSION_REVOKE | AUDIT_QUERY",
+  "actionCode": "ACCOUNT_LOCK | ACCOUNT_UNLOCK | ACCOUNT_DELETE | SESSION_REVOKE | AUDIT_QUERY | ACCOUNT_BULK_CREATE",
   "actor": {
     "type": "operator",
     "id": "string (operator_id)",
@@ -54,4 +54,5 @@ admin-service가 발행하는 Kafka 이벤트. 모든 운영자 행위의 감사
 - 이 이벤트는 **감사 원장의 비동기 복제본** 역할. admin_actions 테이블이 정본, 이벤트는 외부 전파용
 - PII 포함 금지: `reason`에 이메일/전화 등 기재 금지 (운영자 교육 + 입력 validation)
 - forward-compatible: 새 `actionCode` 추가 시 기존 consumer는 알 수 없는 코드를 로그하고 계속 처리
+- `ACCOUNT_BULK_CREATE` (TASK-BE-257): account-service가 bulk provisioning API 호출 시 발행 예정. 현재는 account-service의 `account_status_history`에만 기록됨. admin-service가 provisioning 감사 emission 패턴을 확립한 후 이 이벤트를 실제 발행한다 (TODO).
 - DLQ: `admin.action.performed.dlq` (외부 SIEM consumer가 실패 시)
