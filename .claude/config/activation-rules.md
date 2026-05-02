@@ -244,7 +244,7 @@ Activate:
 - moderation rules
 - notification fanout rules
 
-→ Detailed rules: *(file to be created when a project declares this domain)*
+→ Detailed rules: [`rules/domains/fan-platform.md`](../../rules/domains/fan-platform.md)
 
 ---
 
