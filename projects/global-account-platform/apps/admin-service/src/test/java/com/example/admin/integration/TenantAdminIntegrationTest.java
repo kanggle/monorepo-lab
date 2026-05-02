@@ -195,6 +195,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
@@ -218,16 +219,17 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Regular operator POST → 403 TENANT_SCOPE_DENIED")
+    @DisplayName("Regular operator POST → 403 PERMISSION_DENIED (lacks tenant.manage; aspect rejects before platform-scope gate)")
     void regularOperator_post_returns_403() throws Exception {
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", regularOpToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
                                 """))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test
@@ -235,6 +237,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
     void superAdmin_post_invalid_slug_returns_400() throws Exception {
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"WMS","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
@@ -248,6 +251,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
     void superAdmin_post_reserved_returns_400() throws Exception {
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"admin","displayName":"Admin Tenant","tenantType":"B2B_ENTERPRISE"}
@@ -267,6 +271,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
@@ -287,6 +292,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
         for (int i = 0; i < 3; i++) {
             mockMvc.perform(post("/api/admin/tenants")
                             .header("Authorization", superAdminToken())
+                            .header("X-Operator-Reason", "cb regression test")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"tenantId\":\"cb-test-" + i + "\","
                                     + "\"displayName\":\"CB Test\","
@@ -313,6 +319,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/api/admin/tenants/wms-test")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"SUSPENDED"}
@@ -347,6 +354,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/api/admin/tenants/wms-test")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"ACTIVE"}
@@ -378,6 +386,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/api/admin/tenants/wms-test")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"displayName":"WMS Platform"}

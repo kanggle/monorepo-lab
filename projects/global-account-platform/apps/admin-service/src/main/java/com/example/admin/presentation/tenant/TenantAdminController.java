@@ -73,7 +73,7 @@ public class TenantAdminController {
     @PostMapping
     @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> createTenant(
-            @RequestHeader(value = "X-Operator-Reason", required = false) String reason,
+            @RequestHeader("X-Operator-Reason") String reason,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateTenantRequest request) {
 
@@ -95,7 +95,7 @@ public class TenantAdminController {
     @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> updateTenant(
             @PathVariable String tenantId,
-            @RequestHeader(value = "X-Operator-Reason", required = false) String reason,
+            @RequestHeader("X-Operator-Reason") String reason,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody UpdateTenantRequest request) {
 

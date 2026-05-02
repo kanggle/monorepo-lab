@@ -152,6 +152,7 @@ class TenantAdminControllerTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "onboard wms tenant")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
@@ -162,13 +163,33 @@ class TenantAdminControllerTest {
     }
 
     @Test
+    void create_tenant_missing_operator_reason_returns_400_reason_required() throws Exception {
+        // X-Operator-Reason is required per admin-api.md §Authentication; missing header
+        // is mapped to 400 REASON_REQUIRED by AdminExceptionHandler.handleMissingHeader.
+        // Aspect passes (operator has tenant.manage) → @RequestHeader binding fires the error.
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+
+        mockMvc.perform(post("/api/admin/tenants")
+                        .header("Authorization", superAdminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REASON_REQUIRED"));
+    }
+
+    @Test
     void create_tenant_regular_operator_returns_403_permission_denied() throws Exception {
-        // Regular operator lacks tenant.manage permission.
-        // RequiresPermissionAspect fires first → PermissionDeniedException → PERMISSION_DENIED.
-        // (TENANT_SCOPE_DENIED would be raised if the operator had tenant.manage but no platform scope.)
+        // Regular operator lacks tenant.manage permission. With X-Operator-Reason supplied,
+        // arg resolution succeeds and the RequiresPermissionAspect fires → PermissionDeniedException
+        // → PERMISSION_DENIED. (Without the header, REASON_REQUIRED would short-circuit at the
+        // arg resolver before the aspect runs — separate test for that path.)
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", regularOpToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
@@ -186,6 +207,7 @@ class TenantAdminControllerTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"WMS","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
@@ -203,6 +225,7 @@ class TenantAdminControllerTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"admin","displayName":"Admin","tenantType":"B2B_ENTERPRISE"}
@@ -220,6 +243,7 @@ class TenantAdminControllerTest {
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tenantId":"wms-test","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
@@ -241,6 +265,7 @@ class TenantAdminControllerTest {
 
         mockMvc.perform(patch("/api/admin/tenants/wms-test")
                         .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "suspend wms tenant")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"SUSPENDED"}
@@ -250,10 +275,27 @@ class TenantAdminControllerTest {
     }
 
     @Test
+    void patch_tenant_missing_operator_reason_returns_400_reason_required() throws Exception {
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+
+        mockMvc.perform(patch("/api/admin/tenants/wms-test")
+                        .header("Authorization", superAdminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"SUSPENDED"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REASON_REQUIRED"));
+    }
+
+    @Test
     void patch_tenant_regular_operator_returns_403_permission_denied() throws Exception {
-        // Regular operator lacks tenant.manage — aspect fires first → PERMISSION_DENIED.
+        // Regular operator lacks tenant.manage — with X-Operator-Reason supplied so arg
+        // resolution passes and the aspect fires → PERMISSION_DENIED.
         mockMvc.perform(patch("/api/admin/tenants/wms-test")
                         .header("Authorization", regularOpToken())
+                        .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"SUSPENDED"}
