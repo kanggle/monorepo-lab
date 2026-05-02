@@ -165,4 +165,58 @@ class ImpossibleTravelRuleTest {
         assertThat(r.riskScore()).isEqualTo(85);
         assertThat(RiskLevel.fromScore(r.riskScore())).isEqualTo(RiskLevel.AUTO_LOCK);
     }
+
+    @Test
+    @DisplayName("Evidence contains tenantId on fire")
+    void evidenceContainsTenantId() {
+        Instant now  = Instant.parse("2026-04-18T10:00:00Z");
+        Instant prev = Instant.parse("2026-04-18T09:30:00Z");
+
+        when(loginHistoryRepository.findLatestSuccessByAccountId(Tenants.DEFAULT_TENANT_ID, "acc-1"))
+                .thenReturn(Optional.of(previousLogin("KR", prev)));
+
+        DetectionResult r = new ImpossibleTravelRule(loginHistoryRepository, thresholds)
+                .evaluate(succeededCtx("US", now));
+
+        assertThat(r.fired()).isTrue();
+        assertThat(r.evidence()).containsKey("tenantId");
+        assertThat(r.evidence().get("tenantId")).isEqualTo(Tenants.DEFAULT_TENANT_ID);
+    }
+
+    // ── TASK-BE-248 Phase 2a: Cross-Tenant Isolation ───────────────────────────
+
+    @Test
+    @DisplayName("[cross-tenant] 테넌트A 이동 기록이 테넌트B 동일 account 탐지에 영향 없음")
+    void crossTenantIsolation_tenantAHistoryDoesNotAffectTenantB() {
+        String tenantA = "tenant-a";
+        String tenantB = "tenant-b";
+        Instant now  = Instant.parse("2026-04-18T10:00:00Z");
+        Instant prev = Instant.parse("2026-04-18T09:30:00Z"); // 30분 전, window 내
+
+        ImpossibleTravelRule rule = new ImpossibleTravelRule(loginHistoryRepository, thresholds);
+
+        // tenantA: KR → US within window → fires
+        EvaluationContext ctxA = new EvaluationContext(tenantA,
+                "evt-a", "auth.login.succeeded", "acc-1",
+                "1.2.3.***", "fp-1", "US", now, null);
+        when(loginHistoryRepository.findLatestSuccessByAccountId(tenantA, "acc-1"))
+                .thenReturn(Optional.of(new LoginHistoryEntry(tenantA,
+                        "evt-0", "acc-1", LoginOutcome.SUCCESS,
+                        "1.2.3.***", "Chrome", "fp-0", "KR", prev)));
+        DetectionResult resultA = rule.evaluate(ctxA);
+        assertThat(resultA.fired()).isTrue();
+
+        // tenantB: no previous history → does not fire
+        EvaluationContext ctxB = new EvaluationContext(tenantB,
+                "evt-b", "auth.login.succeeded", "acc-1",
+                "1.2.3.***", "fp-1", "US", now, null);
+        when(loginHistoryRepository.findLatestSuccessByAccountId(tenantB, "acc-1"))
+                .thenReturn(Optional.empty());
+        DetectionResult resultB = rule.evaluate(ctxB);
+        assertThat(resultB.fired()).isFalse();
+
+        // Repository must be called with correct tenantId per evaluation
+        verify(loginHistoryRepository).findLatestSuccessByAccountId(tenantA, "acc-1");
+        verify(loginHistoryRepository).findLatestSuccessByAccountId(tenantB, "acc-1");
+    }
 }

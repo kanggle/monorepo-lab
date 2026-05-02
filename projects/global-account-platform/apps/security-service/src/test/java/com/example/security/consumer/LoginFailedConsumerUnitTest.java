@@ -45,10 +45,12 @@ class LoginFailedConsumerUnitTest {
         when(dedupService.isDuplicate("evt-fail-1")).thenReturn(false);
         when(recordLoginHistoryUseCase.execute(any(LoginHistoryEntry.class), anyString())).thenReturn(true);
 
+        // TASK-BE-248 Phase 2a: tenantId required — consumer rejects events without it.
         String json = """
                 {
                   "eventId": "evt-fail-1",
                   "eventType": "auth.login.failed",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -75,6 +77,7 @@ class LoginFailedConsumerUnitTest {
                 {
                   "eventId": "evt-fail-2",
                   "eventType": "auth.login.failed",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-2",
@@ -100,12 +103,33 @@ class LoginFailedConsumerUnitTest {
                 {
                   "eventId": "evt-fail-dup",
                   "eventType": "auth.login.failed",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": { "accountId": "acc-3", "timestamp": "2026-04-29T10:00:00Z" }
                 }
                 """;
 
         consumer().onMessage(record(json));
+
+        verify(recordLoginHistoryUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-248: tenant_id 누락 메시지 → MissingTenantIdException (DLQ 라우팅 트리거)")
+    void onMessage_missingTenantId_throwsMissingTenantIdException() {
+        String json = """
+                {
+                  "eventId": "evt-no-tenant-fail",
+                  "eventType": "auth.login.failed",
+                  "occurredAt": "2026-04-29T10:00:00Z",
+                  "payload": { "accountId": "acc-x", "timestamp": "2026-04-29T10:00:00Z" }
+                }
+                """;
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> consumer().onMessage(record(json)))
+                .isInstanceOf(MissingTenantIdException.class)
+                .hasMessageContaining("evt-no-tenant-fail");
 
         verify(recordLoginHistoryUseCase, never()).execute(any(), any());
     }

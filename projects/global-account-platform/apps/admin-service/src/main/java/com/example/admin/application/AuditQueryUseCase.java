@@ -1,5 +1,8 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.TenantScopeDeniedException;
+import com.example.admin.application.port.OperatorLookupPort;
+import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.client.SecurityServiceClient;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
@@ -21,6 +24,13 @@ import java.util.UUID;
  *   - suspicious_events (security-service)
  *
  * Meta-audit: the act of querying is itself recorded as AUDIT_QUERY in admin_actions.
+ *
+ * <p>TASK-BE-249: tenant-scope enforcement added.
+ * <ul>
+ *   <li>Normal operators: can only query their own {@code tenantId}.</li>
+ *   <li>SUPER_ADMIN (tenantId='*'): may query any tenant via {@code tenantId=*}
+ *       (returns cross-tenant rows) or a specific {@code tenantId}.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -29,11 +39,42 @@ public class AuditQueryUseCase {
     private final AdminActionJpaRepository adminActionRepo;
     private final SecurityServiceClient securityServiceClient;
     private final AdminActionAuditor auditor;
+    private final OperatorLookupPort operatorLookupPort;
 
     public AuditQueryResult query(QueryAuditCommand cmd) {
         // Authorization is enforced by RequiresPermissionAspect on the
         // controller (base audit.read + conditional security.event.read for
         // security-event sources). This use-case is invoked only after grant.
+
+        // --- TASK-BE-249: resolve operator tenantId then enforce scope ---
+        OperatorLookupPort.OperatorSummary opSummary = operatorLookupPort
+                .findByOperatorId(cmd.operator().operatorId())
+                .orElseThrow(() -> new TenantScopeDeniedException(
+                        "Operator not found: " + cmd.operator().operatorId()));
+
+        String operatorTenantId = opSummary.tenantId();
+        boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
+
+        // Resolve effective tenantId for the query
+        String requestedTenantId = cmd.tenantId();
+        if (requestedTenantId == null || requestedTenantId.isBlank()) {
+            // Default: operator's own tenant
+            requestedTenantId = operatorTenantId;
+        }
+
+        // Tenant-scope gate: non-platform-scope operators may only query their own tenant.
+        // TASK-BE-262: record a best-effort DENIED audit row before throwing.
+        if (!isPlatformScope && !operatorTenantId.equals(requestedTenantId)) {
+            auditor.recordCrossTenantDenied(
+                    cmd.operator(),
+                    operatorTenantId,
+                    ActionCode.AUDIT_QUERY,
+                    "audit.read",
+                    requestedTenantId);
+            throw new TenantScopeDeniedException(
+                    "Operator tenantId=" + operatorTenantId
+                            + " cannot query tenantId=" + requestedTenantId);
+        }
 
         int size = Math.min(Math.max(cmd.size(), 1), 100);
         int page = Math.max(cmd.page(), 0);
@@ -47,12 +88,29 @@ public class AuditQueryUseCase {
         long totalElements = 0;
 
         if (includeAdmin) {
-            Page<AdminActionJpaEntity> adminPage = adminActionRepo.search(
-                    cmd.accountId(),
-                    cmd.actionCode(),
-                    cmd.from(),
-                    cmd.to(),
-                    PageRequest.of(page, size));
+            Page<AdminActionJpaEntity> adminPage;
+            if (isPlatformScope && AdminOperator.PLATFORM_TENANT_ID.equals(requestedTenantId)) {
+                // SUPER_ADMIN querying tenantId='*' → return cross-tenant platform rows
+                adminPage = adminActionRepo.findByTenantId(
+                        AdminOperator.PLATFORM_TENANT_ID,
+                        cmd.accountId(), cmd.actionCode(),
+                        cmd.from(), cmd.to(),
+                        PageRequest.of(page, size));
+            } else if (isPlatformScope) {
+                // SUPER_ADMIN querying a specific tenant → use cross-tenant finder
+                adminPage = adminActionRepo.searchCrossTenant(
+                        requestedTenantId,
+                        cmd.accountId(), cmd.actionCode(),
+                        cmd.from(), cmd.to(),
+                        PageRequest.of(page, size));
+            } else {
+                // Normal operator — own tenant only
+                adminPage = adminActionRepo.findByTenantId(
+                        operatorTenantId,
+                        cmd.accountId(), cmd.actionCode(),
+                        cmd.from(), cmd.to(),
+                        PageRequest.of(page, size));
+            }
             totalElements += adminPage.getTotalElements();
             for (AdminActionJpaEntity e : adminPage.getContent()) {
                 entries.add(new AuditQueryResult.Entry(
@@ -117,6 +175,7 @@ public class AuditQueryUseCase {
                 Comparator.nullsLast(Comparator.reverseOrder())));
 
         // meta-audit: record the audit query itself
+        final String effectiveTenantId = requestedTenantId;
         String auditId = auditor.reserveAuditId();
         Instant now = Instant.now();
         auditor.record(new AdminActionAuditor.AuditRecord(
@@ -131,7 +190,8 @@ public class AuditQueryUseCase {
                 Outcome.SUCCESS,
                 null,
                 now,
-                now));
+                now,
+                effectiveTenantId));  // TASK-BE-249: targetTenantId for meta-audit row
 
         int totalPages = (int) Math.ceil((double) totalElements / (double) size);
         return new AuditQueryResult(entries, page, size, totalElements, Math.max(totalPages, 1));

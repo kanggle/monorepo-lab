@@ -50,6 +50,7 @@ class TokenReuseDetectedConsumerUnitTest {
                 {
                   "eventId": "evt-reuse-1",
                   "eventType": "auth.token.reuse.detected",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -76,6 +77,7 @@ class TokenReuseDetectedConsumerUnitTest {
                 {
                   "eventId": "evt-reuse-dup",
                   "eventType": "auth.token.reuse.detected",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": { "accountId": "acc-2", "timestamp": "2026-04-29T10:00:00Z" }
                 }
@@ -93,5 +95,78 @@ class TokenReuseDetectedConsumerUnitTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(recordLoginHistoryUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("tenant_id 누락 (envelope·payload 모두) → MissingTenantIdException → DLQ 라우팅 (TASK-BE-259)")
+    void onMessage_missingTenantId_throwsMissingTenantIdException() {
+        // No tenantId in envelope, no tenantId in payload — both required positions empty.
+        // AbstractAuthEventConsumer.processEvent rejects before dedup/persistence.
+        String json = """
+                {
+                  "eventId": "evt-reuse-no-tenant",
+                  "eventType": "auth.token.reuse.detected",
+                  "occurredAt": "2026-04-29T10:00:00Z",
+                  "payload": {
+                    "accountId": "acc-1",
+                    "ipMasked": "1.x.x.x",
+                    "timestamp": "2026-04-29T10:00:00Z"
+                  }
+                }
+                """;
+
+        assertThatThrownBy(() -> consumer().onMessage(record(json)))
+                .isInstanceOf(MissingTenantIdException.class);
+
+        // No history persistence, no dedup mark — strict reject before any side effect.
+        verify(recordLoginHistoryUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("tenant_id 누락 + blank string → DLQ 라우팅 (blank tenant_id 도 거부)")
+    void onMessage_blankTenantId_throwsMissingTenantIdException() {
+        String json = """
+                {
+                  "eventId": "evt-reuse-blank-tenant",
+                  "eventType": "auth.token.reuse.detected",
+                  "tenantId": "",
+                  "occurredAt": "2026-04-29T10:00:00Z",
+                  "payload": {
+                    "tenantId": "",
+                    "accountId": "acc-1"
+                  }
+                }
+                """;
+
+        assertThatThrownBy(() -> consumer().onMessage(record(json)))
+                .isInstanceOf(MissingTenantIdException.class);
+
+        verify(recordLoginHistoryUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("tenant_id 가 envelope 상위에만 있어도 (payload 누락) 정상 처리")
+    void onMessage_tenantIdAtEnvelopeOnly_processesNormally() {
+        when(dedupService.isDuplicate("evt-reuse-env-tenant")).thenReturn(false);
+        when(recordLoginHistoryUseCase.execute(any(LoginHistoryEntry.class), anyString())).thenReturn(true);
+
+        String json = """
+                {
+                  "eventId": "evt-reuse-env-tenant",
+                  "eventType": "auth.token.reuse.detected",
+                  "tenantId": "wms",
+                  "occurredAt": "2026-04-29T10:00:00Z",
+                  "payload": {
+                    "accountId": "acc-2",
+                    "ipMasked": "1.x.x.x",
+                    "timestamp": "2026-04-29T10:00:00Z"
+                  }
+                }
+                """;
+
+        consumer().onMessage(record(json));
+
+        verify(recordLoginHistoryUseCase).execute(any(LoginHistoryEntry.class), anyString());
+        verify(dedupService).markProcessedInRedis("evt-reuse-env-tenant");
     }
 }

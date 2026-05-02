@@ -75,8 +75,8 @@ class AddCommentIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("PUBLIC 포스트에 댓글이 성공적으로 작성되면 201 응답과 함께 DB·outbox 가 채워진다")
     void addComment_toPublicPost_returns201_andPersistsOutbox() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.PUBLIC);
 
         mockMvc.perform(post("/api/community/posts/" + postId + "/comments")
@@ -107,8 +107,8 @@ class AddCommentIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("MEMBERS_ONLY 포스트에 FREE 팬이 댓글을 시도하면 403 MEMBERSHIP_REQUIRED 가 반환된다")
     void addComment_toMembersOnlyPost_byFreeFan_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.MEMBERS_ONLY);
 
         MEMBERSHIP_WM.stubFor(get(urlPathEqualTo("/internal/membership/access"))
@@ -128,8 +128,8 @@ class AddCommentIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("MEMBERS_ONLY 포스트에서 membership-service 가 503 일 때 fail-closed 로 403 가 반환된다")
     void addComment_toMembersOnlyPost_membershipServiceDown_failsClosed_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.MEMBERS_ONLY);
 
         MEMBERSHIP_WM.stubFor(get(urlPathEqualTo("/internal/membership/access"))

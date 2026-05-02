@@ -1,5 +1,7 @@
 # Feature: Authentication
 
+> 신규 소비 서비스가 GAP를 OIDC IdP로 이용하는 통합 절차는 [consumer-integration-guide.md](consumer-integration-guide.md) 의 Phase 3 (discovery + JWKS) 와 Phase 4 (S2S `client_credentials`) 를 단일 진입점으로 사용한다.
+
 ## Purpose
 
 사용자 자격 증명을 검증하고 JWT 토큰을 발급·갱신·무효화하는 인증 흐름 전체를 정의한다. 이 기능은 플랫폼의 **보안 게이트** 역할.

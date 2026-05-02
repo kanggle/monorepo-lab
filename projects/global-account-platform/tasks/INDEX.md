@@ -72,13 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-Multi-tenancy gap-fill (post `multi-tenant` trait adoption on 2026-04-29):
+(empty — TASK-BE-271 implementation complete and moved to review on 2026-05-02. GAP IdP 승급 main batch + 모든 follow-up 이 review/done 진입.)
 
-- `TASK-BE-248-security-service-tenant-events.md` — security-service `tenant_id` 페이로드/스키마/per-tenant detection
-- `TASK-BE-249-admin-service-tenant-audit-schema.md` — admin schema `tenant_id` + tenant-scoped audit query
-- `TASK-BE-250-admin-service-tenant-management-api.md` — `POST/PATCH /api/admin/tenants` lifecycle API
-
-Recommended order: 248 → 249 → 250 (security events first because they unblock per-tenant detection; admin schema next because TASK-BE-250 depends on it).
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## in-progress
 
@@ -86,11 +82,23 @@ Recommended order: 248 → 249 → 250 (security events first because they unblo
 
 ## review
 
-(empty)
+(empty — TASK-BE-271 reviewed and moved to done on 2026-05-02)
 
 ## done
 
-247 backend tasks + 26 frontend tasks completed (latest standalone-master commit
-captured: `34ef5e9` on 2026-04-30, post-`9830ecb` catch-up sync). Latest BE:
-TASK-BE-247 (signup half-commit idempotency); latest FE: TASK-FE-026 (DashboardTabs
-server/client boundary). Numbers TASK-BE-238/239/240/244 were not assigned.
+264 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
+TASK-BE-250 (admin tenant lifecycle API), TASK-BE-251 (Spring Authorization Server),
+TASK-BE-252 (OAuth schema), TASK-BE-256 (tenant onboarding API contract), and
+follow-ups 260/261/262/268.
+Newly reviewed (2026-05-02): TASK-BE-254 (consumer integration guide,
+FIX_NEEDED → 263), TASK-BE-255 (account_roles schema, FIX_NEEDED → 265),
+TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
+(auth-api.md discovery, APPROVED), TASK-BE-265 (255 review fix, FIX_NEEDED → 267),
+TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
+FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED),
+TASK-BE-258 (GDPR downstream contract + security ref impl, FIX_NEEDED → 270),
+TASK-BE-270 (258 review fix: salt + data-model.md, APPROVED), TASK-BE-257
+(bulk provisioning API, FIX_NEEDED → 271), TASK-BE-271 (257 review fix:
+readOnly tx + enum + BULK_LIMIT routing, APPROVED).
+Numbers TASK-BE-238/239/240/244 were not assigned.

@@ -78,7 +78,7 @@ class ChangePostStatusIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("DRAFT→PUBLISHED 전이 시 204 응답과 함께 post_status_history 에 기록 1건이 남는다")
     void changeStatus_draftToPublished_returns204AndRecordsHistory() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createDraftPost(artistId);
 
         mockMvc.perform(patch("/api/community/posts/" + postId + "/status")
@@ -100,7 +100,7 @@ class ChangePostStatusIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("PUBLISHED→DELETED 전이 시 204 응답과 함께 post_status_history 에 해당 기록이 추가된다")
     void changeStatus_publishedToDeleted_returns204AndRecordsHistory() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         // Create a DRAFT post and publish it via domain directly, then save
         Post post = Post.createDraft(artistId, PostType.ARTIST_POST, PostVisibility.PUBLIC,
                 "Title", "body", null);
@@ -130,7 +130,7 @@ class ChangePostStatusIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("DELETED→PUBLISHED 전이 시도 시 422 POST_STATUS_TRANSITION_INVALID 가 반환된다")
     void changeStatus_deletedToPublished_returns422() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId);
 
         // First, transition PUBLISHED→DELETED
@@ -153,8 +153,8 @@ class ChangePostStatusIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("비작성자가 상태 전이를 시도하면 403 PERMISSION_DENIED 가 반환된다")
     void changeStatus_nonAuthor_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String otherUserId = "other-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String otherUserId = "other-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createDraftPost(artistId);
 
         mockMvc.perform(patch("/api/community/posts/" + postId + "/status")
@@ -169,7 +169,7 @@ class ChangePostStatusIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("존재하지 않는 postId 로 상태 전이를 시도하면 404 POST_NOT_FOUND 가 반환된다")
     void changeStatus_notFound_returns404() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         String nonExistentPostId = UUID.randomUUID().toString();
 
         mockMvc.perform(patch("/api/community/posts/" + nonExistentPostId + "/status")

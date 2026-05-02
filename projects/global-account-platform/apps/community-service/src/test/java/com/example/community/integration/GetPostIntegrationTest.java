@@ -75,8 +75,8 @@ class GetPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("PUBLIC 포스트 조회 시 200 응답과 필수 필드가 반환된다")
     void getPost_publicPost_returns200WithFields() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.PUBLIC);
 
         mockMvc.perform(get("/api/community/posts/" + postId)
@@ -95,8 +95,8 @@ class GetPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("MEMBERS_ONLY 포스트를 FREE 팬이 조회하면 403 MEMBERSHIP_REQUIRED 가 반환된다")
     void getPost_membersOnlyPost_freeFan_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.MEMBERS_ONLY);
 
         MEMBERSHIP_WM.stubFor(WireMock.get(urlPathEqualTo("/internal/membership/access"))
@@ -114,8 +114,8 @@ class GetPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("MEMBERS_ONLY 포스트에서 membership-service 가 503 일 때 fail-closed 로 403 가 반환된다")
     void getPost_membersOnlyPost_membershipService503_failsClosed_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.MEMBERS_ONLY);
 
         MEMBERSHIP_WM.stubFor(WireMock.get(urlPathEqualTo("/internal/membership/access"))
@@ -131,8 +131,8 @@ class GetPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("DELETED 포스트 조회 시 404 POST_NOT_FOUND 가 반환된다")
     void getPost_deletedPost_returns404() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createDeletedPost(artistId);
 
         mockMvc.perform(get("/api/community/posts/" + postId)
@@ -145,7 +145,7 @@ class GetPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("존재하지 않는 postId 조회 시 404 POST_NOT_FOUND 가 반환된다")
     void getPost_notFound_returns404() throws Exception {
         stubAccountProfile();
-        String fanId = "fan-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String randomPostId = UUID.randomUUID().toString();
 
         mockMvc.perform(get("/api/community/posts/" + randomPostId)

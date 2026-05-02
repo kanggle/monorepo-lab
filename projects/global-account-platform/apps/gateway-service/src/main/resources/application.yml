@@ -8,6 +8,17 @@ spring:
   cloud:
     gateway:
       routes:
+        # OIDC / OAuth2 standard endpoints (TASK-BE-251 Phase 2c).
+        # Ordered BEFORE auth-service to ensure /oauth2/** and /.well-known/openid-configuration
+        # are forwarded to auth-service WITHOUT gateway JWT verification.
+        # The SAS filter chain inside auth-service handles all authentication for these paths.
+        - id: auth-service-oidc
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/oauth2/**,/.well-known/openid-configuration
+          filters:
+            - StripPrefix=0
+
         - id: auth-service
           uri: ${AUTH_SERVICE_URL:http://localhost:8081}
           predicates:
@@ -93,6 +104,14 @@ gateway:
     - GET:/api/auth/oauth/authorize
     - POST:/api/auth/oauth/callback
     - GET:/actuator/health
+    # OIDC / OAuth2 standard endpoints (TASK-BE-251 Phase 2c).
+    # Gateway passes these through without JWT verification — auth-service (SAS)
+    # handles all authentication for these endpoints internally.
+    # Covers: /oauth2/authorize, /oauth2/token, /oauth2/jwks, /oauth2/userinfo,
+    #         /oauth2/revoke, /oauth2/introspect, /.well-known/openid-configuration
+    - GET:/oauth2/**
+    - POST:/oauth2/**
+    - GET:/.well-known/openid-configuration
     # admin-service self-serve auth (no operator JWT at gateway layer).
     # operator JWT verification is delegated to admin-service
     # OperatorAuthenticationFilter. admin-api.md §Authentication Exceptions.

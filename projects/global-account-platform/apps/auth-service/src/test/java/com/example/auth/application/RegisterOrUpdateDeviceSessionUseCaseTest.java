@@ -36,6 +36,7 @@ class RegisterOrUpdateDeviceSessionUseCaseTest {
     private RegisterOrUpdateDeviceSessionUseCase useCase;
 
     private static final String ACCOUNT_ID = "acc-reg";
+    private static final String TENANT_ID = "fan-platform";
 
     @Test
     @DisplayName("기존 활성 세션 fingerprint 일치 — touch 후 isNew=false 반환")
@@ -45,21 +46,21 @@ class RegisterOrUpdateDeviceSessionUseCaseTest {
         when(deviceSessionRepository.findActiveByAccountAndFingerprint(ACCOUNT_ID, fingerprint))
                 .thenReturn(Optional.of(existing));
 
-        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, ctx(fingerprint));
+        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, TENANT_ID, ctx(fingerprint));
 
         assertThat(result.deviceId()).isEqualTo("dev-existing");
         assertThat(result.newSession()).isFalse();
         assertThat(result.evictedDeviceIds()).isEmpty();
         verify(deviceSessionRepository).save(existing);
-        verify(enforceConcurrentLimitUseCase, never()).enforce(anyString());
+        verify(enforceConcurrentLimitUseCase, never()).enforce(anyString(), anyString());
     }
 
     @Test
     @DisplayName("fingerprint 없음 (unknown) — 항상 새 세션 생성")
     void execute_unknownFingerprint_alwaysCreatesNew() {
-        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID)).thenReturn(List.of());
+        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID, TENANT_ID)).thenReturn(List.of());
 
-        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, ctx(null));
+        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, TENANT_ID, ctx(null));
 
         assertThat(result.newSession()).isTrue();
         verify(deviceSessionRepository, never())
@@ -70,9 +71,9 @@ class RegisterOrUpdateDeviceSessionUseCaseTest {
     @Test
     @DisplayName("blank fingerprint — unknown 처리 후 새 세션 생성")
     void execute_blankFingerprint_treatedAsUnknown() {
-        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID)).thenReturn(List.of());
+        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID, TENANT_ID)).thenReturn(List.of());
 
-        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, ctx("   "));
+        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, TENANT_ID, ctx("   "));
 
         assertThat(result.newSession()).isTrue();
         verify(deviceSessionRepository, never())
@@ -85,10 +86,10 @@ class RegisterOrUpdateDeviceSessionUseCaseTest {
         String fingerprint = "fp-new";
         when(deviceSessionRepository.findActiveByAccountAndFingerprint(ACCOUNT_ID, fingerprint))
                 .thenReturn(Optional.empty());
-        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID))
+        when(enforceConcurrentLimitUseCase.enforce(ACCOUNT_ID, TENANT_ID))
                 .thenReturn(List.of("dev-evicted"));
 
-        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, ctx(fingerprint));
+        RegisterDeviceSessionResult result = useCase.execute(ACCOUNT_ID, TENANT_ID, ctx(fingerprint));
 
         assertThat(result.newSession()).isTrue();
         assertThat(result.evictedDeviceIds()).containsExactly("dev-evicted");

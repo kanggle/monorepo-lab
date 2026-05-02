@@ -38,8 +38,8 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
     @Test
     @DisplayName("findByPostIdAndAccountId — 존재하는 리액션 조회")
     void findByPostIdAndAccountId_existing_returnsReaction() {
-        String postId = "post-" + UUID.randomUUID();
-        String accountId = "account-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
+        String accountId = "account-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s ->
                 reactionRepo.save(Reaction.create(postId, accountId, "HEART")));
@@ -54,8 +54,8 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
     @DisplayName("findByPostIdAndAccountId — 없는 키 → empty")
     void findByPostIdAndAccountId_unknown_returnsEmpty() {
         Optional<Reaction> result = reactionRepo.findByPostIdAndAccountId(
-                "ghost-post-" + UUID.randomUUID(),
-                "ghost-account-" + UUID.randomUUID());
+                "ghost-post-" + UUID.randomUUID().toString().substring(0, 20),
+                "ghost-account-" + UUID.randomUUID().toString().substring(0, 20));
 
         assertThat(result).isEmpty();
     }
@@ -63,8 +63,8 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
     @Test
     @DisplayName("복합 PK — (post_id, account_id) 중복 INSERT → DataIntegrityViolationException")
     void compositeKey_uniqueConstraint_secondInsertFails() {
-        String postId = "post-" + UUID.randomUUID();
-        String accountId = "account-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
+        String accountId = "account-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s ->
                 reactionRepo.save(Reaction.create(postId, accountId, "HEART")));
@@ -78,12 +78,12 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
     @Test
     @DisplayName("countByPostId — 동일 포스트의 리액션 수 정확히 반환")
     void countByPostId_returnsAccurateCount() {
-        String postId = "post-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
-            reactionRepo.save(Reaction.create(postId, "user-1-" + UUID.randomUUID(), "HEART"));
-            reactionRepo.save(Reaction.create(postId, "user-2-" + UUID.randomUUID(), "FIRE"));
-            reactionRepo.save(Reaction.create(postId, "user-3-" + UUID.randomUUID(), "HEART"));
+            reactionRepo.save(Reaction.create(postId, "user-1-" + UUID.randomUUID().toString().substring(0, 20), "HEART"));
+            reactionRepo.save(Reaction.create(postId, "user-2-" + UUID.randomUUID().toString().substring(0, 20), "FIRE"));
+            reactionRepo.save(Reaction.create(postId, "user-3-" + UUID.randomUUID().toString().substring(0, 20), "HEART"));
         });
 
         long count = reactionRepo.countByPostId(postId);
@@ -94,13 +94,13 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
     @Test
     @DisplayName("countsGroupedByPostId — 여러 포스트의 그룹별 카운트 반환")
     void countsGroupedByPostId_returnsPerPostCounts() {
-        String postA = "post-a-" + UUID.randomUUID();
-        String postB = "post-b-" + UUID.randomUUID();
+        String postA = "post-a-" + UUID.randomUUID().toString().substring(0, 20);
+        String postB = "post-b-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
-            reactionRepo.save(Reaction.create(postA, "user-1-" + UUID.randomUUID(), "HEART"));
-            reactionRepo.save(Reaction.create(postA, "user-2-" + UUID.randomUUID(), "FIRE"));
-            reactionRepo.save(Reaction.create(postB, "user-3-" + UUID.randomUUID(), "HEART"));
+            reactionRepo.save(Reaction.create(postA, "user-1-" + UUID.randomUUID().toString().substring(0, 20), "HEART"));
+            reactionRepo.save(Reaction.create(postA, "user-2-" + UUID.randomUUID().toString().substring(0, 20), "FIRE"));
+            reactionRepo.save(Reaction.create(postB, "user-3-" + UUID.randomUUID().toString().substring(0, 20), "HEART"));
         });
 
         Map<String, Long> counts = reactionRepo

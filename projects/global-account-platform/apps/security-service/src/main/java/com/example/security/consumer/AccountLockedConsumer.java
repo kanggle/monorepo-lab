@@ -1,6 +1,5 @@
 package com.example.security.consumer;
 
-import com.example.security.domain.Tenants;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaEntity;
 import com.example.security.infrastructure.persistence.AccountLockHistoryJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -76,13 +75,16 @@ public class AccountLockedConsumer {
 
             Instant occurredAt = resolveOccurredAt(root, payload);
 
-            // TASK-BE-248 Phase 1: tenantId required on lock history. account.locked
-            // payload may not yet carry it; default to Tenants.DEFAULT_TENANT_ID until
-            // Phase 2 makes upstream events tenant-aware.
+            // TASK-BE-248 Phase 2b: tenant_id is now required on all account.locked events.
+            // The lenient fallback to DEFAULT_TENANT_ID is removed — upstream publishers
+            // (account-service AccountEventPublisher) always include tenantId since Phase 2b.
+            // Messages without tenant_id are routed to account.locked.dlq via MissingTenantIdException.
             String tenantId = firstNonBlank(
                     root.path("tenantId").asText(null),
-                    payload.path("tenantId").asText(null),
-                    Tenants.DEFAULT_TENANT_ID);
+                    payload.path("tenantId").asText(null));
+            if (tenantId == null || tenantId.isBlank()) {
+                throw new MissingTenantIdException(eventId, "account.locked");
+            }
 
             AccountLockHistoryJpaEntity entity = AccountLockHistoryJpaEntity.create(
                     tenantId, eventId, accountId, truncate(reason, 255), lockedBy, source, occurredAt);

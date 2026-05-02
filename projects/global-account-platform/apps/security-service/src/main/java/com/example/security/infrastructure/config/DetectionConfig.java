@@ -39,8 +39,8 @@ public class DetectionConfig {
     }
 
     @Bean
-    public TokenReuseRule tokenReuseRule() {
-        return new TokenReuseRule();
+    public TokenReuseRule tokenReuseRule(TokenReuseCounter counter) {
+        return new TokenReuseRule(counter);
     }
 
     @Bean

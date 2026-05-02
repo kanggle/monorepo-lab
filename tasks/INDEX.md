@@ -90,7 +90,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+(empty — TASK-MONO-019 implementation complete and moved to review on 2026-05-02)
 
 ## in-progress
 
@@ -98,7 +98,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+(empty — TASK-MONO-019 reviewed and moved to done on 2026-05-02)
 
 ## done
 
@@ -118,3 +118,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-014-frontend-e2e-fullstack-ci.md` — wired the 4 existing full-stack Playwright specs (`golden-flow`, `cart-management`, `auth-redirect`, `wishlist`) into a new `frontend-e2e` CI job. Updated `ecommerce-boot-jars` to upload 12 fat JARs as an artifact; `frontend-e2e` downloads them, generates a synthetic `.env`, `docker compose up --build` (observability services excluded to fit runner RAM), waits for gateway health, then runs `pnpm --filter web-store run e2e`. `playwright.config.ts` gains a CI-only `webServer` block starting web-store on port 3000 with the gateway at localhost:18080. Job gated to `kanggle/monorepo-lab`. 2026-04-27.
 - `TASK-MONO-015-e2e-docker-image-pull-warmup.md` — Docker 28 workaround for the `e2e-tests` job: replaced Testcontainers' `ImageFromDockerfile` (which hangs indefinitely on Docker 28's BuildKit-routed `/build` REST endpoint via the Docker Java client bundled in Testcontainers 1.21.3) with **pre-built service images via the `docker build` CLI**. Added "Download boot jars" / "Restore boot jar paths" / "Build service images for e2e" steps to the `e2e-tests` job, changed `needs` to `[build-and-test, boot-jars]`, and pass `-Dwms.e2e.masterImage=wms-master-service:e2e` + `-Dwms.e2e.gatewayImage=wms-gateway-service:e2e` to the Gradle e2eTest invocation so `E2EBase.java` skips `ImageFromDockerfile` and uses `GenericContainer` against the pre-built tags. Title kept for traceability; original `docker pull` warmup approach pivoted during implementation (see TASK-MONO-016 for the spec amendment record). 2026-04-29.
 - `TASK-MONO-016-fix-TASK-MONO-015.md` — documentation-only fix: rewrote TASK-MONO-015 Goal, Scope, and Acceptance Criteria to reflect the actual Docker 28 workaround implementation (pre-built images via `docker build` CLI), and updated the `tasks/INDEX.md` done-list entry for TASK-MONO-015. No implementation files were changed. 2026-04-29.
+- `TASK-MONO-019-wms-platform-oidc-resource-server-migration.md` — wms-platform 의 5 active service (master/gateway/inbound/inventory/outbound) 가 GAP 표준 OIDC token 을 OAuth2 Resource Server 로 검증. GAP V0010 seed 추가 (wms client 2건 + 9 scopes). admin/notification 은 placeholder. Cross-project atomic commit (`feat!: TASK-MONO-019`). Review 2026-05-02 APPROVED — Critical 0, Warning 0, Suggestion 1 (gateway `audiences: wms` dead config — 향후 정리). 2026-05-02.

@@ -32,12 +32,14 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **Topic**: `auth.login.attempted`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string | null (미존재 이메일이면 null)",
   "emailHash": "string (SHA256[:10])",
-  "tenantId": "string | null (테넌트 컨텍스트. 미확정 이메일이면 null)",
+  "tenantId": "string (required, 테넌트 컨텍스트. 미확정 이메일이면 known 테넌트 컨텍스트 또는 'fan-platform' 기본값 사용)",
   "ipMasked": "192.168.*.*",
   "userAgentFamily": "Chrome 120",
   "deviceFingerprint": "string (hashed)",
@@ -45,6 +47,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
   "timestamp": "2026-04-12T10:00:00Z"
 }
 ```
+
+**필드 노트** (TASK-BE-248):
+- `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다.
 
 **Consumers**: security-service
 
@@ -56,12 +61,14 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **Topic**: `auth.login.failed`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string | null",
   "emailHash": "string",
-  "tenantId": "string | null",
+  "tenantId": "string (required, TASK-BE-248)",
   "failureReason": "CREDENTIALS_INVALID | ACCOUNT_LOCKED | ACCOUNT_DORMANT | ACCOUNT_DELETED | RATE_LIMITED | LOGIN_TENANT_AMBIGUOUS",
   "failCount": 3,
   "ipMasked": "192.168.*.*",
@@ -72,6 +79,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 }
 ```
 
+**필드 노트** (TASK-BE-248):
+- `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
+
 **Consumers**: security-service (VelocityRule 평가)
 
 ---
@@ -81,6 +91,8 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 로그인 성공 시 발행.
 
 **Topic**: `auth.login.succeeded`
+
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required confirmed)
 
 **Payload**:
 ```json
@@ -117,6 +129,8 @@ Refresh token rotation 성공 시 발행.
 
 **Topic**: `auth.token.refreshed`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required confirmed)
+
 **Payload**:
 ```json
 {
@@ -140,10 +154,13 @@ Refresh token rotation 성공 시 발행.
 
 **Topic**: `auth.token.reuse.detected`
 
+**Schema version**: 2 (TASK-BE-259: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, 재사용된 refresh token DB row의 tenant_id. 미존재 시 'fan-platform' 기본값)",
   "reusedJti": "string (재사용 시도된 토큰)",
   "originalRotationAt": "2026-04-12T09:50:00Z",
   "reuseAttemptAt": "2026-04-12T10:00:00Z",
@@ -154,6 +171,9 @@ Refresh token rotation 성공 시 발행.
 }
 ```
 
+**필드 노트** (TASK-BE-259):
+- `tenantId`: 항상 required. publisher (`AuthEventPublisher.publishTokenReuseDetected`) 는 null/blank 시 `IllegalArgumentException` 을 던진다. consumer (security-service) 는 누락 메시지를 DLQ 로 라우팅하고, per-tenant reuse 카운터(`reuse:{tenantId}:{accountId}`)에 활용한다. 다른 auth-events 와 정합 (TASK-BE-248 시리즈).
+
 **Consumers**: security-service → 즉시 `auto.lock.triggered` 발행 (최고 우선순위)
 
 ---
@@ -163,6 +183,8 @@ Refresh token rotation 성공 시 발행.
 Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 token의 `tenant_id`가 불일치. 보안 이벤트.
 
 **Topic**: `auth.token.tenant.mismatch`
+
+**Schema version**: 2 (TASK-BE-248: tenant_id fields are inherently required)
 
 **Payload**:
 ```json
@@ -187,10 +209,13 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
 
 **Topic**: `auth.session.created`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, TASK-BE-248)",
   "deviceId": "string (UUID v7, device_sessions.device_id)",
   "sessionJti": "string (이 device에 최초 발급된 refresh token의 jti)",
   "deviceFingerprintHash": "string (fingerprint SHA256, 관측용)",
@@ -216,10 +241,13 @@ device session이 revoke될 때 발행. 사용자 명시 revoke, concurrent-sess
 
 **Topic**: `auth.session.revoked`
 
+**Schema version**: 2 (TASK-BE-248: `tenant_id` required)
+
 **Payload**:
 ```json
 {
   "accountId": "string",
+  "tenantId": "string (required, TASK-BE-248)",
   "deviceId": "string (UUID v7)",
   "reason": "USER_REQUESTED | EVICTED_BY_LIMIT | TOKEN_REUSE | ADMIN_FORCED | LOGOUT_OTHERS",
   "revokedJtis": ["string"],

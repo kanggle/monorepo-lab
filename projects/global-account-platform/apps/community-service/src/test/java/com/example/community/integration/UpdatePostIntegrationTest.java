@@ -64,7 +64,7 @@ class UpdatePostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("작성자가 PATCH 호출 시 200 응답과 함께 DB의 title/body/updatedAt 이 갱신된다")
     void updatePost_authorUpdatesContent_returns200AndPersists() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId);
 
         String requestBody = """
@@ -91,8 +91,8 @@ class UpdatePostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("비작성자가 PATCH 호출 시 403 PERMISSION_DENIED 가 반환된다")
     void updatePost_nonAuthor_returns403() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String otherUserId = "other-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String otherUserId = "other-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId);
 
         String requestBody = """
@@ -111,7 +111,7 @@ class UpdatePostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("존재하지 않는 postId 로 PATCH 호출 시 404 POST_NOT_FOUND 가 반환된다")
     void updatePost_notFound_returns404() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         String nonExistentPostId = UUID.randomUUID().toString();
 
         String requestBody = """

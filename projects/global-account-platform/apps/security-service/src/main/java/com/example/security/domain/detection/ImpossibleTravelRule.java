@@ -79,6 +79,9 @@ public class ImpossibleTravelRule implements SuspiciousActivityRule {
         evidence.put("currentCountry", currentCountry);
         evidence.put("timeDeltaSeconds", deltaSeconds);
         evidence.put("windowThresholdSeconds", thresholds.impossibleTravelWindowSeconds());
+        // TASK-BE-248 Phase 2a: include tenantId in evidence for cross-tenant audit trail.
+        String tenantId = ctx.tenantId() != null ? ctx.tenantId() : "";
+        evidence.put("tenantId", tenantId);
         return new DetectionResult(CODE, thresholds.impossibleTravelScore(), evidence);
     }
 }

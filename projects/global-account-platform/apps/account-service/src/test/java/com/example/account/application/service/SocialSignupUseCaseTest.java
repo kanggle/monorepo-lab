@@ -68,7 +68,7 @@ class SocialSignupUseCaseTest {
 
         verify(accountRepository).save(any(Account.class));
         verify(profileRepository).save(any(Profile.class));
-        verify(eventPublisher).publishAccountCreated(any(Account.class), any());
+        verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
     }
 
     @Test
@@ -95,7 +95,7 @@ class SocialSignupUseCaseTest {
 
         verify(accountRepository, never()).save(any());
         verify(profileRepository, never()).save(any());
-        verify(eventPublisher, never()).publishAccountCreated(any(), any());
+        verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
     }
 
     @Test

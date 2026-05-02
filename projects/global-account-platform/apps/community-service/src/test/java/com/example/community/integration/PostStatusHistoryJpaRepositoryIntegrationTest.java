@@ -39,8 +39,8 @@ class PostStatusHistoryJpaRepositoryIntegrationTest extends CommunityIntegration
     @Test
     @DisplayName("findByPostIdOrderByOccurredAtAsc — occurred_at 오름차순으로 반환")
     void findByPostIdOrderByOccurredAtAsc_returnsAscOrder() {
-        String postId = "post-" + UUID.randomUUID();
-        String authorId = "author-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
+        String authorId = "author-" + UUID.randomUUID().toString().substring(0, 20);
 
         // 두 transition: DRAFT→PUBLISHED, PUBLISHED→DELETED (시간 차이를 위해 stagger)
         transactionTemplate.executeWithoutResult(s -> {
@@ -62,7 +62,7 @@ class PostStatusHistoryJpaRepositoryIntegrationTest extends CommunityIntegration
     @Test
     @DisplayName("트리거 — post_status_history UPDATE 시도 → 예외 (append-only)")
     void appendOnlyTrigger_update_throwsException() {
-        String postId = "post-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
 
         PostStatusHistoryJpaEntity saved = transactionTemplate.execute(s ->
                 historyRepo.save(PostStatusHistoryJpaEntity.record(
@@ -77,7 +77,7 @@ class PostStatusHistoryJpaRepositoryIntegrationTest extends CommunityIntegration
     @Test
     @DisplayName("트리거 — post_status_history DELETE 시도 → 예외 (append-only)")
     void appendOnlyTrigger_delete_throwsException() {
-        String postId = "post-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
 
         PostStatusHistoryJpaEntity saved = transactionTemplate.execute(s ->
                 historyRepo.save(PostStatusHistoryJpaEntity.record(

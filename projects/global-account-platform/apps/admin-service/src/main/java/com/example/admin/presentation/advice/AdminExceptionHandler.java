@@ -19,11 +19,15 @@ import com.example.admin.application.exception.RefreshTokenReuseDetectedExceptio
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.SelfSuspendForbiddenException;
 import com.example.admin.application.exception.StateTransitionInvalidException;
+import com.example.admin.application.exception.TenantAlreadyExistsException;
+import com.example.admin.application.exception.TenantIdReservedException;
+import com.example.admin.application.exception.TenantNotFoundException;
 import com.example.admin.application.exception.TokenRevokedException;
 import com.example.admin.application.exception.TotpNotEnrolledException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.application.exception.ReasonRequiredException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.presentation.dto.EnrollmentRequiredResponse;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -50,6 +54,13 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePermission(PermissionDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("PERMISSION_DENIED", e.getMessage()));
+    }
+
+    // TASK-BE-249 — tenant scope violation
+    @ExceptionHandler(TenantScopeDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleTenantScopeDenied(TenantScopeDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("TENANT_SCOPE_DENIED", e.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -204,6 +215,31 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleStateTransition(StateTransitionInvalidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("STATE_TRANSITION_INVALID", e.getMessage()));
+    }
+
+    // TASK-BE-250 — tenant lifecycle errors
+    @ExceptionHandler(TenantIdReservedException.class)
+    public ResponseEntity<ErrorResponse> handleTenantIdReserved(TenantIdReservedException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("TENANT_ID_RESERVED", e.getMessage()));
+    }
+
+    @ExceptionHandler(TenantAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleTenantAlreadyExists(TenantAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(TenantNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTenantNotFound(TenantNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("TENANT_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR", e.getMessage()));
     }
 
     @ExceptionHandler(CurrentPasswordMismatchException.class)

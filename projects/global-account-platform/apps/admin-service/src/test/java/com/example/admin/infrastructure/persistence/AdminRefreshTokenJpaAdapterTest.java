@@ -100,9 +100,10 @@ class AdminRefreshTokenJpaAdapterTest {
         Instant now = Instant.now();
         jdbc.update(
                 "INSERT INTO admin_operators " +
-                        "(operator_id, email, password_hash, display_name, status, created_at, updated_at, version) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                        "(operator_id, tenant_id, email, password_hash, display_name, status, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
                 operatorUuid,
+                "fan-platform",
                 "op-" + operatorUuid + "@example.com",
                 "$2a$10$placeholderplaceholderplaceholderplaceholderplaceholder",
                 "Op " + operatorUuid.substring(0, 8),

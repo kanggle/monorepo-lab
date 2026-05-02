@@ -30,11 +30,16 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 2s
 
+  # TASK-MONO-019: Standard OAuth2 Resource Server backed by GAP's JWKS.
   security:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
+          # OIDC issuer for SAS-issued tokens (GAP auth-service).
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          # Explicit JWKS URI consumed by the custom JwtDecoder bean.
+          # JWT_JWKS_URI legacy env var supported for the e2e harness.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -97,6 +102,12 @@ logging:
     org.hibernate.SQL: WARN
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}]"
+
+wms:
+  # TASK-MONO-019: OIDC Resource Server validators.
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
 
 inbound:
   idempotency:

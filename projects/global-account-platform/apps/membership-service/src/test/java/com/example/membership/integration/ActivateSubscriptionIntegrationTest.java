@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -21,6 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static com.example.membership.integration.MembershipJwtTestSupport.bearer;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
+@Import(MembershipJwtTestSupport.JwtDecoderConfig.class)
 @DisplayName("ActivateSubscription integration — full stack")
 class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
 
@@ -107,6 +111,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
         stubAccountStatus(accountId, "ACTIVE");
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"" + idem + "\"}"))
@@ -128,6 +133,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
         stubAccountStatus(accountId, "LOCKED");
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"idem-locked\"}"))
@@ -148,6 +154,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
                 .willReturn(aResponse().withStatus(503)));
 
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"idem-down\"}"))
@@ -169,6 +176,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
 
         // First: 201 Created
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"" + idem + "\"}"))
@@ -176,6 +184,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
 
         // Replay with same key: 200 OK, same subscription
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"" + idem + "\"}"))

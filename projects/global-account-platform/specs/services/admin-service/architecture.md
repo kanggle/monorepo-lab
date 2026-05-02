@@ -207,6 +207,58 @@ operator session 수명은 다음 두 토큰으로 구성된다:
 3. 감사 스키마 변경은 [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A2 표준 필드 준수 확인 + Flyway migration
 4. 이 서비스는 **도메인 로직을 수용하지 않는다**. 운영 명령이 복잡해지면 해당 도메인 소유 서비스(auth / account / security)로 로직을 이동하고 admin-service는 호출만 유지
 
+## Tenant Scope Enforcement (TASK-BE-249)
+
+admin-service의 모든 운영 행위는 **테넌트 스코프**를 기준으로 격리된다.
+
+### Sentinel Value
+
+- `tenant_id = '*'` — **플랫폼 스코프 센티넬**. SUPER_ADMIN 역할 보유 운영자에게 부여되며 모든 테넌트에 걸쳐 명령/조회 권한을 가진다.
+- 모든 일반 운영자는 특정 `tenant_id`(예: `"fan-platform"`) 에 속하며, 자신의 테넌트 범위 안에서만 행위할 수 있다.
+
+### DB 스키마 변경 (V0025)
+
+| 테이블 | 추가 컬럼 | 비고 |
+|---|---|---|
+| `admin_operators` | `tenant_id VARCHAR(32) NOT NULL` | 기존 고유 인덱스 `uk_admin_operators_email` → 복합 인덱스 `(tenant_id, email)` |
+| `admin_operator_roles` | `tenant_id VARCHAR(32) NOT NULL` | 역할 바인딩도 테넌트 소속 명시 |
+| `admin_actions` | `tenant_id VARCHAR(32) NOT NULL`, `target_tenant_id VARCHAR(32)` | 감사 행이 어떤 테넌트에서 어떤 테넌트를 대상으로 했는지 기록 |
+
+### 감사 행 구성 규칙
+
+- **일반 운영자** 행위: `tenant_id = operator.tenantId`, `target_tenant_id = operator.tenantId`
+- **SUPER_ADMIN** 행위: `tenant_id = '*'`, `target_tenant_id = <대상 테넌트 ID>`
+- `OPERATOR_DENY` 행: `tenant_id = operator.tenantId`, `target_tenant_id = operator.tenantId` (크로스 테넌트 거부도 자기 테넌트 기록)
+
+### `PermissionEvaluator.isTenantAllowed` 기본 규칙
+
+```
+isTenantAllowed(operator, targetTenantId):
+  if operator == null → false
+  if operator.isPlatformScope() → true   (SUPER_ADMIN: always pass)
+  if targetTenantId == null → true       (null compat: 자기 테넌트)
+  return operator.tenantId == targetTenantId
+```
+
+### 예외 매핑
+
+| 예외 클래스 | HTTP 상태 | 에러 코드 |
+|---|---|---|
+| `TenantScopeDeniedException` | 403 | `TENANT_SCOPE_DENIED` |
+
+### 감사 쿼리 라우팅
+
+| 운영자 유형 | `tenantId` 파라미터 | 사용 Repository 메서드 |
+|---|---|---|
+| 일반 운영자 | 자기 테넌트 또는 null | `findByTenantId(operatorTenantId, ...)` |
+| SUPER_ADMIN | `*` | `findByTenantId('*', ...)` (플랫폼 행만) |
+| SUPER_ADMIN | 특정 테넌트 | `searchCrossTenant(targetTenantId, ...)` |
+| 일반 운영자 | 다른 테넌트 | → `TenantScopeDeniedException` |
+
+ADR: [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)
+
+---
+
 ## Overrides
 
 - **rule**: rules/traits/audit-heavy.md#A10

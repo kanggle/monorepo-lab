@@ -109,3 +109,11 @@ security:
     ip-reputation:
       score: ${DETECT_IP_REPUTATION_SCORE:60}
       suspicious-cidrs: ${DETECT_IP_REPUTATION_CIDRS:}
+
+app:
+  pii:
+    masking:
+      # TASK-BE-270: fixed application-level salt for SHA-256 device_fingerprint masking.
+      # MUST be overridden in production via env var. Without override the value below is used
+      # only for local/dev. Salt rotation is out of scope (would re-hash all existing rows).
+      fingerprint-salt: ${PII_FINGERPRINT_SALT:dev-only-fingerprint-salt-CHANGE-IN-PROD}

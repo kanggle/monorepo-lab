@@ -30,11 +30,21 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 2s
 
+  # TASK-MONO-019: Standard OAuth2 Resource Server backed by GAP's JWKS.
   security:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
+          # OIDC issuer for SAS-issued tokens. Points at GAP's auth-service.
+          # The custom JwtDecoder in OAuth2ResourceServerConfig uses the
+          # explicit jwk-set-uri below; issuer claim validation is handled
+          # by AllowedIssuersValidator (D2-b: legacy issuer also accepted).
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          # Explicit JWKS URI consumed by the custom JwtDecoder bean.
+          # Test harnesses (Testcontainers + MockWebServer) override this.
+          # JWT_JWKS_URI is the legacy env var name kept for backward
+          # compatibility with the existing e2e harness.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -98,6 +108,15 @@ master:
     ttl-seconds: 86400
 
 wms:
+  # TASK-MONO-019: OIDC Resource Server validators.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window.
+    # - The first entry is the SAS issuer URL.
+    # - The legacy "global-account-platform" string is kept so existing
+    #   tokens from POST /api/auth/login continue to validate. Drop after
+    #   deprecation.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
   scheduler:
     lot-expiration:
       # Default ON in every profile except integration tests; see

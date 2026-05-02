@@ -70,8 +70,8 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로잉 아티스트의 PUBLISHED 포스트만 피드에 노출된다")
     void findFeedForFan_returnsOnlyPublishedPostsFromFollowedArtists() {
         stubAccountProfile();
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             feedSubscriptionJpaRepository.save(FeedSubscription.create(fanId, artistId, Instant.now()));
@@ -89,9 +89,9 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로우하지 않은 아티스트의 포스트는 피드에 노출되지 않는다")
     void findFeedForFan_excludesPostsFromUnfollowedArtists() {
         stubAccountProfile();
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistA = "artist-a-" + UUID.randomUUID();
-        String artistB = "artist-b-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistA = "artist-a-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistB = "artist-b-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             feedSubscriptionJpaRepository.save(FeedSubscription.create(fanId, artistA, Instant.now()));
@@ -110,8 +110,8 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("soft-delete 처리된 PUBLISHED 포스트는 피드에 노출되지 않는다")
     void findFeedForFan_excludesSoftDeletedPost() {
         stubAccountProfile();
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             feedSubscriptionJpaRepository.save(FeedSubscription.create(fanId, artistId, Instant.now()));
@@ -157,8 +157,8 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("PUBLISHED 포스트가 페이지 크기를 초과할 때 페이지네이션이 동작한다")
     void findFeedForFan_paginates() {
         stubAccountProfile();
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             feedSubscriptionJpaRepository.save(FeedSubscription.create(fanId, artistId, Instant.now()));

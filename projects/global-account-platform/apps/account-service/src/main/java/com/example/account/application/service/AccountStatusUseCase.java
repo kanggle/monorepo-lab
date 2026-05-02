@@ -102,16 +102,18 @@ public class AccountStatusUseCase {
         }
 
         eventPublisher.publishStatusChanged(
-                account, previousStatus.name(), command.reason().name(),
+                account, account.getTenantId().value(), previousStatus.name(), command.reason().name(),
                 command.actorType(), command.actorId(), now);
 
         if (command.targetStatus() == AccountStatus.LOCKED) {
             eventPublisher.publishAccountLocked(
-                    account, command.reason().name(), command.actorType(), command.actorId(), now);
+                    account, account.getTenantId().value(), command.reason().name(),
+                    command.actorType(), command.actorId(), now);
         } else if (command.targetStatus() == AccountStatus.ACTIVE
                 && previousStatus == AccountStatus.LOCKED) {
             eventPublisher.publishAccountUnlocked(
-                    account, command.reason().name(), command.actorType(), command.actorId(), now);
+                    account, account.getTenantId().value(), command.reason().name(),
+                    command.actorType(), command.actorId(), now);
         }
     }
 
@@ -133,10 +135,12 @@ public class AccountStatusUseCase {
         Instant gracePeriodEndsAt = now.plus(gracePeriodDays, ChronoUnit.DAYS);
 
         eventPublisher.publishStatusChanged(
-                account, previousStatus.name(), reason.name(), actorType, actorId, now);
+                account, account.getTenantId().value(), previousStatus.name(), reason.name(),
+                actorType, actorId, now);
 
         eventPublisher.publishAccountDeleted(
-                account, reason.name(), actorType, actorId, now, gracePeriodEndsAt);
+                account, account.getTenantId().value(), reason.name(), actorType, actorId,
+                now, gracePeriodEndsAt);
 
         return new DeleteAccountResult(
                 account.getId(),

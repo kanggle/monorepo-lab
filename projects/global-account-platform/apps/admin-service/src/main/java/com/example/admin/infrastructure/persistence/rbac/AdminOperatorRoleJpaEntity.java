@@ -35,13 +35,30 @@ public class AdminOperatorRoleJpaEntity {
     @Column(name = "granted_by")
     private Long grantedBy;
 
+    // TASK-BE-249: tenant_id mirrors the operator's tenantId so role grants
+    // are scoped per tenant (spec §admin-service Isolation Strategy).
+    @Column(name = "tenant_id", length = 32, nullable = false)
+    private String tenantId;
+
     public static AdminOperatorRoleJpaEntity create(Long operatorId, Long roleId,
                                                     Instant grantedAt, Long grantedBy) {
+        // Legacy call sites that predate TASK-BE-249 — tenantId resolved to 'fan-platform'.
+        return create(operatorId, roleId, grantedAt, grantedBy, "fan-platform");
+    }
+
+    /**
+     * Preferred factory (TASK-BE-249). {@code tenantId} must match the operator's
+     * {@code tenant_id} row.
+     */
+    public static AdminOperatorRoleJpaEntity create(Long operatorId, Long roleId,
+                                                    Instant grantedAt, Long grantedBy,
+                                                    String tenantId) {
         AdminOperatorRoleJpaEntity e = new AdminOperatorRoleJpaEntity();
         e.operatorId = operatorId;
         e.roleId = roleId;
         e.grantedAt = grantedAt;
         e.grantedBy = grantedBy;
+        e.tenantId = tenantId;
         return e;
     }
 

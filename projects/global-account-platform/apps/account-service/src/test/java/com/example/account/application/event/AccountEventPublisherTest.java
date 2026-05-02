@@ -21,15 +21,20 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit test for {@link AccountEventPublisher} focused on the
- * TASK-BE-041b-fix contract change: the flat {@code account.locked} payload
- * must carry an {@code eventId} (UUID) so downstream consumers can
- * idempotently deduplicate Kafka at-least-once redeliveries.
+ * Unit test for {@link AccountEventPublisher}.
+ *
+ * <p>TASK-BE-041b-fix: the flat {@code account.locked} payload must carry an
+ * {@code eventId} (UUID) so downstream consumers can idempotently deduplicate
+ * Kafka at-least-once redeliveries.
+ *
+ * <p>TASK-BE-248: all publish* methods require a non-null, non-blank
+ * {@code tenantId}; a blank value throws {@link IllegalArgumentException}.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -53,7 +58,7 @@ class AccountEventPublisherTest {
     @DisplayName("publishAccountLocked payload includes a UUID eventId (idempotency key)")
     void publishAccountLockedIncludesEventId() throws Exception {
         publisher.publishAccountLocked(
-                account("acc-1"), "ADMIN_LOCK", "operator", "op-7",
+                account("acc-1"), TenantId.FAN_PLATFORM.value(), "ADMIN_LOCK", "operator", "op-7",
                 Instant.parse("2026-04-14T10:00:00Z"));
 
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
@@ -79,9 +84,11 @@ class AccountEventPublisherTest {
     @Test
     @DisplayName("Each publishAccountLocked call generates a fresh eventId")
     void eventIdIsUniquePerCall() throws Exception {
-        publisher.publishAccountLocked(account("acc-1"), "ADMIN_LOCK", "operator", "op-1",
+        publisher.publishAccountLocked(account("acc-1"), TenantId.FAN_PLATFORM.value(),
+                "ADMIN_LOCK", "operator", "op-1",
                 Instant.parse("2026-04-14T10:00:00Z"));
-        publisher.publishAccountLocked(account("acc-2"), "AUTO_DETECT", "system", null,
+        publisher.publishAccountLocked(account("acc-2"), TenantId.FAN_PLATFORM.value(),
+                "AUTO_DETECT", "system", null,
                 Instant.parse("2026-04-14T10:00:01Z"));
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
@@ -91,5 +98,50 @@ class AccountEventPublisherTest {
         String e1 = objectMapper.readTree(captor.getAllValues().get(0)).get("eventId").asText();
         String e2 = objectMapper.readTree(captor.getAllValues().get(1)).get("eventId").asText();
         assertThat(e1).isNotEqualTo(e2);
+    }
+
+    // ── TASK-BE-248: tenantId null/blank guard ────────────────────────────────
+
+    @Test
+    @DisplayName("publishAccountLocked — tenantId null → IllegalArgumentException")
+    void publishAccountLocked_nullTenantId_throwsIllegalArgument() {
+        Account acc = account("acc-null");
+        assertThatThrownBy(() ->
+                publisher.publishAccountLocked(acc, null, "ADMIN_LOCK", "operator", "op-1",
+                        Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("publishAccountLocked — tenantId blank → IllegalArgumentException")
+    void publishAccountLocked_blankTenantId_throwsIllegalArgument() {
+        Account acc = account("acc-blank");
+        assertThatThrownBy(() ->
+                publisher.publishAccountLocked(acc, "   ", "ADMIN_LOCK", "operator", "op-1",
+                        Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("publishAccountCreated — tenantId null → IllegalArgumentException")
+    void publishAccountCreated_nullTenantId_throwsIllegalArgument() {
+        Account acc = account("acc-c");
+        assertThatThrownBy(() ->
+                publisher.publishAccountCreated(acc, null, "ko-KR"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
+    }
+
+    @Test
+    @DisplayName("publishStatusChanged — tenantId blank → IllegalArgumentException")
+    void publishStatusChanged_blankTenantId_throwsIllegalArgument() {
+        Account acc = account("acc-s");
+        assertThatThrownBy(() ->
+                publisher.publishStatusChanged(acc, "", "ACTIVE", "ADMIN_LOCK",
+                        "operator", "op-1", Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId required");
     }
 }

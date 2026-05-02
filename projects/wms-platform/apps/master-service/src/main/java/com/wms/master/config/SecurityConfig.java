@@ -2,6 +2,7 @@ package com.wms.master.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.wms.master.config.security.TenantClaimValidator;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -14,9 +15,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 @Configuration
@@ -44,9 +49,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .authenticationEntryPoint((request, response, authException) ->
-                                writeError(response, objectMapper, HttpServletResponse.SC_UNAUTHORIZED,
-                                        "UNAUTHORIZED", "Authentication required"))
+                        .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
                         .accessDeniedHandler(forbiddenHandler(objectMapper)));
         return http.build();
     }
@@ -93,6 +96,60 @@ public class SecurityConfig {
         return (request, response, accessDeniedException) -> writeError(response, objectMapper,
                 HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN",
                 "Insufficient privileges for this operation");
+    }
+
+    /**
+     * Authentication entry point that distinguishes cross-tenant token misuse
+     * from generic authentication failures. {@link TenantClaimValidator} raises
+     * the {@code tenant_mismatch} error code when the {@code tenant_id} claim
+     * does not match the {@code wms} tenant; the OAuth2 Resource Server filter
+     * normally surfaces all token-validation failures as 401, but here we map
+     * tenant mismatch to 403 with the {@code TENANT_FORBIDDEN} envelope code
+     * (TASK-MONO-019 acceptance criteria).
+     */
+    private AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
+        return (request, response, authException) -> {
+            OAuth2Error oauthError = extractOAuth2Error(authException);
+            if (oauthError != null
+                    && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(oauthError.getErrorCode())) {
+                String message = oauthError.getDescription() != null
+                        ? oauthError.getDescription()
+                        : "Cross-tenant access denied";
+                writeError(response, objectMapper, HttpServletResponse.SC_FORBIDDEN,
+                        "TENANT_FORBIDDEN", message);
+                return;
+            }
+            writeError(response, objectMapper, HttpServletResponse.SC_UNAUTHORIZED,
+                    "UNAUTHORIZED", "Authentication required");
+        };
+    }
+
+    /**
+     * Walks the cause chain of an {@link org.springframework.security.core.AuthenticationException}
+     * looking for the granular {@link OAuth2Error} attached by Spring Security's
+     * Jwt validators. {@link JwtValidationException} preserves all individual
+     * validator errors (e.g. {@code tenant_mismatch}, {@code invalid_issuer})
+     * — prefer those over the generic {@code invalid_token} wrapper.
+     */
+    private static OAuth2Error extractOAuth2Error(Throwable t) {
+        Throwable cur = t;
+        OAuth2Error fallback = null;
+        while (cur != null) {
+            if (cur instanceof JwtValidationException jve) {
+                for (OAuth2Error err : jve.getErrors()) {
+                    if (err != null && err.getErrorCode() != null
+                            && !"invalid_token".equals(err.getErrorCode())) {
+                        return err;
+                    }
+                }
+            }
+            if (cur instanceof InvalidBearerTokenException ibte) {
+                OAuth2Error err = ibte.getError();
+                if (err != null) fallback = err;
+            }
+            cur = cur.getCause();
+        }
+        return fallback;
     }
 
     private static void writeError(HttpServletResponse response, ObjectMapper objectMapper,

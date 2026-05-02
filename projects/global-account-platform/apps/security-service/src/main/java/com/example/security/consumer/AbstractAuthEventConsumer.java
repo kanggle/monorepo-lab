@@ -55,6 +55,19 @@ public abstract class AbstractAuthEventConsumer {
                 return;
             }
 
+            // TASK-BE-248 Phase 2a: reject events missing tenant_id — they cannot be
+            // processed with per-tenant isolation guarantees. Non-retryable exception
+            // causes DefaultErrorHandler to route directly to <topic>.dlq and increments
+            // the outbox.dlq.size counter (reason=tenant_id_missing).
+            String tenantIdFromEnvelope = nullableText(envelope, "tenantId");
+            String tenantIdFromPayload  = nullableText(envelope.path("payload"), "tenantId");
+            boolean hasTenantId = isNonBlank(tenantIdFromEnvelope) || isNonBlank(tenantIdFromPayload);
+            if (!hasTenantId) {
+                log.warn("Event missing tenant_id — routing to DLQ: eventType={}, eventId={}",
+                        eventType, eventId);
+                throw new MissingTenantIdException(eventId, eventType);
+            }
+
             if (dedupService.isDuplicate(eventId)) {
                 log.info("Duplicate event skipped (Redis fast-path): eventId={}, topic={}", eventId, record.topic());
                 return;
@@ -97,6 +110,21 @@ public abstract class AbstractAuthEventConsumer {
             log.warn("Detection pipeline threw for eventId={}; history remains recorded",
                     envelope.path("eventId").asText(), e);
         }
+    }
+
+    private static String nullableText(JsonNode node, String field) {
+        if (node == null || node.isMissingNode()) {
+            return null;
+        }
+        JsonNode value = node.path(field);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        return value.asText();
+    }
+
+    private static boolean isNonBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     /**

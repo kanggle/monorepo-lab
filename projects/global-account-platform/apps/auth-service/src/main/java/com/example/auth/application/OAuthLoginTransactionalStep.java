@@ -82,7 +82,7 @@ public class OAuthLoginTransactionalStep {
 
         // Register/update device session
         RegisterDeviceSessionResult sessionResult =
-                registerOrUpdateDeviceSessionUseCase.execute(accountId, ctx);
+                registerOrUpdateDeviceSessionUseCase.execute(accountId, tenantContext.tenantId(), ctx);
         String deviceId = sessionResult.deviceId();
 
         // Issue JWT tokens with tenant context (fail-closed via JwtTokenGenerator)
@@ -102,14 +102,14 @@ public class OAuthLoginTransactionalStep {
         );
         refreshTokenRepository.save(refreshTokenEntity);
 
-        // Publish login succeeded event with loginMethod
-        authEventPublisher.publishLoginSucceeded(accountId, refreshJti, ctx,
-                deviceId, sessionResult.newSession(), provider.loginMethod());
+        // Publish login succeeded event with loginMethod and tenantId
+        authEventPublisher.publishLoginSucceeded(accountId, refreshJti, tenantContext.tenantId(),
+                ctx, deviceId, sessionResult.newSession(), provider.loginMethod());
 
         // Publish session created event if new session
         if (sessionResult.newSession()) {
             authEventPublisher.publishAuthSessionCreated(
-                    accountId, deviceId, refreshJti,
+                    accountId, tenantContext.tenantId(), deviceId, refreshJti,
                     LoginUseCase.fingerprintHash(ctx.deviceFingerprint()),
                     ctx.userAgentFamily(),
                     ctx.ipMasked(),

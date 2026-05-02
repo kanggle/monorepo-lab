@@ -40,8 +40,8 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @Test
     @DisplayName("countByPostIdAndDeletedAtIsNull — 활성 댓글만 카운트, soft-delete 제외")
     void countByPostIdAndDeletedAtIsNull_includesActiveExcludesDeleted() {
-        String postId = "post-" + UUID.randomUUID();
-        String authorId = "author-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
+        String authorId = "author-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             commentRepo.save(Comment.create(postId, authorId, "active-1"));
@@ -60,9 +60,9 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @Test
     @DisplayName("countsGroupedByPostId — 여러 포스트의 그룹별 카운트 반환")
     void countsGroupedByPostId_returnsPerPostCounts() {
-        String postA = "post-a-" + UUID.randomUUID();
-        String postB = "post-b-" + UUID.randomUUID();
-        String authorId = "author-" + UUID.randomUUID();
+        String postA = "post-a-" + UUID.randomUUID().toString().substring(0, 20);
+        String postB = "post-b-" + UUID.randomUUID().toString().substring(0, 20);
+        String authorId = "author-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             commentRepo.save(Comment.create(postA, authorId, "A-1"));
@@ -85,8 +85,8 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
     @Test
     @DisplayName("countsGroupedByPostId — soft-delete 행은 그룹 카운트에서 제외")
     void countsGroupedByPostId_excludesSoftDeleted() {
-        String postId = "post-" + UUID.randomUUID();
-        String authorId = "author-" + UUID.randomUUID();
+        String postId = "post-" + UUID.randomUUID().toString().substring(0, 20);
+        String authorId = "author-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s -> {
             commentRepo.save(Comment.create(postId, authorId, "live-1"));

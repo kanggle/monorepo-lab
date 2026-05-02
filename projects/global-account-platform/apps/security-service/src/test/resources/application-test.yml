@@ -99,3 +99,8 @@ security:
       read-timeout-ms: 2000
     geoip:
       db-path: ""
+
+app:
+  pii:
+    masking:
+      fingerprint-salt: test-fingerprint-salt-TASK-BE-270

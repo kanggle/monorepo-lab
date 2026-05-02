@@ -229,20 +229,31 @@ public class Account {
     }
 
     /**
-     * TASK-BE-231: Event emitted when the provisioning API replaces an account's role set.
+     * TASK-BE-231: Event emitted when the provisioning API mutates an account's role set.
+     *
+     * <p>TASK-BE-255: Schema bumped to v3. Adds {@code beforeRoles}, {@code afterRoles}
+     * and {@code changedBy} fields so downstream consumers can compute the diff
+     * directly without a separate snapshot store. The legacy {@code roles} field
+     * is preserved as an alias for {@code afterRoles} (forward-compat).
      */
-    public AccountDomainEvent buildRolesChangedEvent(java.util.List<String> roles,
+    public AccountDomainEvent buildRolesChangedEvent(java.util.List<String> beforeRoles,
+                                                      java.util.List<String> afterRoles,
+                                                      String changedBy,
                                                       String actorType, String actorId,
                                                       Instant occurredAt) {
-        Map<String, Object> payload = new HashMap<>(Map.of(
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "roles", roles,
-                "actorType", actorType,
-                "occurredAt", occurredAt.toString()
-        ));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("accountId", id);
+        payload.put("tenantId", tenantId.value());
+        payload.put("roles", afterRoles);            // legacy alias (v2 consumers)
+        payload.put("beforeRoles", beforeRoles);     // TASK-BE-255 (v3)
+        payload.put("afterRoles", afterRoles);       // TASK-BE-255 (v3)
+        payload.put("actorType", actorType);
+        payload.put("occurredAt", occurredAt.toString());
         if (actorId != null) {
             payload.put("actorId", actorId);
+        }
+        if (changedBy != null) {
+            payload.put("changedBy", changedBy);     // TASK-BE-255 (v3)
         }
         return new AccountDomainEvent("account.roles.changed", payload);
     }

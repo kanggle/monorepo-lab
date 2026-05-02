@@ -7,6 +7,7 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.result.AssignRolesResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.account.AccountRole;
+import com.example.account.domain.account.AccountRoleName;
 import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountRoleRepository;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,6 +29,13 @@ import java.util.List;
  * <p>Deletes existing role assignments and inserts the new set in a single transaction.
  * Publishes outbox {@code account.roles.changed} event and records audit entry
  * with {@code OPERATOR_PROVISIONING_ROLES_REPLACE} action code.
+ *
+ * <p>TASK-BE-255: Snapshots the previous role set for the {@code beforeRoles}
+ * field on the outbox event and validates each new role name against
+ * {@link AccountRoleName} before persisting. Cross-tenant safety is preserved
+ * because {@code AccountRepository.findById(tenantId, accountId)} returns empty
+ * when the accountId belongs to a different tenant — the call surfaces as
+ * {@code ACCOUNT_NOT_FOUND}.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,21 +55,34 @@ public class AssignRolesUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(command.tenantId()));
 
-        // Validate account exists within this tenant
+        // Validate account exists within this tenant — cross-tenant accountIds surface as 404.
         Account account = accountRepository.findById(tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
-        // Replace roles atomically
+        List<String> requestedRoles = command.roles() != null ? command.roles() : List.of();
+        // Up-front validation so a partial-write trajectory is not possible.
+        for (String roleName : requestedRoles) {
+            AccountRoleName.validate(roleName);
+        }
+
+        // Snapshot the existing role set BEFORE mutating, so the outbox event carries beforeRoles.
+        List<String> beforeRoles = new ArrayList<>(
+                accountRoleRepository.findByTenantIdAndAccountId(tenantId, command.accountId())
+                        .stream()
+                        .map(AccountRole::getRoleName)
+                        .toList()
+        );
+
+        // Replace roles atomically.
         accountRoleRepository.deleteAllByTenantIdAndAccountId(tenantId, command.accountId());
 
-        List<String> newRoles = command.roles() != null ? command.roles() : List.of();
-        for (String roleName : newRoles) {
-            AccountRole role = AccountRole.create(tenantId, command.accountId(), roleName);
+        String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
+        for (String roleName : requestedRoles) {
+            AccountRole role = AccountRole.create(tenantId, command.accountId(), roleName, operatorId);
             accountRoleRepository.save(role);
         }
 
         // Audit record
-        String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
         AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
                 command.tenantId(),
                 command.accountId(),
@@ -69,14 +91,16 @@ public class AssignRolesUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_ROLES_REPLACE,
                 "provisioning_system",
                 operatorId,
-                "action=OPERATOR_PROVISIONING_ROLES_REPLACE,roles=" + newRoles
+                "action=OPERATOR_PROVISIONING_ROLES_REPLACE,before=" + beforeRoles + ",after=" + requestedRoles
         );
         historyRepository.save(auditEntry);
 
-        // Publish outbox event
+        // Publish outbox event with both before / after snapshots (TASK-BE-255).
         Instant now = Instant.now();
-        eventPublisher.publishRolesChanged(account, newRoles, "provisioning_system", operatorId, now);
+        eventPublisher.publishRolesChanged(account, account.getTenantId().value(),
+                beforeRoles, requestedRoles, operatorId,
+                "provisioning_system", operatorId, now);
 
-        return new AssignRolesResult(command.accountId(), command.tenantId(), newRoles, now);
+        return new AssignRolesResult(command.accountId(), command.tenantId(), requestedRoles, now);
     }
 }

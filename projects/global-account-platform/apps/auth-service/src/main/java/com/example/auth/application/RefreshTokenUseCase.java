@@ -234,8 +234,16 @@ public class RefreshTokenUseCase {
         }
 
         Instant reuseAttemptAt = Instant.now();
+
+        // TASK-BE-248 Phase 2b / TASK-BE-259: tenantId from the reused token's DB record.
+        // Resolved before publishing so it can flow into auth.token.reuse.detected as well.
+        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
+                ? existingToken.getTenantId()
+                : TenantContext.DEFAULT_TENANT_ID;
+
         authEventPublisher.publishTokenReuseDetected(
                 accountId,
+                tenantId,
                 jti,
                 originalRotationAt,
                 reuseAttemptAt,
@@ -254,6 +262,7 @@ public class RefreshTokenUseCase {
             deviceSessionRepository.save(session);
             authEventPublisher.publishAuthSessionRevoked(
                     accountId,
+                    tenantId,
                     session.getDeviceId(),
                     RevokeReason.TOKEN_REUSE.name(),
                     deviceJtis,

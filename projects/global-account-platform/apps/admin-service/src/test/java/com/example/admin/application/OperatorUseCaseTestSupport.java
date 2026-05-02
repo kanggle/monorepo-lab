@@ -75,8 +75,10 @@ final class OperatorUseCaseTestSupport {
      * assigns the JPA-internal id afterwards.
      */
     static AdminOperatorJpaEntity operator(Long id, String uuid, String email, String status) {
+        // TASK-BE-249: use 7-arg factory that includes tenantId
         AdminOperatorJpaEntity e = AdminOperatorJpaEntity.create(
-                uuid, email, "hash", "Display", status, Instant.parse("2026-01-01T00:00:00Z"));
+                uuid, email, "hash", "Display", status, "fan-platform",
+                Instant.parse("2026-01-01T00:00:00Z"));
         setField(e, "id", id);
         return e;
     }

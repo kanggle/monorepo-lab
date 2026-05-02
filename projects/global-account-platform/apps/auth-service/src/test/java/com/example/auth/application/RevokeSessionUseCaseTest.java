@@ -59,7 +59,7 @@ class RevokeSessionUseCaseTest {
         verify(refreshTokenRepository).revokeAllByDeviceId(DEVICE_ID);
         verify(deviceSessionRepository).save(session);
         verify(authEventPublisher).publishAuthSessionRevoked(
-                eq(ACCOUNT_ID), eq(DEVICE_ID),
+                eq(ACCOUNT_ID), anyString(), eq(DEVICE_ID),
                 eq(RevokeReason.USER_REQUESTED.name()),
                 anyList(), any(Instant.class),
                 anyString(), anyString());

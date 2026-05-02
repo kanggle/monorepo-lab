@@ -59,7 +59,7 @@ class PublishPostIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("아티스트가 ARTIST_POST 발행에 성공하면 201 응답과 함께 DB·status_history·outbox 가 채워진다")
     void artistPublishesPost_returns201_andPersistsToDb() throws Exception {
         stubAccountProfile("artist", "Test Artist");
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         String body = """
                 {"type":"ARTIST_POST","visibility":"PUBLIC","title":"Test Post","body":"Hello world","mediaUrls":[]}
@@ -107,7 +107,7 @@ class PublishPostIntegrationTest extends CommunityIntegrationTestBase {
     @Test
     @DisplayName("팬이 ARTIST_POST 를 발행하려고 하면 403 PERMISSION_DENIED 가 반환된다")
     void fanCannotPublishArtistPost_returns403() throws Exception {
-        String fanId = "fan-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
 
         String body = """
                 {"type":"ARTIST_POST","visibility":"PUBLIC","title":"Test Post","body":"Hello world","mediaUrls":[]}

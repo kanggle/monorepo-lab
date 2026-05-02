@@ -4,6 +4,7 @@ import com.example.messaging.outbox.OutboxWriter;
 import com.example.security.domain.Tenants;
 import com.example.security.domain.detection.AccountLockClient;
 import com.example.security.domain.detection.RiskLevel;
+import com.example.security.domain.pii.PiiMaskingRecord;
 import com.example.security.domain.suspicious.SuspiciousEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,10 +21,12 @@ import org.mockito.quality.Strictness;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
@@ -85,6 +88,8 @@ class SecurityEventPublisherTest {
 
         JsonNode payload = root.get("payload");
         assertThat(payload.get("suspiciousEventId").asText()).isEqualTo(event.getId());
+        // TASK-BE-248: tenant_id must be present in every security event payload
+        assertThat(payload.get("tenantId").asText()).isEqualTo(Tenants.DEFAULT_TENANT_ID);
         assertThat(payload.get("accountId").asText()).isEqualTo("acc-1");
         assertThat(payload.get("ruleCode").asText()).isEqualTo("RULE_GEO_VELOCITY");
         assertThat(payload.get("riskScore").asInt()).isEqualTo(75);
@@ -110,6 +115,7 @@ class SecurityEventPublisherTest {
 
         JsonNode payload = objectMapper.readTree(jsonCaptor.getValue()).get("payload");
         assertThat(payload.get("suspiciousEventId").asText()).isEqualTo(event.getId());
+        assertThat(payload.get("tenantId").asText()).isEqualTo(Tenants.DEFAULT_TENANT_ID);
         assertThat(payload.get("accountId").asText()).isEqualTo("acc-2");
         assertThat(payload.get("ruleCode").asText()).isEqualTo("RULE_GEO_VELOCITY");
         assertThat(payload.get("riskScore").asInt()).isEqualTo(75);
@@ -157,5 +163,50 @@ class SecurityEventPublisherTest {
         assertThat(payload.get("accountId").asText()).isEqualTo("acc-4");
         assertThat(payload.get("reason").asText()).isEqualTo("ACCOUNT_SERVICE_UNREACHABLE");
         assertThat(payload.get("raisedAt").asText()).isNotBlank();
+    }
+
+    // ─── TASK-BE-258: security.pii.masked ───────────────────────────────
+
+    @Test
+    @DisplayName("publishPiiMasked writes envelope with accountId, tenantId, maskedAt, tableNames")
+    void publishPiiMasked_writesCorrectEnvelope() throws Exception {
+        Instant maskedAt = Instant.parse("2026-05-02T12:00:00Z");
+        List<String> tables = List.of("login_history", "suspicious_events", "account_lock_history");
+        PiiMaskingRecord record = new PiiMaskingRecord("acc-pii", "fan-platform", maskedAt, tables);
+
+        publisher.publishPiiMasked(record, "source-event-id-001");
+
+        ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter).save(
+                eq("security"),
+                eq("acc-pii"),
+                eq(SecurityEventPublisher.TOPIC_PII_MASKED),
+                jsonCaptor.capture());
+
+        JsonNode root = objectMapper.readTree(jsonCaptor.getValue());
+        assertThat(root.get("eventId").asText()).isNotBlank();
+        assertThat(root.get("eventType").asText()).isEqualTo("security.pii.masked");
+        assertThat(root.get("source").asText()).isEqualTo("security-service");
+        assertThat(root.get("partitionKey").asText()).isEqualTo("acc-pii");
+
+        JsonNode payload = root.get("payload");
+        assertThat(payload.get("accountId").asText()).isEqualTo("acc-pii");
+        assertThat(payload.get("tenantId").asText()).isEqualTo("fan-platform");
+        assertThat(payload.get("maskedAt").asText()).isEqualTo("2026-05-02T12:00:00Z");
+        assertThat(payload.get("tableNames").isArray()).isTrue();
+        assertThat(payload.get("tableNames").get(0).asText()).isEqualTo("login_history");
+        assertThat(payload.get("tableNames").get(1).asText()).isEqualTo("suspicious_events");
+        assertThat(payload.get("tableNames").get(2).asText()).isEqualTo("account_lock_history");
+    }
+
+    @Test
+    @DisplayName("publishPiiMasked throws IllegalArgumentException when tenantId is blank")
+    void publishPiiMasked_blankTenantId_throws() {
+        // PiiMaskingRecord itself guards blank tenantId at construction time —
+        // the IllegalArgumentException is expected to propagate from the record constructor.
+        Instant maskedAt = Instant.now();
+        assertThatThrownBy(() -> new PiiMaskingRecord("acc-x", "  ", maskedAt, List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tenantId");
     }
 }

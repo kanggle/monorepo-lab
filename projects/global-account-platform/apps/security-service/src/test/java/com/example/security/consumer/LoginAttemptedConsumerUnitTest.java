@@ -49,6 +49,7 @@ class LoginAttemptedConsumerUnitTest {
                 {
                   "eventId": "evt-atm-1",
                   "eventType": "auth.login.attempted",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -75,6 +76,7 @@ class LoginAttemptedConsumerUnitTest {
                 {
                   "eventId": "evt-atm-dup",
                   "eventType": "auth.login.attempted",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": { "accountId": "acc-2", "timestamp": "2026-04-29T10:00:00Z" }
                 }

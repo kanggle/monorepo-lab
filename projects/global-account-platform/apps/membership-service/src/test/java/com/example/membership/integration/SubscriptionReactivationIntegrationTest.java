@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -42,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
+@Import(MembershipJwtTestSupport.JwtDecoderConfig.class)
 @DisplayName("구독 재활성화 통합 테스트 — EXPIRED 구독 보유 계정의 신규 구독 생성")
 class SubscriptionReactivationIntegrationTest extends AbstractIntegrationTest {
 
@@ -111,6 +113,7 @@ class SubscriptionReactivationIntegrationTest extends AbstractIntegrationTest {
 
         // 재활성화 요청
         mockMvc.perform(post("/api/membership/subscriptions")
+                        .header("Authorization", MembershipJwtTestSupport.bearer(accountId, java.util.List.of("FAN")))
                         .header("X-Account-Id", accountId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planLevel\":\"FAN_CLUB\",\"idempotencyKey\":\"" + idem + "\"}"))

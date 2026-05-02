@@ -13,6 +13,11 @@ import java.util.List;
  * password policy is "≥10 chars, at least one letter, one digit, one special
  * character" enforced via the regex below so invalid shapes surface as
  * {@code 400 VALIDATION_ERROR}.
+ *
+ * <p>TASK-BE-249: {@code tenantId} added as a required field. The creating
+ * operator cannot assign a platform-scope ({@code "*"}) tenantId unless they
+ * themselves are platform-scope — that gate is enforced in
+ * {@code CreateOperatorUseCase}.
  */
 public record CreateOperatorRequest(
         @NotBlank
@@ -31,5 +36,14 @@ public record CreateOperatorRequest(
         )
         String password,
 
-        List<String> roles
+        List<String> roles,
+
+        /**
+         * TASK-BE-249: the tenant this operator belongs to. Required.
+         * Must be a valid tenant slug ({@code ^[a-z][a-z0-9-]{1,31}$}) or the
+         * platform-scope sentinel {@code "*"} (SUPER_ADMIN only — validated in use-case).
+         */
+        @NotBlank
+        @Size(min = 1, max = 32)
+        String tenantId
 ) {}

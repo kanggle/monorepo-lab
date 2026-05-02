@@ -216,7 +216,7 @@ class RefreshTokenUseCaseTest {
         verify(refreshTokenRepository).revokeAllByAccountId(ACCOUNT_ID);
         verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, 604800L);
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(ACCOUNT_ID), eq(OLD_JTI), any(), any(Instant.class),
+                eq(ACCOUNT_ID), eq(TENANT_ID), eq(OLD_JTI), any(), any(Instant.class),
                 eq(CTX.ipMasked()), eq(CTX.deviceFingerprint()),
                 eq(true), eq(3)
         );
@@ -228,11 +228,11 @@ class RefreshTokenUseCaseTest {
                 .allMatch(s -> s.getRevokeReason() == RevokeReason.TOKEN_REUSE);
 
         verify(authEventPublisher).publishAuthSessionRevoked(
-                eq(ACCOUNT_ID), eq("dev-1"), eq(RevokeReason.TOKEN_REUSE.name()),
+                eq(ACCOUNT_ID), anyString(), eq("dev-1"), eq(RevokeReason.TOKEN_REUSE.name()),
                 eq(List.of(OLD_JTI, "sibling-jti-1")), any(Instant.class),
                 eq("SYSTEM"), isNull());
         verify(authEventPublisher).publishAuthSessionRevoked(
-                eq(ACCOUNT_ID), eq("dev-2"), eq(RevokeReason.TOKEN_REUSE.name()),
+                eq(ACCOUNT_ID), anyString(), eq("dev-2"), eq(RevokeReason.TOKEN_REUSE.name()),
                 eq(List.of("sibling-jti-2")), any(Instant.class),
                 eq("SYSTEM"), isNull());
     }
@@ -317,9 +317,9 @@ class RefreshTokenUseCaseTest {
 
         verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, 604800L);
         verify(authEventPublisher, never()).publishTokenReuseDetected(
-                anyString(), anyString(), any(), any(), any(), any(), anyBoolean(), anyInt());
+                anyString(), anyString(), anyString(), any(), any(), any(), any(), anyBoolean(), anyInt());
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
-                anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), any());
+                anyString(), anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), any());
         verify(deviceSessionRepository, never()).save(any());
     }
 }

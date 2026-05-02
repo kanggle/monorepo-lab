@@ -7,6 +7,8 @@ import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
+import com.example.auth.domain.tenant.TenantContext;
+import com.example.auth.domain.token.RefreshToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,16 @@ public class RevokeAllOtherSessionsUseCase {
                 .filter(s -> s.getAccountId().equals(accountId) && s.isActive())
                 .orElseThrow(SessionNotFoundException::new);
 
+        // TASK-BE-248 Phase 2b: resolve tenantId from the caller's current session refresh token.
+        // The current device's active JTI is the authoritative source for tenant context.
+        String tenantId = refreshTokenRepository.findActiveJtisByDeviceId(currentDeviceId)
+                .stream()
+                .findFirst()
+                .flatMap(refreshTokenRepository::findByJti)
+                .map(RefreshToken::getTenantId)
+                .filter(t -> t != null && !t.isBlank())
+                .orElse(TenantContext.DEFAULT_TENANT_ID);
+
         List<DeviceSession> active = deviceSessionRepository.findActiveByAccountId(accountId);
         Instant now = Instant.now();
         int revokedCount = 0;
@@ -55,7 +67,7 @@ public class RevokeAllOtherSessionsUseCase {
             session.revoke(now, RevokeReason.LOGOUT_OTHERS);
             deviceSessionRepository.save(session);
             authEventPublisher.publishAuthSessionRevoked(
-                    accountId, session.getDeviceId(),
+                    accountId, tenantId, session.getDeviceId(),
                     RevokeReason.LOGOUT_OTHERS.name(),
                     revokedJtis, now,
                     ACTOR_TYPE_USER, accountId);

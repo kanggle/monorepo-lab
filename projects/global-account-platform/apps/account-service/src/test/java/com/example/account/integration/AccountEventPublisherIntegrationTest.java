@@ -99,7 +99,7 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
         Instant lockedAt = Instant.parse("2026-04-26T12:00:00Z");
 
         accountEventPublisher.publishAccountLocked(
-                lockedAccount(accountId), "ADMIN_LOCK", "operator", "op-7", lockedAt);
+                lockedAccount(accountId), TenantId.FAN_PLATFORM.value(), "ADMIN_LOCK", "operator", "op-7", lockedAt);
 
         // Read the row that was just written. We filter by aggregate_id +
         // event_type so rows from other tests don't bleed in (outbox is
@@ -145,7 +145,7 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
         Instant lockedAt = Instant.parse("2026-04-26T12:00:01Z");
 
         accountEventPublisher.publishAccountLocked(
-                lockedAccount(accountId), "AUTO_DETECT", "system", null, lockedAt);
+                lockedAccount(accountId), TenantId.FAN_PLATFORM.value(), "AUTO_DETECT", "system", null, lockedAt);
 
         String payloadJson = jdbcTemplate.queryForObject(
                 "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = ?",

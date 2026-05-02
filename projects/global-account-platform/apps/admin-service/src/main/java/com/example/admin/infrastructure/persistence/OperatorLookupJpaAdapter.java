@@ -11,6 +11,8 @@ import java.util.Optional;
 /**
  * JPA-backed adapter for {@link OperatorLookupPort}. Keeps the admin_operators
  * repository out of the application layer's import graph.
+ *
+ * <p>TASK-BE-249: {@code tenantId} is now included in {@link OperatorSummary}.
  */
 @Component
 @RequiredArgsConstructor
@@ -26,6 +28,6 @@ public class OperatorLookupJpaAdapter implements OperatorLookupPort {
     @Override
     public Optional<OperatorSummary> findByOperatorId(String operatorId) {
         return repository.findByOperatorId(operatorId)
-                .map(e -> new OperatorSummary(e.getId(), e.getOperatorId()));
+                .map(e -> new OperatorSummary(e.getId(), e.getOperatorId(), e.getTenantId()));
     }
 }

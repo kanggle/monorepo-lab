@@ -15,6 +15,16 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          # TASK-BE-257: bulk provisioning — Hibernate JDBC batch size for IO optimization.
+          # Keeps per-row transactions short while grouping INSERT statements into batches of 50.
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}

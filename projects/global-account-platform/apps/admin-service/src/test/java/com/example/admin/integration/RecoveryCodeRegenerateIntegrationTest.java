@@ -147,9 +147,9 @@ class RecoveryCodeRegenerateIntegrationTest extends AbstractIntegrationTest {
         if (existing == null || existing == 0) {
             jdbcTemplate.update("""
                     INSERT INTO admin_operators
-                      (operator_id, email, password_hash, display_name, status,
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
                        created_at, updated_at, version)
-                    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    VALUES (?, 'fan-platform', ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)
                     """,
                     operatorUuid, email, passwordHash, displayName);
         } else {
@@ -158,8 +158,8 @@ class RecoveryCodeRegenerateIntegrationTest extends AbstractIntegrationTest {
                     passwordHash, operatorUuid);
         }
         jdbcTemplate.update("""
-                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, granted_at, granted_by)
-                SELECT o.id, r.id, NOW(6), NULL
+                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+                SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = ?
                 """, operatorUuid, roleName);

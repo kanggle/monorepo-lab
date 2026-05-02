@@ -59,10 +59,13 @@ public class GeoAnomalyRule implements SuspiciousActivityRule {
         }
         GeoPoint current = maybeCurrent.get();
 
-        Optional<LastKnownGeoStore.Snapshot> prev = geoStore.get(ctx.accountId());
+        // TASK-BE-248 Phase 1: include tenantId in GeoStore key so snapshots are
+        // isolated per tenant. Full per-tenant geo anomaly scoring is Phase 2.
+        String tenantId = ctx.tenantId() != null ? ctx.tenantId() : "";
+        Optional<LastKnownGeoStore.Snapshot> prev = geoStore.get(tenantId, ctx.accountId());
 
         // Always refresh the snapshot on a successful login so the baseline tracks the user.
-        geoStore.put(ctx.accountId(),
+        geoStore.put(tenantId, ctx.accountId(),
                 new LastKnownGeoStore.Snapshot(
                         current.country(), current.latitude(), current.longitude(), ctx.occurredAt()));
 
@@ -95,6 +98,8 @@ public class GeoAnomalyRule implements SuspiciousActivityRule {
         evidence.put("timeDeltaSeconds", deltaSeconds);
         evidence.put("impliedSpeedKmH", Math.round(speedKmH));
         evidence.put("speedThresholdKmH", thresholds.geoSpeedKmPerHour());
+        // TASK-BE-248 Phase 2a: include tenantId in evidence for cross-tenant audit trail.
+        evidence.put("tenantId", tenantId);
         return new DetectionResult(CODE, score, evidence);
     }
 }

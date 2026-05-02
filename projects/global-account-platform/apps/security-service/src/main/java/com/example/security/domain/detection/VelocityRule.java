@@ -4,8 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * VelocityRule — fires when the per-account failed-login count in the rolling
- * window exceeds {@link DetectionThresholds#velocityThreshold()}.
+ * VelocityRule — fires when the per-tenant per-account failed-login count in the
+ * rolling window exceeds {@link DetectionThresholds#velocityThreshold()}.
  *
  * <p>Spec: {@code riskScore = min(100, (failCount / threshold) * 80)} —
  * threshold-scaled so that reaching the threshold yields 80 (AUTO_LOCK floor)
@@ -13,6 +13,12 @@ import java.util.Map;
  *
  * <p>Increments the counter only on {@code auth.login.failed} events; other
  * event types are ignored.</p>
+ *
+ * <p>TASK-BE-248 Phase 1: the counter key now includes {@code tenantId} so that
+ * a burst of failures for one tenant never contributes to another tenant's
+ * threshold. {@link EvaluationContext#tenantId()} must be non-null at evaluation
+ * time; if it is null the rule falls back to a blank string, which isolates the
+ * counter from any named tenant but still prevents cross-tenant leakage.</p>
  */
 public class VelocityRule implements SuspiciousActivityRule {
 
@@ -36,7 +42,9 @@ public class VelocityRule implements SuspiciousActivityRule {
         if (ctx == null || !ctx.isLoginFailed() || !ctx.hasAccount()) {
             return DetectionResult.NONE;
         }
-        long count = counter.incrementAndGet(ctx.accountId(), thresholds.velocityWindowSeconds());
+        // TASK-BE-248: use tenantId in the counter key for per-tenant isolation.
+        String tenantId = ctx.tenantId() != null ? ctx.tenantId() : "";
+        long count = counter.incrementAndGet(tenantId, ctx.accountId(), thresholds.velocityWindowSeconds());
         if (count < thresholds.velocityThreshold()) {
             return DetectionResult.NONE;
         }
@@ -47,6 +55,7 @@ public class VelocityRule implements SuspiciousActivityRule {
         evidence.put("failCount", count);
         evidence.put("threshold", thresholds.velocityThreshold());
         evidence.put("windowSeconds", thresholds.velocityWindowSeconds());
+        evidence.put("tenantId", tenantId);
         return new DetectionResult(CODE, score, evidence);
     }
 }

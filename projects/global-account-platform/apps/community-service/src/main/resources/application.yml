@@ -32,6 +32,42 @@ spring:
     caffeine:
       spec: maximumSize=10000,expireAfterWrite=5m
 
+  # TASK-BE-253: Standard OAuth2 Resource Server + Client.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # OIDC issuer for SAS-issued tokens. Points at GAP's auth-service. The
+          # Resource Server fetches /.well-known/openid-configuration to learn the
+          # JWKS URI; both legacy and SAS tokens share that JWKS.
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          # Explicit JWKS URI used by the custom JwtDecoder (OAuth2ResourceServerConfig).
+          # Falls back to the well-known endpoint of the issuer.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
+      client:
+        registration:
+          # client_credentials grant for outbound calls to account-service.
+          gap-account:
+            provider: gap
+            client-id: ${COMMUNITY_SERVICE_CLIENT_ID:community-service-client}
+            client-secret: ${COMMUNITY_SERVICE_CLIENT_SECRET:community-service-secret}
+            authorization-grant-type: client_credentials
+            scope: account.read
+            client-authentication-method: client_secret_basic
+          gap-membership:
+            provider: gap
+            client-id: ${COMMUNITY_SERVICE_CLIENT_ID:community-service-client}
+            client-secret: ${COMMUNITY_SERVICE_CLIENT_SECRET:community-service-secret}
+            authorization-grant-type: client_credentials
+            scope: membership.read
+            client-authentication-method: client_secret_basic
+        provider:
+          # Only token-uri is set — Spring would otherwise call OIDC discovery on
+          # the issuer-uri at application startup, which couples bootup to GAP
+          # availability. issuer claim validation lives in OAuth2ResourceServerConfig.
+          gap:
+            token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+
 outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
@@ -41,10 +77,14 @@ server:
   port: 8086
 
 community:
-  jwt:
-    public-key-path: ${JWT_PUBLIC_KEY_PATH:classpath:keys/public.pem}
-    # TASK-BE-143: enforce iss claim. Must match auth.jwt.issuer in auth-service.
-    expected-issuer: ${JWT_EXPECTED_ISSUER:global-account-platform}
+  # TASK-BE-253: OIDC Resource Server validators.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window.
+    # - The first entry is the SAS issuer URL.
+    # - The legacy "global-account-platform" string is kept so existing tokens
+    #   from POST /api/auth/login continue to validate. Drop after deprecation.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
   membership-service:
     base-url: ${MEMBERSHIP_SERVICE_URL:http://localhost:8087}
     connect-timeout-ms: 2000

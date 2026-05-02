@@ -74,7 +74,7 @@ class OAuthLoginTransactionalStepTest {
                 "acc-123", true, Optional.of("ACTIVE"));
         when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-123"), any(SessionContext.class)))
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-123"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq("acc-123"), eq("user"), eq("dev-1"),
                 any(TenantContext.class)))
@@ -91,10 +91,10 @@ class OAuthLoginTransactionalStepTest {
         verify(socialIdentityJpaRepository).save(any());
         verify(refreshTokenRepository).save(any(RefreshToken.class));
         verify(authEventPublisher).publishLoginSucceeded(
-                eq("acc-123"), eq("jti-1"), any(SessionContext.class),
+                eq("acc-123"), eq("jti-1"), anyString(), any(SessionContext.class),
                 eq("dev-1"), eq(true), eq("OAUTH_GOOGLE"));
         verify(authEventPublisher).publishAuthSessionCreated(
-                eq("acc-123"), eq("dev-1"), eq("jti-1"),
+                eq("acc-123"), anyString(), eq("dev-1"), eq("jti-1"),
                 anyString(), any(), any(), any(), any(), any());
     }
 
@@ -109,7 +109,7 @@ class OAuthLoginTransactionalStepTest {
                 "acc-existing", "GOOGLE", "provider-user-1", "user@example.com");
         when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
-        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-existing"), any(SessionContext.class)))
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-existing"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-2", false, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq("acc-existing"), eq("user"), eq("dev-2"),
                 any(TenantContext.class)))
@@ -141,7 +141,7 @@ class OAuthLoginTransactionalStepTest {
         assertThatThrownBy(() -> step.persistLogin(command))
                 .isInstanceOf(AccountLockedException.class);
 
-        verify(registerOrUpdateDeviceSessionUseCase, never()).execute(anyString(), any());
+        verify(registerOrUpdateDeviceSessionUseCase, never()).execute(anyString(), anyString(), any());
         verify(refreshTokenRepository, never()).save(any());
         verify(tokenGeneratorPort, never()).generateTokenPair(anyString(), anyString(), anyString());
     }
@@ -155,7 +155,7 @@ class OAuthLoginTransactionalStepTest {
                 "acc-new", true, Optional.empty());
         when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-new"), any(SessionContext.class)))
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-new"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq("acc-new"), eq("user"), eq("dev-1"),
                 any(TenantContext.class)))

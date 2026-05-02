@@ -4,7 +4,255 @@
 
 ---
 
+## OAuth2 / OIDC Endpoints (Standard, ADR-001)
+
+> TASK-BE-251 Phase 2c 완료. 이하 엔드포인트는 Spring Authorization Server (SAS) 1.x가 처리한다.
+> gateway는 JWT 검증 없이 auth-service로 forward하며 SAS가 인증 책임을 담당한다.
+
+### GET /.well-known/openid-configuration
+
+OIDC Discovery 문서. RFC 8414 준거.
+
+**Auth required**: No
+
+**Response 200** (example):
+```json
+{
+  "issuer": "https://gap.example.com",
+  "authorization_endpoint": "https://gap.example.com/oauth2/authorize",
+  "token_endpoint": "https://gap.example.com/oauth2/token",
+  "jwks_uri": "https://gap.example.com/oauth2/jwks",
+  "userinfo_endpoint": "https://gap.example.com/oauth2/userinfo",
+  "revocation_endpoint": "https://gap.example.com/oauth2/revoke",
+  "introspection_endpoint": "https://gap.example.com/oauth2/introspect",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
+  "subject_types_supported": ["public"],
+  "id_token_signing_alg_values_supported": ["RS256"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"]
+}
+```
+
+---
+
+### GET /oauth2/jwks
+
+RSA 공개키 JWK Set. 기존 `POST /api/auth/login` 발급 토큰과 SAS 발급 토큰 모두 동일 키로 검증 가능.
+
+**Auth required**: No
+
+**Response 200**:
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "key-2026-04-01",
+      "n": "...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+---
+
+### GET /oauth2/authorize
+
+Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 필수.
+
+**Auth required**: No (사용자 세션 없으면 login 페이지로 redirect)
+
+**Query Parameters**:
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `response_type` | Y | `code` 고정 |
+| `client_id` | Y | 등록된 client ID |
+| `redirect_uri` | Y | 사전 등록된 redirect URI와 정확히 일치 |
+| `scope` | Y | 공백 구분. 예: `openid profile email` |
+| `code_challenge` | Y | S256 방식으로 계산된 PKCE challenge |
+| `code_challenge_method` | Y | `S256` 고정 |
+| `state` | 권장 | CSRF 방어용 opaque 값 |
+
+**Response**: 302 redirect to `redirect_uri?code=...&state=...`
+
+**Errors**:
+
+| 조건 | 응답 |
+|---|---|
+| PKCE 미포함 | 400 `invalid_request` |
+| 미등록 client | 400 `invalid_client` |
+| 미등록 redirect_uri | 400 `invalid_request` |
+
+---
+
+### POST /oauth2/token
+
+토큰 발급. `authorization_code`, `client_credentials`, `refresh_token` grant 지원.
+
+**Auth required**: `client_secret_basic` (confidential client) 또는 `none` (public PKCE client)
+
+**Request** (form-urlencoded):
+
+| 파라미터 | 조건 | 설명 |
+|---|---|---|
+| `grant_type` | Y | `authorization_code` \| `client_credentials` \| `refresh_token` |
+| `code` | authorization_code 전용 | authorize 단계에서 발급된 code |
+| `redirect_uri` | authorization_code 전용 | authorize 시와 동일 |
+| `code_verifier` | authorization_code 전용 | PKCE verifier |
+| `client_id` | public client | Basic auth 미사용 시 |
+| `refresh_token` | refresh_token 전용 | 기존 refresh token 값 |
+| `scope` | client_credentials 권장 | 요청 scope |
+
+**Response 200**:
+```json
+{
+  "access_token": "string (JWT)",
+  "token_type": "Bearer",
+  "expires_in": 1800,
+  "refresh_token": "string (authorization_code / refresh_token grant 전용)",
+  "scope": "string",
+  "id_token": "string (scope=openid 포함 시)"
+}
+```
+
+**Token Claims** (access token + id token 공통):
+
+| Claim | 설명 |
+|---|---|
+| `sub` | account_id (UUID) |
+| `iss` | OIDC issuer URL (`oidc.issuer-url`) |
+| `iat` | 발급 시각 (epoch seconds) |
+| `exp` | 만료 시각 |
+| `tenant_id` | 테넌트 slug (필수 — 누락 시 발급 거부) |
+| `tenant_type` | `B2C` \| `B2B_ENTERPRISE` (필수) |
+
+**Errors**:
+
+| Status | 에러 코드 | 조건 |
+|---|---|---|
+| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection) |
+| 400 | `invalid_request` | PKCE 미포함 |
+| 401 | `invalid_client` | client 인증 실패 |
+| 401 | `unauthorized_client` | 해당 grant_type 미허용 client |
+
+---
+
+### GET /oauth2/userinfo
+
+OIDC UserInfo 응답. `scope=openid` 포함 access token 필요.
+
+**Auth required**: Yes (Bearer access token)
+
+**Response 200**:
+```json
+{
+  "sub": "account-uuid",
+  "email": "user@example.com",
+  "email_verified": true,
+  "name": "홍길동",
+  "preferred_username": "honggd",
+  "locale": "ko-KR",
+  "tenant_id": "fan-platform",
+  "tenant_type": "B2C"
+}
+```
+
+**Errors**:
+
+| Status | 조건 |
+|---|---|
+| 401 | Bearer token 없음 또는 만료 |
+| 403 | scope=openid 미포함 |
+
+---
+
+### POST /oauth2/revoke
+
+토큰 폐기 (RFC 7009). access_token, refresh_token 모두 revocation 가능.
+revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2AuthorizationService`가 JPA `RefreshTokenRepository`도 동기화.
+
+**Auth required**: client_secret_basic (confidential client) 또는 client_id (public client)
+
+**Request** (form-urlencoded):
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `token` | Y | 폐기할 token 값 |
+| `token_type_hint` | N | `access_token` \| `refresh_token` (선택적 힌트) |
+
+**Response 200**: (RFC 7009 § 2.2 — 서버는 token 존재 여부와 무관하게 200 반환)
+
+**Errors**:
+
+| Status | 조건 |
+|---|---|
+| 401 | client 인증 실패 |
+
+**Side Effect**:
+- revoked token은 `/oauth2/introspect` 에서 `active=false` 반환
+
+---
+
+### POST /oauth2/introspect
+
+토큰 검사 (RFC 7662). active 여부 + 표준 claim + 테넌트 extension claim 반환.
+
+**Auth required**: client_secret_basic (confidential client만 허용 — public client는 introspect 불가)
+
+**Request** (form-urlencoded):
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `token` | Y | 검사할 token 값 |
+| `token_type_hint` | N | `access_token` \| `refresh_token` |
+
+**Response 200**:
+```json
+{
+  "active": true,
+  "client_id": "string",
+  "username": "string (sub)",
+  "scope": "string",
+  "exp": 1234567890,
+  "iat": 1234566090,
+  "nbf": 1234566090,
+  "sub": "account-uuid",
+  "aud": ["string"],
+  "iss": "https://gap.example.com",
+  "tenant_id": "fan-platform",
+  "tenant_type": "B2C"
+}
+```
+
+비활성(revoked/expired/unknown) 토큰:
+```json
+{ "active": false }
+```
+
+| 필드 | 설명 |
+|---|---|
+| `active` | 토큰이 유효·활성 상태이면 `true` |
+| `tenant_id` | RFC 7662 extension — multi-tenant 식별 (`TenantIntrospectionCustomizer`) |
+| `tenant_type` | RFC 7662 extension — `B2C` \| `B2B_ENTERPRISE` |
+
+**Errors**:
+
+| Status | 조건 |
+|---|---|
+| 401 | client 인증 실패 |
+
+---
+
 ## POST /api/auth/login
+
+> **DEPRECATED since 2026-05-01 (ADR-001 D2-b). 제거 목표: 2026-08-01.**
+> 신규 구현은 `POST /oauth2/token` (OIDC 표준 엔드포인트)을 사용하라.
+> 모든 응답에 `Deprecation: true` (RFC 8594), `Sunset: Sun, 01 Aug 2026 00:00:00 GMT` (RFC 9745) 헤더가 포함된다.
 
 사용자 로그인. 이메일·패스워드를 검증하고 JWT access/refresh token pair를 발급한다.
 

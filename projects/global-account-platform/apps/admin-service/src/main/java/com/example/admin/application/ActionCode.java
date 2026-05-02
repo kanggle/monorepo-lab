@@ -26,5 +26,12 @@ public enum ActionCode {
     // permission_used=operator.manage.
     OPERATOR_CREATE,
     OPERATOR_ROLE_CHANGE,
-    OPERATOR_STATUS_CHANGE
+    OPERATOR_STATUS_CHANGE,
+    // TASK-BE-250: tenant lifecycle management (SUPER_ADMIN only).
+    // target_type=TENANT, target_id=tenantId, tenant_id='*' (platform scope),
+    // target_tenant_id=affected tenantId, permission_used=tenant.manage.
+    TENANT_CREATE,
+    TENANT_SUSPEND,
+    TENANT_REACTIVATE,
+    TENANT_UPDATE
 }

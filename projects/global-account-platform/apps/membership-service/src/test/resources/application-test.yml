@@ -21,15 +21,21 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+  # TASK-BE-253: Resource Server JWKS — overridden by a test JwtDecoder bean.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081
+          jwk-set-uri: http://localhost:8081/oauth2/jwks
+
 server:
   port: 0
 
-internal:
-  api:
-    token: test-internal-token
-    bypass-when-unconfigured: false
-
 membership:
+  oauth2:
+    allowed-issuers: http://localhost:8081,global-account-platform
+    required-tenant-id: fan-platform
   account-service:
     base-url: http://localhost:0
     connect-timeout-ms: 2000

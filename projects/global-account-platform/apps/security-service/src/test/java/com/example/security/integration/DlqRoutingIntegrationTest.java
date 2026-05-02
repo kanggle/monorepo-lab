@@ -1,5 +1,8 @@
 package com.example.security.integration;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.search.MeterNotFoundException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -19,6 +22,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import com.example.security.infrastructure.kafka.KafkaConsumerConfig;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -61,6 +65,9 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private KafkaListenerEndpointRegistry listenerEndpointRegistry;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     private KafkaTemplate<String, String> stringTemplate;
     private KafkaTemplate<String, byte[]> byteTemplate;
 
@@ -87,6 +94,55 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         assertDlqContainsValue("auth.login.succeeded",
                 "acc-dlq-001", malformedEvent, malformedEvent);
         assertAllContainersStillRunning();
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("TASK-BE-248 Phase 2a: auth event missing tenant_id is routed to DLQ and increments outbox.dlq.size")
+    void missingTenantIdRoutedToDlqAndMetricIncremented() {
+        // Valid JSON but no tenantId in envelope or payload — triggers MissingTenantIdException
+        String noTenantEvent = """
+                {"eventId":"evt-no-tenant-001","eventType":"auth.login.succeeded",
+                 "occurredAt":"2026-05-01T10:00:00Z",
+                 "payload":{"accountId":"acc-dlq-004","outcome":"SUCCESS",
+                   "ipMasked":"1.2.3.***","timestamp":"2026-05-01T10:00:00Z"}}
+                """;
+        String topic = "auth.login.succeeded";
+
+        // Capture counter value before sending
+        double beforeCount = getDlqSizeCount("tenant_id_missing");
+
+        stringTemplate.send(new ProducerRecord<>(topic, "acc-dlq-004", noTenantEvent));
+
+        // Wait for DLQ arrival
+        try (KafkaConsumer<String, String> dlqConsumer = newStringDlqConsumer()) {
+            dlqConsumer.subscribe(List.of(topic + ".dlq"));
+            await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
+                ConsumerRecords<String, String> records = dlqConsumer.poll(Duration.ofMillis(500));
+                List<ConsumerRecord<String, String>> dlqRecords = new ArrayList<>();
+                records.forEach(dlqRecords::add);
+                assertThat(dlqRecords).as("missing tenant_id event must reach .dlq").isNotEmpty();
+            });
+        }
+
+        // outbox.dlq.size{reason=tenant_id_missing} must have incremented
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            double afterCount = getDlqSizeCount("tenant_id_missing");
+            assertThat(afterCount).as("outbox.dlq.size counter must increment").isGreaterThan(beforeCount);
+        });
+
+        assertAllContainersStillRunning();
+    }
+
+    private double getDlqSizeCount(String reason) {
+        try {
+            Counter counter = meterRegistry.get(KafkaConsumerConfig.DLQ_SIZE_METRIC)
+                    .tag("reason", reason)
+                    .counter();
+            return counter.count();
+        } catch (MeterNotFoundException e) {
+            return 0.0;
+        }
     }
 
     @Test

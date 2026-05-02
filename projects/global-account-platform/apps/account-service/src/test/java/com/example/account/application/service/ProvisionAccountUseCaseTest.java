@@ -90,7 +90,7 @@ class ProvisionAccountUseCaseTest {
         given(accountRepository.save(any(Account.class))).willReturn(savedAccount());
         given(profileRepository.save(any(Profile.class), any(TenantId.class))).willReturn(savedProfile());
         given(accountRoleRepository.save(any(AccountRole.class)))
-                .willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN"));
+                .willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN", "sys-test"));
         given(historyRepository.save(any())).willReturn(null);
 
         ProvisionAccountResult result = useCase.execute(command());
@@ -104,7 +104,7 @@ class ProvisionAccountUseCaseTest {
         verify(profileRepository).save(any(Profile.class), any(TenantId.class));
         verify(accountRoleRepository).save(any(AccountRole.class));
         verify(historyRepository).save(any());
-        verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class));
+        verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class), any(String.class));
         verify(authServicePort).createCredential(any(), eq("user@example.com"), eq("Password1!"));
     }
 
@@ -149,7 +149,7 @@ class ProvisionAccountUseCaseTest {
         given(accountRepository.existsByEmail(any(TenantId.class), any())).willReturn(false);
         given(accountRepository.save(any())).willReturn(savedAccount());
         given(profileRepository.save(any(Profile.class), any(TenantId.class))).willReturn(savedProfile());
-        given(accountRoleRepository.save(any())).willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN"));
+        given(accountRoleRepository.save(any())).willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN", "sys-test"));
         given(historyRepository.save(any())).willReturn(null);
 
         ProvisionAccountResult result = useCase.execute(command());

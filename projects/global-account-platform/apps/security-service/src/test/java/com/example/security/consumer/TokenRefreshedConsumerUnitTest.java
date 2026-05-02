@@ -52,6 +52,7 @@ class TokenRefreshedConsumerUnitTest {
                 {
                   "eventId": "evt-ref-1",
                   "eventType": "auth.token.refreshed",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-1",
@@ -79,6 +80,7 @@ class TokenRefreshedConsumerUnitTest {
                 {
                   "eventId": "evt-ref-det",
                   "eventType": "auth.token.refreshed",
+                  "tenantId": "fan-platform",
                   "occurredAt": "2026-04-29T10:00:00Z",
                   "payload": {
                     "accountId": "acc-2",

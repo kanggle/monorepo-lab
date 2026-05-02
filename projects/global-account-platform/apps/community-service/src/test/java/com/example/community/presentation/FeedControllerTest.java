@@ -5,13 +5,10 @@ import com.example.community.application.GetFeedUseCase;
 import com.example.community.presentation.exception.GlobalExceptionHandler;
 import com.example.community.support.AccountJwtTestFixture;
 import com.example.community.support.SliceTestSecurityConfig;
-import com.gap.security.jwt.JwtVerifier;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,20 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = FeedController.class)
-@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class, FeedControllerTest.JwtBeans.class})
+@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class})
 class FeedControllerTest {
 
-    private static AccountJwtTestFixture jwt;
+    private static final AccountJwtTestFixture jwt;
 
-    @BeforeAll
-    static void init() { jwt = new AccountJwtTestFixture(); }
-
-    @org.springframework.boot.test.context.TestConfiguration
-    static class JwtBeans {
-        @Bean JwtVerifier communityJwtVerifier() {
-            if (jwt == null) jwt = new AccountJwtTestFixture();
-            return jwt.verifier();
-        }
+    static {
+        jwt = new AccountJwtTestFixture();
+        SliceTestSecurityConfig.useFixture(jwt);
     }
 
     @Autowired MockMvc mockMvc;

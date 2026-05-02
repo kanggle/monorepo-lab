@@ -38,7 +38,8 @@ class JwtTestHelperTest {
         assertThat(claims.getStringClaim("email")).isEqualTo("user-42@test.local");
         assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
         assertThat(claims.getAudience()).containsExactly("wms");
-        assertThat(claims.getIssuer()).isEqualTo("https://test.local/issuer");
+        assertThat(claims.getIssuer()).isEqualTo(JwtTestHelper.LEGACY_ISSUER);
+        assertThat(claims.getStringClaim("tenant_id")).isEqualTo(JwtTestHelper.DEFAULT_TENANT_ID);
         assertThat(claims.getExpirationTime()).isAfter(new java.util.Date());
     }
 

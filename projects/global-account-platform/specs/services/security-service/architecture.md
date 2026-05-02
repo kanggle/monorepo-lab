@@ -109,7 +109,7 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 ## Boundary Rules
 
 ### consumer/
-- 각 consumer는 단일 topic 구독: `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`, `account.locked` (TASK-BE-041b — `account_lock_history` 적재)
+- 각 consumer는 단일 topic 구독: `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`, `account.locked` (TASK-BE-041b — `account_lock_history` 적재), `account.deleted` (TASK-BE-258 — `anonymized=true` 필터링 후 PII 마스킹)
 - **멱등 처리 필수**: Redis `EventDedupService`로 eventId 기반 dedupe. 미지원 시 `processed_events` 테이블 upsert ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T8)
 - 실패 시 지수 백오프 3회 재시도 후 `<topic>.dlq`로 이관
 - 소비 트레이스(`traceparent`)를 Kafka 헤더에서 MDC로 복원 ([platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md))
@@ -134,8 +134,8 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 
 ## Integration Rules
 
-- **이벤트 구독**: [specs/contracts/events/auth-events.md](../../contracts/events/) — 위 5개 토픽
-- **이벤트 발행**: [specs/contracts/events/security-events.md](../../contracts/events/) — `suspicious.detected`, `auto.lock.triggered`, `auto.lock.pending`
+- **이벤트 구독**: [specs/contracts/events/auth-events.md](../../contracts/events/) — auth 5개 토픽 + [account-events.md](../../contracts/events/account-events.md) — `account.locked`, `account.deleted`
+- **이벤트 발행**: [specs/contracts/events/security-events.md](../../contracts/events/) — `suspicious.detected`, `auto.lock.triggered`, `auto.lock.pending`, `security.pii.masked` (TASK-BE-258)
 - **HTTP 컨트랙트 (내부 query)**: [specs/contracts/http/security-query-api.md](../../contracts/http/) — 읽기 전용
 - **HTTP 컨트랙트 (out-going)**: [specs/contracts/http/internal/security-to-account.md](../../contracts/http/internal/) — 자동 잠금 명령
 - **퍼시스턴스**: MySQL — `login_history` (append-only), `suspicious_events`, `processed_events` (dedup), `outbox_events`

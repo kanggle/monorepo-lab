@@ -28,7 +28,8 @@
 apps/auth-service/src/main/java/com/example/auth/
 ├── AuthApplication.java
 ├── presentation/             ← HTTP 컨트롤러, 요청/응답 DTO, 예외 처리
-│   ├── LoginController.java
+│   ├── LoginController.java             ← DEPRECATED (ADR-001 D2-b, 2026-08-01 제거 목표)
+│   │                                      응답에 Deprecation + Sunset 헤더 포함 (RFC 8594, RFC 9745)
 │   ├── LogoutController.java
 │   ├── RefreshController.java
 │   ├── JwksController.java              ← gateway 대상 JWKS 엔드포인트
@@ -74,14 +75,44 @@ apps/auth-service/src/main/java/com/example/auth/
     ├── jwt/
     │   ├── JwtSigner.java               ← RSA 서명
     │   └── JwksProvider.java
+    ├── oauth2/                          ← TASK-BE-251: Spring Authorization Server 설정
+    │   ├── AuthorizationServerConfig.java   ← SAS SecurityFilterChain @Order(1)
+    │   │                                       revocation + introspection 엔드포인트 활성화 (Phase 2c)
+    │   ├── TenantClaimTokenCustomizer.java  ← access/id token에 tenant_id, tenant_type 주입
+    │   ├── TenantIntrospectionCustomizer.java  ← introspect 응답에 tenant_id, tenant_type 추가
+    │   │                                          (RFC 7662 extension, Phase 2c)
+    │   ├── OidcUserInfoMapper.java          ← /oauth2/userinfo 응답 구성 (account-service 조회)
+    │   ├── SasRefreshTokenAuthenticationProvider.java  ← refresh_token grant + reuse detection
+    │   └── DomainSyncOAuth2AuthorizationService.java   ← SAS ↔ JPA RefreshTokenRepository 동기화
+    │                                                      revoke 시 JPA 도메인 스토어도 갱신 (Phase 2c)
     ├── client/
     │   └── AccountServiceClient.java    ← 내부 HTTP, credential lookup
     └── config/
         ├── PersistenceConfig.java
         ├── RedisConfig.java
         ├── KafkaConfig.java
-        └── SecurityConfig.java
+        └── SecurityConfig.java          ← @Order(2) 기존 /api/auth/** 체인
 ```
+
+### SAS 도입에 따른 공존 정책 (ADR-001 D2-b)
+
+| 구분 | 엔드포인트 | 상태 | 제거 일정 |
+|---|---|---|---|
+| **표준 OIDC (SAS)** | `/oauth2/**`, `/.well-known/openid-configuration` | 활성 | — |
+| **레거시** | `POST /api/auth/login` | **DEPRECATED 2026-05-01** | 2026-08-01 |
+| **레거시** | `POST /api/auth/refresh` | 유지 (TASK-BE-259 이후 결정) | 미정 |
+| **레거시** | `POST /api/auth/logout` | 유지 | 미정 |
+
+**SAS 필터 체인 우선순위**:
+- `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담
+- `@Order(2)` — `SecurityConfig.filterChain`: `/api/auth/**`, `/api/accounts/**`, `/actuator/**`, `/internal/**`
+- 두 체인은 request matcher로 완전 분리 — 상호 간섭 없음
+
+**revocation 동작 흐름 (Phase 2c)**:
+1. `POST /oauth2/revoke` → SAS `OAuth2TokenRevocationEndpointFilter` 수신
+2. SAS built-in `OAuth2TokenRevocationAuthenticationProvider` → `oAuth2AuthorizationService.remove(authorization)`
+3. `DomainSyncOAuth2AuthorizationService.remove()` → JPA `RefreshTokenRepository`에서 해당 refresh token `revoked = TRUE`
+4. 이후 `POST /oauth2/introspect` → `active = false`
 
 ## Allowed Dependencies
 

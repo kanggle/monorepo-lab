@@ -32,8 +32,8 @@ class FeedSubscriptionRepositoryIntegrationTest extends CommunityIntegrationTest
     @Test
     @DisplayName("save 후 find 로 조회된다")
     void save_and_find_succeeds() {
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s ->
                 repository.save(FeedSubscription.create(fanId, artistId, Instant.now())));
@@ -47,8 +47,8 @@ class FeedSubscriptionRepositoryIntegrationTest extends CommunityIntegrationTest
     @Test
     @DisplayName("save 후 exists 가 true 를 반환한다")
     void exists_returns_true_after_save() {
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s ->
                 repository.save(FeedSubscription.create(fanId, artistId, Instant.now())));
@@ -59,8 +59,8 @@ class FeedSubscriptionRepositoryIntegrationTest extends CommunityIntegrationTest
     @Test
     @DisplayName("save 전에는 exists 가 false 를 반환한다")
     void exists_returns_false_before_save() {
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         assertThat(repository.exists(fanId, artistId)).isFalse();
         assertThat(repository.find(fanId, artistId)).isEmpty();
@@ -69,8 +69,8 @@ class FeedSubscriptionRepositoryIntegrationTest extends CommunityIntegrationTest
     @Test
     @DisplayName("delete 후 더 이상 조회되지 않는다")
     void delete_removes_subscription() {
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistId = "artist-" + UUID.randomUUID();
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
 
         transactionTemplate.executeWithoutResult(s ->
                 repository.save(FeedSubscription.create(fanId, artistId, Instant.now())));

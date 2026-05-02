@@ -25,9 +25,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Collection;
 import java.util.List;
 
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -121,5 +123,18 @@ class AuditControllerTest {
                         .param("source", "admin_actions")
                         .header("Authorization", bearer()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void audit_query_cross_tenant_denied_returns_403_tenant_scope_denied() throws Exception {
+        // TASK-BE-249: use-case throws TenantScopeDeniedException when normal operator requests different tenant
+        doThrow(new TenantScopeDeniedException("cross-tenant access denied"))
+                .when(useCase).query(any());
+
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("tenantId", "other-platform")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
     }
 }

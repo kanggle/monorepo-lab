@@ -19,6 +19,8 @@ public final class Permission {
     public static final String AUDIT_READ            = "audit.read";
     public static final String SECURITY_EVENT_READ   = "security.event.read";
     public static final String OPERATOR_MANAGE       = "operator.manage";
+    /** TASK-BE-250: tenant lifecycle management (SUPER_ADMIN only). */
+    public static final String TENANT_MANAGE         = "tenant.manage";
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";

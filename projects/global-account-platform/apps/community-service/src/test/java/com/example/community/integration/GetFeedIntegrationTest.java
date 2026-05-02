@@ -86,8 +86,8 @@ class GetFeedIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로우한 아티스트의 PUBLISHED 포스트는 피드에 포함된다")
     void getFeed_includesPublishedPostsFromFollowedArtist() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
 
         follow(fanId, artistId);
         String postId = createPublishedPost(artistId);
@@ -105,8 +105,8 @@ class GetFeedIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로우한 아티스트의 DELETED 포스트는 피드에 미노출된다")
     void getFeed_excludesDeletedPosts() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
 
         follow(fanId, artistId);
         String publishedPostId = createPublishedPost(artistId);
@@ -124,8 +124,8 @@ class GetFeedIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로우한 아티스트의 HIDDEN 포스트는 피드에 미노출된다")
     void getFeed_excludesHiddenPosts() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
 
         follow(fanId, artistId);
         String publishedPostId = createPublishedPost(artistId);
@@ -148,9 +148,9 @@ class GetFeedIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팔로우하지 않은 아티스트의 포스트는 피드에 미포함된다")
     void getFeed_excludesPostsFromNonFollowedArtist() throws Exception {
         stubAccountProfile();
-        String artistA = "artistA-" + UUID.randomUUID();
-        String artistB = "artistB-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistA = "artistA-" + UUID.randomUUID().toString().substring(0, 20);
+        String artistB = "artistB-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
 
         // Fan follows only artistA
         follow(fanId, artistA);

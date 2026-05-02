@@ -80,7 +80,7 @@ class CommunityOutboxRelayIntegrationTest extends CommunityIntegrationTestBase {
     private KafkaConsumer<String, String> createConsumer(String... topics) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-relay-" + UUID.randomUUID());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-relay-" + UUID.randomUUID().toString().substring(0, 20));
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -102,7 +102,7 @@ class CommunityOutboxRelayIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("publishPost 호출 시 community.post.published 가 envelope 와 함께 Kafka 에 릴레이된다")
     void publishPost_relaysToKafka_withCorrectEnvelope() {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
         ActorContext actor = new ActorContext(artistId, Set.of("ARTIST"));
 
         try (KafkaConsumer<String, String> consumer = createConsumer("community.post.published")) {
@@ -141,8 +141,8 @@ class CommunityOutboxRelayIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("addComment 호출 시 community.comment.created 가 Kafka 에 릴레이된다")
     void addComment_relaysToKafka() {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         ActorContext artist = new ActorContext(artistId, Set.of("ARTIST"));
         ActorContext fan = new ActorContext(fanId, Set.of("FAN"));
 
@@ -186,8 +186,8 @@ class CommunityOutboxRelayIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("addReaction 호출 시 community.reaction.added 가 Kafka 에 릴레이된다")
     void addReaction_relaysToKafka() {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         ActorContext artist = new ActorContext(artistId, Set.of("ARTIST"));
         ActorContext fan = new ActorContext(fanId, Set.of("FAN"));
         stubMembershipAllowed(fanId);

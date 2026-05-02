@@ -2,10 +2,14 @@ package com.example.admin.application;
 
 import com.example.admin.application.event.AdminEventPublisher;
 import com.example.admin.application.exception.AuditFailureException;
+import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
+import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,6 +38,10 @@ import java.util.UUID;
  * and only on the {@code outcome}, {@code downstream_detail}, and
  * {@code completed_at} columns — {@code operator_id} and {@code permission_used}
  * are also guarded.
+ *
+ * <p>TASK-BE-249: all audit rows now carry {@code tenant_id} (the operator's tenant)
+ * and {@code target_tenant_id} (the affected tenant). Cross-tenant actions from
+ * SUPER_ADMIN will have {@code tenant_id='*'} and a specific {@code target_tenant_id}.
  */
 @Slf4j
 @Component
@@ -65,6 +73,11 @@ public class AdminActionAuditor {
         map.put(ActionCode.OPERATOR_CREATE, "OPERATOR");
         map.put(ActionCode.OPERATOR_ROLE_CHANGE, "OPERATOR");
         map.put(ActionCode.OPERATOR_STATUS_CHANGE, "OPERATOR");
+        // TASK-BE-250 — tenant lifecycle management
+        map.put(ActionCode.TENANT_CREATE, "TENANT");
+        map.put(ActionCode.TENANT_SUSPEND, "TENANT");
+        map.put(ActionCode.TENANT_REACTIVATE, "TENANT");
+        map.put(ActionCode.TENANT_UPDATE, "TENANT");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -91,22 +104,34 @@ public class AdminActionAuditor {
     private final AdminActionJpaRepository repository;
     private final AdminOperatorJpaRepository operatorRepository;
     private final AdminEventPublisher eventPublisher;
+    private final MeterRegistry meterRegistry;
+
+    /**
+     * Projection record carrying both the internal BIGINT PK and the operator's
+     * tenantId so we can stamp both fields in one DB lookup.
+     */
+    private record OperatorResolved(Long pk, String tenantId) {}
 
     /**
      * Resolves the external operator UUID (JWT {@code sub}) to the internal
-     * {@code admin_operators.id} BIGINT FK. Fail-closed per audit-heavy A10:
-     * if the operator row is missing, throw {@link AuditFailureException}
-     * rather than writing a null FK.
+     * {@code admin_operators.id} BIGINT FK and the operator's {@code tenant_id}.
+     * Fail-closed per audit-heavy A10: if the operator row is missing, throw
+     * {@link AuditFailureException} rather than writing a null FK.
+     *
+     * <p>TASK-BE-249: also returns {@code tenantId} so the caller can stamp
+     * {@code admin_actions.tenant_id} without a second DB round-trip.
      */
-    private Long resolveOperatorPk(String operatorUuid) {
+    private OperatorResolved resolveOperator(String operatorUuid) {
         if (operatorUuid == null) {
             throw new AuditFailureException(
                     "Cannot resolve admin_operators.id: operator UUID is null");
         }
-        return operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new AuditFailureException(
-                        "admin_operators row not found for operatorId=" + operatorUuid))
-                .getId();
+                        "admin_operators row not found for operatorId=" + operatorUuid));
+        String tenantId = entity.getTenantId();
+        if (tenantId == null) tenantId = "fan-platform"; // defensive fallback
+        return new OperatorResolved(entity.getId(), tenantId);
     }
 
     public String newAuditId() {
@@ -124,13 +149,15 @@ public class AdminActionAuditor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordStart(StartRecord record) {
         try {
-            Long operatorPk = resolveOperatorPk(record.operator().operatorId());
+            OperatorResolved resolved = resolveOperator(record.operator().operatorId());
+            String targetTenantId = record.targetTenantId() != null
+                    ? record.targetTenantId() : resolved.tenantId();
             AdminActionJpaEntity entity = AdminActionJpaEntity.create(
                     record.auditId(),
                     record.actionCode().name(),
                     record.operator().operatorId(),
                     "UNKNOWN", // actor_role retained as legacy column; no longer carried in JWT
-                    operatorPk,
+                    resolved.pk(),
                     permissionForActionCode(record.actionCode()),
                     record.targetType(),
                     record.targetId(),
@@ -140,7 +167,9 @@ public class AdminActionAuditor {
                     Outcome.IN_PROGRESS.name(),
                     null,
                     record.startedAt(),
-                    null);
+                    null,
+                    resolved.tenantId(),
+                    targetTenantId);
             repository.save(entity);
         } catch (RuntimeException ex) {
             log.error("Failed to write IN_PROGRESS admin_actions row (fail-closed): auditId={}",
@@ -178,13 +207,15 @@ public class AdminActionAuditor {
     @Transactional
     public void record(AuditRecord record) {
         try {
-            Long operatorPk = resolveOperatorPk(record.operator().operatorId());
+            OperatorResolved resolved = resolveOperator(record.operator().operatorId());
+            String targetTenantId = record.targetTenantId() != null
+                    ? record.targetTenantId() : resolved.tenantId();
             AdminActionJpaEntity entity = AdminActionJpaEntity.create(
                     record.auditId(),
                     record.actionCode().name(),
                     record.operator().operatorId(),
                     "UNKNOWN",
-                    operatorPk,
+                    resolved.pk(),
                     permissionForActionCode(record.actionCode()),
                     record.targetType(),
                     record.targetId(),
@@ -194,7 +225,9 @@ public class AdminActionAuditor {
                     record.outcome().name(),
                     record.downstreamDetail(),
                     record.startedAt(),
-                    record.completedAt());
+                    record.completedAt(),
+                    resolved.tenantId(),
+                    targetTenantId);
             repository.save(entity);
             eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
                     record.operator().operatorId(),
@@ -242,13 +275,13 @@ public class AdminActionAuditor {
         String detail = "PERMISSION_NOT_GRANTED endpoint=" + endpoint + " method=" + method;
 
         try {
-            Long operatorPk = resolveOperatorPk(operatorId);
+            OperatorResolved resolved = resolveOperator(operatorId);
             AdminActionJpaEntity entity = AdminActionJpaEntity.create(
                     auditId,
                     actionCode != null ? actionCode.name() : "UNKNOWN",
                     operatorId,
                     "UNKNOWN",
-                    operatorPk,
+                    resolved.pk(),
                     resolvedPermission,
                     targetType,
                     resolvedTargetId,
@@ -258,7 +291,9 @@ public class AdminActionAuditor {
                     Outcome.DENIED.name(),
                     detail,
                     now,
-                    now);
+                    now,
+                    resolved.tenantId(),
+                    resolved.tenantId()); // denied rows target own tenant
             repository.save(entity);
 
             eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
@@ -276,6 +311,96 @@ public class AdminActionAuditor {
             log.error("Failed to write DENIED admin_actions row (fail-closed): operatorId={} permission={}",
                     operatorId, resolvedPermission, ex);
             throw new AuditFailureException("Failed to record DENIED admin action audit", ex);
+        }
+    }
+
+    /**
+     * Best-effort DENIED audit row for cross-tenant scope violations.
+     *
+     * <p>TASK-BE-262: audit-heavy A1 requires all policy denials to be auditable.
+     * Per spec §Tenant Scope Enforcement:
+     * <ul>
+     *   <li>{@code tenant_id = operator.tenantId} — the deny event is logged in
+     *       the operator's own tenant scope.</li>
+     *   <li>{@code target_tenant_id = operator.tenantId} — same as tenant_id per
+     *       the architecture spec line 231: "크로스 테넌트 거부도 자기 테넌트 기록".</li>
+     *   <li>The attempted target tenant is captured in {@code downstream_detail}
+     *       for forensic analysis (the schema has no separate column for this).</li>
+     * </ul>
+     *
+     * <p>Decision: best-effort, NOT fail-closed (A10 override for cross-tenant deny path).
+     * Rationale: fail-closed here would let an attacker trigger DB outages by spamming
+     * cross-tenant requests, since each deny would attempt a write. The actual
+     * security action (deny + 403) succeeds regardless. Failures increment
+     * {@code admin.audit.cross_tenant_deny_failure} counter for observability.
+     *
+     * @param operator        the operator whose request is being denied
+     * @param operatorTenantId the operator's own tenantId (already resolved by the caller)
+     * @param actionCode      the action that was denied
+     * @param permissionUsed  the permission key associated with the denied action
+     * @param attemptedTenantId the tenantId the operator attempted to access
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordCrossTenantDenied(OperatorContext operator,
+                                        String operatorTenantId,
+                                        ActionCode actionCode,
+                                        String permissionUsed,
+                                        String attemptedTenantId) {
+        try {
+            OperatorResolved resolved = resolveOperator(operator.operatorId());
+            String effectiveTenantId = resolved.tenantId() != null ? resolved.tenantId() : operatorTenantId;
+
+            Instant now = Instant.now();
+            String auditId = UUID.randomUUID().toString();
+            String targetType = targetTypeFor(actionCode);
+            String detail = "TENANT_SCOPE_DENIED attempted_tenant_id=" + attemptedTenantId;
+
+            AdminActionJpaEntity entity = AdminActionJpaEntity.create(
+                    auditId,
+                    actionCode.name(),
+                    operator.operatorId(),
+                    "UNKNOWN",
+                    resolved.pk(),
+                    permissionUsed != null ? permissionUsed : Permission.MISSING,
+                    targetType,
+                    operator.operatorId(),       // targetId: self (no external resource targeted)
+                    "<cross_tenant_deny>",        // reason: synthetic constant
+                    null,
+                    "denied:" + auditId,
+                    Outcome.DENIED.name(),
+                    detail,
+                    now,
+                    now,
+                    effectiveTenantId,
+                    effectiveTenantId); // DENIED rows: both tenant_id and target_tenant_id = operator's own tenant
+            repository.save(entity);
+
+            eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
+                    operator.operatorId(),
+                    operator.jti(),
+                    permissionUsed != null ? permissionUsed : Permission.MISSING,
+                    currentEndpoint(),
+                    currentMethod(),
+                    targetType,
+                    operator.operatorId(),
+                    Outcome.DENIED,
+                    detail,
+                    now));
+        } catch (RuntimeException ex) {
+            // Best-effort: log + metric, do NOT rethrow. The 403 denial still succeeds.
+            log.warn("Failed to write cross-tenant DENIED audit row (best-effort): " +
+                            "operatorId={} action={} attemptedTenant={}",
+                    operator.operatorId(), actionCode, attemptedTenantId, ex);
+            try {
+                Counter counter = Counter.builder("admin.audit.cross_tenant_deny_failure")
+                        .tag("action", actionCode != null ? actionCode.name() : "UNKNOWN")
+                        .register(meterRegistry);
+                if (counter != null) {
+                    counter.increment();
+                }
+            } catch (RuntimeException metricEx) {
+                log.debug("Failed to increment cross_tenant_deny_failure counter", metricEx);
+            }
         }
     }
 
@@ -369,6 +494,8 @@ public class AdminActionAuditor {
             case DATA_EXPORT -> Permission.AUDIT_READ;
             // TASK-BE-083 — all operator management mutations gate on the same permission key.
             case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE -> Permission.OPERATOR_MANAGE;
+            // TASK-BE-250 — tenant lifecycle management
+            case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
         };
     }
 
@@ -381,8 +508,18 @@ public class AdminActionAuditor {
             String reason,
             String ticketId,
             String idempotencyKey,
-            Instant startedAt
-    ) {}
+            Instant startedAt,
+            /** TASK-BE-249: the tenant being acted upon. Null defaults to operator's own tenant. */
+            String targetTenantId
+    ) {
+        /** Backward-compat 9-arg constructor for call sites predating TASK-BE-249. */
+        public StartRecord(String auditId, ActionCode actionCode, OperatorContext operator,
+                           String targetType, String targetId, String reason, String ticketId,
+                           String idempotencyKey, Instant startedAt) {
+            this(auditId, actionCode, operator, targetType, targetId, reason, ticketId,
+                    idempotencyKey, startedAt, null);
+        }
+    }
 
     public record CompletionRecord(
             String auditId,
@@ -420,13 +557,13 @@ public class AdminActionAuditor {
     @Transactional
     public void recordLogin(LoginAuditRecord record) {
         try {
-            Long operatorPk = resolveOperatorPk(record.operator().operatorId());
+            OperatorResolved resolved = resolveOperator(record.operator().operatorId());
             AdminActionJpaEntity entity = AdminActionJpaEntity.create(
                     record.auditId(),
                     ActionCode.OPERATOR_LOGIN.name(),
                     record.operator().operatorId(),
                     "UNKNOWN",
-                    operatorPk,
+                    resolved.pk(),
                     PERMISSION_LOGIN,
                     record.targetType(),
                     record.targetId(),
@@ -436,7 +573,9 @@ public class AdminActionAuditor {
                     record.outcome().name(),
                     record.downstreamDetail(),
                     record.startedAt(),
-                    record.completedAt());
+                    record.completedAt(),
+                    resolved.tenantId(),
+                    resolved.tenantId()); // login is always self-tenant
             entity.markTwofaUsed(record.twofaUsed());
             repository.save(entity);
             eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
@@ -457,7 +596,11 @@ public class AdminActionAuditor {
         }
     }
 
-    /** Single-shot record for {@link #record(AuditRecord)}. */
+    /**
+     * Single-shot record for {@link #record(AuditRecord)}.
+     *
+     * <p>TASK-BE-249: {@code targetTenantId} added. When null, defaults to operator's own tenant.
+     */
     public record AuditRecord(
             String auditId,
             ActionCode actionCode,
@@ -470,8 +613,19 @@ public class AdminActionAuditor {
             Outcome outcome,
             String downstreamDetail,
             Instant startedAt,
-            Instant completedAt
-    ) {}
+            Instant completedAt,
+            /** TASK-BE-249: the tenant being acted upon. Null defaults to operator's own tenant. */
+            String targetTenantId
+    ) {
+        /** Backward-compat 12-arg constructor for call sites predating TASK-BE-249. */
+        public AuditRecord(String auditId, ActionCode actionCode, OperatorContext operator,
+                           String targetType, String targetId, String reason, String ticketId,
+                           String idempotencyKey, Outcome outcome, String downstreamDetail,
+                           Instant startedAt, Instant completedAt) {
+            this(auditId, actionCode, operator, targetType, targetId, reason, ticketId,
+                    idempotencyKey, outcome, downstreamDetail, startedAt, completedAt, null);
+        }
+    }
 
     /**
      * Audit record specialised for the login path (029-3). Unlike

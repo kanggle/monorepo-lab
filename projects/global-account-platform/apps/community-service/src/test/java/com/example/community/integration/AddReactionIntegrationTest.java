@@ -74,8 +74,8 @@ class AddReactionIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("팬이 PUBLIC 포스트에 처음 반응하면 200 응답과 함께 DB 행·outbox 가 생성된다")
     void addReaction_newReaction_returns200AndPersists() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.PUBLIC);
 
         mockMvc.perform(post("/api/community/posts/" + postId + "/reactions")
@@ -108,8 +108,8 @@ class AddReactionIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("같은 emojiCode 로 두 번 반응해도 DB 행은 1개 유지된다 (upsert dedup)")
     void addReaction_sameEmojiTwice_upsertsToSingleRow() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.PUBLIC);
 
         String requestBody = "{\"emojiCode\":\"FIRE\"}";
@@ -140,8 +140,8 @@ class AddReactionIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("다른 emojiCode 로 반응 교체 시 DB 행은 1개이고 emojiCode 가 변경된다")
     void addReaction_differentEmoji_replacesExisting() throws Exception {
         stubAccountProfile();
-        String artistId = "artist-" + UUID.randomUUID();
-        String fanId = "fan-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 20);
+        String fanId = "fan-" + UUID.randomUUID().toString().substring(0, 20);
         String postId = createPublishedPost(artistId, PostVisibility.PUBLIC);
 
         // First reaction: HEART

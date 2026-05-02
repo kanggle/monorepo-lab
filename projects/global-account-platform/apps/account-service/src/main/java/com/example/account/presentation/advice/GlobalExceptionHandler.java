@@ -2,9 +2,11 @@ package com.example.account.presentation.advice;
 
 import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.exception.BulkLimitExceededException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.RateLimitedException;
+import com.example.account.application.exception.TenantAlreadyExistsException;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
@@ -15,6 +17,8 @@ import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -80,6 +84,51 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ErrorResponse.of("AUTH_SERVICE_UNAVAILABLE",
                         "Authentication service is temporarily unavailable"));
+    }
+
+    // TASK-BE-257: bulk provisioning — items array over the 1 000 limit
+    @ExceptionHandler(BulkLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleBulkLimitExceeded(BulkLimitExceededException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", e.getMessage()));
+    }
+
+    /**
+     * TASK-BE-271: route Bean Validation {@code @Size} violation on the bulk
+     * {@code items} field to the {@code BULK_LIMIT_EXCEEDED} contract code so the
+     * HTTP error code matches {@code account-internal-provisioning.md} regardless
+     * of whether the limit guard fires at the controller boundary
+     * ({@code MethodArgumentNotValidException}) or at the use-case layer
+     * ({@link BulkLimitExceededException}). Other validation errors continue to
+     * surface as {@code VALIDATION_ERROR} via the parent handler.
+     */
+    @Override
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
+        boolean isBulkLimit = e.getBindingResult().getFieldErrors().stream()
+                .anyMatch(GlobalExceptionHandler::isBulkItemsSizeViolation);
+        if (isBulkLimit) {
+            String message = e.getBindingResult().getFieldErrors().stream()
+                    .filter(GlobalExceptionHandler::isBulkItemsSizeViolation)
+                    .findFirst()
+                    .map(FieldError::getDefaultMessage)
+                    .orElse("items must not exceed 1000 entries");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", message));
+        }
+        return super.handleValidation(e);
+    }
+
+    private static boolean isBulkItemsSizeViolation(FieldError err) {
+        return "items".equals(err.getField()) && "Size".equals(err.getCode());
+    }
+
+    // TASK-BE-250: tenant lifecycle — duplicate tenantId
+    @ExceptionHandler(TenantAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleTenantAlreadyExists(TenantAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_ALREADY_EXISTS",
+                        "Tenant already exists: " + e.getTenantId()));
     }
 
     // TASK-BE-231: provisioning API tenant-related exceptions
