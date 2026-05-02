@@ -23,6 +23,8 @@ OIDC Discovery 문서. RFC 8414 준거.
   "token_endpoint": "https://gap.example.com/oauth2/token",
   "jwks_uri": "https://gap.example.com/oauth2/jwks",
   "userinfo_endpoint": "https://gap.example.com/oauth2/userinfo",
+  "revocation_endpoint": "https://gap.example.com/oauth2/revoke",
+  "introspection_endpoint": "https://gap.example.com/oauth2/introspect",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
   "subject_types_supported": ["public"],
