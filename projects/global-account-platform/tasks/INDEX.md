@@ -89,15 +89,11 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-OAuth2 Resource Server 마이그레이션 (2026-05-02, awaiting review approval):
-
-253 review follow-up (2026-05-02, awaiting review approval):
-
-- `TASK-BE-269-fix-TASK-BE-253.md` — community-service OAuth2 WebClient 에 connect/read timeout (2s/3s) 적용 + ReadTimeoutException unit test
+(empty — TASK-BE-269 reviewed and moved to done on 2026-05-02)
 
 ## done
 
-260 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+261 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
 TASK-BE-250 (admin tenant lifecycle API), TASK-BE-251 (Spring Authorization Server),
 TASK-BE-252 (OAuth schema), TASK-BE-256 (tenant onboarding API contract), and
@@ -107,5 +103,5 @@ FIX_NEEDED → 263), TASK-BE-255 (account_roles schema, FIX_NEEDED → 265),
 TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
 (auth-api.md discovery, APPROVED), TASK-BE-265 (255 review fix, FIX_NEEDED → 267),
 TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
-FIX_NEEDED → 269).
+FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED).
 Numbers TASK-BE-238/239/240/244 were not assigned.
