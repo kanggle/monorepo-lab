@@ -16,12 +16,14 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 | Project | Domain | Tech | Status | Standalone repo |
 |---|---|---|---|---|
-| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3.4 · Postgres · Kafka · Redis · Hexagonal | ✅ **v1 complete — 3 services**: master (5 aggregates + Lot expiry) · inventory (W4/W5 reservations · 4 outbound-saga consumers · low-stock alerts · 122-test unit suite) · gateway (JWT · rate-limit). inbound/outbound/admin: specs only (v2). | [kanggle/wms-platform](https://github.com/kanggle/wms-platform) |
-| [ecommerce-microservices-platform](projects/ecommerce-microservices-platform/) | E-commerce | Java 21 · Spring Boot 3.4 · Next.js 15 · React 19 · Postgres · Kafka · Redis · Elasticsearch · MinIO | ✅ End-to-end full-stack: 12 backend microservices + Next.js storefront + admin dashboard. Saga orchestration, outbox, JWT, ES product search, MinIO uploads, Playwright E2E. | [kanggle/ecommerce-microservices-platform](https://github.com/kanggle/ecommerce-microservices-platform) |
+| [wms-platform](projects/wms-platform/) | Warehouse Management | Java 21 · Spring Boot 3.4 · Postgres · Kafka · Redis · Hexagonal | ✅ **v1 complete — 5 services**: master (5 aggregates + Lot expiry) · inventory (W4/W5 reservations · 4 outbound-saga consumers · low-stock alerts) · inbound (ASN / inspection / putaway) · outbound (order / picking / packing / shipping) · gateway (OIDC + tenant gate via TASK-MONO-019). admin / notification: bootstrap pending. | [kanggle/wms-platform](https://github.com/kanggle/wms-platform) |
+| [ecommerce-microservices-platform](projects/ecommerce-microservices-platform/) | E-commerce | Java 21 · Spring Boot 3.4 · Next.js 15 · React 19 · Postgres · Kafka · Redis · Elasticsearch · MinIO | ✅ End-to-end full-stack: 12 backend microservices + Next.js storefront + admin dashboard. Saga orchestration, outbox, JWT, ES product search, MinIO uploads, Playwright E2E. GAP IdP migration pending (TASK-MONO-020 future). | [kanggle/ecommerce-microservices-platform](https://github.com/kanggle/ecommerce-microservices-platform) |
+| [global-account-platform](projects/global-account-platform/) | SaaS / Identity | Java 21 · Spring Boot 3.4 · Spring Authorization Server 1.x · Postgres · Kafka · Redis | ✅ **OIDC IdP for the monorepo**: 5 backend services (auth / account / admin / gateway / security) + admin-web frontend. Standard `/oauth2/{authorize,token,jwks,userinfo,revoke,introspect}` + `/.well-known/openid-configuration`. Multi-tenant `tenant_id` row-level isolation. Bulk provisioning `POST /internal/tenants/{id}/accounts:bulk`. Currently consumed by wms-platform; ecommerce + fan-platform pending. | _(monorepo-only)_ |
+| [fan-platform](projects/fan-platform/) | Fan Community (K-pop) | Java 21 · Spring Boot 3.4 · Next.js 15 · Postgres · Kafka · Redis | 🚧 **Bootstrapping** — gateway-service first ([TASK-FAN-BE-001](projects/fan-platform/tasks/ready/)). v1 = gateway + community + artist + lean Next.js frontend. GAP OIDC consumer + Traefik hostname routing from day 1. | _(planned)_ |
 
 Each project is extracted to its own standalone repo via [`scripts/sync-portfolio.sh`](scripts/sync-portfolio.sh) for easier discovery. This monorepo retains the full development history and shared library development.
 
-_Future projects (planned): additional domains to stress-test the shared library and validate the Template extraction._
+_Future projects (planned): scm-platform, erp-platform, mes-platform — taxonomy entries already in [`rules/taxonomy.md`](rules/taxonomy.md), bootstrap pending to validate the Template extraction triggers._
 
 ---
 
@@ -143,8 +145,8 @@ See [rules/README.md](rules/README.md) for the full taxonomy and on-demand polic
 
 **Currently defined in the library:**
 
-- Domains: `wms`
-- Traits: `transactional`, `integration-heavy`
+- Domains: `wms`, `ecommerce`, `saas`, `fan-platform`
+- Traits: `transactional`, `integration-heavy`, `read-heavy`, `content-heavy`
 
 Additional domains/traits get rule files when a new project declares them.
 
