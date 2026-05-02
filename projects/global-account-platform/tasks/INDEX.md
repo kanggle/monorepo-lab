@@ -72,7 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — TASK-BE-257 implementation complete and moved to review on 2026-05-02. GAP IdP 승급 main batch + GDPR follow-ups 모두 review/done 진입.)
+257 review fix:
+
+- `TASK-BE-271-fix-TASK-BE-257.md` — TASK-BE-257 review fix: bulk audit `@Transactional(readOnly=true)` → REQUIRED, `OPERATOR_PROVISIONING_STATUS_CHANGE` → `OPERATOR_PROVISIONING_CREATE` enum 추가, 1001 item 통합 테스트가 `VALIDATION_ERROR` 대신 `BULK_LIMIT_EXCEEDED` 받도록 라우팅
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
@@ -82,13 +84,11 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-GAP IdP 승급 main batch 의 마지막 ready (2026-05-02, awaiting review approval):
-
-- `TASK-BE-257-bulk-provisioning-api.md` — `POST /internal/tenants/{tenantId}/accounts:bulk` (max 1000 items, per-row REQUIRES_NEW transaction, partial-success summary, N개 `account.created` outbox 발행, audit `ACCOUNT_BULK_CREATE`)
+(empty — TASK-BE-257 reviewed and moved to done on 2026-05-02)
 
 ## done
 
-262 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+263 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
 TASK-BE-250 (admin tenant lifecycle API), TASK-BE-251 (Spring Authorization Server),
 TASK-BE-252 (OAuth schema), TASK-BE-256 (tenant onboarding API contract), and
@@ -100,5 +100,6 @@ TASK-BE-259 (auth.token.reuse.detected tenant_id, APPROVED), TASK-BE-263
 TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
 FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED),
 TASK-BE-258 (GDPR downstream contract + security ref impl, FIX_NEEDED → 270),
-TASK-BE-270 (258 review fix: salt + data-model.md, APPROVED).
+TASK-BE-270 (258 review fix: salt + data-model.md, APPROVED), TASK-BE-257
+(bulk provisioning API, FIX_NEEDED → 271).
 Numbers TASK-BE-238/239/240/244 were not assigned.
