@@ -72,30 +72,18 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-Multi-tenancy gap-fill (post `multi-tenant` trait adoption on 2026-04-29):
+GAP IdP 승급 잔여 (post 254/255/259 batch → review on 2026-05-02, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
 
-- `TASK-BE-248-security-service-tenant-events.md` — security-service `tenant_id` 페이로드/스키마/per-tenant detection
-- `TASK-BE-249-admin-service-tenant-audit-schema.md` — admin schema `tenant_id` + tenant-scoped audit query
-- `TASK-BE-250-admin-service-tenant-management-api.md` — `POST/PATCH /api/admin/tenants` lifecycle API
-
-Recommended order: 248 → 249 → 250 (security events first because they unblock per-tenant detection; admin schema next because TASK-BE-250 depends on it).
-
-GAP IdP 승급 (post ADR-001 ACCEPTED on 2026-05-01, decisions D1=A / D2=D2-b / D3=D3-b / D4=D4-c). 자세한 결정 근거는 [docs/adr/ADR-001-oidc-adoption.md](../../docs/adr/ADR-001-oidc-adoption.md):
-
-- `TASK-BE-251-spring-authorization-server-oidc-endpoints.md` — Spring Authorization Server 도입 + `/oauth2/*` 표준 엔드포인트 (P0)
-- `TASK-BE-252-oauth-clients-scopes-consent-schema.md` — OAuth client/scope/consent JPA 스키마 (P0)
 - `TASK-BE-253-community-membership-oidc-integration.md` — community/membership-service OIDC 통합 (P1, FROZEN 예외)
-- `TASK-BE-254-consumer-integration-guide-doc.md` — 소비 서비스 통합 가이드 신규 (P1)
-- `TASK-BE-255-account-roles-schema.md` — `account_roles` 테이블 스키마 + provisioning API 정합 (P1)
-- `TASK-BE-256-tenant-onboarding-api-contract.md` — 테넌트 onboarding API 계약 완성 (P1, TASK-BE-250 선행 contract)
 - `TASK-BE-257-bulk-provisioning-api.md` — bulk provisioning API (P2)
 - `TASK-BE-258-gdpr-deletion-downstream-contract.md` — GDPR 삭제 downstream 전파 계약 + security-service reference (P2)
-- `TASK-BE-259-auth-token-reuse-detected-tenant-id.md` — `auth.token.reuse.detected` 에 `tenant_id` 추가 (P3)
 
-Recommended order: 251 → 252 (둘은 병렬 가능) → 253 / TASK-MONO-019 (consumer 마이그레이션, 251·252 완료 후) → 254 (가이드, 선행 작성도 가능). 255/256/257/258/259는 ADR과 독립이므로 251/252와 병렬 진행 가능. 262 (`tenant_id` cleanup) 는 TASK-BE-248 와 정합 점검 후 진행.
+Recommended order: P0 선행(251/252) 및 256 contract 가 모두 done 이라 잔여 ready 작업은 즉시 시작 가능.
+- 253 / TASK-MONO-019: 둘 다 251/252 의존, 서로 병렬 가능 — Resource Server 마이그레이션 끝맺음.
+- 257 / 258: ADR 과 독립, 병렬 가능. 단 257 은 250 (admin tenant lifecycle API) 가 done 진입한 후 stable. 258 은 255 가 머지된 `account-events.md` v3 위에서 작업.
 
 Cross-project follow-up (root `tasks/`):
-- `tasks/ready/TASK-MONO-019-wms-platform-oidc-resource-server-migration.md` — wms-platform OIDC Resource Server 전환 (TASK-BE-251/252 의존)
+- `tasks/ready/TASK-MONO-019-wms-platform-oidc-resource-server-migration.md` — wms-platform OIDC Resource Server 전환 (TASK-BE-251/252 의존, 둘 다 done)
 
 ## in-progress
 
@@ -103,11 +91,16 @@ Cross-project follow-up (root `tasks/`):
 
 ## review
 
-(empty)
+GAP IdP 승급 batch (2026-05-02, awaiting review approval):
+
+- `TASK-BE-254-consumer-integration-guide-doc.md` — 소비 서비스 OIDC 통합 가이드 (Korean, 6 Phase + 코드 예시 + erp 시뮬레이션)
+- `TASK-BE-255-account-roles-schema.md` — `account_roles` 복합 PK 스키마 + provisioning API add/remove 엔드포인트 + outbox v3
+- `TASK-BE-259-auth-token-reuse-detected-tenant-id.md` — `auth.token.reuse.detected` payload `tenant_id` (auth-service publisher + security-service per-tenant counter)
 
 ## done
 
-247 backend tasks + 26 frontend tasks completed (latest standalone-master commit
-captured: `34ef5e9` on 2026-04-30, post-`9830ecb` catch-up sync). Latest BE:
-TASK-BE-247 (signup half-commit idempotency); latest FE: TASK-FE-026 (DashboardTabs
-server/client boundary). Numbers TASK-BE-238/239/240/244 were not assigned.
+253 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
+TASK-BE-251 (Spring Authorization Server), TASK-BE-252 (OAuth schema),
+TASK-BE-256 (tenant onboarding API contract), and follow-ups 260/261/262.
+Numbers TASK-BE-238/239/240/244 were not assigned.
