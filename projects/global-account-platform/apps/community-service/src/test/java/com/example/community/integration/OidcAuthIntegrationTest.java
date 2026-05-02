@@ -52,7 +52,7 @@ class OidcAuthIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("legacy iss=global-account-platform 토큰 → 201 (호환성)")
     void legacyToken_returns201() throws Exception {
         stubAccountProfile("artist", "Test Artist");
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 28);
 
         mockMvc.perform(post("/api/community/posts")
                         .header("Authorization", bearerToken(artistId, List.of("ARTIST")))
@@ -65,7 +65,7 @@ class OidcAuthIntegrationTest extends CommunityIntegrationTestBase {
     @DisplayName("SAS issuer 토큰 → 201 (표준 경로)")
     void sasToken_returns201() throws Exception {
         stubAccountProfile("artist", "Test Artist");
-        String artistId = "artist-" + UUID.randomUUID();
+        String artistId = "artist-" + UUID.randomUUID().toString().substring(0, 28);
 
         mockMvc.perform(post("/api/community/posts")
                         .header("Authorization", bearerSasToken(artistId, List.of("ARTIST")))
@@ -77,7 +77,7 @@ class OidcAuthIntegrationTest extends CommunityIntegrationTestBase {
     @Test
     @DisplayName("cross-tenant 토큰 (tenant_id=wms) → 403 TENANT_FORBIDDEN")
     void crossTenantWmsToken_returns403() throws Exception {
-        String wmsUserId = "wms-user-" + UUID.randomUUID();
+        String wmsUserId = "wms-user-" + UUID.randomUUID().toString().substring(0, 28);
 
         mockMvc.perform(post("/api/community/posts")
                         .header("Authorization", bearerTokenWithTenant(wmsUserId, List.of("ARTIST"), "wms"))
