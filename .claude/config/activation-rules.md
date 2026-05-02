@@ -233,6 +233,34 @@ Activate:
 
 ---
 
+### fan-platform
+Activate:
+- artist-fan asymmetric publication rules (one-to-many vs community's peer-to-peer)
+- post visibility tiers (public / members-only / premium)
+- membership-based access control (fail-closed when membership service is unavailable)
+- reaction upsert / dedup rules (one reaction per account per post)
+- feed-by-following rules (subscribed artists only, status filter)
+- artist verification / role separation rules
+- moderation rules
+- notification fanout rules
+
+→ Detailed rules: *(file to be created when a project declares this domain)*
+
+---
+
+### scm
+Activate:
+- multi-leg supply chain workflow rules (procurement → manufacturing → logistics → settlement)
+- supplier integration rules (catalog sync, PO acknowledgment, ASN inbound)
+- demand-supply matching rules
+- inventory visibility across nodes (warehouses, suppliers, in-transit)
+- batch reconciliation rules (settlement, demand planning runs)
+- partner SLA / compliance tracking rules
+
+→ Detailed rules: *(file to be created when a project declares this domain)*
+
+---
+
 ### logistics
 Activate:
 - shipment state machine rules

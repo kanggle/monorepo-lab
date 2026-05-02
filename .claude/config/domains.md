@@ -26,6 +26,7 @@ Choose one primary domain for each service.
 ### Enterprise & Internal Systems
 - mes
 - erp
+- scm
 - groupware
 - accounting-system
 
@@ -39,6 +40,7 @@ Choose one primary domain for each service.
 - dmp
 
 ### Content & Community
+- fan-platform
 - community
 - sns
 - forum
