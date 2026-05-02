@@ -37,7 +37,7 @@
 
 ---
 
-## Domains (39)
+## Domains (41)
 
 **선택 원칙**: 각 프로젝트는 **정확히 하나의 primary domain**을 선언한다. 여러 도메인의 특성이 섞여 있으면 **핵심 비즈니스가 무엇으로 규정되는가**를 기준으로 고르고, 나머지는 traits 또는 서브시스템 수준에서 다룬다.
 
@@ -76,6 +76,11 @@
 - **정의**: Enterprise Resource Planning. 회계·구매·재고·HR을 통합 관리하는 기간계 시스템
 - **전형 서브시스템**: GL, AP/AR, Procurement, Inventory, HR, Fixed Assets
 - **언제 고르는가**: 전사 기간 업무 데이터가 중심이고 모듈 간 일관성이 핵심일 때
+
+#### scm
+- **정의**: Supply Chain Management. 수요예측·조달(procurement)·생산계획·운송·재고가시성·정산을 통합 관리하는 공급망 시스템
+- **전형 서브시스템**: Demand Planning, Procurement, Supplier Management, Logistics Coordination, Inventory Visibility, Settlement
+- **언제 고르는가**: 공급망 전 단계의 데이터 흐름과 의사결정이 도메인 핵심이고, 단일 창고 운영(`wms`)이나 단일 ERP 모듈(`erp`)보다 cross-functional 통합이 중심일 때
 
 #### groupware
 - **정의**: 사내 커뮤니케이션/문서/결재/일정 협업 시스템
@@ -125,6 +130,12 @@
 - **언제 고르는가**: 광고 오디언스 데이터 거래·매칭이 중심일 때
 
 ### Content & Community
+
+#### fan-platform
+- **정의**: 특정 아티스트·크리에이터(소수 발행자)와 팬(다수 소비자) 사이의 **비대칭 콘텐츠 관계**를 중심에 두는 팬덤 커뮤니티 플랫폼 (예: Weverse, NCSOFT UNIVERSE). 멤버십 기반 프리미엄 콘텐츠가 자주 결합됨
+- **전형 서브시스템**: Artist Post, Comment, Reaction, Feed (팔로잉 기반), Membership Access Control, Notification, Live Streaming(선택)
+- **언제 고르는가**: 아티스트↔팬의 **비대칭** 발행·소비 구조가 핵심이고, 일반 `community` (사용자 간 평등한 관계) 또는 `sns` (양방향 그래프) 와 명확히 구분될 때
+- **community/sns 와의 차이**: community 는 사용자 관계가 평등하고 generic; sns 는 양방향 follow 그래프와 피드 알고리즘이 중심; fan-platform 은 "발행자(아티스트) 1 : N(팬)" 의 비대칭과 멤버십 차등 접근이 핵심
 
 #### community
 - **정의**: 사용자 간 대화·관계를 중심에 두는 커뮤니티 플랫폼
@@ -337,6 +348,8 @@
 - **cdp + data-intensive + batch-heavy + integration-heavy** → 고객 데이터 플랫폼
 - **game-backoffice + internal-system + audit-heavy** → 게임 운영 콘솔
 - **identity-platform + regulated + audit-heavy + integration-heavy** → 다중 플랫폼 IAM (소셜 로그인, OIDC, 감사)
+- **scm + transactional + integration-heavy + batch-heavy** → 공급망 통합 플랫폼 (조달·운송·정산)
+- **fan-platform + transactional + content-heavy + read-heavy + integration-heavy** → K-pop 류 팬덤 커뮤니티 (Weverse 스타일)
 
 ---
 
