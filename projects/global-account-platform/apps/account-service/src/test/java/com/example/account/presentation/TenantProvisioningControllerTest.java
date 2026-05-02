@@ -402,6 +402,24 @@ class TenantProvisioningControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
+    @Test
+    @DisplayName("PATCH status operatorId 37 chars returns 400 — TASK-BE-267")
+    void changeStatus_operatorIdTooLong_returns400() throws Exception {
+        String operatorId37 = "o".repeat(37);
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/status",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "LOCKED",
+                                  "operatorId": "%s"
+                                }
+                                """.formatted(operatorId37)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
     // --- POST /internal/tenants/{tenantId}/accounts/{accountId}/password-reset ---
 
     @Test
