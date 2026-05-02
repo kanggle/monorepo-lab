@@ -1,10 +1,13 @@
 package com.example.community.infrastructure.config;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.security.oauth2.client.AuthorizedClientServiceOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
@@ -18,6 +21,9 @@ import org.springframework.security.oauth2.client.web.reactive.function.client.S
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+
+import java.time.Duration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
@@ -29,6 +35,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Unit-level verification of TASK-BE-253's outbound OAuth2 token-attachment flow.
@@ -115,5 +123,36 @@ class OAuth2WebClientConfigUnitTest {
         authServer.verify(postRequestedFor(urlPathEqualTo("/oauth2/token")));
         resourceServer.verify(getRequestedFor(urlPathEqualTo("/internal/accounts/some-id"))
                 .withHeader("Authorization", equalTo("Bearer unit-test-token")));
+    }
+
+    @Test
+    @DisplayName("read-timeout 초과 응답에서 ReadTimeoutException 발생 — TASK-BE-269")
+    void slow_response_triggers_read_timeout() {
+        int readTimeoutMs = 500;
+        // ── Resource server: 응답 지연 (read-timeout + 여유)
+        resourceServer.stubFor(get(urlPathEqualTo("/internal/slow"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withFixedDelay(readTimeoutMs + 1500)));
+
+        // OAuth2WebClientConfig.connector(...) 와 동일 패턴
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000)
+                .responseTimeout(Duration.ofMillis(readTimeoutMs));
+        WebClient webClient = WebClient.builder()
+                .baseUrl(resourceServer.baseUrl())
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
+
+        Throwable caught = catchThrowable(() -> webClient.get()
+                .uri("/internal/slow")
+                .retrieve()
+                .toBodilessEntity()
+                .block());
+
+        assertThat(caught)
+                .as("응답 지연이 read-timeout 을 초과하면 ReadTimeoutException 발생해야 함")
+                .isNotNull()
+                .hasRootCauseInstanceOf(ReadTimeoutException.class);
     }
 }

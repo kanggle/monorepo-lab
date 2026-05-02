@@ -1,8 +1,10 @@
 package com.example.community.infrastructure.config;
 
+import io.netty.channel.ChannelOption;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.security.oauth2.client.AuthorizedClientServiceOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
@@ -10,6 +12,7 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.reactive.function.client.ServletOAuth2AuthorizedClientExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
 
@@ -89,6 +92,7 @@ public class OAuth2WebClientConfig {
         return WebClient.builder()
                 .baseUrl(accountServiceBaseUrl)
                 .apply(oauth2.oauth2Configuration())
+                .clientConnector(connector(accountConnectTimeoutMs, accountReadTimeoutMs))
                 .build();
     }
 
@@ -100,11 +104,19 @@ public class OAuth2WebClientConfig {
         return WebClient.builder()
                 .baseUrl(membershipServiceBaseUrl)
                 .apply(oauth2.oauth2Configuration())
+                .clientConnector(connector(membershipConnectTimeoutMs, membershipReadTimeoutMs))
                 .build();
     }
 
-    @SuppressWarnings("unused")
-    private static Duration ms(int millis) {
-        return Duration.ofMillis(millis);
+    /**
+     * Builds a Reactor Netty connector with TCP connect + response timeouts applied
+     * (TASK-BE-269: restore the 2s/3s caller constraint declared in
+     * {@code community-to-{account,membership}.md}).
+     */
+    private static ReactorClientHttpConnector connector(int connectTimeoutMs, int readTimeoutMs) {
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs)
+                .responseTimeout(Duration.ofMillis(readTimeoutMs));
+        return new ReactorClientHttpConnector(httpClient);
     }
 }
