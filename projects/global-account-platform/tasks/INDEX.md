@@ -82,13 +82,11 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
 
 ## review
 
-257 review follow-up (2026-05-02, awaiting review approval):
-
-- `TASK-BE-271-fix-TASK-BE-257.md` — bulk provisioning fix: `@Transactional(readOnly=true)` → `@Transactional`, `OPERATOR_PROVISIONING_CREATE` enum 추가, `BULK_LIMIT_EXCEEDED` HTTP 라우팅
+(empty — TASK-BE-271 reviewed and moved to done on 2026-05-02)
 
 ## done
 
-263 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
+264 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
 TASK-BE-250 (admin tenant lifecycle API), TASK-BE-251 (Spring Authorization Server),
 TASK-BE-252 (OAuth schema), TASK-BE-256 (tenant onboarding API contract), and
@@ -101,5 +99,6 @@ TASK-BE-267 (267 review, APPROVED), TASK-BE-253 (community/membership OIDC RS,
 FIX_NEEDED → 269), TASK-BE-269 (269 OAuth2 WebClient timeout fix, APPROVED),
 TASK-BE-258 (GDPR downstream contract + security ref impl, FIX_NEEDED → 270),
 TASK-BE-270 (258 review fix: salt + data-model.md, APPROVED), TASK-BE-257
-(bulk provisioning API, FIX_NEEDED → 271).
+(bulk provisioning API, FIX_NEEDED → 271), TASK-BE-271 (257 review fix:
+readOnly tx + enum + BULK_LIMIT routing, APPROVED).
 Numbers TASK-BE-238/239/240/244 were not assigned.
