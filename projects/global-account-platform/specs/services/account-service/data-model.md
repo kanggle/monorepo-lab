@@ -60,6 +60,33 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 
 **인덱스**: `idx_ash_account_id_occurred_at` (복합)
 
+### `account_roles`
+
+> TASK-BE-255: 테넌트별 계정 역할 매핑 테이블. `(tenant_id, role_name)` 복합키 정책 ([specs/features/multi-tenancy.md § Per-Tenant Roles](../../features/multi-tenancy.md#per-tenant-roles)) 의 물리 구현.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `tenant_id` | VARCHAR(32) | NOT NULL, PK | internal | 역할이 부여된 테넌트 |
+| `account_id` | VARCHAR(36) | NOT NULL, PK | internal | 역할이 부여된 계정 |
+| `role_name` | VARCHAR(64) | NOT NULL, PK | internal | 역할 이름. 정규식 `^[A-Z][A-Z0-9_]*$` (예: `WAREHOUSE_ADMIN`) |
+| `granted_by` | VARCHAR(36) | NULL | internal | 역할을 부여한 운영자 ID. system grant 의 경우 NULL |
+| `granted_at` | DATETIME(6) | NOT NULL | internal | 부여 시각 (UTC) |
+
+**PK**: `(tenant_id, account_id, role_name)` — surrogate ID 없음. row 자체가 fact ("이 사용자에게 이 role 이 부여되었다") 이므로 자연 키로 충분.
+
+**FK**: `(tenant_id, account_id) → accounts(tenant_id, id)` ON DELETE CASCADE — 계정 삭제 시 역할도 자동 정리. 복합 FK 로 cross-tenant integrity 강화. (`accounts(tenant_id, id)` 에 보조 unique key 가 V0013 에서 추가됨.)
+
+**인덱스**:
+- PK 가 `(tenant_id, account_id, role_name)` 이므로 PK 자체가 `(tenant_id, account_id)` prefix lookup 을 커버한다 (계정별 역할 조회).
+- `idx_account_roles_tenant_role (tenant_id, role_name)` — 특정 역할을 가진 모든 계정 조회용 (예: WMS 의 `INBOUND_OPERATOR` 전체 조회).
+
+**기본 역할 정책**: admin 이 사전에 등록한 역할만 허용. 등록되지 않은 역할 부여 시도는 application 단에서 400. tenant 별 허용 역할 카탈로그 (`tenant_role_definitions`) 는 별도 task 로 분리됨 — 본 테이블의 `role_name` 은 자유 문자열로 시작, 정규식만 강제. ([specs/features/multi-tenancy.md § Per-Tenant Roles](../../features/multi-tenancy.md#per-tenant-roles))
+
+**operations** (provisioning API contract):
+- `replaceAll`: 기존 역할 모두 삭제 후 신규 역할 set 삽입 (단일 트랜잭션).
+- `add`: 단건 추가. 이미 존재 시 no-op (멱등). PK 중복은 409 가 아니라 정상 종료.
+- `remove`: 단건 삭제. 존재하지 않을 시 no-op.
+
 ### `outbox_events`
 
 [libs/java-messaging](../../../libs/java-messaging) 표준 스키마 — auth-service와 동일 구조.
@@ -120,6 +147,8 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 - `V0002__create_account_status_history.sql`
 - `V0003__create_outbox_events.sql`
 - `V0004__add_status_history_trigger_prevent_update_delete.sql`
+- `V0012__create_account_roles.sql` — TASK-BE-231 초기 surrogate-PK 형태 (legacy)
+- `V0013__rebuild_account_roles_composite_pk.sql` — TASK-BE-255 composite PK + composite FK ON DELETE CASCADE + `granted_by` / `granted_at` + `(tenant_id, role_name)` index
 - 각 마이그레이션은 forward-only. down migration은 PII 보존 규칙상 **제공하지 않음** (R6 — 데이터 복원 경로를 제한적으로만 허용)
 
 ---

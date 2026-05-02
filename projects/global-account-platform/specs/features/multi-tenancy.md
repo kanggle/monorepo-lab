@@ -120,8 +120,9 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 ### 원칙
 
 - **역할 이름은 테넌트 컨텍스트 안에서만 의미를 가진다.** 동일한 `WAREHOUSE_ADMIN` role을 다른 테넌트에 부여해도 권한 의미는 다를 수 있다
-- 역할 정의(role definitions)는 `(tenant_id, role_name)` 복합키로 관리
+- 역할 정의(role definitions)는 `(tenant_id, role_name)` 복합키로 관리. 물리 스토리지는 `account_roles` 테이블 ([specs/services/account-service/data-model.md § account_roles](../services/account-service/data-model.md#account_roles))
 - 권한 매트릭스(role → permissions)는 테넌트마다 독립
+- **기본 정책 (TASK-BE-255)**: admin 이 사전 등록한 역할만 부여 가능. 등록되지 않은 역할 이름은 provisioning API 가 400 으로 거부 — `account_roles.role_name` 자체는 자유 문자열 (정규식 `^[A-Z][A-Z0-9_]*$` 강제) 이며, 테넌트별 허용 역할 카탈로그 (`tenant_role_definitions`) 도입은 별도 후속 태스크
 
 ### 기본 역할 (예시)
 

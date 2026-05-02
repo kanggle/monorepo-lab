@@ -66,12 +66,23 @@ public class AccountEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * TASK-BE-231: Published when the provisioning API replaces an account's role set.
+     * TASK-BE-231: Published when the provisioning API mutates an account's role set.
+     *
+     * <p>TASK-BE-255: Signature widened to carry both {@code beforeRoles} and
+     * {@code afterRoles} plus the {@code changedBy} attribution string. The legacy
+     * {@code roles} payload field is now an alias for {@code afterRoles} so
+     * existing v2 consumers keep working unchanged. Add/remove use cases pass the
+     * pre-mutation snapshot as {@code beforeRoles}; replace-all does the same.
      */
-    public void publishRolesChanged(Account account, String tenantId, java.util.List<String> roles,
-                                    String actorType, String actorId, java.time.Instant occurredAt) {
+    public void publishRolesChanged(Account account, String tenantId,
+                                    java.util.List<String> beforeRoles,
+                                    java.util.List<String> afterRoles,
+                                    String changedBy,
+                                    String actorType, String actorId,
+                                    java.time.Instant occurredAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildRolesChangedEvent(roles, actorType, actorId, occurredAt));
+        save(account.getId(), account.buildRolesChangedEvent(
+                beforeRoles, afterRoles, changedBy, actorType, actorId, occurredAt));
     }
 
     public void publishAccountDeletedAnonymized(Account account, String tenantId, String reasonCode,

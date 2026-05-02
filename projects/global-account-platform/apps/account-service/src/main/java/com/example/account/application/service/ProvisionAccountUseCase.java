@@ -79,9 +79,13 @@ public class ProvisionAccountUseCase {
             profileRepository.save(profile, tenantId);
 
             // 5. Persist role assignments
+            //    TASK-BE-255: AccountRole.create now requires a grantedBy attribution.
+            //    We use the provisioning operatorId (or, when null, fall back to the
+            //    tenantId itself so the row is never granted-by-NULL during creation).
             List<String> roles = command.roles() != null ? command.roles() : List.of();
+            String grantedBy = command.operatorId() != null ? command.operatorId() : command.tenantId();
             for (String roleName : roles) {
-                AccountRole role = AccountRole.create(tenantId, account.getId(), roleName);
+                AccountRole role = AccountRole.create(tenantId, account.getId(), roleName, grantedBy);
                 accountRoleRepository.save(role);
             }
 

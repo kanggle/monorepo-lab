@@ -1,10 +1,10 @@
 package com.example.account.application.service;
 
-import com.example.account.application.command.AssignRolesCommand;
+import com.example.account.application.command.RemoveAccountRoleCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.TenantNotFoundException;
-import com.example.account.application.result.AssignRolesResult;
+import com.example.account.application.result.AccountRoleMutationResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.account.AccountRole;
 import com.example.account.domain.account.AccountRoleName;
@@ -24,22 +24,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * TASK-BE-231: Replaces all roles for an account within a tenant.
+ * TASK-BE-255: Remove a single role from an account.
  *
- * <p>Deletes existing role assignments and inserts the new set in a single transaction.
- * Publishes outbox {@code account.roles.changed} event and records audit entry
- * with {@code OPERATOR_PROVISIONING_ROLES_REPLACE} action code.
- *
- * <p>TASK-BE-255: Snapshots the previous role set for the {@code beforeRoles}
- * field on the outbox event and validates each new role name against
- * {@link AccountRoleName} before persisting. Cross-tenant safety is preserved
- * because {@code AccountRepository.findById(tenantId, accountId)} returns empty
- * when the accountId belongs to a different tenant — the call surfaces as
- * {@code ACCOUNT_NOT_FOUND}.
+ * <p>Idempotent: removing a role that the account does not have is a successful
+ * no-op (the response carries the unchanged role list and {@code changed=false}).
+ * Only actual deletions record an audit row and publish the
+ * {@code account.roles.changed} outbox event.
  */
 @Service
 @RequiredArgsConstructor
-public class AssignRolesUseCase {
+public class RemoveAccountRoleUseCase {
 
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
@@ -48,41 +42,38 @@ public class AssignRolesUseCase {
     private final AccountEventPublisher eventPublisher;
 
     @Transactional
-    public AssignRolesResult execute(AssignRolesCommand command) {
+    public AccountRoleMutationResult execute(RemoveAccountRoleCommand command) {
         TenantId tenantId = new TenantId(command.tenantId());
 
-        // Validate tenant exists
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(command.tenantId()));
 
-        // Validate account exists within this tenant — cross-tenant accountIds surface as 404.
         Account account = accountRepository.findById(tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
-        List<String> requestedRoles = command.roles() != null ? command.roles() : List.of();
-        // Up-front validation so a partial-write trajectory is not possible.
-        for (String roleName : requestedRoles) {
-            AccountRoleName.validate(roleName);
-        }
+        // The role-name must still be syntactically valid even when removing — guards
+        // against typos that would otherwise silently no-op.
+        AccountRoleName.validate(command.roleName());
 
-        // Snapshot the existing role set BEFORE mutating, so the outbox event carries beforeRoles.
         List<String> beforeRoles = new ArrayList<>(
                 accountRoleRepository.findByTenantIdAndAccountId(tenantId, command.accountId())
-                        .stream()
-                        .map(AccountRole::getRoleName)
-                        .toList()
+                        .stream().map(AccountRole::getRoleName).toList()
         );
 
-        // Replace roles atomically.
-        accountRoleRepository.deleteAllByTenantIdAndAccountId(tenantId, command.accountId());
+        boolean deleted = accountRoleRepository.removeIfPresent(
+                tenantId, command.accountId(), command.roleName());
 
-        String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
-        for (String roleName : requestedRoles) {
-            AccountRole role = AccountRole.create(tenantId, command.accountId(), roleName, operatorId);
-            accountRoleRepository.save(role);
+        Instant now = Instant.now();
+
+        if (!deleted) {
+            return new AccountRoleMutationResult(
+                    command.accountId(), command.tenantId(), beforeRoles, now, false);
         }
 
-        // Audit record
+        List<String> afterRoles = new ArrayList<>(beforeRoles);
+        afterRoles.remove(command.roleName());
+
+        String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
         AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
                 command.tenantId(),
                 command.accountId(),
@@ -91,16 +82,16 @@ public class AssignRolesUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_ROLES_REPLACE,
                 "provisioning_system",
                 operatorId,
-                "action=OPERATOR_PROVISIONING_ROLES_REPLACE,before=" + beforeRoles + ",after=" + requestedRoles
+                "action=ROLE_REMOVE,role=" + command.roleName()
+                        + ",before=" + beforeRoles + ",after=" + afterRoles
         );
         historyRepository.save(auditEntry);
 
-        // Publish outbox event with both before / after snapshots (TASK-BE-255).
-        Instant now = Instant.now();
         eventPublisher.publishRolesChanged(account, account.getTenantId().value(),
-                beforeRoles, requestedRoles, operatorId,
+                beforeRoles, afterRoles, operatorId,
                 "provisioning_system", operatorId, now);
 
-        return new AssignRolesResult(command.accountId(), command.tenantId(), requestedRoles, now);
+        return new AccountRoleMutationResult(
+                command.accountId(), command.tenantId(), afterRoles, now, true);
     }
 }

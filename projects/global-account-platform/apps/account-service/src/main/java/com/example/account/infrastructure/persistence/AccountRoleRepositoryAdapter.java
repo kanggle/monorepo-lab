@@ -34,4 +34,32 @@ public class AccountRoleRepositoryAdapter implements AccountRoleRepository {
     public void deleteAllByTenantIdAndAccountId(TenantId tenantId, String accountId) {
         jpaRepository.deleteByTenantIdAndAccountId(tenantId.value(), accountId);
     }
+
+    /**
+     * TASK-BE-255: Insert the role only when the (tenant, account, role) triple
+     * is not already present. Returns {@code true} when a new row was written.
+     */
+    @Override
+    @Transactional
+    public boolean addIfAbsent(AccountRole role) {
+        var existing = jpaRepository.findByTenantIdAndAccountIdAndRoleName(
+                role.getTenantId().value(), role.getAccountId(), role.getRoleName());
+        if (existing.isPresent()) {
+            return false;
+        }
+        jpaRepository.save(AccountRoleJpaEntity.fromDomain(role));
+        return true;
+    }
+
+    /**
+     * TASK-BE-255: Remove the role only when present. Returns {@code true} when
+     * a row was deleted.
+     */
+    @Override
+    @Transactional
+    public boolean removeIfPresent(TenantId tenantId, String accountId, String roleName) {
+        int deleted = jpaRepository.deleteByTenantIdAndAccountIdAndRoleName(
+                tenantId.value(), accountId, roleName);
+        return deleted > 0;
+    }
 }

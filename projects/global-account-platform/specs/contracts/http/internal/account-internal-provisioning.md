@@ -164,20 +164,22 @@ Retrieve a single account within the tenant.
 
 ## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/roles
 
-Replace all roles for the account. An empty array removes all roles.
+Replace **all** roles for the account. An empty array removes all roles.
 
 > **Audit**: Records `OPERATOR_PROVISIONING_ROLES_REPLACE` in account_status_history (or equivalent audit table).
 
 **Request**:
 ```json
 {
-  "roles": ["INBOUND_OPERATOR", "INVENTORY_VIEWER"]
+  "roles": ["INBOUND_OPERATOR", "INVENTORY_VIEWER"],
+  "operatorId": "sys-wms-backend"
 }
 ```
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `roles` | string[] | Yes | May be empty (removes all roles); each role ≤ 50 chars |
+| `roles` | string[] | Yes | May be empty (removes all roles); each role matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
 
 **Response 200 OK**:
 ```json
@@ -188,6 +190,84 @@ Replace all roles for the account. An empty array removes all roles.
   "updatedAt": "2026-04-30T10:05:00Z"
 }
 ```
+
+**Errors**: 403 `TENANT_SCOPE_DENIED`, 404 `TENANT_NOT_FOUND`, 404 `ACCOUNT_NOT_FOUND`, 400 `VALIDATION_ERROR`
+
+> Cross-tenant safety: if path `{tenantId}` differs from the account's actual `tenant_id` (i.e., the accountId belongs to a different tenant), the response is **404 `ACCOUNT_NOT_FOUND`** (not 403). The repository's tenant-scoped `findById(tenantId, accountId)` returns empty in that case, so the rest of the flow never sees the foreign account.
+
+---
+
+## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/roles:add
+
+> **TASK-BE-255**: Single-role add operation. Idempotent — if the role is already assigned, the call returns 200 with the existing role set unchanged (no event fired).
+
+Append a single role to the account. This avoids the TOCTOU race that the `replaceAll` endpoint has when two operators concurrently mutate the same account's roles.
+
+> **Audit**: Records `OPERATOR_PROVISIONING_ROLES_REPLACE` in `account_status_history` with `details=action=ROLE_ADD,role={roleName}`. The audit code is shared with replaceAll because the underlying fact ("operator changed this account's roles") is the same.
+
+**Request**:
+```json
+{
+  "roleName": "INBOUND_OPERATOR",
+  "operatorId": "sys-wms-backend"
+}
+```
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `roleName` | string | Yes | Matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
+
+**Response 200 OK**:
+```json
+{
+  "accountId": "01923abc-def0-7890-abcd-ef0123456789",
+  "tenantId": "wms",
+  "roles": ["WAREHOUSE_ADMIN", "INBOUND_OPERATOR"],
+  "updatedAt": "2026-04-30T10:05:00Z"
+}
+```
+
+`roles` is the **complete** role list after the add operation, not just the newly added role.
+
+**Outbox event**: `account.roles.changed` is published only when the role set actually changed (i.e., the role was not already assigned). Idempotent re-adds do not emit events.
+
+**Errors**: 403 `TENANT_SCOPE_DENIED`, 404 `TENANT_NOT_FOUND`, 404 `ACCOUNT_NOT_FOUND`, 400 `VALIDATION_ERROR`
+
+---
+
+## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/roles:remove
+
+> **TASK-BE-255**: Single-role remove operation. Idempotent — if the role is not currently assigned, the call returns 200 with the existing role set unchanged (no event fired).
+
+Remove a single role from the account.
+
+> **Audit**: Records `OPERATOR_PROVISIONING_ROLES_REPLACE` in `account_status_history` with `details=action=ROLE_REMOVE,role={roleName}`.
+
+**Request**:
+```json
+{
+  "roleName": "INBOUND_OPERATOR",
+  "operatorId": "sys-wms-backend"
+}
+```
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `roleName` | string | Yes | Matches `^[A-Z][A-Z0-9_]*$`, ≤ 64 chars |
+| `operatorId` | string | No | Caller identifier for audit + outbox event `changed_by` field |
+
+**Response 200 OK**:
+```json
+{
+  "accountId": "01923abc-def0-7890-abcd-ef0123456789",
+  "tenantId": "wms",
+  "roles": ["WAREHOUSE_ADMIN"],
+  "updatedAt": "2026-04-30T10:05:00Z"
+}
+```
+
+**Outbox event**: `account.roles.changed` is published only when the role set actually changed.
 
 **Errors**: 403 `TENANT_SCOPE_DENIED`, 404 `TENANT_NOT_FOUND`, 404 `ACCOUNT_NOT_FOUND`, 400 `VALIDATION_ERROR`
 
@@ -265,6 +345,8 @@ All mutations record an audit entry in `account_status_history` (or equivalent t
 |---|---|
 | Create account | `OPERATOR_PROVISIONING_CREATE` |
 | Replace roles | `OPERATOR_PROVISIONING_ROLES_REPLACE` |
+| Add a single role (TASK-BE-255) | `OPERATOR_PROVISIONING_ROLES_REPLACE` (`details=action=ROLE_ADD,...`) |
+| Remove a single role (TASK-BE-255) | `OPERATOR_PROVISIONING_ROLES_REPLACE` (`details=action=ROLE_REMOVE,...`) |
 | Change status | `OPERATOR_PROVISIONING_STATUS_CHANGE` |
 | Issue password-reset | `OPERATOR_PROVISIONING_PASSWORD_RESET` |
 
@@ -278,6 +360,6 @@ Audit entry includes: `actor_type=provisioning_system`, `actor_id={operatorId or
 |---|---|
 | `account.created` | POST create — payload includes `tenant_id` |
 | `account.status.changed` | PATCH status — payload includes `tenant_id` |
-| `account.roles.changed` | PATCH roles — payload includes `tenant_id`, `roles` |
+| `account.roles.changed` | PATCH roles, PATCH roles:add, PATCH roles:remove — payload includes `tenant_id`, `roles`, `before_roles`, `after_roles`, `changed_by` (TASK-BE-255). Add/remove only emit when the role set actually changed (idempotent calls are silent). |
 
 All payloads must include `tenant_id` per `specs/contracts/events/account-events.md`.
