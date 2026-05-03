@@ -111,6 +111,51 @@ services:
       start_period: 45s
 
   # ---------------------------------------------------------------------------
+  # artist-service — TASK-FAN-BE-003.
+  # Master-data REST service (Hexagonal architecture). Only reachable internally
+  # via the gateway; no Traefik label.
+  # ---------------------------------------------------------------------------
+  artist-service:
+    image: fan-platform/artist-service:local
+    container_name: fan-platform-artist
+    build:
+      context: ./apps/artist-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_REQUIRED_TENANT_ID: fan-platform
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB_ARTIST: ${POSTGRES_DB_ARTIST:-fanplatform_artist}
+      POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fan-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
   # Postgres 16 — backing store for community / artist services.
   # Multi-database: docker-entrypoint-initdb.d script creates per-service DBs
   # so each service has its own isolated schema namespace.
