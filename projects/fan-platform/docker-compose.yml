@@ -12,9 +12,10 @@
 #
 # Services:
 #   gateway-service   — Spring Cloud Gateway, OIDC token validation, tenant gate
-#   postgres          — relational store (used by community/artist services in
-#                       subsequent tasks; gateway itself does not use Postgres)
-#   redis             — rate-limit counters (gateway), feed cache (community)
+#   community-service — REST + JPA + Kafka outbox; only reachable via gateway
+#   postgres          — relational store (databases auto-provisioned via init script)
+#   redis             — rate-limit counters, feed cache
+#   kafka             — single-broker KRaft mode, outbox relay target
 #
 # Usage:
 #   pnpm fan-platform:up    — start everything in this compose file
@@ -66,8 +67,53 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # Postgres 16 — pre-provisioned for downstream services (community / artist)
-  # bootstrapped in subsequent tasks. Gateway itself does not use Postgres.
+  # community-service — TASK-FAN-BE-002.
+  # Only reachable internally via the gateway; no Traefik label.
+  # ---------------------------------------------------------------------------
+  community-service:
+    image: fan-platform/community-service:local
+    container_name: fan-platform-community
+    build:
+      context: ./apps/community-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_REQUIRED_TENANT_ID: fan-platform
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB_COMMUNITY: ${POSTGRES_DB_COMMUNITY:-fanplatform_community}
+      POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fan-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
+  # Postgres 16 — backing store for community / artist services.
+  # Multi-database: docker-entrypoint-initdb.d script creates per-service DBs
+  # so each service has its own isolated schema namespace.
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
@@ -79,8 +125,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
       POSTGRES_DB: ${POSTGRES_DB:-fanplatform}
+      POSTGRES_DB_COMMUNITY: ${POSTGRES_DB_COMMUNITY:-fanplatform_community}
+      POSTGRES_DB_ARTIST: ${POSTGRES_DB_ARTIST:-fanplatform_artist}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fanplatform}"]
       interval: 10s
@@ -91,8 +140,7 @@ services:
       - fan-platform-net
 
   # ---------------------------------------------------------------------------
-  # Redis 7 — rate-limit counters (gateway). Will also serve as feed cache for
-  # community-service in a subsequent task.
+  # Redis 7 — rate-limit counters (gateway) + feed cache (community).
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -112,9 +160,44 @@ services:
     networks:
       - fan-platform-net
 
+  # ---------------------------------------------------------------------------
+  # Kafka 3.7 — single-broker KRaft mode. Outbox relay target.
+  # bitnami/kafka image because the same image is used in the wms-platform and
+  # ecommerce-microservices-platform compose files (consistency wins).
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: fan-platform-kafka
+    restart: unless-stopped
+    expose:
+      - "9092"
+    environment:
+      # KRaft mode (no Zookeeper)
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server kafka:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    networks:
+      - fan-platform-net
+
 volumes:
   postgres-data:
   redis-data:
+  kafka-data:
 
 networks:
   fan-platform-net:

@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — TASK-FAN-BE-002 / 003 발행 예정)
+- `TASK-FAN-BE-003-artist-service-bootstrap.md` — artist-service Spring Boot 부트스트랩. Hexagonal (ports/adapters). artist 프로필 + group + fandom 메타데이터. admin only 등록/수정. read-heavy 디렉토리 검색 + Redis 캐시. outbox + Kafka 이벤트. reference: wms master-service.
 
 ## in-progress
 
@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## review
 
 - `TASK-FAN-BE-001-gateway-service-bootstrap.md` — gateway-service Spring Boot 부트스트랩 완료. OIDC OAuth2 Resource Server (GAP JWKS 검증, RS256), `tenant_id=fan-platform` claim 필터, Redis rate limit, Traefik label 통합. 47/47 unit+slice 통과, integration 은 CI Linux 에서 실행. 2026-05-03.
+- `TASK-FAN-BE-002-community-service-bootstrap.md` — community-service Spring Boot 부트스트랩 완료. Layered + post 상태 기계 (DRAFT/PUBLISHED/HIDDEN/DELETED), 5 controller (post/feed/comment/reaction/follow), Flyway V1, libs:java-messaging 기반 outbox + Kafka, Redis feed cache, multi-tenant + service-level fail-closed, visibility tier (PUBLIC/MEMBERS_ONLY/PREMIUM v1 always-pass). 5 spec + 2 contract + docker-compose + Kafka 추가. 69/69 unit+slice 통과, 24 integration 클래스 작성 (Windows skip, CI Linux 실행). 2026-05-03.
 
 ## done
 
