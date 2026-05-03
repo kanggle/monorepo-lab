@@ -157,7 +157,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
         stubGoogleTokenEndpoint("google-sub-001", "alice.google@example.com", "Alice G");
         stubSocialSignup("acc-google-001", true);
-        stubCredentialLookup("alice.google@example.com", "acc-google-001", "ACTIVE");
+        stubAccountStatus("acc-google-001", "ACTIVE");
 
         performCallback("google", "auth-code-g", state)
                 .andExpect(status().isOk())
@@ -195,7 +195,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
                                 """)));
 
         stubSocialSignup("acc-kakao-002", true);
-        stubCredentialLookup("bob.kakao@example.com", "acc-kakao-002", "ACTIVE");
+        stubAccountStatus("acc-kakao-002", "ACTIVE");
 
         performCallback("kakao", "auth-code-k", state)
                 .andExpect(status().isOk())
@@ -212,7 +212,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
         stubMicrosoftTokenEndpoint("ms-sub-003", "carol@contoso.com", null, "Carol M");
         stubSocialSignup("acc-ms-003", true);
-        stubCredentialLookup("carol@contoso.com", "acc-ms-003", "ACTIVE");
+        stubAccountStatus("acc-ms-003", "ACTIVE");
 
         performCallback("microsoft", "auth-code-m", state)
                 .andExpect(status().isOk())
@@ -229,7 +229,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
         stubMicrosoftTokenEndpoint("ms-sub-004", null, "dave@fabrikam.com", "Dave M");
         stubSocialSignup("acc-ms-004", true);
-        stubCredentialLookup("dave@fabrikam.com", "acc-ms-004", "ACTIVE");
+        stubAccountStatus("acc-ms-004", "ACTIVE");
 
         performCallback("microsoft", "auth-code-m4", state)
                 .andExpect(status().isOk());
@@ -252,7 +252,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         stubMicrosoftTokenEndpoint("ms-sub-005", "erin@contoso.com", null, "Erin M");
         // account-service reports the email already exists on an account
         stubSocialSignup("acc-existing-999", false);
-        stubCredentialLookup("erin@contoso.com", "acc-existing-999", "ACTIVE");
+        stubAccountStatus("acc-existing-999", "ACTIVE");
 
         performCallback("microsoft", "auth-code-m5", state)
                 .andExpect(status().isOk())
@@ -407,18 +407,27 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(accountId, newAccount))));
     }
 
-    private void stubCredentialLookup(String email, String accountId, String status) {
-        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/credentials"))
-                .withQueryParam("email", equalTo(email))
+    /**
+     * Stubs {@code GET /internal/accounts/{accountId}/status} — the actual endpoint called
+     * by {@link com.example.auth.infrastructure.client.AccountServiceClient#getAccountStatus}.
+     *
+     * <p>TASK-MONO-023b: replaced the pre-TASK-BE-063 {@code stubCredentialLookup} helper
+     * which was stubbing a no-longer-called credential-lookup endpoint. The OAuth social login
+     * flow calls {@code getAccountStatus} after {@code socialSignup} to verify account health;
+     * without a matching stub WireMock returned 404, which the client handled as
+     * {@code Optional.empty()}, but the implicit reliance on WireMock's default 404 behaviour
+     * made the test fragile. An explicit stub is clearer and deterministic.
+     */
+    private void stubAccountStatus(String accountId, String status) {
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/" + accountId + "/status"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
                                 {
                                   "accountId": "%s",
-                                  "credentialHash": "dummy",
-                                  "hashAlgorithm": "argon2id",
-                                  "accountStatus": "%s"
+                                  "status": "%s",
+                                  "statusChangedAt": "2026-01-01T00:00:00Z"
                                 }
                                 """.formatted(accountId, status))));
     }
