@@ -288,7 +288,7 @@ Errors: 401, 404 (NOT_FOLLOWING).
 |---|---|---|
 | `GET /actuator/health` | none | 200 (composite of DB/Redis/Kafka) |
 | `GET /actuator/info` | none | 200 |
-| `GET /actuator/prometheus` | none (gateway-rate-limited) | text/plain Prometheus format |
+| `GET /actuator/prometheus` | none (network-restricted; rate-limit gap — see TASK-FAN-BE-004) | text/plain Prometheus format |
 
 ---
 
