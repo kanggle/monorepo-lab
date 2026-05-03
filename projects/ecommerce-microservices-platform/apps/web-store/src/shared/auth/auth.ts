@@ -167,4 +167,12 @@ export const authConfig: NextAuthConfig = {
   },
 };
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+// Re-export each value with explicit type re-cast to avoid TS2742
+// "inferred type cannot be named" when the NextAuth v5 destructured exports
+// reference @auth/core internal types not exposed through the package
+// surface. Same workaround as admin-dashboard's auth.ts.
+const nextAuth = NextAuth(authConfig);
+export const handlers = nextAuth.handlers;
+export const auth: typeof nextAuth.auth = nextAuth.auth;
+export const signIn: typeof nextAuth.signIn = nextAuth.signIn;
+export const signOut: typeof nextAuth.signOut = nextAuth.signOut;
