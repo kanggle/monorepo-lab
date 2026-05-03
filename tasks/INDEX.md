@@ -96,6 +96,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-023d-outbox-related-failures.md` — TASK-MONO-023 sub-task. TenantAdmin (outbox_events 테이블 누락 — Flyway) + OutboxRelay (outbox 행 미발행 — transaction commit timing) 2 회귀 fix.
 - `TASK-MONO-023e-community-jpa-test-isolation.md` — TASK-MONO-023 sub-task. CommentJpaRepository / ReactionJpaRepository 격리 회귀 (count 누수 / unique constraint 우회) fix. community-service frozen 정책 예외 (회귀 fix 만).
 - `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2**: 기존 3 프로젝트 (ecommerce / wms / GAP) 의 docker-compose 를 `${PORT_PREFIX}XXXX:YYYY` 패턴에서 `expose:` + Traefik 라벨로 일괄 마이그레이션. 전제: TASK-MONO-022 머지 완료. atomic cross-project commit. `frontend-e2e` CI 잡 수정 포함.
+- `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` 의 `BaseEventPublisher` 가 발행하는 `event_id` 를 UUID v4 → v7 로 마이그레이션. fan-platform community-events spec 이 v7 요구. cross-project: GAP auth/community/membership/security + fan-platform community 5 서비스 영향. PR #116 follow-up.
 
 ## in-progress
 
