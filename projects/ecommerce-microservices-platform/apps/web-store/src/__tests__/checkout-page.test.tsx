@@ -57,7 +57,6 @@ describe('CheckoutPage', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
-      signup: vi.fn(),
       logout: vi.fn(),
     });
   });
@@ -72,7 +71,6 @@ describe('CheckoutPage', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
-      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockUseCart.mockReturnValue({
@@ -136,7 +134,6 @@ describe('CheckoutPage', () => {
       isLoading: true,
       user: null,
       login: vi.fn(),
-      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockUseCart.mockReturnValue({

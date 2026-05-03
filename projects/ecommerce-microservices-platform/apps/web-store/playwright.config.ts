@@ -49,6 +49,20 @@ export default defineConfig({
         env: {
           API_URL_INTERNAL: GATEWAY_URL,
           NEXT_PUBLIC_API_URL: GATEWAY_URL,
+          // NextAuth v5 boot guard — without a `secret` even public pages
+          // hit MissingSecret because middleware reads the JWT cookie.
+          // Full-stack e2e currently runs with SKIP_GAP_E2E=1 (GAP container
+          // not yet in the docker-compose), so the values below only need to
+          // satisfy NextAuth's "config exists" check.
+          NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? 'fullstack-test-secret-not-real',
+          OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL ?? 'http://127.0.0.1:1',
+          ECOMMERCE_WEB_STORE_CLIENT_ID:
+            process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',
+          ECOMMERCE_WEB_STORE_CLIENT_SECRET:
+            process.env.ECOMMERCE_WEB_STORE_CLIENT_SECRET ?? 'ecommerce-dev',
+          // Skip GAP-dependent specs by default — flip to '0' once the e2e
+          // docker-compose adds the GAP container per TASK-MONO-014.
+          SKIP_GAP_E2E: process.env.SKIP_GAP_E2E ?? '1',
         },
       }
     : undefined,

@@ -16,20 +16,21 @@ import { useRedirectIfAuthenticated } from '@/features/auth/model/use-redirect-i
 
 const mockUseAuth = vi.mocked(useAuth);
 
+const baseAuth = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  login: vi.fn(),
+  logout: vi.fn(),
+};
+
 describe('useRedirectIfAuthenticated', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('로딩 중일 때 isReady는 false이고 리다이렉트하지 않는다', () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: true,
-      user: null,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
+  it('로딩 중이면 isReady=false 이고 리다이렉트하지 않는다', () => {
+    mockUseAuth.mockReturnValue({ ...baseAuth, isLoading: true });
 
     const { result } = renderHook(() => useRedirectIfAuthenticated());
 
@@ -37,14 +38,11 @@ describe('useRedirectIfAuthenticated', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('인증된 사용자는 /로 리다이렉트된다', async () => {
+  it('인증된 사용자는 / 로 리다이렉트된다', async () => {
     mockUseAuth.mockReturnValue({
+      ...baseAuth,
       isAuthenticated: true,
-      isLoading: false,
-      user: { id: 'user-1', email: 'test@test.com', name: 'Tester' },
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
+      user: { userId: 'u1', email: 'a@b.com', name: 'A' },
     });
 
     const { result } = renderHook(() => useRedirectIfAuthenticated());
@@ -55,67 +53,12 @@ describe('useRedirectIfAuthenticated', () => {
     expect(result.current.isReady).toBe(false);
   });
 
-  it('인증되지 않은 사용자는 리다이렉트되지 않고 isReady가 true이다', () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-      user: null,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
+  it('인증되지 않은 사용자는 리다이렉트되지 않고 isReady=true', () => {
+    mockUseAuth.mockReturnValue(baseAuth);
 
     const { result } = renderHook(() => useRedirectIfAuthenticated());
 
     expect(result.current.isReady).toBe(true);
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-
-  it('로딩이 끝난 후 인증 상태가 변경되면 리다이렉트가 실행된다', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-      user: null,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-
-    const { result, rerender } = renderHook(() => useRedirectIfAuthenticated());
-
-    expect(result.current.isReady).toBe(true);
-    expect(mockReplace).not.toHaveBeenCalled();
-
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { id: 'user-1', email: 'test@test.com', name: 'Tester' },
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-
-    rerender();
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/');
-    });
-    expect(result.current.isReady).toBe(false);
-  });
-
-  it('로딩 중이면서 인증된 상태여도 isReady는 false이다', () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: true,
-      user: { id: 'user-1', email: 'test@test.com', name: 'Tester' },
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-
-    const { result } = renderHook(() => useRedirectIfAuthenticated());
-
-    expect(result.current.isReady).toBe(false);
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

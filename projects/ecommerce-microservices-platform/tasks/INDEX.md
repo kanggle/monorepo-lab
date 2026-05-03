@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose / k8s / .env 정리 (선행: TASK-MONO-027) | auth-service, gateway-service | code, security |
-| TASK-FE-067 | web-store + admin-dashboard 의 GAP OIDC cutover — NextAuth v5 신규 도입 + 자체 auth flow 폐기 + sync-portfolio.sh exclusion (선행: TASK-MONO-027) | web-store, admin-dashboard, packages/api-client | code, security, api, breaking |
 
 ## in-progress
 
@@ -83,7 +82,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-FE-067 | web-store + admin-dashboard 의 GAP OIDC cutover — NextAuth v5 신규 도입 + 자체 auth flow 폐기 + sync-portfolio.sh exclusion (선행: TASK-MONO-027) | web-store, admin-dashboard, packages/api-client | code, security, api, breaking |
 
 ## done
 

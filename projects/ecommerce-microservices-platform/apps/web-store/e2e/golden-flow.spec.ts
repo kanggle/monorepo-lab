@@ -1,18 +1,21 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin } from './helpers/auth';
+import { signupAndLogin, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail, selectFirstVariant, addToCart } from './helpers/product';
 
 /**
- * Golden-flow E2E: 회원가입 → 로그인 → 상품 선택 → 장바구니 담기 → 결제 페이지 진입.
+ * Golden-flow E2E: GAP 로그인 → 상품 선택 → 장바구니 담기 → 결제 페이지 진입.
  *
- * 실제 결제(Toss) 단계는 외부 SDK 및 PG 콜백이 필요하므로 E2E 범위에서 제외.
- * 대신 주문 페이지(/checkout)가 렌더링되고 "결제하기" 버튼이 노출되는 지점까지 검증한다.
+ * Toss 결제 단계는 외부 SDK / PG 콜백이 필요하므로 E2E 범위 외 — /checkout 페이지가
+ * 렌더링되고 "결제하기" 버튼이 노출되는 지점까지 검증한다.
  *
- * 검색(search-service)은 Elasticsearch 의존으로 인해 flaky하므로 별도 E2E로 분리.
- * 골든 플로우는 /products 리스트의 시드 데이터에서 첫 상품을 선택해 결정론적으로 진행한다.
+ * GAP 컨테이너가 e2e 환경에 없으면 (SKIP_GAP_E2E=1) 본 테스트는 자동 skip 된다 —
+ * TASK-MONO-014 frontend-e2e 잡이 GAP 컨테이너를 docker-compose 에 추가한 이후에는
+ * 자동 활성화된다.
  */
-test.describe('웹스토어 주문 골든 플로우', () => {
-  test('회원가입 → 로그인 → 상품 선택 → 장바구니 담기 → 결제 페이지 진입', async ({ page }) => {
+test.describe('웹스토어 주문 골든 플로우 (GAP)', () => {
+  test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
+
+  test('GAP 로그인 → 상품 선택 → 장바구니 담기 → 결제 페이지 진입', async ({ page }) => {
     await signupAndLogin(page);
 
     await openFirstProductDetail(page);

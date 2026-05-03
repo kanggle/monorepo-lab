@@ -70,7 +70,6 @@ describe('OrdersPage', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
-      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockUseRequireAuth.mockReturnValue({ isReady: true });

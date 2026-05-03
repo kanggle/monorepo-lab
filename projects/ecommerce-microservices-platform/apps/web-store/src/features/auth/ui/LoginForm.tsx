@@ -1,136 +1,104 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { isApiError, ERROR_MESSAGES } from '@repo/types/guards';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../model/auth-context';
-import { OAuthButton } from './OAuthButton';
-import { GoogleIcon, NaverIcon, InstagramIcon } from '@/shared/ui/icons/oauth';
 
-function resolveRedirect(raw: string | null): string {
+/**
+ * GAP-backed login surface for web-store. After TASK-FE-067, web-store no
+ * longer collects email/password directly — credentials are entered on the
+ * GAP authorize page and exchanged via the OIDC `authorization_code` + PKCE
+ * flow.
+ *
+ * Error surfaces:
+ *   - `?error=account_type_mismatch` → an OPERATOR completed GAP login but is
+ *     not allowed to enter web-store. Tell them to use the admin dashboard.
+ *   - `?error=Configuration` / `?error=...` → NextAuth-internal errors (most
+ *     commonly "discovery doc fetch failed" when GAP is down). Generic
+ *     fallback message.
+ */
+
+function resolveCallbackUrl(raw: string | null): string {
   if (!raw) return '/';
   try {
     const decoded = decodeURIComponent(raw);
     if (decoded.startsWith('/') && !decoded.startsWith('//')) return decoded;
   } catch {
-    // ignore malformed redirect
+    // ignore malformed
   }
   return '/';
 }
 
+function describeError(code: string | null): string | null {
+  if (!code) return null;
+  if (code === 'account_type_mismatch' || code === 'AccountTypeMismatch') {
+    return 'admin 계정으로는 web-store 에 접근할 수 없습니다. admin dashboard 로 이동해 주세요.';
+  }
+  if (code === 'Configuration') {
+    return '인증 서버 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  if (code === 'AccessDenied') {
+    return '로그인이 거부되었습니다. 권한을 확인해 주세요.';
+  }
+  // Surface anything else as a generic message.
+  return '로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+}
+
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const { login, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isValid = email.includes('@') && password.length >= 8;
+  const callbackUrl = useMemo(
+    () => resolveCallbackUrl(searchParams?.get('from') ?? searchParams?.get('redirect') ?? null),
+    [searchParams],
+  );
+  const errorMessage = useMemo(
+    () => describeError(searchParams?.get('error') ?? null),
+    [searchParams],
+  );
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!isValid || isSubmitting) return;
-
-    setError('');
+  async function handleClick() {
+    if (isSubmitting) return;
     setIsSubmitting(true);
-
     try {
-      await login({ email, password });
-      router.push(resolveRedirect(searchParams?.get('redirect') ?? null));
-    } catch (err) {
-      if (isApiError(err)) {
-        setError(ERROR_MESSAGES[err.code] ?? err.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('로그인에 실패했습니다.');
-      }
+      await login(callbackUrl);
     } finally {
+      // Note: signIn() typically redirects, so we won't actually reach here.
       setIsSubmitting(false);
     }
   }
 
+  const disabled = isSubmitting || isLoading;
+
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <div>
       <h1 className="auth-title">로그인</h1>
 
-      {error && (
+      {errorMessage && (
         <div role="alert" className="alert-error">
-          {error}
+          {errorMessage}
         </div>
       )}
 
-      <div className="form-group">
-        <label htmlFor="email" className="label">이메일</label>
-        <input
-          id="email"
-          type="email"
-          className="input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email@example.com"
-          required
-          autoComplete="email"
-        />
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="password" className="label">비밀번호</label>
-        <input
-          id="password"
-          type="password"
-          className="input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="8자 이상"
-          required
-          minLength={8}
-          autoComplete="current-password"
-        />
-      </div>
+      <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
+        Global Account 로 로그인하여 쇼핑을 계속하세요.
+      </p>
 
       <button
-        type="submit"
+        type="button"
+        onClick={handleClick}
         className="btn btn-primary btn-lg"
-        style={{ width: '100%', marginTop: 'var(--space-2)' }}
-        disabled={!isValid || isSubmitting}
+        style={{ width: '100%' }}
+        disabled={disabled}
       >
-        {isSubmitting ? '로그인 중...' : '로그인'}
+        {disabled ? '이동 중...' : 'Global Account 로 로그인'}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', margin: 'var(--space-6) 0' }}>
-        <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
-        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>또는</span>
-        <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <OAuthButton
-          provider="google"
-          label="Google로 로그인"
-          icon={<GoogleIcon />}
-        />
-        <OAuthButton
-          provider="naver"
-          label="네이버로 로그인"
-          icon={<NaverIcon />}
-          style={{ backgroundColor: '#03C75A', color: '#fff', border: 'none' }}
-        />
-        <OAuthButton
-          provider="instagram"
-          label="Instagram으로 로그인"
-          icon={<InstagramIcon />}
-          style={{ background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)', color: '#fff', border: 'none' }}
-        />
-      </div>
-
-      <p className="auth-footer">
+      <p className="auth-footer" style={{ marginTop: 'var(--space-6)' }}>
         계정이 없으신가요?{' '}
-        <Link href="/signup">회원가입</Link>
+        <a href="/signup">회원가입</a>
       </p>
-    </form>
+    </div>
   );
 }

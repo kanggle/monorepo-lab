@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin } from './helpers/auth';
+import { signupAndLogin, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail } from './helpers/product';
+
+test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
 
 /**
  * 위시리스트 추가/조회/제거 E2E.
