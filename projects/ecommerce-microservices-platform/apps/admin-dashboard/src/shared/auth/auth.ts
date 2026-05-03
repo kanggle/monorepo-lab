@@ -70,6 +70,17 @@ export const authConfig: NextAuthConfig = {
     },
   ],
   callbacks: {
+    /**
+     * Cross-app account_type guard — reject CONSUMER before JWT issuance so the
+     * `/login?error=account_type_mismatch` URL is set for the LoginForm banner.
+     */
+    async signIn({ profile }) {
+      const p = profile as GapOidcProfile | undefined;
+      if (p?.account_type && p.account_type !== ALLOWED_ACCOUNT_TYPE) {
+        return '/login?error=account_type_mismatch';
+      }
+      return true;
+    },
     async jwt({ token, account, profile, user }) {
       if (account) {
         token.accessToken = account.access_token;

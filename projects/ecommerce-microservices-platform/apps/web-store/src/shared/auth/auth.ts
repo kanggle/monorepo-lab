@@ -81,15 +81,18 @@ export const authConfig: NextAuthConfig = {
   ],
   callbacks: {
     /**
-     * Persist access_token + refresh_token + tenant_id + account_type onto the
-     * JWT session cookie. Cookie is HttpOnly so client JS never sees the
-     * tokens.
-     *
-     * `account_type` cross-app guard: if a non-CONSUMER successfully completes
-     * GAP login (e.g. an OPERATOR landing on web-store via a stale cookie or
-     * deep-link), the JWT callback returns `null` to reject the sign-in.
-     * NextAuth surfaces this as `error=account_type_mismatch`.
+     * Cross-app account_type guard. Reject the sign-in *before* a valid JWT
+     * is issued so NextAuth redirects through the configured `pages.error` URL
+     * with the AccessDenied error param. session() callback also keeps a
+     * defense-in-depth degraded-session branch for stale cookies.
      */
+    async signIn({ profile }) {
+      const p = profile as GapOidcProfile | undefined;
+      if (p?.account_type && p.account_type !== ALLOWED_ACCOUNT_TYPE) {
+        return '/login?error=account_type_mismatch';
+      }
+      return true;
+    },
     async jwt({ token, account, profile, user }) {
       if (account) {
         token.accessToken = account.access_token;

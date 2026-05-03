@@ -117,10 +117,16 @@ declare -A PROJECT_EXCLUDE_PATHS=(
 apps/web-store/src/shared/auth \
 apps/web-store/src/middleware.ts \
 apps/web-store/src/app/api/auth \
+apps/web-store/.env.local.example \
+apps/web-store/e2e/helpers/auth.ts \
+apps/web-store/e2e/account-type-guard.spec.ts \
 apps/admin-dashboard/src/shared/auth \
 apps/admin-dashboard/src/middleware.ts \
 apps/admin-dashboard/src/app/api/auth \
-specs/integration/gap-integration.md"
+apps/admin-dashboard/.env.local.example \
+specs/integration/gap-integration.md \
+specs/services/web-store/architecture.md \
+specs/services/admin-dashboard/architecture.md"
 )
 
 MONOREPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
