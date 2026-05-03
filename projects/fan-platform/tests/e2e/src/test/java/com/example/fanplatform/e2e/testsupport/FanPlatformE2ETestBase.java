@@ -40,26 +40,11 @@ import org.testcontainers.utility.DockerImageName;
  *       built on-the-fly via {@link ImageFromDockerfile} (local dev path).</li>
  *   <li>artist-service — same dual-path strategy via {@code fan.e2e.artistImage}.</li>
  *   <li>gateway-service — same dual-path strategy via {@code fan.e2e.gatewayImage}.
- *       Receives test-environment route overrides via {@code SPRING_APPLICATION_JSON}
- *       so {@code /api/v1/community/**} gets a {@code RewritePath} filter
- *       translating it to {@code /api/community/**} (and likewise for
- *       {@code /api/v1/artist/** -> /api/artists/**}).</li>
+ *       Extends the production gateway image with test-only env overrides for
+ *       OIDC + downstream URLs (OIDC_ISSUER_URL, JWT_JWKS_URI, COMMUNITY_SERVICE_URI,
+ *       ARTIST_SERVICE_URI, REDIS_HOST). RewritePath filters are baked into the
+ *       production {@code application.yml} (TASK-FAN-BE-005).</li>
  * </ul>
- *
- * <p><b>Production routing bug surfaced.</b> The current gateway
- * {@code application.yml} routes {@code /api/v1/community/**} and
- * {@code /api/v1/artist/**} to the downstream services without a
- * {@code RewritePath} filter, so a request to
- * {@code GET /api/v1/community/posts} arrives at community-service as
- * {@code /api/v1/community/posts} and 404s — the controller is mounted at
- * {@code /api/community/posts}. The contract spec
- * ({@code projects/fan-platform/specs/contracts/http/community-api.md} §
- * Versioning) documents the expected mapping but the implementation is
- * missing the filter. Per TASK-FAN-INT-001 hard rule "DO NOT modify
- * gateway-service / community-service / artist-service production code",
- * this e2e suite injects the missing rewrites via
- * {@code SPRING_APPLICATION_JSON} and surfaces the production gap as a
- * follow-up.
  *
  * <p>The JWKS stand-in lives in the JVM running the tests — not inside the
  * Docker network. Each service container reaches it via
@@ -222,12 +207,6 @@ public abstract class FanPlatformE2ETestBase {
         community.start();
 
         // ----- gateway-service ---------------------------------------------
-        // SPRING_APPLICATION_JSON injects RewritePath filters that translate
-        // `/api/v1/community/**` -> `/api/community/**` and
-        // `/api/v1/artist/**`    -> `/api/artists/**`.
-        // Production application.yml omits these filters; see class javadoc
-        // "Production routing bug surfaced".
-        String gatewayRoutesJson = buildGatewayRoutesOverride();
         gateway = buildServiceContainer("fan.e2e.gatewayImage", GATEWAY_JAR, GATEWAY_DOCKERFILE)
                 .withNetwork(network)
                 .withNetworkAliases(GATEWAY_ALIAS)
@@ -246,7 +225,6 @@ public abstract class FanPlatformE2ETestBase {
                 // before the gateway, but the probe's 30 s timeout would
                 // still slow the boot signal on cold runners.
                 .withEnv("GATEWAY_JWKS_STARTUP_PROBE_ENABLED", "false")
-                .withEnv("SPRING_APPLICATION_JSON", gatewayRoutesJson)
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
                         .withStartupTimeout(Duration.ofMinutes(3)));
@@ -281,43 +259,6 @@ public abstract class FanPlatformE2ETestBase {
     /** Kafka bootstrap address reachable from the host JVM. Containers use the network alias instead. */
     protected String kafkaBootstrapForHost() {
         return kafka.getBootstrapServers();
-    }
-
-    /**
-     * Builds the {@code SPRING_APPLICATION_JSON} override that injects route
-     * definitions with {@code RewritePath} filters compensating for the
-     * production routing bug. See class javadoc for the rationale.
-     */
-    private static String buildGatewayRoutesOverride() {
-        // Two routes, indexed; relaxed binding accepts indexed properties when
-        // serialised under SPRING_APPLICATION_JSON.
-        // Each route: predicate Path=/api/v1/.../**, filter RewritePath=...
-        return ""
-                + "{"
-                + "\"spring\":{\"cloud\":{\"gateway\":{\"routes\":["
-                + "{"
-                + "\"id\":\"community-service-e2e\","
-                + "\"uri\":\"http://" + COMMUNITY_ALIAS + ":" + SERVICE_PORT + "\","
-                + "\"predicates\":[\"Path=/api/v1/community/**\"],"
-                + "\"filters\":[\"RewritePath=/api/v1/community/(?<segment>.*),/api/community/${segment}\"]"
-                + "},"
-                + "{"
-                + "\"id\":\"artist-service-e2e\","
-                + "\"uri\":\"http://" + ARTIST_ALIAS + ":" + SERVICE_PORT + "\","
-                + "\"predicates\":[\"Path=/api/v1/artist/**\"],"
-                + "\"filters\":[\"RewritePath=/api/v1/artist/(?<segment>.*),/api/${segment}\"]"
-                + "}"
-                + "]}}}}";
-        // Note on the artist rewrite: the contract under
-        // specs/contracts/http/artist-api.md uses /api/artists, /api/artist-groups,
-        // /api/fandoms (all "artist resource family" paths), while the gateway
-        // route predicate is /api/v1/artist/**. The rewrite strips the
-        // /api/v1/artist/ prefix and leaves the rest of the path under /api/,
-        // so /api/v1/artist/artists -> /api/artists,
-        //    /api/v1/artist/artist-groups -> /api/artist-groups,
-        //    /api/v1/artist/fandoms -> /api/fandoms.
-        // Tests must compose the gateway path accordingly (e.g. POST
-        // /api/v1/artist/artists for artist registration).
     }
 
     /**
