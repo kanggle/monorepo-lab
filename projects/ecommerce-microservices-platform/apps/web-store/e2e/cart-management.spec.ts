@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin } from './helpers/auth';
+import { signupAndLogin, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail, selectFirstVariant, addToCart } from './helpers/product';
+
+test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
 
 /**
  * 장바구니 조작 E2E: 수량 증가/감소, 전체선택 → 선택 삭제.

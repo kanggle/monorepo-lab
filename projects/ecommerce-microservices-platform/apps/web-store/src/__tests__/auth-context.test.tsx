@@ -1,76 +1,81 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import { AuthProvider, useAuth } from '@/features/auth/model/auth-context';
+import { getAccessToken } from '@/shared/auth/token-bridge';
 
-vi.mock('@/features/auth/api/auth-actions', () => ({
-  login: vi.fn(),
-  signup: vi.fn(),
-  logout: vi.fn(),
-}));
-
-import * as authActions from '@/features/auth/api/auth-actions';
-
-const mockLogin = vi.mocked(authActions.login);
-const mockSignup = vi.mocked(authActions.signup);
-const mockLogout = vi.mocked(authActions.logout);
-
-// JWT 페이로드: { sub: 'user-1', email: 'test@test.com', name: 'Tester' }
-const MOCK_ACCESS_TOKEN =
-  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.' +
-  btoa(JSON.stringify({ sub: 'user-1', email: 'test@test.com', name: 'Tester' })) +
-  '.signature';
-const MOCK_REFRESH_TOKEN = 'refresh-token-123';
+const mockUseSession = vi.mocked(useSession);
+const mockSignIn = vi.mocked(signIn);
+const mockSignOut = vi.mocked(signOut);
 
 function TestConsumer() {
-  const { user, isAuthenticated, isLoading, login, signup, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, login, logout } = useAuth();
   return (
     <div>
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
       <span data-testid="user">{user ? JSON.stringify(user) : 'null'}</span>
-      <button onClick={() => login({ email: 'test@test.com', password: 'password123' })}>
-        login
-      </button>
-      <button onClick={() => signup({ email: 'new@test.com', password: 'password123', name: 'New' })}>
-        signup
-      </button>
+      <button onClick={() => login()}>login</button>
       <button onClick={() => logout()}>logout</button>
     </div>
   );
 }
 
-describe('AuthContext', () => {
-  let storage: Record<string, string>;
-
+describe('AuthContext (NextAuth + GAP)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    storage = {};
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => storage[key] ?? null);
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
-      storage[key] = value;
-    });
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation((key) => {
-      delete storage[key];
-    });
   });
 
-  it('초기 상태에서 토큰이 없으면 미인증 상태이다', async () => {
+  it('초기 상태: useSession.status=loading 이면 isLoading=true', () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'loading',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
+
     render(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('false');
-    });
+    expect(screen.getByTestId('loading').textContent).toBe('true');
+    expect(screen.getByTestId('authenticated').textContent).toBe('false');
+  });
+
+  it('unauthenticated: isAuthenticated=false 이고 user=null', () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    );
+
+    expect(screen.getByTestId('loading').textContent).toBe('false');
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('user').textContent).toBe('null');
   });
 
-  it('localStorage에 유효한 토큰이 있으면 인증 상태이다', async () => {
-    storage['accessToken'] = MOCK_ACCESS_TOKEN;
+  it('authenticated CONSUMER: user/accountId/accessToken 가 노출된다', async () => {
+    mockUseSession.mockReturnValue({
+      data: {
+        accountId: 'acc-1',
+        tenantId: 'ecommerce',
+        roles: ['CUSTOMER'],
+        accessToken: 'gap-access-token',
+        accountType: 'CONSUMER',
+        user: { email: 'consumer@test.com', name: '소비자' },
+        expires: '2099-01-01T00:00:00Z',
+      },
+      status: 'authenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
 
     render(
       <AuthProvider>
@@ -79,18 +84,21 @@ describe('AuthContext', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('false');
+      expect(screen.getByTestId('authenticated').textContent).toBe('true');
     });
-    expect(screen.getByTestId('authenticated').textContent).toBe('true');
-    expect(screen.getByTestId('user').textContent).toContain('user-1');
+
+    expect(screen.getByTestId('user').textContent).toContain('acc-1');
+    expect(screen.getByTestId('user').textContent).toContain('consumer@test.com');
+    // 토큰 브리지에 access token 이 푸시됨
+    expect(getAccessToken()).toBe('gap-access-token');
   });
 
-  it('login 호출 시 토큰을 저장하고 인증 상태가 된다', async () => {
-    mockLogin.mockResolvedValueOnce({
-      accessToken: MOCK_ACCESS_TOKEN,
-      refreshToken: MOCK_REFRESH_TOKEN,
-      expiresIn: 3600,
-    });
+  it('login() 호출 시 signIn("gap", {callbackUrl:"/"}) 가 호출된다', async () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
 
     const user = userEvent.setup();
     render(
@@ -98,27 +106,23 @@ describe('AuthContext', () => {
         <TestConsumer />
       </AuthProvider>,
     );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('false');
-    });
 
     await user.click(screen.getByText('login'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('authenticated').textContent).toBe('true');
-    });
-    expect(storage['accessToken']).toBe(MOCK_ACCESS_TOKEN);
-    expect(storage['refreshToken']).toBe(MOCK_REFRESH_TOKEN);
+    expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/' });
   });
 
-  it('signup 호출 시 authActions.signup을 호출한다', async () => {
-    mockSignup.mockResolvedValueOnce({
-      userId: 'new-1',
-      email: 'new@test.com',
-      name: 'New',
-      createdAt: '2026-03-23T00:00:00Z',
-    });
+  it('logout() 호출 시 signOut 호출 + 토큰 브리지 정리', async () => {
+    mockUseSession.mockReturnValue({
+      data: {
+        accountId: 'acc-1',
+        accessToken: 'tok',
+        accountType: 'CONSUMER',
+        user: { email: 'c@test.com', name: 'c' },
+        expires: '2099-01-01T00:00:00Z',
+      },
+      status: 'authenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
 
     const user = userEvent.setup();
     render(
@@ -126,74 +130,15 @@ describe('AuthContext', () => {
         <TestConsumer />
       </AuthProvider>,
     );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('false');
-    });
-
-    await user.click(screen.getByText('signup'));
-
-    await waitFor(() => {
-      expect(mockSignup).toHaveBeenCalledWith({
-        email: 'new@test.com',
-        password: 'password123',
-        name: 'New',
-      });
-    });
-    // signup은 토큰을 저장하지 않는다
-    expect(screen.getByTestId('authenticated').textContent).toBe('false');
-  });
-
-  it('logout 호출 시 토큰을 제거하고 미인증 상태가 된다', async () => {
-    storage['accessToken'] = MOCK_ACCESS_TOKEN;
-    storage['refreshToken'] = MOCK_REFRESH_TOKEN;
-    mockLogout.mockResolvedValueOnce(undefined);
-
-    const user = userEvent.setup();
-    render(
-      <AuthProvider>
-        <TestConsumer />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('authenticated').textContent).toBe('true');
-    });
 
     await user.click(screen.getByText('logout'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('authenticated').textContent).toBe('false');
+      expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: '/' });
     });
-    expect(storage['accessToken']).toBeUndefined();
-    expect(storage['refreshToken']).toBeUndefined();
   });
 
-  it('logout API 실패해도 로컬 토큰은 제거된다', async () => {
-    storage['accessToken'] = MOCK_ACCESS_TOKEN;
-    storage['refreshToken'] = MOCK_REFRESH_TOKEN;
-    mockLogout.mockRejectedValueOnce(new Error('network error'));
-
-    const user = userEvent.setup();
-    render(
-      <AuthProvider>
-        <TestConsumer />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('authenticated').textContent).toBe('true');
-    });
-
-    await user.click(screen.getByText('logout'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('authenticated').textContent).toBe('false');
-    });
-    expect(storage['accessToken']).toBeUndefined();
-  });
-
-  it('useAuth를 AuthProvider 없이 사용하면 에러가 발생한다', () => {
+  it('useAuth 를 AuthProvider 없이 사용하면 에러가 발생한다', () => {
     expect(() => {
       render(<TestConsumer />);
     }).toThrow('useAuth must be used within an AuthProvider');

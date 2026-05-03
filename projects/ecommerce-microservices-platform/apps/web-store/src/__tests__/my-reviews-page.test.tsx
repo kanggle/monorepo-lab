@@ -85,7 +85,6 @@ describe('MyReviewsPage', () => {
       isLoading: false,
       user: { userId: 'user-1' } as never,
       login: vi.fn(),
-      signup: vi.fn(),
       logout: vi.fn(),
     });
     vi.mocked(useRequireAuth).mockReturnValue({ isReady: true });
