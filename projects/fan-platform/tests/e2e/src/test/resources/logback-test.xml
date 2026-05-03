@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback config for the fan-platform e2e Gradle module.
+  Goal: keep CI logs readable without losing the high-signal lines we rely on
+  (Testcontainers progress, Awaitility timeouts, gateway/community/artist
+  WARN+).
+-->
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Quiet noisy framework loggers; the test output is dominated by
+         Testcontainers + Awaitility + the actual assertions. -->
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.testcontainers" level="INFO"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="okhttp3" level="WARN"/>
+    <logger name="okhttp3.mockwebserver" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

@@ -1,0 +1,115 @@
+// fan-platform v1 services E2E test module (TASK-FAN-INT-001).
+//
+// Runs Testcontainers-backed end-to-end suites that boot the three v1 services
+// (gateway-service + community-service + artist-service) plus their backing
+// infra (Postgres, Redis, Kafka) and a WireMock JWKS stand-in. Tests drive
+// real HTTP traffic through the gateway and assert cross-service flows
+// (artist publishing -> follow -> post -> feed -> Kafka outbox events).
+//
+// Key conventions inherited from projects/wms-platform/apps/gateway-service
+// (the live-pair e2e reference):
+//   - Pre-built service images: CI builds gateway/community/artist images via
+//     `docker build`, then passes the image names to this Gradle module via
+//     -Dfan.e2e.{gateway,community,artist}Image. The base test class falls
+//     back to ImageFromDockerfile when those system properties are absent
+//     (local dev path), but only when the bootJar artifacts already exist
+//     under apps/<service>/build/libs/.
+//   - JWKS stand-in lives in the host JVM, reachable from containers via
+//     host.docker.internal (added with .withExtraHost on each container).
+//   - Tag("e2e") + @Testcontainers(disabledWithoutDocker=true) — Windows
+//     dev machines without Docker skip cleanly; CI Linux runs the suite.
+
+plugins {
+    id 'java'
+}
+
+group = 'com.example.fanplatform.e2e'
+
+dependencies {
+    // JUnit 5 + AssertJ
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.assertj:assertj-core:3.27.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+
+    // Testcontainers (Postgres, Kafka, Redis, plus generic for service containers)
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+
+    // Awaitility for outbox -> Kafka eventual-consistency assertions
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // JSON parsing + JWT signing (envelope assertions, fan/admin/cross-tenant tokens)
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // MockWebServer for the JWKS stand-in (gateway/community/artist all hit the same URI)
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+
+    // Kafka client — used by the test consumer that asserts outbox -> Kafka publishes
+    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+    // Logging — Testcontainers + Awaitility benefit from a real backend during debugging
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+    testImplementation 'ch.qos.logback:logback-classic:1.5.12'
+
+    // NOTE: libs:java-test-support intentionally NOT depended on here.
+    // It transitively brings in spring-test + spring-boot dependency
+    // management coordinates that aren't applied to this stand-alone test
+    // module, which fails dependency resolution. The base test class
+    // (FanPlatformE2ETestBase) only needs Testcontainers + JUnit 5 +
+    // Awaitility, all already declared above.
+}
+
+// Default `test` task is a no-op for the e2e module — there is no fast/Docker-free
+// test surface here. Everything runs under the dedicated `e2eTest` task below
+// so `./gradlew check` (which depends on `:test`) stays Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`.
+// CI invokes this task explicitly in the `fan-platform-e2e` job after
+// pre-building the three service docker images.
+tasks.register('e2eTest', Test) {
+    description = 'Runs Testcontainers-backed end-to-end live-trio tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+    shouldRunAfter tasks.named('test')
+
+    // Ensure the three service boot jars are produced before the containerized
+    // tests spin up — the base test class' ImageFromDockerfile fallback COPYs
+    // each bootJar from build/libs/ into the image. CI skips these
+    // dependencies via `-x :...:bootJar` after restoring jars from artifact.
+    dependsOn ':projects:fan-platform:apps:gateway-service:bootJar'
+    dependsOn ':projects:fan-platform:apps:community-service:bootJar'
+    dependsOn ':projects:fan-platform:apps:artist-service:bootJar'
+
+    // Forward pre-built image names when set by CI. Local dev (without these
+    // properties) falls back to ImageFromDockerfile in FanPlatformE2ETestBase.
+    [
+        'fan.e2e.gatewayImage',
+        'fan.e2e.communityImage',
+        'fan.e2e.artistImage'
+    ].each { prop ->
+        def val = System.getProperty(prop)
+        if (val) systemProperty prop, val
+    }
+
+    // Generous timeout — Kafka KRaft cold start + 3 Spring Boot services
+    // can exceed 60s on a constrained CI runner.
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
