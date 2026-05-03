@@ -109,9 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-028-ecommerce-standalone-v1-freeze-policy.md` — ecommerce GAP cutover 시리즈 (PR #145 / #148 / #150) 의 follow-up. `scripts/sync-portfolio.sh` `PROJECT_EXCLUDE_PATHS` 보강 (BE-132 변경분: docker-compose / k8s / .env / spec rename / contracts deprecated 헤더 / gateway application.yml — 8개 path 카테고리), monorepo 의 AUTH_SECRET / AUTH_GOOGLE_CLIENT_* / ADMIN_INITIAL_PASSWORD 잔재 grep & 제거, tasks/done 의 깨진 auth-service spec 경로 정책 명시 (옵션 a 방치 + c README redirect — 이미 처리됨). k8s prod gateway → GAP egress 추가는 별도 follow-up.
+(empty)
 
 ## done
 
@@ -143,3 +141,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` `BaseEventPublisher.eventId` v4 → v7 마이그레이션. `UuidV7` 이미 `libs:java-common/.../id/` 에 존재 (재발견) — 1줄 변경 + 단위 테스트 2건. 5 영향 서비스 모두 PASS. PR #130 머지. 2026-05-03.
 - `TASK-MONO-026-gap-v0011-fan-platform-oidc-clients.md` — GAP V0011 Flyway seed 로 `fan-platform-user-flow-client` 등록 (PKCE confidential, dev secret = `fan-platform-dev`). auth-api.md / gap-integration.md / .env.example 갱신. v2 internal-services-client 는 deferred. PR #135 머지. 2026-05-03.
 - `TASK-MONO-027-ecommerce-gap-integration.md` — ecommerce-platform 의 GAP OIDC 통합 cutover. GAP V0012 시드 (ecommerce-web-store-client + ecommerce-admin-dashboard-client + 2 scopes) + account-service V0014 (ecommerce tenant row) + ecommerce gateway-service 의 issuer-uri / jwk-set-uri / TenantClaimValidator / AllowedIssuersValidator + docker-compose env 갱신 + .env.example 신규 변수 + integration test 5 시나리오. cross-project atomic (`feat!:` PR #145 머지). 후속: TASK-FE-067 (frontend cutover), TASK-BE-132 (auth-service 폐기). 2026-05-04.
+- `TASK-MONO-028-ecommerce-standalone-v1-freeze-policy.md` — ecommerce GAP cutover 시리즈 follow-up. `scripts/sync-portfolio.sh` `PROJECT_EXCLUDE_PATHS["ecommerce-microservices-platform"]` 에 BE-132 변경 path 12건 추가 (docker-compose × 3 / .env.example / k8s / gateway application.yml / specs/services rename × 2 / contracts http+events / features authentication+user-management) + dry-run 출력에 excluded paths 표시 추가. 환경변수 잔재 grep 결과 깨끗 (AUTH_SECRET / AUTH_GOOGLE_CLIENT / ADMIN_INITIAL_PASSWORD 모두 잔재 없음 — done task 본문 참조만). tasks/done 의 50+ 옛 auth-service 경로 참조는 옵션 a (방치, CLAUDE.md "do not modify done" 룰 준수) + c (auth-service-deprecated/README.md redirect 이미 처리됨) 로 의도된 방치. k8s prod gateway → GAP egress NetworkPolicy 추가는 별도 follow-up. PR #153 머지. 2026-05-04.
