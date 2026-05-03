@@ -17,6 +17,7 @@
     "@repo/utils": "workspace:*",
     "@tanstack/react-query": "^5.60.0",
     "next": "^15.1.0",
+    "next-auth": "5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

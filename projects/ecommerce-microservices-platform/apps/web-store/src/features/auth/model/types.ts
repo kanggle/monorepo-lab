@@ -1,1 +1,1 @@
-export type { AuthUser, AuthState } from '@repo/api-client';
+export type { AuthUser, AuthState } from '@/shared/lib/auth-context';
