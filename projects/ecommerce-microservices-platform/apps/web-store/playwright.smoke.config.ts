@@ -36,6 +36,17 @@ export default defineConfig({
       // 분기 등) 이 활성화되어 백엔드 없이도 결정론적으로 테스트할 수 있다.
       API_URL_INTERNAL: 'http://127.0.0.1:1',
       NEXT_PUBLIC_API_URL: 'http://127.0.0.1:1',
+      // NextAuth v5 boot guard — without a `secret` it throws MissingSecret on
+      // first request even for public pages (middleware decodes the JWT cookie
+      // unconditionally). Smoke tests don't actually sign in — any stable
+      // string works.
+      NEXTAUTH_SECRET: 'smoke-test-secret-not-real',
+      // GAP discovery URL is unreachable in smoke; the lazy-init pattern means
+      // it's only fetched on actual signin attempt. Set to localhost:1 so any
+      // accidental fetch fails fast.
+      OIDC_ISSUER_URL: 'http://127.0.0.1:1',
+      ECOMMERCE_WEB_STORE_CLIENT_ID: 'ecommerce-web-store-client',
+      ECOMMERCE_WEB_STORE_CLIENT_SECRET: 'smoke',
     },
   },
   projects: [
