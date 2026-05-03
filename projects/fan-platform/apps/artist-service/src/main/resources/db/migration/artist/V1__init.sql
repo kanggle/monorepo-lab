@@ -74,8 +74,10 @@ CREATE TABLE group_memberships (
     CONSTRAINT ck_group_memberships_role
         CHECK (role IN ('LEADER', 'MEMBER', 'FORMER_MEMBER'))
 );
+-- Reverse-lookup ("which groups is this artist in"): tenant_id prefix per F7
+-- (rules/domains/fan-platform.md) + (rules/traits/multi-tenant.md M2).
 CREATE INDEX idx_group_memberships_artist
-    ON group_memberships (artist_id);
+    ON group_memberships (tenant_id, artist_id);
 CREATE INDEX idx_group_memberships_tenant_group
     ON group_memberships (tenant_id, group_id);
 

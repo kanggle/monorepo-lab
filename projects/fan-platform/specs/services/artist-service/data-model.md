@@ -67,7 +67,7 @@
 | `left_at` | TIMESTAMPTZ | NULL for active memberships |
 
 **Indexes**:
-- `idx_group_memberships_artist (artist_id)` — reverse lookup
+- `idx_group_memberships_artist (tenant_id, artist_id)` — reverse lookup, tenant_id-prefixed per F7 / M2
 - `idx_group_memberships_tenant_group (tenant_id, group_id)`
 
 Active membership = `left_at IS NULL AND role <> 'FORMER_MEMBER'`.
