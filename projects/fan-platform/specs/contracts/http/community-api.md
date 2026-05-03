@@ -284,11 +284,23 @@ Errors: 401, 404 (NOT_FOLLOWING).
 
 ## Health / metrics
 
-| Path | Auth | Response |
-|---|---|---|
-| `GET /actuator/health` | none | 200 (composite of DB/Redis/Kafka) |
-| `GET /actuator/info` | none | 200 |
-| `GET /actuator/prometheus` | none (network-restricted; rate-limit gap — see TASK-FAN-BE-004) | text/plain Prometheus format |
+| Path | Auth | Exposure | Response |
+|---|---|---|---|
+| `GET /actuator/health` | none | gateway-routed (`/actuator/health`) | 200 (composite of DB/Redis/Kafka) |
+| `GET /actuator/info` | none | gateway-routed (`/actuator/info`) | 200 |
+| `GET /actuator/prometheus` | none | **internal docker network only — NOT gateway-routed** | text/plain Prometheus format |
+
+`/actuator/prometheus` is intentionally excluded from the gateway route table.
+It is scraped by Prometheus directly within the `fan-platform-net` docker network
+(`http://community-service:8080/actuator/prometheus`), never exposed through the
+external gateway. This is the network-isolation approach (TASK-FAN-BE-004 option c):
+a gateway route would create a path-collision between the gateway's own
+`/actuator/prometheus` and community-service's endpoint, and would require an
+additional auth bypass rule. Network isolation is simpler and equally safe since
+the service container binds only to the internal network.
+
+See `projects/fan-platform/docs/operations/prometheus-scrape.md` for Prometheus
+job configuration and scrape interval guidance.
 
 ---
 

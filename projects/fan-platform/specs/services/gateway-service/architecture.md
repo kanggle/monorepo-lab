@@ -137,6 +137,26 @@ downstream services come online; that is intentional per the task Edge Cases.
 
 All other paths return `404 NOT_FOUND`.
 
+### Prometheus scrape endpoint — network isolation (TASK-FAN-BE-004)
+
+`/actuator/prometheus` is **not routed through the gateway**. Each service
+(`community-service`, `artist-service`, etc.) exposes its metrics endpoint
+exclusively on the internal `fan-platform-net` docker network. Prometheus scrapes
+them directly at `http://<service-name>:8080/actuator/prometheus` without passing
+through the gateway. This avoids:
+
+- Path collision between the gateway's own `/actuator/prometheus` and upstream
+  service metrics on the same path.
+- The need for an auth bypass rule in the gateway's security filter chain.
+
+The isolation is enforced at the docker-compose level: backend services use
+`expose:` (internal network only) without `ports:`, and Traefik labels are absent
+from those containers. An external actor cannot reach the prometheus endpoint
+without access to the docker network.
+
+For Prometheus job configuration and scrape interval guidance, see
+`projects/fan-platform/docs/operations/prometheus-scrape.md`.
+
 ---
 
 ## JWT Validation
