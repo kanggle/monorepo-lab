@@ -201,10 +201,17 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 | 필드 | 값 | 비고 |
 |---|---|---|
 | `accountId` | 대상 계정 ID | 변경 없음 |
-| `reasonCode`, `actorType`, `actorId` | 원래 DELETED 전이 시 발행한 값 그대로 | 재발행이므로 원래 사유·주체 보존 |
+| `reasonCode` | 원래 DELETED 전이 시 발행한 값 그대로 | 재발행이므로 원래 삭제 사유 보존 (audit fidelity) |
+| `actorType` | **`"system"`** | 익명화 배치가 수행하는 시스템 행위이므로 원래 삭제 주체와 무관하게 항상 `system` |
+| `actorId` | **`"anonymization-batch"`** | 배치 스케줄러 식별자 (원래 삭제 actor와 무관) |
 | `deletedAt` | 원래 `accounts.deleted_at` 시각 | 변경 없음. 익명화 시각이 아님 |
 | `gracePeriodEndsAt` | **원래 유예 종료 시각** (`deleted_at + 30d`) | [account-events.md](../../contracts/events/account-events.md) `account.deleted` 스키마 정의(유예 종료 시각)와 동일 의미. **익명화 완료 시각이 아님** |
 | `anonymized` | `true` | 본 재발행에서만 `true` |
+
+> **설계 결정 (TASK-MONO-023c)**: `actorType`/`actorId`를 원래 삭제 행위자에서 배치 시스템으로 변경한 이유:
+> 익명화는 원래 삭제를 요청한 사람(user/admin)이 아닌 자동화된 배치 스케줄러(`AccountAnonymizationScheduler`)가 수행하는 독립적 시스템 행위다.
+> consumer가 "누가 익명화를 수행했는가"를 파악하는 데 원래 삭제 actor 정보는 오해를 유발한다.
+> 원래 삭제 사유(`reasonCode`)는 audit fidelity를 위해 보존한다.
 
 > **이전 문서 표기 정정**: 본 절은 과거에 `gracePeriodEndsAt`을 "익명화 시각"으로 채운다고 기술했으나, 이는 [account-events.md](../../contracts/events/account-events.md)의 필드 의미(유예 종료 시각)와 충돌하여 다운스트림 consumer 해석 오류를 유발한다. 본 개정에서 해당 표기를 제거하고 계약 정의와 일치시킨다.
 >

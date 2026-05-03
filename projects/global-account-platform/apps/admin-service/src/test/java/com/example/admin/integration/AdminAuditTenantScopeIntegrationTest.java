@@ -128,8 +128,11 @@ class AdminAuditTenantScopeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("1. tenantA operator queries tenantId=tenant-b → 403 TENANT_SCOPE_DENIED + DENIED audit row")
     void tenantA_queriesTenantB_returns403() throws Exception {
+        // operator_id in admin_actions is a BIGINT FK to admin_operators.id (internal PK).
+        // actor_id is the VARCHAR(100) column that stores the operator UUID string.
+        // TASK-MONO-023c fix: use actor_id for UUID-based lookup.
         Integer beforeCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND operator_id = ?",
+                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND actor_id = ?",
                 Integer.class, TENANT_A_OP_UUID);
 
         mockMvc.perform(get("/api/admin/audit")
@@ -141,13 +144,13 @@ class AdminAuditTenantScopeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
 
         Integer afterCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND operator_id = ?",
+                "SELECT COUNT(*) FROM admin_actions WHERE outcome = 'DENIED' AND actor_id = ?",
                 Integer.class, TENANT_A_OP_UUID);
         org.assertj.core.api.Assertions.assertThat(afterCount).isEqualTo(beforeCount + 1);
 
         String latestDetail = jdbcTemplate.queryForObject(
                 "SELECT downstream_detail FROM admin_actions " +
-                        "WHERE outcome = 'DENIED' AND operator_id = ? " +
+                        "WHERE outcome = 'DENIED' AND actor_id = ? " +
                         "ORDER BY started_at DESC LIMIT 1",
                 String.class, TENANT_A_OP_UUID);
         org.assertj.core.api.Assertions.assertThat(latestDetail)
