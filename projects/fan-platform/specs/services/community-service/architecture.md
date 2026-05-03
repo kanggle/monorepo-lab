@@ -181,7 +181,7 @@ applies the same tiering at the row level — locked items are returned with
 ## Read Path (read-heavy.md)
 
 - Single-post `GET /api/community/posts/{id}` — pure DB read, no cache.
-- Feed `GET /api/community/feed` — fan-out-on-read with Redis read-through cache (5-minute TTL). On Redis unavailability, fall through to Postgres directly (fail-open) and emit `community_feed_cache_unavailable_total`.
+- Feed `GET /api/community/feed` — fan-out-on-read with Redis read-through cache (5-minute TTL). On Redis unavailability, fall through to Postgres directly (fail-open) and emit `community_feed_cache_unavailable_total`. **Invalidation**: TTL-only in v1 — newly published posts and follow/unfollow changes are visible after at most 5 minutes. v2 may add explicit DEL on `community.post.published` / a future `community.follow.changed` topic if sub-minute freshness becomes a requirement.
 - Bulk aggregate counts (`countsByPostIds`) batch all comment/reaction tallies into 2 grouped queries per page.
 
 ---

@@ -220,8 +220,46 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
 
         String cached = stringRedisTemplate.opsForValue().get(key);
         assertThat(cached)
-                .as("Cached value should be a non-empty pipe-delimited list of post ids")
-                .isNotBlank();
+                .as("Cached value should be the JSON-serialized FeedPage")
+                .isNotBlank()
+                .as("Cached payload should be JSON (start with '{')")
+                .startsWith("{");
+    }
+
+    @Test
+    @DisplayName("read-through: 2nd call hits Redis (DB mutation invisible until TTL)")
+    void secondCall_servedFromCacheNotDb() throws Exception {
+        String fanToken = jwt.signFanToken(fanId);
+        String key = "feed:fan-platform:" + fanId + ":0:10";
+
+        // 1) First call: cache miss. Verify the key was absent before, and
+        //    the cache key exists after.
+        assertThat(Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))).isFalse();
+
+        JsonNode first = fetchFeed(fanToken, 0, 10);
+        int firstSize = first.path("data").path("content").size();
+        long firstTotal = first.path("data").path("totalElements").asLong();
+        assertThat(firstSize).isEqualTo(10);
+
+        assertThat(Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))).isTrue();
+
+        // 2) Mutate the DB AFTER the first call: delete every followed-author
+        //    post. If the second call queries Postgres, totalElements drops to
+        //    0; if it serves from Redis, totalElements MUST still match the
+        //    pre-mutation snapshot.
+        postJpaRepository.deleteAll();
+        assertThat(postJpaRepository.count()).isZero();
+
+        JsonNode second = fetchFeed(fanToken, 0, 10);
+        long secondTotal = second.path("data").path("totalElements").asLong();
+        int secondSize = second.path("data").path("content").size();
+
+        assertThat(secondTotal)
+                .as("read-through cache must serve the PRE-mutation snapshot — proves no DB hit")
+                .isEqualTo(firstTotal);
+        assertThat(secondSize)
+                .as("cached page content must match the first call exactly")
+                .isEqualTo(firstSize);
     }
 
     private JsonNode fetchFeed(String token, int page, int size) throws Exception {

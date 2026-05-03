@@ -17,20 +17,26 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Follow-based feed. v1 is fan-out-on-read with a Redis read-through cache:
  *
  * <ol>
- *   <li>look up cached page; on hit return immediately.</li>
- *   <li>on miss query Postgres ({@link PostRepository#findFeedForFan}), cache
- *       the page id list, return the hydrated payload.</li>
+ *   <li>look up cached page; on hit return immediately (zero DB round-trips).</li>
+ *   <li>on miss query Postgres ({@link PostRepository#findFeedForFan}), batch
+ *       comment/reaction counts, build the page, write the result back to
+ *       cache, return it.</li>
  *   <li>on Redis unavailability fall through to Postgres directly (fail-open
  *       per rules/traits/integration-heavy.md I3).</li>
  * </ol>
  *
- * <p>Cache invalidation is best-effort TTL (5 min); a v2 cache-aware consumer
- * of {@code community.post.published} can do explicit invalidation.
+ * <p><strong>Invalidation</strong> is TTL-only (5 minutes — see
+ * {@link FeedCacheRepository}). A new post or follow/unfollow becomes visible
+ * to the fan after at most that window. v2 may add explicit invalidation by
+ * subscribing to {@code community.post.published} / a future
+ * {@code community.follow.changed} topic if sub-minute freshness becomes a
+ * requirement.
  */
 @Slf4j
 @Service
@@ -51,19 +57,26 @@ public class GetFeedUseCase {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), MAX_SIZE);
 
+        // 1) Read-through: fast path — return immediately from Redis on hit.
+        Optional<FeedPage> cached = feedCache.readPage(
+                actor.tenantId(), actor.accountId(), safePage, safeSize);
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
+        // 2) Miss: query Postgres + build the page.
+        FeedPage built = queryAndBuild(actor, safePage, safeSize);
+
+        // 3) Best-effort cache write of the hydrated page. The repository
+        //    swallows + counts failures so the caller's response is unaffected.
+        feedCache.cachePage(actor.tenantId(), actor.accountId(), safePage, safeSize, built);
+        return built;
+    }
+
+    private FeedPage queryAndBuild(ActorContext actor, int safePage, int safeSize) {
         Page<Post> posts = postRepository.findFeedForFan(
                 actor.accountId(), actor.tenantId(),
                 PageRequest.of(safePage, safeSize));
-
-        // Best-effort cache write of the post-id slice. Read-through is a
-        // future v2 concern (would require denormalised fan-out-on-write or
-        // careful authority-scoped caching to avoid leaking gated posts).
-        try {
-            feedCache.cachePage(actor.tenantId(), actor.accountId(), safePage, safeSize,
-                    posts.getContent().stream().map(Post::getId).toList());
-        } catch (RuntimeException e) {
-            log.warn("Feed cache write failed (fail-open): {}", e.getMessage());
-        }
 
         List<String> postIds = posts.getContent().stream().map(Post::getId).toList();
         Map<String, Long> commentCounts = commentRepository.countsByPostIds(postIds, actor.tenantId());
