@@ -80,14 +80,13 @@ _(없음)_
 
 ## review
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose / k8s / .env 정리 (선행: TASK-MONO-027) | auth-service, gateway-service | code, security |
+_(없음)_
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — docker-compose / k8s (services + network-policies + secrets + gateway env) / settings.gradle / CI (build-and-test + boot-jars + frontend-e2e) / .env / spec (services rename + auth-api/auth-events/features deprecated). PR #150 (`chore(ecommerce): TASK-BE-132`) 머지. apps/auth-service/ 소스는 보존 (settings.gradle 에서만 제외). follow-up: TASK-MONO-028 candidate — sync-portfolio.sh standalone v1 freeze policy + AUTH_SECRET grep + done task 깨진 spec 경로 cleanup. 2026-05-04. | auth-service (제거), gateway-service, infra | code, security |
 | TASK-FE-067 | web-store + admin-dashboard 의 GAP OIDC cutover — NextAuth v5 신규 도입 + 자체 auth flow 폐기 + sync-portfolio.sh exclusion. PR #148 (`feat(ecommerce)!: TASK-FE-067`) 머지. signIn callback 으로 account_type_mismatch URL 전파 + sync exclusion 7건. follow-up: TASK-BE-132 (auth-service 컴포넌트 폐기), 별도 admin-dashboard SSR baseURL fallback (TASK-FE-068 candidate). 2026-05-04. | web-store, admin-dashboard, packages/api-client | code, security, api, breaking |
 | TASK-BE-131 | ecommerce gateway-service JWT 검증 방식을 HS256 → JWKS/RSA(RS256)로 교체 | gateway-service | code, security, test |
 | TASK-BE-130 | [Security P2] ReviewController sort 파라미터 허용 값 화이트리스트 검증 추가 | review-service | code, security, test |
