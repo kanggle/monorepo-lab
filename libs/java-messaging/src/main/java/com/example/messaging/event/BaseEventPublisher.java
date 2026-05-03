@@ -1,5 +1,6 @@
 package com.example.messaging.event;
 
+import com.example.common.id.UuidV7;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Shared base for all service-level event publishers.
@@ -53,7 +53,7 @@ public abstract class BaseEventPublisher {
                               String eventType, String source,
                               Map<String, Object> payload) {
         Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("eventId", UUID.randomUUID().toString());
+        envelope.put("eventId", UuidV7.randomString());
         envelope.put("eventType", eventType);
         envelope.put("source", source);
         envelope.put("occurredAt", Instant.now().toString());

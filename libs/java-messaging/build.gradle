@@ -3,6 +3,9 @@ plugins {
 }
 
 dependencies {
+    // Shared utilities (UuidV7, PageQuery, etc.)
+    implementation project(':libs:java-common')
+
     // Spring Data JPA
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
