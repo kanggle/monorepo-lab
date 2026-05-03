@@ -7,6 +7,7 @@ import com.example.messaging.event.BaseEventPublisher;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
@@ -31,12 +32,25 @@ public class AccountEventPublisher extends BaseEventPublisher {
         super(outboxWriter, objectMapper);
     }
 
+    /**
+     * Writes the {@code account.created} outbox row.
+     *
+     * <p>{@code @Transactional} (REQUIRED) ensures the outbox write participates in the
+     * caller's transaction when one exists, or opens its own when called directly
+     * (e.g. integration tests). Required because {@link com.example.messaging.outbox.OutboxJpaConfig}
+     * sets {@code enableDefaultTransactions = false} on the outbox JPA config — without an
+     * explicit transaction boundary the {@code save} call would fail with
+     * "No EntityManager with actual transaction available" (TASK-MONO-023c).
+     */
+    @Transactional
     public void publishAccountCreated(Account account, String tenantId, String locale) {
         requireTenantId(tenantId);
         String emailHash = DigestUtils.sha256Short(account.getEmail(), 10);
         save(account.getId(), account.buildCreatedEvent(emailHash, locale));
     }
 
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishStatusChanged(Account account, String tenantId, String previousStatus,
                                      String reasonCode, String actorType, String actorId,
                                      Instant occurredAt) {
@@ -45,18 +59,24 @@ public class AccountEventPublisher extends BaseEventPublisher {
                 actorType, actorId, occurredAt));
     }
 
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishAccountLocked(Account account, String tenantId, String reasonCode,
                                      String actorType, String actorId, Instant lockedAt) {
         requireTenantId(tenantId);
         save(account.getId(), account.buildLockedEvent(reasonCode, actorType, actorId, lockedAt));
     }
 
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishAccountUnlocked(Account account, String tenantId, String reasonCode,
                                        String actorType, String actorId, Instant unlockedAt) {
         requireTenantId(tenantId);
         save(account.getId(), account.buildUnlockedEvent(reasonCode, actorType, actorId, unlockedAt));
     }
 
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishAccountDeleted(Account account, String tenantId, String reasonCode,
                                       String actorType, String actorId,
                                       Instant deletedAt, Instant gracePeriodEndsAt) {
@@ -74,6 +94,8 @@ public class AccountEventPublisher extends BaseEventPublisher {
      * existing v2 consumers keep working unchanged. Add/remove use cases pass the
      * pre-mutation snapshot as {@code beforeRoles}; replace-all does the same.
      */
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishRolesChanged(Account account, String tenantId,
                                     java.util.List<String> beforeRoles,
                                     java.util.List<String> afterRoles,
@@ -85,6 +107,8 @@ public class AccountEventPublisher extends BaseEventPublisher {
                 beforeRoles, afterRoles, changedBy, actorType, actorId, occurredAt));
     }
 
+    /** @see #publishAccountCreated for transaction rationale. */
+    @Transactional
     public void publishAccountDeletedAnonymized(Account account, String tenantId, String reasonCode,
                                                 String actorType, String actorId,
                                                 Instant deletedAt, Instant gracePeriodEndsAt) {

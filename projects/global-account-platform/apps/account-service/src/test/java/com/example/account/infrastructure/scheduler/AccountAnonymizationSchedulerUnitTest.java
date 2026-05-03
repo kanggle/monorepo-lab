@@ -41,11 +41,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link AccountAnonymizationScheduler} (TASK-BE-093, TASK-BE-097).
+ * Unit tests for {@link AccountAnonymizationScheduler} (TASK-BE-093, TASK-BE-097, TASK-MONO-023c).
  *
  * <p>Covers:
  * <ol>
  *   <li>Normal anonymization — eligible candidate is masked, masked_at stamped, event re-published.</li>
+ *   <li>{@code actorType=system, actorId=anonymization-batch} — the anonymization batch is ALWAYS
+ *       the acting system regardless of the original deletion actor (TASK-MONO-023c fix).</li>
  *   <li>{@code reasonCode} resolution — the most recent DELETED history row's reason is propagated.</li>
  *   <li>{@code reasonCode} fallback — when no DELETED history row exists, USER_REQUEST is used.</li>
  *   <li>{@code gracePeriodEndsAt} = {@code deletedAt + 30d} per retention.md §2.7.</li>
@@ -160,7 +162,7 @@ class AccountAnonymizationSchedulerUnitTest {
                 .willReturn(Optional.of(managedSnapshot));
         given(profileRepository.findByAccountId(accountId))
                 .willReturn(Optional.of(profile));
-        // History resolved: original deletion was a regular USER_REQUEST.
+        // History resolved: original deletion was a regular USER_REQUEST by a human user.
         given(statusHistoryRepository.findByAccountIdOrderByOccurredAtDesc(accountId))
                 .willReturn(List.of(deletedHistoryEntry(
                         accountId, StatusChangeReason.USER_REQUEST,
@@ -189,16 +191,18 @@ class AccountAnonymizationSchedulerUnitTest {
         assertThat(profile.getMaskedAt()).isNotNull();
         verify(profileRepository).save(profile);
 
-        // Event re-published with the resolved reasonCode/actorType/actorId from the
-        // DELETED history row + gracePeriodEndsAt = deletedAt + 30d
-        // (retention.md §2.7, account-events.md §account.deleted).
+        // TASK-MONO-023c: actorType is ALWAYS "system" and actorId is ALWAYS
+        // "anonymization-batch" for the anonymized re-publication — the scheduler is the
+        // acting system, not the original deletion actor (retention.md §2.7 revised).
+        // reasonCode is resolved from the original DELETED history row (audit fidelity).
+        // gracePeriodEndsAt = deletedAt + 30d (account-events.md §account.deleted semantic).
         Instant expectedGraceEnd = DELETED_AT_OLD.plus(30, ChronoUnit.DAYS);
         verify(eventPublisher).publishAccountDeletedAnonymized(
                 any(Account.class),
                 any(String.class),
                 eq(StatusChangeReason.USER_REQUEST.name()),
-                eq("user"),
-                eq(accountId),
+                eq("system"),
+                eq("anonymization-batch"),
                 eq(DELETED_AT_OLD),
                 eq(expectedGraceEnd));
 
@@ -210,8 +214,8 @@ class AccountAnonymizationSchedulerUnitTest {
     }
 
     @Test
-    @DisplayName("deletion context 복원 — history 마지막 DELETED 전이의 reason/actorType/actorId(ADMIN_DELETE,operator,op-1)가 이벤트 payload에 그대로 전달")
-    void runAnonymizationBatch_resolvesDeletionContextFromHistory_adminDelete() {
+    @DisplayName("TASK-MONO-023c: actorType=system/actorId=anonymization-batch — 원래 삭제 주체(ADMIN_DELETE,operator,op-1)와 무관하게 항상 system")
+    void runAnonymizationBatch_actorTypeAlwaysSystem_regardlessOfOriginalActor() {
         String accountId = "acc-admin";
         AccountJpaEntity candidate = entityFromAccount(deletedAccount(accountId, "admin@example.com"));
         AccountJpaEntity managed = entityFromAccount(deletedAccount(accountId, "admin@example.com"));
@@ -221,7 +225,7 @@ class AccountAnonymizationSchedulerUnitTest {
                 .willReturn(List.of(candidate));
         given(accountJpaRepository.findById(accountId)).willReturn(Optional.of(managed));
         given(profileRepository.findByAccountId(accountId)).willReturn(Optional.of(profile));
-        // Most recent transition is to DELETED with ADMIN_DELETE reason performed by an operator.
+        // Original deletion was by an operator — but the anonymized event must still use system/batch.
         given(statusHistoryRepository.findByAccountIdOrderByOccurredAtDesc(accountId))
                 .willReturn(List.of(deletedHistoryEntry(
                         accountId, StatusChangeReason.ADMIN_DELETE,
@@ -229,18 +233,19 @@ class AccountAnonymizationSchedulerUnitTest {
 
         scheduler.runAnonymizationBatch();
 
+        // reasonCode comes from history (ADMIN_DELETE); actor is always system/anonymization-batch.
         verify(eventPublisher).publishAccountDeletedAnonymized(
                 any(Account.class),
                 any(String.class),
                 eq(StatusChangeReason.ADMIN_DELETE.name()),
-                eq("operator"),
-                eq("op-1"),
+                eq("system"),
+                eq("anonymization-batch"),
                 eq(DELETED_AT_OLD),
                 eq(DELETED_AT_OLD.plus(30, ChronoUnit.DAYS)));
     }
 
     @Test
-    @DisplayName("deletion context fallback — DELETED 전이 history row가 없으면 USER_REQUEST + actorType=system + actorId=null + WARN 로그")
+    @DisplayName("deletion context fallback — DELETED 전이 history row가 없으면 USER_REQUEST + actorType=system + actorId=anonymization-batch + WARN 로그")
     void runAnonymizationBatch_missingHistory_fallsBackToSystemContext() {
         String accountId = "acc-no-history";
         AccountJpaEntity candidate = entityFromAccount(deletedAccount(accountId, "noh@example.com"));
@@ -262,7 +267,7 @@ class AccountAnonymizationSchedulerUnitTest {
                 any(String.class),
                 eq(StatusChangeReason.USER_REQUEST.name()),
                 eq("system"),
-                eq(null),
+                eq("anonymization-batch"),
                 eq(DELETED_AT_OLD),
                 eq(DELETED_AT_OLD.plus(30, ChronoUnit.DAYS)));
     }
@@ -327,9 +332,10 @@ class AccountAnonymizationSchedulerUnitTest {
         assertThat(accountCaptor.getValue().getId()).isEqualTo(stillDeletedId);
 
         verify(profileRepository).save(stillDeletedProfile);
-        // History supplied actorType="user", actorId=stillDeletedId for the surviving account.
+        // History supplied reasonCode=USER_REQUEST; actorType/actorId are always system/batch.
         verify(eventPublisher, times(1)).publishAccountDeletedAnonymized(
-                any(Account.class), any(), any(), eq("user"), eq(stillDeletedId),
+                any(Account.class), any(), eq(StatusChangeReason.USER_REQUEST.name()),
+                eq("system"), eq("anonymization-batch"),
                 any(Instant.class), any(Instant.class));
         // Recovered account: no event published
         verify(eventPublisher, never()).publishAccountDeletedAnonymized(
@@ -388,9 +394,10 @@ class AccountAnonymizationSchedulerUnitTest {
         // Profile save only for the okId (failing path threw before profile lookup).
         verify(profileRepository).save(okProfile);
 
-        // Event published only for the okId — context restored from history (user/okId).
+        // Event published only for the okId — actorType/actorId always system/batch (TASK-MONO-023c).
         verify(eventPublisher).publishAccountDeletedAnonymized(
-                any(Account.class), any(), any(), eq("user"), eq(okId),
+                any(Account.class), any(), eq(StatusChangeReason.USER_REQUEST.name()),
+                eq("system"), eq("anonymization-batch"),
                 any(Instant.class), any(Instant.class));
         verify(eventPublisher, never()).publishAccountDeletedAnonymized(
                 argThat(a -> failingId.equals(a.getId())), any(), any(), any(), any(),
