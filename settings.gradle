@@ -48,3 +48,8 @@ include(
     'projects:global-account-platform:apps:membership-service',
     'projects:global-account-platform:apps:security-service'
 )
+
+// Project: fan-platform
+include(
+    'projects:fan-platform:apps:gateway-service'
+)

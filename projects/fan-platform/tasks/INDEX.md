@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-001-gateway-service-bootstrap.md` — gateway-service Spring Boot 부트스트랩. OIDC OAuth2 Resource Server (GAP JWKS 검증, RS256), `tenant_id=fan-platform` claim 필터, rate limit (Redis), Traefik label 통합. 첫 reference implementation — community/artist 가 이 패턴 복제.
+(empty — TASK-FAN-BE-002 / 003 발행 예정)
 
 ## in-progress
 
@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-001-gateway-service-bootstrap.md` — gateway-service Spring Boot 부트스트랩 완료. OIDC OAuth2 Resource Server (GAP JWKS 검증, RS256), `tenant_id=fan-platform` claim 필터, Redis rate limit, Traefik label 통합. 47/47 unit+slice 통과, integration 은 CI Linux 에서 실행. 2026-05-03.
 
 ## done
 

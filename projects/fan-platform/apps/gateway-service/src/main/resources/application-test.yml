@@ -1,0 +1,17 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.security.oauth2.resourceserver.jwt.jwk-set-uri (WireMock / MockWebServer)
+# and spring.data.redis.host (Redis Testcontainer) via @DynamicPropertySource.
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: stub-downstream
+          uri: ${TEST_DOWNSTREAM_URI:http://localhost:0}
+          predicates:
+            - Path=/api/v1/community/**
+
+fanplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    required-tenant-id: fan-platform
