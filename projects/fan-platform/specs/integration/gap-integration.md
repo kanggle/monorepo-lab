@@ -42,14 +42,20 @@ spring:
 
 ## OAuth Clients (등록은 GAP 의 시드 마이그레이션에서 생성)
 
-| Client ID | Grant Types | 용도 |
-|---|---|---|
-| `fan-platform-user-flow-client` | `authorization_code` + `refresh_token` (PKCE 필수) | fan-platform-web (Next.js) 사용자 로그인 |
-| `fan-platform-internal-services-client` | `client_credentials` | 향후 fan-platform 서비스 간 REST 호출 |
+| Client ID | Grant Types | PKCE | Redirect URIs | Flyway |
+|---|---|---|---|---|
+| `fan-platform-user-flow-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/gap`, `http://fan-platform.local/api/auth/callback/gap` | V0011 (TASK-MONO-026) |
+| `fan-platform-internal-services-client` | `client_credentials` | No | — | v2 DEFERRED |
 
-Redirect URI placeholder: `http://fan-platform.local/api/auth/callback/gap`. fan-platform-web 클라이언트가 도입되면 (TASK-FAN-FE-001) 정확한 콜백 URL 로 갱신.
+`fan-platform-user-flow-client` 는 confidential client (secret + PKCE 동시 사용) 로 등록됨:
+- `client_authentication_methods`: `client_secret_basic`
+- `require_proof_key`: `true`
+- `access_token_time_to_live`: PT15M (900 s)
+- `refresh_token_time_to_live`: PT24H (86400 s)
 
-Secret 은 Flyway 시드에 BCrypt 해시로 저장. 평문 secret 은 `FAN_PLATFORM_USER_FLOW_CLIENT_SECRET`, `FAN_PLATFORM_INTERNAL_SERVICES_CLIENT_SECRET` 환경 변수에서 주입.
+Secret 은 V0011 Flyway 시드에 BCrypt(strength=10) 해시로 저장.
+dev 평문 secret 은 `fan-platform-dev` (`.env.example` 의 `OIDC_CLIENT_SECRET` 참고).
+production 은 `FAN_PLATFORM_USER_FLOW_CLIENT_SECRET` 환경 변수로 교체 후 admin API 로 갱신.
 
 ---
 
