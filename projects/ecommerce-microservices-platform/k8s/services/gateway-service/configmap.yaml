@@ -7,7 +7,7 @@ data:
   SPRING_PROFILES_ACTIVE: "prod"
   SERVER_PORT: "8080"
   OTEL_SERVICE_NAME: "gateway-service"
-  AUTH_SERVICE_URL: "http://auth-service.ecommerce.svc.cluster.local:8081"
+  # AUTH_SERVICE_URL removed by TASK-BE-132 — auth-service decommissioned.
   PRODUCT_SERVICE_URL: "http://product-service.ecommerce.svc.cluster.local:8082"
   USER_SERVICE_URL: "http://user-service.ecommerce.svc.cluster.local:8084"
   SEARCH_SERVICE_URL: "http://search-service.ecommerce.svc.cluster.local:8085"

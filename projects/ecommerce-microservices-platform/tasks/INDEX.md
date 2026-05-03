@@ -72,9 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose / k8s / .env 정리 (선행: TASK-MONO-027) | auth-service, gateway-service | code, security |
+_(없음)_
 
 ## in-progress
 
@@ -82,7 +80,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose / k8s / .env 정리 (선행: TASK-MONO-027) | auth-service, gateway-service | code, security |
 
 ## done
 

@@ -1,4 +1,21 @@
-# Feature: Authentication & Authorization
+# Feature: Authentication & Authorization (DEPRECATED — see GAP)
+
+> **DEPRECATED — primary owner moved out of ecommerce.**
+>
+> TASK-MONO-027 (PR #145) + TASK-FE-067 (PR #148) + TASK-BE-132 (PR #150)
+> retired the in-tree ecommerce auth-service. Identity, signup/login/logout,
+> token issuance, and admin authorization are now owned by GAP
+> (global-account-platform). The ecommerce gateway validates GAP-issued
+> RS256 JWTs via JWKS; the frontends use NextAuth v5 with the GAP OIDC
+> provider.
+>
+> Authoritative sources:
+> - `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
+> - `projects/global-account-platform/specs/contracts/http/auth-api.md`
+> - `projects/global-account-platform/specs/features/consumer-integration-guide.md`
+>
+> The flows below are retained as historical reference of how the in-tree
+> auth-service used to behave; they no longer reflect runtime behavior.
 
 ## Purpose
 
@@ -8,9 +25,9 @@ Provides user identity management and access control for the platform. Handles a
 
 | Service | Role |
 |---|---|
-| auth-service | Primary owner — credential storage, token issuance/rotation, session management, audit logging |
-| gateway-service | JWT validation, user identity injection (X-User-Id, X-User-Email, X-User-Role headers), rate limiting |
-| user-service | Consumes UserSignedUp event to create initial user profile |
+| auth-service | ~~Primary owner — credential storage, token issuance/rotation, session management, audit logging~~ **REMOVED — replaced by GAP** |
+| gateway-service | JWT validation (now via GAP JWKS / RS256), user identity injection (X-User-Id, X-User-Email, X-User-Role headers), rate limiting |
+| user-service | Consumes UserSignedUp event to create initial user profile (now sourced from GAP account events) |
 
 ## User Flows
 

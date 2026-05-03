@@ -40,20 +40,10 @@ spring:
               - 'Authorization'
             max-age: 3600
       routes:
-        - id: auth-service
-          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
-          predicates:
-            - Path=/api/auth/**
-          filters:
-            # auth는 brute-force 방어를 위해 타이트하게. 단 burst는 합법적 SPA 트래픽
-            # (login → /me → /refresh 연쇄 호출, 자동화된 헬스체크·스모크 테스트,
-            # E2E 배치 실행)과 배포 직후 재인증 러시를 흡수해야 한다.
-            # 20 req/s 지속 공격은 여전히 스로틀링되므로 방어 유효.
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 20
-                redis-rate-limiter.burstCapacity: 100
-                key-resolver: "#{@ipKeyResolver}"
+        # auth-service route removed by TASK-BE-132 — auth-service decommissioned.
+        # Authentication is now handled by GAP OIDC (TASK-MONO-027).
+        # /api/auth/** paths previously routed to auth-service are retired;
+        # login/logout flows go through GAP's /oauth2/authorize endpoint directly.
 
         - id: product-service
           uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
