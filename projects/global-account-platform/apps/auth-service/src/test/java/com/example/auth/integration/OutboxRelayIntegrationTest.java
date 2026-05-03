@@ -92,17 +92,23 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
             transactionTemplate.executeWithoutResult(status ->
                     authEventPublisher.publishLoginSucceeded(accountId, sessionJti, ctx));
 
+            // Accumulate matching records across multiple polls so that unrelated records
+            // from other integration tests (same Kafka container, earliest offset reset)
+            // do not cause the assertion to consume the target record and then find nothing.
+            List<ConsumerRecord<String, String>> accumulated = new ArrayList<>();
+
             // Wait for the outbox relay to pick up and publish
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-                List<ConsumerRecord<String, String>> matchingRecords = new ArrayList<>();
                 for (ConsumerRecord<String, String> record : records) {
-                    matchingRecords.add(record);
+                    if (record.key().equals(accountId)) {
+                        accumulated.add(record);
+                    }
                 }
 
-                assertThat(matchingRecords).isNotEmpty();
+                assertThat(accumulated).isNotEmpty();
 
-                ConsumerRecord<String, String> record = matchingRecords.get(0);
+                ConsumerRecord<String, String> record = accumulated.get(0);
 
                 // Verify partition key is account_id
                 assertThat(record.key()).isEqualTo(accountId);
@@ -149,18 +155,21 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
                     authEventPublisher.publishLoginFailed(accountId, emailHash, "fan-platform",
                             "CREDENTIALS_INVALID", 3, ctx));
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            // Accumulate matching records across polls to survive unrelated records
+            // from other integration tests on the shared Kafka container.
+            List<ConsumerRecord<String, String>> accumulated = new ArrayList<>();
+
+            await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-                List<ConsumerRecord<String, String>> matchingRecords = new ArrayList<>();
                 for (ConsumerRecord<String, String> record : records) {
                     if (record.key().equals(accountId)) {
-                        matchingRecords.add(record);
+                        accumulated.add(record);
                     }
                 }
 
-                assertThat(matchingRecords).isNotEmpty();
+                assertThat(accumulated).isNotEmpty();
 
-                ConsumerRecord<String, String> record = matchingRecords.get(0);
+                ConsumerRecord<String, String> record = accumulated.get(0);
                 assertThat(record.key()).isEqualTo(accountId);
 
                 JsonNode envelope = objectMapper.readTree(record.value());

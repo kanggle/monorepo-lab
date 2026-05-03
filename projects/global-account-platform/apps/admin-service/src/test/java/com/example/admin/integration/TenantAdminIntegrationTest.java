@@ -213,7 +213,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
         // Verify outbox event
         Integer outboxCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'tenant.created'",
+                "SELECT COUNT(*) FROM outbox WHERE event_type = 'tenant.created'",
                 Integer.class);
         assertThat(outboxCount).isGreaterThan(0);
     }
@@ -334,7 +334,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
         assertThat(count).isGreaterThan(0);
 
         Integer outboxCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'tenant.suspended'",
+                "SELECT COUNT(*) FROM outbox WHERE event_type = 'tenant.suspended'",
                 Integer.class);
         assertThat(outboxCount).isGreaterThan(0);
     }
@@ -401,7 +401,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
         assertThat(count).isGreaterThan(0);
 
         Integer outboxCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'tenant.updated'",
+                "SELECT COUNT(*) FROM outbox WHERE event_type = 'tenant.updated'",
                 Integer.class);
         assertThat(outboxCount).isGreaterThan(0);
     }
