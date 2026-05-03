@@ -134,7 +134,7 @@ public class BulkProvisionAccountUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_CREATE,
                 "provisioning_system",
                 actorId,
-                "action=ACCOUNT_BULK_CREATE,targetCount=" + createdCount
+                "{\"action\":\"ACCOUNT_BULK_CREATE\",\"targetCount\":" + createdCount + "}"
         );
         historyRepository.save(entry);
     }

@@ -72,7 +72,7 @@ public class GdprDeleteUseCase {
                 StatusChangeReason.REGULATED_DELETION,
                 "operator",
                 operatorId,
-                "GDPR deletion with immediate PII masking"
+                "{\"action\":\"REGULATED_DELETION\",\"note\":\"GDPR deletion with immediate PII masking\"}"
         );
         historyRepository.save(historyEntry);
 

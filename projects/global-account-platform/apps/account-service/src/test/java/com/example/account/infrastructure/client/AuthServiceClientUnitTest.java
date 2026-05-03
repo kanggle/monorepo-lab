@@ -7,11 +7,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestClient;
-
-import java.net.http.HttpClient;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -32,17 +27,8 @@ class AuthServiceClientUnitTest {
     void setUp() {
         wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
+        // AuthServiceClient now enforces HTTP/1.1 internally, so no workaround needed here.
         client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000);
-        // JDK HttpClient defaults to HTTP/2 (H2C) which causes RST_STREAM with WireMock.
-        // Replace with an HTTP/1.1-only client so stubs are served predictably.
-        HttpClient jdkHttp11 = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-        RestClient http11RestClient = RestClient.builder()
-                .baseUrl(wireMockServer.baseUrl())
-                .requestFactory(new JdkClientHttpRequestFactory(jdkHttp11))
-                .build();
-        ReflectionTestUtils.setField(client, "restClient", http11RestClient);
     }
 
     @AfterEach

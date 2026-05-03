@@ -8,7 +8,7 @@ GAP provisioning 통합 테스트 격리·downstream mock 회귀 fix
 
 # Status
 
-ready
+review
 
 # Owner
 

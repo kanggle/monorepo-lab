@@ -54,7 +54,7 @@ public class ProvisionPasswordResetUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_PASSWORD_RESET,
                 "provisioning_system",
                 actor,
-                "action=OPERATOR_PROVISIONING_PASSWORD_RESET"
+                "{\"action\":\"OPERATOR_PROVISIONING_PASSWORD_RESET\"}"
         );
         historyRepository.save(auditEntry);
 
