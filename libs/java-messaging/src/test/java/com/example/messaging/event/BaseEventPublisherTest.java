@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,6 +59,43 @@ class BaseEventPublisherTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> innerPayload = (Map<String, Object>) envelope.get("payload");
         assertThat(innerPayload).containsEntry("key", "value");
+    }
+
+    @Test
+    @DisplayName("writeEvent — eventId 는 UUID v7 형식 (version=7, variant=2)")
+    void writeEvent_eventIdIsUuidV7() throws Exception {
+        publisher().writeEvent("agg", "agg-1", "evt", "svc", new LinkedHashMap<>());
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter).save(eq("agg"), eq("agg-1"), eq("evt"), captor.capture());
+
+        String eventId = objectMapper.readValue(captor.getValue(), new TypeReference<Map<String, Object>>() {})
+                .get("eventId").toString();
+
+        UUID uuid = UUID.fromString(eventId);
+        // RFC 9562 §5.7 — version nibble must be 7
+        assertThat(uuid.version()).isEqualTo(7);
+        // variant bits "10" — java UUID.variant() = 2
+        assertThat(uuid.variant()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("writeEvent — 연속 호출 시 eventId 가 lexicographic 오름차순 (시간 정렬)")
+    void writeEvent_consecutiveEventIdsAreLexicographicallyOrdered() throws Exception {
+        publisher().writeEvent("agg", "id-1", "evt", "svc", new LinkedHashMap<>());
+        publisher().writeEvent("agg", "id-2", "evt", "svc", new LinkedHashMap<>());
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter, times(2)).save(eq("agg"), any(), eq("evt"), captor.capture());
+
+        String id1 = objectMapper.readValue(captor.getAllValues().get(0), new TypeReference<Map<String, Object>>() {})
+                .get("eventId").toString();
+        String id2 = objectMapper.readValue(captor.getAllValues().get(1), new TypeReference<Map<String, Object>>() {})
+                .get("eventId").toString();
+
+        // UUID v7 strings are lexicographically ordered by timestamp prefix
+        assertThat(id1).isNotEqualTo(id2);
+        assertThat(id1.compareTo(id2)).isLessThanOrEqualTo(0);
     }
 
     @Test
