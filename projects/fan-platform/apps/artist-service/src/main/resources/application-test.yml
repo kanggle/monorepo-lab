@@ -1,0 +1,36 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.datasource.* (PostgreSQL Testcontainer), spring.kafka.bootstrap-servers
+# (Kafka Testcontainer), spring.data.redis.host (Redis Testcontainer), and
+# spring.security.oauth2.resourceserver.jwt.jwk-set-uri (WireMock JWKS) via
+# @DynamicPropertySource.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/artist
+    baseline-on-migrate: true
+
+outbox:
+  polling:
+    # Tighten the loop in tests so the relay reacts within an awaitility
+    # timeout. Disabled by default for slice/unit tests; integration tests
+    # explicitly enable it.
+    enabled: false
+    interval-ms: 200
+    batch-size: 50
+
+fanplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    required-tenant-id: fan-platform
+  artist:
+    cache:
+      directory:
+        ttl-seconds: 60
+        namespace: cache:fan-platform:artist:directory:

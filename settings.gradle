@@ -52,5 +52,6 @@ include(
 // Project: fan-platform
 include(
     'projects:fan-platform:apps:gateway-service',
-    'projects:fan-platform:apps:community-service'
+    'projects:fan-platform:apps:community-service',
+    'projects:fan-platform:apps:artist-service'
 )
