@@ -165,10 +165,13 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Order(4)
     @DisplayName("Login rate limit after 5 failures")
     void loginRateLimit() throws Exception {
-        String emailHash = "login:fail:" + hashEmail(TEST_EMAIL);
-        redisTemplate.delete(emailHash);
+        // TASK-MONO-023b fix: TASK-BE-229 changed key pattern to login:fail:{tenantId}:{emailHash}.
+        // LoginUseCase uses TenantContext.DEFAULT_TENANT_ID ("fan-platform") when no tenantId
+        // is present in the request. Tests must seed the 3-part key so the rate-limit check fires.
+        String emailHash = hashEmail(TEST_EMAIL);
+        String key = "login:fail:fan-platform:" + emailHash;
+        redisTemplate.delete(key);
 
-        String key = "login:fail:" + hashEmail(TEST_EMAIL);
         redisTemplate.opsForValue().set(key, "5");
 
         mockMvc.perform(post("/api/auth/login")

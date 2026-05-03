@@ -8,7 +8,7 @@ OAuth2 / OIDC 통합 테스트 회귀 family fix (7 테스트 클래스)
 
 # Status
 
-ready
+review
 
 # Owner
 
