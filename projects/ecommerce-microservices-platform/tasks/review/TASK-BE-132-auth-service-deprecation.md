@@ -8,7 +8,7 @@ ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose 
 
 # Status
 
-in-progress
+review
 
 # Owner
 
