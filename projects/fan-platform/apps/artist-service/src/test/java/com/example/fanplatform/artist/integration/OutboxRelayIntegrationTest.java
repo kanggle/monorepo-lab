@@ -41,6 +41,15 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
     @Autowired TestRestTemplate rest;
     @Autowired ObjectMapper objectMapper;
 
+    /**
+     * Use a unique stage name per test run so the awaitility filter can
+     * exclude {@code artist.registered.v1} envelopes left over from other
+     * tests sharing the same broker. Without the filter, an earlier test's
+     * payload could capture before the relay publishes ours and the
+     * follow-up assertions would fail (the historic flake).
+     */
+    private static final String UNIQUE_STAGE_NAME = "OutboxTest-" + System.nanoTime();
+
     @Test
     @DisplayName("register artist → artist.registered.v1 published to Kafka")
     void registeredEventPublished() throws Exception {
@@ -48,8 +57,8 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(jwt.signAdminToken("admin-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"OutboxTest-1"}
-                """;
+                {"artistType":"SOLO","stageName":"%s"}
+                """.formatted(UNIQUE_STAGE_NAME);
 
         ResponseEntity<String> resp = rest.exchange(
                 "/api/artists", HttpMethod.POST,
@@ -78,7 +87,12 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
                         if (records.isEmpty()) return false;
                         for (var record : records) {
                             JsonNode env = objectMapper.readTree(record.value());
-                            if ("artist.registered".equals(env.path("eventType").asText())) {
+                            // Filter on the unique stage name we just registered. Earlier tests
+                            // (or earlier runs reusing the broker) may also have published
+                            // artist.registered.v1 events; without this guard the wrong payload
+                            // would capture and the assertion below would race-fail.
+                            if ("artist.registered".equals(env.path("eventType").asText())
+                                    && UNIQUE_STAGE_NAME.equals(env.path("payload").path("stageName").asText())) {
                                 capturedPayload.set(env);
                                 return true;
                             }
@@ -90,7 +104,7 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
         JsonNode env = capturedPayload.get();
         assertThat(env).isNotNull();
         assertThat(env.path("eventType").asText()).isEqualTo("artist.registered");
-        assertThat(env.path("payload").path("stageName").asText()).isEqualTo("OutboxTest-1");
+        assertThat(env.path("payload").path("stageName").asText()).isEqualTo(UNIQUE_STAGE_NAME);
         assertThat(env.path("payload").path("tenantId").asText()).isEqualTo("fan-platform");
     }
 }
