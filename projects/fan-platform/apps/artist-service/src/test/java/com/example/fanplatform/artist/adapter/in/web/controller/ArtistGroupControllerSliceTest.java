@@ -75,4 +75,22 @@ class ArtistGroupControllerSliceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").value("g-1"));
     }
+
+    @Test
+    @DisplayName("POST /api/artist-groups/{id}/members with role=FORMER_MEMBER → 422 VALIDATION_ERROR (boundary-level enum rejection)")
+    void addMember_formerMemberRoleReturns422() throws Exception {
+        // FORMER_MEMBER is intentionally absent from the controller boundary
+        // AddRole enum; Jackson rejects it during deserialization, the
+        // GlobalExceptionHandler maps that to a 422 envelope. The use case
+        // must NOT be invoked.
+        String body = """
+                {"artistId":"a-1","role":"FORMER_MEMBER"}
+                """;
+        mockMvc.perform(post("/api/artist-groups/g-1/members")
+                        .header("Authorization", "Bearer " + jwt.signAdminToken("admin-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 }

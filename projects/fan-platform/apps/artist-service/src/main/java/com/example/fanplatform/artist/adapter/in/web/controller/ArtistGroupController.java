@@ -55,7 +55,7 @@ public class ArtistGroupController {
             @PathVariable String id,
             @Valid @RequestBody AddGroupMemberRequest req) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        ArtistGroupView view = addMemberUseCase.addMember(actor, id, req.artistId(), req.role());
+        ArtistGroupView view = addMemberUseCase.addMember(actor, id, req.artistId(), req.toDomainRole());
         return ResponseEntity.ok(ApiEnvelope.of(view));
     }
 

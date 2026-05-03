@@ -150,7 +150,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        // Includes Jackson enum deserialization failures (e.g. role=FORMER_MEMBER
+        // against the controller-boundary AddRole enum). Per artist-api.md the
+        // contract surface for these cases is 422 VALIDATION_ERROR.
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
     }
 

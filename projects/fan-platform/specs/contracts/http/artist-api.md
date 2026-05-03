@@ -42,7 +42,8 @@ For paginated list endpoints, `meta` adds `page`, `size`, `totalElements`,
 
 | HTTP | code | When |
 |---|---|---|
-| 400 | VALIDATION_ERROR | malformed JSON / type mismatch / unknown enum value |
+| 400 | VALIDATION_ERROR | path-variable type mismatch (e.g. non-UUID `{id}`) |
+| 422 | VALIDATION_ERROR | malformed JSON / unknown enum value (request body) |
 | 401 | UNAUTHORIZED | missing / expired / invalid signature |
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `fan-platform` (and is not `*`) |
 | 403 | FORBIDDEN | authenticated but lacks admin role on a mutating endpoint |
