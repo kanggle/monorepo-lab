@@ -103,11 +103,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-028-ecommerce-standalone-v1-freeze-policy.md` — ecommerce GAP cutover 시리즈 (PR #145 / #148 / #150) 의 follow-up. `scripts/sync-portfolio.sh` `PROJECT_EXCLUDE_PATHS` 보강 (BE-132 변경분: docker-compose / k8s / .env / spec rename / contracts deprecated 헤더 / gateway application.yml — 8개 path 카테고리), monorepo 의 AUTH_SECRET / AUTH_GOOGLE_CLIENT_* / ADMIN_INITIAL_PASSWORD 잔재 grep & 제거, tasks/done 의 깨진 auth-service spec 경로 정책 명시 (옵션 a 방치 + c README redirect — 이미 처리됨). k8s prod gateway → GAP egress 추가는 별도 follow-up.
 
 ## in-progress
 
 (empty)
+
+## review
 
 (empty)
 
