@@ -1,7 +1,18 @@
 # HTTP Contract: auth-service
 
+> **DEPRECATED** — 2026-05-04 (TASK-BE-132)
+>
+> This contract is retired. The ecommerce auth-service has been decommissioned
+> and replaced by GAP (Global Account Platform) OIDC.
+>
+> Replacement references:
+> - GAP auth contract: `projects/global-account-platform/specs/contracts/http/auth-api.md`
+> - Integration spec: `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
+>
+> This file is retained for historical reference only.
+
 ## Overview
-Authentication APIs provided by auth-service.
+Authentication APIs provided by auth-service (decommissioned).
 All endpoints are routed through gateway-service.
 
 ---

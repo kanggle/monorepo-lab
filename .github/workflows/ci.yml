@@ -46,8 +46,7 @@ jobs:
         # - ecommerce-microservices-platform/* run on a per-service basis after
         #   TASK-MONO-004 added @Tag("integration") to Testcontainers-backed
         #   classes and made the default :test task Docker-free.
-        # - All 12 ecommerce backend services run (TASK-MONO-005/006/007
-        #   closed the last per-service blockers).
+        # - 11 ecommerce backend services run (auth-service removed by TASK-BE-132).
         # Use :check (not :test) on every entry — matches the wms style, and
         # picks up jacoco / lint where defined.
         run: >-
@@ -65,7 +64,6 @@ jobs:
           :projects:wms-platform:apps:master-service:check
           :projects:wms-platform:apps:notification-service:check
           :projects:wms-platform:apps:admin-service:check
-          :projects:ecommerce-microservices-platform:apps:auth-service:check
           :projects:ecommerce-microservices-platform:apps:batch-worker:check
           :projects:ecommerce-microservices-platform:apps:gateway-service:check
           :projects:ecommerce-microservices-platform:apps:notification-service:check
@@ -178,9 +176,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build ecommerce boot jars
+        # auth-service excluded by TASK-BE-132 — decommissioned, not in settings.gradle.
         run: >-
           ./gradlew
-          :projects:ecommerce-microservices-platform:apps:auth-service:bootJar
           :projects:ecommerce-microservices-platform:apps:batch-worker:bootJar
           :projects:ecommerce-microservices-platform:apps:gateway-service:bootJar
           :projects:ecommerce-microservices-platform:apps:notification-service:bootJar
@@ -199,11 +197,11 @@ jobs:
         with:
           name: ecommerce-boot-jars
           # upload-artifact@v4 strips the longest common prefix from multi-path
-          # uploads. All 12 paths share `projects/ecommerce-microservices-platform/apps/`
+          # uploads. All 11 paths share `projects/ecommerce-microservices-platform/apps/`
           # so the artifact root contains `<service>/build/libs/<service>.jar`.
           # The frontend-e2e job restores them to their canonical locations.
+          # auth-service excluded by TASK-BE-132 — decommissioned.
           path: |
-            projects/ecommerce-microservices-platform/apps/auth-service/build/libs/auth-service.jar
             projects/ecommerce-microservices-platform/apps/batch-worker/build/libs/batch-worker.jar
             projects/ecommerce-microservices-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/ecommerce-microservices-platform/apps/notification-service/build/libs/notification-service.jar
@@ -577,7 +575,8 @@ jobs:
         # expects (COPY apps/<service>/build/libs/*.jar app.jar).
         working-directory: ${{ github.workspace }}
         run: |
-          services=(auth-service batch-worker gateway-service notification-service \
+          # auth-service excluded by TASK-BE-132 — decommissioned.
+          services=(batch-worker gateway-service notification-service \
             order-service payment-service product-service promotion-service \
             review-service search-service shipping-service user-service)
           for svc in "${services[@]}"; do
@@ -590,9 +589,8 @@ jobs:
         # Synthetic test values — no real secrets needed.
         # Toss and OAuth keys are placeholders (tests stop before payment/OAuth).
         run: |
+          # JWT_SECRET and AUTH_DB_PASSWORD removed by TASK-BE-132 — auth-service decommissioned.
           cat << 'EOF' > .env
-          JWT_SECRET=ci-e2e-test-secret-key-32-chars-minimum
-          AUTH_DB_PASSWORD=ci_auth_pass
           PRODUCT_DB_PASSWORD=ci_product_pass
           ORDER_DB_PASSWORD=ci_order_pass
           PAYMENT_DB_PASSWORD=ci_payment_pass
@@ -623,12 +621,13 @@ jobs:
         # Apply the CI overlay so gateway-service is published on host
         # port 18080 (the shared Traefik stack is not started in CI).
         run: |
+          # auth-postgres and auth-service excluded by TASK-BE-132 — decommissioned.
           docker compose -f docker-compose.yml -f docker-compose.ci.yml up --build -d \
             kafka redis elasticsearch minio minio-init \
-            auth-postgres product-postgres order-postgres payment-postgres \
+            product-postgres order-postgres payment-postgres \
             user-postgres batch-postgres shipping-postgres review-postgres \
             promotion-postgres notification-postgres \
-            auth-service product-service search-service user-service \
+            product-service search-service user-service \
             order-service payment-service batch-worker shipping-service \
             review-service promotion-service notification-service \
             gateway-service

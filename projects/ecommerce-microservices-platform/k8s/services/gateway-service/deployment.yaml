@@ -49,12 +49,7 @@ spec:
                 name: gateway-service-config
             - configMapRef:
                 name: infrastructure-endpoints
-          env:
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: jwt-secret
-                  key: JWT_SECRET
+          # JWT_SECRET removed by TASK-BE-132 — gateway uses GAP JWKS, not HS256.
           volumeMounts:
             - name: tmp
               mountPath: /tmp

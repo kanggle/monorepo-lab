@@ -23,8 +23,9 @@ include(
 )
 
 // Project: ecommerce-microservices-platform
+// Note: apps:auth-service excluded from build by TASK-BE-132 (decommissioned).
+// Source code preserved in apps/auth-service/ for history. Replaced by GAP OIDC.
 include(
-    'projects:ecommerce-microservices-platform:apps:auth-service',
     'projects:ecommerce-microservices-platform:apps:batch-worker',
     'projects:ecommerce-microservices-platform:apps:gateway-service',
     'projects:ecommerce-microservices-platform:apps:notification-service',
