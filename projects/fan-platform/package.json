@@ -1,0 +1,16 @@
+{
+  "name": "fan-platform",
+  "private": true,
+  "description": "fan-platform monorepo (Next.js apps under web/, Spring Boot services under apps/).",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "e2e:smoke": "pnpm -r run e2e:smoke"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

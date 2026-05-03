@@ -1,0 +1,44 @@
+{
+  "name": "fan-platform-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "fan-platform Next.js 15 App Router frontend — feed / artists / posts / login.",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:smoke": "playwright test --config playwright.smoke.config.ts",
+    "lint": "next lint --dir src"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.60.0",
+    "next": "^15.1.0",
+    "next-auth": "5.0.0-beta.25",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "^15.1.0",
+    "jsdom": "^29.0.1",
+    "msw": "^2.7.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.4"
+  }
+}
