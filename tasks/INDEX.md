@@ -90,7 +90,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-026-gap-v0011-fan-platform-oidc-clients.md` — GAP V0011 Flyway seed 로 `fan-platform-user-flow-client` OIDC client 등록. 전제: TASK-MONO-019 (V0010) 머지 완료. fan-platform-web (TASK-FAN-FE-001) 의 production OIDC 로그인 unblock. wms client 패턴 reference.
 
 ## in-progress
 
