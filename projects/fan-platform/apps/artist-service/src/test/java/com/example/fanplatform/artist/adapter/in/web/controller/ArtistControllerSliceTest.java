@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -135,5 +136,23 @@ class ArtistControllerSliceTest {
                         .header("Authorization", "Bearer " + jwt.signCrossTenantToken("op-1")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/artists/{id}/status with status=DRAFT → 422 VALIDATION_ERROR (error envelope, not data:null)")
+    void changeStatus_draftReturnsErrorEnvelope() throws Exception {
+        String body = """
+                {"status":"DRAFT"}
+                """;
+        mockMvc.perform(patch("/api/artists/a-1/status")
+                        .header("Authorization", "Bearer " + jwt.signAdminToken("admin-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                // Error envelope (ApiErrorBody): { code, message, timestamp } — NOT { data, meta }
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.meta").doesNotExist());
     }
 }

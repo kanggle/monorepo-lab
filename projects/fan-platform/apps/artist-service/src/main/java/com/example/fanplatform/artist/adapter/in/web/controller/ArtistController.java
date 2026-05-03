@@ -16,7 +16,6 @@ import com.example.fanplatform.artist.application.port.in.UpdateArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.UpdateArtistUseCase.UpdateArtistCommand;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -72,7 +71,10 @@ public class ArtistController {
 
     /**
      * State transitions: {@code DRAFT → PUBLISHED} or
-     * {@code {DRAFT, PUBLISHED} → ARCHIVED}. Other targets fail validation.
+     * {@code {DRAFT, PUBLISHED} → ARCHIVED}. Other targets fail validation —
+     * sending {@code status: DRAFT} raises {@link IllegalArgumentException}
+     * which {@code GlobalExceptionHandler} maps to a 422 {@code VALIDATION_ERROR}
+     * envelope (consistent with the other 422 error responses).
      */
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiEnvelope<ArtistView>> changeStatus(@PathVariable String id,
@@ -82,8 +84,8 @@ public class ArtistController {
             case PUBLISHED -> ResponseEntity.ok(ApiEnvelope.of(publishUseCase.publish(actor, id)));
             case ARCHIVED -> ResponseEntity.ok(
                     ApiEnvelope.of(archiveUseCase.archive(actor, id, req.reason())));
-            case DRAFT -> ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                    .body(ApiEnvelope.of(null));
+            case DRAFT -> throw new IllegalArgumentException(
+                    "status: DRAFT is not a valid transition target");
         };
     }
 }
