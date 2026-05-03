@@ -96,6 +96,19 @@ jobs:
           :projects:global-account-platform:apps:security-service:check
           --no-daemon --stacktrace
 
+      - name: Build and check fan-platform backend (Docker-free)
+        # fan-platform integration tests carry @Tag("integration"); the e2e
+        # module's tests carry @Tag("e2e"). Both are excluded from default
+        # :test/:check tasks (see each module's build.gradle). The e2e job
+        # below runs them with Docker.
+        run: >-
+          ./gradlew
+          :projects:fan-platform:apps:gateway-service:check
+          :projects:fan-platform:apps:community-service:check
+          :projects:fan-platform:apps:artist-service:check
+          :projects:fan-platform:tests:e2e:check
+          --no-daemon --stacktrace
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -202,6 +215,51 @@ jobs:
             projects/ecommerce-microservices-platform/apps/search-service/build/libs/search-service.jar
             projects/ecommerce-microservices-platform/apps/shipping-service/build/libs/shipping-service.jar
             projects/ecommerce-microservices-platform/apps/user-service/build/libs/user-service.jar
+          retention-days: 1
+
+  fan-platform-boot-jars:
+    name: Package boot jars (fan-platform)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 15
+    # Packages the 3 fan-platform v1 backend services (gateway / community /
+    # artist) as boot jars and uploads them as a single artifact consumed by
+    # the `fan-platform-e2e` job (TASK-FAN-INT-001). Same pattern as
+    # `boot-jars` (wms) and `ecommerce-boot-jars`.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build fan-platform boot jars
+        run: >-
+          ./gradlew
+          :projects:fan-platform:apps:gateway-service:bootJar
+          :projects:fan-platform:apps:community-service:bootJar
+          :projects:fan-platform:apps:artist-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Upload fan-platform boot jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-platform-boot-jars
+          # upload-artifact@v4 strips the longest common prefix
+          # (`projects/fan-platform/apps/`) so the artifact root contains
+          # `<service>/build/libs/<service>.jar`. The fan-platform-e2e job
+          # restores them to their canonical locations.
+          path: |
+            projects/fan-platform/apps/gateway-service/build/libs/gateway-service.jar
+            projects/fan-platform/apps/community-service/build/libs/community-service.jar
+            projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
           retention-days: 1
 
   frontend-unit-tests:
@@ -661,4 +719,96 @@ jobs:
           path: |
             projects/wms-platform/apps/gateway-service/build/reports/tests/e2eTest/
             projects/wms-platform/apps/gateway-service/build/test-results/e2eTest/
+          retention-days: 7
+
+  fan-platform-e2e:
+    name: E2E (fan-platform v1 live-trio, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [build-and-test, fan-platform-boot-jars]
+    timeout-minutes: 20
+    # Live-trio e2e suite (TASK-FAN-INT-001): boots gateway-service +
+    # community-service + artist-service plus Postgres + Redis + Kafka
+    # via Testcontainers and a host-side WireMock JWKS stand-in. Mirrors
+    # the wms `e2e-tests` job's pattern: pre-build images via the Docker
+    # CLI to dodge the Docker 28 BuildKit gRPC hang in
+    # `ImageFromDockerfile`, then pass the image names via -Dfan.e2e.*
+    # so FanPlatformE2ETestBase uses GenericContainer directly.
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Download fan-platform boot jars
+        uses: actions/download-artifact@v4
+        with:
+          name: fan-platform-boot-jars
+          path: artifact-staging-fan
+
+      - name: Restore fan-platform boot jar paths
+        # actions/upload-artifact@v4 strips the longest common prefix when
+        # multiple paths are uploaded. The fan-platform-boot-jars artifact
+        # therefore contains `<service>/build/libs/<service>.jar` (with
+        # `projects/fan-platform/apps/` stripped). Move them back to their
+        # canonical locations so the gateway/community/artist Dockerfiles
+        # COPY the right path during the docker build below, AND so
+        # FanPlatformE2ETestBase's locateOptionalJar fallback can resolve
+        # them when the dev-path system properties are unset.
+        run: |
+          mkdir -p projects/fan-platform/apps/gateway-service/build/libs/
+          mkdir -p projects/fan-platform/apps/community-service/build/libs/
+          mkdir -p projects/fan-platform/apps/artist-service/build/libs/
+          mv artifact-staging-fan/gateway-service/build/libs/gateway-service.jar \
+             projects/fan-platform/apps/gateway-service/build/libs/gateway-service.jar
+          mv artifact-staging-fan/community-service/build/libs/community-service.jar \
+             projects/fan-platform/apps/community-service/build/libs/community-service.jar
+          mv artifact-staging-fan/artist-service/build/libs/artist-service.jar \
+             projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build fan-platform service images for e2e
+        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
+        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
+        run: |
+          docker build -t fan-platform-gateway-service:e2e \
+            -f projects/fan-platform/apps/gateway-service/Dockerfile \
+            projects/fan-platform/apps/gateway-service/
+          docker build -t fan-platform-community-service:e2e \
+            -f projects/fan-platform/apps/community-service/Dockerfile \
+            projects/fan-platform/apps/community-service/
+          docker build -t fan-platform-artist-service:e2e \
+            -f projects/fan-platform/apps/artist-service/Dockerfile \
+            projects/fan-platform/apps/artist-service/
+
+      - name: Run fan-platform live-trio e2e suite
+        run: >-
+          ./gradlew
+          :projects:fan-platform:tests:e2e:e2eTest
+          -x :projects:fan-platform:apps:gateway-service:bootJar
+          -x :projects:fan-platform:apps:community-service:bootJar
+          -x :projects:fan-platform:apps:artist-service:bootJar
+          -Dfan.e2e.gatewayImage=fan-platform-gateway-service:e2e
+          -Dfan.e2e.communityImage=fan-platform-community-service:e2e
+          -Dfan.e2e.artistImage=fan-platform-artist-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload fan-platform e2e test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-platform-e2e-test-reports
+          path: |
+            projects/fan-platform/tests/e2e/build/reports/tests/e2eTest/
+            projects/fan-platform/tests/e2e/build/test-results/e2eTest/
           retention-days: 7
