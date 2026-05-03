@@ -90,7 +90,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-026-gap-v0011-fan-platform-oidc-clients.md` — GAP V0011 Flyway seed 로 `fan-platform-user-flow-client` OIDC client 등록. 전제: TASK-MONO-019 (V0010) 머지 완료. fan-platform-web (TASK-FAN-FE-001) 의 production OIDC 로그인 unblock. wms client 패턴 reference.
+(empty)
 
 ## in-progress
 
@@ -128,3 +128,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-023e-community-jpa-test-isolation.md` — `@AfterEach deleteAll()` 추가 (CommentJpaRepository / ReactionJpaRepository). `TransactionTemplate.executeWithoutResult` 가 commit 하므로 isolation 누수. test-only 변경 (frozen-policy 준수). PR #119 머지. 2026-05-03.
 - `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2** 완료. ecommerce / wms / GAP 의 docker-compose 를 hostname routing 으로 마이그레이션. 모든 host port 제거 + Traefik 라벨 (web.ecommerce.local / admin.ecommerce.local / kafka.wms.local 등). CI overlay (`docker-compose.ci.yml`) + bootrun overlay (`docker-compose.bootrun.yml`) 신설. PR #129 머지. 2026-05-03.
 - `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` `BaseEventPublisher.eventId` v4 → v7 마이그레이션. `UuidV7` 이미 `libs:java-common/.../id/` 에 존재 (재발견) — 1줄 변경 + 단위 테스트 2건. 5 영향 서비스 모두 PASS. PR #130 머지. 2026-05-03.
+- `TASK-MONO-026-gap-v0011-fan-platform-oidc-clients.md` — GAP V0011 Flyway seed 로 `fan-platform-user-flow-client` 등록 (PKCE confidential, dev secret = `fan-platform-dev`). auth-api.md / gap-integration.md / .env.example 갱신. v2 internal-services-client 는 deferred. PR #135 머지. 2026-05-03.
