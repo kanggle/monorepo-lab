@@ -101,7 +101,8 @@ public class SliceTestSecurityConfig {
                         .requestMatchers(HttpMethod.POST,   "/api/artist-groups/**", "/api/artist-groups").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.PATCH,  "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.DELETE, "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
-                        .requestMatchers(HttpMethod.PUT,    "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.POST,   "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.PATCH,  "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
                         // reads — any authenticated caller
                         .requestMatchers(HttpMethod.GET,    "/api/artists/**", "/api/artists").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/artist-groups/**", "/api/artist-groups").authenticated()

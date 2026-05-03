@@ -4,7 +4,9 @@ import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotPublishedException;
+import com.example.fanplatform.artist.application.exception.FandomAlreadyExistsException;
 import com.example.fanplatform.artist.application.exception.FandomNotFoundException;
+import com.example.fanplatform.artist.application.port.in.CreateFandomUseCase;
 import com.example.fanplatform.artist.application.port.in.FandomView;
 import com.example.fanplatform.artist.application.port.in.GetFandomUseCase;
 import com.example.fanplatform.artist.application.port.in.UpdateFandomUseCase;
@@ -17,25 +19,27 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
 /**
- * PUT-style upsert for the fandom aggregate. Per task spec § Edge Cases:
+ * Fandom application service. Per task spec § Edge Cases:
  * <ul>
- *   <li>artist:fandom = 1:1 (rejected only on create — update is fine)</li>
- *   <li>fandom can only be created/updated when the artist is PUBLISHED</li>
+ *   <li>artist:fandom = 1:1 (second create -> 422 FANDOM_ALREADY_EXISTS)</li>
+ *   <li>fandom can only be created when the artist is PUBLISHED</li>
+ *   <li>update against a non-existing fandom -> 404 FANDOM_NOT_FOUND</li>
  * </ul>
+ *
+ * <p>Create and update are split (POST + PATCH respectively) so the
+ * {@code FANDOM_ALREADY_EXISTS} path is reachable.
  */
 @Service
 @RequiredArgsConstructor
-public class FandomService implements UpdateFandomUseCase, GetFandomUseCase {
+public class FandomService implements CreateFandomUseCase, UpdateFandomUseCase, GetFandomUseCase {
 
     private final FandomRepository fandomRepository;
     private final ArtistRepository artistRepository;
 
     @Override
     @Transactional
-    public FandomView upsert(UpdateFandomCommand cmd) {
+    public FandomView create(CreateFandomCommand cmd) {
         requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
         ArtistId aid = parseArtistId(cmd.artistId());
@@ -45,18 +49,31 @@ public class FandomService implements UpdateFandomUseCase, GetFandomUseCase {
         if (!artist.isPublished()) {
             throw new ArtistNotPublishedException(cmd.artistId());
         }
-
-        Optional<Fandom> existing = fandomRepository.findByArtistId(aid, tenantId);
-        Fandom saved;
-        if (existing.isPresent()) {
-            Fandom fandom = existing.get();
-            fandom.update(cmd.fandomName(), cmd.colorHex(), cmd.foundedAt(), cmd.slogan());
-            saved = fandomRepository.update(fandom);
-        } else {
-            Fandom fandom = Fandom.create(aid, tenantId, cmd.fandomName(), cmd.colorHex(),
-                    cmd.foundedAt(), cmd.slogan());
-            saved = fandomRepository.insert(fandom);
+        if (fandomRepository.findByArtistId(aid, tenantId).isPresent()) {
+            throw new FandomAlreadyExistsException(cmd.artistId());
         }
+        Fandom fandom = Fandom.create(aid, tenantId, cmd.fandomName(), cmd.colorHex(),
+                cmd.foundedAt(), cmd.slogan());
+        Fandom saved = fandomRepository.insert(fandom);
+        return FandomView.from(saved);
+    }
+
+    @Override
+    @Transactional
+    public FandomView update(UpdateFandomCommand cmd) {
+        requireAdmin(cmd.actor());
+        String tenantId = cmd.actor().tenantId();
+        ArtistId aid = parseArtistId(cmd.artistId());
+
+        Artist artist = artistRepository.findById(aid, tenantId)
+                .orElseThrow(() -> new ArtistNotFoundException(cmd.artistId()));
+        if (!artist.isPublished()) {
+            throw new ArtistNotPublishedException(cmd.artistId());
+        }
+        Fandom fandom = fandomRepository.findByArtistId(aid, tenantId)
+                .orElseThrow(() -> new FandomNotFoundException(cmd.artistId()));
+        fandom.update(cmd.fandomName(), cmd.colorHex(), cmd.foundedAt(), cmd.slogan());
+        Fandom saved = fandomRepository.update(fandom);
         return FandomView.from(saved);
     }
 

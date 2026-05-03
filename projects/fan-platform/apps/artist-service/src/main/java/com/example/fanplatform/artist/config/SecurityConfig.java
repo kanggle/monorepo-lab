@@ -33,7 +33,7 @@ import java.time.Instant;
  *   <li>{@code /actuator/health}, {@code /actuator/info}, {@code /actuator/prometheus} — public</li>
  *   <li>{@code GET /api/artists/**}, {@code GET /api/artist-groups/**}, {@code GET /api/fandoms/**}
  *       — bearer token required, any role</li>
- *   <li>{@code POST/PATCH/DELETE/PUT} on {@code /api/artists/**}, {@code /api/artist-groups/**},
+ *   <li>{@code POST/PATCH/DELETE} on {@code /api/artists/**}, {@code /api/artist-groups/**},
  *       {@code /api/fandoms/**} — admin-tier role required
  *       ({@code ROLE_ADMIN}, {@code ROLE_OPERATOR}, {@code ROLE_SUPER_ADMIN})</li>
  *   <li>everything else — denied</li>
@@ -73,7 +73,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,   "/api/artist-groups/**", "/api/artist-groups").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.PATCH,  "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.DELETE, "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
-                        .requestMatchers(HttpMethod.PUT,    "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.POST,   "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.PATCH,  "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
                         // Reads — any authenticated caller in the same tenant.
                         .requestMatchers(HttpMethod.GET,    "/api/artists/**",       "/api/artists").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/artist-groups/**", "/api/artist-groups").authenticated()

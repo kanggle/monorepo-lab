@@ -4,7 +4,7 @@
 > with `tenant_id ∈ { fan-platform, * }`. Tokens with any other tenant value
 > get 403 `TENANT_FORBIDDEN`.
 >
-> All mutating endpoints (POST / PATCH / DELETE / PUT) additionally require an
+> All mutating endpoints (POST / PATCH / DELETE) additionally require an
 > admin-tier role: `ADMIN`, `OPERATOR`, or `SUPER_ADMIN`. Non-admin callers
 > receive 403 `FORBIDDEN`. Read endpoints accept any authenticated tenant
 > member.
@@ -303,11 +303,32 @@ Response 200:
 
 Failures: 401, 404 FANDOM_NOT_FOUND.
 
-### `PUT /api/fandoms/{artistId}` — Upsert fandom
+### `POST /api/fandoms/{artistId}` — Create fandom
 
-Auth: admin role. Creates the fandom on first call (artist must be
-PUBLISHED — 422 ARTIST_NOT_PUBLISHED otherwise) or updates fields on
-subsequent calls.
+Auth: admin role. Creates the single fandom for the artist. The artist must
+already be PUBLISHED — 422 `ARTIST_NOT_PUBLISHED` otherwise. If a fandom
+already exists for that artist, 422 `FANDOM_ALREADY_EXISTS` (artist:fandom
+is 1:1 — subsequent edits go through PATCH).
+
+Request:
+```json
+{
+  "fandomName": "string (1..120)",
+  "colorHex": "#RRGGBB (optional)",
+  "foundedAt": "YYYY-MM-DD (optional)",
+  "slogan": "string (max 200, optional)"
+}
+```
+
+Response 201: same shape as GET.
+
+Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND,
+422 ARTIST_NOT_PUBLISHED, 422 FANDOM_ALREADY_EXISTS, 422 VALIDATION_ERROR.
+
+### `PATCH /api/fandoms/{artistId}` — Update fandom
+
+Auth: admin role. Updates the existing fandom for the artist. If no fandom
+exists, 404 `FANDOM_NOT_FOUND` (use POST first).
 
 Request:
 ```json
@@ -321,7 +342,7 @@ Request:
 
 Response 200: same shape as GET.
 
-Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND,
+Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 FANDOM_NOT_FOUND,
 422 ARTIST_NOT_PUBLISHED, 422 VALIDATION_ERROR.
 
 ---

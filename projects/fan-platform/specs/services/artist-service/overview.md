@@ -41,7 +41,8 @@
 | POST | `/api/artist-groups/{id}/members` | 멤버 추가 | bearer + ADMIN |
 | DELETE | `/api/artist-groups/{id}/members/{artistId}` | 멤버 탈퇴 (left_at + FORMER_MEMBER) | bearer + ADMIN |
 | GET | `/api/fandoms/{artistId}` | 팬덤 조회 | bearer |
-| PUT | `/api/fandoms/{artistId}` | 팬덤 upsert (artist must be PUBLISHED) | bearer + ADMIN |
+| POST | `/api/fandoms/{artistId}` | 팬덤 생성 (artist must be PUBLISHED, 1:1) | bearer + ADMIN |
+| PATCH | `/api/fandoms/{artistId}` | 팬덤 수정 (404 if no fandom yet) | bearer + ADMIN |
 
 `/actuator/health`, `/actuator/info`, `/actuator/prometheus` 는 인증 없이 접근.
 
