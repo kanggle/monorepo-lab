@@ -1,0 +1,29 @@
+# =============================================================================
+# E-Commerce — CI overlay (frontend-e2e job, TASK-MONO-024)
+# =============================================================================
+# Purpose
+#   The shared Traefik stack (`infra/traefik/`) is not started in GitHub
+#   Actions runners — spinning up Traefik plus all 12 backends + infra exceeds
+#   the runner's memory budget. The frontend-e2e job therefore needs gateway
+#   access via a published host port, even though the production-shape
+#   docker-compose.yml uses Traefik labels and `expose:` only.
+#
+#   This overlay re-publishes only the gateway-service host port (18080)
+#   so the existing E2E setup (`webServer` + curl health probe at
+#   localhost:18080) keeps working without re-architecting the CI job.
+#
+# Usage (CI only):
+#   docker compose \
+#     -f projects/ecommerce-microservices-platform/docker-compose.yml \
+#     -f projects/ecommerce-microservices-platform/docker-compose.ci.yml \
+#     up -d
+#
+# Local developers should NOT use this overlay — use Traefik (`pnpm traefik:up`)
+# and access via http://ecommerce.local/ instead. The pnpm `ecommerce:up`
+# shortcut intentionally omits this overlay.
+# =============================================================================
+
+services:
+  gateway-service:
+    ports:
+      - "18080:8080"

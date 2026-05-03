@@ -325,10 +325,10 @@ A monorepo-root `infra/traefik/docker-compose.yml` runs Traefik once, on host po
 
 | Hostname | Project | Status |
 |---|---|---|
-| `ecommerce.local` | ecommerce-microservices-platform | (legacy `PORT_PREFIX=1` until TASK-MONO-022) |
-| `wms.local` | wms-platform | (legacy `PORT_PREFIX=2` until TASK-MONO-022) |
-| `gap.local` | global-account-platform | (legacy `PORT_PREFIX=3` until TASK-MONO-022) |
-| `fan-platform.local` | fan-platform | hostname routing from bootstrap |
+| `ecommerce.local` | ecommerce-microservices-platform | hostname routing |
+| `wms.local` | wms-platform | hostname routing |
+| `gap.local` | global-account-platform | hostname routing |
+| `fan-platform.local` | fan-platform | hostname routing |
 | `scm.local` | scm-platform | hostname routing from bootstrap |
 | `erp.local` | erp-platform | hostname routing from bootstrap |
 | `mes.local` | mes-platform | hostname routing from bootstrap |
@@ -361,15 +361,11 @@ External tools that need direct TCP access to backing services use one of:
 2. **Per-developer `docker-compose.dev.yml` overlay** — adds `ports:` for the local machine only, never committed.
 3. **Traefik TCP routing** — declare a TCP router with a unique hostname (e.g., `wms-postgres.local:5432` via `entryPoints: [postgres]` on Traefik). Documented in `docs/guides/dev-tooling.md`.
 
-### Migration window (until TASK-MONO-022)
+### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
-The three existing projects (ecommerce, wms, global-account-platform) continue using legacy `PORT_PREFIX` (1, 2, 3) until TASK-MONO-022 migrates them in one batch. Their `docker-compose.yml` retains:
+The three existing projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing — `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
 
-```yaml
-ports: ["${PORT_PREFIX:-N}XXXX:YYYY"]
-```
-
-5-digit source ports (e.g. Jaeger UI `16686`) remain unprefixed during the migration window and become Traefik-internal afterward.
+5-digit source ports (e.g. Jaeger UI `16686` in ecommerce) are kept as-is; they remain unprefixed and continue to publish on the host because collisions with other projects are unlikely in practice.
 
 ### Validation
 

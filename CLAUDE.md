@@ -253,7 +253,7 @@ See `docs/guides/` for the full commit-message convention and cross-project work
 
 When adding or modifying `docker-compose.yml` host port bindings across projects, follow the **hostname-based routing** convention. This allows arbitrarily many projects to run concurrently on one machine without host-port slot exhaustion. See [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) for the rationale.
 
-## Target pattern (after TASK-MONO-022 migration)
+## Target pattern
 
 A single shared Traefik reverse proxy occupies host ports `:80` and `:443`. Every project's gateway/frontend registers a hostname with Traefik via docker-compose labels:
 
@@ -272,13 +272,12 @@ Backing services (postgres, redis, kafka, etc.) use `expose:` without `ports:` �
 http://ecommerce.local/    → ecommerce gateway
 http://wms.local/          → wms gateway
 http://gap.local/          → global-account-platform gateway
+http://fan-platform.local/ → fan-platform gateway
 ```
 
 `*.local` hostnames map to `127.0.0.1` via the developer's hosts file or dnsmasq (one-time machine setup).
 
-## Transitional state (until TASK-MONO-022 lands)
-
-Existing projects (ecommerce, wms, global-account-platform) continue using the legacy `PORT_PREFIX` digit (1, 2, 3 respectively) until TASK-MONO-022 migrates them. Newly bootstrapped projects (fan-platform, scm, erp, mes, …) adopt the hostname convention from day one — no `PORT_PREFIX` assignment needed.
+The legacy `PORT_PREFIX` scheme has been fully retired by TASK-MONO-024. New projects must not reintroduce it.
 
 ## Database tools (DBeaver, Redis Insight, Kafka UI)
 

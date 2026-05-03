@@ -320,20 +320,28 @@ sequenceDiagram
 ### 로컬 스택 실행
 
 ```bash
-cp .env.example .env    # 값 입력
-docker-compose up -d    # Postgres, Kafka, Redis
+cp .env.example .env
+
+# bootRun 워크플로우 (host JVM 프로세스가 Postgres/Kafka/Redis 에 접근)
+pnpm wms:bootrun        # docker-compose.yml + docker-compose.bootrun.yml 동시 적용
+                        # → Postgres :25432, Kafka :29093, Redis :26379 host 포트 노출
+
+# 또는 컨테이너 풀스택 (gateway 도 컨테이너로 띄울 때 — 호스트네임 라우팅)
+bash scripts/dev-setup.sh    # *.local hosts 등록 (한 번만)
+pnpm traefik:up               # 공유 Traefik (한 번만)
+pnpm wms:up                   # gateway/services 컨테이너 + http://wms.local/
 ```
 
 ### 서비스 실행
 
 ```bash
-# 기본 포트: gateway :8080, master :8081, inventory :8082
+# 기본 포트: gateway :8080, master :8081, inventory :8082 (host JVM bootRun)
 ./gradlew :apps:gateway-service:bootRun
 ./gradlew :apps:master-service:bootRun
 ./gradlew :apps:inventory-service:bootRun
 ```
 
-> **크로스 프로젝트 포트 네임스페이스** — 서비스는 `${PORT_PREFIX:-2}XXXX` 패턴 사용; `2`는 WMS 접두사로, 다른 포트폴리오 프로젝트(예: ecommerce = `1`)와 동시에 실행 가능. 로컬에서 여러 플랫폼을 함께 띄울 때 환경 변수로 재정의하세요.
+> **크로스 프로젝트 호스트네임 규약** — TASK-MONO-024 이후 wms-platform 은 `wms.local` 호스트네임으로 Traefik 라우팅을 사용한다. 다른 포트폴리오 프로젝트와 호스트 포트 충돌 없이 동시 실행 가능. (이전의 `${PORT_PREFIX:-2}XXXX` 패턴은 폐지됨.)
 
 ### 테스트 실행
 
@@ -355,9 +363,9 @@ docker-compose up -d    # Postgres, Kafka, Redis
 ```bash
 # 스택 + 서비스 실행
 docker compose up -d                          # postgres, kafka, redis
-./gradlew :apps:gateway-service:bootRun &     # :20080
-./gradlew :apps:master-service:bootRun &      # :20081
-./gradlew :apps:inventory-service:bootRun &   # :20082
+./gradlew :apps:gateway-service:bootRun &     # :8080
+./gradlew :apps:master-service:bootRun &      # :8081
+./gradlew :apps:inventory-service:bootRun &   # :8082
 
 # JWT 취득 (IdP 설정 또는 infra/seed-token.txt 사용)
 TOKEN=$(cat infra/seed-token.txt)
@@ -366,7 +374,7 @@ H_IDEM(){ echo "-H Idempotency-Key: $(uuidgen)"; }
 H_JSON="-H Content-Type: application/json"
 
 # 1) 창고 생성 → POST /api/v1/master/warehouses
-WH=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/master/warehouses \
+WH=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:8080/api/v1/master/warehouses \
   -d '{"code":"WH-001","name":"Seoul DC","status":"ACTIVE"}' | jq -r .id)
 
 # 2) 구역, 위치, SKU 생성 (동일 패턴; specs/contracts/http/master-service-api.md 참고)
@@ -380,15 +388,15 @@ docker exec wms-kafka kafka-console-producer \
 # → Inventory + InventoryMovement(W2 원장) 기록 → 아웃박스 통해 inventory.received 발행
 
 # 4) 재고 조회 → GET /api/v1/inventory
-curl -s $H_AUTH "http://localhost:20080/api/v1/inventory?warehouseId=$WH" | jq
+curl -s $H_AUTH "http://localhost:8080/api/v1/inventory?warehouseId=$WH" | jq
 
 # 5) 재고 예약 → POST /api/v1/reservations (W4: AVAILABLE → RESERVED)
-RESV=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:20080/api/v1/reservations \
+RESV=$(curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST http://localhost:8080/api/v1/reservations \
   -d "$(cat demo/reserve-request.json)" | jq -r .id)
 
 # 6) 출고 확정 (W5: RESERVED 소비, AVAILABLE 유지)
 curl -s $H_AUTH $H_JSON $(H_IDEM) -X POST \
-  "http://localhost:20080/api/v1/reservations/$RESV/confirm" \
+  "http://localhost:8080/api/v1/reservations/$RESV/confirm" \
   -d "$(cat demo/confirm-request.json)"
 
 # 7) Kafka에 이벤트 4건 확인

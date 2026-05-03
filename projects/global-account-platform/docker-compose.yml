@@ -1,15 +1,48 @@
 # =============================================================================
 # Global Account Platform — Local Development Infrastructure
 # =============================================================================
-# Usage:
-#   docker compose up -d        — start all services
-#   docker compose down -v      — stop and remove volumes (clean state)
-#   docker compose ps           — check service status
+# Hostname-based routing (per ADR-MONO-001 Option C, TASK-MONO-024):
+#   When GAP services run as containers (e.g. via the docker-compose.e2e.yml
+#   harness or full-stack runs), gateway-service is reached via http://gap.local/.
+#   Backing services (mysql/redis/kafka/kafka-ui/observability) stay on the
+#   internal `gap-net` network and do not publish host ports.
 #
-# Port Namespace (PORT_PREFIX=3):
-#   Default host ports follow the monorepo PORT_PREFIX convention: ${PORT_PREFIX:-3}XXXX
-#   Set PORT_PREFIX=3 in .env (the default) when running global-account-platform alone.
-#   Change PORT_PREFIX if you need a custom offset (rarely needed).
+# Prerequisites (one-time setup):
+#   1. Register *.local hostnames in your hosts file:
+#        bash scripts/dev-setup.sh           # Linux/macOS
+#        .\scripts\dev-setup.ps1              # Windows (Run as Administrator)
+#   2. Start the shared Traefik stack:
+#        pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
+#
+# Services in this file (infrastructure only — application services run via
+# `./gradlew :apps:<service>:bootRun` from the host, or via the dedicated
+# docker-compose.e2e.yml harness for full-stack scenarios):
+#   mysql        — 6 databases: auth_db, account_db, security_db, admin_db,
+#                  community_db, membership_db
+#   redis        — single instance with password
+#   kafka        — KRaft single broker
+#   kafka-init   — creates 14 main + 14 DLQ topics idempotently
+#   kafka-ui     — broker / topic inspection (Traefik-routed)
+#   prometheus   — metrics scrape
+#   alertmanager — alert routing
+#   loki         — log aggregation
+#   promtail     — docker log tailer
+#   grafana      — dashboards (Traefik-routed)
+#
+# Local bootRun workflow
+#   Application services running as host JVM processes need to reach the
+#   backing containers via `localhost:<port>`. Use the optional overlay:
+#     docker compose -f projects/global-account-platform/docker-compose.yml \
+#                    -f projects/global-account-platform/docker-compose.bootrun.yml up -d
+#   The overlay re-publishes MySQL/Kafka/Redis on host ports 33306/39093/36379.
+#   See docs/guides/dev-tooling.md for ad-hoc access patterns.
+#
+# Usage:
+#   pnpm gap:up           — start everything in this compose file
+#   pnpm gap:bootrun      — start with bootRun overlay (host ports for JVM dev)
+#   pnpm gap:down         — stop containers (volumes preserved)
+#   pnpm gap:ps           — status
 # =============================================================================
 
 name: global-account-platform
@@ -22,8 +55,8 @@ services:
     image: mysql:8.0
     container_name: gap-mysql
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}3306:3306"
+    expose:
+      - "3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
@@ -42,7 +75,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # Redis 7 Alpine — single instance with password
@@ -51,8 +84,8 @@ services:
     image: redis:7-alpine
     container_name: gap-redis
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}6379:6379"
+    expose:
+      - "6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:-redispass} --appendonly yes
     volumes:
       - redis-data:/data
@@ -63,17 +96,23 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # Kafka (KRaft mode — no Zookeeper dependency)
+  # The EXTERNAL listener used to advertise localhost:<host>:9093 for bootRun
+  # access. With hostname routing the standard path is the docker-network
+  # listener (kafka:9092). When bootRun on the host needs an external listener,
+  # the docker-compose.bootrun.yml overlay re-publishes 9093 and overrides the
+  # advertised listener to localhost:39093.
   # ---------------------------------------------------------------------------
   kafka:
     image: apache/kafka:3.7.0
     container_name: gap-kafka
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}9093:9093"
+    expose:
+      - "9092"
+      - "9093"
     environment:
       # KRaft settings
       KAFKA_NODE_ID: 1
@@ -82,7 +121,7 @@ services:
       CLUSTER_ID: ${KAFKA_KRAFT_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qg}
       # Listeners
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${PORT_PREFIX:-3}9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://kafka:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -104,7 +143,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # Kafka Topic Initializer — creates 14 main + 14 DLQ topics idempotently
@@ -182,17 +221,17 @@ services:
         echo "Done."
     restart: "no"
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
-  # Kafka UI (provectuslabs/kafka-ui)
+  # Kafka UI (provectuslabs/kafka-ui) — Traefik-routed at http://kafka.gap.local/
   # ---------------------------------------------------------------------------
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     container_name: gap-kafka-ui
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}8090:8080"
+    expose:
+      - "8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: gap-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
@@ -200,6 +239,12 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.gap-kafka-ui.rule=Host(`kafka.gap.local`)"
+      - "traefik.http.routers.gap-kafka-ui.entrypoints=web"
+      - "traefik.http.services.gap-kafka-ui.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
@@ -207,7 +252,8 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - gap-network
+      - gap-net
+      - traefik-net
 
   # ---------------------------------------------------------------------------
   # Prometheus — metrics scraping (retention 2 days for local dev)
@@ -216,8 +262,8 @@ services:
     image: prom/prometheus:v2.54.1
     container_name: gap-prometheus
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}9090:9090"
+    expose:
+      - "9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -233,7 +279,7 @@ services:
       retries: 5
       start_period: 15s
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # AlertManager — routes Prometheus alerts
@@ -242,14 +288,14 @@ services:
     image: prom/alertmanager:v0.27.0
     container_name: gap-alertmanager
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}9095:9093"
+    expose:
+      - "9093"
     volumes:
       - ./infra/alertmanager:/etc/alertmanager:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # Loki — log aggregation (retention ~1 day via compactor)
@@ -258,14 +304,14 @@ services:
     image: grafana/loki:3.1.1
     container_name: gap-loki
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}3100:3100"
+    expose:
+      - "3100"
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
       - ./infra/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
   # Promtail — docker log tailer, ships to Loki
@@ -282,17 +328,18 @@ services:
     depends_on:
       - loki
     networks:
-      - gap-network
+      - gap-net
 
   # ---------------------------------------------------------------------------
-  # Grafana — dashboards (Prometheus + Loki)
+  # Grafana — dashboards (Prometheus + Loki) — Traefik-routed at
+  # http://grafana.gap.local/
   # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:11.2.0
     container_name: gap-grafana
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-3}3010:3000"
+    expose:
+      - "3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -303,11 +350,18 @@ services:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.gap-grafana.rule=Host(`grafana.gap.local`)"
+      - "traefik.http.routers.gap-grafana.entrypoints=web"
+      - "traefik.http.services.gap-grafana.loadbalancer.server.port=3000"
     depends_on:
       - prometheus
       - loki
     networks:
-      - gap-network
+      - gap-net
+      - traefik-net
 
 volumes:
   mysql-data:
@@ -319,5 +373,8 @@ volumes:
   promtail-positions:
 
 networks:
-  gap-network:
+  gap-net:
     driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net
