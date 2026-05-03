@@ -1,0 +1,50 @@
+# =============================================================================
+# Global Account Platform — bootRun overlay (TASK-MONO-024)
+# =============================================================================
+# Purpose
+#   The main docker-compose.yml exposes backing services on the docker-internal
+#   network only (per ADR-MONO-001). When developers run GAP application
+#   services as host JVM processes via `./gradlew :apps:<svc>:bootRun`, those
+#   processes need to reach MySQL / Kafka / Redis at `localhost:<port>`.
+#
+#   This overlay re-publishes the host ports the bootRun workflow expects
+#   without adding host ports to the main compose file. It is committed (unlike
+#   the per-developer ad-hoc overlay described in docs/guides/dev-tooling.md)
+#   because bootRun is GAP's primary local development pattern.
+#
+#   The dedicated `docker-compose.e2e.yml` harness (containerized full-stack
+#   smoke) remains independent and is unaffected by this overlay.
+#
+# Usage
+#   docker compose \
+#     -f projects/global-account-platform/docker-compose.yml \
+#     -f projects/global-account-platform/docker-compose.bootrun.yml up -d
+#
+#   Or via the pnpm shortcut:
+#     pnpm gap:bootrun
+#
+# Host ports re-published (legacy 3XXXX range preserved for muscle memory):
+#   33306  → mysql:3306
+#   36379  → redis:6379
+#   39093  → kafka:9093 (EXTERNAL listener)
+#
+# Note on Kafka advertised listener
+#   When the overlay is active, override KAFKA_ADVERTISED_LISTENERS so the
+#   EXTERNAL listener resolves to localhost:39093 (matching what the bootRun
+#   process sees).
+# =============================================================================
+
+services:
+  mysql:
+    ports:
+      - "33306:3306"
+
+  redis:
+    ports:
+      - "36379:6379"
+
+  kafka:
+    ports:
+      - "39093:9093"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:39093

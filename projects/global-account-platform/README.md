@@ -138,8 +138,22 @@
 - Node.js 20+ (admin-web)
 
 ### 1. Infrastructure
+
+bootRun 워크플로우 (host JVM이 MySQL/Kafka/Redis 에 접근):
+
 ```bash
-docker compose up -d mysql redis kafka kafka-init
+# host port re-publish overlay 적용 — MySQL :33306, Kafka :39093, Redis :36379
+pnpm gap:bootrun
+# 또는: docker compose -f docker-compose.yml -f docker-compose.bootrun.yml up -d \
+#         mysql redis kafka kafka-init
+```
+
+컨테이너 풀스택 (gateway 도 컨테이너; 호스트네임 라우팅):
+
+```bash
+bash scripts/dev-setup.sh    # *.local hosts 등록 (한 번만)
+pnpm traefik:up               # 공유 Traefik (한 번만)
+pnpm gap:up                   # http://gap.local/ 으로 gateway 접근
 ```
 
 ### 2. Backend Services
@@ -191,12 +205,16 @@ docker compose -f docker-compose.e2e.yml -p gap-e2e up -d --build
 
 ## Monitoring
 
+호스트네임 라우팅 (Traefik) 기준. `pnpm traefik:up` 으로 공유 Traefik 기동 후 접근.
+
 | Dashboard | URL | Description |
 |---|---|---|
-| Grafana | http://localhost:3000 | 서비스 메트릭 + 로그 |
-| Prometheus | http://localhost:9090 | 메트릭 수집/쿼리 |
-| Kafka UI | http://localhost:8090 | 토픽/컨슈머 그룹 모니터링 |
-| Alertmanager | http://localhost:9095 | 알림 관리 |
+| Grafana | http://grafana.gap.local/ | 서비스 메트릭 + 로그 |
+| Kafka UI | http://kafka.gap.local/ | 토픽/컨슈머 그룹 모니터링 |
+| Prometheus | (internal — `gap-prometheus:9090` from container) | 메트릭 수집/쿼리 |
+| Alertmanager | (internal — `gap-alertmanager:9093` from container) | 알림 라우팅 |
+
+> Prometheus / Alertmanager 는 호스트 노출이 필요 없으므로 docker network 내부 전용. 외부 접근이 필요하면 `docker exec` 또는 [docs/guides/dev-tooling.md](../../docs/guides/dev-tooling.md) 의 dev overlay 패턴 참조.
 
 ---
 

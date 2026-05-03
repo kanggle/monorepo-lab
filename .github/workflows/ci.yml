@@ -416,15 +416,23 @@ jobs:
     # Full-stack Playwright suite: docker compose starts 12 Spring Boot backends
     # + Postgres ×10 + Kafka + Redis + Elasticsearch (Nori) + MinIO; Playwright
     # webServer starts web-store via `pnpm start` pointing at the gateway on
-    # localhost:18080 (PORT_PREFIX=1 default). Observability services (Jaeger,
-    # Prometheus, AlertManager, Grafana, Loki, Promtail) are excluded to fit
-    # within the runner's 7 GB RAM. OTEL exporters in the backend services will
-    # log connection errors against the absent Jaeger endpoint; these are
-    # non-blocking and do not affect test correctness.
+    # localhost:18080 via the docker-compose.ci.yml overlay (TASK-MONO-024).
+    # Observability services (Jaeger, Prometheus, AlertManager, Grafana, Loki,
+    # Promtail) are excluded to fit within the runner's 7 GB RAM. OTEL
+    # exporters in the backend services will log connection errors against the
+    # absent Jaeger endpoint; these are non-blocking and do not affect test
+    # correctness.
+    #
+    # CI does NOT start the shared Traefik stack — spinning up Traefik plus
+    # all 12 backends + infra exceeds the runner's memory budget. Instead the
+    # CI overlay (docker-compose.ci.yml) re-publishes only gateway-service on
+    # host port 18080 so the existing webServer/health-probe wiring works
+    # without architectural change. Local developers should not use the
+    # overlay — `pnpm traefik:up` + http://ecommerce.local/ is the dev path.
     #
     # Scoped to kanggle/monorepo-lab: extracted portfolio repos have no backend
     # stack and the smoke job (frontend-e2e-smoke) covers them instead.
-    # TASK-MONO-014.
+    # TASK-MONO-014, TASK-MONO-024.
     if: github.repository == 'kanggle/monorepo-lab'
     defaults:
       run:
@@ -505,8 +513,10 @@ jobs:
         run: pnpm --filter web-store build
 
       - name: Start docker compose stack (backends + infra, no observability)
+        # Apply the CI overlay so gateway-service is published on host
+        # port 18080 (the shared Traefik stack is not started in CI).
         run: |
-          docker compose up --build -d \
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up --build -d \
             kafka redis elasticsearch minio minio-init \
             auth-postgres product-postgres order-postgres payment-postgres \
             user-postgres batch-postgres shipping-postgres review-postgres \
@@ -517,7 +527,7 @@ jobs:
             gateway-service
 
       - name: Wait for gateway health
-        # PORT_PREFIX=1 (default) → gateway host port = 18080.
+        # docker-compose.ci.yml publishes gateway-service on host port 18080.
         # Backends have start_period=360s in compose healthchecks; allow 7 min.
         run: |
           echo "Waiting for gateway-service to be healthy (up to 7 min)..."
@@ -530,7 +540,7 @@ jobs:
             sleep 10
           done
           echo "Gateway did not become healthy within 7 minutes"
-          docker compose logs --tail=50 gateway-service
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=50 gateway-service
           exit 1
 
       - name: Install Playwright browsers (chromium, with system deps)
@@ -541,7 +551,7 @@ jobs:
 
       - name: Stop docker compose stack
         if: always()
-        run: docker compose down
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
 
       - name: Upload Playwright report on failure
         if: failure()

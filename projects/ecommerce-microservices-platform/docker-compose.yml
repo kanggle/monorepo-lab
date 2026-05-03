@@ -1,45 +1,49 @@
-# ============================================================
-# 로컬 개발 전체 스택
-# 실행 전: ./gradlew bootJar
-# 실행: docker-compose up --build -d
-# ============================================================
+# =============================================================================
+# E-Commerce Microservices Platform — Local Development Infrastructure
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C, TASK-MONO-024):
+#   gateway-service is reached via http://ecommerce.local/ — Traefik routes
+#   based on Host header. No legacy host-port-prefix scheme; no host-port
+#   slot allocation across projects.
 #
-# Kafka 리스너:
-#   - Docker 내부: kafka:9092
-#   - 호스트 bootRun: localhost:9093 (KAFKA_BOOTSTRAP_SERVERS=localhost:9093)
+# Prerequisites (one-time setup):
+#   1. Register *.local hostnames in your hosts file:
+#        bash scripts/dev-setup.sh           # Linux/macOS
+#        .\scripts\dev-setup.ps1              # Windows (Run as Administrator)
+#   2. Start the shared Traefik stack:
+#        pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
 #
-# PostgreSQL 포트 (호스트):
-#   - auth-postgres    : 5432
-#   - product-postgres : 5433
-#   - order-postgres   : 5434
-#   - payment-postgres : 5435
-#   - batch-postgres   : 5436
-#   - user-postgres    : 5437
-#   - shipping-postgres: 5438
-#   - review-postgres  : 5439
-#   - promotion-postgres: 5440
-#   - notification-postgres: 5441
+# Usage:
+#   pnpm ecommerce:up      — start everything in this compose file
+#   pnpm ecommerce:down    — stop containers (volumes preserved)
+#   pnpm ecommerce:logs    — tail logs
 #
-# Frontend 포트 (호스트):
-#   - web-store        : 3000
-#   - admin-dashboard  : 3001
-# ============================================================
+# Direct DB / queue access from external tools (DBeaver, Redis Insight, ...):
+#   See docs/guides/dev-tooling.md for `docker exec` / per-developer overlay
+#   options. Backing services no longer publish host ports by default.
+#
+# Internal service URLs (docker network only):
+#   - kafka:9092, redis:6379, elasticsearch:9200, minio:9000, jaeger:4318
+#   - per-service postgres: <svc>-postgres:5432
+#   - gateway-service:8080 (entry through Traefik at http://ecommerce.local/)
+# =============================================================================
 
 services:
 
   # ──────────────────────────────────────────────
-  # 인프라 — Kafka (이중 리스너: Docker 내부 + 호스트)
+  # 인프라 — Kafka (KRaft, single broker)
   # ──────────────────────────────────────────────
   kafka:
     image: apache/kafka:3.7.0
-    container_name: kafka
+    container_name: ecommerce-kafka
     restart: unless-stopped
     environment:
       - KAFKA_NODE_ID=0
       - KAFKA_PROCESS_ROLES=controller,broker
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9093
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
@@ -50,8 +54,8 @@ services:
       - KAFKA_DEFAULT_REPLICATION_FACTOR=1
       - KAFKA_MIN_INSYNC_REPLICAS=1
       - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
-    ports:
-      - "${PORT_PREFIX:-1}9093:9094"
+    expose:
+      - "9092"
     deploy:
       resources:
         limits:
@@ -63,16 +67,18 @@ services:
       timeout: 30s
       retries: 10
       start_period: 30s
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Redis (auth-service + gateway-service 공유)
   # ──────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: ecommerce-redis
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-1}6379:6379"
+    expose:
+      - "6379"
     deploy:
       resources:
         limits:
@@ -83,6 +89,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Elasticsearch (search-service용)
@@ -92,15 +100,15 @@ services:
       context: .
       dockerfile: infra/elasticsearch/Dockerfile
     image: ecommerce-microservices-platform-elasticsearch:nori
-    container_name: elasticsearch
+    container_name: ecommerce-elasticsearch
     restart: unless-stopped
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - xpack.security.enrollment.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "${PORT_PREFIX:-1}9200:9200"
+    expose:
+      - "9200"
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     deploy:
@@ -114,6 +122,8 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — MinIO (S3 호환 객체 스토리지 — product-images)
@@ -121,15 +131,15 @@ services:
   # ──────────────────────────────────────────────
   minio:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
-    container_name: minio
+    container_name: ecommerce-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports:
-      - "${PORT_PREFIX:-1}9000:9000"
-      - "${PORT_PREFIX:-1}9001:9001"
+    expose:
+      - "9000"
+      - "9001"
     volumes:
       - minio-data:/data
     deploy:
@@ -143,6 +153,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # MinIO 부트스트랩 — 버킷 생성 + 익명 읽기 정책
@@ -150,7 +162,7 @@ services:
   # ──────────────────────────────────────────────
   minio-init:
     image: minio/mc:RELEASE.2024-10-08T09-37-26Z
-    container_name: minio-init
+    container_name: ecommerce-minio-init
     restart: "no"
     depends_on:
       minio:
@@ -167,20 +179,25 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Jaeger (분산 트레이싱)
+  # 16686 (UI) 는 5자리 호스트 포트라 prefix 무관 — 그대로 노출 유지.
+  # OTLP 수신 포트(4317/4318)는 docker network 내부 전용.
   # ──────────────────────────────────────────────
   jaeger:
     image: jaegertracing/all-in-one:latest
-    container_name: jaeger
+    container_name: ecommerce-jaeger
     restart: unless-stopped
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"
-      - "${PORT_PREFIX:-1}4317:4317"
-      - "${PORT_PREFIX:-1}4318:4318"
+    expose:
+      - "4317"
+      - "4318"
     deploy:
       resources:
         limits:
@@ -191,19 +208,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Prometheus (메트릭 수집)
   # ──────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.54.1
-    container_name: prometheus
+    container_name: ecommerce-prometheus
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
-    ports:
-      - "${PORT_PREFIX:-1}9090:9090"
+    expose:
+      - "9090"
     deploy:
       resources:
         limits:
@@ -217,13 +236,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — AlertManager (알림 관리)
   # ──────────────────────────────────────────────
   alertmanager:
     image: prom/alertmanager:v0.27.0
-    container_name: alertmanager
+    container_name: ecommerce-alertmanager
     restart: unless-stopped
     volumes:
       - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
@@ -233,8 +254,8 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.listen-address=:9093'
-    ports:
-      - "${PORT_PREFIX:-1}9094:9093"
+    expose:
+      - "9093"
     deploy:
       resources:
         limits:
@@ -245,13 +266,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Grafana (메트릭 시각화)
   # ──────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.2.0
-    container_name: grafana
+    container_name: ecommerce-grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
@@ -261,8 +284,8 @@ services:
       - ./infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - "${PORT_PREFIX:-1}3100:3000"
+    expose:
+      - "3000"
     deploy:
       resources:
         limits:
@@ -279,20 +302,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Loki (로그 집계)
   # ──────────────────────────────────────────────
   loki:
     image: grafana/loki:3.2.1
-    container_name: loki
+    container_name: ecommerce-loki
     restart: unless-stopped
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - ./infra/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
-    ports:
-      - "${PORT_PREFIX:-1}3101:3100"
+    expose:
+      - "3100"
     deploy:
       resources:
         limits:
@@ -304,13 +329,15 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 인프라 — Promtail (로그 수집 → Loki)
   # ──────────────────────────────────────────────
   promtail:
     image: grafana/promtail:3.2.1
-    container_name: promtail
+    container_name: ecommerce-promtail
     restart: unless-stopped
     command: -config.file=/etc/promtail/config.yml
     volumes:
@@ -325,20 +352,22 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
-  # 인프라 — PostgreSQL ×5
+  # 인프라 — PostgreSQL (서비스별 DB)
   # ──────────────────────────────────────────────
   auth-postgres:
     image: postgres:16-alpine
-    container_name: auth-postgres
+    container_name: ecommerce-auth-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: auth_db
       POSTGRES_USER: auth_user
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5432:5432"
+    expose:
+      - "5432"
     volumes:
       - auth-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -351,17 +380,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   product-postgres:
     image: postgres:16-alpine
-    container_name: product-postgres
+    container_name: ecommerce-product-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: product_db
       POSTGRES_USER: product_user
       POSTGRES_PASSWORD: ${PRODUCT_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5433:5432"
+    expose:
+      - "5432"
     volumes:
       - product-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -374,17 +405,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   order-postgres:
     image: postgres:16-alpine
-    container_name: order-postgres
+    container_name: ecommerce-order-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: order_db
       POSTGRES_USER: order_user
       POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5434:5432"
+    expose:
+      - "5432"
     volumes:
       - order-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -397,17 +430,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   payment-postgres:
     image: postgres:16-alpine
-    container_name: payment-postgres
+    container_name: ecommerce-payment-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: payment_db
       POSTGRES_USER: payment_user
       POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5435:5432"
+    expose:
+      - "5432"
     volumes:
       - payment-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -420,17 +455,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   user-postgres:
     image: postgres:16-alpine
-    container_name: user-postgres
+    container_name: ecommerce-user-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: user_db
       POSTGRES_USER: user_user
       POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5437:5432"
+    expose:
+      - "5432"
     volumes:
       - user-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -443,17 +480,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   batch-postgres:
     image: postgres:16-alpine
-    container_name: batch-postgres
+    container_name: ecommerce-batch-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: batch_db
       POSTGRES_USER: batch_user
       POSTGRES_PASSWORD: ${BATCH_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5436:5432"
+    expose:
+      - "5432"
     volumes:
       - batch-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -466,17 +505,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   shipping-postgres:
     image: postgres:16-alpine
-    container_name: shipping-postgres
+    container_name: ecommerce-shipping-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: shipping_db
       POSTGRES_USER: shipping_user
       POSTGRES_PASSWORD: ${SHIPPING_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5438:5432"
+    expose:
+      - "5432"
     volumes:
       - shipping-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -489,17 +530,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   review-postgres:
     image: postgres:16-alpine
-    container_name: review-postgres
+    container_name: ecommerce-review-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: review_db
       POSTGRES_USER: review_user
       POSTGRES_PASSWORD: ${REVIEW_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5439:5432"
+    expose:
+      - "5432"
     volumes:
       - review-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -512,17 +555,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   promotion-postgres:
     image: postgres:16-alpine
-    container_name: promotion-postgres
+    container_name: ecommerce-promotion-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: promotion_db
       POSTGRES_USER: promotion_user
       POSTGRES_PASSWORD: ${PROMOTION_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5440:5432"
+    expose:
+      - "5432"
     volumes:
       - promotion-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -535,17 +580,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   notification-postgres:
     image: postgres:16-alpine
-    container_name: notification-postgres
+    container_name: ecommerce-notification-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: notification_db
       POSTGRES_USER: notification_user
       POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-    ports:
-      - "${PORT_PREFIX:-1}5441:5432"
+    expose:
+      - "5432"
     volumes:
       - notification-postgres-data:/var/lib/postgresql/data
     deploy:
@@ -558,6 +605,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ecommerce-net
 
   # ──────────────────────────────────────────────
   # 백엔드 서비스
@@ -566,7 +615,7 @@ services:
     build:
       context: .
       dockerfile: apps/auth-service/Dockerfile
-    container_name: auth-service
+    container_name: ecommerce-auth-service
     init: true
     restart: unless-stopped
     environment:
@@ -596,8 +645,8 @@ services:
       - NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
       - OAUTH_CALLBACK_ALLOWLIST=${OAUTH_CALLBACK_ALLOWLIST}
       - ADMIN_INITIAL_PASSWORD=${ADMIN_INITIAL_PASSWORD:-}
-    ports:
-      - "${PORT_PREFIX:-1}8081:8081"
+    expose:
+      - "8081"
     deploy:
       resources:
         limits:
@@ -616,12 +665,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   product-service:
     build:
       context: .
       dockerfile: apps/product-service/Dockerfile
-    container_name: product-service
+    container_name: ecommerce-product-service
     init: true
     restart: unless-stopped
     environment:
@@ -641,8 +692,8 @@ services:
       - S3_ENDPOINT=http://minio:9000
       - S3_BUCKET_PRODUCT_IMAGES=firstproject-local-product-images
       - CDN_BASE_URL=http://localhost:9000
-    ports:
-      - "${PORT_PREFIX:-1}8082:8082"
+    expose:
+      - "8082"
     deploy:
       resources:
         limits:
@@ -663,12 +714,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   search-service:
     build:
       context: .
       dockerfile: apps/search-service/Dockerfile
-    container_name: search-service
+    container_name: ecommerce-search-service
     init: true
     restart: unless-stopped
     environment:
@@ -681,8 +734,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8085:8085"
+    expose:
+      - "8085"
     deploy:
       resources:
         limits:
@@ -699,12 +752,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   user-service:
     build:
       context: .
       dockerfile: apps/user-service/Dockerfile
-    container_name: user-service
+    container_name: ecommerce-user-service
     init: true
     restart: unless-stopped
     environment:
@@ -720,8 +775,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8084:8084"
+    expose:
+      - "8084"
     deploy:
       resources:
         limits:
@@ -738,12 +793,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   order-service:
     build:
       context: .
       dockerfile: apps/order-service/Dockerfile
-    container_name: order-service
+    container_name: ecommerce-order-service
     init: true
     restart: unless-stopped
     environment:
@@ -758,8 +815,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8086:8086"
+    expose:
+      - "8086"
     deploy:
       resources:
         limits:
@@ -776,12 +833,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   payment-service:
     build:
       context: .
       dockerfile: apps/payment-service/Dockerfile
-    container_name: payment-service
+    container_name: ecommerce-payment-service
     init: true
     restart: unless-stopped
     environment:
@@ -797,8 +856,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8087:8087"
+    expose:
+      - "8087"
     deploy:
       resources:
         limits:
@@ -815,12 +874,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   batch-worker:
     build:
       context: .
       dockerfile: apps/batch-worker/Dockerfile
-    container_name: batch-worker
+    container_name: ecommerce-batch-worker
     init: true
     restart: unless-stopped
     environment:
@@ -835,8 +896,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8088:8088"
+    expose:
+      - "8088"
     deploy:
       resources:
         limits:
@@ -853,12 +914,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   shipping-service:
     build:
       context: .
       dockerfile: apps/shipping-service/Dockerfile
-    container_name: shipping-service
+    container_name: ecommerce-shipping-service
     init: true
     restart: unless-stopped
     environment:
@@ -873,8 +936,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8090:8090"
+    expose:
+      - "8090"
     deploy:
       resources:
         limits:
@@ -891,12 +954,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   review-service:
     build:
       context: .
       dockerfile: apps/review-service/Dockerfile
-    container_name: review-service
+    container_name: ecommerce-review-service
     init: true
     restart: unless-stopped
     environment:
@@ -912,8 +977,8 @@ services:
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
       - ORDER_SERVICE_URL=http://order-service:8086
-    ports:
-      - "${PORT_PREFIX:-1}8091:8091"
+    expose:
+      - "8091"
     deploy:
       resources:
         limits:
@@ -930,12 +995,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   promotion-service:
     build:
       context: .
       dockerfile: apps/promotion-service/Dockerfile
-    container_name: promotion-service
+    container_name: ecommerce-promotion-service
     init: true
     restart: unless-stopped
     environment:
@@ -950,8 +1017,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8092:8092"
+    expose:
+      - "8092"
     deploy:
       resources:
         limits:
@@ -968,12 +1035,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   notification-service:
     build:
       context: .
       dockerfile: apps/notification-service/Dockerfile
-    container_name: notification-service
+    container_name: ecommerce-notification-service
     init: true
     restart: unless-stopped
     environment:
@@ -988,8 +1057,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8093:8093"
+    expose:
+      - "8093"
     deploy:
       resources:
         limits:
@@ -1006,12 +1075,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
 
   gateway-service:
     build:
       context: .
       dockerfile: apps/gateway-service/Dockerfile
-    container_name: gateway-service
+    container_name: ecommerce-gateway-service
     init: true
     restart: unless-stopped
     environment:
@@ -1036,8 +1107,8 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
-    ports:
-      - "${PORT_PREFIX:-1}8080:8080"
+    expose:
+      - "8080"
     deploy:
       resources:
         limits:
@@ -1066,30 +1137,42 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.ecommerce.rule=Host(`ecommerce.local`)"
+      - "traefik.http.routers.ecommerce.entrypoints=web"
+      - "traefik.http.services.ecommerce.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 360s
+    networks:
+      - ecommerce-net
+      - traefik-net
 
   # ──────────────────────────────────────────────
   # 프론트엔드 애플리케이션
+  # web-store / admin-dashboard 는 Traefik 아래의 별도 서브도메인으로 노출.
+  # NEXT_PUBLIC_API_URL 은 브라우저에서 접근하는 절대 URL 이므로
+  # Traefik 진입점인 http://ecommerce.local 로 지정한다.
   # ──────────────────────────────────────────────
   web-store:
     build:
       context: .
       dockerfile: apps/web-store/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:${PORT_PREFIX:-}8080
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://ecommerce.local}
         - NEXT_PUBLIC_TOSS_CLIENT_KEY=${NEXT_PUBLIC_TOSS_CLIENT_KEY}
-    container_name: web-store
+    container_name: ecommerce-web-store
     init: true
     restart: unless-stopped
     environment:
       - API_URL_INTERNAL=http://gateway-service:8080
-    ports:
-      - "${PORT_PREFIX:-1}3000:3000"
+    expose:
+      - "3000"
     deploy:
       resources:
         limits:
@@ -1098,25 +1181,34 @@ services:
     depends_on:
       gateway-service:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.ecommerce-web.rule=Host(`web.ecommerce.local`)"
+      - "traefik.http.routers.ecommerce-web.entrypoints=web"
+      - "traefik.http.services.ecommerce-web.loadbalancer.server.port=3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3000/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - ecommerce-net
+      - traefik-net
 
   admin-dashboard:
     build:
       context: .
       dockerfile: apps/admin-dashboard/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:${PORT_PREFIX:-}8080
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://ecommerce.local}
         - NEXT_PUBLIC_USE_MOCK=true
-    container_name: admin-dashboard
+    container_name: ecommerce-admin-dashboard
     init: true
     restart: unless-stopped
-    ports:
-      - "${PORT_PREFIX:-1}3001:3001"
+    expose:
+      - "3001"
     deploy:
       resources:
         limits:
@@ -1125,12 +1217,21 @@ services:
     depends_on:
       gateway-service:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.ecommerce-admin.rule=Host(`admin.ecommerce.local`)"
+      - "traefik.http.routers.ecommerce-admin.entrypoints=web"
+      - "traefik.http.services.ecommerce-admin.loadbalancer.server.port=3001"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3001/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - ecommerce-net
+      - traefik-net
 
 volumes:
   auth-postgres-data:
@@ -1147,3 +1248,10 @@ volumes:
   loki-data:
   promtail-data:
   minio-data:
+
+networks:
+  ecommerce-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net

@@ -1,0 +1,47 @@
+# =============================================================================
+# WMS Platform — bootRun overlay (TASK-MONO-024)
+# =============================================================================
+# Purpose
+#   The main docker-compose.yml exposes backing services on the docker-internal
+#   network only (per ADR-MONO-001). When developers run wms application
+#   services as host JVM processes via `./gradlew :apps:<svc>:bootRun`, those
+#   processes need to reach Postgres / Kafka / Redis at `localhost:<port>`.
+#
+#   This overlay re-publishes the host ports the bootRun workflow expects
+#   without adding host ports to the main compose file. It is committed (unlike
+#   the per-developer ad-hoc overlay described in docs/guides/dev-tooling.md)
+#   because bootRun is wms-platform's primary local development pattern.
+#
+# Usage
+#   docker compose \
+#     -f projects/wms-platform/docker-compose.yml \
+#     -f projects/wms-platform/docker-compose.bootrun.yml up -d
+#
+#   Or via the pnpm shortcut:
+#     pnpm wms:bootrun
+#
+# Host ports re-published (legacy 2XXXX range preserved for muscle memory):
+#   25432  → postgres:5432
+#   26379  → redis:6379
+#   29093  → kafka:9093 (EXTERNAL listener)
+#
+# Note on Kafka advertised listener
+#   When the overlay is active, override KAFKA_ADVERTISED_LISTENERS so the
+#   EXTERNAL listener resolves to localhost:29093 (matching what the bootRun
+#   process sees).
+# =============================================================================
+
+services:
+  postgres:
+    ports:
+      - "25432:5432"
+
+  redis:
+    ports:
+      - "26379:6379"
+
+  kafka:
+    ports:
+      - "29093:9093"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29093
