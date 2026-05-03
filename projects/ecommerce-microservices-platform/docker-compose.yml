@@ -1088,7 +1088,18 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_JWKS_URI=http://auth-service:8081/auth/.well-known/jwks.json
+      # TASK-MONO-027: ecommerce gateway is now a GAP OIDC consumer.
+      # GAP joins the shared traefik-net network so http://gap.local works
+      # from inside the ecommerce stack (mirrors fan-platform compose,
+      # TASK-MONO-026). JWT_JWKS_URI is kept for backward-compat with the
+      # e2e harness; the production lookup comes from OIDC_ISSUER_URL.
+      # The legacy 'auth-service' JWKS path is retired here — auth-service
+      # is still alive but is no longer the source of truth for tokens
+      # (TASK-BE-132 completes the auth-service decommission).
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-http://gap.local}
+      - JWT_JWKS_URI=${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      - OIDC_REQUIRED_TENANT_ID=${OIDC_REQUIRED_TENANT_ID:-ecommerce}
+      - OIDC_ALLOWED_ISSUERS=${OIDC_ALLOWED_ISSUERS:-http://gap.local,global-account-platform}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - AUTH_SERVICE_URL=http://auth-service:8081
       - PRODUCT_SERVICE_URL=http://product-service:8082
@@ -1117,8 +1128,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      auth-service:
-        condition: service_healthy
+      # TASK-MONO-027: auth-service removed from gateway's depends_on —
+      # the gateway no longer fetches JWKS or tokens from auth-service.
+      # auth-service is still kept in this compose for token issuance to
+      # legacy clients until TASK-BE-132 retires it.
       user-service:
         condition: service_healthy
       product-service:

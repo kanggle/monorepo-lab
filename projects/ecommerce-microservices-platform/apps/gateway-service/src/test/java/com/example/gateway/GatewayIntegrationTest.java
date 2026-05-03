@@ -231,4 +231,91 @@ class GatewayIntegrationTest {
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("UP");
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-MONO-027 — TenantClaimValidator + AllowedIssuersValidator scenarios
+    //
+    // The integration profile (application-integration-test.yml) configures:
+    //   ecommerce.oauth2.allowed-issuers = https://test.local/issuer,
+    //                                      global-account-platform
+    //   ecommerce.oauth2.required-tenant-id = ecommerce
+    //
+    // Spring Security WebFlux surfaces all JWT validation failures
+    // (issuer mismatch, tenant_id mismatch, missing claim) as 401 via
+    // ServerAuthenticationEntryPoint — not 403 — because the token is
+    // rejected before authentication completes.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("tenant_id=ecommerce + iss=test.local → JWT 필터 통과 (다운스트림 불가 → 5xx)")
+    void protectedRoute_ecommerceTenant_passesJwtFilter() {
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "https://test.local/issuer", "ecommerce");
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("tenant_id=wms (cross-tenant) → 401")
+    void protectedRoute_crossTenantWms_returns401() {
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "https://test.local/issuer", "wms");
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    @Test
+    @DisplayName("tenant_id 미설정 → 401")
+    void protectedRoute_missingTenant_returns401() {
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "https://test.local/issuer", null);
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    @Test
+    @DisplayName("iss=global-account-platform (legacy) + tenant_id=ecommerce → 통과")
+    void protectedRoute_legacyIssuer_passesJwtFilter() {
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "global-account-platform", "ecommerce");
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("iss=https://attacker.example.com → 401")
+    void protectedRoute_attackerIssuer_returns401() {
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "https://attacker.example.com", "ecommerce");
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
 }

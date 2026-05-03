@@ -2,11 +2,24 @@ spring:
   application:
     name: gateway-service
 
+  # TASK-MONO-027: Standard OAuth2 Resource Server backed by GAP's JWKS.
+  # Mirrors the wms-platform pattern (TASK-MONO-019) so the GAP issuer URL
+  # discovery + JWKS fetch + tenant/issuer validation chain are shared
+  # across consumer projects.
   security:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${JWT_JWKS_URI:http://localhost:8088/.well-known/jwks.json}
+          # OIDC issuer for SAS-issued tokens (GAP auth-service via Traefik
+          # at http://gap.local). The issuer-uri triggers Spring Security's
+          # automatic /.well-known/openid-configuration discovery.
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          # Default port 8088 avoids a self-referential loop when the gateway
+          # binds to 8080. Real environments set OIDC_JWK_SET_URI / JWT_JWKS_URI
+          # to the issuer's JWKS endpoint. JWT_JWKS_URI is the legacy env var
+          # name kept for backward compatibility with the e2e harness and
+          # docker-compose envs predating TASK-MONO-027.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://localhost:8088}/oauth2/jwks}}
           audiences: ecommerce
 
   data:
@@ -164,3 +177,18 @@ management:
 
 server:
   port: 8080
+
+ecommerce:
+  # TASK-MONO-027: OIDC Resource Server validators.
+  # Consumed by OAuth2ResourceServerConfig + TenantClaimValidator +
+  # AllowedIssuersValidator. See specs/integration/gap-integration.md.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window
+    # (~2026-08-01). Both the SAS issuer (default http://gap.local) and the
+    # legacy 'global-account-platform' string must validate while the
+    # legacy path is being deprecated.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    # Tokens whose tenant_id claim does not match this value are rejected
+    # at the gateway with 403 (TENANT_FORBIDDEN). Single-tenant only — no
+    # wildcard support; cross-tenant access is blocked by design.
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:ecommerce}

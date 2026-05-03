@@ -5,6 +5,11 @@ spring:
       resourceserver:
         jwt:
           audiences: ecommerce
+          # No issuer-uri here: integration tests publish a MockWebServer-backed
+          # JWKS document (see GatewayIntegrationTest.JwksMockServer) and set
+          # jwk-set-uri via DynamicPropertySource. Setting issuer-uri would
+          # trigger /.well-known/openid-configuration discovery against the
+          # mock server which does not implement it.
 
   cloud:
     gateway:
@@ -43,3 +48,11 @@ spring:
           uri: http://localhost:19999
           predicates:
             - Path=/api/payments/**
+
+# TASK-MONO-027: validator config for the integration profile.
+# JwtTestHelper signs tokens with iss=https://test.local/issuer and
+# tenant_id=ecommerce; the validators must accept that pair.
+ecommerce:
+  oauth2:
+    allowed-issuers: https://test.local/issuer,global-account-platform
+    required-tenant-id: ecommerce
