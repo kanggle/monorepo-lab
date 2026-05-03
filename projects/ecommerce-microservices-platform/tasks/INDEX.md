@@ -74,7 +74,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-BE-132 | ecommerce auth-service 폐기 — Global Account Platform 이관 후 제거 | auth-service | code, security |
+| TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — settings.gradle / docker-compose / k8s / .env 정리 (선행: TASK-MONO-027) | auth-service, gateway-service | code, security |
+| TASK-FE-067 | web-store + admin-dashboard NextAuth provider GAP authorize cutover (선행: TASK-MONO-027) | web-store, admin-dashboard | code, security, api |
 
 ## in-progress
 

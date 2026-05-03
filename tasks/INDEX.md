@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-027-ecommerce-gap-integration.md` — ecommerce-platform 의 GAP OIDC 통합 cutover. GAP V0012 시드 (ecommerce-web-store-client + ecommerce-admin-dashboard-client + 2 scopes + tenant 등록) + ecommerce gateway-service 의 issuer-uri / jwk-set-uri / TenantClaimValidator / AllowedIssuersValidator + docker-compose env 갱신 (`OIDC_ISSUER_URL`, `OIDC_REQUIRED_TENANT_ID`, `OIDC_ALLOWED_ISSUERS`) + ecommerce/specs/integration/gap-integration.md 신설. cross-project (atomic). 선행: TASK-BE-131 (done), TASK-MONO-019 / 026 (done). 후속: TASK-BE-132 (auth-service 폐기), TASK-FE-067 (frontend OAuth cutover).
 
 ## in-progress
 
