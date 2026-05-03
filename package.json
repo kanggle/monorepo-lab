@@ -39,6 +39,14 @@
     "fan-platform:down": "docker compose --project-directory projects/fan-platform down",
     "fan-platform:ps": "docker compose --project-directory projects/fan-platform ps",
     "fan-platform:logs": "docker compose --project-directory projects/fan-platform logs -f",
-    "fan-platform:docker": "docker compose --project-directory projects/fan-platform"
+    "fan-platform:docker": "docker compose --project-directory projects/fan-platform",
+    "fan-platform:install": "pnpm --dir projects/fan-platform install",
+    "fan-platform:dev": "pnpm --dir projects/fan-platform dev",
+    "fan-platform:build": "pnpm --dir projects/fan-platform build",
+    "fan-platform:lint": "pnpm --dir projects/fan-platform lint",
+    "fan-platform:test": "pnpm --dir projects/fan-platform test",
+    "fan-platform:e2e:smoke": "pnpm --dir projects/fan-platform e2e:smoke",
+    "fan-platform:web": "pnpm --dir projects/fan-platform --filter fan-platform-web dev",
+    "fan-platform:pnpm": "pnpm --dir projects/fan-platform"
   }
 }

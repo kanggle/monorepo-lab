@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  @apply bg-ink-50 text-ink-900;
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    @apply bg-ink-900 text-ink-50;
+  }
+}
+
+/* Tailwind line-clamp utility — Tailwind 3.4 ships line-clamp out of the box. */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+.turbo/
+coverage/
+.env
+.env.local
+.env.*.local
+playwright-report/
+playwright-report-smoke/
+test-results/
+test-results-smoke/
+*.log
+.DS_Store
