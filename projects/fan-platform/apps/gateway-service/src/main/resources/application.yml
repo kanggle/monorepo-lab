@@ -1,0 +1,129 @@
+spring:
+  application:
+    name: fan-platform-gateway-service
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # OIDC issuer for SAS-issued tokens (GAP auth-service).
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          # JWKS endpoint default. Real environments set OIDC_JWK_SET_URI to the
+          # issuer's JWKS endpoint. JWT_JWKS_URI is the legacy env var name.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/.well-known/jwks.json}}
+
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: ${CORS_ALLOWED_ORIGINS:http://fan-platform.local,http://localhost:3000}
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - X-Request-Id
+              - Idempotency-Key
+            exposedHeaders:
+              - X-Request-Id
+              - ETag
+              - Retry-After
+            maxAge: 3600
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 10s
+      routes:
+        # Placeholder routes for v1 services. community-service and artist-service
+        # are bootstrapped in TASK-FAN-BE-002 and TASK-FAN-BE-003. Until then these
+        # routes will return 503/504 — that is the expected behaviour for this
+        # bootstrap task per Edge Cases in TASK-FAN-BE-001.
+        - id: community-service
+          uri: ${COMMUNITY_SERVICE_URI:http://community-service:8080}
+          predicates:
+            - Path=/api/v1/community/**
+          filters:
+            # Global ceiling per IP — 60 req/min, bursts up to 120.
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+        - id: artist-service
+          uri: ${ARTIST_SERVICE_URI:http://artist-service:8080}
+          predicates:
+            - Path=/api/v1/artist/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.fanplatform.gateway: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-}]"
+
+fanplatform:
+  # OIDC Resource Server validators.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window:
+    # SAS issuer URL + the legacy "global-account-platform" string.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
+
+# JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable
+# at startup, instead of waiting for the first protected request. Configured per
+# TASK-FAN-BE-001 § Edge Cases ("OIDC discovery 실패 (GAP 다운) ... 30초 후에도
+# 실패하면 fail-fast"). Disable in tests via gateway.jwks.startup-probe.enabled.
+gateway:
+  jwks:
+    startup-probe:
+      enabled: ${GATEWAY_JWKS_STARTUP_PROBE_ENABLED:true}
+      timeout-seconds: ${GATEWAY_JWKS_STARTUP_PROBE_TIMEOUT_SECONDS:30}

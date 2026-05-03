@@ -1,0 +1,124 @@
+# =============================================================================
+# fan-platform — Local Development Infrastructure
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C):
+#   gateway-service is reached via http://fan-platform.local/ — Traefik routes
+#   based on Host header. No PORT_PREFIX, no host-port slot allocation.
+#
+# Prerequisites:
+#   1. Start the shared Traefik stack:  pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
+#   2. Add `127.0.0.1 fan-platform.local` to your hosts file (one-time setup)
+#
+# Services:
+#   gateway-service   — Spring Cloud Gateway, OIDC token validation, tenant gate
+#   postgres          — relational store (used by community/artist services in
+#                       subsequent tasks; gateway itself does not use Postgres)
+#   redis             — rate-limit counters (gateway), feed cache (community)
+#
+# Usage:
+#   pnpm fan-platform:up    — start everything in this compose file
+#   pnpm fan-platform:down  — stop containers (volumes preserved)
+#   pnpm fan-platform:logs  — tail logs
+# =============================================================================
+
+services:
+  gateway-service:
+    image: fan-platform/gateway-service:local
+    container_name: fan-platform-gateway
+    build:
+      context: ./apps/gateway-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_REQUIRED_TENANT_ID: fan-platform
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      COMMUNITY_SERVICE_URI: http://community-service:8080
+      ARTIST_SERVICE_URI: http://artist-service:8080
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://fan-platform.local,http://localhost:3000}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.fan-platform.rule=Host(`fan-platform.local`)"
+      - "traefik.http.routers.fan-platform.entrypoints=web"
+      - "traefik.http.services.fan-platform.loadbalancer.server.port=8080"
+    networks:
+      - fan-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Postgres 16 — pre-provisioned for downstream services (community / artist)
+  # bootstrapped in subsequent tasks. Gateway itself does not use Postgres.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: fan-platform-postgres
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
+      POSTGRES_DB: ${POSTGRES_DB:-fanplatform}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fanplatform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - fan-platform-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — rate-limit counters (gateway). Will also serve as feed cache for
+  # community-service in a subsequent task.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: fan-platform-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fan-platform-net
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  fan-platform-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net

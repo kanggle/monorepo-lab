@@ -34,6 +34,11 @@
     "traefik:up": "docker compose -f infra/traefik/docker-compose.yml up -d",
     "traefik:down": "docker compose -f infra/traefik/docker-compose.yml down",
     "traefik:ps": "docker compose -f infra/traefik/docker-compose.yml ps",
-    "traefik:logs": "docker compose -f infra/traefik/docker-compose.yml logs -f"
+    "traefik:logs": "docker compose -f infra/traefik/docker-compose.yml logs -f",
+    "fan-platform:up": "docker compose --project-directory projects/fan-platform up -d",
+    "fan-platform:down": "docker compose --project-directory projects/fan-platform down",
+    "fan-platform:ps": "docker compose --project-directory projects/fan-platform ps",
+    "fan-platform:logs": "docker compose --project-directory projects/fan-platform logs -f",
+    "fan-platform:docker": "docker compose --project-directory projects/fan-platform"
   }
 }
