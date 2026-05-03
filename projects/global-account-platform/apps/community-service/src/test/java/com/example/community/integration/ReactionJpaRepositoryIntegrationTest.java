@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import com.example.community.domain.reaction.Reaction;
 import com.example.community.infrastructure.persistence.ReactionJpaRepository;
@@ -34,6 +35,11 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @AfterEach
+    void cleanUp() {
+        reactionRepo.deleteAll();
+    }
 
     @Test
     @DisplayName("findByPostIdAndAccountId — 존재하는 리액션 조회")

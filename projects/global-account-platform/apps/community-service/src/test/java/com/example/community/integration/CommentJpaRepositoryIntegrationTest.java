@@ -1,5 +1,6 @@
 package com.example.community.integration;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import com.example.community.domain.comment.Comment;
 import com.example.community.infrastructure.persistence.CommentJpaRepository;
@@ -36,6 +37,11 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @AfterEach
+    void cleanUp() {
+        commentRepo.deleteAll();
+    }
 
     @Test
     @DisplayName("countByPostIdAndDeletedAtIsNull — 활성 댓글만 카운트, soft-delete 제외")
