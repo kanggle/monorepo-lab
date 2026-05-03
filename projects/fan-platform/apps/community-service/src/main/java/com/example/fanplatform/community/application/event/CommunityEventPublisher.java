@@ -21,6 +21,17 @@ import java.util.Map;
  * schemaVersion / partitionKey / payload}) is identical across services. The
  * relay (a {@link com.example.messaging.outbox.OutboxPollingScheduler}
  * subclass) hands rows off to Kafka.
+ *
+ * <p><strong>Topic naming convention</strong>: every Kafka topic name is the
+ * envelope's {@code eventType} field plus a {@code .v1} suffix. Example: the
+ * envelope {@code eventType="community.post.published"} is published on the
+ * topic {@code community.post.published.v1}. Consumers MUST subscribe to the
+ * suffixed topic name; the envelope's {@code eventType} stays unsuffixed for
+ * forward compatibility (a future v2 schema can be published on a new topic
+ * without re-emitting events with new envelope values). See
+ * {@code platform/event-driven-policy.md} and
+ * {@code projects/fan-platform/specs/contracts/events/community-events.md}
+ * § "Common envelope" for the canonical statement of this rule.
  */
 @Component
 public class CommunityEventPublisher extends BaseEventPublisher {

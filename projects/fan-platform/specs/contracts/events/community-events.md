@@ -24,6 +24,15 @@ Every payload (event_type-specific schema below) is wrapped by
 Idempotency key for consumers = `eventId` (UUID, persisted by
 `libs:java-messaging`'s `processed_events` table on consumer side).
 
+> **Topic naming convention.** Every Kafka topic name is the envelope's
+> `eventType` field plus a `.v1` suffix. Example: an envelope with
+> `eventType="community.post.published"` is published on the topic
+> `community.post.published.v1`. Consumers MUST subscribe to the suffixed
+> topic name; the envelope's `eventType` stays unsuffixed for forward
+> compatibility — a future v2 schema can be published on a new topic
+> (`community.post.published.v2`) without re-emitting events under a
+> different envelope value.
+
 ## Topics (`.v1` suffix per `platform/event-driven-policy.md`)
 
 | Topic | Producer trigger | Partition key | Retention (recommended) |
