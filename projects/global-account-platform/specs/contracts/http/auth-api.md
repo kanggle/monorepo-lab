@@ -248,6 +248,22 @@ revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2Authorizat
 
 ---
 
+## OAuth2 Clients
+
+Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-service OAuth client API (TASK-BE-258, pending).
+
+| Client ID | Tenant | Grant Types | PKCE | Redirect URIs | Scopes | Flyway Version |
+|---|---|---|---|---|---|---|
+| `community-service-client` | `fan-platform` | `client_credentials` | No | — | `account.read`, `membership.read` | V0009 |
+| `membership-service-client` | `fan-platform` | `client_credentials` | No | — | `account.read`, `membership.read` | V0009 |
+| `wms-user-flow-client` | `wms` | `authorization_code`, `refresh_token` | Yes | `http://localhost:9001/callback` | `openid`, `profile`, `email`, `offline_access`, `wms.*` | V0010 |
+| `wms-internal-services-client` | `wms` | `client_credentials` | No | — | `wms.*` scopes | V0010 |
+| `fan-platform-user-flow-client` | `fan-platform` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3000/api/auth/callback/gap`, `http://fan-platform.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read` | V0011 |
+
+> `fan-platform-internal-services-client` (client_credentials) is deferred to v2 — see TASK-MONO-026 Out of Scope.
+
+---
+
 ## POST /api/auth/login
 
 > **DEPRECATED since 2026-05-01 (ADR-001 D2-b). 제거 목표: 2026-08-01.**
