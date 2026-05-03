@@ -1,25 +1,33 @@
 package com.example.fanplatform.gateway.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.lettuce.core.RedisException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 /**
- * Exercises the fail-open decorator: when the underlying Redis-backed limiter emits a
- * reactive error (simulating a Redis outage), the decorator must:
+ * Exercises the fail-open decorator. The contract is intentionally narrowed:
+ *
  * <ol>
- *   <li>return {@code isAllowed = true} with sentinel header,</li>
- *   <li>increment the {@code gateway_ratelimit_redis_unavailable_total} counter.</li>
+ *   <li>Redis-class failures (connection refusal, timeout, Lettuce/Spring wrappers)
+ *       fail open with sentinel header and increment
+ *       {@code gateway_ratelimit_redis_unavailable_total}.</li>
+ *   <li>Other reactive errors propagate (do NOT fail open) and increment
+ *       {@code gateway_ratelimit_unexpected_error_total} so ops still has visibility.</li>
  * </ol>
+ *
  * See {@code platform/api-gateway-policy.md} § Rate Limiting and TASK-FAN-BE-001
  * § Implementation Notes.
  */
@@ -45,13 +53,15 @@ class FailOpenRateLimiterTest {
 
         assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
                 .isEqualTo(1.0);
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_UNEXPECTED_ERROR).count())
+                .isEqualTo(0.0);
     }
 
     @Test
-    void failsOpenOnAnyReactiveError() {
+    void failsOpenOnRedisConnectionFailure() {
         RedisRateLimiter delegate = mock(RedisRateLimiter.class);
         when(delegate.isAllowed("community-service", "k"))
-                .thenReturn(Mono.error(new RuntimeException("unexpected Lua error")));
+                .thenReturn(Mono.error(new RedisConnectionFailureException("connection refused")));
 
         MeterRegistry registry = new SimpleMeterRegistry();
         FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
@@ -62,6 +72,102 @@ class FailOpenRateLimiterTest {
         assertThat(response.isAllowed()).isTrue();
         assertThat(response.getHeaders()).containsEntry(RedisRateLimiter.REMAINING_HEADER, "-1");
         assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void failsOpenOnQueryTimeout() {
+        RedisRateLimiter delegate = mock(RedisRateLimiter.class);
+        when(delegate.isAllowed("community-service", "k"))
+                .thenReturn(Mono.error(new QueryTimeoutException("redis command timed out")));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
+
+        RateLimiter.Response response = limiter.isAllowed("community-service", "k").block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.isAllowed()).isTrue();
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void failsOpenOnLettuceRedisException() {
+        RedisRateLimiter delegate = mock(RedisRateLimiter.class);
+        when(delegate.isAllowed("community-service", "k"))
+                .thenReturn(Mono.error(new RedisException("MOVED slot")));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
+
+        RateLimiter.Response response = limiter.isAllowed("community-service", "k").block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.isAllowed()).isTrue();
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void failsOpenOnRedisSystemExceptionWrappingLettuce() {
+        // Spring frequently re-wraps Lettuce errors in RedisSystemException; the cause
+        // chain check must still recognise the failure.
+        RedisRateLimiter delegate = mock(RedisRateLimiter.class);
+        RedisSystemException wrapped = new RedisSystemException(
+                "wrapped", new RedisException("low-level redis failure"));
+        when(delegate.isAllowed("community-service", "k")).thenReturn(Mono.error(wrapped));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
+
+        RateLimiter.Response response = limiter.isAllowed("community-service", "k").block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.isAllowed()).isTrue();
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void propagatesUnknownErrorsAndIncrementsUnexpectedCounter() {
+        // A non-Redis error (e.g. programming bug, malformed Lua reply parser, NPE)
+        // MUST NOT be masked as "redis down". Propagate so SCG translates to 5xx,
+        // observability picks it up, and increment the unexpected counter.
+        RedisRateLimiter delegate = mock(RedisRateLimiter.class);
+        when(delegate.isAllowed("community-service", "k"))
+                .thenReturn(Mono.error(new RuntimeException("not redis: programming bug")));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
+
+        assertThatThrownBy(() -> limiter.isAllowed("community-service", "k").block())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("not redis: programming bug");
+
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(0.0);
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_UNEXPECTED_ERROR).count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void propagatesIllegalStateException() {
+        RedisRateLimiter delegate = mock(RedisRateLimiter.class);
+        when(delegate.isAllowed("community-service", "k"))
+                .thenReturn(Mono.error(new IllegalStateException("limiter not configured")));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(delegate, registry);
+
+        StepVerifier.create(limiter.isAllowed("community-service", "k"))
+                .expectErrorMatches(t -> t instanceof IllegalStateException
+                        && "limiter not configured".equals(t.getMessage()))
+                .verify();
+
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(0.0);
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_UNEXPECTED_ERROR).count())
                 .isEqualTo(1.0);
     }
 
@@ -82,6 +188,8 @@ class FailOpenRateLimiterTest {
         assertThat(response.isAllowed()).isTrue();
         assertThat(response.getHeaders()).containsEntry(RedisRateLimiter.REMAINING_HEADER, "42");
         assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(0.0);
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_UNEXPECTED_ERROR).count())
                 .isEqualTo(0.0);
     }
 
