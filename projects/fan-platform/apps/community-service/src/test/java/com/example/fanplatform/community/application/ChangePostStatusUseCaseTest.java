@@ -52,14 +52,35 @@ class ChangePostStatusUseCaseTest {
     }
 
     @Test
-    @DisplayName("작성자 외 일반 actor 가 transition 시도 → PermissionDeniedException")
-    void nonAuthorRejected() {
+    @DisplayName("작성자도 OPERATOR 도 아닌 actor 가 transition 시도 → PermissionDeniedException")
+    void nonAuthorNonOperatorRejected() {
         Post post = published();
         when(postRepository.findById("p1", TENANT)).thenReturn(Optional.of(post));
 
+        // Plain FAN user, not the author. resolveActor must throw before the
+        // domain state machine sees the call.
         ActorContext actor = new ActorContext("stranger", TENANT, Set.of("FAN"));
         assertThatThrownBy(() -> useCase.execute("p1", PostStatus.HIDDEN, actor, null))
                 .isInstanceOf(PermissionDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("OPERATOR 가 PUBLISHED→HIDDEN 전이 → success + 이벤트 발행")
+    void operatorCanHide() {
+        Post post = published();
+        when(postRepository.findById("p1", TENANT)).thenReturn(Optional.of(post));
+        when(postRepository.save(any(Post.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // OPERATOR with no AUTHOR relationship — exercises the post-author /
+        // OPERATOR fork in resolveActor.
+        ActorContext actor = new ActorContext("ops-1", TENANT, Set.of("OPERATOR"));
+        useCase.execute("p1", PostStatus.HIDDEN, actor, "violation");
+
+        verify(historyRepository).save(any());
+        verify(eventPublisher).publishPostStatusChanged(
+                any(String.class), any(String.class),
+                any(PostStatus.class), any(PostStatus.class),
+                any(String.class), any());
     }
 
     @Test

@@ -26,10 +26,6 @@ public class ChangePostStatusUseCase {
         Post post = postRepository.findById(postId, actor.tenantId())
                 .orElseThrow(() -> new PostNotFoundException(postId));
         ActorType actorType = resolveActor(post, actor);
-        if (actorType == ActorType.AUTHOR
-                && !post.getAuthorAccountId().equals(actor.accountId())) {
-            throw new PermissionDeniedException("Only the author can change this post's status");
-        }
         PostStatus previous = post.changeStatus(target, actorType);
         Post saved = postRepository.save(post);
         historyRepository.save(PostStatusHistoryEntry.record(
@@ -40,9 +36,21 @@ public class ChangePostStatusUseCase {
                 previous, target, actor.accountId(), saved.getUpdatedAt());
     }
 
+    /**
+     * Resolves the actor type, fail-closed: callers who are neither the post's
+     * author nor an OPERATOR are rejected with {@link PermissionDeniedException}.
+     * Returning a sentinel here would force the caller to do a redundant
+     * self-check; we throw eagerly instead so the access-control invariant lives
+     * in one place.
+     */
     private static ActorType resolveActor(Post post, ActorContext actor) {
-        if (actor.isOperator()) return ActorType.OPERATOR;
-        if (post.getAuthorAccountId().equals(actor.accountId())) return ActorType.AUTHOR;
-        return ActorType.AUTHOR; // will fail the AUTHOR-self check above
+        if (post.getAuthorAccountId().equals(actor.accountId())) {
+            return ActorType.AUTHOR;
+        }
+        if (actor.isOperator()) {
+            return ActorType.OPERATOR;
+        }
+        throw new PermissionDeniedException(
+                "Only the author or an operator can change this post's status");
     }
 }
