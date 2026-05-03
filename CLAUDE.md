@@ -154,7 +154,7 @@ For any implementation task:
 
 3. Identify the target project (see "Identify the Target Project" above)
 4. Read the target project's `PROJECT.md` and load the rule layers determined by its `domain` and `traits` (see "Project Classification" above)
-5. Read the target task in `<project>/tasks/ready/`
+5. Read the target task in `<project>/tasks/ready/`. Before committing to a task, grep its spec body and the project's `tasks/INDEX.md` for explicit dependency expressions (`선행`, `후속`, `depends on`, `blocked by`, `prerequisite`, `전제`) so that you don't implement on top of undefined contracts. If the candidate is referenced elsewhere as a `선행` / `prerequisite` of another task, read that referencing task too.
 6. Follow `platform/entrypoint.md` for spec reading order
 7. Determine the target service's `Service Type` from `<project>/specs/services/<service>/architecture.md` and read the matching `platform/service-types/<type>.md` (exactly one file)
 8. Read `.claude/skills/INDEX.md` and matched skill files for implementation guidance
@@ -165,7 +165,7 @@ For any implementation task:
 
 **For monorepo-level work:**
 
-3. Read the target task in repo-root `tasks/ready/` and confirm its scope is monorepo-level per `tasks/INDEX.md` § "When to Use Root vs Project Tasks"
+3. Read the target task in repo-root `tasks/ready/` and confirm its scope is monorepo-level per `tasks/INDEX.md` § "When to Use Root vs Project Tasks". Apply the same dependency-grep rule as project-internal step 5 — check the spec body and `tasks/INDEX.md` for `선행` / `후속` / `depends on` / `blocked by` / `prerequisite` / `전제` references before committing to the task.
 4. Read the relevant shared file(s) the task targets (`libs/`, `platform/`, `rules/`, `.claude/`, root `build.gradle`/`settings.gradle`/`.github/workflows/`, `scripts/`, etc.)
 5. If the change has implications for any `projects/<name>/`, enumerate them in the task and verify each affected project's tests after implementation
 6. Read `.claude/skills/INDEX.md` and matched skill files only if a skill applies (most monorepo-level work is build/CI/docs without a skill match)
@@ -287,3 +287,22 @@ Direct DB access from external tools requires one of:
 3. Traefik TCP routing labels exposing specific DB ports under unique hostnames.
 
 Full specification and migration steps: `TEMPLATE.md` § "Local Network Convention".
+
+---
+
+# Recommending Tasks and Dispatching Agents
+
+When recommending a task or implementation path to the user, annotate the response with both the **analysis model** (current session) and the **recommended implementation model** based on task complexity, in the form `(분석=<model> / 구현 권장=<model>)`. Example: `진행 권장 (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단순 fix)`.
+
+Recommended implementation model by task type:
+- Complex domain work — state machines, transaction design, event-driven outbox, cross-cutting refactors, contract design: **Opus**.
+- CI / docs / single-line config / lifecycle chore PRs: **Sonnet** or **Haiku** is sufficient.
+
+When dispatching implementation work via the Agent tool, **always pass the recommended model explicitly** via the `model` parameter — do not rely on session inheritance. The current session's model is irrelevant to the optimal model for the dispatched work.
+
+```
+Agent(subagent_type="backend-engineer", model="opus", ...)   # complex
+Agent(subagent_type="backend-engineer", model="sonnet", ...) # routine fix
+```
+
+This rule persists across session compaction and new sessions; the model annotation must precede every implementation recommendation.
