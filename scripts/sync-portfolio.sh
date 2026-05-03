@@ -94,6 +94,35 @@ SHARED_PATHS=(
     "TEMPLATE.md"
 )
 
+# Per-project path EXCLUSIONS — applied via `git filter-repo --invert-paths`
+# AFTER the main extraction. These are project-relative paths inside the
+# project directory; they are stripped from history before the standalone
+# repo is force-pushed.
+#
+# Why exclude paths from a project's standalone sync?
+#   - The standalone portfolio repo is a curated snapshot, not always
+#     identical to what's in the monorepo. For example: portfolio v1 of
+#     `ecommerce-microservices-platform` (kanggle/ecommerce-microservices-platform)
+#     deliberately preserves the legacy self-hosted ecommerce auth-service
+#     (signup / login / refresh) so the standalone repo demonstrates an
+#     end-to-end JWT-issuing service. The monorepo cut that over to GAP OIDC
+#     (TASK-MONO-027 + TASK-FE-067), but cutting the standalone repo over
+#     would force GAP as a transitive dependency of the standalone — which
+#     defeats the "self-contained" property the standalone is supposed to
+#     showcase.
+#   - Solution: exclude the GAP-integration-only frontend / contract paths
+#     from the ecommerce sync. The standalone v1 retains its own auth flow.
+declare -A PROJECT_EXCLUDE_PATHS=(
+    ["ecommerce-microservices-platform"]="\
+apps/web-store/src/shared/auth \
+apps/web-store/src/middleware.ts \
+apps/web-store/src/app/api/auth \
+apps/admin-dashboard/src/shared/auth \
+apps/admin-dashboard/src/middleware.ts \
+apps/admin-dashboard/src/app/api/auth \
+specs/integration/gap-integration.md"
+)
+
 MONOREPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP_ROOT="${TMPDIR:-/tmp}/portfolio-sync"
 FILTER_REPO_IMAGE="python:3.11-alpine"
@@ -314,6 +343,18 @@ sync_project() {
         done
         printf " --path-rename 'projects/%s/:'" "$project"
         printf '\n'
+        # Step 3 (optional): per-project exclusions — strip paths that belong
+        # only in the monorepo and should NOT bleed into the standalone repo.
+        # Runs after Step 2 so the paths are already hoisted (project-relative).
+        local excludes_str
+        excludes_str="${PROJECT_EXCLUDE_PATHS[$project]:-}"
+        if [ -n "$excludes_str" ]; then
+            printf 'git filter-repo --force --invert-paths'
+            for p in $excludes_str; do
+                printf " --path '%s'" "$p"
+            done
+            printf '\n'
+        fi
     } > "$runner"
 
     # Run the filter inside a container. Mount workdir as /repo.
