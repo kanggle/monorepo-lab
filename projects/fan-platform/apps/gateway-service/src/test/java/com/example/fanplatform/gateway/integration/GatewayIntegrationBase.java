@@ -80,20 +80,24 @@ public abstract class GatewayIntegrationBase {
         // downstream MockWebServer instead of the unreachable
         // http://community-service:8080. spring.cloud.gateway.routes is a list,
         // and Spring's relaxed binding accepts indexed property keys.
+        // RewritePath filter included so integration tests reflect the production
+        // configuration (TASK-FAN-BE-005 fix).
         registry.add("spring.cloud.gateway.routes[0].id", () -> "community-service");
         registry.add("spring.cloud.gateway.routes[0].uri",
                 () -> "http://" + downstream.getHostName() + ":" + downstream.getPort());
         registry.add("spring.cloud.gateway.routes[0].predicates[0]",
                 () -> "Path=/api/v1/community/**");
-        registry.add("spring.cloud.gateway.routes[0].filters[0].name",
+        registry.add("spring.cloud.gateway.routes[0].filters[0]",
+                () -> "RewritePath=/api/v1/community/(?<segment>.*), /api/community/${segment}");
+        registry.add("spring.cloud.gateway.routes[0].filters[1].name",
                 () -> "RequestRateLimiter");
-        registry.add("spring.cloud.gateway.routes[0].filters[0].args.redis-rate-limiter.replenishRate",
+        registry.add("spring.cloud.gateway.routes[0].filters[1].args.redis-rate-limiter.replenishRate",
                 () -> "1");
-        registry.add("spring.cloud.gateway.routes[0].filters[0].args.redis-rate-limiter.burstCapacity",
+        registry.add("spring.cloud.gateway.routes[0].filters[1].args.redis-rate-limiter.burstCapacity",
                 () -> "5");
-        registry.add("spring.cloud.gateway.routes[0].filters[0].args.redis-rate-limiter.requestedTokens",
+        registry.add("spring.cloud.gateway.routes[0].filters[1].args.redis-rate-limiter.requestedTokens",
                 () -> "1");
-        registry.add("spring.cloud.gateway.routes[0].filters[0].args.key-resolver",
+        registry.add("spring.cloud.gateway.routes[0].filters[1].args.key-resolver",
                 () -> "#{@accountKeyResolver}");
     }
 }

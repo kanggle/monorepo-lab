@@ -49,15 +49,17 @@ spring:
         connect-timeout: 2000
         response-timeout: 10s
       routes:
-        # Placeholder routes for v1 services. community-service and artist-service
-        # are bootstrapped in TASK-FAN-BE-002 and TASK-FAN-BE-003. Until then these
-        # routes will return 503/504 — that is the expected behaviour for this
-        # bootstrap task per Edge Cases in TASK-FAN-BE-001.
+        # community-service — external path /api/v1/community/** is rewritten to
+        # the downstream service's /api/community/** (TASK-FAN-BE-005 production fix).
         - id: community-service
           uri: ${COMMUNITY_SERVICE_URI:http://community-service:8080}
           predicates:
             - Path=/api/v1/community/**
           filters:
+            # Strip the v1 namespace prefix before forwarding to community-service.
+            # /api/v1/community/posts → /api/community/posts
+            # /api/v1/community/posts/{id}/reactions → /api/community/posts/{id}/reactions
+            - RewritePath=/api/v1/community/(?<segment>.*), /api/community/${segment}
             # Global ceiling per IP — 60 req/min, bursts up to 120.
             - name: RequestRateLimiter
               args:
@@ -65,11 +67,47 @@ spring:
                 redis-rate-limiter.burstCapacity: 120
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
-        - id: artist-service
+
+        # artist-service routes — 3 explicit routes (one per downstream base path)
+        # rather than a single ambiguous /api/v1/artist/** catch-all.
+        # This avoids complex regex and keeps the gateway path → service path mapping 1:1.
+        # (TASK-FAN-BE-005 production fix — option B: explicit separation)
+
+        - id: artist-service-artists
           uri: ${ARTIST_SERVICE_URI:http://artist-service:8080}
           predicates:
-            - Path=/api/v1/artist/**
+            - Path=/api/v1/artists/**
           filters:
+            # /api/v1/artists/** → /api/artists/**
+            - RewritePath=/api/v1/artists/(?<segment>.*), /api/artists/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+        - id: artist-service-artist-groups
+          uri: ${ARTIST_SERVICE_URI:http://artist-service:8080}
+          predicates:
+            - Path=/api/v1/artist-groups/**
+          filters:
+            # /api/v1/artist-groups/** → /api/artist-groups/**
+            - RewritePath=/api/v1/artist-groups/(?<segment>.*), /api/artist-groups/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+        - id: artist-service-fandoms
+          uri: ${ARTIST_SERVICE_URI:http://artist-service:8080}
+          predicates:
+            - Path=/api/v1/fandoms/**
+          filters:
+            # /api/v1/fandoms/** → /api/fandoms/**
+            - RewritePath=/api/v1/fandoms/(?<segment>.*), /api/fandoms/${segment}
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 1
