@@ -66,7 +66,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-003-artist-service-bootstrap.md` — artist-service Spring Boot 부트스트랩. Hexagonal (ports/adapters). artist 프로필 + group + fandom 메타데이터. admin only 등록/수정. read-heavy 디렉토리 검색 + Redis 캐시. outbox + Kafka 이벤트. reference: wms master-service.
 - `TASK-FAN-BE-004-prometheus-rate-limit.md` — gateway-service 의 `/actuator/prometheus` rate-limit (또는 네트워크 격리). PR #116 review Warning 4 follow-up — community-api.md 의 "gateway-rate-limited" 주장이 현재 false 라 정정 + 옵션 3가지 (gateway route + RateLimiter / in-process Bucket4j / network isolation) 비교 결정 필요.
 
 ## in-progress
@@ -81,3 +80,4 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-FAN-BE-001-gateway-service-bootstrap.md` — gateway-service Spring Boot 부트스트랩 (OIDC + Traefik). PR #115 머지 2026-05-03 (review fix 포함: JWKS startup probe + FailOpenRateLimiter narrowing).
 - `TASK-FAN-BE-002-community-service-bootstrap.md` — community-service Spring Boot 부트스트랩 (Layered + post 상태 기계 + outbox). PR #116 머지 2026-05-03 (review fix 8건 포함: Critical status_changed 이벤트, FeedCache read-through, etc.). follow-up: TASK-FAN-BE-004 (prometheus rate-limit), TASK-MONO-025 (UUID v7 마이그레이션).
+- `TASK-FAN-BE-003-artist-service-bootstrap.md` — artist-service Spring Boot 부트스트랩 (Hexagonal ports/adapters + outbox). PR #125 머지 2026-05-03 (review fix 6건 포함: 인덱스 tenant_id prefix, FANDOM POST/PATCH 분리, error envelope 일관, ARTIST_ARCHIVED 정책 문서화, AddRole 전용 enum, outbox 테스트 race fix).
