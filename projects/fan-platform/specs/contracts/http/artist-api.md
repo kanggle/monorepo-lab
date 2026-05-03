@@ -9,9 +9,18 @@
 > receive 403 `FORBIDDEN`. Read endpoints accept any authenticated tenant
 > member.
 >
-> All requests are routed through the fan-platform gateway and forwarded to
-> the service which serves `/api/artists/**`, `/api/artist-groups/**`,
-> `/api/fandoms/**`. Path examples below use the service-internal path.
+> All requests are routed through the fan-platform gateway. The gateway maps
+> external paths to the service-internal paths:
+>
+> | External path (client-facing) | Internal path (service-level) |
+> |---|---|
+> | `/api/v1/artists/**` | `/api/artists/**` |
+> | `/api/v1/artist-groups/**` | `/api/artist-groups/**` |
+> | `/api/v1/fandoms/**` | `/api/fandoms/**` |
+>
+> The gateway applies a `RewritePath` filter to strip the `/v1/` prefix before
+> forwarding (TASK-FAN-BE-005). Path examples below use the **service-internal**
+> path (i.e., no `/v1/` prefix). Clients must use the external paths above.
 
 ## Envelope shapes
 

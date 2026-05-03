@@ -121,17 +121,50 @@ com.example.fanplatform.gateway/
 
 ---
 
-## Routes (v1 placeholder)
+## Routes (v1)
 
-`application.yml` declares the route surface. v1 routes are **placeholders** —
-the downstream services do not exist yet (they are bootstrapped in TASK-FAN-BE-002
-and TASK-FAN-BE-003). Calls to these routes will return 503/504 until the
-downstream services come online; that is intentional per the task Edge Cases.
+`application.yml` declares the route surface.
 
-| Path prefix | Target | Auth | Rate Limit |
+### RewritePath policy (TASK-FAN-BE-005)
+
+The gateway exposes all API resources under the `/api/v1/` external namespace.
+Downstream services do **not** use the `v1` prefix internally. The gateway
+`RewritePath` filter strips the namespace before forwarding:
+
+| External path (client-facing) | Internal path (downstream) | Target service |
+|---|---|---|
+| `/api/v1/community/**` | `/api/community/**` | `community-service:8080` |
+| `/api/v1/artists/**` | `/api/artists/**` | `artist-service:8080` |
+| `/api/v1/artist-groups/**` | `/api/artist-groups/**` | `artist-service:8080` |
+| `/api/v1/fandoms/**` | `/api/fandoms/**` | `artist-service:8080` |
+
+The artist-service routes are declared as **3 explicit routes** (one per
+downstream base path) rather than a single `/api/v1/artist/**` catch-all.
+This gives a 1:1 mapping between gateway predicate and downstream controller
+base path, avoids complex regex, and makes downstream path changes explicit.
+
+RewritePath filter syntax (Spring Cloud Gateway named-group capture):
+
+```yaml
+- RewritePath=/api/v1/community/(?<segment>.*), /api/community/${segment}
+- RewritePath=/api/v1/artists/(?<segment>.*), /api/artists/${segment}
+- RewritePath=/api/v1/artist-groups/(?<segment>.*), /api/artist-groups/${segment}
+- RewritePath=/api/v1/fandoms/(?<segment>.*), /api/fandoms/${segment}
+```
+
+Path variables and query strings are preserved automatically by Spring Cloud
+Gateway — only the path prefix is rewritten. The `segment` capture group
+matches everything after the prefix (including nested path variables such as
+`posts/{id}/reactions`).
+
+### Route table
+
+| External path prefix | Target | Auth | Rate Limit |
 |---|---|---|---|
-| `/api/v1/community/**` | `community-service:8080` | required | account/IP — 60 r/s replenish, 120 burst |
-| `/api/v1/artist/**` | `artist-service:8080` | required | account/IP — 60 r/s replenish, 120 burst |
+| `/api/v1/community/**` | `community-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
+| `/api/v1/artists/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
+| `/api/v1/artist-groups/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
+| `/api/v1/fandoms/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
