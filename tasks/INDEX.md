@@ -60,6 +60,19 @@ Allowed only after review approval.
 - Fix tasks must include the original task ID in their Goal section (e.g. "Fix issue found in TASK-MONO-002").
 - Do not modify a task file after it moves to `review/` or `done/`.
 
+### PR Separation Rule (lifecycle ↔ PR boundary)
+Each lifecycle transition lands in its own PR. **Never bundle task spec authoring with implementation in the same PR.**
+
+| Stage | Recommended PR shape |
+|---|---|
+| `(writing) → ready` | **spec PR** — adds the task file to `ready/` + updates this `INDEX.md` ready list. No implementation code. Multiple specs may share one spec PR; spec + impl must NOT share one. |
+| `ready → in-progress → review` | **impl PR** — moves the task file through `in-progress/` to `review/` and lands the implementation. Lifecycle moves and impl commits should be separate commits but live in one PR. |
+| `review → done` | **chore PR** — moves merged task file(s) from `review/` to `done/` and updates the `INDEX.md` done list with one-line outcome summaries. May batch multiple merged tasks. |
+
+**Why**: bundling spec authoring with implementation hides the `ready` lifecycle stage from `main` — external observers (other developers, AI sessions, audit) read the `ready/` queue to know what's available next. If a task only ever appears in `review/` because spec + impl shipped together, the queue signal is broken.
+
+Established precedents: `chore: file follow-up tasks ... (#110)`, `chore: move merged TASK-MONO-022/023 from review/ to done/ (#114)`, `#118`, `#124`, `#133`, `#137`, `#138`. Same pattern applies to project-level lifecycle (`projects/<name>/tasks/`).
+
 ---
 
 # When to Use Root vs Project Tasks
