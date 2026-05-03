@@ -61,6 +61,20 @@ public class PublishPostUseCase {
                 saved.getVisibility(),
                 saved.getPublishedAt());
 
+        // Per architecture.md "Every transition appends post_status_history AND
+        // emits community.post.status_changed.v1" and community-events.md (the
+        // status_changed topic must fire on PUBLISH / HIDE / DELETE / un-HIDE).
+        // Downstream consumers (search-service, audit) listen on
+        // community.post.status_changed and would miss PUBLISH events without
+        // this second emission.
+        eventPublisher.publishPostStatusChanged(
+                saved.getId(),
+                saved.getTenantId(),
+                PostStatus.DRAFT,
+                PostStatus.PUBLISHED,
+                actor.accountId(),
+                saved.getPublishedAt());
+
         return view(saved, 0L, 0L);
     }
 

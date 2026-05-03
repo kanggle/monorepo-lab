@@ -8,6 +8,7 @@ import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.PostStatus;
 import com.example.fanplatform.community.domain.post.status.PostStatusHistoryRepository;
+import org.mockito.InOrder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,9 +62,20 @@ class PublishPostUseCaseTest {
         assertThat(savedPost.getValue().getTenantId()).isEqualTo("fan-platform");
 
         verify(historyRepository).save(any());
-        verify(eventPublisher).publishPostPublished(
+
+        // Both topics must fire on PUBLISH:
+        //   - community.post.published   (consumed by notification, search)
+        //   - community.post.status_changed (with from=DRAFT, to=PUBLISHED;
+        //                                    consumed by search-service, audit)
+        // See architecture.md L149 + community-events.md status_changed trigger.
+        InOrder order = inOrder(eventPublisher);
+        order.verify(eventPublisher).publishPostPublished(
                 anyString(), anyString(), anyString(),
                 any(PostType.class), any(PostVisibility.class), any());
+        order.verify(eventPublisher).publishPostStatusChanged(
+                anyString(), anyString(),
+                eq(PostStatus.DRAFT), eq(PostStatus.PUBLISHED),
+                anyString(), any());
     }
 
     @Test
