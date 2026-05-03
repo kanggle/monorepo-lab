@@ -9,7 +9,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 | Service | Role |
 |---|---|
 | user-service | Primary owner — profile CRUD, address management, withdrawal, event publishing |
-| auth-service | Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials |
+| ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — GAP (global-account-platform) is now the identity source. Profile creation triggers from GAP `AccountSignedUp` events; credential invalidation is GAP-internal.** |
 | order-service | Consumes UserWithdrawn event to cancel active orders |
 | web-store | Customer-facing profile view/edit, address management UI |
 | admin-dashboard | Admin user list and detail view |

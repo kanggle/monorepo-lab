@@ -22,13 +22,6 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: auth-service
-      ports:
-        - protocol: TCP
-          port: 8081
-    - to:
-        - podSelector:
-            matchLabels:
               app: user-service
       ports:
         - protocol: TCP

@@ -18,13 +18,6 @@ spec:
       ports:
         - protocol: TCP
           port: 8084
-    - from:
-        - podSelector:
-            matchLabels:
-              app: auth-service
-      ports:
-        - protocol: TCP
-          port: 8084
   egress:
     - to:
         - namespaceSelector:
