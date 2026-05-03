@@ -109,9 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-027-ecommerce-gap-integration.md` — ecommerce-platform 의 GAP OIDC 통합 cutover. GAP V0012 시드 (ecommerce-web-store-client + ecommerce-admin-dashboard-client + 2 scopes) + account-service V0014 (ecommerce tenant row) + ecommerce gateway-service 의 issuer-uri / jwk-set-uri / TenantClaimValidator / AllowedIssuersValidator + docker-compose env 갱신 (`OIDC_ISSUER_URL`, `OIDC_REQUIRED_TENANT_ID`, `OIDC_ALLOWED_ISSUERS`) + .env.example 신규 변수 + integration test 5 시나리오. cross-project (atomic). 선행: TASK-BE-131 / TASK-MONO-019 / 026 (done). 후속: TASK-BE-132 (auth-service 폐기), TASK-FE-067 (frontend OAuth cutover).
+(empty)
 
 ## done
 
@@ -142,3 +140,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2** 완료. ecommerce / wms / GAP 의 docker-compose 를 hostname routing 으로 마이그레이션. 모든 host port 제거 + Traefik 라벨 (web.ecommerce.local / admin.ecommerce.local / kafka.wms.local 등). CI overlay (`docker-compose.ci.yml`) + bootrun overlay (`docker-compose.bootrun.yml`) 신설. PR #129 머지. 2026-05-03.
 - `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` `BaseEventPublisher.eventId` v4 → v7 마이그레이션. `UuidV7` 이미 `libs:java-common/.../id/` 에 존재 (재발견) — 1줄 변경 + 단위 테스트 2건. 5 영향 서비스 모두 PASS. PR #130 머지. 2026-05-03.
 - `TASK-MONO-026-gap-v0011-fan-platform-oidc-clients.md` — GAP V0011 Flyway seed 로 `fan-platform-user-flow-client` 등록 (PKCE confidential, dev secret = `fan-platform-dev`). auth-api.md / gap-integration.md / .env.example 갱신. v2 internal-services-client 는 deferred. PR #135 머지. 2026-05-03.
+- `TASK-MONO-027-ecommerce-gap-integration.md` — ecommerce-platform 의 GAP OIDC 통합 cutover. GAP V0012 시드 (ecommerce-web-store-client + ecommerce-admin-dashboard-client + 2 scopes) + account-service V0014 (ecommerce tenant row) + ecommerce gateway-service 의 issuer-uri / jwk-set-uri / TenantClaimValidator / AllowedIssuersValidator + docker-compose env 갱신 + .env.example 신규 변수 + integration test 5 시나리오. cross-project atomic (`feat!:` PR #145 머지). 후속: TASK-FE-067 (frontend cutover), TASK-BE-132 (auth-service 폐기). 2026-05-04.
