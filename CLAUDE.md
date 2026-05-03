@@ -306,3 +306,5 @@ Agent(subagent_type="backend-engineer", model="sonnet", ...) # routine fix
 ```
 
 This rule persists across session compaction and new sessions; the model annotation must precede every implementation recommendation.
+
+Before recommending the next task, scan **both** the `ready/` queue (new candidates) **and** the `review/` queue (open impl PRs awaiting review fix or merged PRs awaiting `review/ → done/` chore PR). Surface review-side work that should be cleared first to avoid open-PR pile-up. Apply this to both root `tasks/` and each affected `projects/<name>/tasks/`.
