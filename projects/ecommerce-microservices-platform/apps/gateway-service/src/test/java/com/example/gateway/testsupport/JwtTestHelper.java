@@ -55,8 +55,14 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Builds and signs a CONSUMER token with {@code aud: ecommerce} and
-     * {@code account_type: CONSUMER}. Valid for 5 minutes.
+     * Builds and signs a CONSUMER token with {@code aud: ecommerce},
+     * {@code account_type: CONSUMER}, {@code iss: https://test.local/issuer}
+     * and {@code tenant_id: ecommerce}. Valid for 5 minutes.
+     *
+     * <p>The {@code tenant_id} claim is required by
+     * {@code TenantClaimValidator} (TASK-MONO-027); it has been baked into
+     * the standard helper so existing tests continue to pass after the
+     * validator was added.
      */
     public String signConsumerToken(String subject, List<String> roles) {
         Instant now = Instant.now();
@@ -68,6 +74,7 @@ public final class JwtTestHelper {
                 .jwtID(UUID.randomUUID().toString())
                 .audience(List.of("ecommerce"))
                 .claim("account_type", "CONSUMER")
+                .claim("tenant_id", "ecommerce")
                 .claim("email", subject + "@test.local");
         if (roles != null && !roles.isEmpty()) {
             claims.claim("roles", roles);
@@ -76,8 +83,9 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Builds and signs an OPERATOR token with {@code aud: ecommerce} and
-     * {@code account_type: OPERATOR}. Valid for 5 minutes.
+     * Builds and signs an OPERATOR token with {@code aud: ecommerce},
+     * {@code account_type: OPERATOR}, {@code iss: https://test.local/issuer}
+     * and {@code tenant_id: ecommerce}. Valid for 5 minutes.
      */
     public String signOperatorToken(String subject, List<String> roles) {
         Instant now = Instant.now();
@@ -89,6 +97,7 @@ public final class JwtTestHelper {
                 .jwtID(UUID.randomUUID().toString())
                 .audience(List.of("ecommerce"))
                 .claim("account_type", "OPERATOR")
+                .claim("tenant_id", "ecommerce")
                 .claim("email", subject + "@test.local");
         if (roles != null && !roles.isEmpty()) {
             claims.claim("roles", roles);
@@ -113,6 +122,32 @@ public final class JwtTestHelper {
             claims.claim("role", role);
         }
         additionalClaims.forEach(claims::claim);
+        return sign(claims.build());
+    }
+
+    /**
+     * Builds and signs a CONSUMER token with explicit {@code iss} and
+     * {@code tenant_id} claims so TASK-MONO-027 validators
+     * (AllowedIssuersValidator + TenantClaimValidator) can be exercised
+     * end-to-end. Always carries {@code aud: ecommerce} and
+     * {@code account_type: CONSUMER}. Valid for 5 minutes.
+     *
+     * @param issuer    explicit {@code iss} claim value
+     * @param tenantId  {@code tenant_id} claim, or {@code null} to omit
+     */
+    public String signTokenWithIssuerAndTenant(String issuer, String tenantId) {
+        Instant now = Instant.now();
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+                .subject("user-" + UUID.randomUUID())
+                .issuer(issuer)
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .audience(List.of("ecommerce"))
+                .claim("account_type", "CONSUMER");
+        if (tenantId != null) {
+            claims.claim("tenant_id", tenantId);
+        }
         return sign(claims.build());
     }
 
