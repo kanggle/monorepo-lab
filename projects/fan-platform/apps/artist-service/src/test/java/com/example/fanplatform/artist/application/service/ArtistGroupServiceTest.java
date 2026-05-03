@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.application.service;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
+import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
 import com.example.fanplatform.artist.application.exception.ArtistGroupNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.port.in.CreateArtistGroupUseCase.CreateArtistGroupCommand;
@@ -108,6 +109,47 @@ class ArtistGroupServiceTest {
 
         assertThatThrownBy(() -> service.addMember(admin, "g-1", "a-1", GroupRole.MEMBER))
                 .isInstanceOf(ArtistNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("addMember: ARCHIVED artist -> 422 ARTIST_ARCHIVED")
+    void addMember_archivedArtist() {
+        ArtistGroup g = ArtistGroup.create(ArtistGroupId.of("g-1"), "fan-platform",
+                "Group X", null, null, null);
+        when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
+                .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.ARCHIVED)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.addMember(admin, "g-1", "a-1", GroupRole.MEMBER))
+                .isInstanceOf(ArtistArchivedException.class);
+        verify(groupRepo, never()).insertMembership(any());
+    }
+
+    @Test
+    @DisplayName("addMember: DRAFT artist -> happy (admin may pre-stage roster)")
+    void addMember_draftArtist() {
+        ArtistGroup g = ArtistGroup.create(ArtistGroupId.of("g-1"), "fan-platform",
+                "Group X", null, null, null);
+        when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
+                .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.PUBLISHED)))
+                .thenReturn(false);
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.DRAFT)))
+                .thenReturn(true);
+        when(groupRepo.existsActiveMembership(any(ArtistGroupId.class), any(ArtistId.class), eq("fan-platform")))
+                .thenReturn(false);
+        when(groupRepo.insertMembership(any(GroupMembership.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        when(groupRepo.findAllMembers(any(ArtistGroupId.class), eq("fan-platform")))
+                .thenReturn(List.of());
+
+        service.addMember(admin, "g-1", "a-1", GroupRole.MEMBER);
+
+        verify(groupRepo, times(1)).insertMembership(any(GroupMembership.class));
+        verify(eventPublisher, times(1)).publishArtistGroupMemberChanged(
+                any(ArtistGroup.class), any(ArtistId.class), eq(GroupRole.MEMBER),
+                eq(ArtistEventPublisher.MemberChangeAction.ADDED), any());
     }
 
     @Test

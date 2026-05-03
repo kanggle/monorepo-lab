@@ -56,7 +56,8 @@ For paginated list endpoints, `meta` adds `page`, `size`, `totalElements`,
 | 422 | STATE_TRANSITION_INVALID | rejected by Artist state machine; `details.from`, `details.to` |
 | 422 | ALREADY_MEMBER | adding an already-active member to the group |
 | 422 | FANDOM_ALREADY_EXISTS | second fandom for the same artist (1:1 invariant) |
-| 422 | ARTIST_NOT_PUBLISHED | fandom upsert against DRAFT/ARCHIVED artist |
+| 422 | ARTIST_NOT_PUBLISHED | fandom create/update against DRAFT/ARCHIVED artist |
+| 422 | ARTIST_ARCHIVED | adding an ARCHIVED artist as a new group member |
 | 422 | ILLEGAL_STATE | state-machine guard at controller boundary |
 
 ---
@@ -257,11 +258,19 @@ Request:
 }
 ```
 
+Member status policy:
+
+- The member artist may be in `DRAFT` or `PUBLISHED` status. DRAFT lets
+  admins pre-stage a group's roster ahead of debut.
+- An `ARCHIVED` artist cannot start a new membership: the call returns
+  422 `ARTIST_ARCHIVED`.
+- A missing or cross-tenant artist returns 404 `ARTIST_NOT_FOUND`.
+
 Response 200: returns the updated group with the new member appended.
 
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_GROUP_NOT_FOUND,
-404 ARTIST_NOT_FOUND, 422 ALREADY_MEMBER, 422 VALIDATION_ERROR
-(`role: FORMER_MEMBER` rejected on add).
+404 ARTIST_NOT_FOUND, 422 ARTIST_ARCHIVED, 422 ALREADY_MEMBER,
+422 VALIDATION_ERROR (`role: FORMER_MEMBER` rejected on add).
 
 ### `DELETE /api/artist-groups/{id}/members/{artistId}` — Remove member
 

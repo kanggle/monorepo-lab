@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.adapter.in.web.advice;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiErrorBody;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
+import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
 import com.example.fanplatform.artist.application.exception.ArtistGroupNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotPublishedException;
@@ -36,7 +37,7 @@ import java.util.Map;
  *   <li>404 — ARTIST_NOT_FOUND / ARTIST_GROUP_NOT_FOUND / FANDOM_NOT_FOUND</li>
  *   <li>409 — STAGE_NAME_CONFLICT / GROUP_NAME_CONFLICT / CONFLICT (optimistic lock)</li>
  *   <li>422 — STATE_TRANSITION_INVALID / ALREADY_MEMBER / FANDOM_ALREADY_EXISTS /
- *             ARTIST_NOT_PUBLISHED / VALIDATION_ERROR</li>
+ *             ARTIST_NOT_PUBLISHED / ARTIST_ARCHIVED / VALIDATION_ERROR</li>
  * </ul>
  */
 @Slf4j
@@ -89,6 +90,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorBody> handleArtistNotPublished(ArtistNotPublishedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("ARTIST_NOT_PUBLISHED", e.getMessage()));
+    }
+
+    @ExceptionHandler(ArtistArchivedException.class)
+    public ResponseEntity<ApiErrorBody> handleArtistArchived(ArtistArchivedException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiErrorBody.of("ARTIST_ARCHIVED", e.getMessage()));
     }
 
     @ExceptionHandler(IllegalStateTransitionException.class)

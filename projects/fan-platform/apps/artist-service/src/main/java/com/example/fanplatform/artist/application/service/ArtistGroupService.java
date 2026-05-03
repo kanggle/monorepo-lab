@@ -4,6 +4,7 @@ import com.example.common.id.UuidV7;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
+import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
 import com.example.fanplatform.artist.application.exception.ArtistGroupNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.GroupNameConflictException;
@@ -59,6 +60,17 @@ public class ArtistGroupService implements
         return ArtistGroupView.from(saved, List.of());
     }
 
+    /**
+     * Add a member to the group. Per artist-api.md § "Add member":
+     * <ul>
+     *   <li>The member artist may be in {@code DRAFT} or {@code PUBLISHED}
+     *       status (DRAFT lets admins pre-stage roster ahead of debut).</li>
+     *   <li>{@code ARCHIVED} artists are rejected with 422
+     *       {@code ARTIST_ARCHIVED} — they cannot start new memberships.</li>
+     *   <li>Missing / cross-tenant artist -> 404 {@code ARTIST_NOT_FOUND}.</li>
+     *   <li>Active duplicate membership -> 422 {@code ALREADY_MEMBER}.</li>
+     * </ul>
+     */
     @Override
     @Transactional
     public ArtistGroupView addMember(ActorContext actor, String groupId, String artistId,
@@ -67,6 +79,9 @@ public class ArtistGroupService implements
         String tenantId = actor.tenantId();
         ArtistGroup group = loadGroupOrThrow(groupId, tenantId);
         ArtistId aid = parseArtistId(artistId);
+        if (artistRepository.existsInStatus(aid, tenantId, ArtistStatus.ARCHIVED)) {
+            throw new ArtistArchivedException(artistId);
+        }
         if (!artistRepository.existsInStatus(aid, tenantId, ArtistStatus.PUBLISHED)
                 && !artistRepository.existsInStatus(aid, tenantId, ArtistStatus.DRAFT)) {
             throw new ArtistNotFoundException(artistId);
