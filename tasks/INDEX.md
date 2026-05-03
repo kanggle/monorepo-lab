@@ -90,8 +90,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2**: 기존 3 프로젝트 (ecommerce / wms / GAP) 의 docker-compose 를 `${PORT_PREFIX}XXXX:YYYY` 패턴에서 `expose:` + Traefik 라벨로 일괄 마이그레이션. 전제: TASK-MONO-022 머지 완료. atomic cross-project commit. `frontend-e2e` CI 잡 수정 포함.
-- `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` 의 `BaseEventPublisher` 가 발행하는 `event_id` 를 UUID v4 → v7 로 마이그레이션. fan-platform community-events spec 이 v7 요구. cross-project: GAP auth/community/membership/security + fan-platform community 5 서비스 영향. PR #116 follow-up.
+(empty)
 
 ## in-progress
 
@@ -127,3 +126,5 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-023c-anonymization-and-audit.md` — AccountAnonymizationScheduler `actorType=system` 강제 / AccountEventPublisher 6 메서드 `@Transactional` (`OutboxJpaConfig.enableDefaultTransactions=false` RC) / AdminAudit SQL `actor_id` (VARCHAR UUID) 컬럼 정정. PR #122 머지. 2026-05-03.
 - `TASK-MONO-023d-outbox-related-failures.md` — TenantAdmin 테이블명 `outbox_events` → `outbox` / AdminOutboxPollingScheduler 4 이벤트 토픽 매핑 추가 / OutboxRelay Awaitility lambda fix. PR #120 머지. 2026-05-03.
 - `TASK-MONO-023e-community-jpa-test-isolation.md` — `@AfterEach deleteAll()` 추가 (CommentJpaRepository / ReactionJpaRepository). `TransactionTemplate.executeWithoutResult` 가 commit 하므로 isolation 누수. test-only 변경 (frozen-policy 준수). PR #119 머지. 2026-05-03.
+- `TASK-MONO-024-existing-projects-traefik-migration.md` — **Phase 2** 완료. ecommerce / wms / GAP 의 docker-compose 를 hostname routing 으로 마이그레이션. 모든 host port 제거 + Traefik 라벨 (web.ecommerce.local / admin.ecommerce.local / kafka.wms.local 등). CI overlay (`docker-compose.ci.yml`) + bootrun overlay (`docker-compose.bootrun.yml`) 신설. PR #129 머지. 2026-05-03.
+- `TASK-MONO-025-base-event-publisher-uuidv7.md` — `libs:java-messaging` `BaseEventPublisher.eventId` v4 → v7 마이그레이션. `UuidV7` 이미 `libs:java-common/.../id/` 에 존재 (재발견) — 1줄 변경 + 단위 테스트 2건. 5 영향 서비스 모두 PASS. PR #130 머지. 2026-05-03.
