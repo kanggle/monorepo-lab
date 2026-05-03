@@ -117,3 +117,13 @@ fanplatform:
     # SAS issuer URL + the legacy "global-account-platform" string.
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
+
+# JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable
+# at startup, instead of waiting for the first protected request. Configured per
+# TASK-FAN-BE-001 § Edge Cases ("OIDC discovery 실패 (GAP 다운) ... 30초 후에도
+# 실패하면 fail-fast"). Disable in tests via gateway.jwks.startup-probe.enabled.
+gateway:
+  jwks:
+    startup-probe:
+      enabled: ${GATEWAY_JWKS_STARTUP_PROBE_ENABLED:true}
+      timeout-seconds: ${GATEWAY_JWKS_STARTUP_PROBE_TIMEOUT_SECONDS:30}
