@@ -9,6 +9,7 @@ import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.ProvisionAccountResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.account.AccountRole;
+import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountRoleRepository;
@@ -23,6 +24,7 @@ import com.example.account.domain.tenant.TenantType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -159,5 +162,36 @@ class ProvisionAccountUseCaseTest {
         assertThat(result.tenantId()).isEqualTo(TENANT_ID);
         assertThat(result.email()).isEqualTo("user@example.com");
         assertThat(result.status()).isEqualTo("ACTIVE");
+    }
+
+    // ── Regression: TASK-MONO-023a — audit details must be valid JSON ─────────
+
+    @Test
+    @DisplayName("audit details 필드가 유효한 JSON 형식이다 (MySQL JSON 컬럼 호환)")
+    void execute_auditEntry_detailsIsValidJson() {
+        given(tenantRepository.findById(any(TenantId.class))).willReturn(Optional.of(activeTenant()));
+        given(accountRepository.existsByEmail(any(TenantId.class), eq("user@example.com"))).willReturn(false);
+        given(accountRepository.save(any(Account.class))).willReturn(savedAccount());
+        given(profileRepository.save(any(Profile.class), any(TenantId.class))).willReturn(savedProfile());
+        given(accountRoleRepository.save(any(AccountRole.class)))
+                .willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN", "sys-test"));
+
+        ArgumentCaptor<AccountStatusHistoryEntry> historyCaptor =
+                ArgumentCaptor.forClass(AccountStatusHistoryEntry.class);
+        given(historyRepository.save(historyCaptor.capture())).willReturn(null);
+
+        useCase.execute(command());
+
+        AccountStatusHistoryEntry captured = historyCaptor.getValue();
+        String details = captured.getDetails();
+        assertThat(details).isNotNull();
+        // Must start with '{' and end with '}' — primitive JSON object check
+        assertThat(details.trim()).startsWith("{");
+        assertThat(details.trim()).endsWith("}");
+        // Must contain the action key and tenantId value
+        assertThat(details).contains("\"action\"");
+        assertThat(details).contains("OPERATOR_PROVISIONING_CREATE");
+        assertThat(details).contains("\"tenantId\"");
+        assertThat(details).contains(TENANT_ID);
     }
 }

@@ -7,6 +7,7 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.result.BulkProvisionAccountResult;
 import com.example.account.application.result.ProvisionAccountResult;
+import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.repository.AccountStatusHistoryRepository;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.tenant.Tenant;
@@ -16,6 +17,7 @@ import com.example.account.domain.tenant.TenantType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -267,5 +269,41 @@ class BulkProvisionAccountUseCaseTest {
 
         assertThat(result.failed()).hasSize(1);
         assertThat(result.failed().get(0).errorCode()).isEqualTo("INVALID_ROLE");
+    }
+
+    // ── Regression: TASK-MONO-023a — bulk audit details must be valid JSON ────
+
+    @Test
+    @DisplayName("bulk audit 엔트리의 details 필드가 유효한 JSON 형식이다 (MySQL JSON 컬럼 호환)")
+    void execute_bulkAuditEntry_detailsIsValidJson() {
+        BulkProvisionAccountCommand.Item item1 = item("a@example.com");
+        BulkProvisionAccountCommand.Item item2 = item("b@example.com");
+
+        given(tenantRepository.findById(any(TenantId.class))).willReturn(Optional.of(activeTenant()));
+        given(rowProvisioningHelper.provisionRow(eq(TENANT_ID), eq(item1), any()))
+                .willReturn(successResult("a@example.com"));
+        given(rowProvisioningHelper.provisionRow(eq(TENANT_ID), eq(item2), any()))
+                .willReturn(successResult("b@example.com"));
+
+        ArgumentCaptor<AccountStatusHistoryEntry> historyCaptor =
+                ArgumentCaptor.forClass(AccountStatusHistoryEntry.class);
+        given(historyRepository.save(historyCaptor.capture())).willReturn(null);
+
+        BulkProvisionAccountCommand command = new BulkProvisionAccountCommand(
+                TENANT_ID, List.of(item1, item2), "sys-wms");
+
+        useCase.execute(command);
+
+        AccountStatusHistoryEntry captured = historyCaptor.getValue();
+        String details = captured.getDetails();
+        assertThat(details).isNotNull();
+        // Must be a JSON object
+        assertThat(details.trim()).startsWith("{");
+        assertThat(details.trim()).endsWith("}");
+        // Must contain action key and targetCount
+        assertThat(details).contains("\"action\"");
+        assertThat(details).contains("ACCOUNT_BULK_CREATE");
+        assertThat(details).contains("\"targetCount\"");
+        assertThat(details).contains("2");
     }
 }

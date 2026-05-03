@@ -66,7 +66,7 @@ public class ProvisionStatusChangeUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE,
                 "provisioning_system",
                 actor,
-                "action=OPERATOR_PROVISIONING_STATUS_CHANGE"
+                "{\"action\":\"OPERATOR_PROVISIONING_STATUS_CHANGE\"}"
         );
         historyRepository.save(historyEntry);
 

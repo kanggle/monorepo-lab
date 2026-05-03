@@ -106,7 +106,7 @@ public class ProvisionAccountUseCase {
                     StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE,
                     "provisioning_system",
                     operatorId,
-                    "action=OPERATOR_PROVISIONING_CREATE,tenantId=" + command.tenantId()
+                    "{\"action\":\"OPERATOR_PROVISIONING_CREATE\",\"tenantId\":\"" + command.tenantId() + "\"}"
             );
             historyRepository.save(auditEntry);
 

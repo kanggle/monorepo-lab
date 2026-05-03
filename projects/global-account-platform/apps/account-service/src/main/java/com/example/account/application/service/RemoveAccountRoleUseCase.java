@@ -74,6 +74,7 @@ public class RemoveAccountRoleUseCase {
         afterRoles.remove(command.roleName());
 
         String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
+        String escapedRole = command.roleName().replace("\"", "\\\"");
         AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
                 command.tenantId(),
                 command.accountId(),
@@ -82,8 +83,9 @@ public class RemoveAccountRoleUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_ROLES_REPLACE,
                 "provisioning_system",
                 operatorId,
-                "action=ROLE_REMOVE,role=" + command.roleName()
-                        + ",before=" + beforeRoles + ",after=" + afterRoles
+                "{\"action\":\"ROLE_REMOVE\",\"role\":\"" + escapedRole + "\""
+                        + ",\"before\":" + toJsonStringArray(beforeRoles)
+                        + ",\"after\":" + toJsonStringArray(afterRoles) + "}"
         );
         historyRepository.save(auditEntry);
 
@@ -93,5 +95,16 @@ public class RemoveAccountRoleUseCase {
 
         return new AccountRoleMutationResult(
                 command.accountId(), command.tenantId(), afterRoles, now, true);
+    }
+
+    private static String toJsonStringArray(List<String> items) {
+        if (items == null || items.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(items.get(i).replace("\"", "\\\"")).append("\"");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }

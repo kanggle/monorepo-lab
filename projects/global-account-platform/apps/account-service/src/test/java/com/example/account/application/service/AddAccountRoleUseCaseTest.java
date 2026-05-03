@@ -7,6 +7,7 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.result.AccountRoleMutationResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.account.AccountRole;
+import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountRoleRepository;
 import com.example.account.domain.repository.AccountStatusHistoryRepository;
@@ -19,6 +20,7 @@ import com.example.account.domain.tenant.TenantType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -137,5 +139,34 @@ class AddAccountRoleUseCaseTest {
 
         assertThatThrownBy(() -> useCase.execute(command("warehouse-admin")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── Regression: TASK-MONO-023a — audit details must be valid JSON ─────────
+
+    @Test
+    @DisplayName("role 추가 시 audit details 필드가 유효한 JSON 형식이다 (MySQL JSON 컬럼 호환)")
+    void execute_auditEntry_detailsIsValidJson() {
+        given(tenantRepository.findById(any(TenantId.class))).willReturn(Optional.of(activeTenant()));
+        given(accountRepository.findById(any(TenantId.class), eq(ACCOUNT_ID)))
+                .willReturn(Optional.of(targetAccount()));
+        given(accountRoleRepository.findByTenantIdAndAccountId(any(TenantId.class), eq(ACCOUNT_ID)))
+                .willReturn(List.of());
+        given(accountRoleRepository.addIfAbsent(any(AccountRole.class))).willReturn(true);
+
+        ArgumentCaptor<AccountStatusHistoryEntry> historyCaptor =
+                ArgumentCaptor.forClass(AccountStatusHistoryEntry.class);
+        given(historyRepository.save(historyCaptor.capture())).willReturn(null);
+
+        useCase.execute(command("INBOUND_OPERATOR"));
+
+        AccountStatusHistoryEntry captured = historyCaptor.getValue();
+        String details = captured.getDetails();
+        assertThat(details).isNotNull();
+        assertThat(details.trim()).startsWith("{");
+        assertThat(details.trim()).endsWith("}");
+        assertThat(details).contains("\"action\"");
+        assertThat(details).contains("ROLE_ADD");
+        assertThat(details).contains("\"role\"");
+        assertThat(details).contains("INBOUND_OPERATOR");
     }
 }

@@ -82,7 +82,9 @@ public class AssignRolesUseCase {
             accountRoleRepository.save(role);
         }
 
-        // Audit record
+        // Audit record — details must be valid JSON for the account_status_history.details JSON column.
+        String beforeJson = toJsonStringArray(beforeRoles);
+        String afterJson = toJsonStringArray(requestedRoles);
         AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
                 command.tenantId(),
                 command.accountId(),
@@ -91,7 +93,7 @@ public class AssignRolesUseCase {
                 StatusChangeReason.OPERATOR_PROVISIONING_ROLES_REPLACE,
                 "provisioning_system",
                 operatorId,
-                "action=OPERATOR_PROVISIONING_ROLES_REPLACE,before=" + beforeRoles + ",after=" + requestedRoles
+                "{\"action\":\"OPERATOR_PROVISIONING_ROLES_REPLACE\",\"before\":" + beforeJson + ",\"after\":" + afterJson + "}"
         );
         historyRepository.save(auditEntry);
 
@@ -102,5 +104,16 @@ public class AssignRolesUseCase {
                 "provisioning_system", operatorId, now);
 
         return new AssignRolesResult(command.accountId(), command.tenantId(), requestedRoles, now);
+    }
+
+    private static String toJsonStringArray(List<String> items) {
+        if (items == null || items.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(items.get(i).replace("\"", "\\\"")).append("\"");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }
