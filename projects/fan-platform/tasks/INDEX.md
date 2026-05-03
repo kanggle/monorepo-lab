@@ -66,8 +66,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-INT-001-v1-services-e2e.md` — PR #131 open (사용자 머지 대기 — gh CLI token `workflow` scope 부족). v1 e2e 테스트 스위트 + 3 시나리오 + `fan-platform-e2e` CI job. INT-001 구현 시 발견된 production bug: gateway `application.yml` `RewritePath` 누락 (TASK-FAN-BE-005 follow-up 발행 예정).
-- `TASK-FAN-FE-001-frontend-bootstrap.md` — PR #132 open (사용자 머지 대기 — 같은 token scope 이슈). Next.js 15 + next-auth v5 + Tailwind + FSD lite, 4 페이지 + 27 vitest + 4 playwright smoke 통과. follow-up: GAP V0011 seed 로 `fan-platform-user-flow-client` OIDC client 등록 필요.
+- `TASK-FAN-INT-001-v1-services-e2e.md` — PR #131 open (사용자 머지 대기 — gh CLI token `workflow` scope 부족). v1 e2e 테스트 스위트 + 3 시나리오 + `fan-platform-e2e` CI job. INT-001 구현 시 발견된 production bug: gateway `application.yml` `RewritePath` 누락 → TASK-FAN-BE-005 follow-up.
+- `TASK-FAN-FE-001-frontend-bootstrap.md` — PR #132 open (사용자 머지 대기 — 같은 token scope 이슈). Next.js 15 + next-auth v5 + Tailwind + FSD lite, 4 페이지 + 27 vitest + 4 playwright smoke 통과. follow-up: TASK-MONO-026 (GAP V0011 seed).
+- `TASK-FAN-BE-005-gateway-rewrite-path-fix.md` — gateway `application.yml` 에 `RewritePath` 누락 — `/api/v1/community/**` 외부 요청이 다운스트림에서 404. TASK-FAN-INT-001 e2e 우회 제거 + 단위 테스트 추가. 전제: PR #131 머지.
 
 ## in-progress
 
