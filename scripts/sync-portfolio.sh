@@ -103,15 +103,23 @@ SHARED_PATHS=(
 #   - The standalone portfolio repo is a curated snapshot, not always
 #     identical to what's in the monorepo. For example: portfolio v1 of
 #     `ecommerce-microservices-platform` (kanggle/ecommerce-microservices-platform)
-#     deliberately preserves the legacy self-hosted ecommerce auth-service
-#     (signup / login / refresh) so the standalone repo demonstrates an
-#     end-to-end JWT-issuing service. The monorepo cut that over to GAP OIDC
-#     (TASK-MONO-027 + TASK-FE-067), but cutting the standalone repo over
-#     would force GAP as a transitive dependency of the standalone — which
-#     defeats the "self-contained" property the standalone is supposed to
-#     showcase.
-#   - Solution: exclude the GAP-integration-only frontend / contract paths
-#     from the ecommerce sync. The standalone v1 retains its own auth flow.
+#     is FROZEN at the state prior to the GAP OIDC cutover (TASK-MONO-027 +
+#     TASK-FE-067 + TASK-BE-132). The standalone v1 deliberately preserves
+#     the legacy self-hosted ecommerce auth-service (signup / login / refresh /
+#     Google OAuth) so the standalone repo demonstrates an end-to-end
+#     JWT-issuing service without requiring GAP as a transitive dependency.
+#   - The monorepo has since cut over to GAP OIDC (auth-service decommissioned
+#     from docker-compose / k8s / .env / gateway config / specs). These
+#     GAP-cutover changes must NOT be synced into the standalone v1, or the
+#     standalone's self-hosted auth-service demo will break.
+#   - Solution: exclude all GAP-cutover-related paths from the ecommerce sync.
+#     The ecommerce standalone v1 retains its own auth flow intact.
+#
+# ecommerce-microservices-platform exclusions split into two groups:
+#   GROUP A — TASK-FE-067 (PR #148): frontend NextAuth v5 + GAP OIDC cutover
+#   GROUP B — TASK-BE-132 (PR #150): backend auth-service decommission
+#             (docker-compose / .env / k8s / gateway config / spec rename /
+#              deprecated contracts / deprecated feature specs)
 declare -A PROJECT_EXCLUDE_PATHS=(
     ["ecommerce-microservices-platform"]="\
 apps/web-store/src/shared/auth \
@@ -126,7 +134,19 @@ apps/admin-dashboard/src/app/api/auth \
 apps/admin-dashboard/.env.local.example \
 specs/integration/gap-integration.md \
 specs/services/web-store/architecture.md \
-specs/services/admin-dashboard/architecture.md"
+specs/services/admin-dashboard/architecture.md \
+docker-compose.yml \
+docker-compose.ci.yml \
+docker-compose.bootrun.yml \
+.env.example \
+k8s \
+apps/gateway-service/src/main/resources/application.yml \
+specs/services/auth-service-deprecated \
+specs/services/auth-service \
+specs/contracts/http/auth-api.md \
+specs/contracts/events/auth-events.md \
+specs/features/authentication.md \
+specs/features/user-management.md"
 )
 
 MONOREPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -288,6 +308,13 @@ sync_project() {
         for p in "${SHARED_PATHS[@]}" "projects/$project/"; do
             printf '             %s\n' "$p"
         done
+        local dry_excludes="${PROJECT_EXCLUDE_PATHS[$project]:-}"
+        if [ -n "$dry_excludes" ]; then
+            log "[dry-run] Excluded paths (--invert-paths after extraction):"
+            for p in $dry_excludes; do
+                printf '             %s\n' "$p"
+            done
+        fi
         return 0
     fi
 
