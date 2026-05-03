@@ -58,33 +58,16 @@ INSERT INTO oauth_clients (
     '["authorization_code","refresh_token"]',
     '["http://localhost:3000/api/auth/callback/gap","http://fan-platform.local/api/auth/callback/gap"]',
     '["openid","profile","email","tenant.read"]',
-    '{"@class":"java.util.Collections$UnmodifiableMap","settings.client.require-proof-key":true,"settings.client.require-authorization-consent":false}',
+    -- client_settings: include post-logout-redirect-uris inline (was a separate
+    -- JSON_SET UPDATE in the original spec, but JSON_SET / JSON_ARRAY are
+    -- MySQL-only and break the H2-backed SAS slice tests; embedding the
+    -- field directly keeps the migration portable across MySQL (production
+    -- and Testcontainers) and H2 (slice tests).
+    '{"@class":"java.util.Collections$UnmodifiableMap","settings.client.require-proof-key":true,"settings.client.require-authorization-consent":false,"settings.client.post-logout-redirect-uris":["http://localhost:3000/","http://fan-platform.local/"]}',
     '{"@class":"java.util.Collections$UnmodifiableMap","settings.token.reuse-refresh-tokens":false,"settings.token.x509-certificate-bound-access-tokens":false,"settings.token.access-token-time-to-live":["java.time.Duration",900.000000000],"settings.token.access-token-format":{"@class":"org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat","value":"self-contained"},"settings.token.refresh-token-time-to-live":["java.time.Duration",86400.000000000],"settings.token.authorization-code-time-to-live":["java.time.Duration",300.000000000],"settings.token.device-code-time-to-live":["java.time.Duration",300.000000000]}',
     NOW(),
     NOW()
 );
-
--- ============================================================
--- post_logout_redirect_uris
--- Note: The oauth_clients table stores redirect_uris as a JSON array.
--- SAS post-logout redirect URIs are stored in client_settings per SAS 1.x
--- spec. The column 'redirect_uris' above covers the authorization-code
--- callback; post-logout URIs are embedded in client_settings below.
--- Per V0008 schema the client_settings JSON holds SAS ClientSettings fields.
--- Adding post_logout_redirect_uris requires updating the INSERT above via
--- the dedicated SAS settings key. We store them as an UPDATE to keep the
--- INSERT readable.
--- ============================================================
-UPDATE oauth_clients
-SET client_settings = JSON_SET(
-    client_settings,
-    '$.settings.client.post-logout-redirect-uris',
-    JSON_ARRAY(
-        'http://localhost:3000/',
-        'http://fan-platform.local/'
-    )
-)
-WHERE client_id = 'fan-platform-user-flow-client';
 
 -- ============================================================
 -- Tenant-scoped scope: tenant.read
