@@ -40,7 +40,7 @@ class AddReactionUseCaseTest {
     @InjectMocks AddReactionUseCase useCase;
 
     @Test
-    @DisplayName("같은 (post, reactor) 가 같은 reactionType 으로 두 번 호출 → save 호출 없음 (idempotent)")
+    @DisplayName("같은 (post, reactor) 가 같은 reactionType 으로 두 번 호출 → save 와 outbox event 모두 skip (idempotent)")
     void idempotentSameReaction() {
         Post post = published();
         when(postAccessGuard.requirePublishedAccess(eq("p1"), any(ActorContext.class))).thenReturn(post);
@@ -53,6 +53,14 @@ class AddReactionUseCaseTest {
 
         assertThat(r.totalReactions()).isEqualTo(1L);
         verify(reactionRepository, never()).save(any());
+
+        // Same-type re-PUT is a true no-op: no outbox row should be appended
+        // either, otherwise consumers see duplicate community.reaction.added
+        // events with distinct event_ids that they cannot dedupe (the JPA
+        // upsert produces no DB row change, so consumers have no way to know
+        // the event is a redundancy).
+        verify(eventPublisher, never()).publishReactionAdded(
+                any(), any(), any(), any(), any());
     }
 
     @Test

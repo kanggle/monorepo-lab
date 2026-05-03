@@ -98,9 +98,14 @@ Consumers (planned): notification-service (mention/reply alerts).
 
 ## `community.reaction.added.v1`
 
-Triggered on each `AddReactionUseCase.execute(...)` call — both new reactions
-and type-changes (re-emits with updated type). Consumers MUST treat duplicates
-as no-ops keyed by `eventId`.
+Triggered only when a reaction is **created** (first PUT for a `(post,
+reactor)` pair) or its **type changes** (e.g. `LIKE` → `LOVE`). A repeat
+PUT with the same `(post, reactor, reactionType)` is a true no-op — neither
+the DB row nor the outbox is touched, so consumers do not see a stream of
+distinct `eventId`s for what is the same logical interaction. Consumers
+SHOULD additionally dedupe by `eventId` (idempotency safety net) but with
+this trigger semantics the duplicate volume is bounded by genuine
+type-change activity.
 
 ```json
 {

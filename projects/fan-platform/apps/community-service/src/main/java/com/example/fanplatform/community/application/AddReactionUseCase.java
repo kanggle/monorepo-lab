@@ -25,20 +25,31 @@ public class AddReactionUseCase {
         postAccessGuard.requirePublishedAccess(postId, actor);
         Optional<Reaction> existing = reactionRepository.find(postId, actor.accountId(), actor.tenantId());
         Reaction reaction;
+        boolean changed;
         if (existing.isPresent()) {
             reaction = existing.get();
             if (reaction.getReactionType() != reactionType) {
                 reaction.changeType(reactionType);
                 reactionRepository.save(reaction);
+                changed = true;
+            } else {
+                // Same (post, reactor, type) PUT again — a true no-op at the
+                // database level. Skip the outbox write so consumers don't
+                // see duplicate community.reaction.added events with distinct
+                // event_ids that they cannot dedupe.
+                changed = false;
             }
         } else {
             reaction = Reaction.create(postId, actor.accountId(), actor.tenantId(), reactionType);
             reactionRepository.save(reaction);
+            changed = true;
         }
         long total = reactionRepository.countByPostId(postId, actor.tenantId());
-        eventPublisher.publishReactionAdded(
-                postId, actor.tenantId(), actor.accountId(),
-                reactionType, reaction.getUpdatedAt());
+        if (changed) {
+            eventPublisher.publishReactionAdded(
+                    postId, actor.tenantId(), actor.accountId(),
+                    reactionType, reaction.getUpdatedAt());
+        }
         return new ReactionResult(postId, reactionType, total);
     }
 }
