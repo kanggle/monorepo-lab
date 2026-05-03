@@ -66,9 +66,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-004-prometheus-rate-limit.md` — gateway-service 의 `/actuator/prometheus` rate-limit (또는 네트워크 격리). PR #116 review Warning 4 follow-up — community-api.md 의 "gateway-rate-limited" 주장이 현재 false 라 정정 + 옵션 3가지 (gateway route + RateLimiter / in-process Bucket4j / network isolation) 비교 결정 필요.
-- `TASK-FAN-INT-001-v1-services-e2e.md` — fan-platform v1 3 backend service (gateway/community/artist) 의 cross-service E2E 테스트 스위트. Testcontainers + WireMock JWKS, 3 시나리오 (artist+post happy path / multi-tenant isolation / visibility tier). 새 CI job `fan-platform-e2e`. wms tests/e2e + ecommerce frontend-e2e 패턴 reference.
-- `TASK-FAN-FE-001-frontend-bootstrap.md` — Next.js 15 App Router + Tailwind + next-auth v5 + GAP OIDC PKCE. 5~7 페이지 (피드/아티스트 디렉토리/프로필/포스트 상세/로그인 + 옵션 멤버십/마이페이지). React Query + Vitest + Playwright smoke. ecommerce web-store 패턴 reference.
+- `TASK-FAN-INT-001-v1-services-e2e.md` — PR #131 open (사용자 머지 대기 — gh CLI token `workflow` scope 부족). v1 e2e 테스트 스위트 + 3 시나리오 + `fan-platform-e2e` CI job. INT-001 구현 시 발견된 production bug: gateway `application.yml` `RewritePath` 누락 (TASK-FAN-BE-005 follow-up 발행 예정).
+- `TASK-FAN-FE-001-frontend-bootstrap.md` — PR #132 open (사용자 머지 대기 — 같은 token scope 이슈). Next.js 15 + next-auth v5 + Tailwind + FSD lite, 4 페이지 + 27 vitest + 4 playwright smoke 통과. follow-up: GAP V0011 seed 로 `fan-platform-user-flow-client` OIDC client 등록 필요.
 
 ## in-progress
 
@@ -82,4 +81,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-FAN-BE-001-gateway-service-bootstrap.md` — gateway-service Spring Boot 부트스트랩 (OIDC + Traefik). PR #115 머지 2026-05-03 (review fix 포함: JWKS startup probe + FailOpenRateLimiter narrowing).
 - `TASK-FAN-BE-002-community-service-bootstrap.md` — community-service Spring Boot 부트스트랩 (Layered + post 상태 기계 + outbox). PR #116 머지 2026-05-03 (review fix 8건 포함: Critical status_changed 이벤트, FeedCache read-through, etc.). follow-up: TASK-FAN-BE-004 (prometheus rate-limit), TASK-MONO-025 (UUID v7 마이그레이션).
+- `TASK-FAN-BE-003-artist-service-bootstrap.md` — artist-service Spring Boot 부트스트랩 (Hexagonal ports/adapters + outbox). PR #125 머지 2026-05-03 (review fix 6건 포함: 인덱스 tenant_id prefix, FANDOM POST/PATCH 분리, error envelope 일관, ARTIST_ARCHIVED 정책 문서화, AddRole 전용 enum, outbox 테스트 race fix).
+- `TASK-FAN-BE-004-prometheus-rate-limit.md` — gateway 의 `/actuator/prometheus` 네트워크 격리 (option c). PR #128 머지 2026-05-03. spec 정정 + 신규 ops guide + 통합 테스트 2건. follow-up: Prometheus 컨테이너 docker-compose 추가 시 `fan-platform-net` join 필요.
 - `TASK-FAN-BE-003-artist-service-bootstrap.md` — artist-service Spring Boot 부트스트랩 (Hexagonal ports/adapters + outbox). PR #125 머지 2026-05-03 (review fix 6건 포함: 인덱스 tenant_id prefix, FANDOM POST/PATCH 분리, error envelope 일관, ARTIST_ARCHIVED 정책 문서화, AddRole 전용 enum, outbox 테스트 race fix).
