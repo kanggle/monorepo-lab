@@ -102,6 +102,8 @@ class ArtistGroupServiceTest {
                 "Group X", null, null, null);
         when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
                 .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.ARCHIVED)))
+                .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.PUBLISHED)))
                 .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.DRAFT)))
@@ -133,6 +135,8 @@ class ArtistGroupServiceTest {
                 "Group X", null, null, null);
         when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
                 .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.ARCHIVED)))
+                .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.PUBLISHED)))
                 .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.DRAFT)))
@@ -159,6 +163,8 @@ class ArtistGroupServiceTest {
                 "Group X", null, null, null);
         when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
                 .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.ARCHIVED)))
+                .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.PUBLISHED)))
                 .thenReturn(true);
         when(groupRepo.existsActiveMembership(any(ArtistGroupId.class), any(ArtistId.class), eq("fan-platform")))
@@ -176,6 +182,8 @@ class ArtistGroupServiceTest {
                 "Group X", null, null, null);
         when(groupRepo.findById(any(ArtistGroupId.class), eq("fan-platform")))
                 .thenReturn(Optional.of(g));
+        when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.ARCHIVED)))
+                .thenReturn(false);
         when(artistRepo.existsInStatus(any(ArtistId.class), eq("fan-platform"), eq(ArtistStatus.PUBLISHED)))
                 .thenReturn(true);
         when(groupRepo.existsActiveMembership(any(ArtistGroupId.class), any(ArtistId.class), eq("fan-platform")))
