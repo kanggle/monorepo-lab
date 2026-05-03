@@ -1,5 +1,6 @@
 package com.example.fanplatform.community.infrastructure.security;
 
+import com.example.fanplatform.community.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -45,12 +46,19 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Source the public-path list from PublicPaths so SecurityConfig and
+        // TenantClaimEnforcer agree on exactly the same set. Adding a new
+        // public actuator endpoint requires editing PublicPaths only.
+        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
+        String[] prefixed = PublicPaths.PREFIXES.stream()
+                .map(p -> p + "**")
+                .toArray(String[]::new);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/health/**",
-                                "/actuator/info", "/actuator/prometheus").permitAll()
+                        .requestMatchers(exact).permitAll()
+                        .requestMatchers(prefixed).permitAll()
                         .requestMatchers("/api/community/**").authenticated()
                         .anyRequest().denyAll()
                 )

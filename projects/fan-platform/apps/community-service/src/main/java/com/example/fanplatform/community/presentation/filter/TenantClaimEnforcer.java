@@ -2,6 +2,7 @@ package com.example.fanplatform.community.presentation.filter;
 
 import com.example.fanplatform.community.domain.tenant.TenantContext;
 import com.example.fanplatform.community.infrastructure.security.TenantClaimValidator;
+import com.example.fanplatform.community.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -53,8 +54,12 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        return path.startsWith("/actuator/");
+        // Whitelist only the actuator endpoints we deliberately expose
+        // unauthenticated. A blanket "/actuator/" prefix would bypass the
+        // tenant gate for endpoints that may be added later
+        // (/actuator/env, /actuator/heapdump, …); we want a fail-closed
+        // posture there.
+        return PublicPaths.isPublic(request);
     }
 
     @Override
