@@ -22,9 +22,14 @@ try {
         exit 0
     }
 
-    # Block git push to main/master
+    # Block git push to main/master, raw force push, or hard reset to origin's
+    # main/master. `--force-with-lease` (the safe alternative used to update
+    # feature branches after rebase — git only updates the remote when its
+    # current tip matches what we last fetched) is NOT blocked on non-protected
+    # branches; the first regex still catches main/master targets regardless of
+    # the force flavor. TASK-MONO-043 (A) fixed this false-positive.
     if ($command -match 'git\s+push.*\b(main|master)\b' -or
-        $command -match 'git\s+push\s+--force' -or
+        $command -match 'git\s+push\s+--force(?!-with-lease)' -or
         $command -match 'git\s+push\s+-f\b' -or
         $command -match 'git\s+reset\s+--hard\s+origin/(main|master)') {
 
