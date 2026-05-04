@@ -107,7 +107,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-037-template-md-bootstrap-dryrun.md` — TASK-MONO-033 의 follow-up. TEMPLATE.md 부트스트랩 instruction 을 dummy 프로젝트로 dry-run 검증 + catch 된 누락 / 모호 항목 fix.
+(empty)
+
+## review
+
+- `TASK-MONO-037-template-md-bootstrap-dryrun.md` — TASK-MONO-033 의 follow-up. TEMPLATE.md 부트스트랩 instruction 을 dummy 프로젝트로 dry-run 검증 + catch 된 누락 / 모호 항목 fix. Critical 3 / Warning 5 / Suggestion 2 fix. PR pending.
 
 ## done
 
