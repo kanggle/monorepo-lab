@@ -109,9 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-041-adr-mono-002-phase-4-trigger.md` — ADR-MONO-002 신설 (Phase 4 진입 결정 + scm catalyst). D1=1 도메인 추가 / D2=scm 우선 / D3·D4=별도 ADR 또는 task 로 deferred. Status: ACCEPTED.
+(empty)
 
 ## done
 
@@ -157,3 +155,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **공통규칙 정리 시리즈 follow-up (035~038) 4/4 완료** — 2026-05-04. 시리즈 전체 (029~038) 12 task / 24 PR 종결.
 - `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리 완료. `rule-consistency-check.ps1` 의 skill/agent/command 정규식 모두에 `-and $filePath -notmatch 'README\.md$'` 추가 (false-positive fix, 일관 적용) + `.claude/agents/common/README.md` 신설 (13 agent 카탈로그 + frontmatter 컨벤션 + dispatch 설명 + cross-ref). hook self-modification 사용자 명시 승인 받음. PR #180 머지. 2026-05-04. **공통규칙 정리 시리즈 029~039 13 task / 26 PR 완전 종결.**
+- `TASK-MONO-041-adr-mono-002-phase-4-trigger.md` — ADR-MONO-002 신설 (Phase 4 = Template 레포 추출 진입 결정 + scm catalyst, ACCEPTED). D1=1 도메인 추가 (3 도메인 동시 거부 — root 공유 파일 conflict + bottleneck), D2=scm 우선 (wms 시너지 + 첫 도메인 risk 낮음), D3=Template 추출 시점 별도 ADR-MONO-003 candidate, D4=erp/mes 순서 후속 결정 (추천: scm→erp→mes). PR #183 머지. 2026-05-04.
