@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 skills: service-types/batch-job-setup, backend/scheduled-tasks, database/schema-change-workflow, cross-cutting/observability-setup
 capabilities: [etl-pipeline, data-modeling, batch-processing, data-quality, lineage-tracking]
 languages: [python, java, kotlin, sql]
-domains: [analytics, reporting, data-lake, data-warehouse]
+domains: [all]
 service_types: [batch-job]
 ---
 

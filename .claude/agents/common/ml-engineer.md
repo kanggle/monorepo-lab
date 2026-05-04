@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 skills: service-types/ml-pipeline-setup, cross-cutting/observability-setup, cross-cutting/security-hardening
 capabilities: [model-training, feature-engineering, model-registry, inference-serving, drift-detection, evaluation-gating]
 languages: [python, java, kotlin]
-domains: [recommendation, ranking, fraud-detection, forecasting]
+domains: [all]
 service_types: [ml-pipeline]
 ---
 
