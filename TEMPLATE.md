@@ -74,21 +74,30 @@ This is the single most important rule for keeping the template-extraction path 
 
 ## Phase Timeline
 
-### Phase 1 — Single Project (completed for wms-platform setup)
+### Phase 1 — Single Project ✅ (completed)
 
-One project in the monorepo. Focus on learning what's truly common vs project-specific.
+One project in the monorepo (`wms-platform`). Focus on learning what's truly common vs project-specific. Shared library bootstrapped.
 
-### Phase 2 — Second Project (current planning frontier)
+### Phase 2 — Second Project ✅ (completed)
 
-Add a second domain project under `projects/<new-project>/`. Observe which shared library files needed no change vs needed tweaks. Tighten library abstractions that both projects use.
+`ecommerce-microservices-platform` imported (2026-04-25, PR #58–61). Composite-build → direct-include consolidation demonstrated. Shared library survived cross-domain stress.
 
-### Phase 3 — Third Project
+### Phase 3 — Third and Fourth Project ✅ (completed, 2026-05-03)
 
-Add a third project. By now, the "Rule of Three" has filtered out false generalizations. Shared library stabilizes.
+`global-account-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). All 4 projects now co-exist:
 
-### Phase 4 — Template Extraction
+| Project | Domain | Integration style | Hostname |
+|---|---|---|---|
+| wms-platform | wms | direct-include | wms.local |
+| ecommerce-microservices-platform | ecommerce | direct-include | ecommerce.local (web/admin) |
+| global-account-platform | saas | direct-include | gap.local |
+| fan-platform | fan-platform | direct-include | fan-platform.local |
 
-When the library has been stable for a month+ with no churn:
+"Rule of Three" baseline established. TASK-MONO-029~033 (공통규칙 정리 시리즈) completed the audit and stabilisation. Shared library is approaching Phase 4 readiness.
+
+### Phase 4 — Template Extraction (pending decision)
+
+When the library has been stable for a month+ with no churn, initiate extraction. Decision is the project owner's call — this document does not presuppose the timing.
 
 1. Run `scripts/extract-template.sh <target-dir>` (to be authored):
    - Copy the shared library layer to `<target-dir>`.
