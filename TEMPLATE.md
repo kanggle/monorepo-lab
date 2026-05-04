@@ -367,7 +367,9 @@ The flat layout (no `projects/` level) keeps the single-project repository simpl
 
 ## Local Network Convention
 
-Per [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md), the monorepo adopts a **hostname-based routing** model for local development: a single shared Traefik reverse proxy occupies host ports `:80`/`:443`, and every project's gateway/frontend registers a hostname with Traefik. Backing services (postgres, redis, kafka, ...) stay on the docker network with no host exposure.
+> **Source of truth**: This section (`TEMPLATE.md § Local Network Convention`) is the **master** specification for hostname-based routing. `CLAUDE.md § Local Network Convention` is a concise summary that redirects here for full detail. If the two conflict, this document wins.
+
+Per [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) (Status: ACCEPTED, 2026-05-02), the monorepo adopts a **hostname-based routing** model for local development: a single shared Traefik reverse proxy occupies host ports `:80`/`:443`, and every project's gateway/frontend registers a hostname with Traefik. Backing services (postgres, redis, kafka, ...) stay on the docker network with no host exposure.
 
 This replaces the legacy `PORT_PREFIX` digit-allocation scheme, which was capped at 5 usable slots (prefix 6+ overflows the 65535 host-port limit for common service ports like 6379/8080/9092). With hostname routing, the number of concurrent projects is unbounded.
 
@@ -442,7 +444,7 @@ External tools that need direct TCP access to backing services use one of:
 
 ### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
-The three existing projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing — `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
+The original three projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, GAP, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
 
 5-digit source ports (e.g. Jaeger UI `16686` in ecommerce) are kept as-is; they remain unprefixed and continue to publish on the host because collisions with other projects are unlikely in practice.
 
