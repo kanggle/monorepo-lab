@@ -103,11 +103,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-044-main-baseline-ci-regression-cleanup.md` — main 브랜치의 baseline CI 회귀 청소. 2026-05-04 이후 4 CI job 일관 FAIL: Integration (GAP, `MissingWebServerFactoryBeanException`) / E2E (gateway-master) / E2E (fan-platform) / Frontend E2E (web-store). TASK-MONO-023 시리즈 (a~e, 2026-05-03 종결) 패턴 답습 — 1차 진단 + 분류 ((a) 코드 회귀 / (b) 환경 한계 / (c) flaky) + 분류별 sub-task (`044a/b/c...`) 발행 + main baseline 안정화 검증 (3 연속 PASS) + 회귀 재발 방지 메커니즘. 진행 중 PR (#194/#195/#196/#197) 모두 같은 4 job FAIL — 본 task 의 진단 결과로 admin-override 가능 여부 결정. 분석=Opus 4.7 / 구현 권장=Opus — context loader / dependency tree / git bisect 동시 분석.
 
 ## in-progress
-
-(empty)
 
 (empty)
 
