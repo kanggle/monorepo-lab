@@ -103,7 +103,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-035-spec-drift-followups.md` — TASK-MONO-030 의 W4-W8 follow-up 일괄. wms/fan-platform OIDC issuer/JWKS URI 정렬 (W4-W6) + ecommerce 5 이벤트 발행 service architecture.md Outbox 섹션 추가 (W7) + wms architecture.md 섹션명 표준화 (W8).
+- `TASK-MONO-036-claude-config-followups.md` — TASK-MONO-032 의 W1-W6 follow-up 일괄. 4 agent (devops/frontend/data/ml) frontmatter domains 카탈로그 정규화 + spec-check.ps1 dead 패턴 fix.
+- `TASK-MONO-037-template-md-bootstrap-dryrun.md` — TASK-MONO-033 의 follow-up. TEMPLATE.md 부트스트랩 instruction 을 dummy 프로젝트로 dry-run 검증 + catch 된 누락 / 모호 항목 fix.
+- `TASK-MONO-038-monorepo-workflow-guide.md` — TASK-MONO-033 의 follow-up. `docs/guides/monorepo-workflow.md` 신설 (TEMPLATE.md 가 reference 하는 to-be-authored 가이드). branch 패턴 / task lifecycle / agent dispatch / sync-portfolio.sh / CI 잡 / hook / 자주 발생 conflict 9 섹션.
 
 ## in-progress
 
