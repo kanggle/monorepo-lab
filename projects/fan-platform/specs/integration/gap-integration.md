@@ -20,7 +20,7 @@
 | 항목 | 값 (dev 기본) | 환경 변수 |
 |---|---|---|
 | Issuer URL | `http://gap.local` | `OIDC_ISSUER_URL` |
-| JWKS URI | `${OIDC_ISSUER_URL}/.well-known/jwks.json` | `JWT_JWKS_URI` |
+| JWKS URI | `${OIDC_ISSUER_URL}/oauth2/jwks` | `JWT_JWKS_URI` |
 | OIDC Discovery | `${OIDC_ISSUER_URL}/.well-known/openid-configuration` | n/a |
 | Token endpoint | `${OIDC_ISSUER_URL}/oauth2/token` | n/a |
 | Authorization endpoint | `${OIDC_ISSUER_URL}/oauth2/authorize` | n/a |
