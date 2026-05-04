@@ -74,21 +74,30 @@ This is the single most important rule for keeping the template-extraction path 
 
 ## Phase Timeline
 
-### Phase 1 — Single Project (completed for wms-platform setup)
+### Phase 1 — Single Project ✅ (completed)
 
-One project in the monorepo. Focus on learning what's truly common vs project-specific.
+One project in the monorepo (`wms-platform`). Focus on learning what's truly common vs project-specific. Shared library bootstrapped.
 
-### Phase 2 — Second Project (current planning frontier)
+### Phase 2 — Second Project ✅ (completed)
 
-Add a second domain project under `projects/<new-project>/`. Observe which shared library files needed no change vs needed tweaks. Tighten library abstractions that both projects use.
+`ecommerce-microservices-platform` imported (2026-04-25, PR #58–61). Composite-build → direct-include consolidation demonstrated. Shared library survived cross-domain stress.
 
-### Phase 3 — Third Project
+### Phase 3 — Third and Fourth Project ✅ (completed, 2026-05-03)
 
-Add a third project. By now, the "Rule of Three" has filtered out false generalizations. Shared library stabilizes.
+`global-account-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). All 4 projects now co-exist:
 
-### Phase 4 — Template Extraction
+| Project | Domain | Integration style | Hostname |
+|---|---|---|---|
+| wms-platform | wms | direct-include | wms.local |
+| ecommerce-microservices-platform | ecommerce | direct-include | ecommerce.local (web/admin) |
+| global-account-platform | saas | direct-include | gap.local |
+| fan-platform | fan-platform | direct-include | fan-platform.local |
 
-When the library has been stable for a month+ with no churn:
+"Rule of Three" baseline established. TASK-MONO-029~033 (공통규칙 정리 시리즈) completed the audit and stabilisation. Shared library is approaching Phase 4 readiness.
+
+### Phase 4 — Template Extraction (pending decision)
+
+When the library has been stable for a month+ with no churn, initiate extraction. Decision is the project owner's call — this document does not presuppose the timing.
 
 1. Run `scripts/extract-template.sh <target-dir>` (to be authored):
    - Copy the shared library layer to `<target-dir>`.
@@ -146,13 +155,81 @@ touch projects/<new-project>/tasks/{ready,in-progress,review,done,archive}/.gitk
 
 #### 2. Write `PROJECT.md`
 
-Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). Declare `domain`, `traits`, `service_types`. Write Purpose, Domain Rationale, Trait Rationale, Out of Scope in prose.
+Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). The required frontmatter fields are:
+
+```yaml
+---
+name: <project-name>
+domain: <domain>          # must be in rules/taxonomy.md
+traits: [<trait>, ...]    # each must be in rules/taxonomy.md
+service_types: [rest-api, event-consumer, ...]
+compliance: []            # e.g. [gdpr, pipa] — informational
+data_sensitivity: internal   # internal | pii | pii-sensitive
+scale_tier: startup       # informational
+taxonomy_version: 0.1
+---
+```
+
+Verify `domain` and each `trait` exist in `rules/taxonomy.md` (Hard Stop if not). If adding a new domain or trait, add the rule file in the same PR per the On-Demand Rule Policy below.
+
+Write prose sections: Purpose, Domain Rationale, Trait Rationale, Service Map, GAP IdP Integration (see §"GAP IdP Integration Pattern" below), Out of Scope, Overrides.
 
 #### 3. Write `tasks/INDEX.md`
 
-Copy from the existing project and adjust. This file defines the task lifecycle for the new project.
+Copy from an existing project (e.g., `projects/wms-platform/tasks/INDEX.md`) and adjust. The project-level lifecycle includes **backlog/** and **archive/** in addition to the monorepo-root lifecycle stages (ready / in-progress / review / done).
 
-#### 4. Update root `settings.gradle`
+| Stage | Note |
+|---|---|
+| `backlog/` | Parked ideas — not yet ready for implementation |
+| `ready/` | Accepted and scoped — may be implemented |
+| `in-progress/` | Actively being implemented |
+| `review/` | Implementation complete, awaiting review |
+| `done/` | Merged |
+| `archive/` | Superseded or abandoned |
+
+Adopt the same **PR Separation Rule** as the root `tasks/INDEX.md`: spec PR / impl PR / chore (lifecycle move) PR must not be bundled.
+
+#### 4. Write `docker-compose.yml` with Traefik hostname labels
+
+The project must join the shared Traefik network from day one (TASK-MONO-022/024 precedent). Pick an unused `*.local` hostname and register it in `TEMPLATE.md § Local Network Convention — Hostname allocation`.
+
+```yaml
+services:
+  gateway:
+    expose: ["8080"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.<new-project>.rule=Host(`<new-project>.local`)"
+      - "traefik.http.services.<new-project>.loadbalancer.server.port=8080"
+    networks:
+      - traefik-net
+      - <new-project>-net
+
+  postgres:
+    expose: ["5432"]         # no host port — DB tools via docker exec or dev overlay
+    networks: [<new-project>-net]
+
+networks:
+  traefik-net:
+    external: true
+  <new-project>-net:
+    driver: bridge
+```
+
+Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `CLAUDE.md § Local Network Convention` (authoritative) and `TEMPLATE.md § Local Network Convention` (full detail) for the DB tool access pattern.
+
+#### 5. Write `.env.example`
+
+```bash
+# Hostname (Traefik routing — no PORT_PREFIX)
+PROJECT_HOSTNAME=<new-project>.local
+
+# GAP OIDC (if integrating with GAP IdP)
+OIDC_ISSUER_URL=http://gap.local/oauth2/
+OIDC_JWKS_URI=http://gap.local/oauth2/jwks
+```
+
+#### 6. Update root `settings.gradle`
 
 Add an `include` block for the new project's apps:
 
@@ -163,15 +240,26 @@ include(
 )
 ```
 
-#### 5. Create project-level `build.gradle` (placeholder)
+#### 7. Add shortcut scripts to root `package.json`
+
+```jsonc
+{
+  "scripts": {
+    "<new-project>:up":   "docker compose --project-directory projects/<new-project> up -d",
+    "<new-project>:down": "docker compose --project-directory projects/<new-project> down"
+  }
+}
+```
+
+#### 8. Create project-level `build.gradle` (placeholder)
 
 Start empty. Add project-wide common config (e.g., Spring Boot plugin) when multiple services share it.
 
-#### 6. Write the first `tasks/ready/TASK-BE-001-*.md`
+#### 9. Write the first `tasks/ready/TASK-BE-001-*.md`
 
-Typically a `<service>-bootstrap` task that stands up the first service skeleton.
+Typically a `<service>-bootstrap` task that stands up the first service skeleton. Follow the PR Separation Rule — this spec lands in a spec PR before any implementation.
 
-#### 7. Register for portfolio sync (when ready to publish)
+#### 10. Register for portfolio sync (when ready to publish)
 
 In `scripts/sync-portfolio.sh`:
 
@@ -180,7 +268,7 @@ PROJECT_REMOTES["<new-project>"]="https://github.com/<owner>/<new-project>.git"
 PROJECT_TYPES["<new-project>"]="direct-include"
 ```
 
-#### 8. Verify Gradle sees the new structure
+#### 11. Verify Gradle sees the new structure
 
 ```bash
 ./gradlew projects
@@ -288,7 +376,9 @@ The flat layout (no `projects/` level) keeps the single-project repository simpl
 
 ## Local Network Convention
 
-Per [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md), the monorepo adopts a **hostname-based routing** model for local development: a single shared Traefik reverse proxy occupies host ports `:80`/`:443`, and every project's gateway/frontend registers a hostname with Traefik. Backing services (postgres, redis, kafka, ...) stay on the docker network with no host exposure.
+> **Source of truth**: This section (`TEMPLATE.md § Local Network Convention`) is the **master** specification for hostname-based routing. `CLAUDE.md § Local Network Convention` is a concise summary that redirects here for full detail. If the two conflict, this document wins.
+
+Per [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) (Status: ACCEPTED, 2026-05-02), the monorepo adopts a **hostname-based routing** model for local development: a single shared Traefik reverse proxy occupies host ports `:80`/`:443`, and every project's gateway/frontend registers a hostname with Traefik. Backing services (postgres, redis, kafka, ...) stay on the docker network with no host exposure.
 
 This replaces the legacy `PORT_PREFIX` digit-allocation scheme, which was capped at 5 usable slots (prefix 6+ overflows the 65535 host-port limit for common service ports like 6379/8080/9092). With hostname routing, the number of concurrent projects is unbounded.
 
@@ -363,7 +453,7 @@ External tools that need direct TCP access to backing services use one of:
 
 ### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
-The three existing projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing — `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
+The original three projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, GAP, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
 
 5-digit source ports (e.g. Jaeger UI `16686` in ecommerce) are kept as-is; they remain unprefixed and continue to publish on the host because collisions with other projects are unlikely in practice.
 
@@ -421,6 +511,139 @@ See `docs/guides/monorepo-workflow.md` (to be authored) for the full workflow ru
 
 ---
 
+## Standalone Portfolio Sync and Freeze Policy
+
+`scripts/sync-portfolio.sh` extracts each project from the monorepo into its own standalone GitHub repository (full history, filter-repo based). This allows individual project repos suitable for portfolio submission while keeping development in the monorepo.
+
+### How standalone sync works
+
+```
+monorepo main → filter-repo (keep SHARED_PATHS + projects/<name>/) → hoist to root → post-process → force-push standalone repo
+```
+
+| Config key | Where | Purpose |
+|---|---|---|
+| `PROJECT_REMOTES["<name>"]` | `sync-portfolio.sh` | Target GitHub remote URL |
+| `PROJECT_TYPES["<name>"]` | `sync-portfolio.sh` | `direct-include` (default) or `composite-build` (fallback) |
+| `PROJECT_EXCLUDE_PATHS["<name>"]` | `sync-portfolio.sh` | Paths excluded from standalone — see below |
+
+### PROJECT_EXCLUDE_PATHS — standalone freeze policy
+
+A project's standalone repo is not always identical to the monorepo. When a project undergoes a **major integration cutover** (e.g., migrating from a self-hosted auth service to GAP OIDC), the standalone v1 may intentionally be **frozen** at the pre-cutover state to preserve the v1 demo intact.
+
+**Use `PROJECT_EXCLUDE_PATHS` when:**
+
+- The monorepo has a breaking integration change that the standalone v1 must NOT receive (e.g., auth-service decommission, docker-compose overhaul, GAP OIDC cutover).
+- The standalone's demo depends on components that are removed or replaced in the monorepo.
+
+**Do NOT use `PROJECT_EXCLUDE_PATHS` for:**
+
+- Routine bug fixes or feature additions that the standalone should receive.
+- CI workflow improvements that help standalone repo CI.
+
+**Current freeze example — ecommerce standalone v1:**
+
+`ecommerce-microservices-platform` standalone is frozen at the state prior to the GAP OIDC cutover (TASK-MONO-027 + TASK-FE-067 + TASK-BE-132). The standalone v1 preserves the legacy self-hosted ecommerce auth-service (JWT issuer, signup, Google OAuth) so the standalone repo demonstrates an end-to-end JWT-issuing service without requiring GAP as a transitive dependency.
+
+The following path groups are excluded from the ecommerce standalone sync:
+
+- **GROUP A (TASK-FE-067)**: frontend NextAuth v5 + GAP OIDC cutover (web-store / admin-dashboard auth files)
+- **GROUP B (TASK-BE-132)**: backend auth-service decommission (docker-compose × 3, .env.example, k8s, gateway application.yml, spec rename, deprecated contracts, deprecated feature specs)
+
+### Dual-deploy strategy
+
+Each project has two publication surfaces:
+
+| Surface | Audience | State |
+|---|---|---|
+| Dev monorepo (`kanggle/monorepo-lab`) | Technical reviewers / AI agents | Always latest |
+| Standalone project repo (`kanggle/<project>`) | Portfolio reviewers with time budget | Curated snapshot (may be frozen) |
+
+When a project's standalone is frozen, the standalone `README.md` should document the freeze point and explain that the monorepo version is more recent. See `project_portfolio_submission_strategy.md` in the memory layer for the full dual-deploy rationale.
+
+### Dry-run validation
+
+```bash
+./scripts/sync-portfolio.sh --dry-run <project>
+# Shows: kept paths + excluded paths (PROJECT_EXCLUDE_PATHS)
+```
+
+---
+
+## GAP IdP Integration Pattern (New Projects)
+
+As of ADR-001 (ACCEPTED 2026-05-01), **global-account-platform (GAP) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with GAP from bootstrap.
+
+This applies to: `fan-platform`, `wms`, `ecommerce` (post-TASK-MONO-027), and all future projects.
+
+### 1. Tenant registration
+
+Before any code, register the new domain as a GAP tenant via the admin API:
+
+```
+POST /api/admin/tenants
+Authorization: Bearer <super-admin-token>
+
+{
+  "tenantId": "<domain>",          # e.g. "erp", "scm", "mes"
+  "displayName": "...",
+  "tenantType": "B2B_ENTERPRISE"   # or B2C_CONSUMER
+}
+```
+
+Full procedure: `projects/global-account-platform/specs/features/consumer-integration-guide.md § Phase 1`.
+
+### 2. OIDC client registration (Flyway seed)
+
+Register the new OIDC client(s) via a GAP Flyway seed migration (pattern: `V00XX__<description>.sql`). Reference existing seeds (V0010 = wms, V0011 = fan-platform, V0012 = ecommerce) for the INSERT pattern.
+
+Typical client registration includes:
+
+- `authorization_code` + PKCE (user-facing flows)
+- `refresh_token`
+- `client_credentials` (service-to-service, optional)
+- Redirect URIs for dev / staging / prod
+- Domain-specific scopes (e.g., `wms.inventory.read`)
+
+The seed lives in `projects/global-account-platform/apps/account-service/src/main/resources/db/migration/`.
+
+### 3. Gateway — OAuth2 Resource Server
+
+The new project's gateway service must be configured as an OAuth2 Resource Server that validates GAP's RS256 JWT:
+
+```yaml
+# application.yml (gateway-service)
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI}   # http://gap.local/oauth2/  (dev)
+          jwk-set-uri: ${OIDC_JWKS_URI}    # http://gap.local/oauth2/jwks
+```
+
+Add a `TenantClaimValidator` (or equivalent) that rejects tokens with `tenant_id` != `<domain>`. Reference: `projects/ecommerce-microservices-platform/apps/gateway-service/` (post-TASK-MONO-027).
+
+### 4. PROJECT.md — declare GAP IdP integration
+
+Add a `## GAP IdP Integration` section to the project's `PROJECT.md` (see `projects/wms-platform/PROJECT.md` and `projects/fan-platform/PROJECT.md` as templates):
+
+```markdown
+## GAP IdP Integration
+
+`<project>` uses [global-account-platform](../global-account-platform/PROJECT.md) (GAP)
+as the standard OIDC IdP ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)).
+All <project> services validate GAP RS256 access tokens as OAuth2 Resource Servers and
+pass only `tenant_id=<domain>` tokens.
+Integration detail: [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+```
+
+### 5. Full integration guide
+
+`projects/global-account-platform/specs/features/consumer-integration-guide.md` is the **single reference** for new consumers. It covers all 6 phases: tenant registration → OIDC client setup → gateway RS config → frontend PKCE flow → event subscription → operational checklist.
+
+---
+
 ## Template Extraction (Phase 4 Detail)
 
 _Exact scripts to be authored when Phase 4 approaches. This section is a sketch._
@@ -438,6 +661,54 @@ Until Phase 4, this section is preparation only.
 
 ---
 
+## Task Lifecycle and PR Separation Rule
+
+Both root-level (`tasks/`) and project-level (`projects/<name>/tasks/`) task lifecycles follow the same PR Separation Rule defined in `tasks/INDEX.md`:
+
+| Stage | Recommended PR shape |
+|---|---|
+| `(writing) → ready` | **spec PR** — adds the task file to `ready/` + updates `INDEX.md` ready list. No implementation code. |
+| `ready → in-progress → review` | **impl PR** — moves the task file through `in-progress/` to `review/` and lands the implementation. Lifecycle moves and impl commits are separate commits but live in one PR. |
+| `review → done` | **chore PR** — moves merged task file(s) from `review/` to `done/` + updates `INDEX.md` done list. May batch multiple merged tasks. |
+
+**Why**: bundling spec authoring with implementation hides the `ready` lifecycle stage from `main`. External observers (AI sessions, other developers, audits) read the `ready/` queue to know what's available next. If a task only ever appears in `review/` because spec + impl shipped together, the queue signal is broken.
+
+The root `tasks/INDEX.md § PR Separation Rule` is the authoritative definition. This section is a summary for quick reference during project bootstrap.
+
+---
+
+## Periodic Consistency Audit
+
+After any major cutover (new project join, GAP IdP migration, Traefik hostname migration, shared library promotion, or similar), run a consistency audit:
+
+| Audit scope | Reference task |
+|---|---|
+| `rules/` + `.claude/config/` 4-way sync | TASK-MONO-029 pattern |
+| Spec drift across all project `architecture.md` files | TASK-MONO-030 pattern |
+| `libs/` usage frequency + shared-library-policy compliance | TASK-MONO-031 pattern |
+| `.claude/skills/agents/commands/hooks` index ↔ file sync | TASK-MONO-032 pattern |
+| `TEMPLATE.md` ↔ monorepo state | TASK-MONO-033 pattern (this task) |
+
+**Recommended audit trigger**: after each major platform-level cutover (e.g., adding a 4th or 5th project, completing a cross-project migration) or at minimum quarterly if multiple projects are co-developed.
+
+The TASK-MONO-029~033 series (공통규칙 정리 시리즈, 2026-05-04) established the audit baseline for the 4-project (wms / ecommerce / GAP / fan-platform) monorepo state.
+
+---
+
+## ADR Index (Monorepo Level)
+
+| ADR | Title | Status | Date |
+|---|---|---|---|
+| [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) | Hostname-based routing via Traefik (replace PORT_PREFIX) | **ACCEPTED** | 2026-05-02 |
+
+Project-level ADRs live in `projects/<name>/docs/adr/`. The most significant project-level ADR affecting all consumers:
+
+| ADR | Title | Status | Date |
+|---|---|---|---|
+| [GAP ADR-001](projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | GAP as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
+
+---
+
 ## Validation
 
 After any significant change, verify:
@@ -452,6 +723,16 @@ grep -rE "(auth-service|product-service|order-service|payment-service)" platform
 
 # Each project has a PROJECT.md
 find projects -maxdepth 2 -name PROJECT.md
+
+# No PORT_PREFIX references in any project (hostname routing enforced)
+grep -rn "PORT_PREFIX" projects/ 2>/dev/null
+# Expected: no matches
+
+# Each active project has Traefik labels in docker-compose.yml
+for p in wms-platform ecommerce-microservices-platform global-account-platform fan-platform; do
+  echo "=== $p ==="
+  grep -A2 "traefik.enable" projects/$p/docker-compose.yml 2>/dev/null || echo "MISSING Traefik labels"
+done
 ```
 
 AI-based validation: `.claude/commands/validate-rules.md` (if present).
@@ -485,6 +766,11 @@ A: Only when an existing standalone repo with its own `settings.gradle` + nested
 
 ## References
 
-- `CLAUDE.md` — operating rules (Repository Layout section explains the monorepo structure)
+- `CLAUDE.md` — operating rules (Repository Layout, Hard Stop rules, Local Network Convention summary)
 - `rules/README.md` — rule library architecture and on-demand policy
+- `tasks/INDEX.md` — root task lifecycle + PR Separation Rule (authoritative)
+- `scripts/sync-portfolio.sh` — portfolio extraction tool (PROJECT_REMOTES, PROJECT_TYPES, PROJECT_EXCLUDE_PATHS)
+- `docs/adr/ADR-MONO-001-port-prefix-scaling.md` — hostname routing ADR (ACCEPTED)
+- `projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md` — GAP OIDC AS ADR (ACCEPTED)
+- `projects/global-account-platform/specs/features/consumer-integration-guide.md` — GAP consumer integration (single reference)
 - `docs/guides/` — human-oriented workflow guides (when present)

@@ -103,7 +103,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-033-template-md-consistency-audit.md` — 공통규칙 정리 시리즈 5/5 (마지막). TEMPLATE.md ↔ 실제 monorepo (4 프로젝트 + Traefik hostname routing + GAP IdP 표준화 + standalone freeze 정책 + sync-portfolio.sh PROJECT_EXCLUDE_PATHS) 정합성. CLAUDE.md ↔ TEMPLATE.md source of truth 분담 명시.
 - `TASK-MONO-034-java-security-package-rename.md` — libs/java-security 패키지명 `com.gap.security.*` → `com.example.security.*` 정규화. TASK-MONO-031 audit follow-up (shared-library-policy.md 위반 fix).
 
 ## in-progress
@@ -112,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-033-template-md-consistency-audit.md` — 공통규칙 정리 시리즈 5/5 (마지막). TEMPLATE.md ↔ monorepo 6개 영역 audit + 수정. Critical 2건 fix (bootstrap instruction 누락 항목, Phase Timeline stale). Warning 4건 fix (standalone freeze 정책 설명 누락, GAP IdP 패턴 누락, PR Separation Rule 미반영, PORT_PREFIX 설명 오기재). source of truth 분담 명시 (TEMPLATE.md master, CLAUDE.md redirect). 공통규칙 정리 시리즈 5/5 완료.
 
 ## done
 
