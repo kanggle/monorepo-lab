@@ -103,15 +103,17 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-031-libs-audit.md` — 공통규칙 정리 시리즈 3/5. libs/java-* 의 cross-project import 카운트 매트릭스 + dead code 후보 + libs ↔ project 중복 + project-specific leak 검출 + shared-library-policy.md 준수 검증. Rule of Three (3+ project) 충족 검증.
 - `TASK-MONO-032-claude-config-audit.md` — 공통규칙 정리 시리즈 4/5. .claude/{skills,agents,commands,hooks} 의 stale / orphan / 중복 / 미사용 검증. activation-rules → SKILL.md triggers 양방향 일관성. project-specific leak (common agent frontmatter 의 앱 이름 등) 검출.
 - `TASK-MONO-033-template-md-consistency-audit.md` — 공통규칙 정리 시리즈 5/5 (마지막). TEMPLATE.md ↔ 실제 monorepo (4 프로젝트 + Traefik hostname routing + GAP IdP 표준화 + standalone freeze 정책 + sync-portfolio.sh PROJECT_EXCLUDE_PATHS) 정합성. CLAUDE.md ↔ TEMPLATE.md source of truth 분담 명시.
+- `TASK-MONO-034-java-security-package-rename.md` — libs/java-security 패키지명 `com.gap.security.*` → `com.example.security.*` 정규화. TASK-MONO-031 audit follow-up (shared-library-policy.md 위반 fix).
 
 ## in-progress
 
 (empty)
 
-(empty)
+## review
+
+- `TASK-MONO-031-libs-audit.md` — 공통규칙 정리 시리즈 3/5. libs/java-* 6모듈 40 class audit. Critical 0, Warning 5 (com.gap.security 패키지명 policy 위반, wms 미사용 deps, 0-importer interface 2건), Suggestion 3. dead code 분류 a 없음. follow-up TASK-MONO-034 (패키지명 정규화) 신규 발행.
 
 ## done
 
