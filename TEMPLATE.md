@@ -149,9 +149,11 @@ Use Option A unless Option B's benefit (zero rewrites of many existing internal 
 #### 1. Create project directory structure
 
 ```bash
-mkdir -p projects/<new-project>/{apps,specs/{contracts/{http,events},services,features,use-cases},tasks/{ready,in-progress,review,done,archive},knowledge,docs,infra}
-touch projects/<new-project>/tasks/{ready,in-progress,review,done,archive}/.gitkeep
+mkdir -p projects/<new-project>/{apps,specs/{contracts/{http,events},services,features,use-cases,integration},tasks/{backlog,ready,in-progress,review,done,archive},knowledge,docs,infra}
+touch projects/<new-project>/tasks/{backlog,ready,in-progress,review,done,archive}/.gitkeep
 ```
+
+> `specs/integration/` is created here because the `PROJECT.md` GAP IdP section references `specs/integration/gap-integration.md` (see Step 2 and §"GAP IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
 
 #### 2. Write `PROJECT.md`
 
@@ -199,7 +201,9 @@ services:
     expose: ["8080"]
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
       - "traefik.http.routers.<new-project>.rule=Host(`<new-project>.local`)"
+      - "traefik.http.routers.<new-project>.entrypoints=web"
       - "traefik.http.services.<new-project>.loadbalancer.server.port=8080"
     networks:
       - traefik-net
@@ -212,9 +216,12 @@ services:
 networks:
   traefik-net:
     external: true
+    name: traefik-net        # explicit name so compose project-name prefix is not prepended
   <new-project>-net:
     driver: bridge
 ```
+
+> `traefik.docker.network=traefik-net` is required when the gateway container is attached to multiple networks — without it Traefik may route via the wrong network and fail to reach the container. `entrypoints=web` pins the router to Traefik's HTTP (port 80) entrypoint. Both labels are present in all existing projects (fan-platform, wms, gap, ecommerce).
 
 Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `CLAUDE.md § Local Network Convention` (authoritative) and `TEMPLATE.md § Local Network Convention` (full detail) for the DB tool access pattern.
 
@@ -225,8 +232,11 @@ Backing services (postgres, redis, kafka, …) use `expose:` only — never `por
 PROJECT_HOSTNAME=<new-project>.local
 
 # GAP OIDC (if integrating with GAP IdP)
-OIDC_ISSUER_URL=http://gap.local/oauth2/
-OIDC_JWKS_URI=http://gap.local/oauth2/jwks
+# OIDC_ISSUER_URL: GAP's issuer base URL — no trailing /oauth2/ path.
+#   Spring Security appends /.well-known/openid-configuration automatically.
+OIDC_ISSUER_URL=http://gap.local
+# JWT_JWKS_URI: explicit JWKS endpoint (avoids OpenID discovery round-trip in dev).
+JWT_JWKS_URI=http://gap.local/oauth2/jwks
 ```
 
 #### 6. Update root `settings.gradle`
@@ -245,19 +255,33 @@ include(
 ```jsonc
 {
   "scripts": {
-    "<new-project>:up":   "docker compose --project-directory projects/<new-project> up -d",
-    "<new-project>:down": "docker compose --project-directory projects/<new-project> down"
+    "<new-project>:up":     "docker compose --project-directory projects/<new-project> up -d",
+    "<new-project>:down":   "docker compose --project-directory projects/<new-project> down",
+    "<new-project>:ps":     "docker compose --project-directory projects/<new-project> ps",
+    "<new-project>:logs":   "docker compose --project-directory projects/<new-project> logs -f",
+    "<new-project>:docker": "docker compose --project-directory projects/<new-project>"
   }
 }
 ```
 
+> Add `:install`, `:dev`, `:build`, `:lint`, `:pnpm` shortcuts if the project has a frontend (`pnpm --dir projects/<new-project>`). See fan-platform entries in the root `package.json` as a template for the full set.
+
 #### 8. Create project-level `build.gradle` (placeholder)
 
-Start empty. Add project-wide common config (e.g., Spring Boot plugin) when multiple services share it.
+Create `projects/<new-project>/build.gradle` with a header comment only — no plugin declarations yet. Use `projects/wms-platform/build.gradle` as a structural template (the file documents what to add when multiple services share common config). Add Spring Boot plugin or dependency blocks only when concrete duplication across service modules warrants it.
 
-#### 9. Write the first `tasks/ready/TASK-BE-001-*.md`
+#### 9. Write the first task in `tasks/ready/`
 
 Typically a `<service>-bootstrap` task that stands up the first service skeleton. Follow the PR Separation Rule — this spec lands in a spec PR before any implementation.
+
+**Task ID convention** — two patterns are in use; pick one and declare it in `tasks/INDEX.md`:
+
+| Pattern | Example | When to use |
+|---|---|---|
+| `TASK-BE-001-*.md` | wms-platform style | Short domain name; project namespace implied by directory |
+| `TASK-<PROJECT-PREFIX>-BE-001-*.md` | `TASK-FAN-BE-001-*.md` (fan-platform) | Avoids ambiguity when task IDs may appear in cross-project context |
+
+Choose the simpler `TASK-BE-001` form for single-domain projects; use the prefixed form if the project name is commonly abbreviated in shared contexts.
 
 #### 10. Register for portfolio sync (when ready to publish)
 
@@ -273,6 +297,12 @@ PROJECT_TYPES["<new-project>"]="direct-include"
 ```bash
 ./gradlew projects
 ```
+
+Expected output: new project and its app subproject(s) appear under `Project ':projects:<new-project>'`.
+
+#### 12. Write `README.md`
+
+Create `projects/<new-project>/README.md` introducing the project: purpose, architecture diagram (optional), local dev quick-start (hostname, `pnpm <new-project>:up`, Traefik prerequisite), and known limitations. See `projects/fan-platform/README.md` or `projects/wms-platform/README.md` as templates.
 
 ---
 
@@ -392,7 +422,9 @@ services:
     expose: ["8080"]                             # internal-only, no host port
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
       - "traefik.http.routers.<project>.rule=Host(`<project>.local`)"
+      - "traefik.http.routers.<project>.entrypoints=web"
       - "traefik.http.services.<project>.loadbalancer.server.port=8080"
     networks:
       - traefik-net
@@ -405,6 +437,7 @@ services:
 networks:
   traefik-net:
     external: true                               # shared with the global Traefik stack
+    name: traefik-net                            # explicit name — no compose project-name prefix
   <project>-net:
     driver: bridge
 ```
@@ -605,7 +638,7 @@ Typical client registration includes:
 - Redirect URIs for dev / staging / prod
 - Domain-specific scopes (e.g., `wms.inventory.read`)
 
-The seed lives in `projects/global-account-platform/apps/account-service/src/main/resources/db/migration/`.
+The seed lives in `projects/global-account-platform/apps/auth-service/src/main/resources/db/migration/`.
 
 ### 3. Gateway — OAuth2 Resource Server
 
@@ -618,9 +651,11 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URI}   # http://gap.local/oauth2/  (dev)
-          jwk-set-uri: ${OIDC_JWKS_URI}    # http://gap.local/oauth2/jwks
+          issuer-uri: ${OIDC_ISSUER_URL}   # http://gap.local  (dev — no trailing /oauth2/)
+          jwk-set-uri: ${JWT_JWKS_URI}     # http://gap.local/oauth2/jwks
 ```
+
+> Use `OIDC_ISSUER_URL` (not `OIDC_ISSUER_URI`) — this aligns with the `.env.example` variable name used by all existing projects (ecommerce, fan-platform). `JWT_JWKS_URI` is the conventional env var name for the JWKS endpoint; `OIDC_JWKS_URI` is an alias that also works but less common in the codebase. Set `issuer-uri` to `http://gap.local` (no `/oauth2/` path) — Spring Security's OpenID discovery appends `/.well-known/openid-configuration` automatically; the issuer in the issued JWT must match exactly.
 
 Add a `TenantClaimValidator` (or equivalent) that rejects tokens with `tenant_id` != `<domain>`. Reference: `projects/ecommerce-microservices-platform/apps/gateway-service/` (post-TASK-MONO-027).
 
