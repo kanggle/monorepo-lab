@@ -14,8 +14,10 @@
 --     credentials. Production deployments MUST rotate the secret via the admin
 --     API or by overriding via env vars (WMS_USER_FLOW_CLIENT_SECRET,
 --     WMS_INTERNAL_SERVICES_CLIENT_SECRET) and updating these rows.
---   - Hash verified: $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
---     matches "secret".
+--   - Hash verified: $2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS
+--     matches "secret" via BCryptPasswordEncoder (TASK-MONO-044c re-pinned;
+--     the previous N9qo8u... hash was a stale comment claim that did not
+--     round-trip through BCrypt.matches and silently broke client_credentials).
 --
 -- Tenant:
 --   Both clients are scoped to tenant_id='wms' (B2B enterprise). Cross-tenant
@@ -49,7 +51,7 @@ INSERT INTO oauth_clients (
     'wms-user-flow-client',
     'wms',
     'B2B_ENTERPRISE',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
     'WMS User Flow Client',
     '["client_secret_basic"]',
     '["authorization_code","refresh_token"]',
@@ -89,7 +91,7 @@ INSERT INTO oauth_clients (
     'wms-internal-services-client',
     'wms',
     'B2B_ENTERPRISE',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
     'WMS Internal Services Client',
     '["client_secret_basic"]',
     '["client_credentials"]',

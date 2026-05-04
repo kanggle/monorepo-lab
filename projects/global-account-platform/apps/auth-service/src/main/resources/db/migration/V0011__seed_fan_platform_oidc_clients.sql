@@ -13,8 +13,10 @@
 --     Production deployments MUST rotate the secret via the admin API or by
 --     overriding via env vars (FAN_PLATFORM_USER_FLOW_CLIENT_SECRET) and
 --     updating this row.
---   - Hash: $2a$10$8K1p/a0dR1xqM8LjelOS.OEI7NJJkMvNKbFbMaWkVWzBJUY9qQ4hO
---     matches "fan-platform-dev" (BCryptPasswordEncoder strength=10).
+--   - Hash: $2a$10$TqHKIHozp9LhJTBLZHrOkusLbXZ/z12IWiCl51O665gJtMIc3UvuO
+--     matches "fan-platform-dev" via BCryptPasswordEncoder strength=10
+--     (TASK-MONO-044c re-pinned; the previous 8K1p... hash was a stale comment
+--     claim that did not round-trip through BCrypt.matches).
 --
 -- Tenant:
 --   Client is scoped to tenant_id='fan-platform' (B2C self-service). Cross-tenant
@@ -52,7 +54,7 @@ INSERT INTO oauth_clients (
     'fan-platform-user-flow-client',
     'fan-platform',
     'B2C',
-    '$2a$10$8K1p/a0dR1xqM8LjelOS.OEI7NJJkMvNKbFbMaWkVWzBJUY9qQ4hO',
+    '$2a$10$TqHKIHozp9LhJTBLZHrOkusLbXZ/z12IWiCl51O665gJtMIc3UvuO',
     'fan-platform Web',
     '["client_secret_basic"]',
     '["authorization_code","refresh_token"]',
