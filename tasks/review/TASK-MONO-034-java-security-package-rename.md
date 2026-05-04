@@ -8,7 +8,7 @@ libs/java-security 패키지명 com.gap.security → com.example.security 정규
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -82,12 +82,12 @@ TASK-MONO-031 audit 에서 발견된 `libs/java-security` 모듈의 project-spec
 
 # Acceptance Criteria
 
-- [ ] `libs/java-security` 내 모든 파일이 `com.example.security.*` 패키지 사용.
-- [ ] `projects/global-account-platform` 의 모든 `import com.gap.security.*` 가 `import com.example.security.*` 로 교체.
-- [ ] `./gradlew :libs:java-security:check` PASS.
-- [ ] `./gradlew :projects:global-account-platform:apps:auth-service:check` PASS (+ 다른 GAP 서비스).
-- [ ] `./gradlew :projects:wms-platform:apps:gateway-service:compileJava` PASS.
-- [ ] `./gradlew :projects:fan-platform:apps:gateway-service:compileJava` PASS.
+- [x] `libs/java-security` 내 모든 파일이 `com.example.security.*` 패키지 사용.
+- [x] `projects/global-account-platform` 의 모든 `import com.gap.security.*` 가 `import com.example.security.*` 로 교체.
+- [x] `./gradlew :libs:java-security:check` PASS.
+- [x] `./gradlew :projects:global-account-platform:apps:auth-service:check` PASS (+ admin-service compileJava PASS).
+- [x] `./gradlew :projects:wms-platform:apps:gateway-service:compileJava` PASS.
+- [x] `./gradlew :projects:fan-platform:apps:gateway-service:compileJava` PASS.
 
 ---
 
@@ -119,9 +119,9 @@ TASK-MONO-031 audit 에서 발견된 `libs/java-security` 모듈의 project-spec
 
 # Definition of Done
 
-- [ ] 패키지명 정규화 완료.
-- [ ] 영향 서비스 빌드/테스트 PASS.
-- [ ] Ready for review.
+- [x] 패키지명 정규화 완료.
+- [x] 영향 서비스 빌드/테스트 PASS.
+- [x] Ready for review.
 
 ---
 
