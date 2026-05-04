@@ -110,9 +110,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-036-claude-config-followups.md` — TASK-MONO-032 의 W1-W5 follow-up. W1-W4 완료 (4 agent frontmatter `domains: [all]`), W5 완료 (spec-check.ps1 `specs/platform/` → `platform/`). W6 (`agents/common/README.md` 부재 + rule-consistency-check.ps1 README false-positive 버그) 는 hook self-modification permission 차단으로 별도 task 분리 권장.
+(empty)
 
 ## done
 
@@ -152,3 +150,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-033-template-md-consistency-audit.md` — 공통규칙 정리 시리즈 5/5 (마지막). TEMPLATE.md ↔ monorepo 6개 영역 audit + ~300줄 수정. Critical 2건 fix (bootstrap instruction 누락 항목 — frontmatter / Traefik labels / .env.example / backlog / package.json, Phase Timeline stale → Phase 3 완료 + Phase 4 pending). Warning 4건 fix (standalone freeze 정책 누락 → Standalone Portfolio Sync and Freeze Policy 섹션 신설, GAP IdP 패턴 누락 → GAP IdP Integration Pattern 섹션 5단계 신설, PR Separation Rule + audit 주기 + ADR 현황 미반영 → 3 섹션 신설, PORT_PREFIX "three projects" 오기재 → 4 정정). source of truth 분담: Local Network Convention TEMPLATE master / CLAUDE redirect, PR Separation Rule INDEX master / TEMPLATE summary, GAP consumer guide GAP spec master. follow-up candidate: dummy 프로젝트 부트스트랩 dry-run, `docs/guides/monorepo-workflow.md` 신설. **공통규칙 정리 시리즈 029~033 5/5 완료**. PR #166 머지. 2026-05-04.
 - `TASK-MONO-034-java-security-package-rename.md` — libs/java-security 패키지명 `com.gap.security.*` → `com.example.security.*` 정규화 (TASK-MONO-031 audit follow-up). 77 files (libs main 10 + test 3 + GAP import 갱신 63 + SQL 주석 1). reflection 사용 검증 결과 무관. 4 module sample build PASS. CI Build & Test + master integration + boot jars + frontend 모두 PASS. PR #168 머지. 2026-05-04.
 - `TASK-MONO-035-spec-drift-followups.md` — TASK-MONO-030 의 W4-W8 follow-up 일괄. W4-W6: wms gap-integration.md issuer `localhost:8081`→`gap.local` + JWKS URI `/.well-known/jwks.json`→`/oauth2/jwks`, fan-platform JWKS URI 동일 정렬. W7: ecommerce 4 service (order/promotion/review/shipping) architecture.md 에 Outbox 섹션 추가 (payment 는 OutboxPollingScheduler subclass 없어 제외 명시). W8: wms 4 service (master/inventory/inbound/outbound) architecture.md 의 `## Architecture Style: Hexagonal` → 헤더 + 별도 줄 분리 (gateway 는 이미 분리). 10 files. sample build 4 module PASS. PR #171 머지. 2026-05-04.
+- `TASK-MONO-036-claude-config-followups.md` — TASK-MONO-032 의 W1-W5 follow-up. W1-W4 완료 (4 agent: devops/frontend/data/ml frontmatter `domains: [all]` — backend-engineer 패턴 일치), W5 완료 (spec-check.ps1 `specs/platform/` → `platform/`). W6 (`agents/common/README.md` 부재 + rule-consistency-check.ps1 의 README false-positive 버그) 는 hook self-modification permission 차단으로 deferred — TASK-MONO-039 candidate 권장. PR #173 머지. 2026-05-04.
