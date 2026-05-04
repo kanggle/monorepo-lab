@@ -10,7 +10,7 @@ import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.repository.PasswordResetTokenStore;
 import com.example.auth.domain.repository.RefreshTokenRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

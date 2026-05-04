@@ -1,4 +1,4 @@
-package com.gap.security.password;
+package com.example.security.password;
 
 import com.password4j.Argon2Function;
 import com.password4j.Password;

@@ -8,7 +8,7 @@
 --
 -- Test password (plaintext, dev-only): "devpassword123!"
 -- Encoded hash: Argon2id (m=65536, t=3, p=1, 32B output, 16B salt) via
---   com.gap.security.password.Argon2idPasswordHasher (default parameters).
+--   com.example.security.password.Argon2idPasswordHasher (default parameters).
 --
 -- The INSERT IGNORE + dependent INSERT IGNORE keep the migration idempotent
 -- on re-runs and safe on environments where an operator with this UUID is

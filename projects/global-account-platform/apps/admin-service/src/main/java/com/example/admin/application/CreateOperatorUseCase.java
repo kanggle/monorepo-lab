@@ -9,7 +9,7 @@ import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaReposit
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaEntity;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;

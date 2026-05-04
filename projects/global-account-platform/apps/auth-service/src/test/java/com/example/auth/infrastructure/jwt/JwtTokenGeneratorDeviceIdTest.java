@@ -1,7 +1,7 @@
 package com.example.auth.infrastructure.jwt;
 
 import com.example.auth.domain.token.TokenPair;
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeAll;

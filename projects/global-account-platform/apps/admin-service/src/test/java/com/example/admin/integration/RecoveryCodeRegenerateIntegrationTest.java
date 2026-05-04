@@ -6,7 +6,7 @@ import com.example.admin.support.OperatorJwtTestFixture;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;

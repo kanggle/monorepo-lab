@@ -4,7 +4,7 @@ import com.example.admin.application.port.AdminRefreshTokenPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.application.port.TokenBlacklistPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

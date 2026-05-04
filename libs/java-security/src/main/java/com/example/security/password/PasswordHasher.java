@@ -1,4 +1,4 @@
-package com.gap.security.password;
+package com.example.security.password;
 
 /**
  * Hashes and verifies passwords.

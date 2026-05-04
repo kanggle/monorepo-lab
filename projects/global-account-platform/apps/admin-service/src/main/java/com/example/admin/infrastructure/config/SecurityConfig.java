@@ -4,7 +4,7 @@ import com.example.admin.application.port.TokenBlacklistPort;
 import com.example.admin.infrastructure.security.BootstrapAuthenticationFilter;
 import com.example.admin.infrastructure.security.BootstrapTokenService;
 import com.example.admin.infrastructure.security.OperatorAuthenticationFilter;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

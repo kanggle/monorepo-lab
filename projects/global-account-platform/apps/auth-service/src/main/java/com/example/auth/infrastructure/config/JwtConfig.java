@@ -1,9 +1,9 @@
 package com.example.auth.infrastructure.config;
 
-import com.gap.security.jwt.JwtSigner;
-import com.gap.security.jwt.Rs256JwtSigner;
-import com.gap.security.password.Argon2idPasswordHasher;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.jwt.JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
+import com.example.security.password.Argon2idPasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

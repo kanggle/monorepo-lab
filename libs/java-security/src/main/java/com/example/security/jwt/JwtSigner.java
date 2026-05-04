@@ -1,4 +1,4 @@
-package com.gap.security.jwt;
+package com.example.security.jwt;
 
 import java.security.PrivateKey;
 import java.util.Map;

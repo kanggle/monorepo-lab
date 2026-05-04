@@ -1,6 +1,6 @@
 package com.example.community.support;
 
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 

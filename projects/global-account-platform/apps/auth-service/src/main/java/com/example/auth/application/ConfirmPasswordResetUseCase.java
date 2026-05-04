@@ -11,7 +11,7 @@ import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.repository.PasswordResetTokenStore;
 import com.example.auth.domain.repository.RefreshTokenRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

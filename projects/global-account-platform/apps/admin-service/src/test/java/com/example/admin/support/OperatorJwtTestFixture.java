@@ -1,8 +1,8 @@
 package com.example.admin.support;
 
-import com.gap.security.jwt.JwtVerifier;
-import com.gap.security.jwt.Rs256JwtSigner;
-import com.gap.security.jwt.Rs256JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
+import com.example.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtVerifier;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;

@@ -1,4 +1,4 @@
-package com.gap.security.jwt;
+package com.example.security.jwt;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;

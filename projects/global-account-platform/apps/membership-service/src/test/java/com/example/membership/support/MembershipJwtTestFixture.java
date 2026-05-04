@@ -1,6 +1,6 @@
 package com.example.membership.support;
 
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;

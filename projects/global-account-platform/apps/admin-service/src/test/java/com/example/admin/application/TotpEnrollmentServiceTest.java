@@ -9,7 +9,7 @@ import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaReposit
 import com.example.admin.infrastructure.security.TotpGenerator;
 import com.example.admin.infrastructure.security.TotpSecretCipher;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

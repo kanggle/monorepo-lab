@@ -2,8 +2,8 @@ package com.example.admin.infrastructure.security;
 
 import com.example.admin.application.exception.InvalidBootstrapTokenException;
 import com.example.common.id.UuidV7;
-import com.gap.security.jwt.JwtVerificationException;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerifier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;

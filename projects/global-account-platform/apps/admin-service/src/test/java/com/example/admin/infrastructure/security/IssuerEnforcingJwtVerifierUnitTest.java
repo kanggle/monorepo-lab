@@ -1,6 +1,6 @@
 package com.example.admin.infrastructure.security;
 
-import com.gap.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerificationException;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,9 +1,9 @@
 package com.example.admin.infrastructure.security;
 
 import com.example.admin.application.exception.InvalidBootstrapTokenException;
-import com.gap.security.jwt.JwtVerifier;
-import com.gap.security.jwt.Rs256JwtSigner;
-import com.gap.security.jwt.Rs256JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
+import com.example.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
