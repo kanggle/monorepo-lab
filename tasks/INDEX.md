@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-043-micro-fix-bundle.md` — operational hygiene 3 micro-fix batch. (A) `protect-main-branch.ps1` 의 `--force-with-lease` false-positive (TASK-MONO-040 시리즈에서 직접 친 friction), (B) `.claude/scheduled_tasks.lock` `.gitignore` 등록, (C) `auth-api.md` § OAuth2 Clients 표의 ecommerce V0012 행 누락 fix. ADR-MONO-002 D3 churn 안정 평가 기간에 적합한 churn-zero 작업. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — line-level batch fix.
+(empty)
 
 ## in-progress
 
@@ -160,3 +160,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-040-scm-platform-bootstrap.md` — ADR-MONO-002 D2 후속 — 모노레포 5번째 프로젝트 `scm-platform` skeleton 부트스트랩 (Phase 4 catalyst). `rules/domains/scm.md` 신설 (on-demand, Mandatory Rules S1-S8) + `.claude/config/activation-rules.md` link 활성화 + `projects/scm-platform/` 전체 트리 (PROJECT.md / tasks/INDEX.md / docker-compose.yml / .env.example / build.gradle / README.md / 17 .gitkeep) + 루트 `package.json` `scm:*` 5 shortcuts. 25 files / 796 insertions. Library 경계 grep empty / `./gradlew projects` regression 0 / docker-compose config valid. v1 service map 의도 (gateway / procurement / inventory-visibility), 첫 service skeleton 은 후속 TASK-SCM-BE-001. PR #185 (spec) + PR #188 (impl) 머지. 2026-05-04.
 
 **scm 부트스트랩 시리즈 (040 + 042) 4 PR 종결** — 2026-05-04. monorepo Phase 4 catalyst 첫 도메인 추가 완료. 5 프로젝트 동거 진입 (wms / ecommerce / GAP / fan-platform / **scm**). ADR-MONO-002 D3 (Template 레포 실제 추출 결정) 는 라이브러리 churn 안정 평가 후 ADR-MONO-003 candidate.
+- `TASK-MONO-043-micro-fix-bundle.md` — operational hygiene 3 micro-fix batch. (A) `protect-main-branch.ps1` 의 force-with-lease false-positive fix (L27 regex 에 negative lookahead 추가, TASK-MONO-040 시리즈 직접 친 friction 의 근본 fix). (B) `.claude/scheduled_tasks.lock` `.gitignore` 등록 + `git rm --cached` 로 untrack. (C) `auth-api.md` § OAuth2 Clients 표에 ecommerce V0012 의 web-store-client + admin-dashboard-client 2 행 추가 (TASK-MONO-027 머지 시 spec 갱신 누락 fix). ADR-MONO-002 D3 churn 안정 평가 기간 churn-zero 작업. Hook self-modification 사용자 명시 승인 (TASK-MONO-039 패턴). PR #190 (spec) + PR #191 (impl) 머지. 2026-05-04.
