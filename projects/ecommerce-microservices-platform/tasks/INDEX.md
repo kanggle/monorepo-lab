@@ -72,7 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-FE-068 | admin-dashboard 의 SSR `API_URL_INTERNAL` fallback 추가 — web-store 와 정합성. axios baseURL 결정 로직을 web-store 와 1:1 동일하게 (SSR=internal→public→localhost, client=public→localhost). docker-compose / k8s manifest / .env.example 의 admin-dashboard env 에 `API_URL_INTERNAL` 노출. 단위 테스트 4개 + frontend-unit-tests CI 통과. TASK-FE-067 cutover 의 follow-up candidate (done 표에 명시). 선행=FE-067 (done). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단일 파일 textual diff + 단위 테스트. | admin-dashboard, web-store (테스트 답습) | code, bug |
 
 ## in-progress
 
