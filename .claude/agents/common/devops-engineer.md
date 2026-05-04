@@ -5,7 +5,7 @@ model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
 capabilities: [docker, kubernetes, ci-cd, terraform, monitoring-setup, secrets-management, cost-optimization, service-mesh]
 languages: [yaml, hcl, dockerfile, bash]
-domains: [infra]
+domains: [all]
 service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app]
 ---
 

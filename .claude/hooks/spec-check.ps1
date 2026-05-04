@@ -20,7 +20,7 @@ try {
     }
 
     # Warn when editing platform specs
-    if ($filePath -match 'specs[\\/]platform[\\/]') {
+    if ($filePath -match '[\\/]platform[\\/]' -or $filePath -match '^platform[\\/]') {
         $result = @{
             decision = "ask"
             reason   = "Platform specs (platform/) are the highest priority source of truth. Confirm this change is intentional and not a task-driven modification."
