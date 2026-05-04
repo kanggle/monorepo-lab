@@ -17,15 +17,15 @@ try {
         $isRuleFile = $true
         $fileType = "claude-md"
     }
-    elseif ($filePath -match '\.claude[\\/]skills[\\/]') {
+    elseif ($filePath -match '\.claude[\\/]skills[\\/]' -and $filePath -notmatch 'README\.md$') {
         $isRuleFile = $true
         $fileType = "skill"
     }
-    elseif ($filePath -match '\.claude[\\/]agents[\\/]') {
+    elseif ($filePath -match '\.claude[\\/]agents[\\/]' -and $filePath -notmatch 'README\.md$') {
         $isRuleFile = $true
         $fileType = "agent"
     }
-    elseif ($filePath -match '\.claude[\\/]commands[\\/]') {
+    elseif ($filePath -match '\.claude[\\/]commands[\\/]' -and $filePath -notmatch 'README\.md$') {
         $isRuleFile = $true
         $fileType = "command"
     }
