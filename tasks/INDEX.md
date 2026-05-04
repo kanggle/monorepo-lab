@@ -109,9 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리 완료. `rule-consistency-check.ps1` 의 skill/agent/command 정규식 모두에 `-and $filePath -notmatch 'README\.md$'` 추가 + `.claude/agents/common/README.md` 신설 (13 agent 카탈로그 + frontmatter 컨벤션 + dispatch 설명).
+(empty)
 
 ## done
 
@@ -156,3 +154,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-038-monorepo-workflow-guide.md` — TASK-MONO-033 의 follow-up. `docs/guides/monorepo-workflow.md` 신설 305줄 9섹션 (overview / branch 패턴 / task lifecycle / agent dispatch + 모델 선택표 / sync-portfolio.sh + freeze policy / CI 잡 분류표 / hook 우회 규칙 / 자주 발생 conflict 패턴 7건 — 본 시리즈 029~037 실사례 기반 / 9 master 문서 cross-ref 표). TEMPLATE.md anchor link 1건 갱신. dangling link 0건. PR #177 머지. 2026-05-04.
 
 **공통규칙 정리 시리즈 follow-up (035~038) 4/4 완료** — 2026-05-04. 시리즈 전체 (029~038) 12 task / 24 PR 종결.
+- `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리 완료. `rule-consistency-check.ps1` 의 skill/agent/command 정규식 모두에 `-and $filePath -notmatch 'README\.md$'` 추가 (false-positive fix, 일관 적용) + `.claude/agents/common/README.md` 신설 (13 agent 카탈로그 + frontmatter 컨벤션 + dispatch 설명 + cross-ref). hook self-modification 사용자 명시 승인 받음. PR #180 머지. 2026-05-04. **공통규칙 정리 시리즈 029~039 13 task / 26 PR 완전 종결.**
