@@ -286,7 +286,33 @@ Activate:
 
 ---
 
-> **Other domains** (reservation, erp, groupware, accounting-system, analytics, bi, reporting, ad-platform, cdp, dmp, sns, forum, content-platform, ott, media-streaming, live-streaming, saas, collaboration-tool, crm, developer-platform, pg, banking, securities, wms, delivery-platform, fleet-management, edtech, lms, online-course, game-platform, game-backoffice) — listed in [`domains.md`](domains.md) catalog; activation mapping and detailed rules files will be added on-demand when a project declares them.
+### saas
+Activate:
+- account / credential lifecycle rules (active / locked / dormant / deleted state machine)
+- credential–profile physical separation rules
+- internal vs public API boundary rules
+- admin double-auth + audit trail rules (S5)
+- account deletion grace-period + anonymization rules (S6)
+- security analytics event rules (login attempt, suspicious activity)
+
+→ Detailed rules: [`rules/domains/saas.md`](../../rules/domains/saas.md)
+
+---
+
+### wms
+Activate:
+- inbound workflow rules (ASN → inspection → putaway)
+- inventory mutation rules (reserve → decrement / release atomically, W1)
+- inventory history append-only rules (W2)
+- location code uniqueness rules (W3)
+- picking two-phase rules (reserve then confirm, W4–W5)
+- master data referential integrity rules (W6)
+
+→ Detailed rules: [`rules/domains/wms.md`](../../rules/domains/wms.md)
+
+---
+
+> **Other domains** (reservation, erp, groupware, accounting-system, analytics, bi, reporting, ad-platform, cdp, dmp, sns, forum, content-platform, ott, media-streaming, live-streaming, collaboration-tool, crm, developer-platform, pg, banking, securities, delivery-platform, fleet-management, edtech, lms, online-course, game-platform, game-backoffice) — listed in [`domains.md`](domains.md) catalog; activation mapping and detailed rules files will be added on-demand when a project declares them.
 
 ---
 

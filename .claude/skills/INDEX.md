@@ -79,6 +79,7 @@ Read only the matched skill files — do not read unrelated ones.
 | Set up a `graphql-service` end-to-end | `service-types/graphql-service-setup/SKILL.md` |
 | Set up an `ml-pipeline` service end-to-end | `service-types/ml-pipeline-setup/SKILL.md` |
 | Set up a `frontend-app` service end-to-end | `service-types/frontend-app-setup/SKILL.md` |
+| Set up an `identity-platform` service end-to-end | `service-types/identity-platform-setup/SKILL.md` |
 | Code review checklist | `review-checklist/SKILL.md` |
 
 ---

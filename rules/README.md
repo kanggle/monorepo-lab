@@ -10,7 +10,7 @@
 
 **이 디렉토리(`rules/`)가 진실 소스**이지만, 에이전트 런타임 라우팅을 위해 `.claude/config/` 아래에 **짧은 디스패치 카탈로그**가 함께 존재한다:
 
-- [`../.claude/config/domains.md`](../.claude/config/domains.md) — 38 domain 카탈로그 (리스트·규칙·예시)
+- [`../.claude/config/domains.md`](../.claude/config/domains.md) — 41 domain 카탈로그 (리스트·규칙·예시)
 - [`../.claude/config/traits.md`](../.claude/config/traits.md) — 11 trait 카탈로그
 - [`../.claude/config/activation-rules.md`](../.claude/config/activation-rules.md) — trait/domain → 활성화 규칙 카테고리 디스패치 표. 각 항목에서 이 디렉토리의 상세 파일로 링크
 
@@ -88,10 +88,10 @@ AI 에이전트와 개발자는 다음 순서로 규칙을 로드·적용한다:
 
 ## On-Demand Generation Policy
 
-taxonomy.md는 38개 domain과 11개 trait을 카탈로그로 등록하지만, 이 디렉토리에 **모든 파일이 사전 생성되어 있지는 않다**. 원칙:
+taxonomy.md는 41개 domain과 11개 trait을 카탈로그로 등록하지만, 이 디렉토리에 **모든 파일이 사전 생성되어 있지는 않다**. 원칙:
 
 - **파일 부재 = 추가 제약 없음**: 해당 domain/trait을 선언한 프로젝트가 아직 이 저장소에 없으면, 규칙 파일도 없는 것이 정상이다.
-- **자동 생성 금지**: 빈 stub 파일을 미리 생성하지 않는다. 파일 폭발(38 × 11)을 막기 위함.
+- **자동 생성 금지**: 빈 stub 파일을 미리 생성하지 않는다. 파일 폭발(41 × 11)을 막기 위함.
 - **생성 시점**: 새 프로젝트가 특정 domain/trait을 선언할 때, 해당 프로젝트 PR에서 규칙 파일을 **같은 변경**으로 함께 추가한다. taxonomy.md 카탈로그에도 이미 존재하는 태그만 선언 가능.
 - **생성 포맷**: [domains/ecommerce.md](domains/ecommerce.md)와 [traits/transactional.md](traits/transactional.md)의 섹션 구조를 따른다.
 

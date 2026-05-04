@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-029-rules-validation-audit.md` — `rules/` 라이브러리 + 라우팅 레이어 (`.claude/config/`) cross-file 정합성 audit. `/validate-rules` skill 실행 + taxonomy ↔ rules/domains/ ↔ rules/traits/ ↔ activation-rules.md 4-way 동기화 검증. 4 프로젝트 동거 안정화 시점의 공통규칙 정리 시리즈 5개 task 중 첫 번째 (후속 030 spec drift / 031 libs / 032 .claude / 033 TEMPLATE.md candidate).
+(empty)
 
 ## in-progress
 
@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-029-rules-validation-audit.md` — `rules/` 라이브러리 + 라우팅 레이어 (`.claude/config/`) cross-file 정합성 audit. 4-way 동기화 PASS. 발견 항목: Critical 1(identity-platform-setup skill orphan), Warning 2(도메인 카운트 drift, saas/wms activation-rules 섹션 누락). 모두 fix. 후속 030~033 candidate 명시. 2026-05-04.
 
 ## done
 

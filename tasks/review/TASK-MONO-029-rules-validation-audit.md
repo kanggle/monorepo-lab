@@ -8,7 +8,7 @@ rules/ 라이브러리 정합성 audit + cross-file drift 수정
 
 # Status
 
-ready
+review
 
 # Owner
 
