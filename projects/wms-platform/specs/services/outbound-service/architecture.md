@@ -66,7 +66,9 @@ packing units, and shipping records. It does **not** own stock quantities.
 
 ---
 
-## Architecture Style: Hexagonal
+## Architecture Style
+
+Hexagonal (Ports & Adapters)
 
 ### Rationale
 

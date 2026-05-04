@@ -51,7 +51,9 @@ If a change request introduces any of the above, promote it to the owning servic
 
 ---
 
-## Architecture Style: Hexagonal
+## Architecture Style
+
+Hexagonal (Ports & Adapters)
 
 ### Rationale
 

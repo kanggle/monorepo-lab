@@ -53,7 +53,9 @@ sub-type with a different validation flow.
 
 ---
 
-## Architecture Style: Hexagonal
+## Architecture Style
+
+Hexagonal (Ports & Adapters)
 
 ### Rationale
 
