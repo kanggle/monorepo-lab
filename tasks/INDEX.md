@@ -103,11 +103,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-034-java-security-package-rename.md` — libs/java-security 패키지명 `com.gap.security.*` → `com.example.security.*` 정규화. TASK-MONO-031 audit follow-up (shared-library-policy.md 위반 fix).
+(empty)
 
 ## in-progress
 
 (empty)
+
+## review
 
 (empty)
 
@@ -147,3 +149,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-031-libs-audit.md` — 공통규칙 정리 시리즈 3/5. libs/java-* 6모듈 40 class audit. 사용 빈도 매트릭스: 3+ project (Rule of Three 충족) 6 class, 2 project 9, 1 project 10, 0 external importer 15 (대부분 Spring AutoConfig / interface / internal). dead code 분류 a (즉시 삭제) 없음, b (향후 사용) 3건 / c (내부 참조) 11건 보존. Critical 0, Warning 5 (`com.gap.security.*` 패키지명 policy 위반, wms 미사용 deps × 5, JwksProvider/RedisKeyHelper 0-importer, java-test-support 1-project only), Suggestion 3 (EventMetricNames/AccessDeniedException/CommonGlobalExceptionHandler 단일 프로젝트 전용). 본 PR 코드 변경 없음 (audit 카탈로그만). follow-up: TASK-MONO-034 (패키지명 정규화) 신규 발행. PR #162 머지. 2026-05-04.
 - `TASK-MONO-032-claude-config-audit.md` — 공통규칙 정리 시리즈 4/5. .claude/{skills,agents,commands,hooks} 검증. Skills 71개 INDEX↔파일 완전 일치, Agents 13개 frontmatter PASS, Commands 참조 PASS, Hooks 일관성 PASS. Critical 2건 fix: (1) `agents/common/backend-engineer.md` domains 에 ecommerce 서비스명 leak (`[auth, user, ...]` → `[all]`), (2) `hooks/rule-consistency-check.ps1` settings.json 미등록 orphan → PreToolUse Edit/Write hook 등록. Warning 6 (4 agent domains 카탈로그 외 값 + spec-check.ps1 dead 패턴), Suggestion 0. 주의: 첫 attempt 시 agent 가 hook 우회로 main 에 직접 commit 했으나 origin push 차단. 로컬 reset 으로 복구 후 PR #164 정상 머지. PR #164 머지. 2026-05-04.
 - `TASK-MONO-033-template-md-consistency-audit.md` — 공통규칙 정리 시리즈 5/5 (마지막). TEMPLATE.md ↔ monorepo 6개 영역 audit + ~300줄 수정. Critical 2건 fix (bootstrap instruction 누락 항목 — frontmatter / Traefik labels / .env.example / backlog / package.json, Phase Timeline stale → Phase 3 완료 + Phase 4 pending). Warning 4건 fix (standalone freeze 정책 누락 → Standalone Portfolio Sync and Freeze Policy 섹션 신설, GAP IdP 패턴 누락 → GAP IdP Integration Pattern 섹션 5단계 신설, PR Separation Rule + audit 주기 + ADR 현황 미반영 → 3 섹션 신설, PORT_PREFIX "three projects" 오기재 → 4 정정). source of truth 분담: Local Network Convention TEMPLATE master / CLAUDE redirect, PR Separation Rule INDEX master / TEMPLATE summary, GAP consumer guide GAP spec master. follow-up candidate: dummy 프로젝트 부트스트랩 dry-run, `docs/guides/monorepo-workflow.md` 신설. **공통규칙 정리 시리즈 029~033 5/5 완료**. PR #166 머지. 2026-05-04.
+- `TASK-MONO-034-java-security-package-rename.md` — libs/java-security 패키지명 `com.gap.security.*` → `com.example.security.*` 정규화 (TASK-MONO-031 audit follow-up). 77 files (libs main 10 + test 3 + GAP import 갱신 63 + SQL 주석 1). reflection 사용 검증 결과 무관. 4 module sample build PASS. CI Build & Test + master integration + boot jars + frontend 모두 PASS. PR #168 머지. 2026-05-04.
