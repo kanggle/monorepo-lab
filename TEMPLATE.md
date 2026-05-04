@@ -652,6 +652,54 @@ Until Phase 4, this section is preparation only.
 
 ---
 
+## Task Lifecycle and PR Separation Rule
+
+Both root-level (`tasks/`) and project-level (`projects/<name>/tasks/`) task lifecycles follow the same PR Separation Rule defined in `tasks/INDEX.md`:
+
+| Stage | Recommended PR shape |
+|---|---|
+| `(writing) → ready` | **spec PR** — adds the task file to `ready/` + updates `INDEX.md` ready list. No implementation code. |
+| `ready → in-progress → review` | **impl PR** — moves the task file through `in-progress/` to `review/` and lands the implementation. Lifecycle moves and impl commits are separate commits but live in one PR. |
+| `review → done` | **chore PR** — moves merged task file(s) from `review/` to `done/` + updates `INDEX.md` done list. May batch multiple merged tasks. |
+
+**Why**: bundling spec authoring with implementation hides the `ready` lifecycle stage from `main`. External observers (AI sessions, other developers, audits) read the `ready/` queue to know what's available next. If a task only ever appears in `review/` because spec + impl shipped together, the queue signal is broken.
+
+The root `tasks/INDEX.md § PR Separation Rule` is the authoritative definition. This section is a summary for quick reference during project bootstrap.
+
+---
+
+## Periodic Consistency Audit
+
+After any major cutover (new project join, GAP IdP migration, Traefik hostname migration, shared library promotion, or similar), run a consistency audit:
+
+| Audit scope | Reference task |
+|---|---|
+| `rules/` + `.claude/config/` 4-way sync | TASK-MONO-029 pattern |
+| Spec drift across all project `architecture.md` files | TASK-MONO-030 pattern |
+| `libs/` usage frequency + shared-library-policy compliance | TASK-MONO-031 pattern |
+| `.claude/skills/agents/commands/hooks` index ↔ file sync | TASK-MONO-032 pattern |
+| `TEMPLATE.md` ↔ monorepo state | TASK-MONO-033 pattern (this task) |
+
+**Recommended audit trigger**: after each major platform-level cutover (e.g., adding a 4th or 5th project, completing a cross-project migration) or at minimum quarterly if multiple projects are co-developed.
+
+The TASK-MONO-029~033 series (공통규칙 정리 시리즈, 2026-05-04) established the audit baseline for the 4-project (wms / ecommerce / GAP / fan-platform) monorepo state.
+
+---
+
+## ADR Index (Monorepo Level)
+
+| ADR | Title | Status | Date |
+|---|---|---|---|
+| [ADR-MONO-001](docs/adr/ADR-MONO-001-port-prefix-scaling.md) | Hostname-based routing via Traefik (replace PORT_PREFIX) | **ACCEPTED** | 2026-05-02 |
+
+Project-level ADRs live in `projects/<name>/docs/adr/`. The most significant project-level ADR affecting all consumers:
+
+| ADR | Title | Status | Date |
+|---|---|---|---|
+| [GAP ADR-001](projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | GAP as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
+
+---
+
 ## Validation
 
 After any significant change, verify:
@@ -666,6 +714,16 @@ grep -rE "(auth-service|product-service|order-service|payment-service)" platform
 
 # Each project has a PROJECT.md
 find projects -maxdepth 2 -name PROJECT.md
+
+# No PORT_PREFIX references in any project (hostname routing enforced)
+grep -rn "PORT_PREFIX" projects/ 2>/dev/null
+# Expected: no matches
+
+# Each active project has Traefik labels in docker-compose.yml
+for p in wms-platform ecommerce-microservices-platform global-account-platform fan-platform; do
+  echo "=== $p ==="
+  grep -A2 "traefik.enable" projects/$p/docker-compose.yml 2>/dev/null || echo "MISSING Traefik labels"
+done
 ```
 
 AI-based validation: `.claude/commands/validate-rules.md` (if present).
@@ -699,6 +757,11 @@ A: Only when an existing standalone repo with its own `settings.gradle` + nested
 
 ## References
 
-- `CLAUDE.md` — operating rules (Repository Layout section explains the monorepo structure)
+- `CLAUDE.md` — operating rules (Repository Layout, Hard Stop rules, Local Network Convention summary)
 - `rules/README.md` — rule library architecture and on-demand policy
+- `tasks/INDEX.md` — root task lifecycle + PR Separation Rule (authoritative)
+- `scripts/sync-portfolio.sh` — portfolio extraction tool (PROJECT_REMOTES, PROJECT_TYPES, PROJECT_EXCLUDE_PATHS)
+- `docs/adr/ADR-MONO-001-port-prefix-scaling.md` — hostname routing ADR (ACCEPTED)
+- `projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md` — GAP OIDC AS ADR (ACCEPTED)
+- `projects/global-account-platform/specs/features/consumer-integration-guide.md` — GAP consumer integration (single reference)
 - `docs/guides/` — human-oriented workflow guides (when present)
