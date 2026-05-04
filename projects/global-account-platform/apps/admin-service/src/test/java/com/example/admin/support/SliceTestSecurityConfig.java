@@ -1,7 +1,7 @@
 package com.example.admin.support;
 
 import com.example.admin.infrastructure.security.OperatorAuthenticationFilter;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;

@@ -1,7 +1,7 @@
 package com.example.gateway.security;
 
-import com.gap.security.jwt.JwtVerificationException;
-import com.gap.security.jwt.Rs256JwtVerifier;
+import com.example.security.jwt.JwtVerificationException;
+import com.example.security.jwt.Rs256JwtVerifier;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;

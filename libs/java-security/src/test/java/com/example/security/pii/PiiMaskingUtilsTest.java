@@ -1,4 +1,4 @@
-package com.gap.security.pii;
+package com.example.security.pii;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

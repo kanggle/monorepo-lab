@@ -2,7 +2,7 @@ package com.example.admin.application.event;
 
 import com.example.admin.application.Outcome;
 import com.example.common.id.UuidV7;
-import com.gap.security.pii.PiiMaskingUtils;
+import com.example.security.pii.PiiMaskingUtils;
 import com.example.messaging.event.BaseEventPublisher;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;

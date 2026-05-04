@@ -5,7 +5,7 @@ import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.PasswordPolicyViolationException;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

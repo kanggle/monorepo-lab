@@ -1,4 +1,4 @@
-package com.gap.security.jwt;
+package com.example.security.jwt;
 
 /**
  * Thrown when JWT verification fails due to invalid signature,

@@ -4,7 +4,7 @@ import com.example.auth.application.exception.TokenParseException;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.TokenPair;
-import com.gap.security.jwt.JwtSigner;
+import com.example.security.jwt.JwtSigner;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;

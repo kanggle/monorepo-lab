@@ -6,7 +6,7 @@ import com.example.auth.application.result.CreateCredentialResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
 import com.example.auth.domain.repository.CredentialRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,8 +1,8 @@
 package com.example.admin.infrastructure.security;
 
-import com.gap.security.jwt.JwtVerificationException;
-import com.gap.security.jwt.JwtVerifier;
-import com.gap.security.jwt.Rs256JwtVerifier;
+import com.example.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerifier;
+import com.example.security.jwt.Rs256JwtVerifier;
 
 import java.security.interfaces.RSAPublicKey;
 import java.util.Map;

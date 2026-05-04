@@ -6,7 +6,7 @@ import com.example.gateway.security.TokenValidator;
 import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gap.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerificationException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;

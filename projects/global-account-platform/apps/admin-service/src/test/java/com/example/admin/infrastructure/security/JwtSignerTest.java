@@ -1,7 +1,7 @@
 package com.example.admin.infrastructure.security;
 
-import com.gap.security.jwt.JwtVerifier;
-import com.gap.security.jwt.Rs256JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
+import com.example.security.jwt.Rs256JwtVerifier;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.Test;
 

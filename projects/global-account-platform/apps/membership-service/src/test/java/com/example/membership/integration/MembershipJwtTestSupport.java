@@ -2,7 +2,7 @@ package com.example.membership.integration;
 
 import com.example.membership.infrastructure.security.AllowedIssuersValidator;
 import com.example.membership.infrastructure.security.TenantClaimValidator;
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;

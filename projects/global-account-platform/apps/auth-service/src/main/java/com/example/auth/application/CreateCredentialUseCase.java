@@ -6,7 +6,7 @@ import com.example.auth.application.result.CreateCredentialResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
 import com.example.auth.domain.repository.CredentialRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;

@@ -10,7 +10,7 @@ import com.example.auth.infrastructure.persistence.CredentialJpaRepository;
 import com.example.messaging.outbox.OutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gap.security.password.Argon2idPasswordHasher;
+import com.example.security.password.Argon2idPasswordHasher;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;

@@ -8,7 +8,7 @@ import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaRepository;
-import com.gap.security.password.PasswordHasher;
+import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -5,7 +5,7 @@ import com.example.security.infrastructure.persistence.LoginHistoryJpaEntity;
 import com.example.security.infrastructure.persistence.LoginHistoryJpaRepository;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaEntity;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaRepository;
-import com.gap.security.pii.PiiMaskingUtils;
+import com.example.security.pii.PiiMaskingUtils;
 import com.example.security.query.dto.LoginHistoryView;
 import com.example.security.query.dto.SuspiciousEventView;
 import com.fasterxml.jackson.core.type.TypeReference;

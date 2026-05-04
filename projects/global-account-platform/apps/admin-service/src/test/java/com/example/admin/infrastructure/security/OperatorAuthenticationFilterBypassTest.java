@@ -1,6 +1,6 @@
 package com.example.admin.infrastructure.security;
 
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;

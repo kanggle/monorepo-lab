@@ -10,7 +10,7 @@ import com.example.admin.presentation.advice.AdminExceptionHandler;
 import com.example.admin.presentation.aspect.RequiresPermissionAspect;
 import com.example.admin.support.OperatorJwtTestFixture;
 import com.example.admin.support.SliceTestSecurityConfig;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -2,8 +2,8 @@ package com.example.admin.infrastructure.security;
 
 import com.example.admin.application.OperatorContext;
 import com.example.admin.application.port.TokenBlacklistPort;
-import com.gap.security.jwt.JwtVerificationException;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerifier;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

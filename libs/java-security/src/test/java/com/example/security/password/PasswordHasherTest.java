@@ -1,4 +1,4 @@
-package com.gap.security.password;
+package com.example.security.password;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

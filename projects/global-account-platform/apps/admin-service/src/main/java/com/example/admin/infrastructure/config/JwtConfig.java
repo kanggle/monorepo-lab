@@ -3,7 +3,7 @@ package com.example.admin.infrastructure.config;
 import com.example.admin.infrastructure.security.AdminJwtKeyStore;
 import com.example.admin.infrastructure.security.IssuerEnforcingJwtVerifier;
 import com.example.admin.infrastructure.security.JwtSigner;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

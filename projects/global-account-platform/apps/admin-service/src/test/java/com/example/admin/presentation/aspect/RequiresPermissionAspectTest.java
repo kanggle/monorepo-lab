@@ -12,7 +12,7 @@ import com.example.admin.presentation.AccountAdminController;
 import com.example.admin.presentation.advice.AdminExceptionHandler;
 import com.example.admin.support.OperatorJwtTestFixture;
 import com.example.admin.support.SliceTestSecurityConfig;
-import com.gap.security.jwt.JwtVerifier;
+import com.example.security.jwt.JwtVerifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

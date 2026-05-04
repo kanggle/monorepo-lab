@@ -1,6 +1,6 @@
 package com.example.admin.infrastructure.security;
 
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

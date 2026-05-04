@@ -1,4 +1,4 @@
-package com.gap.security.redis;
+package com.example.security.redis;
 
 /**
  * Provides standardized Redis key construction for security-related keys.

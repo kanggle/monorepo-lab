@@ -3,7 +3,7 @@ package com.example.community.integration;
 import com.example.community.infrastructure.security.AllowedIssuersValidator;
 import com.example.community.infrastructure.security.TenantClaimValidator;
 import com.example.testsupport.integration.AbstractIntegrationTest;
-import com.gap.security.jwt.Rs256JwtSigner;
+import com.example.security.jwt.Rs256JwtSigner;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.junit.jupiter.api.AfterAll;

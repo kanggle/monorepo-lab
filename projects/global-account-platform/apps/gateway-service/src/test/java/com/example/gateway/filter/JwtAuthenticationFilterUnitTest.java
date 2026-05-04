@@ -4,7 +4,7 @@ import com.example.gateway.config.EdgeGatewayProperties;
 import com.example.gateway.route.RouteConfig;
 import com.example.gateway.security.TokenValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gap.security.jwt.JwtVerificationException;
+import com.example.security.jwt.JwtVerificationException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
