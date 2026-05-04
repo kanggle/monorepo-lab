@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-040-scm-platform-bootstrap.md` — 모노레포 5번째 프로젝트 `scm-platform` 의 skeleton 부트스트랩. `projects/scm-platform/` 디렉토리 트리 + `PROJECT.md` (domain=scm, traits=[transactional, integration-heavy, batch-heavy]) + `tasks/INDEX.md` + `docker-compose.yml` (Traefik `scm.local` 라벨, gateway service v1 placeholder) + `.env.example` + 루트 `package.json` shortcuts + `rules/domains/scm.md` 신설 (on-demand) + `README.md`. 첫 service skeleton 과 GAP V0013 seed 는 후속 분리. 분석=Opus 4.7 / 구현 권장=Opus — cross-cutting 부트스트랩.
 
 ## in-progress
 
