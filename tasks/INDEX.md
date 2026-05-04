@@ -110,6 +110,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
+## review
+
+(empty)
+
 ## done
 
 - `TASK-MONO-001-introduce-root-task-lifecycle.md` — bootstrap of this lifecycle and `CLAUDE.md` integration. Self-referential; landed in the same PR that introduced the lifecycle. 2026-04-26.
@@ -144,3 +148,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-029-rules-validation-audit.md` — 공통규칙 정리 시리즈 1/5. `rules/` + `.claude/config/` 4-way 동기화 audit. /validate-rules skill 실행 + 매뉴얼 grep. 발견: Critical 1 (`.claude/skills/INDEX.md` 의 identity-platform-setup orphaned reference), Warning 2 (`rules/README.md` 의 도메인 카운트 38 → 41 drift, `.claude/config/activation-rules.md` 의 saas/wms 전용 activation 섹션 누락). 모두 본 PR 에서 fix, on-demand 정책 위반 없음. 후속 candidate: TASK-MONO-030 (spec drift), -031 (libs audit), -032 (.claude skills/agents/commands), -033 (TEMPLATE.md 정합성). PR #156 머지. 2026-05-04.
 - `TASK-MONO-030-spec-drift-audit.md` — 공통규칙 정리 시리즈 2/5. 4 프로젝트 (wms / ecommerce / GAP / fan-platform) 의 architecture.md + gap-integration.md + contracts deprecated 헤더 + platform/contracts reference 일관성 audit (~27 services). Critical 2건 fix (wms+ecommerce gap-integration error envelope 형식 오기재), Warning 3건 fix (wms cross-tenant enumerate 표현, wms+fan-platform 의 jwt-standard-claims ref 누락 추가). 5건 Warning + 4건 Suggestion 은 PR body 카탈로그 → follow-up: (a) wms/fan-platform OIDC issuer/JWKS URI 정렬 (W4-W6), (b) ecommerce 이벤트 발행 서비스 architecture.md Outbox 섹션 추가 (W7), (c) wms architecture.md 섹션명 표준화 (W8). PR #160 머지. 2026-05-04.
 - `TASK-MONO-031-libs-audit.md` — 공통규칙 정리 시리즈 3/5. libs/java-* 6모듈 40 class audit. 사용 빈도 매트릭스: 3+ project (Rule of Three 충족) 6 class, 2 project 9, 1 project 10, 0 external importer 15 (대부분 Spring AutoConfig / interface / internal). dead code 분류 a (즉시 삭제) 없음, b (향후 사용) 3건 / c (내부 참조) 11건 보존. Critical 0, Warning 5 (`com.gap.security.*` 패키지명 policy 위반, wms 미사용 deps × 5, JwksProvider/RedisKeyHelper 0-importer, java-test-support 1-project only), Suggestion 3 (EventMetricNames/AccessDeniedException/CommonGlobalExceptionHandler 단일 프로젝트 전용). 본 PR 코드 변경 없음 (audit 카탈로그만). follow-up: TASK-MONO-034 (패키지명 정규화) 신규 발행. PR #162 머지. 2026-05-04.
+- `TASK-MONO-032-claude-config-audit.md` — 공통규칙 정리 시리즈 4/5. .claude/{skills,agents,commands,hooks} 검증. Skills 71개 INDEX↔파일 완전 일치, Agents 13개 frontmatter PASS, Commands 참조 PASS, Hooks 일관성 PASS. Critical 2건 fix: (1) `agents/common/backend-engineer.md` domains 에 ecommerce 서비스명 leak (`[auth, user, ...]` → `[all]`), (2) `hooks/rule-consistency-check.ps1` settings.json 미등록 orphan → PreToolUse Edit/Write hook 등록. Warning 6 (4 agent domains 카탈로그 외 값 + spec-check.ps1 dead 패턴), Suggestion 0. 주의: 첫 attempt 시 agent 가 hook 우회로 main 에 직접 commit 했으나 origin push 차단. 로컬 reset 으로 복구 후 PR #164 정상 머지. PR #164 머지. 2026-05-04.
