@@ -1,0 +1,140 @@
+spring:
+  application:
+    name: scm-platform-gateway-service
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # OIDC issuer for SAS-issued tokens (GAP auth-service).
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          # JWKS endpoint default. V0013 SQL seeded the scm-platform OIDC client
+          # against GAP's standard /oauth2/jwks endpoint (TASK-MONO-035 alignment).
+          # Edge Case E2: default to /oauth2/jwks, not /.well-known/jwks.json.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            # scm v1 = backend only (no localhost:3000 frontend origin yet).
+            # When scm-platform-web lands in v2, add its hostname here.
+            allowedOrigins: ${CORS_ALLOWED_ORIGINS:http://scm.local}
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - X-Request-Id
+              - Idempotency-Key
+            exposedHeaders:
+              - X-Request-Id
+              - ETag
+              - Retry-After
+            maxAge: 3600
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 10s
+      routes:
+        # procurement-service — placeholder (TASK-SCM-BE-002 will activate the
+        # downstream service). External path /api/v1/procurement/** is rewritten
+        # to the downstream service's /api/procurement/** for symmetry with the
+        # fan-platform / wms RewritePath policy. Until BE-002 lands, requests to
+        # this path will return 503 (downstream unreachable) — this is the
+        # documented behaviour for v1 of the gateway (Edge Case E4).
+        - id: procurement-service
+          uri: ${PROCUREMENT_SERVICE_URI:http://procurement-service:8080}
+          predicates:
+            - Path=/api/v1/procurement/**
+          filters:
+            - RewritePath=/api/v1/procurement/(?<segment>.*), /api/procurement/${segment}
+            # Default tier — replenish 1 token/s, burst 120 (matches fan-platform).
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+        # inventory-visibility-service — placeholder (TASK-SCM-BE-003 will
+        # activate the downstream service). Same RewritePath shape as
+        # procurement-service.
+        - id: inventory-visibility-service
+          uri: ${INVENTORY_VISIBILITY_SERVICE_URI:http://inventory-visibility-service:8080}
+          predicates:
+            - Path=/api/v1/inventory-visibility/**
+          filters:
+            - RewritePath=/api/v1/inventory-visibility/(?<segment>.*), /api/inventory-visibility/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.scmplatform.gateway: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-}]"
+
+scmplatform:
+  # OIDC Resource Server validators.
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window:
+    # SAS issuer URL + the legacy "global-account-platform" string.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
+
+# JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable
+# at startup, instead of waiting for the first protected request. Configured per
+# TASK-SCM-BE-001 § Edge Cases ("OIDC discovery 실패 (GAP 다운) ... 30초 후에도
+# 실패하면 fail-fast"). Disable in tests via gateway.jwks.startup-probe.enabled.
+gateway:
+  jwks:
+    startup-probe:
+      enabled: ${GATEWAY_JWKS_STARTUP_PROBE_ENABLED:true}
+      timeout-seconds: ${GATEWAY_JWKS_STARTUP_PROBE_TIMEOUT_SECONDS:30}

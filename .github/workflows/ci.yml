@@ -107,6 +107,18 @@ jobs:
           :projects:fan-platform:tests:e2e:check
           --no-daemon --stacktrace
 
+      - name: Build and check scm-platform backend (Docker-free)
+        # scm-platform integration tests carry @Tag("integration") and are
+        # excluded from default :test/:check tasks (see gateway-service's
+        # build.gradle). Docker-backed integrationTest is invoked separately
+        # on dev environments / future scm-specific CI job. v1 scope: only
+        # gateway-service exists (TASK-SCM-BE-001); procurement / inventory-
+        # visibility services arrive in TASK-SCM-BE-002 / -003.
+        run: >-
+          ./gradlew
+          :projects:scm-platform:apps:gateway-service:check
+          --no-daemon --stacktrace
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

@@ -32,52 +32,51 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # gateway-service — TASK-SCM-BE-001 (deferred).
+  # gateway-service — activated by TASK-SCM-BE-001.
   # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
-  # (tenant_id=scm only), rate limit. The block below is the target shape;
-  # uncomment when the Spring Boot module is generated.
+  # (tenant_id=scm only), rate limit.
   # ---------------------------------------------------------------------------
-  # gateway-service:
-  #   image: scm-platform/gateway-service:local
-  #   container_name: scm-platform-gateway
-  #   build:
-  #     context: ./apps/gateway-service
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8080"
-  #   environment:
-  #     SERVER_PORT: "8080"
-  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
-  #     OIDC_REQUIRED_TENANT_ID: scm
-  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-scm-platform-internal-services-client}
-  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-scm-dev}
-  #     REDIS_HOST: redis
-  #     REDIS_PORT: "6379"
-  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://scm.local}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     postgres:
-  #       condition: service_healthy
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=traefik-net"
-  #     - "traefik.http.routers.scm-platform.rule=Host(`scm.local`)"
-  #     - "traefik.http.routers.scm-platform.entrypoints=web"
-  #     - "traefik.http.services.scm-platform.loadbalancer.server.port=8080"
-  #   networks:
-  #     - scm-platform-net
-  #     - traefik-net
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
+  gateway-service:
+    image: scm-platform/gateway-service:local
+    container_name: scm-platform-gateway
+    build:
+      context: ./apps/gateway-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      OIDC_REQUIRED_TENANT_ID: scm
+      OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-scm-platform-internal-services-client}
+      OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-scm-dev}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://scm.local}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.scm-platform.rule=Host(`scm.local`)"
+      - "traefik.http.routers.scm-platform.entrypoints=web"
+      - "traefik.http.services.scm-platform.loadbalancer.server.port=8080"
+    networks:
+      - scm-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # Postgres 16 — backing store for procurement / inventory-visibility services

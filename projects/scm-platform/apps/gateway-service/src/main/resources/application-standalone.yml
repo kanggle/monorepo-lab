@@ -1,0 +1,20 @@
+# Standalone profile: disable Redis-dependent rate limiting so the gateway
+# runs without external infra. Activated with SPRING_PROFILES_ACTIVE=standalone.
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  cloud:
+    gateway:
+      routes:
+        - id: procurement-service
+          uri: ${PROCUREMENT_SERVICE_URI:http://procurement-service:8080}
+          predicates:
+            - Path=/api/v1/procurement/**
+          # No RequestRateLimiter filter under standalone (Redis is not available).
+        - id: inventory-visibility-service
+          uri: ${INVENTORY_VISIBILITY_SERVICE_URI:http://inventory-visibility-service:8080}
+          predicates:
+            - Path=/api/v1/inventory-visibility/**

@@ -58,3 +58,8 @@ include(
     'projects:fan-platform:apps:artist-service',
     'projects:fan-platform:tests:e2e'
 )
+
+// Project: scm-platform
+include(
+    'projects:scm-platform:apps:gateway-service'
+)

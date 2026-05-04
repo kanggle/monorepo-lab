@@ -1,0 +1,102 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.example.scmplatform.gateway'
+
+// -------------------------------------------------------------------------
+// Source sets:
+//
+// * `test`              → unit + slice + Testcontainers integration tests.
+//                         Tests tagged `integration` use Testcontainers (Docker
+//                         daemon required). The `integrationTest` task below
+//                         filters JUnit by tag = "integration"; the default
+//                         `test` task excludes the same tag so `./gradlew check`
+//                         remains Docker-free.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Spring Cloud Gateway (reactive)
+    implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // Rate limiting (RedisRateLimiter)
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // JSON (for error envelope)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Structured logging (prod profile)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Shared libs
+    implementation project(':libs:java-common')
+    implementation project(':libs:java-web')
+    implementation project(':libs:java-observability')
+    implementation project(':libs:java-security')
+
+    // Test (unit / slice / integration)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webflux'
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.assertj:assertj-core'
+
+    // JWT signing helper used by validator unit tests and the integration suite.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // MockWebServer for the JWKS stand-in.
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+
+    // Testcontainers (integration tests, `@Tag("integration")`).
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+    }
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'gateway-service.jar'
+}
+
+// Default `test` task: unit + slice only. Excludes Docker-dependent tests so
+// `./gradlew check` stays fast and Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY @Tag("integration") tests.
+// Not wired into `check` so the fast feedback loop stays Docker-free.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
