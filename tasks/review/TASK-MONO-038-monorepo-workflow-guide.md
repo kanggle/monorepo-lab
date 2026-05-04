@@ -8,7 +8,7 @@ docs/guides/monorepo-workflow.md 신설 — TEMPLATE.md 가 참조하는 to-be-a
 
 # Status
 
-ready
+review
 
 # Owner
 
