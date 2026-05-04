@@ -54,6 +54,15 @@ Package organization should preserve aggregate boundaries and domain ownership.
 - infrastructure layer implements repositories and external integrations
 - aggregate boundaries must be respected during modification
 
+## Outbox
+
+- Pattern: Transactional Outbox
+- Table: `outbox` (libs/java-messaging 표준 schema)
+- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
+- Topic 매핑:
+  - `OrderPlaced` → `order.order.placed`
+  - `OrderCancelled` → `order.order.cancelled`
+
 ## Integration Rules
 - outbound events must follow published event contracts
 - HTTP APIs must follow published HTTP contracts

@@ -62,6 +62,16 @@ Key domain concepts:
 - Only users who purchased the product can write reviews (verified via order-service)
 - Deleted reviews are soft-deleted (status change)
 
+## Outbox
+
+- Pattern: Transactional Outbox
+- Table: `outbox` (libs/java-messaging 표준 schema)
+- Polling scheduler: `ReviewOutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
+- Topic 매핑:
+  - `ReviewCreated` → `review.review.created`
+  - `ReviewUpdated` → `review.review.updated`
+  - `ReviewDeleted` → `review.review.deleted`
+
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts
