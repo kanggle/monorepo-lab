@@ -108,11 +108,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-036-claude-config-followups.md` — TASK-MONO-032 의 W1-W6 follow-up 일괄. 4 agent (devops/frontend/data/ml) frontmatter domains 카탈로그 정규화 + spec-check.ps1 dead 패턴 fix.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-036-claude-config-followups.md` — TASK-MONO-032 의 W1-W5 follow-up. W1-W4 완료 (4 agent frontmatter `domains: [all]`), W5 완료 (spec-check.ps1 `specs/platform/` → `platform/`). W6 (`agents/common/README.md` 부재 + rule-consistency-check.ps1 README false-positive 버그) 는 hook self-modification permission 차단으로 별도 task 분리 권장.
 
 ## done
 
