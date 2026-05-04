@@ -540,7 +540,7 @@ feat(wms): apply W7 to inventory-service state spec
 
 Atomic cross-project commits are the **primary advantage of the monorepo layout**. If you find yourself wanting separate PRs for library and project, stop and review — the library change is likely not yet worth the work, or the project-side adaptation is missing scope.
 
-See `docs/guides/monorepo-workflow.md` (to be authored) for the full workflow rules.
+See [`docs/guides/monorepo-workflow.md`](docs/guides/monorepo-workflow.md) for the full workflow rules — branch patterns, task lifecycle, agent dispatch, CI job areas, hook bypass rules, and common conflict patterns.
 
 ---
 
