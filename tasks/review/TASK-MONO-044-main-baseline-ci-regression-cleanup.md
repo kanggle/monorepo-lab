@@ -8,7 +8,7 @@ main 브랜치의 baseline CI 회귀 청소 (4 jobs FAIL 누적, 2026-05-04~05)
 
 # Status
 
-ready
+review
 
 # Owner
 

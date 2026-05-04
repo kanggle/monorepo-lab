@@ -1,0 +1,198 @@
+# 2026-05-05 — main baseline CI 회귀 진단 보고서
+
+**Parent task**: [TASK-MONO-044](../../tasks/review/TASK-MONO-044-main-baseline-ci-regression-cleanup.md)
+
+**Range analyzed**:
+- 마지막 PASS run: `25080247794` (`c3ed6bc0`, 2026-04-28T22:09Z, "fix(wms): parallelise E2E rate-limit burst")
+- 첫 FAIL run: `25153508674` (`fe6d1b71`, 2026-04-30T07:40Z, "feat(gap): import GAP into monorepo [TASK-MONO-017]")
+- 분석 기준 run: `25327478714` (`248c08fb`, 2026-05-04T15:21Z)
+
+**4 FAIL job, 2 distinct root cause로 환원**.
+
+---
+
+## Job별 진단
+
+### Job 1 — Integration (global-account-platform, Testcontainers)
+
+- **Job DB ID**: 74252350954
+- **Failed task**: `:projects:global-account-platform:apps:gateway-service:integrationTest`
+- **모든 8 통합 테스트 클래스가 동일 stack trace로 FAIL**:
+
+```
+java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+  Caused by: org.springframework.context.ApplicationContextException at ServletWebServerApplicationContext.java:165
+    Caused by: org.springframework.boot.web.context.MissingWebServerFactoryBeanException at ServletWebServerApplicationContext.java:216
+```
+
+**이건 증상**. Spring Boot가 servlet web context를 부팅하려 하나 `ServletWebServerFactory` bean이 없음. GAP gateway는 reactive (Spring Cloud Gateway)이므로 servlet web context 자체가 잘못된 선택. `@SpringBootTest` 컨텍스트 로더가 servlet/reactive 둘 다 classpath 에서 발견 → servlet 모드로 잘못 부팅 시도.
+
+- **분류**: **(a) 코드/테스트 회귀** — Job 2/3과 동일 root cause family.
+
+### Job 2 — E2E (gateway-master live-pair, Testcontainers)
+
+- **Job DB ID**: 74252498562
+- **Failed task**: `:projects:wms-platform:apps:gateway-service:e2eTest`
+- **`GatewayMasterE2ETest > initializationError`**: container 부팅 실패. 컨테이너 로그에서 직접 확인:
+
+```
+APPLICATION FAILED TO START
+BeanDefinitionOverrideException: Invalid bean definition with name 'conversionServicePostProcessor'
+  defined in class path resource [.../WebSecurityConfiguration.class]
+  Cannot register bean definition ... since there is already
+  [.../reactive/WebFluxSecurityConfiguration.class] bound.
+```
+
+**이건 root cause 그 자체**. Spring Security가 servlet (`WebSecurityConfiguration`) AND reactive (`WebFluxSecurityConfiguration`) 둘 다 활성화 → 동일 bean name (`conversionServicePostProcessor`) 두 번 등록 시도 → 부팅 실패.
+
+- **분류**: **(a) 코드 회귀** — `libs/java-web` 의존성 changeset이 root cause.
+
+### Job 3 — E2E (fan-platform v1 live-trio, Testcontainers)
+
+- **Job DB ID**: 74252540333
+- **Failed task**: `:projects:fan-platform:tests:e2e:e2eTest`
+- 3 test class (`ArtistAndPostFlowE2ETest`, `MultiTenantIsolationE2ETest`, `VisibilityTierE2ETest`) 모두 동일 `initializationError`로 FAIL.
+- gateway-service container 로그에서 **Job 2와 100% 동일한 BeanDefinitionOverrideException** 확인됨.
+- **분류**: **(a) 코드 회귀** — Job 2와 동일 root cause.
+
+### Job 4 — Frontend E2E full-stack (web-store, Playwright + docker compose)
+
+- **Job DB ID**: 74252573360
+- **Failed step**: "Start docker compose stack" (CI workflow line 620–633)
+- 2.5분만에 exit code 1. 직전 마지막 라인:
+
+```
+network traefik-net declared as external, but could not be found
+##[error]Process completed with exit code 1.
+```
+
+**이건 root cause 그 자체**. `docker-compose.yml` (TASK-MONO-024 마이그레이션 후) 가 `traefik-net` 을 `external: true` 로 선언. CI는 `pnpm traefik:up` 을 실행하지 않으므로 외부 네트워크가 미존재. docker compose가 stack startup 자체를 거부.
+
+- **분류**: **(a) 코드 회귀** — `docker-compose.ci.yml` 오버레이가 traefik-net 부재를 보상하지 않음.
+- **참고**: 만약 이 traefik-net 이슈가 fix되더라도, gateway-service 컨테이너는 Job 2/3과 같은 BeanDefinitionOverrideException으로 healthcheck 실패할 가능성 높음. 즉 Job 4는 **순차적으로 두 root cause를 모두 노출**할 것.
+
+---
+
+## Root Cause 분석 (cross-job)
+
+### Root Cause #1 — `libs/java-web` 가 servlet 의존성을 모든 consumer에게 강제
+
+**도입 commit**: `cf901f4b` (2026-04-30, "fix(libs): wire dependencies + promote missed classes for GAP compile [TASK-MONO-017]", PR #93 merge `fe6d1b71`).
+
+**Diff**:
+```gradle
+// libs/java-web/build.gradle 에 추가됨:
+implementation 'org.springframework:spring-web'
+implementation 'org.springframework:spring-webmvc'
+implementation 'org.springframework:spring-orm'
+implementation 'jakarta.servlet:jakarta.servlet-api'
+implementation 'org.slf4j:slf4j-api'
+```
+
+**영향 chain**:
+1. `libs:java-web` 가 `CommonGlobalExceptionHandler` (servlet 기반 `@ControllerAdvice`) 를 호스트하기 위해 servlet 의존성 추가됨 — **GAP 의 6개 servlet 서비스에는 정당한 의존성**.
+2. 그러나 `implementation` 으로 선언되어 모든 consumer에게 transitive 노출.
+3. 3개 reactive gateway-service (WMS / GAP / fan-platform) 가 `implementation project(':libs:java-web')` 을 사용 — 이들은 `spring-cloud-starter-gateway` (WebFlux) 만 써야 함.
+4. 결과: gateway-service 의 classpath 에 servlet API + WebFlux 둘 다 존재.
+5. Spring Boot autoconfig: `WebApplicationType` detection 이 SERVLET 으로 떨어지거나 (Job 1 의 `MissingWebServerFactoryBeanException`), Spring Security 가 servlet+reactive 양쪽 `@Configuration` 활성화 (Job 2/3 의 `BeanDefinitionOverrideException`).
+
+**왜 마지막 green (`c3ed6bc0`) 에서는 PASS 였나?**
+TASK-MONO-017 머지 직전이라 `libs/java-web` 가 `jackson-databind` 만 가졌음 (servlet 의존성 zero). WMS gateway-service 는 이미 `libs:java-web` 을 사용 중이었으나 transitive servlet은 들어오지 않음.
+
+**왜 처음 FAIL 으로 떨어진 시점은 2026-04-30 (`fe6d1b71`) 인가?**
+PR #93 머지가 `cf901f4b` 의존성 wiring 을 main 에 처음 도입. 직후의 첫 main run (`25153508674`) 에서 즉시 회귀 노출.
+
+**Fix 후보**:
+- (i) `CommonGlobalExceptionHandler` 를 servlet 전용 sub-module 로 분리 (예: `libs/java-web-servlet/`), `libs/java-web` 은 framework-agnostic 만 유지.
+- (ii) `libs/java-web` 의 servlet 의존성을 `compileOnly` 로 다운그레이드. Consumer 가 자기 starter (web 또는 webflux) 로 servlet API 가져오도록 위임.
+- (iii) Reactive gateway 3 곳에서 `exclude module: 'spring-web'` / `exclude module: 'spring-webmvc'` / `exclude module: 'jakarta.servlet-api'` 추가 (가장 빠른 mitigation, 하지만 임시 처방).
+
+**권장**: (i) 분리. `CommonGlobalExceptionHandler` 의 사용처가 GAP 6 servlet 서비스 + ecommerce 서비스 (모두 servlet) — reactive consumer가 사용하지 않음. 분리 후에는 reactive gateway가 이를 직접 의존하지 않도록 재구성.
+
+### Root Cause #2 — `docker-compose.ci.yml` 오버레이가 `traefik-net` 부재를 보상하지 않음
+
+**도입 commit**: `ee13ecc` (2026-05-03, "feat(infra)!: TASK-MONO-024 — migrate ecommerce/wms/GAP to Traefik hostname routing", PR #129).
+
+**증상 (4 Job 만의 root cause)**: `docker-compose.yml` 의 networks 블록:
+
+```yaml
+networks:
+  ecommerce-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net
+```
+
+`docker-compose.ci.yml` 이 gateway-service 의 `ports: 18080:8080` 만 추가. 그러나 `traefik-net: external: true` 는 그대로 — CI 는 traefik 스택을 부팅하지 않으므로 이 네트워크는 미존재.
+
+`docker compose up` 시점에 compose 가 외부 네트워크 lookup 실패 → 즉시 abort.
+
+**Fix 후보**:
+- (i) `docker-compose.ci.yml` 에서 `traefik-net` 을 internal bridge 로 override (CI 한정).
+- (ii) `docker-compose.ci.yml` 에 traefik-net 자동 생성 step (`docker network create traefik-net` 을 CI workflow 의 별도 step으로 선행).
+- (iii) `traefik.enable=false` 라벨 + 모든 service 의 `networks:` 에서 `traefik-net` 제거 — 그러나 compose 파일은 base/overlay 두 곳에 split 되어 service-level network override가 까다로움.
+
+**권장**: (ii) — workflow 에 `docker network create traefik-net || true` 1줄 추가. 가장 단순 + base compose 파일 변경 없음. 또는 (i) 가 깔끔하면 그쪽.
+
+**추가 위험**: Root Cause #1 fix 가 선행되어야 Job 4 의 Stage 2 (gateway healthcheck) 가 통과. 두 fix는 직렬 의존: 1 fix → 2 fix → Job 4 최초 PASS.
+
+---
+
+## Cross-Job 패턴
+
+| Job | RC#1 (libs/java-web servlet leak) | RC#2 (traefik-net missing) |
+|---|---|---|
+| Job 1 (GAP integration) | YES (단독 cause) | N/A (Testcontainers, compose 미사용) |
+| Job 2 (gateway-master e2e) | YES (단독 cause) | N/A |
+| Job 3 (fan-platform e2e) | YES (단독 cause) | N/A |
+| Job 4 (frontend e2e) | YES (잠복, RC#2 뒤에서 노출 예정) | YES (현재 가시 cause) |
+
+**정리**: 1 root cause로 3 job, 1 root cause로 1 job + 1 잠복 cause. 따라서 **2 sub-task**가 적절.
+
+---
+
+## flaky 의심 / 환경 한계 후보 평가
+
+회의록 시점의 가설 (e2e 30분 timeout, GitHub-hosted runner RAM 한계) 은 **현재 main 의 4 FAIL 의 직접 원인이 아님**. 이유:
+
+- Job 2 / Job 3 e2e: 30분 timeout 미도달 (3분49초 / 11분에 BUILD FAILED). 환경이 timeout 으로 죽인 게 아니고 application context 부팅 실패가 즉발 fail 시킨 것.
+- Job 4 frontend e2e: 2분30초만에 exit. timeout 과 무관, traefik-net lookup 단계에서 즉발 fail.
+
+따라서 4 Job 모두 분류 **(a) 코드 회귀** — fix 가능. (b) / (c) 의심 0.
+
+향후 RC#1, RC#2 가 fix 되어 4 Job 이 PASS 회복한 후에도 별도로 e2e/frontend-e2e 가 sporadic timeout 을 내면 그 시점에 다시 분류 (b) 평가 — 이번 진단 범위 밖.
+
+---
+
+## 권장 sub-task 분할
+
+| Sub-task | Goal | 예상 PR scope |
+|---|---|---|
+| **TASK-MONO-044a** | Root Cause #1 fix — `libs/java-web` servlet 의존성을 reactive consumer에게 누출하지 않도록 재구성. WMS gateway / GAP gateway / fan-platform gateway 의 application context 부팅 회복. Job 1/2/3 PASS. | (i) `libs/java-web-servlet` 신설 및 `CommonGlobalExceptionHandler` 이전, OR (ii) `libs/java-web` servlet deps 를 `compileOnly` 로 변경 + 3 gateway 에 webflux 일관 정리. 5–8 build.gradle + 0–2 file move. |
+| **TASK-MONO-044b** | Root Cause #2 fix — `docker-compose.ci.yml` overlay 또는 frontend-e2e workflow step이 `traefik-net` 부재를 처리. Job 4 의 docker compose up 단계 통과. (Job 4 의 최종 PASS는 044a 선행 필요.) | `.github/workflows/ci.yml` 에 `docker network create traefik-net` step 추가, OR `docker-compose.ci.yml` 에 traefik-net 재정의. 1–2 file. |
+
+(c) flaky / (b) 환경 한계 분류 sub-task는 **본 진단 시점에서 불필요** — 4 Job 모두 (a) 진짜 회귀로 환원됨.
+
+회귀 재발 방지 메커니즘 (TASK-MONO-044 의 AC #8) 은 044a/b 머지 후 별도 sub-task (e.g. TASK-MONO-044c — nightly main run + label automation) 로 발행 가능. 본 진단 PR 의 scope 초과.
+
+---
+
+## 결정 포인트 (User input 필요)
+
+1. **TASK-MONO-044a fix 전략 선택**: (i) sub-module 분리 (cleaner, 더 큰 PR) vs (ii) `compileOnly` 다운그레이드 + exclude (임시 처방, 더 작은 PR). 권장은 (i) but (ii) 가 ADR-MONO-002 D3 churn 안정 평가 기간에 부합.
+2. **회귀 재발 방지 메커니즘**: nightly main run 도입 시 GitHub Actions 분 사용량 영향 (ubuntu-runner ~30분 × 1회/일 × 30일 = 900분/월). Free tier 2,000 min 한도 내. 도입 가/부 결정 필요.
+3. **Job 4 admin-override 정책**: 044a 머지될 때까지 main의 모든 PR이 frontend-e2e FAIL 을 안고 가야 함. 영향 PR 4건 (#194~#197 + 본 PR). admin-override 일관 적용 vs 044a 우선 머지로 회피, 어느 쪽인지 결정.
+
+---
+
+## 참고 자료
+
+- 분석 기준 CI run: <https://github.com/kanggle/monorepo-lab/actions/runs/25327478714>
+- TASK-MONO-017 (PR #93, 회귀 도입): tasks/done/TASK-MONO-017 / 시리즈 메모
+- TASK-MONO-024 (PR #129, RC#2 도입): tasks/done/TASK-MONO-024-existing-projects-traefik-migration.md
+- TASK-MONO-023 (이전 baseline 청소 시리즈, 패턴 참조): tasks/done/TASK-MONO-023*
+
+---
+
+*작성: 2026-05-05, TASK-MONO-044 진단 단계.*
