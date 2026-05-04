@@ -1,0 +1,48 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+// -------------------------------------------------------------------------
+// libs/java-web-servlet — Servlet-stack web utilities (Spring MVC).
+//
+// Hosts servlet-specific helpers like CommonGlobalExceptionHandler that pull
+// in spring-web / spring-webmvc / spring-orm / jakarta.servlet-api. Reactive
+// gateway services (Spring Cloud Gateway / WebFlux) MUST NOT depend on this
+// module — their classpath must remain free of servlet API to avoid Spring
+// Boot's WebApplicationType deduction falling back to SERVLET (which breaks
+// `@ConditionalOnWebApplication(type = REACTIVE)` autoconfig).
+//
+// Background: TASK-MONO-044a split this out of libs/java-web after the
+// servlet dependencies leaked transitively into 3 reactive gateway-service
+// classpaths and triggered BeanDefinitionOverrideException at boot.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Sibling lib for ErrorResponse DTO returned by exception handlers.
+    implementation project(':libs:java-web')
+
+    // Jackson for JSON serialization support
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Spring Web (for CommonGlobalExceptionHandler @ExceptionHandler / ResponseEntity / web exceptions)
+    implementation 'org.springframework:spring-web'
+    implementation 'org.springframework:spring-webmvc'
+    implementation 'org.springframework:spring-orm'
+
+    // Jakarta Servlet API (transitively required by spring-web for ServletException type)
+    implementation 'jakarta.servlet:jakarta.servlet-api'
+
+    // SLF4J for @Slf4j logger (Lombok-generated)
+    implementation 'org.slf4j:slf4j-api'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}
