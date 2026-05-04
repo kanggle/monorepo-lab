@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-044-main-baseline-ci-regression-cleanup.md` — main 브랜치의 baseline CI 회귀 청소. 2026-05-04 이후 4 CI job 일관 FAIL: Integration (GAP, `MissingWebServerFactoryBeanException`) / E2E (gateway-master) / E2E (fan-platform) / Frontend E2E (web-store). TASK-MONO-023 시리즈 (a~e, 2026-05-03 종결) 패턴 답습 — 1차 진단 + 분류 ((a) 코드 회귀 / (b) 환경 한계 / (c) flaky) + 분류별 sub-task (`044a/b/c...`) 발행 + main baseline 안정화 검증 (3 연속 PASS) + 회귀 재발 방지 메커니즘. 진행 중 PR (#194/#195/#196/#197) 모두 같은 4 job FAIL — 본 task 의 진단 결과로 admin-override 가능 여부 결정. 분석=Opus 4.7 / 구현 권장=Opus — context loader / dependency tree / git bisect 동시 분석.
+- `TASK-MONO-044b-traefik-net-ci-overlay-fix.md` — TASK-MONO-044 진단 후속. RC#2 fix — `ee13ecc` (TASK-MONO-024, 2026-05-03) 가 ecommerce `docker-compose.yml` 에 `traefik-net: external: true` 도입; CI 의 frontend-e2e Job 은 shared Traefik 스택을 띄우지 않으므로 `docker compose up` 호출 시 `network traefik-net declared as external, but could not be found` 로 즉시 abort. Frontend E2E full-stack (web-store) Job 의 단독 가시 root cause. Fix 옵션: (i) workflow 에 `docker network create traefik-net || true` step 1줄 추가 권장 / (ii) ci overlay 에서 traefik-net 재정의 / (iii) service-by-service network override. 분석=Opus 4.7 / 구현 권장=Sonnet — 단순 CI yml 1줄 변경.
 
 ## in-progress
 
