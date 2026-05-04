@@ -146,13 +146,81 @@ touch projects/<new-project>/tasks/{ready,in-progress,review,done,archive}/.gitk
 
 #### 2. Write `PROJECT.md`
 
-Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). Declare `domain`, `traits`, `service_types`. Write Purpose, Domain Rationale, Trait Rationale, Out of Scope in prose.
+Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). The required frontmatter fields are:
+
+```yaml
+---
+name: <project-name>
+domain: <domain>          # must be in rules/taxonomy.md
+traits: [<trait>, ...]    # each must be in rules/taxonomy.md
+service_types: [rest-api, event-consumer, ...]
+compliance: []            # e.g. [gdpr, pipa] — informational
+data_sensitivity: internal   # internal | pii | pii-sensitive
+scale_tier: startup       # informational
+taxonomy_version: 0.1
+---
+```
+
+Verify `domain` and each `trait` exist in `rules/taxonomy.md` (Hard Stop if not). If adding a new domain or trait, add the rule file in the same PR per the On-Demand Rule Policy below.
+
+Write prose sections: Purpose, Domain Rationale, Trait Rationale, Service Map, GAP IdP Integration (see §"GAP IdP Integration Pattern" below), Out of Scope, Overrides.
 
 #### 3. Write `tasks/INDEX.md`
 
-Copy from the existing project and adjust. This file defines the task lifecycle for the new project.
+Copy from an existing project (e.g., `projects/wms-platform/tasks/INDEX.md`) and adjust. The project-level lifecycle includes **backlog/** and **archive/** in addition to the monorepo-root lifecycle stages (ready / in-progress / review / done).
 
-#### 4. Update root `settings.gradle`
+| Stage | Note |
+|---|---|
+| `backlog/` | Parked ideas — not yet ready for implementation |
+| `ready/` | Accepted and scoped — may be implemented |
+| `in-progress/` | Actively being implemented |
+| `review/` | Implementation complete, awaiting review |
+| `done/` | Merged |
+| `archive/` | Superseded or abandoned |
+
+Adopt the same **PR Separation Rule** as the root `tasks/INDEX.md`: spec PR / impl PR / chore (lifecycle move) PR must not be bundled.
+
+#### 4. Write `docker-compose.yml` with Traefik hostname labels
+
+The project must join the shared Traefik network from day one (TASK-MONO-022/024 precedent). Pick an unused `*.local` hostname and register it in `TEMPLATE.md § Local Network Convention — Hostname allocation`.
+
+```yaml
+services:
+  gateway:
+    expose: ["8080"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.<new-project>.rule=Host(`<new-project>.local`)"
+      - "traefik.http.services.<new-project>.loadbalancer.server.port=8080"
+    networks:
+      - traefik-net
+      - <new-project>-net
+
+  postgres:
+    expose: ["5432"]         # no host port — DB tools via docker exec or dev overlay
+    networks: [<new-project>-net]
+
+networks:
+  traefik-net:
+    external: true
+  <new-project>-net:
+    driver: bridge
+```
+
+Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `CLAUDE.md § Local Network Convention` (authoritative) and `TEMPLATE.md § Local Network Convention` (full detail) for the DB tool access pattern.
+
+#### 5. Write `.env.example`
+
+```bash
+# Hostname (Traefik routing — no PORT_PREFIX)
+PROJECT_HOSTNAME=<new-project>.local
+
+# GAP OIDC (if integrating with GAP IdP)
+OIDC_ISSUER_URL=http://gap.local/oauth2/
+OIDC_JWKS_URI=http://gap.local/oauth2/jwks
+```
+
+#### 6. Update root `settings.gradle`
 
 Add an `include` block for the new project's apps:
 
@@ -163,15 +231,26 @@ include(
 )
 ```
 
-#### 5. Create project-level `build.gradle` (placeholder)
+#### 7. Add shortcut scripts to root `package.json`
+
+```jsonc
+{
+  "scripts": {
+    "<new-project>:up":   "docker compose --project-directory projects/<new-project> up -d",
+    "<new-project>:down": "docker compose --project-directory projects/<new-project> down"
+  }
+}
+```
+
+#### 8. Create project-level `build.gradle` (placeholder)
 
 Start empty. Add project-wide common config (e.g., Spring Boot plugin) when multiple services share it.
 
-#### 6. Write the first `tasks/ready/TASK-BE-001-*.md`
+#### 9. Write the first `tasks/ready/TASK-BE-001-*.md`
 
-Typically a `<service>-bootstrap` task that stands up the first service skeleton.
+Typically a `<service>-bootstrap` task that stands up the first service skeleton. Follow the PR Separation Rule — this spec lands in a spec PR before any implementation.
 
-#### 7. Register for portfolio sync (when ready to publish)
+#### 10. Register for portfolio sync (when ready to publish)
 
 In `scripts/sync-portfolio.sh`:
 
@@ -180,7 +259,7 @@ PROJECT_REMOTES["<new-project>"]="https://github.com/<owner>/<new-project>.git"
 PROJECT_TYPES["<new-project>"]="direct-include"
 ```
 
-#### 8. Verify Gradle sees the new structure
+#### 11. Verify Gradle sees the new structure
 
 ```bash
 ./gradlew projects
