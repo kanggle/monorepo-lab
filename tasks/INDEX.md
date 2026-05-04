@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-041-adr-mono-002-phase-4-trigger.md` — ADR-MONO-002 신설 (Phase 4 = Template 레포 추출 진입 결정 + scm catalyst 명시). cleanup 시리즈 029~039 종결 후 새 도메인 부트스트랩 의향 발화의 결정 근거 보존. D1=1 도메인 추가, D2=scm 우선, D3=Template 추출 시점 별도 ADR, D4=erp/mes 순서 후속 결정.
+(empty)
 
 ## in-progress
 
@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-041-adr-mono-002-phase-4-trigger.md` — ADR-MONO-002 신설 (Phase 4 진입 결정 + scm catalyst). D1=1 도메인 추가 / D2=scm 우선 / D3·D4=별도 ADR 또는 task 로 deferred. Status: ACCEPTED.
 
 ## done
 
