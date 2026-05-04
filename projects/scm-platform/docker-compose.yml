@@ -1,0 +1,174 @@
+# =============================================================================
+# scm-platform — Local Development Infrastructure (v1 placeholder)
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C):
+#   gateway-service is reached via http://scm.local/ — Traefik routes based on
+#   Host header. No PORT_PREFIX, no host-port slot allocation.
+#
+# Status: v1 bootstrap (TASK-MONO-040). The gateway-service block below is
+# commented out — its Spring Boot module is not yet generated. The first
+# service skeleton (TASK-SCM-BE-001) will:
+#   1. Create projects/scm-platform/apps/gateway-service/ (Spring Boot module +
+#      Dockerfile),
+#   2. Update root settings.gradle to include the new app subproject,
+#   3. Uncomment / activate the gateway-service block below,
+#   4. Activate Traefik labels so http://scm.local/ resolves.
+#
+# Backing services (postgres / redis / kafka) are also placeholders — they are
+# defined here so `docker compose --project-directory projects/scm-platform
+# config` validates the file shape, but they will only be brought up once at
+# least one application service depends on them.
+#
+# Prerequisites (when activated):
+#   1. Start the shared Traefik stack:  pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
+#   2. Add `127.0.0.1 scm.local` to your hosts file (one-time setup)
+#
+# Usage (after first service skeleton lands):
+#   pnpm scm:up    — start everything in this compose file
+#   pnpm scm:down  — stop containers (volumes preserved)
+#   pnpm scm:logs  — tail logs
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # gateway-service — TASK-SCM-BE-001 (deferred).
+  # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
+  # (tenant_id=scm only), rate limit. The block below is the target shape;
+  # uncomment when the Spring Boot module is generated.
+  # ---------------------------------------------------------------------------
+  # gateway-service:
+  #   image: scm-platform/gateway-service:local
+  #   container_name: scm-platform-gateway
+  #   build:
+  #     context: ./apps/gateway-service
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   expose:
+  #     - "8080"
+  #   environment:
+  #     SERVER_PORT: "8080"
+  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #     OIDC_REQUIRED_TENANT_ID: scm
+  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-scm-platform-internal-services-client}
+  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-scm-dev}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: "6379"
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://scm.local}
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     postgres:
+  #       condition: service_healthy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=traefik-net"
+  #     - "traefik.http.routers.scm-platform.rule=Host(`scm.local`)"
+  #     - "traefik.http.routers.scm-platform.entrypoints=web"
+  #     - "traefik.http.services.scm-platform.loadbalancer.server.port=8080"
+  #   networks:
+  #     - scm-platform-net
+  #     - traefik-net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Postgres 16 — backing store for procurement / inventory-visibility services
+  # (TASK-SCM-BE-001+). Multi-database: docker-entrypoint-initdb.d will create
+  # per-service DBs once the init script is added in the first service skeleton
+  # task (mirrors fan-platform's infra/postgres/init/ pattern).
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: scm-platform-postgres
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
+      POSTGRES_DB: ${POSTGRES_DB:-scm}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro  # uncomment in TASK-SCM-BE-001
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - scm-platform-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — rate-limit counters (gateway), short-lived token cache.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: scm-platform-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - scm-platform-net
+
+  # ---------------------------------------------------------------------------
+  # Kafka 3.7 — single-broker KRaft mode. Outbox relay target for transactional
+  # events (procurement.po.confirmed / inventory.snapshot.published / ...).
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: scm-platform-kafka
+    restart: unless-stopped
+    expose:
+      - "9092"
+    environment:
+      # KRaft mode (no Zookeeper)
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server kafka:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    networks:
+      - scm-platform-net
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+
+networks:
+  scm-platform-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net
