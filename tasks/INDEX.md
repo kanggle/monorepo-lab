@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-043-micro-fix-bundle.md` — operational hygiene 3 micro-fix batch. (A) `protect-main-branch.ps1` 의 `--force-with-lease` false-positive (TASK-MONO-040 시리즈에서 직접 친 friction), (B) `.claude/scheduled_tasks.lock` `.gitignore` 등록, (C) `auth-api.md` § OAuth2 Clients 표의 ecommerce V0012 행 누락 fix. ADR-MONO-002 D3 churn 안정 평가 기간에 적합한 churn-zero 작업. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — line-level batch fix.
 
 ## in-progress
 
