@@ -107,9 +107,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-038-monorepo-workflow-guide.md` — TASK-MONO-033 의 follow-up. `docs/guides/monorepo-workflow.md` 신설 (TEMPLATE.md 가 reference 하는 to-be-authored 가이드). branch 패턴 / task lifecycle / agent dispatch / sync-portfolio.sh / CI 잡 / hook / 자주 발생 conflict 9 섹션.
-
 (empty)
+
+## review
+
+- `TASK-MONO-038-monorepo-workflow-guide.md` — TASK-MONO-033 의 follow-up. `docs/guides/monorepo-workflow.md` 신설 (9섹션: overview / branch 패턴 / task lifecycle / agent dispatch / sync-portfolio.sh / CI 잡 / hook / conflict 패턴 / cross-ref). TEMPLATE.md anchor link 갱신 1건.
 
 ## done
 
