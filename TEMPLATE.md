@@ -502,6 +502,139 @@ See `docs/guides/monorepo-workflow.md` (to be authored) for the full workflow ru
 
 ---
 
+## Standalone Portfolio Sync and Freeze Policy
+
+`scripts/sync-portfolio.sh` extracts each project from the monorepo into its own standalone GitHub repository (full history, filter-repo based). This allows individual project repos suitable for portfolio submission while keeping development in the monorepo.
+
+### How standalone sync works
+
+```
+monorepo main → filter-repo (keep SHARED_PATHS + projects/<name>/) → hoist to root → post-process → force-push standalone repo
+```
+
+| Config key | Where | Purpose |
+|---|---|---|
+| `PROJECT_REMOTES["<name>"]` | `sync-portfolio.sh` | Target GitHub remote URL |
+| `PROJECT_TYPES["<name>"]` | `sync-portfolio.sh` | `direct-include` (default) or `composite-build` (fallback) |
+| `PROJECT_EXCLUDE_PATHS["<name>"]` | `sync-portfolio.sh` | Paths excluded from standalone — see below |
+
+### PROJECT_EXCLUDE_PATHS — standalone freeze policy
+
+A project's standalone repo is not always identical to the monorepo. When a project undergoes a **major integration cutover** (e.g., migrating from a self-hosted auth service to GAP OIDC), the standalone v1 may intentionally be **frozen** at the pre-cutover state to preserve the v1 demo intact.
+
+**Use `PROJECT_EXCLUDE_PATHS` when:**
+
+- The monorepo has a breaking integration change that the standalone v1 must NOT receive (e.g., auth-service decommission, docker-compose overhaul, GAP OIDC cutover).
+- The standalone's demo depends on components that are removed or replaced in the monorepo.
+
+**Do NOT use `PROJECT_EXCLUDE_PATHS` for:**
+
+- Routine bug fixes or feature additions that the standalone should receive.
+- CI workflow improvements that help standalone repo CI.
+
+**Current freeze example — ecommerce standalone v1:**
+
+`ecommerce-microservices-platform` standalone is frozen at the state prior to the GAP OIDC cutover (TASK-MONO-027 + TASK-FE-067 + TASK-BE-132). The standalone v1 preserves the legacy self-hosted ecommerce auth-service (JWT issuer, signup, Google OAuth) so the standalone repo demonstrates an end-to-end JWT-issuing service without requiring GAP as a transitive dependency.
+
+The following path groups are excluded from the ecommerce standalone sync:
+
+- **GROUP A (TASK-FE-067)**: frontend NextAuth v5 + GAP OIDC cutover (web-store / admin-dashboard auth files)
+- **GROUP B (TASK-BE-132)**: backend auth-service decommission (docker-compose × 3, .env.example, k8s, gateway application.yml, spec rename, deprecated contracts, deprecated feature specs)
+
+### Dual-deploy strategy
+
+Each project has two publication surfaces:
+
+| Surface | Audience | State |
+|---|---|---|
+| Dev monorepo (`kanggle/monorepo-lab`) | Technical reviewers / AI agents | Always latest |
+| Standalone project repo (`kanggle/<project>`) | Portfolio reviewers with time budget | Curated snapshot (may be frozen) |
+
+When a project's standalone is frozen, the standalone `README.md` should document the freeze point and explain that the monorepo version is more recent. See `project_portfolio_submission_strategy.md` in the memory layer for the full dual-deploy rationale.
+
+### Dry-run validation
+
+```bash
+./scripts/sync-portfolio.sh --dry-run <project>
+# Shows: kept paths + excluded paths (PROJECT_EXCLUDE_PATHS)
+```
+
+---
+
+## GAP IdP Integration Pattern (New Projects)
+
+As of ADR-001 (ACCEPTED 2026-05-01), **global-account-platform (GAP) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with GAP from bootstrap.
+
+This applies to: `fan-platform`, `wms`, `ecommerce` (post-TASK-MONO-027), and all future projects.
+
+### 1. Tenant registration
+
+Before any code, register the new domain as a GAP tenant via the admin API:
+
+```
+POST /api/admin/tenants
+Authorization: Bearer <super-admin-token>
+
+{
+  "tenantId": "<domain>",          # e.g. "erp", "scm", "mes"
+  "displayName": "...",
+  "tenantType": "B2B_ENTERPRISE"   # or B2C_CONSUMER
+}
+```
+
+Full procedure: `projects/global-account-platform/specs/features/consumer-integration-guide.md § Phase 1`.
+
+### 2. OIDC client registration (Flyway seed)
+
+Register the new OIDC client(s) via a GAP Flyway seed migration (pattern: `V00XX__<description>.sql`). Reference existing seeds (V0010 = wms, V0011 = fan-platform, V0012 = ecommerce) for the INSERT pattern.
+
+Typical client registration includes:
+
+- `authorization_code` + PKCE (user-facing flows)
+- `refresh_token`
+- `client_credentials` (service-to-service, optional)
+- Redirect URIs for dev / staging / prod
+- Domain-specific scopes (e.g., `wms.inventory.read`)
+
+The seed lives in `projects/global-account-platform/apps/account-service/src/main/resources/db/migration/`.
+
+### 3. Gateway — OAuth2 Resource Server
+
+The new project's gateway service must be configured as an OAuth2 Resource Server that validates GAP's RS256 JWT:
+
+```yaml
+# application.yml (gateway-service)
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI}   # http://gap.local/oauth2/  (dev)
+          jwk-set-uri: ${OIDC_JWKS_URI}    # http://gap.local/oauth2/jwks
+```
+
+Add a `TenantClaimValidator` (or equivalent) that rejects tokens with `tenant_id` != `<domain>`. Reference: `projects/ecommerce-microservices-platform/apps/gateway-service/` (post-TASK-MONO-027).
+
+### 4. PROJECT.md — declare GAP IdP integration
+
+Add a `## GAP IdP Integration` section to the project's `PROJECT.md` (see `projects/wms-platform/PROJECT.md` and `projects/fan-platform/PROJECT.md` as templates):
+
+```markdown
+## GAP IdP Integration
+
+`<project>` uses [global-account-platform](../global-account-platform/PROJECT.md) (GAP)
+as the standard OIDC IdP ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)).
+All <project> services validate GAP RS256 access tokens as OAuth2 Resource Servers and
+pass only `tenant_id=<domain>` tokens.
+Integration detail: [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+```
+
+### 5. Full integration guide
+
+`projects/global-account-platform/specs/features/consumer-integration-guide.md` is the **single reference** for new consumers. It covers all 6 phases: tenant registration → OIDC client setup → gateway RS config → frontend PKCE flow → event subscription → operational checklist.
+
+---
+
 ## Template Extraction (Phase 4 Detail)
 
 _Exact scripts to be authored when Phase 4 approaches. This section is a sketch._
