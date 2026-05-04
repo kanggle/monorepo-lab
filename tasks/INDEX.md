@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리. `rule-consistency-check.ps1` line 24 정규식에 `-and $filePath -notmatch 'README\.md$'` 추가 (false-positive fix, skill/command 도 일관 적용) + `.claude/agents/common/README.md` 신설. hook self-modification 사용자 명시 승인 (2026-05-04).
+(empty)
 
 ## in-progress
 
@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리 완료. `rule-consistency-check.ps1` 의 skill/agent/command 정규식 모두에 `-and $filePath -notmatch 'README\.md$'` 추가 + `.claude/agents/common/README.md` 신설 (13 agent 카탈로그 + frontmatter 컨벤션 + dispatch 설명).
 
 ## done
 
