@@ -109,11 +109,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-030-spec-drift-audit.md` — 공통규칙 정리 시리즈 2/5. 4 프로젝트 (wms / ecommerce / GAP / fan-platform) 의 specs/services/architecture.md + specs/integration/gap-integration.md + specs/contracts/{http,events}/*.md deprecated 헤더 + platform/contracts reference 일관성 audit (~27 services). Critical/Warning/Suggestion 분류.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-030-spec-drift-audit.md` — 공통규칙 정리 시리즈 2/5. 4 프로젝트 (wms / ecommerce / GAP / fan-platform) 의 specs/services/architecture.md + specs/integration/gap-integration.md + specs/contracts/{http,events}/*.md deprecated 헤더 + platform/contracts reference 일관성 audit (~27 services). Critical 2건 fix (gap-integration error envelope + cross-tenant enumerate), Warning 2건 fix (jwt-standard-claims ref 추가 × 2 프로젝트). Warning/Suggestion 나머지는 PR body 카탈로그.
 
 ## done
 
