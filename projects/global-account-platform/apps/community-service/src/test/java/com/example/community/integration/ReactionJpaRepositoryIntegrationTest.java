@@ -9,7 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Instant;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,9 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @AfterEach
     void cleanUp() {

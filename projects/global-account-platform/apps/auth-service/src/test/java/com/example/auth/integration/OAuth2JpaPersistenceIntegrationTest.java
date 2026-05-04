@@ -114,7 +114,7 @@ class OAuth2JpaPersistenceIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("Flyway V0008: system seed scopes (openid, profile, email, offline_access) present")
+    @DisplayName("Flyway V0008+V0011: system seed scopes (openid, profile, email, offline_access, tenant.read) present")
     void flyway_v0008_systemScopesSeeded() {
         List<Map<String, Object>> scopes = jdbcTemplate.queryForList(
                 "SELECT scope_name FROM oauth_scopes WHERE is_system = TRUE");
@@ -123,9 +123,15 @@ class OAuth2JpaPersistenceIntegrationTest extends AbstractIntegrationTest {
                 .map(row -> (String) row.get("scope_name"))
                 .toList();
 
+        // V0008 seeded openid/profile/email/offline_access. V0011 (TASK-MONO-026)
+        // appended tenant.read as a system scope (tenant_id NULL, is_system TRUE)
+        // so any tenant's client may request it. Use containsAtLeast (TASK-MONO-044c)
+        // so this test does not have to be re-pinned every time a future migration
+        // adds another system scope — it only asserts the V0008-baseline four are
+        // still present.
         assertThat(scopeNames)
-                .as("System scopes must include openid, profile, email, offline_access")
-                .containsExactlyInAnyOrder("openid", "profile", "email", "offline_access");
+                .as("System scopes must include the V0008 baseline four")
+                .contains("openid", "profile", "email", "offline_access");
     }
 
     // -----------------------------------------------------------------------
