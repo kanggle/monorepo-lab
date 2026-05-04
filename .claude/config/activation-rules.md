@@ -257,7 +257,7 @@ Activate:
 - batch reconciliation rules (settlement, demand planning runs)
 - partner SLA / compliance tracking rules
 
-→ Detailed rules: *(file to be created when a project declares this domain)*
+→ Detailed rules: [`rules/domains/scm.md`](../../rules/domains/scm.md)
 
 ---
 

@@ -49,6 +49,11 @@
     "fan-platform:test": "pnpm --dir projects/fan-platform test",
     "fan-platform:e2e:smoke": "pnpm --dir projects/fan-platform e2e:smoke",
     "fan-platform:web": "pnpm --dir projects/fan-platform --filter fan-platform-web dev",
-    "fan-platform:pnpm": "pnpm --dir projects/fan-platform"
+    "fan-platform:pnpm": "pnpm --dir projects/fan-platform",
+    "scm:up": "docker compose --project-directory projects/scm-platform up -d",
+    "scm:down": "docker compose --project-directory projects/scm-platform down",
+    "scm:ps": "docker compose --project-directory projects/scm-platform ps",
+    "scm:logs": "docker compose --project-directory projects/scm-platform logs -f",
+    "scm:docker": "docker compose --project-directory projects/scm-platform"
   }
 }
