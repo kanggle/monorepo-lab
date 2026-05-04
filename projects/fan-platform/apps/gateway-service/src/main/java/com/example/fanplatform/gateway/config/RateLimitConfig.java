@@ -47,8 +47,19 @@ public class RateLimitConfig {
      * Key resolver for authenticated requests — keyed on the JWT subject (account id).
      * Falls back to the IP-based key when no security context is present (e.g. public
      * routes / pre-auth phase).
+     *
+     * <p>{@code @Primary} designates this as the default {@link KeyResolver} injected by
+     * Spring Cloud Gateway's {@code requestRateLimiterGatewayFilterFactory}. Without it,
+     * the factory's constructor-injection fails with an ambiguous-bean error because both
+     * {@code clientIpKeyResolver} and this bean implement the same interface. All
+     * application.yml routes already reference this bean explicitly via SpEL
+     * ({@code key-resolver: "#{@accountKeyResolver}"}); {@code @Primary} only resolves
+     * the factory-level injection ambiguity — not the per-route resolver selection.
+     * {@code clientIpKeyResolver} is kept as a named bean for potential future use on
+     * public/unauthenticated routes that require pure IP-based bucketing.
      */
     @Bean("accountKeyResolver")
+    @Primary
     KeyResolver accountKeyResolver() {
         return exchange -> ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication())
