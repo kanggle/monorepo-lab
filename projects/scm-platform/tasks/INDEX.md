@@ -78,7 +78,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-001-gateway-service-bootstrap.md` — scm-platform 의 첫 service `gateway-service` Spring Boot 부트스트랩. Spring Cloud Gateway 3.4 + OAuth2 Resource Server (GAP RS256 JWT 검증) + TenantClaimValidator (`tenant_id=scm` only) + Redis rate limit + Traefik label 활성화 (`scm.local`). procurement / inventory-visibility 라우트는 placeholder (BE-002/003 활성화). spec 3개 (gateway architecture / public-routes / gap-integration). 단위·슬라이스·통합 테스트 + 루트 CI Build & Test 에 모듈 추가. 분석=Opus 4.7 / 구현 권장=Opus — security + reactive + filter 동시 작성.
 - `TASK-SCM-BE-002-procurement-service-bootstrap.md` — scm-platform 핵심 도메인 service `procurement-service` 부트스트랩. PO 상태기계 (DRAFT→SUBMITTED→ACKNOWLEDGED→CONFIRMED→…→CLOSED, S1) + Hexagonal (supplier adapter 분리) + outbox 패턴 + supplier 외부 통합 (Resilience4j circuit breaker + idempotency key, S2) + audit_log (S7) + supplier credentials AES-GCM 암호화 (S6). API 8 endpoint + webhook 2 (supplier-ack / asn). Event 7개 (`scm.procurement.po.{submitted,acknowledged,confirmed,canceled,received,closed}` + `asn.received`). Spec 7개 (architecture / state-machines/po-status / data-model / dependencies / observability / overview / integration/supplier-adapters) + contracts 2개 (procurement-api / procurement-events). 단위·슬라이스·통합 테스트 (multi-tenant isolation / outbox relay / supplier circuit breaker / supplier idempotency / state machine atomicity / audit log / asn overreceipt). gateway-service 의 procurement placeholder 라우트 활성화 검증. 선행=BE-001 (review). 분석=Opus 4.7 / 구현 권장=Opus — Hexagonal + 상태기계 + outbox + circuit breaker + idempotency + 암호화 동시 작성.
 - `TASK-SCM-BE-003-inventory-visibility-service-bootstrap.md` — scm-platform 의 두 번째 도메인 service `inventory-visibility-service` 부트스트랩. cross-node 재고 가시성 read-model (자사 wms / supplier / 3PL / in-transit) — Service Type=`rest-api`+`event-consumer`, Hexagonal. wms-platform 의 `wms.inventory.{received,adjusted,transferred}.v1` 토픽 구독 (cross-project event consumption 첫 사례) + eventId 기반 멱등 처리 (T8). 노드별 staleness threshold 초과 감지 batch (5분 주기, ShedLock — `batch-heavy` trait 첫 코드 적용). API 5 endpoint (read-only) + alert 이벤트 1개 (`scm.inventory.alert.v1`). 4 테이블 + tenant_id + S5 (eventual consistency 명시적 노출 `meta.staleness`). Spec 6개 (architecture / data-model / dependencies / observability / overview / staleness-monitoring) + contracts 2개 (inventory-visibility-api / inventory-visibility-subscriptions). 단위·슬라이스·통합 테스트 (consumer 멱등 / cross-node aggregation / transferred atomic / staleness batch / Kafka retry+DLT). 선행=BE-001 (review). 병렬 가능=BE-002 (데이터 공유 0). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — read-only + 단순 consumer + batch.
 
@@ -88,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-001-gateway-service-bootstrap.md` — scm-platform 의 첫 service `gateway-service` Spring Boot 부트스트랩. Spring Cloud Gateway 3.4 + OAuth2 Resource Server (GAP RS256 JWT 검증) + TenantClaimValidator (`tenant_id=scm` only) + Redis rate limit + Traefik label 활성화 (`scm.local`). procurement / inventory-visibility 라우트는 placeholder (BE-002/003 활성화). spec 3개 (gateway architecture / public-routes / gap-integration). 단위·슬라이스·통합 테스트 + 루트 CI Build & Test 에 모듈 추가. 분석=Opus 4.7 / 구현 권장=Opus — security + reactive + filter 동시 작성.
 
 ## done
 
