@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-044b-traefik-net-ci-overlay-fix.md` — TASK-MONO-044 진단 후속. RC#2 fix — `ee13ecc` (TASK-MONO-024, 2026-05-03) 가 ecommerce `docker-compose.yml` 에 `traefik-net: external: true` 도입; CI 의 frontend-e2e Job 은 shared Traefik 스택을 띄우지 않으므로 `docker compose up` 호출 시 `network traefik-net declared as external, but could not be found` 로 즉시 abort. Frontend E2E full-stack (web-store) Job 의 단독 가시 root cause. Fix 옵션: (i) workflow 에 `docker network create traefik-net || true` step 1줄 추가 권장 / (ii) ci overlay 에서 traefik-net 재정의 / (iii) service-by-service network override. 분석=Opus 4.7 / 구현 권장=Sonnet — 단순 CI yml 1줄 변경.
+(empty)
 
 ## in-progress
 
