@@ -111,9 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 (empty)
 
-## review
-
-- `TASK-MONO-030-spec-drift-audit.md` — 공통규칙 정리 시리즈 2/5. 4 프로젝트 (wms / ecommerce / GAP / fan-platform) 의 specs/services/architecture.md + specs/integration/gap-integration.md + specs/contracts/{http,events}/*.md deprecated 헤더 + platform/contracts reference 일관성 audit (~27 services). Critical 2건 fix (gap-integration error envelope + cross-tenant enumerate), Warning 2건 fix (jwt-standard-claims ref 추가 × 2 프로젝트). Warning/Suggestion 나머지는 PR body 카탈로그.
+(empty)
 
 ## done
 
@@ -147,3 +145,4 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-027-ecommerce-gap-integration.md` — ecommerce-platform 의 GAP OIDC 통합 cutover. GAP V0012 시드 (ecommerce-web-store-client + ecommerce-admin-dashboard-client + 2 scopes) + account-service V0014 (ecommerce tenant row) + ecommerce gateway-service 의 issuer-uri / jwk-set-uri / TenantClaimValidator / AllowedIssuersValidator + docker-compose env 갱신 + .env.example 신규 변수 + integration test 5 시나리오. cross-project atomic (`feat!:` PR #145 머지). 후속: TASK-FE-067 (frontend cutover), TASK-BE-132 (auth-service 폐기). 2026-05-04.
 - `TASK-MONO-028-ecommerce-standalone-v1-freeze-policy.md` — ecommerce GAP cutover 시리즈 follow-up. `scripts/sync-portfolio.sh` `PROJECT_EXCLUDE_PATHS["ecommerce-microservices-platform"]` 에 BE-132 변경 path 12건 추가 (docker-compose × 3 / .env.example / k8s / gateway application.yml / specs/services rename × 2 / contracts http+events / features authentication+user-management) + dry-run 출력에 excluded paths 표시 추가. 환경변수 잔재 grep 결과 깨끗 (AUTH_SECRET / AUTH_GOOGLE_CLIENT / ADMIN_INITIAL_PASSWORD 모두 잔재 없음 — done task 본문 참조만). tasks/done 의 50+ 옛 auth-service 경로 참조는 옵션 a (방치, CLAUDE.md "do not modify done" 룰 준수) + c (auth-service-deprecated/README.md redirect 이미 처리됨) 로 의도된 방치. k8s prod gateway → GAP egress NetworkPolicy 추가는 별도 follow-up. PR #153 머지. 2026-05-04.
 - `TASK-MONO-029-rules-validation-audit.md` — 공통규칙 정리 시리즈 1/5. `rules/` + `.claude/config/` 4-way 동기화 audit. /validate-rules skill 실행 + 매뉴얼 grep. 발견: Critical 1 (`.claude/skills/INDEX.md` 의 identity-platform-setup orphaned reference), Warning 2 (`rules/README.md` 의 도메인 카운트 38 → 41 drift, `.claude/config/activation-rules.md` 의 saas/wms 전용 activation 섹션 누락). 모두 본 PR 에서 fix, on-demand 정책 위반 없음. 후속 candidate: TASK-MONO-030 (spec drift), -031 (libs audit), -032 (.claude skills/agents/commands), -033 (TEMPLATE.md 정합성). PR #156 머지. 2026-05-04.
+- `TASK-MONO-030-spec-drift-audit.md` — 공통규칙 정리 시리즈 2/5. 4 프로젝트 (wms / ecommerce / GAP / fan-platform) 의 architecture.md + gap-integration.md + contracts deprecated 헤더 + platform/contracts reference 일관성 audit (~27 services). Critical 2건 fix (wms+ecommerce gap-integration error envelope 형식 오기재), Warning 3건 fix (wms cross-tenant enumerate 표현, wms+fan-platform 의 jwt-standard-claims ref 누락 추가). 5건 Warning + 4건 Suggestion 은 PR body 카탈로그 → follow-up: (a) wms/fan-platform OIDC issuer/JWKS URI 정렬 (W4-W6), (b) ecommerce 이벤트 발행 서비스 architecture.md Outbox 섹션 추가 (W7), (c) wms architecture.md 섹션명 표준화 (W8). PR #160 머지. 2026-05-04.
