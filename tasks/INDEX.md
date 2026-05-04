@@ -103,8 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-040-scm-platform-bootstrap.md` — 모노레포 5번째 프로젝트 `scm-platform` 의 skeleton 부트스트랩. `projects/scm-platform/` 디렉토리 트리 + `PROJECT.md` (domain=scm, traits=[transactional, integration-heavy, batch-heavy]) + `tasks/INDEX.md` + `docker-compose.yml` (Traefik `scm.local` 라벨, gateway service v1 placeholder) + `.env.example` + 루트 `package.json` shortcuts + `rules/domains/scm.md` 신설 (on-demand) + `README.md`. 첫 service skeleton 과 GAP V0013 seed 는 후속 분리. 분석=Opus 4.7 / 구현 권장=Opus — cross-cutting 부트스트랩.
-- `TASK-MONO-042-gap-v0013-scm-oidc-clients.md` — TASK-MONO-040 의 선행. GAP V0013 (auth-service `oauth_clients` + `oauth_scopes`) + V0015 (account-service `tenants`) Flyway seed 로 `scm` tenant + `scm-platform-internal-services-client` (client_credentials) + `scm.read`/`scm.write` scope 등록. v1 backend-only 라 user-flow PKCE client 는 v2 frontend 도입 시 별도. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단순 seed 추가.
+(empty)
 
 ## in-progress
 
@@ -157,3 +156,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 **공통규칙 정리 시리즈 follow-up (035~038) 4/4 완료** — 2026-05-04. 시리즈 전체 (029~038) 12 task / 24 PR 종결.
 - `TASK-MONO-039-rule-consistency-check-readme-fix.md` — TASK-MONO-036 의 W6 deferred 처리 완료. `rule-consistency-check.ps1` 의 skill/agent/command 정규식 모두에 `-and $filePath -notmatch 'README\.md$'` 추가 (false-positive fix, 일관 적용) + `.claude/agents/common/README.md` 신설 (13 agent 카탈로그 + frontmatter 컨벤션 + dispatch 설명 + cross-ref). hook self-modification 사용자 명시 승인 받음. PR #180 머지. 2026-05-04. **공통규칙 정리 시리즈 029~039 13 task / 26 PR 완전 종결.**
 - `TASK-MONO-041-adr-mono-002-phase-4-trigger.md` — ADR-MONO-002 신설 (Phase 4 = Template 레포 추출 진입 결정 + scm catalyst, ACCEPTED). D1=1 도메인 추가 (3 도메인 동시 거부 — root 공유 파일 conflict + bottleneck), D2=scm 우선 (wms 시너지 + 첫 도메인 risk 낮음), D3=Template 추출 시점 별도 ADR-MONO-003 candidate, D4=erp/mes 순서 후속 결정 (추천: scm→erp→mes). PR #183 머지. 2026-05-04.
+- `TASK-MONO-042-gap-v0013-scm-oidc-clients.md` — TASK-MONO-040 의 선행. GAP V0013 (auth-service `oauth_clients` + `oauth_scopes`) + V0015 (account-service `tenants`) Flyway seed 로 `scm` tenant (B2B_ENTERPRISE) + `scm-platform-internal-services-client` (client_credentials) + `scm.read`/`scm.write` scope 등록. BCrypt hash for `"scm-dev"` (strength=10) 생성. v1 = backend only — user-flow PKCE client 는 v2 frontend 도입 시 별도 V slot. auth-api.md OAuth2 Clients 표 갱신. PR #186 (spec) + PR #187 (impl) 머지. 2026-05-04.
+- `TASK-MONO-040-scm-platform-bootstrap.md` — ADR-MONO-002 D2 후속 — 모노레포 5번째 프로젝트 `scm-platform` skeleton 부트스트랩 (Phase 4 catalyst). `rules/domains/scm.md` 신설 (on-demand, Mandatory Rules S1-S8) + `.claude/config/activation-rules.md` link 활성화 + `projects/scm-platform/` 전체 트리 (PROJECT.md / tasks/INDEX.md / docker-compose.yml / .env.example / build.gradle / README.md / 17 .gitkeep) + 루트 `package.json` `scm:*` 5 shortcuts. 25 files / 796 insertions. Library 경계 grep empty / `./gradlew projects` regression 0 / docker-compose config valid. v1 service map 의도 (gateway / procurement / inventory-visibility), 첫 service skeleton 은 후속 TASK-SCM-BE-001. PR #185 (spec) + PR #188 (impl) 머지. 2026-05-04.
+
+**scm 부트스트랩 시리즈 (040 + 042) 4 PR 종결** — 2026-05-04. monorepo Phase 4 catalyst 첫 도메인 추가 완료. 5 프로젝트 동거 진입 (wms / ecommerce / GAP / fan-platform / **scm**). ADR-MONO-002 D3 (Template 레포 실제 추출 결정) 는 라이브러리 churn 안정 평가 후 ADR-MONO-003 candidate.
