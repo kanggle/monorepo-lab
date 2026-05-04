@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-042-gap-v0013-scm-oidc-clients.md` — TASK-MONO-040 의 선행. GAP V0013 (auth-service `oauth_clients` + `oauth_scopes`) + V0015 (account-service `tenants`) Flyway seed 로 `scm` tenant + `scm-platform-internal-services-client` (client_credentials) + `scm.read`/`scm.write` scope 등록. v1 backend-only 라 user-flow PKCE client 는 v2 frontend 도입 시 별도. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단순 seed 추가.
 
 ## in-progress
 
