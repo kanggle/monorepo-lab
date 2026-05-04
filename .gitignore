@@ -32,6 +32,7 @@ Desktop.ini
 # Claude Code local settings
 .claude/settings.local.json
 .claude/worktrees/
+.claude/scheduled_tasks.lock
 .turbo/
 */data/*.mv.db
 */data/*.lock.db

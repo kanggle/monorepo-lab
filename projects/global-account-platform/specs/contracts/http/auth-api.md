@@ -259,6 +259,8 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | `wms-user-flow-client` | `wms` | `authorization_code`, `refresh_token` | Yes | `http://localhost:9001/callback` | `openid`, `profile`, `email`, `offline_access`, `wms.*` | V0010 |
 | `wms-internal-services-client` | `wms` | `client_credentials` | No | — | `wms.*` scopes | V0010 |
 | `fan-platform-user-flow-client` | `fan-platform` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3000/api/auth/callback/gap`, `http://fan-platform.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read` | V0011 |
+| `ecommerce-web-store-client` | `ecommerce` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3000/api/auth/callback/gap`, `http://web.ecommerce.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read`, `ecommerce.consumer` | V0012 |
+| `ecommerce-admin-dashboard-client` | `ecommerce` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3001/api/auth/callback/gap`, `http://admin.ecommerce.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read`, `ecommerce.operator` | V0012 |
 | `scm-platform-internal-services-client` | `scm` | `client_credentials` | No | — | `scm.read`, `scm.write` | V0013 |
 
 > `fan-platform-internal-services-client` (client_credentials) is deferred to v2 — see TASK-MONO-026 Out of Scope.
