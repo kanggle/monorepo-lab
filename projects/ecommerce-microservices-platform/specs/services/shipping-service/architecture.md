@@ -61,6 +61,14 @@ Key domain concepts:
 - One shipping record per order
 - Duplicate OrderConfirmed events must not create duplicate shipping records (idempotency)
 
+## Outbox
+
+- Pattern: Transactional Outbox
+- Table: `outbox` (libs/java-messaging 표준 schema)
+- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
+- Topic 매핑:
+  - `ShippingStatusChanged` → `shipping.shipping.status-changed`
+
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts

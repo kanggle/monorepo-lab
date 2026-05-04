@@ -8,7 +8,7 @@ spec drift cleanup — TASK-MONO-030 의 W4-W8 follow-up 일괄 정리
 
 # Status
 
-ready
+review
 
 # Owner
 

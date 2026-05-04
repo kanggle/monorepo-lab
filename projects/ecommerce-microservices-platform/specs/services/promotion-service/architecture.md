@@ -63,6 +63,15 @@ Key domain concepts:
 - Expired coupons cannot be applied
 - Discount amount must not exceed order total
 
+## Outbox
+
+- Pattern: Transactional Outbox
+- Table: `outbox` (libs/java-messaging 표준 schema)
+- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
+- Topic 매핑:
+  - `CouponUsed` → `promotion.coupon.used`
+  - `CouponExpired` → `promotion.coupon.expired`
+
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts
