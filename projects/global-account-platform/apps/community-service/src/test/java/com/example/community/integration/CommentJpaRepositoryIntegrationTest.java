@@ -60,8 +60,10 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             // of 2 and the test fails.
             commentRepo.flush();
             // soft-delete via native UPDATE (도메인이 직접 노출하지 않음)
+            // TASK-MONO-044c: pass a Timestamp (not Instant.toString()) — MySQL DATETIME
+            // rejects the ISO string with "Z" suffix as data truncation.
             jdbc.update("UPDATE comments SET deleted_at = ? WHERE id = ?",
-                    Instant.now().toString(), toDelete.getId());
+                    java.sql.Timestamp.from(Instant.now()), toDelete.getId());
         });
 
         long count = commentRepo.countByPostIdAndDeletedAtIsNull(postId);
@@ -104,10 +106,10 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             commentRepo.save(Comment.create(postId, authorId, "live-1"));
             Comment deleted = commentRepo.save(Comment.create(postId, authorId, "deleted-1"));
             // TASK-MONO-044c: see countByPostIdAndDeletedAtIsNull above —
-            // flush before the JdbcTemplate UPDATE.
+            // flush before the JdbcTemplate UPDATE; pass Timestamp (not Instant.toString()).
             commentRepo.flush();
             jdbc.update("UPDATE comments SET deleted_at = ? WHERE id = ?",
-                    Instant.now().toString(), deleted.getId());
+                    java.sql.Timestamp.from(Instant.now()), deleted.getId());
         });
 
         Map<String, Long> counts = commentRepo

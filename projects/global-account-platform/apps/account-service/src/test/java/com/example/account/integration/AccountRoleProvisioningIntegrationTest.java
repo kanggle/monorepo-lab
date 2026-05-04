@@ -162,6 +162,10 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         assertThat(preCount).isEqualTo(2L);
 
         // Hard-delete the account row directly (bypasses status machine — ok for CASCADE assertion).
+        // TASK-MONO-044c: profiles.fk_profiles_account_id (V0001) is NOT ON DELETE CASCADE,
+        // so we delete the profile row first before the account row. The intent of this test
+        // is to assert account_roles cascade (V0013), not profiles cascade.
+        jdbc.update("DELETE FROM profiles WHERE account_id = ?", accountId);
         jdbc.update("DELETE FROM accounts WHERE tenant_id = ? AND id = ?",
                 WMS_TENANT_ID, accountId);
 
