@@ -100,7 +100,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 | 일반 경로인데 `account_type != CONSUMER` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 유효 토큰이지만 도메인 권한 부족 | 403 | downstream 서비스가 결정 |
 
-`platform/error-handling.md` 의 envelope 형식 (`{ "error": { "code", "message", "timestamp", ... } }`) 따름.
+`platform/error-handling.md` 의 envelope 형식 (`{ "code", "message", "timestamp" }`) 따름.
 
 ---
 
