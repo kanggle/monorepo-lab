@@ -40,12 +40,12 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-2 Phase 1: re-enabled — same logback test-profile fix that unblocked
-// SecurityServiceIntegrationTest applies here.
+// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076).

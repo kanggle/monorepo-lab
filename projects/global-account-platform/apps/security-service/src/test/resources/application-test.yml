@@ -78,14 +78,7 @@ security-service:
 # Demonstrates that rule behaviour is config-driven and can be tuned
 # without code changes. Values are intentionally close to defaults so
 # integration tests remain deterministic.
-#
-# TASK-MONO-046-2: per Spring-context random consumer group ID so multi-test-class
-# runs do not stamp on each other's group state. Tests with @DirtiesContext or
-# distinct @DynamicPropertySource get a fresh context → fresh group → no
-# rebalance-driven offset confusion across the security-service IT classes.
 security:
-  consumer:
-    group-id: ${random.uuid}
   detection:
     velocity:
       threshold: 5

@@ -46,13 +46,13 @@ import static org.awaitility.Awaitility.await;
  * <p>Docker required — skip gracefully on Docker-less CI hosts via the
  * Testcontainers assumption mechanism.
  */
-// TASK-MONO-046-2 Phase 1: re-enabled — same logback test-profile fix that unblocked
-// SecurityServiceIntegrationTest applies here.
+// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @Tag("integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
 
     @Container

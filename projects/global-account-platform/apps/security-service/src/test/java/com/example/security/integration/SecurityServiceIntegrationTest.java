@@ -33,14 +33,17 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// TASK-MONO-046-2 Phase 1: re-enabled to capture logs (logback test profile now active)
-// for root-cause diagnosis. Expected to fail until the Kafka consumer regression is
-// identified — failures will produce stack traces in CI artifacts.
+// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown so
+// the 7 @KafkaListener consumers in this context release their group membership
+// before the next IT class boots — multi-context concurrency was overloading the
+// cp-kafka:7.6.0 broker's group coordinator and pushing first-test consumer
+// startup past the 15s test awaits.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076/078).

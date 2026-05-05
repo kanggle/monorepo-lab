@@ -41,12 +41,12 @@ import static org.awaitility.Awaitility.await;
  * path routes poison-pill payloads to {@code <topic>.dlq} after the configured
  * retry budget, while the original listener container remains healthy.
  */
-// TASK-MONO-046-2 Phase 1: re-enabled — same logback test-profile fix that unblocked
-// SecurityServiceIntegrationTest applies here.
+// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076).
