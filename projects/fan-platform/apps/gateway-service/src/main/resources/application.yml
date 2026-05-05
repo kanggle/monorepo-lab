@@ -57,9 +57,15 @@ spring:
             - Path=/api/v1/community/**
           filters:
             # Strip the v1 namespace prefix before forwarding to community-service.
-            # /api/v1/community/posts → /api/community/posts
+            # The optional-segment regex (?:/.*)? captures both the collection
+            # form (no trailing slash, no further segments) and the
+            # path-variable form so a POST /api/v1/community/posts (no trailing
+            # slash) is rewritten to /api/community/posts and not left as the
+            # external path. (TASK-MONO-044f RC#1b)
+            # /api/v1/community              → /api/community
+            # /api/v1/community/posts        → /api/community/posts
             # /api/v1/community/posts/{id}/reactions → /api/community/posts/{id}/reactions
-            - RewritePath=/api/v1/community/(?<segment>.*), /api/community/${segment}
+            - RewritePath=/api/v1/community(?<segment>(?:/.*)?), /api/community${segment}
             # Global ceiling per IP — 60 req/min, bursts up to 120.
             - name: RequestRateLimiter
               args:
@@ -78,8 +84,10 @@ spring:
           predicates:
             - Path=/api/v1/artists/**
           filters:
-            # /api/v1/artists/** → /api/artists/**
-            - RewritePath=/api/v1/artists/(?<segment>.*), /api/artists/${segment}
+            # See community-service route for the (?:/.*)? rationale.
+            # /api/v1/artists           → /api/artists           (collection POST/GET)
+            # /api/v1/artists/{id}/...  → /api/artists/{id}/...
+            - RewritePath=/api/v1/artists(?<segment>(?:/.*)?), /api/artists${segment}
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 1
@@ -92,8 +100,8 @@ spring:
           predicates:
             - Path=/api/v1/artist-groups/**
           filters:
-            # /api/v1/artist-groups/** → /api/artist-groups/**
-            - RewritePath=/api/v1/artist-groups/(?<segment>.*), /api/artist-groups/${segment}
+            # See community-service route for the (?:/.*)? rationale.
+            - RewritePath=/api/v1/artist-groups(?<segment>(?:/.*)?), /api/artist-groups${segment}
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 1
@@ -106,8 +114,8 @@ spring:
           predicates:
             - Path=/api/v1/fandoms/**
           filters:
-            # /api/v1/fandoms/** → /api/fandoms/**
-            - RewritePath=/api/v1/fandoms/(?<segment>.*), /api/fandoms/${segment}
+            # See community-service route for the (?:/.*)? rationale.
+            - RewritePath=/api/v1/fandoms(?<segment>(?:/.*)?), /api/fandoms${segment}
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 1
