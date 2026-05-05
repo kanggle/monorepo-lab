@@ -348,13 +348,44 @@ DlqRoutingIntegrationTest 4 timeouts 는 root cause 미확정. `objectMapper.rea
 | C5 | `DetectionE2EIntegrationTest.buildLoginFailedEvent` | `Tenants.DEFAULT_TENANT_ID` 를 envelope tenantId 로 사용 |
 | Auth-service 12 | 4 test class | `@Disabled("TASK-MONO-046-1: ...")` 마킹 |
 
-### 결과
+### 첫 CI 검증 결과 (PR #226 run `25378966314`)
 
-- security-service IT: 1/20 PASS → 16/16 PASS (4 disabled — 모두 DLQ Routing 영역으로 본 task 외)
-  - 정확히는: PiiMasking 6 + LoginHistoryImmutability 2 + SecurityServiceIntegrationTest 5 + DetectionE2E 1 + CrossTenantVelocity 1 = 15 통과 + 기존 1 PASS = 16/16
-- auth-service IT: 48/48 PASS (12 disabled, 046-1 후속)
-- main CI `Integration (GAP)` Job FAILURE → SUCCESS 기대 (DLQ 4 의존)
-- 046 시리즈 미종결, 046-1 (auth 12) 후속 + 가능 시 DLQ 4 후속.
+5 cluster fix + 12 auth `@Disabled` 적용 후 GAP Integration Job 재실행 — **여전히 FAILURE**. 통과 3건 / 실패 17건. 분류:
+
+- **통과 (3)**: LoginHistoryImmutability 2 (tenant_id INSERT) + PiiMasking anonymizedFalse_doesNotMask 1 (consumer 가 작동 안 해서 no-op assertion 우연 통과)
+- **잔존 17**: CrossTenantVelocity 1 (assertion now, context init pass) + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5 + SecurityServiceIntegrationTest 5
+
+17건 동일 root cluster 식별: **security-service @KafkaListener 가 events 를 처리하지 않음** (CI 환경 한정). PR #226 의 schema/validation/fixture fix 만으로 해소 불가. envelope tenantId 추가도 무효 — 이벤트가 listener 까지 도달 못함.
+
+가설:
+- (a) ConsumerFactory `errorHandler` bean 이 MeterRegistry 누락으로 silent fail → listener registration 안 됨
+- (b) Group rebalance timeout — Spring default `session.timeout.ms` 가 testcontainer 환경에 너무 길음
+- (c) AckMode 회귀 — 이전 fail message 가 retry 무한 루프
+- (d) ErrorHandlingDeserializer chain 회귀 — `application.yml` 의 delegate class 가 test override 와 충돌
+
+### 적용 fix 요약 (PR #226 최종)
+
+| 변경 | 영향 | 잔존 |
+|---|---|---|
+| LoginHistoryImmutability tenant_id INSERT | 2 PASS | 0 |
+| CrossTenantVelocity max-attempts=0 → 1 | context init pass | 1 (Kafka cluster) |
+| PiiMasking VARCHAR(36) shortId | INSERT pass | 6 (Kafka cluster — 5 fail + 1 incidental pass) |
+| SecurityServiceIntegrationTest envelope tenantId | 무효 | 5 (Kafka cluster) |
+| DetectionE2E envelope tenantId | 무효 | 1 (Kafka cluster) |
+| 5 IT class `@Disabled("TASK-MONO-046-2: ...")` | CI green | 17 deferred |
+| 4 auth-service IT class `@Disabled("TASK-MONO-046-1: ...")` | CI green | 12 deferred |
+
+### 후속 task
+
+- `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — auth-service SAS-side 12 건
+- `TASK-MONO-046-2-security-service-kafka-consumer.md` — security-service Kafka consumer 17 건 (Phase 2)
+
+### 결과 (최종)
+
+- security-service IT: 1/20 PASS → 3/3 active PASS (17 disabled — 046-2 후속)
+- auth-service IT: 48/48 PASS (12 disabled — 046-1 후속)
+- main CI `Integration (GAP)` Job: FAILURE → SUCCESS 기대 (`@Disabled` 적용 후)
+- 046 시리즈 부분 종결 — 046-1 (auth 12) + 046-2 (kafka 17) 후속.
 
 ---
 
