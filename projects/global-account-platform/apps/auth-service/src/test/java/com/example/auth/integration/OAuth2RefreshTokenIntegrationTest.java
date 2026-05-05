@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -57,11 +58,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>TASK-BE-251 Phase 2b.
  */
+// TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
+// AccountServiceClient bean URL must be rebuilt per class to track this
+// class's WireMock instance.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Container
@@ -138,15 +143,19 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
                 .encodeToString(sha256.digest(codeVerifier.getBytes(StandardCharsets.US_ASCII)));
 
         // Authorize
+        // TASK-MONO-044c-1 RC#1: queryParam() for GET /oauth2/authorize because
+        // SAS's OAuth2EndpointUtils.getQueryParameters() filters by
+        // request.getQueryString().contains(name); MockMvc .param() for GET
+        // does not populate queryString. .queryParam() does.
         MvcResult authorizeResult = mockMvc.perform(get("/oauth2/authorize")
                         .with(user("rt-account-001")
                                 .authorities(new SimpleGrantedAuthority("ROLE_USER")))
-                        .param("response_type", "code")
-                        .param("client_id", "demo-spa-client")
-                        .param("redirect_uri", "http://localhost:3000/callback")
-                        .param("scope", "openid profile email")
-                        .param("code_challenge", codeChallenge)
-                        .param("code_challenge_method", "S256"))
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", "demo-spa-client")
+                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("scope", "openid profile email")
+                        .queryParam("code_challenge", codeChallenge)
+                        .queryParam("code_challenge_method", "S256"))
                 .andExpect(status().is3xxRedirection())
                 .andReturn();
 
@@ -335,15 +344,16 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
         String codeChallenge = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(sha256.digest(codeVerifier.getBytes(StandardCharsets.US_ASCII)));
 
+        // TASK-MONO-044c-1 RC#1: queryParam() for GET /oauth2/authorize.
         MvcResult authorizeResult = mockMvc.perform(get("/oauth2/authorize")
                         .with(user("cross-tenant-account")
                                 .authorities(new SimpleGrantedAuthority("ROLE_USER")))
-                        .param("response_type", "code")
-                        .param("client_id", "demo-spa-client")
-                        .param("redirect_uri", "http://localhost:3000/callback")
-                        .param("scope", "openid")
-                        .param("code_challenge", codeChallenge)
-                        .param("code_challenge_method", "S256"))
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", "demo-spa-client")
+                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("scope", "openid")
+                        .queryParam("code_challenge", codeChallenge)
+                        .queryParam("code_challenge_method", "S256"))
                 .andExpect(status().is3xxRedirection())
                 .andReturn();
 
