@@ -19,8 +19,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -149,11 +151,20 @@ public class AuthorizationServerConfig {
                                         introspection.introspectionResponseHandler(introspectionCustomizer)))
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
-                // Redirect to /api/auth/login when unauthenticated — for authorization_code flow
-                // the user will need an active session or must authenticate first.
+                // TASK-MONO-046-1: scope the LoginUrlAuthenticationEntryPoint redirect
+                // to browser (text/html) requests only. Programmatic API requests (POST
+                // /oauth2/token, /oauth2/revoke, /oauth2/introspect) must NOT be
+                // redirected — the SAS configurer's own filters short-circuit before
+                // this entry point is consulted, but the {@code oauth2ResourceServer().jwt()}
+                // BearerTokenAuthenticationFilter installed below sets a bearer-aware
+                // entry point on top of {@code authorizeHttpRequests}. Without scoping
+                // this default to text/html, public-client refresh_token grant requests
+                // (no Authorization header, no session) get a 302 redirect instead of
+                // reaching the SAS token endpoint filter.
                 .exceptionHandling(exceptions ->
-                        exceptions.authenticationEntryPoint(
-                                new LoginUrlAuthenticationEntryPoint("/api/auth/login")))
+                        exceptions.defaultAuthenticationEntryPointFor(
+                                new LoginUrlAuthenticationEntryPoint("/api/auth/login"),
+                                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
                 // TASK-MONO-046-1 (Cluster B): the OIDC userinfo endpoint requires the
                 // bearer access token to be authenticated as a JWT. Without an
                 // {@code oauth2ResourceServer().jwt()} configurer, SAS's userinfo filter
