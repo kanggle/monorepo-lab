@@ -59,19 +59,42 @@ VisibilityTierE2ETest > MEMBERS_ONLY post -> v1 stub allows access (follow-up: b
 
 ## In Scope
 
-- 4 failing e2e 테스트의 stack trace + HTTP response body 분석 (테스트 보고서 + 컨테이너 로그):
-  - `ArtistAndPostFlowE2ETest > admin registers + publishes artist; ...`
-  - `VisibilityTierE2ETest > PUBLIC post -> any authenticated tenant member sees 200`
-  - `VisibilityTierE2ETest > PREMIUM post -> v1 always-pass + WARN log captured`
-  - `VisibilityTierE2ETest > MEMBERS_ONLY post -> v1 stub allows access`
-- 다음 가설 단계별 검증:
-  1. **(a) 044a libs/java-web 분리 누락 dependent**: fan-platform 의 servlet service 들 (`artist-service`/`post-service`/`membership-service` 등) `build.gradle` 이 `libs:java-web-servlet` 의존을 가지고 있는지 확인. 누락 시 `CommonGlobalExceptionHandler` 미로드 / @ControllerAdvice 미동작 → exception 시 잘못된 status. **Most likely root cause**.
-  2. **(b) gateway route rewrite 회귀**: `/api/v1/artist/artists -> /api/artists` 경로 재작성이 새 reactive 부팅 후에도 정상 동작하는지 검증. `gateway-public-routes.md` spec 과 일치 확인.
-  3. **(c) 권한/역할 검증 로직**: `admin-tier role` 인식 또는 `tenant_id` claim 처리 회귀.
-- root cause 별 fix:
-  - (a) 누락 service 들에 `libs:java-web-servlet` 의존 추가 (한 commit 으로 cross-service 수정)
-  - (b) gateway route 정의 또는 strip prefix 회귀 fix
-  - (c) downstream service 의 SecurityConfig 또는 role mapping fix
+- 4 failing e2e 테스트의 stack trace + HTTP response body 분석:
+  - `ArtistAndPostFlowE2ETest > admin registers + publishes artist; ...` — actual=**404** (TASK-MONO-044c-1 후속 분석 시점에서 확인)
+  - `VisibilityTierE2ETest > PUBLIC post -> any authenticated tenant member sees 200` — actual=**500**
+  - `VisibilityTierE2ETest > PREMIUM post -> v1 always-pass + WARN log captured` — actual=**500**
+  - `VisibilityTierE2ETest > MEMBERS_ONLY post -> v1 stub allows access` — actual=**500**
+
+> 2026-05-05 분석 갱신 — 본 task 의 가설 (a)/(b)/(c) 모두 부정확으로 판명. 실제 root cause 는 아래와 같이 RC#1 + RC#2 로 split:
+
+### RC#1 (1 fail) — e2e fixture vs gateway route + contract spec **path drift**
+
+`ArtistAndPostFlowE2ETest` 의 첫 fail 은 `POST /api/v1/artist/artists` → 404. 실제 contract 와 gateway route 의 일관된 path 는 `/api/v1/artists/**`:
+
+| 파일 | path |
+|---|---|
+| `tests/e2e/.../E2ETestFixtures.java#pathArtistRegister()` | `/api/v1/artist/artists` ❌ (drift) |
+| `apps/gateway-service/.../application.yml` (id=artist-service-artists) | `Path=/api/v1/artists/**` ✅ |
+| `specs/contracts/http/artist-api.md` § Public ↔ Internal table | `/api/v1/artists/**` ✅ |
+
+→ **fix**: `E2ETestFixtures.pathArtistRegister()` 와 `pathArtistStatus(...)` 의 base 를 `/api/v1/artists` 로 정정.
+
+본래 PR #131 (TASK-FAN-INT-001 v1 e2e 도입) 에서 fixture 가 잘못 작성되었으나 servlet leak 부팅 차단으로 노출되지 않았음 — 044d KeyResolver fix 로 부팅 회복 후 path drift 가 처음으로 가시화. 단순 1-line fixture fix.
+
+### RC#2 (3 fail) — VisibilityTier 의 `POST /api/community/posts` 가 community-service 에서 **500**
+
+VisibilityTier 3 테스트 모두 첫 단계 `pathCommunityPosts()` (`/api/v1/community/posts`) 의 createPost 가 500. gateway route `/api/v1/community/(?<segment>.*) → /api/community/${segment}` 는 정의되어 있음. PostStatusMachine 자체에는 회귀 없음 (DRAFT→PUBLISHED for AUTHOR 가 정의됨; 또한 createPost 흐름에서는 호출되지 않을 수 있음).
+
+→ **분석 단계**:
+1. `tests/e2e/build/reports/tests/e2eTest/index.html` (CI artifact) 또는 로컬 재현으로 community-service container stderr 확보.
+2. PostController#createPost → RegisterPostUseCase → DB INSERT → outbox emit 흐름 중 500 발생 지점 식별.
+3. 가설 후보:
+   - (a) DB schema 회귀 (V0001/V0002 fan-platform community Flyway seed 와 entity mapping mismatch)
+   - (b) outbox emit 시 NPE / serialization 실패
+   - (c) ActorContextResolver 가 JWT claim 누락으로 NPE
+   - (d) PostType=`FAN_POST` 인 enum 매핑 회귀
+
+**fix**: cause 식별 후 cause 별 commit. RC#1 과 RC#2 는 서로 무관하므로 commit 분리.
 
 ## Out of Scope
 
@@ -129,32 +152,32 @@ VisibilityTierE2ETest > MEMBERS_ONLY post -> v1 stub allows access (follow-up: b
 
 # Implementation Notes
 
-- **첫 단계**: 4 테스트의 HTTP response body / status code 를 fan-platform e2e 보고서 (`projects/fan-platform/tests/e2e/build/reports/tests/e2eTest/index.html`) 에서 확인. CI artifacts 다운로드 또는 로컬 e2e 재현.
-- **(a) 검증 명령**: `grep -r "libs:java-web" projects/fan-platform/apps/*/build.gradle` 로 의존 분포 확인. 누락이 있으면 일관 적용 + `libs:java-web-servlet` 으로 갱신.
-- **(b) 검증**: gateway-service 컨테이너 로그에서 `/api/v1/artist/artists` 요청의 라우팅 확인. `application.yml` 의 `RewritePath` 필터 동작 확인.
-- **(c) 검증**: downstream service 의 SecurityConfig 가 admin-tier role 을 인식하는지 trace.
-- 가설 (a) 가 가장 likely — 044a 머지 시 `libs/java-web-servlet` 으로 의존 마이그레이션이 어느 한 service 에서 누락되었을 수 있음.
+- **RC#1 fix**: `tests/e2e/.../E2ETestFixtures.java` 의 `pathArtistRegister()` / `pathArtistStatus(...)` 를 `/api/v1/artist/artists...` → `/api/v1/artists...` 로 정정. 1 commit, 1-2 줄 변경.
+- **RC#2 분석 첫 단계**: 로컬에서 fan-platform e2e suite 실행 후 `tests/e2e/build/reports/tests/e2eTest/index.html` 의 `VisibilityTierE2ETest > PUBLIC ...` 의 stack trace + community-service 컨테이너 stdout (`docker logs <community-service-container>`) 으로 500 origin 확인.
+- 부수 검토: `git log --since=2026-05-01 --oneline -- projects/fan-platform/apps/community-service/src/main` 으로 회귀 도입 commit 후보 추적.
+- 가설 (a) `libs:java-web-servlet` 의존 누락은 부정 — fan-platform community/artist build.gradle 은 PR #131 v1 bootstrap 시점 이후 변경 없음을 git log 로 확인 가능 (단순 검증).
 
 ---
 
 # Edge Cases
 
-1. **4 실패가 단일 root cause**: ideal. (a) 가능성 가장 높음.
-2. **WMS / GAP / scm 도 동일 누락**: 본 task 에서 cross-project 수정 적용. PR description 에 명시.
-3. **route rewrite 가 reactive 부팅 차이로 회귀**: gateway 의 application.yml SpEL 또는 RewritePath 필터 검증 필요.
-4. **admin-tier role 자체 미정의**: spec 회귀 → spec/contract 갱신 필요.
+1. **RC#1 단독 fix 시 RC#2 자동 해소 가능성** — 매우 낮음. RC#1 은 artist endpoint 의 path drift, RC#2 는 community POST 의 application 500 이라 서로 다른 서비스 + 다른 endpoint. 분리 fix.
+2. **RC#2 가 V0011 OAuth seed 회귀 (TASK-MONO-044c BCrypt re-pin) 와 cascade**: 매우 낮음. fan-platform e2e 는 자체 RSA JWKS 로 직접 서명 (`JwtTestHelper`), GAP SAS 발행 토큰을 사용하지 않음. 무관.
+3. **route rewrite 가 reactive 부팅 차이로 회귀**: 부정 — `/api/v1/community/...` route 는 `RewritePath` 정의됨 + RC#1 은 단순 fixture path drift.
+4. **RC#2 community 500 의 cause 가 V0001 schema vs entity drift**: 가능. fan-platform v1 community Flyway seed 와 PostJpaEntity / PostJpaRepository 의 컬럼 매핑 검증 필요.
 
 ---
 
 # Failure Scenarios
 
-## A. 단일 root cause = 가설 (a)
+## A. RC#1 + RC#2 가 본 task 가 가정한 바와 같이 분리 (확정)
 
-`libs:java-web-servlet` 의존 누락 fix. cross-service 정합성 일관 적용.
+- RC#1: `E2ETestFixtures` path drift fix — 1 commit
+- RC#2: community POST 500 의 cause 식별 후 cause 별 commit
 
-## B. 복수 root cause
+## B. RC#2 가 복수 cause 로 더 분해
 
-cause 별 commit 분할, 또는 sub-task 분할 (044f-1, 044f-2).
+`044f-1` (RC#1 fixture fix) + `044f-2` (RC#2 community 500) 로 sub-task 분할 검토. 또는 RC#2 의 cause 별 sub-task 추가 분할.
 
 ## C. fix 후에도 sporadic 실패
 
@@ -185,8 +208,8 @@ CI runner 자원 / Testcontainers 환경 한계 영역. TASK-MONO-044 § AC #8 �
 
 # Notes
 
-- **Recommended impl model**: **Sonnet** — 가설 (a) 가 단일 root cause 면 cross-service `build.gradle` 일관성 fix (단순). 복수 cause 또는 (b)(c) 인 경우 Opus 로 escalate.
-- **분량 추정**: (a) 단일이면 1-3 build.gradle 변경 (작은 PR). 복수 cause 면 medium PR.
+- **Recommended impl model**: **Opus** — RC#2 community POST 500 이 application/도메인 레이어 회귀 분석 필요. RC#1 은 단순 1-line fixture fix 라 별도로 빠르게 처리 가능. RC#2 cause 가 자명한 단일 (예: schema drift 1 컬럼) 으로 판명 시 사후 Sonnet downgrade 가능.
+- **분량 추정**: RC#1 small (1 commit, 2 줄). RC#2 medium 예상 (community-service 의 POST 흐름 분석 + cause 별 fix).
 - **dependency**:
   - `선행`: TASK-MONO-044a + 044d (이미 머지됨)
   - `후속`: 없음
