@@ -41,9 +41,7 @@ import static org.awaitility.Awaitility.await;
  * path routes poison-pill payloads to {@code <topic>.dlq} after the configured
  * retry budget, while the original listener container remains healthy.
  */
-// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
-// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3: per-class consumer group ID prevents cross-class offset replay.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -58,12 +56,16 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 
+    private static final String TEST_GROUP_ID = "test-dlq-routing-" + UUID.randomUUID();
+
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+        // TASK-MONO-046-3: per-class consumer group prevents cross-class offset replay.
+        registry.add("security.consumer.group-id", () -> TEST_GROUP_ID);
     }
 
     @Autowired

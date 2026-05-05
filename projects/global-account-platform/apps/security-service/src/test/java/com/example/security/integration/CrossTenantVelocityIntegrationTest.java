@@ -53,14 +53,10 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-2 Phase 4: kept disabled. Phase 1-3 verified the consumer pipeline
-// works in isolation (SecurityServiceIntegrationTest passes solo) but the shared
-// "security-service" group leaks uncommitted offsets across @DirtiesContext
-// boundaries — the next class's consumer replays prior class events
-// (CrossTenantVelocity 50 / DlqRouting poison pills) and exhausts the test await
-// before reaching its own messages. Real fix needs deeper Spring Kafka work
-// (per-class group, AckMode tweaks, or topic isolation).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3: per-class consumer group ID (lambda captures TEST_GROUP_ID once
+// at static-init, so all 7 listeners in this Spring context share the same group
+// while different IT classes get distinct groups) prevents the cross-class offset
+// replay that PR #228 Phase 1-4 narrowed down.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -76,12 +72,16 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 
+    private static final String TEST_GROUP_ID = "test-cross-tenant-" + UUID.randomUUID();
+
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+        // TASK-MONO-046-3: per-class consumer group prevents cross-class offset replay.
+        registry.add("security.consumer.group-id", () -> TEST_GROUP_ID);
         // Lower threshold so 50 tenantA failures clearly exceed it.
         registry.add("security.detection.velocity.threshold", () -> "3");
         registry.add("security.detection.velocity.window-seconds", () -> "3600");

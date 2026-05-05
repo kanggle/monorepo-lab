@@ -54,6 +54,13 @@ spring:
         reconnect.backoff.ms: 500
         reconnect.backoff.max.ms: 10000
         request.timeout.ms: 60000
+    # TASK-MONO-046-3: ack-mode=record commits offsets per record so an unexpected
+    # @DirtiesContext teardown mid-batch cannot leave uncommitted offsets that the
+    # next test class's listener would re-read with auto-offset-reset=earliest.
+    # Production stays on the Spring Kafka default (BATCH) — this override is
+    # test-profile only.
+    listener:
+      ack-mode: record
 
 outbox:
   polling:

@@ -33,11 +33,9 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown so
-// the 7 @KafkaListener consumers in this context release their group membership
-// before the next IT class boots — multi-context concurrency was overloading the
-// cp-kafka:7.6.0 broker's group coordinator and pushing first-test consumer
-// startup past the 15s test awaits.
+// TASK-MONO-046-3: per-class consumer group ID matches the pattern applied to the
+// 4 sibling IT classes — keeps the 5-class run consistent so a future contributor
+// can't accidentally regress only this class.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -54,6 +52,8 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 
+    private static final String TEST_GROUP_ID = "test-security-svc-" + UUID.randomUUID();
+
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         // MySQL + Kafka registered by AbstractIntegrationTest.
@@ -61,6 +61,8 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+        // TASK-MONO-046-3: per-class consumer group prevents cross-class offset replay.
+        registry.add("security.consumer.group-id", () -> TEST_GROUP_ID);
     }
 
     @Autowired
