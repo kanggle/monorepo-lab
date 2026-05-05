@@ -19,10 +19,103 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # changes — single source of truth for path-based job filtering.
+  #
+  # dorny/paths-filter@v3 computes which project areas were touched in this
+  # PR / push. Every downstream job reads these outputs via `needs.changes`
+  # and applies:
+  #
+  #   if: needs.changes.outputs.libs == 'true'
+  #       || needs.changes.outputs.workflows == 'true'
+  #       || needs.changes.outputs.<project> == 'true'
+  #
+  # Filter rules (path → flag):
+  #   libs       libs/ platform/ rules/ .claude/ build.gradle settings.gradle
+  #              package.json tsconfig.base.json tasks/templates/
+  #              → activates ALL downstream jobs (cross-project impact)
+  #   workflows  .github/workflows/
+  #              → activates ALL downstream jobs (CI self-change safety)
+  #   wms        projects/wms-platform/**
+  #   ecommerce  projects/ecommerce-microservices-platform/**
+  #   gap        projects/global-account-platform/**
+  #   fan        projects/fan-platform/**
+  #   scm        projects/scm-platform/**
+  #
+  # Edge case — workflow self-change PR (.github/workflows/** modified):
+  #   The `workflows` flag catches it → all jobs activate (regression safety).
+  #
+  # Edge case — dorny/paths-filter step itself fails (bug/timeout):
+  #   All outputs default to empty string (falsy).  The `if:` conditions below
+  #   use `|| github.event_name == 'push'` as a push-to-main fallback so main
+  #   branch protection is never compromised by a filter failure.
+  #   PR-level filtering simply falls back to "all skip" — the author can
+  #   close+reopen the PR to retry or add an empty commit to re-trigger.
+  #
+  # Edge case — tasks/** or *.md only change:
+  #   No project flag is true; libs/workflows are also false.
+  #   build-and-test activates via its own fallback (it is always-on for pushes
+  #   to main); all other jobs skip. Spec/chore PRs complete in ~1-2 min.
+  #   TASK-MONO-045.
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      libs: ${{ steps.filter.outputs.libs }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      wms: ${{ steps.filter.outputs.wms }}
+      ecommerce: ${{ steps.filter.outputs.ecommerce }}
+      gap: ${{ steps.filter.outputs.gap }}
+      fan: ${{ steps.filter.outputs.fan }}
+      scm: ${{ steps.filter.outputs.scm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            libs:
+              - 'libs/**'
+              - 'platform/**'
+              - 'rules/**'
+              - '.claude/**'
+              - 'build.gradle'
+              - 'settings.gradle'
+              - 'package.json'
+              - 'tsconfig.base.json'
+              - 'tasks/templates/**'
+            workflows:
+              - '.github/workflows/**'
+            wms:
+              - 'projects/wms-platform/**'
+            ecommerce:
+              - 'projects/ecommerce-microservices-platform/**'
+            gap:
+              - 'projects/global-account-platform/**'
+            fan:
+              - 'projects/fan-platform/**'
+            scm:
+              - 'projects/scm-platform/**'
+
   build-and-test:
     name: Build & Test (JDK 21, Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    # Activate when:
+    #   - any shared library / cross-project path changed (libs, workflows)
+    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm)
+    #   - push to main always runs (safety net regardless of filter)
+    # spec/chore PRs (tasks/** or *.md only) produce no matching flag → skip.
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.wms == 'true' ||
+      needs.changes.outputs.ecommerce == 'true' ||
+      needs.changes.outputs.gap == 'true' ||
+      needs.changes.outputs.fan == 'true' ||
+      needs.changes.outputs.scm == 'true'
 
     steps:
       - name: Checkout
@@ -132,8 +225,14 @@ jobs:
   boot-jars:
     name: Package boot jars
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
     timeout-minutes: 15
+    # Activate for wms changes or cross-project (libs/workflows).
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.wms == 'true'
 
     steps:
       - name: Checkout
@@ -167,12 +266,16 @@ jobs:
   ecommerce-boot-jars:
     name: Package boot jars (ecommerce)
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
     timeout-minutes: 15
+    # Activate for ecommerce changes or cross-project (libs/workflows).
     # Packages all 12 ecommerce backend services and uploads the JARs as an
-    # artifact consumed by the frontend-e2e job (TASK-MONO-014). Also catches
-    # Spring Boot autoconfig / fat-jar classpath / runtime-dep issues that
-    # :check (compile + unit tests) does not surface.
+    # artifact consumed by the nightly-e2e workflow (TASK-MONO-014, TASK-MONO-045).
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.ecommerce == 'true'
 
     steps:
       - name: Checkout
@@ -230,12 +333,17 @@ jobs:
   fan-platform-boot-jars:
     name: Package boot jars (fan-platform)
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
     timeout-minutes: 15
+    # Activate for fan-platform changes or cross-project (libs/workflows).
     # Packages the 3 fan-platform v1 backend services (gateway / community /
     # artist) as boot jars and uploads them as a single artifact consumed by
-    # the `fan-platform-e2e` job (TASK-FAN-INT-001). Same pattern as
-    # `boot-jars` (wms) and `ecommerce-boot-jars`.
+    # the `fan-platform-e2e` job (TASK-FAN-INT-001).
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.fan == 'true'
 
     steps:
       - name: Checkout
@@ -276,6 +384,14 @@ jobs:
     name: Frontend unit tests (ecommerce + fan-platform, vitest)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
+    # Activate for ecommerce or fan-platform frontend changes, or cross-project.
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.ecommerce == 'true' ||
+      needs.changes.outputs.fan == 'true'
 
     steps:
       - name: Checkout
@@ -317,12 +433,20 @@ jobs:
     name: Frontend E2E smoke (web-store + fan-platform-web, Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
     # Frontend CI Phase 3 (TASK-MONO-013) extended for fan-platform-web
     # (TASK-FAN-FE-001).
     # Smoke-level E2E only — both apps' playwright.smoke.config.ts force SSR
     # fetch / OIDC discovery to a closed loopback host so each page exercises
     # its fallback path / middleware redirect. No backend stack needed; runs
     # in extracted portfolio repos as well as monorepo-lab.
+    # Activate for ecommerce or fan-platform frontend changes, or cross-project.
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.ecommerce == 'true' ||
+      needs.changes.outputs.fan == 'true'
 
     steps:
       - name: Checkout
@@ -388,13 +512,21 @@ jobs:
   integration-tests:
     name: Integration (master-service, Testcontainers)
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
     timeout-minutes: 20
     # Integration suite boots Postgres + Kafka + Redis via Testcontainers.
     # Mirrors the e2e job's gating: runs only on the monorepo-lab dev
     # environment, skipped in the portfolio extraction (kanggle/wms-platform)
     # whose badge reflects the Docker-free `check` signal. TASK-BE-017.
-    if: github.repository == 'kanggle/monorepo-lab'
+    # Activate for wms changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.wms == 'true'
+      )
 
     steps:
       - name: Checkout
@@ -431,12 +563,20 @@ jobs:
   gap-integration-tests:
     name: Integration (global-account-platform, Testcontainers)
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
     timeout-minutes: 30
     # GAP integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
     # via Testcontainers. Scoped to monorepo-lab; the standalone repo
     # extraction relies on its own Docker-free `check` signal.
-    if: github.repository == 'kanggle/monorepo-lab'
+    # Activate for GAP changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.gap == 'true'
+      )
 
     steps:
       - name: Checkout
@@ -480,6 +620,15 @@ jobs:
     name: Frontend lint & build (ecommerce + fan-platform)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    # Activate for ecommerce or fan-platform frontend changes, or cross-project.
+    # Frontend build depends on shared tsconfig.base.json (captured by libs flag).
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.ecommerce == 'true' ||
+      needs.changes.outputs.fan == 'true'
 
     steps:
       - name: Checkout
@@ -525,193 +674,25 @@ jobs:
           NEXT_PUBLIC_GATEWAY_URL: http://fan-platform.local
         run: pnpm build
 
-  frontend-e2e:
-    name: Frontend E2E full-stack (web-store, Playwright + docker compose)
-    runs-on: ubuntu-latest
-    needs: [ecommerce-boot-jars, frontend-checks]
-    timeout-minutes: 60
-    # Full-stack Playwright suite: docker compose starts 12 Spring Boot backends
-    # + Postgres ×10 + Kafka + Redis + Elasticsearch (Nori) + MinIO; Playwright
-    # webServer starts web-store via `pnpm start` pointing at the gateway on
-    # localhost:18080 via the docker-compose.ci.yml overlay (TASK-MONO-024).
-    # Observability services (Jaeger, Prometheus, AlertManager, Grafana, Loki,
-    # Promtail) are excluded to fit within the runner's 7 GB RAM. OTEL
-    # exporters in the backend services will log connection errors against the
-    # absent Jaeger endpoint; these are non-blocking and do not affect test
-    # correctness.
-    #
-    # CI does NOT start the shared Traefik stack — spinning up Traefik plus
-    # all 12 backends + infra exceeds the runner's memory budget. Instead the
-    # CI overlay (docker-compose.ci.yml) re-publishes only gateway-service on
-    # host port 18080 so the existing webServer/health-probe wiring works
-    # without architectural change. Local developers should not use the
-    # overlay — `pnpm traefik:up` + http://ecommerce.local/ is the dev path.
-    #
-    # Scoped to kanggle/monorepo-lab: extracted portfolio repos have no backend
-    # stack and the smoke job (frontend-e2e-smoke) covers them instead.
-    # TASK-MONO-014, TASK-MONO-024.
-    if: github.repository == 'kanggle/monorepo-lab'
-    defaults:
-      run:
-        working-directory: projects/ecommerce-microservices-platform
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: '9.15.0'
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Download ecommerce boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: ecommerce-boot-jars
-          path: projects/ecommerce-microservices-platform/artifact-staging
-
-      - name: Restore ecommerce boot jar paths
-        # upload-artifact@v4 strips the common prefix so the artifact contains
-        # `<service>/build/libs/<service>.jar`. Restore to the canonical
-        # `apps/<service>/build/libs/<service>.jar` layout that each Dockerfile
-        # expects (COPY apps/<service>/build/libs/*.jar app.jar).
-        working-directory: ${{ github.workspace }}
-        run: |
-          # auth-service excluded by TASK-BE-132 — decommissioned.
-          services=(batch-worker gateway-service notification-service \
-            order-service payment-service product-service promotion-service \
-            review-service search-service shipping-service user-service)
-          for svc in "${services[@]}"; do
-            mkdir -p "projects/ecommerce-microservices-platform/apps/${svc}/build/libs/"
-            mv "projects/ecommerce-microservices-platform/artifact-staging/${svc}/build/libs/${svc}.jar" \
-               "projects/ecommerce-microservices-platform/apps/${svc}/build/libs/${svc}.jar"
-          done
-
-      - name: Create .env for docker compose
-        # Synthetic test values — no real secrets needed.
-        # Toss and OAuth keys are placeholders (tests stop before payment/OAuth).
-        run: |
-          # JWT_SECRET and AUTH_DB_PASSWORD removed by TASK-BE-132 — auth-service decommissioned.
-          cat << 'EOF' > .env
-          PRODUCT_DB_PASSWORD=ci_product_pass
-          ORDER_DB_PASSWORD=ci_order_pass
-          PAYMENT_DB_PASSWORD=ci_payment_pass
-          USER_DB_PASSWORD=ci_user_pass
-          BATCH_DB_PASSWORD=ci_batch_pass
-          SHIPPING_DB_PASSWORD=ci_shipping_pass
-          REVIEW_DB_PASSWORD=ci_review_pass
-          PROMOTION_DB_PASSWORD=ci_promotion_pass
-          NOTIFICATION_DB_PASSWORD=ci_notification_pass
-          TOSS_PAYMENTS_SECRET_KEY=test_sk_ci_placeholder
-          NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_ci_placeholder
-          MINIO_ROOT_USER=minioadmin
-          MINIO_ROOT_PASSWORD=minioadmin
-          PRODUCT_IMAGES_BUCKET=firstproject-local-product-images
-          GRAFANA_ADMIN_PASSWORD=admin
-          CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-          OAUTH_CALLBACK_ALLOWLIST=http://localhost:3000/oauth/callback
-          EOF
-
-      - name: Build web-store (Next.js prod build)
-        # NEXT_PUBLIC_* vars are baked into the bundle at build time, not runtime.
-        # Set the gateway URL here so browser-side API calls reach port 18080.
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:18080
-        run: pnpm --filter web-store build
-
-      - name: Ensure traefik-net exists (CI mitigation for TASK-MONO-024)
-        # ecommerce docker-compose.yml declares traefik-net as `external: true`
-        # so it can join the shared Traefik stack in dev (`pnpm traefik:up`).
-        # CI does not run the Traefik stack (RAM budget), so the network must
-        # be created here before `docker compose up` — otherwise compose aborts
-        # with "network traefik-net declared as external, but could not be found".
-        # Idempotent (`|| true`) so a leaked network from a prior run is OK.
-        # See knowledge/incidents/2026-05-05-ci-regression.md § Root Cause #2.
-        run: docker network create traefik-net || true
-
-      - name: Start docker compose stack (backends + infra, no observability)
-        # Apply the CI overlay so gateway-service is published on host
-        # port 18080 (the shared Traefik stack is not started in CI).
-        run: |
-          # auth-postgres and auth-service excluded by TASK-BE-132 — decommissioned.
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml up --build -d \
-            kafka redis elasticsearch minio minio-init \
-            product-postgres order-postgres payment-postgres \
-            user-postgres batch-postgres shipping-postgres review-postgres \
-            promotion-postgres notification-postgres \
-            product-service search-service user-service \
-            order-service payment-service batch-worker shipping-service \
-            review-service promotion-service notification-service \
-            gateway-service
-
-      - name: Wait for gateway health
-        # docker-compose.ci.yml publishes gateway-service on host port 18080.
-        # Backends have start_period=360s in compose healthchecks; allow 7 min.
-        run: |
-          echo "Waiting for gateway-service to be healthy (up to 7 min)..."
-          for i in $(seq 1 42); do
-            if curl -sf http://localhost:18080/actuator/health > /dev/null 2>&1; then
-              echo "Gateway healthy after $((i * 10))s"
-              exit 0
-            fi
-            echo "  attempt $i/42 (${i}0s elapsed), retrying in 10s..."
-            sleep 10
-          done
-          echo "Gateway did not become healthy within 7 minutes"
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=50 gateway-service
-          exit 1
-
-      - name: Install Playwright browsers (chromium, with system deps)
-        run: pnpm --filter web-store exec playwright install --with-deps chromium
-
-      - name: Run full-stack E2E
-        # SKIP_GAP_E2E gates the 4 GAP-dependent specs (account-type-guard,
-        # cart-management, golden-flow, wishlist) at the Playwright runner
-        # level via `test.skip(shouldSkipGap, ...)` in each spec file. The
-        # docker-compose stack does NOT yet boot a GAP container (deferred per
-        # TASK-MONO-014 § Out of Scope), so these specs would otherwise drive
-        # NextAuth `/api/auth/signin/gap` → OIDC discovery against
-        # OIDC_ISSUER_URL=http://127.0.0.1:1 (closed loopback per
-        # playwright.config.ts webServer.env) and emit `fetch failed`.
-        # The webServer env already carries SKIP_GAP_E2E=1 to gate NextAuth
-        # boot — but the runner process needs it too to honor the
-        # spec-level `test.skip()` gate. Setting it once at the job level
-        # keeps both processes in sync.
-        env:
-          SKIP_GAP_E2E: '1'
-        run: pnpm --filter web-store run e2e
-
-      - name: Stop docker compose stack
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-fullstack
-          path: |
-            projects/ecommerce-microservices-platform/apps/web-store/playwright-report/
-            projects/ecommerce-microservices-platform/apps/web-store/test-results/
-          retention-days: 7
+  # frontend-e2e (full-stack web-store) has been moved to nightly-e2e.yml.
+  # It runs on schedule cron '0 18 * * *' (UTC 18:00 = KST 03:00) and is
+  # triggered manually via workflow_dispatch. TASK-MONO-045.
 
   e2e-tests:
     name: E2E (gateway-master live-pair, Testcontainers)
     runs-on: ubuntu-latest
-    needs: [build-and-test, boot-jars]
+    needs: [changes, build-and-test, boot-jars]
     timeout-minutes: 60
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
-    if: github.repository == 'kanggle/monorepo-lab'
+    # Activate for wms changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.wms == 'true'
+      )
 
     steps:
       - name: Checkout
@@ -769,22 +750,6 @@ jobs:
             -f projects/wms-platform/apps/gateway-service/Dockerfile \
             projects/wms-platform/apps/gateway-service/
 
-      - name: Build service images for e2e
-        # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
-        # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
-        # through BuildKit's gRPC session mechanism and hangs indefinitely with the
-        # Docker Java client bundled in Testcontainers 1.21.3 — 58-min and 60-min
-        # diagnostic runs confirmed zero progress after the image-check log line.
-        # Pre-building here and passing the image names via -Dwms.e2e.* lets
-        # E2EBase.java skip ImageFromDockerfile and use GenericContainer directly.
-        run: |
-          docker build -t wms-master-service:e2e \
-            -f projects/wms-platform/apps/master-service/Dockerfile \
-            projects/wms-platform/apps/master-service/
-          docker build -t wms-gateway-service:e2e \
-            -f projects/wms-platform/apps/gateway-service/Dockerfile \
-            projects/wms-platform/apps/gateway-service/
-
       - name: Run gateway-master e2e suite
         run: >-
           ./gradlew
@@ -808,7 +773,7 @@ jobs:
   fan-platform-e2e:
     name: E2E (fan-platform v1 live-trio, Testcontainers)
     runs-on: ubuntu-latest
-    needs: [build-and-test, fan-platform-boot-jars]
+    needs: [changes, build-and-test, fan-platform-boot-jars]
     timeout-minutes: 20
     # Live-trio e2e suite (TASK-FAN-INT-001): boots gateway-service +
     # community-service + artist-service plus Postgres + Redis + Kafka
@@ -817,7 +782,15 @@ jobs:
     # CLI to dodge the Docker 28 BuildKit gRPC hang in
     # `ImageFromDockerfile`, then pass the image names via -Dfan.e2e.*
     # so FanPlatformE2ETestBase uses GenericContainer directly.
-    if: github.repository == 'kanggle/monorepo-lab'
+    # Activate for fan-platform changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.fan == 'true'
+      )
 
     steps:
       - name: Checkout
