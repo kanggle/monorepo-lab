@@ -19,13 +19,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2AccessTokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 
@@ -142,7 +153,15 @@ public class AuthorizationServerConfig {
                 // the user will need an active session or must authenticate first.
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(
-                                new LoginUrlAuthenticationEntryPoint("/api/auth/login")));
+                                new LoginUrlAuthenticationEntryPoint("/api/auth/login")))
+                // TASK-MONO-046-1 (Cluster B): the OIDC userinfo endpoint requires the
+                // bearer access token to be authenticated as a JWT. Without an
+                // {@code oauth2ResourceServer().jwt()} configurer, SAS's userinfo filter
+                // sees no Authentication on the SecurityContext and returns 403 Access Denied.
+                // We delegate JWT decoding to the same {@link JwtDecoder} bean (built from
+                // our JWKSource) so userinfo accepts tokens issued by this same AS.
+                .oauth2ResourceServer(resourceServer ->
+                        resourceServer.jwt(Customizer.withDefaults()));
 
         return http.build();
     }
@@ -224,5 +243,55 @@ public class AuthorizationServerConfig {
         return AuthorizationServerSettings.builder()
                 .issuer(issuerUrl)
                 .build();
+    }
+
+    /**
+     * {@link JwtDecoder} for the resource server filter chain that protects
+     * {@code /oauth2/userinfo}. Uses the same JWK source as the JWT issuance side
+     * so tokens issued by this AS can be validated locally without a network call.
+     *
+     * <p>TASK-MONO-046-1 (Cluster B): without this bean SAS's
+     * {@code oauth2ResourceServer().jwt()} configurer cannot resolve a decoder and
+     * the userinfo filter chain rejects every bearer token with 403.
+     */
+    @Bean
+    public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
+        return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
+    }
+
+    /**
+     * Custom {@link OAuth2TokenGenerator} that overrides SAS's auto-configured default.
+     *
+     * <p>Composes:
+     * <ol>
+     *   <li>{@link JwtGenerator} — JWT access tokens + ID tokens, applies our
+     *       {@link TenantClaimTokenCustomizer} so {@code tenant_id} / {@code tenant_type}
+     *       claims appear in every issued token.</li>
+     *   <li>{@link OAuth2AccessTokenGenerator} — opaque access-token fallback (kept for
+     *       parity with SAS defaults; not used in our flows but harmless).</li>
+     *   <li>{@link PublicClientRefreshTokenGenerator} — issues refresh tokens for public
+     *       PKCE clients (TASK-MONO-046-1 Cluster A). Replaces SAS's default
+     *       {@code OAuth2RefreshTokenGenerator}, which returns {@code null} for
+     *       {@code authorization_code} grants whose client uses {@code ClientAuthenticationMethod.NONE}.
+     *       Without this override, {@code demo-spa-client} (a public PKCE SPA) cannot
+     *       receive a refresh_token and the entire SAS rotation flow is unreachable.</li>
+     * </ol>
+     *
+     * <p>Registered as a {@code @Bean} so SAS picks it up automatically via
+     * {@code OAuth2ConfigurerUtils.getTokenGenerator(http)}.
+     */
+    @Bean
+    public OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator(
+            JWKSource<SecurityContext> jwkSource,
+            OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer) {
+        JwtEncoder jwtEncoder = new NimbusJwtEncoder(jwkSource);
+        JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
+        jwtGenerator.setJwtCustomizer(jwtCustomizer);
+        OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
+        PublicClientRefreshTokenGenerator refreshTokenGenerator = new PublicClientRefreshTokenGenerator();
+        return new DelegatingOAuth2TokenGenerator(
+                jwtGenerator,
+                accessTokenGenerator,
+                refreshTokenGenerator);
     }
 }
