@@ -164,7 +164,7 @@ public class AuthorizationServerConfig {
                 .exceptionHandling(exceptions ->
                         exceptions.defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/api/auth/login"),
-                                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
+                                buildHtmlOnlyRequestMatcher()))
                 // TASK-MONO-046-1 (Cluster B): the OIDC userinfo endpoint requires the
                 // bearer access token to be authenticated as a JWT. Without an
                 // {@code oauth2ResourceServer().jwt()} configurer, SAS's userinfo filter
@@ -175,6 +175,18 @@ public class AuthorizationServerConfig {
                         resourceServer.jwt(Customizer.withDefaults()));
 
         return http.build();
+    }
+
+    /**
+     * Builds a {@link MediaTypeRequestMatcher} that matches ONLY explicit text/html
+     * requests, ignoring {@code Accept: *\/*} which would otherwise be treated as
+     * compatible with text/html and cause API requests (e.g. POST /oauth2/token from
+     * cURL or test clients sending no Accept header) to be redirected to /api/auth/login.
+     */
+    private static MediaTypeRequestMatcher buildHtmlOnlyRequestMatcher() {
+        MediaTypeRequestMatcher matcher = new MediaTypeRequestMatcher(MediaType.TEXT_HTML);
+        matcher.setIgnoredMediaTypes(java.util.Set.of(MediaType.ALL));
+        return matcher;
     }
 
     /**

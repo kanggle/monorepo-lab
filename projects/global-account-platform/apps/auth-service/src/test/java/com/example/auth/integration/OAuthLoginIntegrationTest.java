@@ -68,7 +68,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// TASK-MONO-046-1: BEFORE_CLASS guarantees a fresh Spring context (and a fresh
+// Environment with this class's @DynamicPropertySource values) regardless of
+// what the previous test class left in the ContextCache. AFTER_CLASS alone was
+// insufficient because sibling integration tests without @DirtiesContext (e.g.
+// OAuth2JpaPersistenceIntegrationTest, OAuth2AuthorizationServerIntegrationTest)
+// keep their cached context — and its stale auth.account-service.base-url —
+// alive past their @AfterAll teardown, so OAuthLoginIntegrationTest inherited
+// a Environment pointing at a dead port and every callback yielded
+// AccountServiceUnavailableException → 503.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka containers inherited from AbstractIntegrationTest (TASK-BE-076).
