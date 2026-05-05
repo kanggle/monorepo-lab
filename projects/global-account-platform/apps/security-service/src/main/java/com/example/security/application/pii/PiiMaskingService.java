@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,11 +52,13 @@ public class PiiMaskingService {
     private final PiiMaskingLogJpaRepository piiMaskingLogRepository;
     private final SecurityEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
     private final String fingerprintSalt;
 
     public PiiMaskingService(PiiMaskingLogJpaRepository piiMaskingLogRepository,
                              SecurityEventPublisher eventPublisher,
                              ObjectMapper objectMapper,
+                             JdbcTemplate jdbcTemplate,
                              @Value("${app.pii.masking.fingerprint-salt}") String fingerprintSalt) {
         if (fingerprintSalt == null || fingerprintSalt.isBlank()) {
             throw new IllegalStateException(
@@ -64,6 +67,7 @@ public class PiiMaskingService {
         this.piiMaskingLogRepository = piiMaskingLogRepository;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.jdbcTemplate = jdbcTemplate;
         this.fingerprintSalt = fingerprintSalt;
     }
 
@@ -85,9 +89,24 @@ public class PiiMaskingService {
         Instant maskedAt = Instant.now();
 
         // Execute per-table masking (UPDATE returns affected row count; 0 is OK).
-        int lhRows = piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, fingerprintSalt);
-        int seRows = piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId);
-        int alRows = piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId);
+        //
+        // TASK-MONO-046-5: enable trigger bypass for the GDPR-driven UPDATE on
+        // login_history. The V0010 trigger redefinition allows UPDATE only when
+        // @pii_masking_bypass=1 on the current connection; @Transactional pins
+        // the JDBC connection for the duration of this method, and the finally{}
+        // block resets the flag to NULL before Hikari returns the connection to
+        // the pool, preventing leakage to subsequent borrowers.
+        jdbcTemplate.execute("SET @pii_masking_bypass = 1");
+        int lhRows;
+        int seRows;
+        int alRows;
+        try {
+            lhRows = piiMaskingLogRepository.maskLoginHistory(tenantId, accountId, fingerprintSalt);
+            seRows = piiMaskingLogRepository.maskSuspiciousEvents(tenantId, accountId);
+            alRows = piiMaskingLogRepository.touchAccountLockHistory(tenantId, accountId);
+        } finally {
+            jdbcTemplate.execute("SET @pii_masking_bypass = NULL");
+        }
 
         log.info("PII masked: eventId={}, tenantId={}, accountId={}, " +
                         "login_history={} rows, suspicious_events={} rows, account_lock_history={} rows",

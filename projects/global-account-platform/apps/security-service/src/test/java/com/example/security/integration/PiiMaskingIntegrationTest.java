@@ -46,11 +46,6 @@ import static org.awaitility.Awaitility.await;
  * <p>Docker required — skip gracefully on Docker-less CI hosts via the
  * Testcontainers assumption mechanism.
  */
-// TASK-MONO-046-3 Phase 8: cross-class offset leak resolved (Phase 6+7), but PiiMaskingService
-// UPDATEs login_history while V0002 trigger trg_login_history_no_update raises SQLSTATE 45000
-// "UPDATE not allowed on login_history (append-only)". The trigger needs a controlled bypass
-// for GDPR masking — separate task TASK-MONO-046-5 (or a project-level TASK-BE follow-up).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-5: append-only trigger blocks PiiMaskingService UPDATE")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
