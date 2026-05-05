@@ -103,11 +103,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-044f-2-fan-platform-feed-self-post-missing.md` — TASK-MONO-044f 5 PR 시리즈 (RC#1a/RC#1b/RC#2/diagnosis/close) 후 4 fail → 1 fail 회복했으나 잔존 `ArtistAndPostFlowE2ETest > full flow` line 306: step 6 `GET /api/community/feed` 응답에 fan 자신이 publish 한 FAN_POST 누락. test JavaDoc 인용: "v1 feed surfaces the actor's own posts plus their followed artists' posts" — application-layer 회귀 (FeedQueryUseCase 가 actor 자신의 posts 누락) 또는 spec drift (test 가 잘못). 분석=Opus 4.7 / 구현 권장=Sonnet — feed query 1 method 또는 spec/test 1 줄 정정. fan-platform v1 application 회귀라 044f layered cascade 의 마지막 layer.
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-044f-2-fan-platform-feed-self-post-missing.md` — RC = 가설 (c) **e2e fixture vs contract drift** 채택. community-api.md § GET /api/community/feed contract: "actor's follow-based feed (artists they follow)" — actor self 미포함. PostRepository.findFeedForFan port doc + GetFeedUseCase JavaDoc 모두 follows-only 로 일관. e2e test 의 step 6 검증이 contract 와 불일치 (production 무결). e2e test 의 step 6 assertion 을 contract 에 맞게 약화 (200 + well-formed page envelope) + class JavaDoc 의 contract 인용 정정. fan-platform v1 layered cascade 의 마지막 layer 종결.
 
 ## done
 
