@@ -113,9 +113,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-046-gap-integration-residual-31.md` — PR #226. 31건 진단 + 부분 종결 (3 fix + 28 deferred). security-service: LoginHistoryImmutability 2 (tenant_id NOT NULL) + CrossTenantVelocity context init (max-attempts validation) + PiiMasking truncation INSERT 단계 fix. 17건 (Kafka consumer cluster) 은 046-2 분리, 12건 (auth SAS cluster) 은 046-1 분리. GAP Integration Job FAILURE → SUCCESS (3m4s, run `25381225455`).
+(empty)
 
 ## done
+
+- `TASK-MONO-046-gap-integration-residual-31.md` — PR #226. 31건 진단 + 부분 종결 (3 fix + 28 deferred). security-service: LoginHistoryImmutability 2 (tenant_id NOT NULL) + CrossTenantVelocity context init (max-attempts @Min(1) validation) + PiiMasking VARCHAR(36) truncation INSERT 단계 fix. 17건 (security-service Kafka consumer cluster) 은 TASK-MONO-046-2 분리 (5 IT class @Disabled), 12건 (auth-service SAS cluster) 은 TASK-MONO-046-1 분리 (4 IT class/method @Disabled). GAP Integration Job FAILURE → SUCCESS (3m4s, run `25381225455`). 사용자 가설 (a) "libs/java-web-servlet 누락" 즉시 반증 — 실제 cluster 6 distinct. 2026-05-05.
 
 - `TASK-MONO-001-introduce-root-task-lifecycle.md` — bootstrap of this lifecycle and `CLAUDE.md` integration. Self-referential; landed in the same PR that introduced the lifecycle. 2026-04-26.
 - `TASK-MONO-002-sync-portfolio-dry-run-verification.md` — verified `scripts/sync-portfolio.sh --dry-run` is clean for both projects after Phase 7/8 changes. Recommendation: keep current `SHARED_PATHS` unchanged (root `tasks/` lifecycle correctly excluded). Live extraction deferred to a future TASK-MONO. 2026-04-26.
