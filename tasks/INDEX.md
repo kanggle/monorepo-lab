@@ -103,13 +103,12 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-044e-web-store-fullstack-nextauth-fail.md` — TASK-MONO-044b 의 traefik-net fix 후 docker compose stack 부팅 회복했으나 Playwright suite 가 NextAuth `fetch failed` 반복 + timeout. 두 distinct 이슈 동시: (1) NextAuth (web-store SSR) 가 backend 무엇을 fetch 하다 실패 → `?error=Configuration` redirect → 모든 인증 시나리오 timeout, (2) `getByRole('alert')` strict-mode locator violation (2 elements). 044c 의 GAP auth-service 회귀와 동일 root cause 가능성 (dependency). 분석=Opus 4.7 / 구현 권장=Opus — NextAuth + docker network + 가능한 044a 회귀 + Playwright strict-mode 동시 진단. 머지 시 main CI 4 회귀 청소 시리즈 (044~044e 6 task) 종결.
 - `TASK-MONO-044c-1-gap-auth-oauth-pkce-circuitbreaker-residue.md` — TASK-MONO-044c 가 33건 중 16건 fix 후 머지(#208), `Integration (GAP)` Job 잔존 17건 fix follow-up. RC#1 = OAuth2AuthCodePkce/RefreshToken/RevokeIntrospect 12건 (모두 `/oauth2/authorize → 400 invalid_request response_type` from `demo-spa-client` — TASK-BE-251 SAS 도입 commit 512cbbd4 이후 single root cause 가설, **production 회귀 가능**) + RC#2 = OAuthLogin Google/Microsoft/Kakao 4건 (resilience4j circuit-breaker `@SpringBootTest` context 공유 cascade — test isolation refactor) + RC#3 = gateway downstream-fault 1건 (Redis/WireMock fault stub race — sporadic 가능). 분석=Opus 4.7 / 구현 권장=Opus — RC#1 SAS 1.4.1 + JpaRegisteredClientRepository config drift 분석 + 잠재적 production 회귀 판정. RC#1 fixture 단순 이슈로 판명 시 Sonnet downgrade 가능.
 - `TASK-MONO-044f-2-fan-platform-feed-self-post-missing.md` — TASK-MONO-044f 5 PR 시리즈 (RC#1a/RC#1b/RC#2/diagnosis/close) 후 4 fail → 1 fail 회복했으나 잔존 `ArtistAndPostFlowE2ETest > full flow` line 306: step 6 `GET /api/community/feed` 응답에 fan 자신이 publish 한 FAN_POST 누락. test JavaDoc 인용: "v1 feed surfaces the actor's own posts plus their followed artists' posts" — application-layer 회귀 (FeedQueryUseCase 가 actor 자신의 posts 누락) 또는 spec drift (test 가 잘못). 분석=Opus 4.7 / 구현 권장=Sonnet — feed query 1 method 또는 spec/test 1 줄 정정. fan-platform v1 application 회귀라 044f layered cascade 의 마지막 layer.
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-044e-web-store-fullstack-nextauth-fail.md` — TASK-MONO-044b 의 traefik-net fix 후 docker compose stack 부팅 회복했으나 Playwright suite 가 NextAuth `fetch failed` 반복 + timeout. 두 distinct 이슈 동시: (1) NextAuth (web-store SSR) 가 backend 무엇을 fetch 하다 실패 → `?error=Configuration` redirect → 모든 인증 시나리오 timeout, (2) `getByRole('alert')` strict-mode locator violation (2 elements). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## done
 
