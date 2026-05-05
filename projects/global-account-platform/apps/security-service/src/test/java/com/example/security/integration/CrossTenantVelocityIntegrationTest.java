@@ -55,13 +55,6 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-3 Phase 8: cross-class offset leak is resolved by Phase 6+7
-// (per-context random group + auto-offset-reset=latest + waitForAssignment).
-// Remaining failure here is the DLQ producer ClassCastException — KafkaConsumerConfig
-// hardcodes ByteArraySerializer for the dead-letter producer, which fails when the
-// consumer value is a String (test profile uses StringDeserializer, not the
-// production EHD chain that preserves byte[]). Deferred to TASK-MONO-046-4.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-4: DLQ producer ClassCastException for String values")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")

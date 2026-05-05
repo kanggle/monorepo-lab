@@ -8,6 +8,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
@@ -17,6 +18,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.DeserializationException;
+import org.springframework.kafka.support.serializer.DelegatingByTypeSerializer;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.Map;
@@ -38,13 +40,26 @@ public class KafkaConsumerConfig {
     @Bean
     public DefaultErrorHandler errorHandler(KafkaProperties kafkaProperties,
                                             MeterRegistry meterRegistry) {
-        // DLQ recoverer needs ByteArraySerializer for values because
-        // ErrorHandlingDeserializer preserves raw bytes on deserialization failures.
+        // DLQ recoverer must handle two value types:
+        //   - byte[]  : deserialization-failed records where ErrorHandlingDeserializer
+        //               preserved the raw bytes and DLPR restores them transparently.
+        //   - String  : records that deserialized successfully but failed downstream
+        //               (e.g. MissingTenantIdException) — value is the decoded String.
+        // DelegatingByTypeSerializer dispatches to the correct serializer at runtime,
+        // avoiding the ClassCastException that occurred when ByteArraySerializer-only
+        // received a String value (TASK-MONO-046-4).
+        Map<Class<?>, Serializer<?>> typeMap = Map.of(
+                byte[].class, new ByteArraySerializer(),
+                String.class, new StringSerializer()
+        );
+        Serializer<Object> dlqValueSerializer = new DelegatingByTypeSerializer(typeMap);
+
         Map<String, Object> producerProps = kafkaProperties.buildProducerProperties(null);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        KafkaTemplate<String, byte[]> dlqTemplate = new KafkaTemplate<>(
-                new DefaultKafkaProducerFactory<>(producerProps));
+        // VALUE_SERIALIZER_CLASS_CONFIG is intentionally omitted — the serializer instance
+        // is injected directly into DefaultKafkaProducerFactory via the 3-arg constructor.
+        KafkaTemplate<String, Object> dlqTemplate = new KafkaTemplate<>(
+                new DefaultKafkaProducerFactory<>(producerProps, new StringSerializer(), dlqValueSerializer));
 
         // Pre-create counters per reason so they are visible in Prometheus from startup.
         Counter deserializationDlqCounter = Counter.builder(DLQ_SIZE_METRIC)
