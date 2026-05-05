@@ -113,9 +113,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-046-2-security-service-kafka-consumer.md` — PR #228. 17건 중 6건 회복 (SecurityServiceIntegrationTest 6/6, solo execution 으로 PASS). Phase 1 logback `test` 프로파일 매칭 추가 → 진단 가시성 회복. Phase 2 `@KafkaListener.groupId` 외부화 (production code 보전). Phase 3 `@DirtiesContext(AFTER_CLASS)` (4 IT class). Phase 4 4 IT class 재 `@Disabled` (root cause 가 다른 영역으로 이전 — TASK-MONO-046-3 후속). Real root cause: shared "security-service" group 이 multi-class @DirtiesContext 경계를 넘어 uncommitted offsets leak → 새 클래스가 이전 클래스의 events replay → Redis (stop된 testcontainer) 호출 실패 → DLQ → timeout. GAP Integration Job pass 1m51s, run `25388371565`.
+(empty)
 
 ## done
+
+- `TASK-MONO-046-2-security-service-kafka-consumer.md` — PR #228. 17건 중 6건 회복 (SecurityServiceIntegrationTest 6/6, solo execution PASS). Phase 1 logback `test` 프로파일 매칭 추가 → 진단 가시성 회복 (이전: Logback root logger 가 NO appender 라 모든 Spring/Kafka 로그 silent drop, system-out 비어있어 root cause 추적 불가). Phase 2 `@KafkaListener.groupId` 외부화 (`${security.consumer.group-id:security-service}` SpEL — production benign + Phase 5 extension point). Phase 3 `@DirtiesContext(AFTER_CLASS)` 4 IT class. Phase 4 4 IT class 재 `@Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")`. **Real root cause** (Phase 3 test report XML 분석 확정): 새 컨텍스트의 listener 가 group "security-service" join → no committed offsets → `auto-offset-reset=earliest` → 이전 클래스 events replay (DlqRouting `acc-dlq-001` / CrossTenantVelocity 50-burst) → Redis (이미 stop 된 이전 클래스의 testcontainer) 호출 실패 → DLQ → 시간 소진 → 자기 클래스 메시지 처리 못함. 11건 잔존 fix 는 TASK-MONO-046-3 (Phase 5) 분리. GAP Integration Job pass 1m35s, run `25389330383`. 2026-05-06.
 
 - `TASK-MONO-046-gap-integration-residual-31.md` — PR #226. 31건 진단 + 부분 종결 (3 fix + 28 deferred). security-service: LoginHistoryImmutability 2 (tenant_id NOT NULL) + CrossTenantVelocity context init (max-attempts @Min(1) validation) + PiiMasking VARCHAR(36) truncation INSERT 단계 fix. 17건 (security-service Kafka consumer cluster) 은 TASK-MONO-046-2 분리 (5 IT class @Disabled), 12건 (auth-service SAS cluster) 은 TASK-MONO-046-1 분리 (4 IT class/method @Disabled). GAP Integration Job FAILURE → SUCCESS (3m4s, run `25381225455`). 사용자 가설 (a) "libs/java-web-servlet 누락" 즉시 반증 — 실제 cluster 6 distinct. 2026-05-05.
 
