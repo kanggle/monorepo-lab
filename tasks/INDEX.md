@@ -109,7 +109,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-046-gap-integration-residual-31.md` — TASK-MONO-044c-1 머지 후에도 main `Integration (GAP)` Job 잔재 31건 진단 + 부분 종결. security-service 19 건 deterministic 5 cluster (CrossTenantVelocity / PiiMasking / LoginHistoryImmutability / SecurityServiceIntegrationTest / DetectionE2E) 모두 fix. auth-service 12 건은 § Failure Scenario B 적용 → `@Disabled("TASK-MONO-046-1: ...")` + 후속 task 분리. DLQ Routing 4 건은 root cause 미확정으로 본 PR 그대로 두고 CI 결과 대기.
+(empty)
+
+## review
+
+- `TASK-MONO-046-gap-integration-residual-31.md` — PR #226. 31건 진단 + 부분 종결 (3 fix + 28 deferred). security-service: LoginHistoryImmutability 2 (tenant_id NOT NULL) + CrossTenantVelocity context init (max-attempts validation) + PiiMasking truncation INSERT 단계 fix. 17건 (Kafka consumer cluster) 은 046-2 분리, 12건 (auth SAS cluster) 은 046-1 분리. GAP Integration Job FAILURE → SUCCESS (3m4s, run `25381225455`).
 
 ## done
 
