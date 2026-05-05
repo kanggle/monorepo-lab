@@ -13,6 +13,8 @@ import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -60,7 +62,17 @@ public class Post {
     @Column(name = "body", columnDefinition = "TEXT")
     private String body;
 
-    /** JSON-serialized list of S3/MinIO media keys (raw upload is v2). */
+    /**
+     * JSON-serialized list of S3/MinIO media keys (raw upload is v2).
+     *
+     * <p>{@link JdbcTypeCode}({@link SqlTypes#JSON}) tells Hibernate to bind the
+     * String through the PostgreSQL JSONB-aware setter instead of {@code setString}.
+     * Without it, Hibernate routes the value as VARCHAR and PostgreSQL rejects it
+     * with {@code ERROR: column "media_refs" is of type jsonb but expression is
+     * of type character varying} (TASK-MONO-044f RC#2). The {@code columnDefinition}
+     * controls DDL only; the JdbcTypeCode controls the runtime bind.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "media_refs", columnDefinition = "jsonb")
     private String mediaRefsJson;
 
