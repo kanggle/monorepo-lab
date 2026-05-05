@@ -53,7 +53,7 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
         registry.add("spring.cloud.gateway.routes[1].predicates[0]",
                 () -> "Path=/api/v1/artists/**");
         registry.add("spring.cloud.gateway.routes[1].filters[0]",
-                () -> "RewritePath=/api/v1/artists/(?<segment>.*), /api/artists/${segment}");
+                () -> "RewritePath=/api/v1/artists(?<segment>(?:/.*)?), /api/artists${segment}");
         registry.add("spring.cloud.gateway.routes[1].filters[1].name",
                 () -> "RequestRateLimiter");
         registry.add("spring.cloud.gateway.routes[1].filters[1].args.redis-rate-limiter.replenishRate",
@@ -72,7 +72,7 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
         registry.add("spring.cloud.gateway.routes[2].predicates[0]",
                 () -> "Path=/api/v1/artist-groups/**");
         registry.add("spring.cloud.gateway.routes[2].filters[0]",
-                () -> "RewritePath=/api/v1/artist-groups/(?<segment>.*), /api/artist-groups/${segment}");
+                () -> "RewritePath=/api/v1/artist-groups(?<segment>(?:/.*)?), /api/artist-groups${segment}");
         registry.add("spring.cloud.gateway.routes[2].filters[1].name",
                 () -> "RequestRateLimiter");
         registry.add("spring.cloud.gateway.routes[2].filters[1].args.redis-rate-limiter.replenishRate",
@@ -91,7 +91,7 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
         registry.add("spring.cloud.gateway.routes[3].predicates[0]",
                 () -> "Path=/api/v1/fandoms/**");
         registry.add("spring.cloud.gateway.routes[3].filters[0]",
-                () -> "RewritePath=/api/v1/fandoms/(?<segment>.*), /api/fandoms/${segment}");
+                () -> "RewritePath=/api/v1/fandoms(?<segment>(?:/.*)?), /api/fandoms${segment}");
         registry.add("spring.cloud.gateway.routes[3].filters[1].name",
                 () -> "RequestRateLimiter");
         registry.add("spring.cloud.gateway.routes[3].filters[1].args.redis-rate-limiter.replenishRate",
@@ -192,6 +192,107 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
         assertThat(received.getPath())
                 .as("/api/v1/artist-groups/{id} must be rewritten to /api/artist-groups/{id}")
                 .isEqualTo("/api/artist-groups/" + groupId);
+    }
+
+    /**
+     * Collection-form regression guards (TASK-MONO-044f RC#1b).
+     *
+     * <p>The previous {@code RewritePath=/api/v1/<base>/(?<segment>.*), ...} regex
+     * required a trailing slash, so a {@code POST /api/v1/artists} (no trailing
+     * slash, no path variable — the canonical "create on collection" form) was
+     * forwarded unchanged to artist-service, where Spring Security's fallback
+     * {@code anyRequest().denyAll()} returned 403. The new regex
+     * {@code (?<segment>(?:/.*)?)} captures both the empty-segment collection
+     * form and the path-variable form. These tests pin that contract.
+     */
+    @Test
+    void communityRouteRewritesCollectionWithoutTrailingSlash() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(201)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{\"postId\":\"x\"}}"));
+
+        String token = jwt.signFanToken("fan-rewrite-collection-1");
+
+        webTestClient.post().uri("/api/v1/community/posts")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isCreated();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).isNotNull();
+        assertThat(received.getPath())
+                .as("collection POST /api/v1/community/posts must rewrite to /api/community/posts")
+                .isEqualTo("/api/community/posts");
+    }
+
+    @Test
+    void artistsRouteRewritesCollectionWithoutTrailingSlash() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(201)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{}}"));
+
+        String token = jwt.signFanToken("fan-rewrite-collection-2");
+
+        webTestClient.post().uri("/api/v1/artists")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isCreated();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).isNotNull();
+        assertThat(received.getPath())
+                .as("collection POST /api/v1/artists must rewrite to /api/artists")
+                .isEqualTo("/api/artists");
+    }
+
+    @Test
+    void artistGroupsRouteRewritesCollectionWithoutTrailingSlash() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(201)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{}}"));
+
+        String token = jwt.signFanToken("fan-rewrite-collection-3");
+
+        webTestClient.post().uri("/api/v1/artist-groups")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isCreated();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).isNotNull();
+        assertThat(received.getPath())
+                .as("collection POST /api/v1/artist-groups must rewrite to /api/artist-groups")
+                .isEqualTo("/api/artist-groups");
+    }
+
+    @Test
+    void fandomsRouteRewritesCollectionWithoutTrailingSlash() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":[]}"));
+
+        String token = jwt.signFanToken("fan-rewrite-collection-4");
+
+        webTestClient.get().uri("/api/v1/fandoms")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).isNotNull();
+        assertThat(received.getPath())
+                .as("collection GET /api/v1/fandoms must rewrite to /api/fandoms")
+                .isEqualTo("/api/fandoms");
     }
 
     @Test
