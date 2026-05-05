@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-045-ci-path-filter-and-nightly.md` — CI 시간 단축. 5 프로젝트 + 50+ 서비스 누적으로 일반 PR CI 가 ~15분 (`Frontend E2E full-stack (web-store)` 단독 보틀넥) 으로 수렴. 변경 범위 대부분이 단일 프로젝트인데 모든 e2e/integration job 이 매번 돌고 있음. 조합: (1순위) `dorny/paths-filter@v3` 로 path-based job 게이팅 — `libs/`/`platform/`/`rules/`/`.claude/`/`.github/workflows/` 변경은 전체 fallback, `projects/<name>/**` 만 변경시 해당 project job 만 활성. (2순위) frontend-e2e full-stack 을 `.github/workflows/nightly-e2e.yml` schedule cron `0 18 * * *` (KST 03:00) 으로 분리 + workflow_dispatch 수동 trigger. 기대 효과: spec/chore PR 1-2분, single-project PR 3-8분, libs/cross-project PR 기존대로 (회귀 catch 무손실), nightly main HEAD 회귀 백업 catch. 분석=Opus 4.7 / 구현 권장=Sonnet — yml 패턴 조합 + path 매칭 룰. spec PR + impl PR 분리.
 
 ## in-progress
 
