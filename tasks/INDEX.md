@@ -105,13 +105,15 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
+- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — **046-2 Phase 5 follow-up** (선행=046-2). 046-2 의 Phase 1-4 진단 후 11건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5) 은 동일 root cause — **cross-class consumer-group offset leak** — 으로 잔존. PR #228 에서 4 IT class `@Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")` 마킹. 권장 fix: per-class consumer group via @DynamicPropertySource lambda capture + `spring.kafka.listener.ack-mode: record` (test profile). 분석=Opus 4.7 / 구현 권장=Opus.
+
 ## in-progress
 
-- `TASK-MONO-046-2-security-service-kafka-consumer.md` — Phase 1 진단 PR. logback-spring.xml `springProfile name="default,local,dev,test"` 추가 (이전 test 프로파일 적용 시 root logger 가 NO appender 였음 — Spring/Kafka 로그 silent drop) + SecurityServiceIntegrationTest `@Disabled` 제거 → CI 재실행 시 실패 stack trace + 컨슈머 로그 확보 → 가설 (a)~(d) 좁힘. 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-046-2-security-service-kafka-consumer.md` — PR #228. 17건 중 6건 회복 (SecurityServiceIntegrationTest 6/6, solo execution 으로 PASS). Phase 1 logback `test` 프로파일 매칭 추가 → 진단 가시성 회복. Phase 2 `@KafkaListener.groupId` 외부화 (production code 보전). Phase 3 `@DirtiesContext(AFTER_CLASS)` (4 IT class). Phase 4 4 IT class 재 `@Disabled` (root cause 가 다른 영역으로 이전 — TASK-MONO-046-3 후속). Real root cause: shared "security-service" group 이 multi-class @DirtiesContext 경계를 넘어 uncommitted offsets leak → 새 클래스가 이전 클래스의 events replay → Redis (stop된 testcontainer) 호출 실패 → DLQ → timeout. GAP Integration Job pass 1m51s, run `25388371565`.
 
 ## done
 
