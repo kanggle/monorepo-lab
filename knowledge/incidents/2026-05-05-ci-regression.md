@@ -195,4 +195,58 @@ networks:
 
 ---
 
-*작성: 2026-05-05, TASK-MONO-044 진단 단계.*
+## GAP integration 잔존 17건 fix (TASK-MONO-044c-1)
+
+`TASK-MONO-044c` (PR #208) 머지로 33 → 17 회복 후 `Integration (GAP)` Job 잔존
+17건을 본 task 가 종결.
+
+**3 distinct root causes**:
+
+- **RC#1 (12 fail, fixture)** — `OAuth2AuthCodePkceIntegrationTest` (5) +
+  `OAuth2RefreshTokenIntegrationTest` (6) + `OAuth2RevokeIntrospectIntegrationTest` (1)
+  모두 `/oauth2/authorize → 400 [invalid_request] OAuth 2.0 Parameter: response_type`.
+  Spring Security Authorization Server 1.4.x 의
+  `OAuth2EndpointUtils.getQueryParameters()` 가 `request.getQueryString().contains(name)`
+  로 파라미터를 필터. MockMvc `.param()` 은 GET 요청에서 `request.getParameterMap()`
+  은 채우지만 `request.getQueryString()` 은 채우지 않음 (`.queryParam()` 은 둘 다 채움).
+  즉 SAS 가 빈 파라미터 맵을 받아 `response_type` 누락으로 거절.
+  **Production code 무결**, test fixture 만 수정. PR #107 (TASK-BE-251) 머지 시점부터
+  CI 에서 같은 회귀 재현 — `Integration (GAP)` Job 은 그때부터 FAIL 이었으나
+  044c 가 16건 회복 시점에야 17건으로 압축되어 가시화. `.param()` →
+  `.queryParam()` 변경 (3 test class, 6 호출) + 회귀 가드 (`OAuth2AuthorizationServerSliceTest
+  .authorize_queryParamRequired_regressionGuard`).
+
+- **RC#2 (4 fail, isolation)** — `OAuthLoginIntegrationTest` Google/Microsoft/Kakao
+  4 happy-path 테스트가 `503 SERVICE_UNAVAILABLE` (`AccountServiceUnavailableException`).
+  spec 가설은 "resilience4j circuit-breaker bean cascade" 였으나 실제 root cause 는
+  **Spring TestContext ContextCache 가 `@DynamicPropertySource` 값을 키에 포함하지 않음**.
+  5 test class (`AuthIntegrationTest`, `DeviceSessionIntegrationTest`,
+  `OAuth2AuthCodePkceIntegrationTest`, `OAuth2RefreshTokenIntegrationTest`,
+  `OAuthLoginIntegrationTest`) 가 모두 동일 정적 설정으로 컨텍스트 공유 → 첫 클래스의
+  WireMock URL 이 `AccountServiceClient` bean 에 캡처. 첫 클래스 `@AfterAll wireMock.stop()`
+  후 후속 클래스는 dead URL 로 호출 → connection refused → CB 가 아닌 IOException →
+  `AccountServiceUnavailableException` → 503. CB cascade 는 downstream 증상.
+  **Fix**: 5 클래스 모두 `@DirtiesContext(classMode=AFTER_CLASS)` 추가. Production
+  무영향 (production 은 단일 컨텍스트, 단일 bean, real account-service URL).
+
+- **RC#3 (1 fail, sporadic)** — `Gateway Rate Limit > 다운스트림 연결 리셋(Fault)`.
+  WireMock `Fault.CONNECTION_RESET_BY_PEER` stub 이 Reactor Netty client 와 race —
+  ~5–10% CI run 에서 fault 가 적용 전에 gateway 가 200 OK 로 forward.
+  System-out 은 동시에 Redis 가 `recvAddress(..) failed: Connection reset by peer`
+  를 받아 `JwtAuthenticationFilter` 가 fail-open 되는 것도 포착 (2개 동시 fault 의심).
+  Production code 정상; test 인프라 flake. `@Disabled` + TASK-MONO-044 § AC #8
+  nightly task 로 deferred (option a/b/c 카탈로그를 javadoc 에 기록).
+
+**최종 통합 테스트 카운트**:
+- auth-service: 60/60 PASS (이전 44/60)
+- gateway-service: 33/34 PASS + 1 disabled (이전 33/34 + 1 fail) — 1 disabled 는
+  RC#3 nightly 이관
+
+**production 회귀 분류**: 0건. 3 RC 모두 test infra (RC#1 fixture / RC#2 context
+isolation / RC#3 mock library race). PR #107 (TASK-BE-251) 의 OAuth2 SAS 도입은
+production 측면에서 정상 동작하며, 동시 도입된 통합 테스트가 Spring 6.2 의
+MockMvc `.param()` 시맨틱과 충돌한 것이 RC#1 의 원인.
+
+---
+
+*작성: 2026-05-05, TASK-MONO-044 진단 단계. GAP 단락 갱신: 2026-05-05 (TASK-MONO-044c-1).*
