@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -42,10 +43,32 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * issuance → outbox event with loginMethod) against real MySQL / Redis / Kafka via
  * Testcontainers, with WireMock standing in for account-service and each OAuth provider.
  */
+/**
+ * TASK-MONO-044c-1 RC#2: {@link DirtiesContext} forces a fresh Spring context per
+ * test class so that the {@code AccountServiceClient} bean is rebuilt with the URL
+ * of <em>this</em> class's WireMock instance.
+ *
+ * <p>Without this, every integration test class that does
+ * {@code registry.add("auth.account-service.base-url", wireMock::baseUrl)} in a
+ * {@code @DynamicPropertySource} ends up sharing the Spring context (Spring's
+ * ContextCache key does not include dynamic property values). The first class
+ * to load the context "wins" — its WireMock URL is captured by the
+ * {@code AccountServiceClient} bean. After that class's {@code @AfterAll}
+ * stops its WireMock, every subsequent class's tests fail with connection
+ * refused, which the client wraps as
+ * {@code AccountServiceUnavailableException → 503 SERVICE_UNAVAILABLE}.
+ *
+ * <p>The same fix is applied to {@code AuthIntegrationTest},
+ * {@code OAuth2AuthCodePkceIntegrationTest},
+ * {@code OAuth2RefreshTokenIntegrationTest}, and
+ * {@code DeviceSessionIntegrationTest} — every class that owns its own
+ * WireMock and overrides {@code auth.account-service.base-url}.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka containers inherited from AbstractIntegrationTest (TASK-BE-076).

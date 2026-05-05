@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -57,11 +58,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>TASK-BE-251 Phase 2b.
  */
+// TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
+// AccountServiceClient bean URL must be rebuilt per class to track this
+// class's WireMock instance.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Container
