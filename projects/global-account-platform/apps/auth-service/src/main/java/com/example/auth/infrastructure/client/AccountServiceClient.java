@@ -9,6 +9,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatusCode;
@@ -57,6 +58,7 @@ public class AccountServiceClient implements AccountServicePort {
     private volatile String cachedBaseUrl;
     private volatile RestClient cachedRestClient;
 
+    @Autowired
     public AccountServiceClient(
             Environment environment,
             @Value("${auth.account-service.connect-timeout-ms:3000}") int connectTimeoutMs,
