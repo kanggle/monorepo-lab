@@ -675,6 +675,20 @@ jobs:
         run: pnpm --filter web-store exec playwright install --with-deps chromium
 
       - name: Run full-stack E2E
+        # SKIP_GAP_E2E gates the 4 GAP-dependent specs (account-type-guard,
+        # cart-management, golden-flow, wishlist) at the Playwright runner
+        # level via `test.skip(shouldSkipGap, ...)` in each spec file. The
+        # docker-compose stack does NOT yet boot a GAP container (deferred per
+        # TASK-MONO-014 § Out of Scope), so these specs would otherwise drive
+        # NextAuth `/api/auth/signin/gap` → OIDC discovery against
+        # OIDC_ISSUER_URL=http://127.0.0.1:1 (closed loopback per
+        # playwright.config.ts webServer.env) and emit `fetch failed`.
+        # The webServer env already carries SKIP_GAP_E2E=1 to gate NextAuth
+        # boot — but the runner process needs it too to honor the
+        # spec-level `test.skip()` gate. Setting it once at the job level
+        # keeps both processes in sync.
+        env:
+          SKIP_GAP_E2E: '1'
         run: pnpm --filter web-store run e2e
 
       - name: Stop docker compose stack
