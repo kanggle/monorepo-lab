@@ -39,7 +39,12 @@ spring:
       # group. @KafkaListener annotations no longer set groupId, so this consumer
       # factory value is what the listener containers use.
       group-id: test-security-service-${random.uuid}
-      auto-offset-reset: earliest
+      # TASK-MONO-046-3 Phase 7: auto-offset-reset=latest so a fresh per-class
+      # consumer group does NOT replay every accumulated message from prior classes
+      # in the shared Kafka container's topics. Tests must wait for partition
+      # assignment via ContainerTestUtils.waitForAssignment before sending — see
+      # the @BeforeEach hook in each IT class.
+      auto-offset-reset: latest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer

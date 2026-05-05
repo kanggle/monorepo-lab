@@ -11,6 +11,8 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -70,6 +72,9 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private KafkaListenerEndpointRegistry listenerRegistry;
+
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @BeforeEach
@@ -80,6 +85,12 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         DefaultKafkaProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(producerProps);
         kafkaTemplate = new KafkaTemplate<>(pf);
+        // TASK-MONO-046-3 Phase 7: with auto-offset-reset=latest, tests must wait until
+        // each listener container has been assigned partitions before producing — otherwise
+        // the message lands at offset N but the consumer's position is still earlier and
+        // it never catches up within the test await.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     @Test

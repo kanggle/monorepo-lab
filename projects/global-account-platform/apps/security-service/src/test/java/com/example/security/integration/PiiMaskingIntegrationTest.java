@@ -80,6 +80,9 @@ class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private org.springframework.kafka.config.KafkaListenerEndpointRegistry listenerRegistry;
+
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @BeforeEach
@@ -89,6 +92,9 @@ class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     // ─── Helper: seed login_history row ──────────────────────────────────

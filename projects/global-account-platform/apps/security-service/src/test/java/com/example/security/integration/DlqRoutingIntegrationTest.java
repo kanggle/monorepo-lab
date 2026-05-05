@@ -86,6 +86,9 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         byteProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         byteProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         byteTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(byteProps));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerEndpointRegistry.getListenerContainers()
+                .forEach(c -> org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     @Test

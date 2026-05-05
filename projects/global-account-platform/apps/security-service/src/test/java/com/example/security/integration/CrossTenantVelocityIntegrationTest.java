@@ -11,8 +11,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -89,6 +91,7 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private SuspiciousEventJpaRepository suspiciousEventJpaRepository;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
 
     private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -99,6 +102,9 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(producerProps));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     /**
