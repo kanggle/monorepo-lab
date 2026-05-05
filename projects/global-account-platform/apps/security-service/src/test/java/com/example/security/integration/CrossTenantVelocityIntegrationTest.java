@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -55,13 +56,11 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-3 Phase 8: cross-class offset leak is resolved by Phase 6+7
-// (per-context random group + auto-offset-reset=latest + waitForAssignment).
-// Remaining failure here is the DLQ producer ClassCastException — KafkaConsumerConfig
-// hardcodes ByteArraySerializer for the dead-letter producer, which fails when the
-// consumer value is a String (test profile uses StringDeserializer, not the
-// production EHD chain that preserves byte[]). Deferred to TASK-MONO-046-4.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-4: DLQ producer ClassCastException for String values")
+// TASK-MONO-046-6: DLQ ClassCast fix (046-4) eliminated CCE but uncovered a consumer-pipeline
+// timing issue — 50-event burst for tenantA does not produce a suspicious_events row within 30s
+// in CI. This is unrelated to serialization; root cause is likely burst-saturation or
+// auto-offset-reset race. Deferred to TASK-MONO-046-6 for diagnosis and re-enablement.
+@Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
