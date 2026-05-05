@@ -33,10 +33,9 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// TASK-MONO-046-2: envelope tenantId fix verified syntactically, but events are still
-// not consumed in CI — same root cluster as DetectionE2E / PiiMasking / DlqRouting.
-// Deferred until consumer behaviour is restored.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 1: re-enabled to capture logs (logback test profile now active)
+// for root-cause diagnosis. Expected to fail until the Kafka consumer regression is
+// identified — failures will produce stack traces in CI artifacts.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")

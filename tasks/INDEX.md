@@ -105,11 +105,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
-- `TASK-MONO-046-2-security-service-kafka-consumer.md` — **046 첫 CI 검증 후 발견된 신규 cluster** (선행=046). 046 PR 의 schema/validation/fixture fix 가 LoginHistoryImmutability 2 + CrossTenantVelocity context init 1 + PiiMasking truncation 의 INSERT 단계만 회복시켰고, 17건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 6 + SecurityServiceIntegrationTest 5) 은 동일 root cluster — **security-service @KafkaListener 가 events 를 처리하지 않음** — 으로 잔존. 046 PR 에서 5 IT class `@Disabled("TASK-MONO-046-2: ...")` 마킹. 가설: ConsumerFactory MeterRegistry 의존, group rebalance timeout, AckMode 회귀, ErrorHandlingDeserializer chain. WSL Docker 환경 reproduce 필요. 분석=Opus 4.7 / 구현 권장=Opus — Spring Kafka + Testcontainers + DirtiesContext 상호작용.
-
 ## in-progress
 
-(empty)
+- `TASK-MONO-046-2-security-service-kafka-consumer.md` — Phase 1 진단 PR. logback-spring.xml `springProfile name="default,local,dev,test"` 추가 (이전 test 프로파일 적용 시 root logger 가 NO appender 였음 — Spring/Kafka 로그 silent drop) + SecurityServiceIntegrationTest `@Disabled` 제거 → CI 재실행 시 실패 stack trace + 컨슈머 로그 확보 → 가설 (a)~(d) 좁힘. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
