@@ -41,9 +41,11 @@ import static org.awaitility.Awaitility.await;
  * path routes poison-pill payloads to {@code <topic>.dlq} after the configured
  * retry budget, while the original listener container remains healthy.
  */
-// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
-// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3 Phase 8: DLQ producer ClassCastException — KafkaConsumerConfig
+// hardcodes ByteArraySerializer for the dead-letter producer, which fails the moment
+// the consumer's String value reaches the recoverer. By definition this whole class
+// exercises that path, so it stays disabled until TASK-MONO-046-4 lands the fix.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-4: DLQ producer ClassCastException for String values")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -88,6 +90,9 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         byteProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         byteProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         byteTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(byteProps));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerEndpointRegistry.getListenerContainers()
+                .forEach(c -> org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     @Test

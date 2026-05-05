@@ -11,8 +11,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -53,14 +55,13 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-2 Phase 4: kept disabled. Phase 1-3 verified the consumer pipeline
-// works in isolation (SecurityServiceIntegrationTest passes solo) but the shared
-// "security-service" group leaks uncommitted offsets across @DirtiesContext
-// boundaries — the next class's consumer replays prior class events
-// (CrossTenantVelocity 50 / DlqRouting poison pills) and exhausts the test await
-// before reaching its own messages. Real fix needs deeper Spring Kafka work
-// (per-class group, AckMode tweaks, or topic isolation).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3 Phase 8: cross-class offset leak is resolved by Phase 6+7
+// (per-context random group + auto-offset-reset=latest + waitForAssignment).
+// Remaining failure here is the DLQ producer ClassCastException — KafkaConsumerConfig
+// hardcodes ByteArraySerializer for the dead-letter producer, which fails when the
+// consumer value is a String (test profile uses StringDeserializer, not the
+// production EHD chain that preserves byte[]). Deferred to TASK-MONO-046-4.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-4: DLQ producer ClassCastException for String values")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -93,6 +94,7 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private SuspiciousEventJpaRepository suspiciousEventJpaRepository;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
 
     private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -103,6 +105,9 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(producerProps));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     /**

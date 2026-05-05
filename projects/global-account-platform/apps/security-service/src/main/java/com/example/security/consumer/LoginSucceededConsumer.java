@@ -21,7 +21,7 @@ public class LoginSucceededConsumer extends AbstractAuthEventConsumer {
         super(objectMapper, dedupService, recordLoginHistoryUseCase, detectUseCase);
     }
 
-    @KafkaListener(topics = "auth.login.succeeded", groupId = "${security.consumer.group-id:security-service}")
+    @KafkaListener(topics = "auth.login.succeeded")
     public void onMessage(ConsumerRecord<String, String> record) {
         processEvent(record, LoginOutcome.SUCCESS);
     }

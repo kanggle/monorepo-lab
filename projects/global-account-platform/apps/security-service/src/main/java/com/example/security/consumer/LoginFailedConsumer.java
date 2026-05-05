@@ -22,7 +22,7 @@ public class LoginFailedConsumer extends AbstractAuthEventConsumer {
         super(objectMapper, dedupService, recordLoginHistoryUseCase, detectUseCase);
     }
 
-    @KafkaListener(topics = "auth.login.failed", groupId = "${security.consumer.group-id:security-service}")
+    @KafkaListener(topics = "auth.login.failed")
     public void onMessage(ConsumerRecord<String, String> record) {
         processEvent(record, LoginOutcome.FAILURE);
     }

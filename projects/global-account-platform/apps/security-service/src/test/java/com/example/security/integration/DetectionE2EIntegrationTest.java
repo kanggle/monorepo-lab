@@ -14,7 +14,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -40,9 +42,9 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
-// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3 Phase 8: same DLQ producer ClassCastException as CrossTenantVelocity.
+// Deferred to TASK-MONO-046-4.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-4: DLQ producer ClassCastException for String values")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -94,6 +96,7 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
     @Autowired private SuspiciousEventJpaRepository suspiciousEventJpaRepository;
     @Autowired private OutboxJpaRepository outboxJpaRepository;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
 
     private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -105,6 +108,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(producerProps));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     @Test

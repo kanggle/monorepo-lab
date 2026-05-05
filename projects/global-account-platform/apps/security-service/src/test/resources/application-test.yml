@@ -32,8 +32,19 @@ spring:
 
   kafka:
     consumer:
-      group-id: security-service
-      auto-offset-reset: earliest
+      # TASK-MONO-046-3 Phase 6: per-Spring-context random group ID. KafkaProperties is
+      # bound via @ConfigurationProperties so ${random.uuid} is evaluated ONCE per
+      # context refresh — every test class that builds a fresh ApplicationContext
+      # (each one does, via distinct @DynamicPropertySource) lands on a unique
+      # group. @KafkaListener annotations no longer set groupId, so this consumer
+      # factory value is what the listener containers use.
+      group-id: test-security-service-${random.uuid}
+      # TASK-MONO-046-3 Phase 7: auto-offset-reset=latest so a fresh per-class
+      # consumer group does NOT replay every accumulated message from prior classes
+      # in the shared Kafka container's topics. Tests must wait for partition
+      # assignment via ContainerTestUtils.waitForAssignment before sending — see
+      # the @BeforeEach hook in each IT class.
+      auto-offset-reset: latest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -54,6 +65,13 @@ spring:
         reconnect.backoff.ms: 500
         reconnect.backoff.max.ms: 10000
         request.timeout.ms: 60000
+    # TASK-MONO-046-3: ack-mode=record commits offsets per record so an unexpected
+    # @DirtiesContext teardown mid-batch cannot leave uncommitted offsets that the
+    # next test class's listener would re-read with auto-offset-reset=earliest.
+    # Production stays on the Spring Kafka default (BATCH) — this override is
+    # test-profile only.
+    listener:
+      ack-mode: record
 
 outbox:
   polling:

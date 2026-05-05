@@ -46,9 +46,11 @@ import static org.awaitility.Awaitility.await;
  * <p>Docker required — skip gracefully on Docker-less CI hosts via the
  * Testcontainers assumption mechanism.
  */
-// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
-// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
+// TASK-MONO-046-3 Phase 8: cross-class offset leak resolved (Phase 6+7), but PiiMaskingService
+// UPDATEs login_history while V0002 trigger trg_login_history_no_update raises SQLSTATE 45000
+// "UPDATE not allowed on login_history (append-only)". The trigger needs a controlled bypass
+// for GDPR masking — separate task TASK-MONO-046-5 (or a project-level TASK-BE follow-up).
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-5: append-only trigger blocks PiiMaskingService UPDATE")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -82,6 +84,9 @@ class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private org.springframework.kafka.config.KafkaListenerEndpointRegistry listenerRegistry;
+
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @BeforeEach
@@ -91,6 +96,9 @@ class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+        // TASK-MONO-046-3 Phase 7: wait for partition assignment before producing.
+        listenerRegistry.getListenerContainers()
+                .forEach(c -> org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(c, 1));
     }
 
     // ─── Helper: seed login_history row ──────────────────────────────────

@@ -105,7 +105,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
-- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — **046-2 Phase 5 follow-up** (선행=046-2). 046-2 의 Phase 1-4 진단 후 11건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5) 은 동일 root cause — **cross-class consumer-group offset leak** — 으로 잔존. PR #228 에서 4 IT class `@Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")` 마킹. 권장 fix: per-class consumer group via @DynamicPropertySource lambda capture + `spring.kafka.listener.ack-mode: record` (test profile). 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-MONO-046-4-dlq-producer-classcast.md` — **046-3 Phase 8 분리** (선행=046-3). KafkaConsumerConfig 의 DLQ producer 가 `ByteArraySerializer` 하드코딩 → consumer value (String) cast 실패 → `ClassCastException: String cannot be cast to [B`. Test profile 의 StringDeserializer 환경에서 노출되며 production EHD-success path 에서도 잠재. 6 IT 메서드 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4) 영향. 권장 fix: `DelegatingByTypeSerializer` (byte[] + String 매핑). 분석=Opus 4.7 / 구현 권장=Sonnet.
+
+- `TASK-MONO-046-5-pii-masking-trigger-bypass.md` — **046-3 Phase 8 분리** (선행=046-3). `V0002__create_login_history_triggers.sql` 의 `trg_login_history_no_update` 가 PiiMaskingService.maskPii 의 GDPR-driven UPDATE 차단 → SQLSTATE 45000 → 5 PiiMasking 테스트 fail. Audit append-only invariant 와 GDPR masking invariant 충돌. 권장 fix: V0010 trigger redefine + session variable bypass (`SET @pii_masking_bypass=1`). LoginHistoryImmutability 회귀 0 보장. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
@@ -113,7 +115,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — PR #230. cross-class consumer-group offset leak 해소 (Phase 6 unique groupId via `spring.kafka.consumer.group-id=test-${random.uuid}` + Phase 7 `auto-offset-reset=latest` + `ContainerTestUtils.waitForAssignment`). SecurityServiceIntegrationTest 6/6 PASS 확인. 잔존 11건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5) 은 다른 cluster — DLQ ClassCastException → TASK-MONO-046-4, login_history trigger 충돌 → TASK-MONO-046-5 분리. GAP Integration Job pass 1m47s, run `25393465327`.
 
 ## done
 
