@@ -30,17 +30,17 @@ public final class E2ETestFixtures {
 
     /** Gateway path that fronts {@code POST /api/artists} on artist-service. */
     public static String pathArtistRegister() {
-        return "/api/v1/artist/artists";
+        return "/api/v1/artists";
     }
 
     /** Gateway path that fronts {@code PATCH /api/artists/{id}/status} on artist-service. */
     public static String pathArtistStatus(String artistId) {
-        return "/api/v1/artist/artists/" + artistId + "/status";
+        return "/api/v1/artists/" + artistId + "/status";
     }
 
     /** Gateway path that fronts {@code GET /api/artists/{id}} on artist-service. */
     public static String pathArtistById(String artistId) {
-        return "/api/v1/artist/artists/" + artistId;
+        return "/api/v1/artists/" + artistId;
     }
 
     /** Gateway path that fronts {@code POST /api/community/follows} on community-service. */

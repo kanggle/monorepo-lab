@@ -120,7 +120,7 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
                     .build());
 
             assertThat(registerResp.statusCode())
-                    .as("POST /api/v1/artist/artists (-> /api/artists) returns 201 for admin-tier role")
+                    .as("POST /api/v1/artists (-> /api/artists) returns 201 for admin-tier role")
                     .isEqualTo(201);
             JsonNode registerJson = objectMapper.readTree(registerResp.body());
             JsonNode registeredArtist = registerJson.get("data");
