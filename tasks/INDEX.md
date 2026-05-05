@@ -111,11 +111,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — PR #230. 11건 추가 회복 시도 → cross-class consumer-group offset leak 해소 (Phase 6 unique groupId via spring.kafka.consumer.group-id=test-${random.uuid} + Phase 7 auto-offset-reset=latest + ContainerTestUtils.waitForAssignment). SecurityServiceIntegrationTest 6/6 PASS 확인. 그러나 잔존 11건이 다른 cluster: DLQ ClassCastException (CrossTenantVelocity/DetectionE2E/DlqRouting 6건 → TASK-MONO-046-4) + login_history trigger 충돌 (PiiMasking 5건 → TASK-MONO-046-5). 4 IT class `@Disabled("046-4: ...")` / `@Disabled("046-5: ...")` 분리 마킹.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — PR #230. cross-class consumer-group offset leak 해소 (Phase 6 unique groupId via `spring.kafka.consumer.group-id=test-${random.uuid}` + Phase 7 `auto-offset-reset=latest` + `ContainerTestUtils.waitForAssignment`). SecurityServiceIntegrationTest 6/6 PASS 확인. 잔존 11건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5) 은 다른 cluster — DLQ ClassCastException → TASK-MONO-046-4, login_history trigger 충돌 → TASK-MONO-046-5 분리. GAP Integration Job pass 1m47s, run `25393465327`.
 
 ## done
 
