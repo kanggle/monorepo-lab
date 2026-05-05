@@ -189,9 +189,6 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
     // 4. authorization_code flow → revoke refresh_token → introspect → inactive
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046: refresh_token absent from authCode response — same root cause as
-    // OAuth2RefreshTokenIntegrationTest. Deferred to TASK-MONO-046-1 (SAS tracing).
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: SAS refresh_token grant tracing")
     @Test
     @Order(4)
     @DisplayName("authCode flow: issue refresh_token → revoke → introspect → active=false")
