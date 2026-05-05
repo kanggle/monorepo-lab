@@ -40,6 +40,13 @@ test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
 
   test('로그인 페이지에 ?error=account_type_mismatch 가 있으면 안내가 표시된다', async ({ page }) => {
     await page.goto('/login?error=account_type_mismatch');
-    await expect(page.getByRole('alert')).toContainText('admin');
+    // Next.js App Router injects a hidden `<div role="alert"
+    // id="__next-route-announcer__">` on every page for accessibility-driven
+    // route change announcements; pairing the bare `getByRole('alert')` with
+    // the LoginForm's account_type_mismatch banner triggers strict-mode
+    // resolution to 2 elements. Scope explicitly to the LoginForm error
+    // banner — which carries `class="alert-error"` — to keep the assertion
+    // deterministic regardless of Next.js's announcer presence.
+    await expect(page.locator('[role="alert"].alert-error')).toContainText('admin');
   });
 });

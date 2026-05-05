@@ -250,3 +250,52 @@ MockMvc `.param()` 시맨틱과 충돌한 것이 RC#1 의 원인.
 ---
 
 *작성: 2026-05-05, TASK-MONO-044 진단 단계. GAP 단락 갱신: 2026-05-05 (TASK-MONO-044c-1).*
+
+---
+
+## TASK-MONO-044e — Frontend E2E full-stack (web-store) Playwright 잔존 fix
+
+### 진단 결과
+
+044b 의 traefik-net fix 가 docker compose 부팅을 회복시키자, Job 4 의 잔존 fail 이 Playwright 단계에서 두 distinct 이슈로 노출:
+
+#### Issue 1 — NextAuth fetch fail (RC = 분류 (a) env URL 설정 mismatch 의 변형)
+
+GAP 컨테이너는 e2e docker-compose 에 미포함 (TASK-MONO-014 § Out of Scope). 이를 감안하여:
+
+- `playwright.config.ts` webServer.env 에 `OIDC_ISSUER_URL=http://127.0.0.1:1` (closed loopback) + `SKIP_GAP_E2E=1` 설정
+- 4 개 GAP 의존 spec (`account-type-guard`, `cart-management`, `golden-flow`, `wishlist`) 각각 `test.skip(shouldSkipGap, ...)` 로 자동 skip 의도
+
+그러나 `webServer.env` 는 **web-store SSR 프로세스에만** 전달되고, **Playwright runner 프로세스에는 전달되지 않음**. `shouldSkipGap()` 은 runner 에서 평가되므로 `process.env.SKIP_GAP_E2E === '1'` 체크가 항상 false → spec 들이 skip 안 됨 → `signupAndLogin()` → `getByRole('button', { name: 'Global Account 로 로그인' }).click()` → NextAuth `/api/auth/signin/gap` → OIDC discovery to `http://127.0.0.1:1/.well-known/openid-configuration` → `TypeError: fetch failed` (8회 반복) → `?error=Configuration` redirect → 모든 인증 의존 시나리오 timeout (60s).
+
+**Fix**: `.github/workflows/ci.yml` frontend-e2e job 의 "Run full-stack E2E" step 에 `env: SKIP_GAP_E2E: '1'` 추가. webServer.env 와 runner env 양쪽 모두 동기. 044a 의 ecommerce gateway/auth-service routing 회귀 가설 (분류 (c)) 은 stack trace 에 ecommerce gateway-service 호출 흔적이 없어 기각. 044c 의 GAP auth-service 회귀 (분류 (d)) 는 GAP 컨테이너가 stack 에 없으므로 무관.
+
+#### Issue 2 — Strict-mode locator violation (테스트 회귀)
+
+`auth-redirect.spec.ts:43` 의 `getByRole('alert')` 가 strict mode 에서 2 element 매칭:
+
+1. `<div role="alert" class="alert-error">admin 계정으로는 web-store …</div>` — LoginForm 의 의도한 banner
+2. `<div role="alert" aria-live="assertive" id="__next-route-announcer__"></div>` — Next.js App Router 가 모든 페이지에 자동 추가하는 hidden route-change announcer
+
+페이지 회귀가 아닌 **Next.js 프레임워크 동작** (Next.js 15.5 기준 항상 announcer 가 visible 로 계측됨). 테스트의 책임이며, locator 를 `[role="alert"].alert-error` 로 좁힘.
+
+### 적용 fix 요약
+
+| 이슈 | 수정 파일 | 변경 내용 |
+|---|---|---|
+| Issue 1 (NextAuth fetch fail) | `.github/workflows/ci.yml` | "Run full-stack E2E" step `env: SKIP_GAP_E2E: '1'` 추가 |
+| Issue 2 (locator strict-mode) | `apps/web-store/e2e/auth-redirect.spec.ts:43` | `getByRole('alert')` → `[role="alert"].alert-error` |
+
+### 결과
+
+- 4 GAP 의존 spec (account-type-guard / cart-management / golden-flow / wishlist) → SKIP 으로 전이 (GAP 컨테이너 도입 시 자동 활성화 — TASK-MONO-014 후속 영역)
+- auth-redirect 5 spec → 모두 PASS 기대 (locator 좁히기로 strict-mode violation 소거)
+- `Frontend E2E full-stack (web-store)` Job FAILURE → SUCCESS
+
+### 044 시리즈 종결
+
+044/044a/044b/044c/044d/044e 6 task 으로 구성된 main CI 4 회귀 청소 시리즈 종결. 잔존: 044c-1 (GAP integration 17건), 044f-2 (fan-platform feed 1건) 는 044a 가 노출시킨 downstream cascade 로 별도 follow-up.
+
+---
+
+*작성: 2026-05-05, TASK-MONO-044 진단 단계.*

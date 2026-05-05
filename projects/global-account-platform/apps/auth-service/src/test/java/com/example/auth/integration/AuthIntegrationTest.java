@@ -35,8 +35,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 // TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
-// AccountServiceClient bean URL must be rebuilt per class to track this
-// class's WireMock instance.
+// classes that own their WireMock and override auth.account-service.base-url
+// via @DynamicPropertySource must isolate Spring contexts to avoid the
+// AccountServiceClient bean capturing another class's now-stopped WireMock URL.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
