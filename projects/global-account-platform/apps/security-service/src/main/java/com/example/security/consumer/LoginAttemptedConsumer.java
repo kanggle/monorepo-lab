@@ -21,7 +21,7 @@ public class LoginAttemptedConsumer extends AbstractAuthEventConsumer {
         super(objectMapper, dedupService, recordLoginHistoryUseCase, detectUseCase);
     }
 
-    @KafkaListener(topics = "auth.login.attempted", groupId = "security-service")
+    @KafkaListener(topics = "auth.login.attempted", groupId = "${security.consumer.group-id:security-service}")
     public void onMessage(ConsumerRecord<String, String> record) {
         processEvent(record, LoginOutcome.ATTEMPTED);
     }
