@@ -170,10 +170,13 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
     }
 
     private String buildLoginFailedEvent(String eventId, String accountId) {
+        // TASK-BE-248 Phase 2a: tenantId in envelope is required — events without it
+        // are routed to .dlq by AbstractAuthEventConsumer (MissingTenantIdException).
         return """
                 {
                   "eventId": "%s",
                   "eventType": "auth.login.failed",
+                  "tenantId": "%s",
                   "source": "auth-service",
                   "occurredAt": "%s",
                   "schemaVersion": 1,
@@ -190,6 +193,6 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
                     "timestamp": "%s"
                   }
                 }
-                """.formatted(eventId, Instant.now(), accountId, accountId, Instant.now());
+                """.formatted(eventId, Tenants.DEFAULT_TENANT_ID, Instant.now(), accountId, accountId, Instant.now());
     }
 }

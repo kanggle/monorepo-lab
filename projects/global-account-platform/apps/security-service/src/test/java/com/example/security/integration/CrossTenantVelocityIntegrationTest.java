@@ -77,8 +77,10 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
         // Lower threshold so 50 tenantA failures clearly exceed it.
         registry.add("security.detection.velocity.threshold", () -> "3");
         registry.add("security.detection.velocity.window-seconds", () -> "3600");
-        // Disable auto-lock HTTP call — not needed for this test.
-        registry.add("security.detection.auto-lock.max-attempts", () -> "0");
+        // Stub auto-lock with the lowest valid retry count (validated as @Min(1) in
+        // DetectionProperties.AutoLock.maxAttempts). The test does not exercise the
+        // auto-lock HTTP path because tenantB never crosses threshold.
+        registry.add("security.detection.auto-lock.max-attempts", () -> "1");
     }
 
     @Autowired private SuspiciousEventJpaRepository suspiciousEventJpaRepository;

@@ -103,11 +103,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-046-gap-integration-residual-31.md` — TASK-MONO-044c-1 머지 후에도 main `Integration (GAP)` Job 잔재 31건. **auth-service** 12건 (OAuth2RefreshToken 6건 + RevokeIntrospect / AuthCodePkce userinfo 등 — SAS 1.4.1 + JpaRegisteredClientRepository 영역, 044c 의 deferred) + **security-service** 19/20건 (CrossTenantVelocityIntegrationTest + DetectionE2EIntegrationTest 등 — 044 시리즈에서 한 번도 다루지 않은 영역, 새 발견). 가설: security-service 19건이 단일 root cause (libs/java-web-servlet 의존 누락 의심, 044a 일관성 누락) → 1 build.gradle fix 가능. auth-service 12건은 OAuth2 영역 별도 진단 필요. 본 task 머지 시 `Integration (GAP)` Job 첫 SUCCESS = main green 회복 milestone. 분석=Opus 4.7 / 구현 권장=Opus — 두 서비스 도메인 동시 분석. security 단일 root cause 판명 시 Sonnet downgrade 가능.
+- `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-046-gap-integration-residual-31.md` — TASK-MONO-044c-1 머지 후에도 main `Integration (GAP)` Job 잔재 31건 진단 + 부분 종결. security-service 19 건 deterministic 5 cluster (CrossTenantVelocity / PiiMasking / LoginHistoryImmutability / SecurityServiceIntegrationTest / DetectionE2E) 모두 fix. auth-service 12 건은 § Failure Scenario B 적용 → `@Disabled("TASK-MONO-046-1: ...")` + 후속 task 분리. DLQ Routing 4 건은 root cause 미확정으로 본 PR 그대로 두고 CI 결과 대기.
 
 ## done
 

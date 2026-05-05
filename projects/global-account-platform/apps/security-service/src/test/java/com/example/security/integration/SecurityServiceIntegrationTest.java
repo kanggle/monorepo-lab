@@ -196,10 +196,13 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     private String buildLoginSucceededEvent(String eventId, String accountId) {
+        // TASK-BE-248 Phase 2a: tenantId in envelope is required — events without it
+        // are routed to .dlq by AbstractAuthEventConsumer (MissingTenantIdException).
         return """
                 {
                   "eventId": "%s",
                   "eventType": "auth.login.succeeded",
+                  "tenantId": "fan-platform",
                   "source": "auth-service",
                   "occurredAt": "%s",
                   "schemaVersion": 1,
@@ -222,6 +225,7 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
                 {
                   "eventId": "%s",
                   "eventType": "auth.login.failed",
+                  "tenantId": "fan-platform",
                   "source": "auth-service",
                   "occurredAt": "%s",
                   "schemaVersion": 1,
