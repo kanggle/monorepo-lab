@@ -62,16 +62,12 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         wireMockServer.start();
     }
 
-    private static final String TEST_GROUP_ID = "test-detection-e2e-" + UUID.randomUUID();
-
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
-        // TASK-MONO-046-3: per-class consumer group prevents cross-class offset replay.
-        registry.add("security.consumer.group-id", () -> TEST_GROUP_ID);
         // Lower velocity threshold so 3 failed logins trigger AUTO_LOCK in-test.
         registry.add("security.detection.velocity.threshold", () -> "3");
         registry.add("security.detection.velocity.window-seconds", () -> "3600");

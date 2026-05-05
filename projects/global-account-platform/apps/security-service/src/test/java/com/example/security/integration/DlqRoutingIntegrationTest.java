@@ -56,16 +56,12 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 
-    private static final String TEST_GROUP_ID = "test-dlq-routing-" + UUID.randomUUID();
-
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
-        // TASK-MONO-046-3: per-class consumer group prevents cross-class offset replay.
-        registry.add("security.consumer.group-id", () -> TEST_GROUP_ID);
     }
 
     @Autowired

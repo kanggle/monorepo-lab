@@ -41,7 +41,7 @@ public class AccountDeletedAnonymizedConsumer {
     private final ObjectMapper objectMapper;
     private final PiiMaskingService piiMaskingService;
 
-    @KafkaListener(topics = TOPIC, groupId = "${security.consumer.group-id:security-service}")
+    @KafkaListener(topics = TOPIC)
     public void onMessage(ConsumerRecord<String, String> record) {
         try {
             JsonNode root = objectMapper.readTree(record.value());

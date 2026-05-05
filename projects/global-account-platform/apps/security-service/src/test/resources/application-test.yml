@@ -32,7 +32,13 @@ spring:
 
   kafka:
     consumer:
-      group-id: security-service
+      # TASK-MONO-046-3 Phase 6: per-Spring-context random group ID. KafkaProperties is
+      # bound via @ConfigurationProperties so ${random.uuid} is evaluated ONCE per
+      # context refresh — every test class that builds a fresh ApplicationContext
+      # (each one does, via distinct @DynamicPropertySource) lands on a unique
+      # group. @KafkaListener annotations no longer set groupId, so this consumer
+      # factory value is what the listener containers use.
+      group-id: test-security-service-${random.uuid}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer

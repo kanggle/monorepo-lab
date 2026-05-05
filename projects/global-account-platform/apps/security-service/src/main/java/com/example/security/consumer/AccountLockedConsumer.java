@@ -41,7 +41,7 @@ public class AccountLockedConsumer {
     private final ObjectMapper objectMapper;
     private final AccountLockHistoryJpaRepository repository;
 
-    @KafkaListener(topics = TOPIC, groupId = "${security.consumer.group-id:security-service}")
+    @KafkaListener(topics = TOPIC)
     public void onMessage(ConsumerRecord<String, String> record) {
         try {
             JsonNode root = objectMapper.readTree(record.value());
