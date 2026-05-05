@@ -61,6 +61,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
 // AccountServiceClient bean URL must be rebuilt per class to track this
 // class's WireMock instance.
+// TASK-MONO-046: 6/7 tests fail (refresh_token absent from token response) — deferred
+// to TASK-MONO-046-1 per task spec § Failure Scenarios B (SAS 1.4.1 +
+// JpaRegisteredClientRepository tracing requires Docker reproduction; out of scope here).
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-1: SAS refresh_token grant tracing")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers

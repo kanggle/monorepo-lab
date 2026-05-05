@@ -50,9 +50,10 @@ class LoginHistoryImmutabilityIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("UPDATE on login_history is rejected by trigger")
     void updateIsRejected() {
-        // Insert a test row (event_id must be UUID-shaped, VARCHAR(36))
+        // Insert a test row. tenant_id is NOT NULL since V0008.
         jdbcTemplate.update(
-                "INSERT INTO login_history (event_id, account_id, outcome, occurred_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO login_history (tenant_id, event_id, account_id, outcome, occurred_at) VALUES (?, ?, ?, ?, ?)",
+                "fan-platform",
                 java.util.UUID.randomUUID().toString(),
                 "acc-immutability-001",
                 "SUCCESS",
@@ -71,9 +72,9 @@ class LoginHistoryImmutabilityIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("DELETE on login_history is rejected by trigger")
     void deleteIsRejected() {
-        // Insert a test row (event_id must be UUID-shaped, VARCHAR(36))
         jdbcTemplate.update(
-                "INSERT INTO login_history (event_id, account_id, outcome, occurred_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO login_history (tenant_id, event_id, account_id, outcome, occurred_at) VALUES (?, ?, ?, ?, ?)",
+                "fan-platform",
                 java.util.UUID.randomUUID().toString(),
                 "acc-immutability-002",
                 "SUCCESS",
