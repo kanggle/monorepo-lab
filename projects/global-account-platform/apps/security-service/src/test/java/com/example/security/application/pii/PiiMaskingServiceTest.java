@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -32,11 +33,14 @@ class PiiMaskingServiceTest {
     @Mock
     private SecurityEventPublisher eventPublisher;
 
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
     private PiiMaskingService service;
 
     @BeforeEach
     void setUp() {
-        service = new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), TEST_SALT);
+        service = new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), jdbcTemplate, TEST_SALT);
     }
 
     // ─── Happy path ──────────────────────────────────────────────────────────
@@ -86,13 +90,13 @@ class PiiMaskingServiceTest {
     void constructor_blankSalt_throws() {
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class,
-                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), ""));
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), jdbcTemplate, ""));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class,
-                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), "  "));
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), jdbcTemplate, "  "));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class,
-                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), null));
+                () -> new PiiMaskingService(piiMaskingLogRepository, eventPublisher, new ObjectMapper(), jdbcTemplate, null));
     }
 
     @Test
