@@ -108,7 +108,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-044e-web-store-fullstack-nextauth-fail.md` — TASK-MONO-044b 의 traefik-net fix 후 docker compose stack 부팅 회복했으나 Playwright suite 가 NextAuth `fetch failed` 반복 + timeout. 두 distinct 이슈 동시: (1) NextAuth (web-store SSR) 가 backend 무엇을 fetch 하다 실패 → `?error=Configuration` redirect → 모든 인증 시나리오 timeout, (2) `getByRole('alert')` strict-mode locator violation (2 elements). 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
+
+## review
+
+- `TASK-MONO-044e-web-store-fullstack-nextauth-fail.md` — Issue 1 (NextAuth fetch fail) RC = SKIP_GAP_E2E env 가 webServer 프로세스에만 전달되고 Playwright runner 에 누락 (분류 (a) "env 미설정" 의 변형). frontend-e2e job 의 "Run full-stack E2E" step 에 `env: SKIP_GAP_E2E: '1'` 추가로 두 프로세스 동기화 → 4 GAP 의존 spec 자동 SKIP. Issue 2 (strict-mode locator) RC = Next.js App Router 의 `__next-route-announcer__` (`<div role="alert">`) 가 LoginForm 의 alert 와 동시 매칭 (Next.js 15.5 동작). `auth-redirect.spec.ts:43` locator 를 `[role="alert"].alert-error` 로 좁힘. 회귀보고서 단락 추가. main CI 4 회귀 청소 시리즈 (044/044a/044b/044c/044d/044e) 종결.
 
 ## done
 
