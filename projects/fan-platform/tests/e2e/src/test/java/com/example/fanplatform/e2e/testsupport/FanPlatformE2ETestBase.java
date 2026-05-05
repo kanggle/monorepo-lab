@@ -11,6 +11,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
@@ -58,6 +61,7 @@ import org.testcontainers.utility.DockerImageName;
 @Tag("e2e")
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@ExtendWith(FanPlatformE2ETestBase.ServiceContainerLogDumper.class)
 public abstract class FanPlatformE2ETestBase {
 
     protected static final Logger log = LoggerFactory.getLogger(FanPlatformE2ETestBase.class);
@@ -327,5 +331,47 @@ public abstract class FanPlatformE2ETestBase {
         // Fall back to the naive resolve — the subsequent existence check or
         // ImageFromDockerfile call will report a clear error.
         return cwd.resolve(relative).normalize();
+    }
+
+    /**
+     * Dumps each service container's stdout+stderr to {@code System.err} when an
+     * e2e test fails, so the CI log carries the actual stack trace that produced
+     * a 4xx/5xx response. Without this, GitHub Actions only shows the JUnit
+     * assertion ("expected: 201 / but was: 500") with no service-side context.
+     *
+     * <p>Triggered automatically by JUnit 5 because every concrete e2e test class
+     * extends this base class and inherits the {@code @ExtendWith} declaration.
+     */
+    public static class ServiceContainerLogDumper implements TestWatcher {
+
+        @Override
+        public void testFailed(ExtensionContext context, Throwable cause) {
+            Object instance = context.getTestInstance().orElse(null);
+            if (!(instance instanceof FanPlatformE2ETestBase suite)) {
+                return;
+            }
+            System.err.println("================================================================");
+            System.err.println("[e2e-fail] " + context.getDisplayName());
+            System.err.println("[e2e-fail] dumping service container logs for diagnosis");
+            System.err.println("================================================================");
+            dumpContainerLogs("gateway", suite.gateway);
+            dumpContainerLogs("community", suite.community);
+            dumpContainerLogs("artist", suite.artist);
+        }
+
+        private static void dumpContainerLogs(String label, GenericContainer<?> container) {
+            if (container == null || !container.isRunning()) {
+                System.err.println("[e2e-fail] " + label + " container: <not running>");
+                return;
+            }
+            try {
+                String logs = container.getLogs();
+                System.err.println("---- " + label + " container logs (" + container.getContainerId() + ") ----");
+                System.err.println(logs);
+                System.err.println("---- end " + label + " logs ----");
+            } catch (Exception e) {
+                System.err.println("[e2e-fail] " + label + " getLogs() failed: " + e.getMessage());
+            }
+        }
     }
 }
