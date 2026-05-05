@@ -53,11 +53,9 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046: context init now succeeds (max-attempts validation fix), but the
-// consumer pipeline does not process events — same root cluster as DetectionE2E,
-// SecurityServiceIntegrationTest, PiiMasking, DlqRouting. Deferred to TASK-MONO-046-2
-// (security-service Kafka consumer not consuming events in CI).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 1: re-enabled. SecurityServiceIntegrationTest passed once
+// the logback test profile was wired up — verifying that the same fix unblocks the
+// other 4 deferred classes.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")

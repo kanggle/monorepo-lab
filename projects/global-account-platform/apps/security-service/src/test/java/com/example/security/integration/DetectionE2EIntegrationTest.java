@@ -40,10 +40,8 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-2: security-service Kafka consumer does not process events in CI.
-// Test was already failing for the same reason before TASK-MONO-046; envelope tenantId
-// fix was insufficient. Deferred until consumer behaviour is restored.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 1: re-enabled — same logback test-profile fix that unblocked
+// SecurityServiceIntegrationTest applies here.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
