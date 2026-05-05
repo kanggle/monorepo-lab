@@ -105,9 +105,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
-- `TASK-MONO-046-4-dlq-producer-classcast.md` — **046-3 Phase 8 분리** (선행=046-3). KafkaConsumerConfig 의 DLQ producer 가 `ByteArraySerializer` 하드코딩 → consumer value (String) cast 실패 → `ClassCastException: String cannot be cast to [B`. Test profile 의 StringDeserializer 환경에서 노출되며 production EHD-success path 에서도 잠재. 6 IT 메서드 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4) 영향. 권장 fix: `DelegatingByTypeSerializer` (byte[] + String 매핑). 분석=Opus 4.7 / 구현 권장=Sonnet.
-
 - `TASK-MONO-046-5-pii-masking-trigger-bypass.md` — **046-3 Phase 8 분리** (선행=046-3). `V0002__create_login_history_triggers.sql` 의 `trg_login_history_no_update` 가 PiiMaskingService.maskPii 의 GDPR-driven UPDATE 차단 → SQLSTATE 45000 → 5 PiiMasking 테스트 fail. Audit append-only invariant 와 GDPR masking invariant 충돌. 권장 fix: V0010 trigger redefine + session variable bypass (`SET @pii_masking_bypass=1`). LoginHistoryImmutability 회귀 0 보장. 분석=Opus 4.7 / 구현 권장=Opus.
+
+- `TASK-MONO-046-6-consumer-pipeline-burst-timing.md` — **046-4 Phase 2 분리** (선행=046-4). 046-4 의 DelegatingByTypeSerializer fix 가 ClassCastException 제거 후, 잔존 3 IT method 가 다른 root cause 로 fail: CrossTenantVelocity (50-burst → no suspicious_events row in 30s) + DetectionE2E (10-burst → no AUTO_LOCK row) + DlqRouting.invalidBytesRoutedToDlq (byte[] poison → .dlq topic timeout 60s). 가설: (i) burst event 가 per-class consumer 처리 budget 초과, (ii) byte[] DLPR routing edge case (producer factory generic <String, Object> 변경 후), (iii) `auto-offset-reset=latest` race. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
@@ -118,6 +118,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-046-4-dlq-producer-classcast.md` — PR #232. KafkaConsumerConfig 의 DLQ producer `ByteArraySerializer` → `DelegatingByTypeSerializer(byte[]+String)` 교체 (`DefaultKafkaProducerFactory<String, Object>` 3-arg constructor 로 serializer 인스턴스 직접 주입). 6 IT method 중 3 회복 (DlqRouting `malformedJsonRoutedToDlq` / `missingTenantIdRoutedToDlqAndMetricIncremented` / `accountLockedMissingEventIdRoutedToDlq` PASS). CCE 가 CI logs 에서 완전 제거됨 (fix 검증). 잔존 3 method (CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytesRoutedToDlq byte[] timeout) 는 다른 root cause (consumer pipeline burst timing + byte[] DLPR edge case) — TASK-MONO-046-6 분리. GAP Integration Job pass 2m11s, run `25394880326`. 2026-05-06.
 
 - `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — PR #230. cross-class consumer-group offset leak 해소 — fix 3 단계: (1) production code 의 `@KafkaListener.groupId` 속성 제거 → `spring.kafka.consumer.group-id` 가 listener group 결정 (production: `application.yml` "security-service" 보존), (2) `application-test.yml` 가 `spring.kafka.consumer.group-id=test-security-service-${random.uuid}` 로 override — `KafkaProperties` `@ConfigurationProperties` binding 으로 컨텍스트 refresh 마다 한 번 평가, 컨텍스트별 unique group 보장, (3) `auto-offset-reset=latest` + `ContainerTestUtils.waitForAssignment(c, 1)` (5 IT class `@BeforeEach`) — fresh 그룹이 토픽 누적 메시지 replay 없이 high water mark 부터 시작 + partition assignment race 방지. SecurityServiceIntegrationTest 6/6 회복. 잔존 11건은 다른 cluster: DLQ ClassCastException (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4) → TASK-MONO-046-4, login_history trigger conflict (PiiMasking 5) → TASK-MONO-046-5. GAP Integration Job pass 1m47s, run `25393465327`. 8 phases iteration 으로 정착. 2026-05-06.
 

@@ -389,4 +389,35 @@ DlqRoutingIntegrationTest 4 timeouts 는 root cause 미확정. `objectMapper.rea
 
 ---
 
-*작성: 2026-05-05, TASK-MONO-044 / 046 진단 단계.*
+## 추가 갱신 — 2026-05-06 (TASK-MONO-046-4 부분 회복)
+
+### 변경 요약
+
+`KafkaConsumerConfig.errorHandler` DLQ producer 의 `ByteArraySerializer` 단일 사용 → `DelegatingByTypeSerializer(byte[]+String)` 로 교체. `DefaultKafkaProducerFactory` 의 3-arg constructor `(configs, keySerializer, valueSerializer)` 사용해 serializer 인스턴스 직접 주입 (config-based route 우회). `KafkaTemplate` generic 이 `<String, byte[]>` → `<String, Object>` 변경.
+
+### 검증
+
+- CI logs 에서 `ClassCastException: class java.lang.String cannot be cast to class [B` 완전 제거 (fix 검증).
+- 6 IT method 중 3 회복:
+  - DlqRoutingIntegrationTest.malformedJsonRoutedToDlq (Order=1)
+  - DlqRoutingIntegrationTest.missingTenantIdRoutedToDlqAndMetricIncremented (Order=4)
+  - DlqRoutingIntegrationTest.accountLockedMissingEventIdRoutedToDlq (Order=3)
+- main CI `Integration (GAP)` Job: pass 2m11s, run `25394880326`.
+
+### 잔존 3 method (TASK-MONO-046-6 분리)
+
+| Method | 증상 | 가설 |
+|---|---|---|
+| `CrossTenantVelocityIntegrationTest.tenantABurst_doesNotTriggerTenantBDetection` | 50-burst 후 30s 내 suspicious_events row 없음 (line 135 AssertionError) | burst event 가 per-class consumer 처리 budget 초과 |
+| `DetectionE2EIntegrationTest.<10x auth.login.failed>` | 10-burst 후 AUTO_LOCK row 없음 (line 140 AssertionError) | 동일 — VelocityRule 파이프라인 burst 처리 race |
+| `DlqRoutingIntegrationTest.invalidBytesRoutedToDlq` (Order=2) | byte[] poison → .dlq 60s timeout | byte[] DLPR routing edge case (`<String, Object>` factory 변경 후) |
+
+3 method method-level/class-level `@Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")` 마킹.
+
+### 후속 task
+
+- `TASK-MONO-046-6-consumer-pipeline-burst-timing.md` — 046-4 가 노출시킨 burst timing + byte[] DLPR edge case 3 method. 분석=Opus 4.7 / 구현 권장=Opus.
+
+---
+
+*작성: 2026-05-05, TASK-MONO-044 / 046 진단 단계 — 갱신 2026-05-06 (046-4 부분 회복).*
