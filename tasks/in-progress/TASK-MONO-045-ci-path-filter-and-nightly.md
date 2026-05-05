@@ -8,7 +8,7 @@ CI 시간 단축 — path-based job filtering + frontend-e2e full-stack nightly 
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
