@@ -393,13 +393,20 @@ class OAuth2AuthorizationServerSliceTest {
         // In slice test mode with MockMvc, SAS may return 302 (to /api/auth/login) or
         // delegate the error handling. Any non-5xx response is acceptable here — the
         // critical invariant is that SAS DOES handle this endpoint (not 404).
+        //
+        // TASK-MONO-044c-1: queryParam() (not param()) is required for GET /oauth2/authorize
+        // because Spring Security Authorization Server's
+        // OAuth2EndpointUtils.getQueryParameters() filters by
+        // request.getQueryString().contains(name); MockMvc .param() for GET does not
+        // populate getQueryString(). See authorize_queryParamRequired_regressionGuard
+        // below for the explicit guard.
         MvcResult result = mockMvc.perform(get("/oauth2/authorize")
-                        .param("response_type", "code")
-                        .param("client_id", "demo-spa-client")
-                        .param("redirect_uri", "http://localhost:3000/callback")
-                        .param("scope", "openid profile email")
-                        .param("code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
-                        .param("code_challenge_method", "S256"))
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", "demo-spa-client")
+                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("scope", "openid profile email")
+                        .queryParam("code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+                        .queryParam("code_challenge_method", "S256"))
                 .andReturn();
         int status = result.getResponse().getStatus();
         // Must NOT be 404 (SAS must own this endpoint) or 5xx
@@ -409,6 +416,56 @@ class OAuth2AuthorizationServerSliceTest {
         assertThat(status)
                 .as("/oauth2/authorize must not return 5xx. Got " + status)
                 .isLessThan(500);
+    }
+
+    /**
+     * Regression guard for TASK-MONO-044c-1 RC#1.
+     *
+     * <p>Spring Security Authorization Server's
+     * {@code OAuth2EndpointUtils.getQueryParameters()} filters request parameters by
+     * {@code request.getQueryString().contains(name)}. MockMvc's {@code .param()} for
+     * GET requests populates {@code request.getParameterMap()} but NOT
+     * {@code request.getQueryString()}; only {@code .queryParam()} populates both.
+     *
+     * <p>If a future test author or framework upgrade reintroduces {@code .param()}
+     * for GET against an SAS endpoint, the request reaches SAS's authorization
+     * converter with an empty parameter map, producing
+     * {@code 400 [invalid_request] OAuth 2.0 Parameter: response_type}. This guard
+     * locks the contract by asserting that .queryParam() yields a 4xx other than
+     * the "missing response_type" 400 (we expect a redirect to login or a different
+     * 4xx for the unauthenticated case).
+     *
+     * <p>Note: this test does not assert on a specific status code beyond rejecting
+     * the "missing response_type" body marker — it only verifies SAS sees the
+     * parameters. The full happy path (302 redirect with code) requires an
+     * authenticated session, which the integration tests cover.
+     */
+    @Test
+    @Order(8)
+    @DisplayName("regression: GET /oauth2/authorize with queryParam() → SAS sees response_type (TASK-MONO-044c-1 RC#1)")
+    void authorize_queryParamRequired_regressionGuard() throws Exception {
+        MvcResult result = mockMvc.perform(get("/oauth2/authorize")
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", "demo-spa-client")
+                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("scope", "openid profile email")
+                        .queryParam("code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+                        .queryParam("code_challenge_method", "S256"))
+                .andReturn();
+        // queryString must contain response_type for SAS to see it
+        assertThat(result.getRequest().getQueryString())
+                .as("MockMvc .queryParam() must populate request.getQueryString() so SAS's "
+                        + "OAuth2EndpointUtils.getQueryParameters() can read response_type")
+                .isNotNull()
+                .contains("response_type=code");
+        // SAS must NOT respond with the "OAuth 2.0 Parameter: response_type" error
+        // (which would mean SAS filtered it out).
+        String errorMessage = result.getResponse().getErrorMessage();
+        if (errorMessage != null) {
+            assertThat(errorMessage)
+                    .as("SAS must see response_type when .queryParam() is used")
+                    .doesNotContain("OAuth 2.0 Parameter: response_type");
+        }
     }
 
     // -----------------------------------------------------------------------
