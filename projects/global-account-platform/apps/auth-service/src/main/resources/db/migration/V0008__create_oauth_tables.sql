@@ -134,8 +134,15 @@ INSERT INTO oauth_scopes (scope_name, tenant_id, description, is_system, created
 -- ============================================================
 -- Seed data: placeholder clients migrated from TASK-BE-251
 -- in-memory beans.  BCrypt hash of "secret" (cost 10).
--- Verified: $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
+-- Verified: $2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS
 --   matches "secret" via BCryptPasswordEncoder.
+--
+-- TASK-MONO-044c: the previous hash
+-- ($2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy) was a comment-only
+-- "verified" claim that did not actually round-trip through BCrypt.matches("secret").
+-- It silently caused 401 invalid_client for every client_credentials grant against
+-- test-internal-client. The hash is now generated and pinned via a
+-- BcryptHashPinTest test that fails CI if it ever drifts.
 --
 -- test-internal-client — client_credentials (service-to-service)
 -- ============================================================
@@ -159,7 +166,7 @@ INSERT INTO oauth_clients (
     'test-internal-client',
     'fan-platform',
     'B2C',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
     'Test Internal Client',
     '["client_secret_basic"]',
     '["client_credentials"]',

@@ -14,8 +14,10 @@
 --     MEMBERSHIP_SERVICE_CLIENT_SECRET) and updating this row.
 --   - Mapper prepends "{bcrypt}" automatically when constructing RegisteredClient,
 --     so the stored hash here is the raw BCrypt output.
---   - Hash verified: $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
---     matches "secret".
+--   - Hash verified: $2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS
+--     matches "secret" via BCryptPasswordEncoder (TASK-MONO-044c re-pinned;
+--     the previous N9qo8u... hash was a stale comment claim that did not
+--     round-trip through BCrypt.matches and silently broke client_credentials).
 --
 -- Tenant:
 --   Both clients are scoped to tenant_id='fan-platform' (B2C). Cross-tenant calls
@@ -47,7 +49,7 @@ INSERT INTO oauth_clients (
     'community-service-client',
     'fan-platform',
     'B2C',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
     'Community Service Client',
     '["client_secret_basic"]',
     '["client_credentials"]',
@@ -86,7 +88,7 @@ INSERT INTO oauth_clients (
     'membership-service-client',
     'fan-platform',
     'B2C',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
     'Membership Service Client',
     '["client_secret_basic"]',
     '["client_credentials"]',

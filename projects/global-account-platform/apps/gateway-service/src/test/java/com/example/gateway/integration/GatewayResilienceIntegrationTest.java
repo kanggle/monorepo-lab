@@ -226,6 +226,7 @@ class GatewayResilienceIntegrationTest {
                 .header().keyId("res-kid-1").and()
                 .subject(accountId)
                 .issuer("global-account-platform")
+                .claim("tenant_id", "fan-platform")
                 .issuedAt(Date.from(iat))
                 .expiration(Date.from(Instant.now().plusSeconds(3600)))
                 .signWith(keyPairKid1.getPrivate(), Jwts.SIG.RS256)
@@ -262,6 +263,8 @@ class GatewayResilienceIntegrationTest {
                 .subject(accountId)
                 .issuer("global-account-platform")
                 .claim("email", "test@example.com")
+                // tenant_id required by JwtAuthenticationFilter; legacy-fallback disabled by default.
+                .claim("tenant_id", "fan-platform")
                 .issuedAt(Date.from(Instant.now()))
                 .expiration(Date.from(Instant.now().plusSeconds(3600)))
                 .signWith(kp.getPrivate(), Jwts.SIG.RS256)

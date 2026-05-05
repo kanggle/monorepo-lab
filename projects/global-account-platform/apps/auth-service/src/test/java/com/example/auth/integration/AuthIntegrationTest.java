@@ -389,12 +389,15 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Order(11)
     @DisplayName("TASK-BE-063: duplicate credential create returns 409")
     void duplicateCredentialReturns409() throws Exception {
+        // TASK-MONO-044c: TASK-BE-247 made the use case idempotent for the same (accountId, email)
+        // pair (returns 200 with idempotent flag). To exercise the genuine-conflict path that
+        // still returns 409, post the same accountId with a *different* email.
         mockMvc.perform(post("/internal/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "accountId": "%s",
-                                  "email": "%s",
+                                  "email": "different-%s",
                                   "password": "%s"
                                 }
                                 """.formatted(ACCOUNT_ID, TEST_EMAIL, TEST_PASSWORD)))

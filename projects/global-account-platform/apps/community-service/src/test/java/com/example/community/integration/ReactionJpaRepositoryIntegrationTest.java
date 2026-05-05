@@ -9,7 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Instant;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,9 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @AfterEach
     void cleanUp() {
@@ -75,10 +81,17 @@ class ReactionJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase 
         transactionTemplate.executeWithoutResult(s ->
                 reactionRepo.save(Reaction.create(postId, accountId, "HEART")));
 
-        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(s -> {
-            reactionRepo.save(Reaction.create(postId, accountId, "FIRE"));
-            reactionRepo.flush();
-        })).isInstanceOf(DataIntegrityViolationException.class);
+        // TASK-MONO-044c: JpaRepository.save() on an entity with the same composite-PK
+        // performs MERGE (load-then-update), not INSERT, so it never raises a duplicate-
+        // key violation. To exercise the DB-level UNIQUE/PK constraint we must issue
+        // a raw INSERT via JdbcTemplate.
+        Instant now = Instant.now();
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO reactions (post_id, account_id, emoji_code, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, ?)",
+                postId, accountId, "FIRE",
+                java.sql.Timestamp.from(now), java.sql.Timestamp.from(now)))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

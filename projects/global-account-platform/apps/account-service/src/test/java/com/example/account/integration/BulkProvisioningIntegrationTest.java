@@ -84,6 +84,13 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("5건 정상 생성 → 200 + created=5 + outbox 5건 + audit 1건")
     void bulkCreate_5Items_allSucceed() throws Exception {
+        // TASK-MONO-044c: tests in this class share the WMS_TENANT_ID Testcontainers DB
+        // without cleanup, so prior bulk runs accumulate audit rows. Capture the baseline
+        // audit count and assert delta = 1, not absolute = 1.
+        Integer baselineAuditRows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM account_status_history WHERE tenant_id = ? AND details LIKE '%ACCOUNT_BULK_CREATE%'",
+                Integer.class, WMS_TENANT_ID);
+
         List<String> emails = new ArrayList<>();
         StringBuilder items = new StringBuilder();
         for (int i = 0; i < 5; i++) {
@@ -129,11 +136,11 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
             assertThat(payload.get("tenantId").asText()).isEqualTo(WMS_TENANT_ID);
         }
 
-        // Verify one audit row for the entire bulk call
+        // Verify one new audit row for THIS bulk call (delta from baseline).
         int auditRows = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM account_status_history WHERE tenant_id = ? AND details LIKE '%ACCOUNT_BULK_CREATE%'",
                 Integer.class, WMS_TENANT_ID);
-        assertThat(auditRows).isEqualTo(1);
+        assertThat(auditRows - baselineAuditRows).isEqualTo(1);
     }
 
     // ── 부분 실패 ─────────────────────────────────────────────────────────────

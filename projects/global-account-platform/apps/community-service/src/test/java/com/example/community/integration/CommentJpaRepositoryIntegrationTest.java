@@ -53,9 +53,17 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             commentRepo.save(Comment.create(postId, authorId, "active-1"));
             commentRepo.save(Comment.create(postId, authorId, "active-2"));
             Comment toDelete = commentRepo.save(Comment.create(postId, authorId, "to-delete"));
+            // TASK-MONO-044c: flush so the INSERTs are visible to the subsequent
+            // JdbcTemplate UPDATE on the same connection. Without flush, JPA
+            // batches the inserts until commit and the UPDATE matches 0 rows,
+            // leaving deleted_at IS NULL on every row → count returns 3 instead
+            // of 2 and the test fails.
+            commentRepo.flush();
             // soft-delete via native UPDATE (도메인이 직접 노출하지 않음)
+            // TASK-MONO-044c: pass a Timestamp (not Instant.toString()) — MySQL DATETIME
+            // rejects the ISO string with "Z" suffix as data truncation.
             jdbc.update("UPDATE comments SET deleted_at = ? WHERE id = ?",
-                    Instant.now().toString(), toDelete.getId());
+                    java.sql.Timestamp.from(Instant.now()), toDelete.getId());
         });
 
         long count = commentRepo.countByPostIdAndDeletedAtIsNull(postId);
@@ -97,8 +105,11 @@ class CommentJpaRepositoryIntegrationTest extends CommunityIntegrationTestBase {
         transactionTemplate.executeWithoutResult(s -> {
             commentRepo.save(Comment.create(postId, authorId, "live-1"));
             Comment deleted = commentRepo.save(Comment.create(postId, authorId, "deleted-1"));
+            // TASK-MONO-044c: see countByPostIdAndDeletedAtIsNull above —
+            // flush before the JdbcTemplate UPDATE; pass Timestamp (not Instant.toString()).
+            commentRepo.flush();
             jdbc.update("UPDATE comments SET deleted_at = ? WHERE id = ?",
-                    Instant.now().toString(), deleted.getId());
+                    java.sql.Timestamp.from(Instant.now()), deleted.getId());
         });
 
         Map<String, Long> counts = commentRepo
