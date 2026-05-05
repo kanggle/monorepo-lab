@@ -46,16 +46,15 @@ import static org.awaitility.Awaitility.await;
  * <p>Docker required — skip gracefully on Docker-less CI hosts via the
  * Testcontainers assumption mechanism.
  */
-// TASK-MONO-046-2: VARCHAR(36) truncation fix lets the seed insert succeed, but the
-// downstream consumer still does not process the account.deleted event in CI. Deferred.
-// (anonymizedFalse_doesNotMask happens to pass when the consumer is stuck because the
-// test asserts a no-op outcome — keeping it disabled too for symmetry.)
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
+// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @Tag("integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
 
     @Container

@@ -53,11 +53,14 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046: context init now succeeds (max-attempts validation fix), but the
-// consumer pipeline does not process events — same root cluster as DetectionE2E,
-// SecurityServiceIntegrationTest, PiiMasking, DlqRouting. Deferred to TASK-MONO-046-2
-// (security-service Kafka consumer not consuming events in CI).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 4: kept disabled. Phase 1-3 verified the consumer pipeline
+// works in isolation (SecurityServiceIntegrationTest passes solo) but the shared
+// "security-service" group leaks uncommitted offsets across @DirtiesContext
+// boundaries — the next class's consumer replays prior class events
+// (CrossTenantVelocity 50 / DlqRouting poison pills) and exhausts the test await
+// before reaching its own messages. Real fix needs deeper Spring Kafka work
+// (per-class group, AckMode tweaks, or topic isolation).
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")

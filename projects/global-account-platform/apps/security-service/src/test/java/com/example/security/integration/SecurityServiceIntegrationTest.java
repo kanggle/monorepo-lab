@@ -33,15 +33,17 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// TASK-MONO-046-2: envelope tenantId fix verified syntactically, but events are still
-// not consumed in CI — same root cluster as DetectionE2E / PiiMasking / DlqRouting.
-// Deferred until consumer behaviour is restored.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 3: @DirtiesContext(AFTER_CLASS) forces sequential teardown so
+// the 7 @KafkaListener consumers in this context release their group membership
+// before the next IT class boots — multi-context concurrency was overloading the
+// cp-kafka:7.6.0 broker's group coordinator and pushing first-test consumer
+// startup past the 15s test awaits.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076/078).

@@ -40,14 +40,14 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-2: security-service Kafka consumer does not process events in CI.
-// Test was already failing for the same reason before TASK-MONO-046; envelope tenantId
-// fix was insufficient. Deferred until consumer behaviour is restored.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
+// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076).

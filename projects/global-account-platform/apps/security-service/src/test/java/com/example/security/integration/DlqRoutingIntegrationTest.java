@@ -41,14 +41,14 @@ import static org.awaitility.Awaitility.await;
  * path routes poison-pill payloads to {@code <topic>.dlq} after the configured
  * retry budget, while the original listener container remains healthy.
  */
-// TASK-MONO-046-2: security-service Kafka consumer pipeline does not process events
-// in CI — DLT routing depends on the listener container actually invoking processEvent.
-// Same root cluster as DetectionE2E / SecurityServiceIntegrationTest / PiiMasking.
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: security-service Kafka consumer not processing events in CI")
+// TASK-MONO-046-2 Phase 4: kept disabled — same cross-class consumer-group offset leak
+// as the other deferred IT classes. See CrossTenantVelocityIntegrationTest for details.
+@org.junit.jupiter.api.Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
     // MySQL + Kafka inherited from AbstractIntegrationTest (TASK-BE-076).

@@ -37,12 +37,11 @@ import org.springframework.stereotype.Component;
 public class AccountDeletedAnonymizedConsumer {
 
     private static final String TOPIC = "account.deleted";
-    private static final String GROUP_ID = "security-service";
 
     private final ObjectMapper objectMapper;
     private final PiiMaskingService piiMaskingService;
 
-    @KafkaListener(topics = TOPIC, groupId = GROUP_ID)
+    @KafkaListener(topics = TOPIC, groupId = "${security.consumer.group-id:security-service}")
     public void onMessage(ConsumerRecord<String, String> record) {
         try {
             JsonNode root = objectMapper.readTree(record.value());

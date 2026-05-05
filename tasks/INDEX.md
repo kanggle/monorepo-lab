@@ -105,7 +105,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-1-auth-service-sas-deferred-12.md` — **046 § Failure Scenario B 분리** (선행=046). 046 PR 가 security-service 19 건은 deterministic root cause 5 cluster 로 종결 (CrossTenantVelocity max-attempts validation, PiiMasking VARCHAR(36) truncation, LoginHistoryImmutability tenant_id NOT NULL, SecurityServiceIntegrationTest tenantId envelope, DetectionE2E tenantId envelope) 했으나, auth-service 12 건은 SAS 1.4.1 + JpaRegisteredClientRepository tracing 영역 — Docker 환경 reproduce 필요. 046 PR 에서 12 건 모두 `@Disabled("TASK-MONO-046-1: ...")` 마킹. 본 task 머지 시 `@Disabled` 제거 + 실제 fix → 60/60 PASS. 분석=Opus 4.7 / 구현 권장=Opus.
 
-- `TASK-MONO-046-2-security-service-kafka-consumer.md` — **046 첫 CI 검증 후 발견된 신규 cluster** (선행=046). 046 PR 의 schema/validation/fixture fix 가 LoginHistoryImmutability 2 + CrossTenantVelocity context init 1 + PiiMasking truncation 의 INSERT 단계만 회복시켰고, 17건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 6 + SecurityServiceIntegrationTest 5) 은 동일 root cluster — **security-service @KafkaListener 가 events 를 처리하지 않음** — 으로 잔존. 046 PR 에서 5 IT class `@Disabled("TASK-MONO-046-2: ...")` 마킹. 가설: ConsumerFactory MeterRegistry 의존, group rebalance timeout, AckMode 회귀, ErrorHandlingDeserializer chain. WSL Docker 환경 reproduce 필요. 분석=Opus 4.7 / 구현 권장=Opus — Spring Kafka + Testcontainers + DirtiesContext 상호작용.
+- `TASK-MONO-046-3-security-kafka-consumer-group-isolation.md` — **046-2 Phase 5 follow-up** (선행=046-2). 046-2 의 Phase 1-4 진단 후 11건 (CrossTenantVelocity 1 + DetectionE2E 1 + DlqRouting 4 + PiiMasking 5) 은 동일 root cause — **cross-class consumer-group offset leak** — 으로 잔존. PR #228 에서 4 IT class `@Disabled("TASK-MONO-046-2: cross-class consumer-group offset leak")` 마킹. 권장 fix: per-class consumer group via @DynamicPropertySource lambda capture + `spring.kafka.listener.ack-mode: record` (test profile). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
@@ -113,7 +113,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-046-2-security-service-kafka-consumer.md` — PR #228. 17건 중 6건 회복 (SecurityServiceIntegrationTest 6/6, solo execution 으로 PASS). Phase 1 logback `test` 프로파일 매칭 추가 → 진단 가시성 회복. Phase 2 `@KafkaListener.groupId` 외부화 (production code 보전). Phase 3 `@DirtiesContext(AFTER_CLASS)` (4 IT class). Phase 4 4 IT class 재 `@Disabled` (root cause 가 다른 영역으로 이전 — TASK-MONO-046-3 후속). Real root cause: shared "security-service" group 이 multi-class @DirtiesContext 경계를 넘어 uncommitted offsets leak → 새 클래스가 이전 클래스의 events replay → Redis (stop된 testcontainer) 호출 실패 → DLQ → timeout. GAP Integration Job pass 1m51s, run `25388371565`.
 
 ## done
 

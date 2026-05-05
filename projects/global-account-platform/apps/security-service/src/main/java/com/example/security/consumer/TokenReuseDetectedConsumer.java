@@ -21,7 +21,7 @@ public class TokenReuseDetectedConsumer extends AbstractAuthEventConsumer {
         super(objectMapper, dedupService, recordLoginHistoryUseCase, detectUseCase);
     }
 
-    @KafkaListener(topics = "auth.token.reuse.detected", groupId = "security-service")
+    @KafkaListener(topics = "auth.token.reuse.detected", groupId = "${security.consumer.group-id:security-service}")
     public void onMessage(ConsumerRecord<String, String> record) {
         processEvent(record, LoginOutcome.TOKEN_REUSE);
     }
