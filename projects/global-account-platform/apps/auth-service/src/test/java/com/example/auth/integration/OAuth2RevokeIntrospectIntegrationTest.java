@@ -189,9 +189,10 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
     // 4. authorization_code flow → revoke refresh_token → introspect → inactive
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046: refresh_token absent from authCode response — same root cause as
-    // OAuth2RefreshTokenIntegrationTest. Deferred to TASK-MONO-046-1 (SAS tracing).
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: SAS refresh_token grant tracing")
+    // TASK-MONO-046-7 Cluster A: public-client revocation of refresh_token returns 401.
+    // SAS /oauth2/revoke requires client authentication; public client (demo-spa-client)
+    // fails because stock converter does not authenticate client_id-only revoke requests.
+    @Disabled("TASK-MONO-046-7: Cluster A deferred")
     @Test
     @Order(4)
     @DisplayName("authCode flow: issue refresh_token → revoke → introspect → active=false")

@@ -290,10 +290,10 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
     // 4. /oauth2/userinfo — access token → OIDC claims + tenant_id
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046: userinfo claims missing tenant_id — same root cause cluster
-    // as OAuth2RefreshToken (SAS-side OIDC userinfo customization tracing).
-    // Deferred to TASK-MONO-046-1.
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: SAS OIDC userinfo claim tracing")
+    // TASK-MONO-046-7 Cluster B: /oauth2/userinfo response missing tenant_id claim.
+    // SAS UserInfo endpoint does not automatically include custom JWT claims; requires
+    // OidcUserInfoMapper wiring investigation.
+    @Disabled("TASK-MONO-046-7: Cluster B deferred")
     @Test
     @Order(4)
     @DisplayName("userinfo: valid access_token → 200 with sub + email + tenant_id")

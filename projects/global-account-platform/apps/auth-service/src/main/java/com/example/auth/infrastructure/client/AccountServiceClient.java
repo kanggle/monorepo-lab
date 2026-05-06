@@ -9,7 +9,9 @@ import com.example.common.resilience.ResilienceClientFactory;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -33,17 +35,95 @@ import java.util.function.Supplier;
 @Component
 public class AccountServiceClient implements AccountServicePort {
 
-    private final RestClient restClient;
+    /** Property key for the account-service base URL. */
+    static final String BASE_URL_PROPERTY = "auth.account-service.base-url";
+
+    private final Environment environment;
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
 
+    /**
+     * Cached {@link RestClient} keyed by base URL string. The base URL is resolved
+     * from {@link Environment} on every call rather than captured at construction
+     * time. This avoids stale URLs when integration tests share a Spring context
+     * via {@code ContextCache} but each test class registers a different
+     * {@link org.springframework.test.context.DynamicPropertySource} value
+     * (TASK-MONO-046-1 Cluster C / TASK-MONO-044c-1 RC#2 residue).
+     *
+     * <p>Production runtimes use a single static base URL, so the cache only ever
+     * holds one entry; the lookup-and-build cost is negligible.
+     */
+    private volatile String cachedBaseUrl;
+    private volatile RestClient cachedRestClient;
+
+    @Autowired
     public AccountServiceClient(
-            @Value("${auth.account-service.base-url}") String baseUrl,
+            Environment environment,
             @Value("${auth.account-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${auth.account-service.read-timeout-ms:5000}") int readTimeoutMs) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+        this.environment = environment;
+        this.connectTimeoutMs = connectTimeoutMs;
+        this.readTimeoutMs = readTimeoutMs;
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
         this.retry = ResilienceClientFactory.buildRetry("accountService");
+    }
+
+    /**
+     * Test-only constructor that pins a single {@code baseUrl} without going through
+     * {@link Environment}. Used by {@code AccountServiceClientUnitTest} which builds
+     * the client outside of a Spring context.
+     *
+     * <p>Production code uses the {@link Environment}-based constructor and therefore
+     * benefits from the lazy URL resolution that Cluster C of TASK-MONO-046-1 added.
+     */
+    public AccountServiceClient(String baseUrl, int connectTimeoutMs, int readTimeoutMs) {
+        this.environment = null;
+        this.connectTimeoutMs = connectTimeoutMs;
+        this.readTimeoutMs = readTimeoutMs;
+        this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
+        this.retry = ResilienceClientFactory.buildRetry("accountService");
+        this.cachedBaseUrl = baseUrl;
+        this.cachedRestClient = ResilienceClientFactory.buildRestClient(
+                baseUrl, connectTimeoutMs, readTimeoutMs);
+    }
+
+    /**
+     * Resolves the {@link RestClient} bound to the current value of
+     * {@code auth.account-service.base-url}. If the property changes between
+     * calls (e.g. integration test contexts), a fresh {@link RestClient} is
+     * built; otherwise the cached instance is reused.
+     */
+    private RestClient restClient() {
+        // Test-only constructor pinned a RestClient without an Environment — use it.
+        if (environment == null) {
+            RestClient pinned = this.cachedRestClient;
+            if (pinned == null) {
+                throw new IllegalStateException(
+                        "Test-only AccountServiceClient created without baseUrl");
+            }
+            return pinned;
+        }
+        String baseUrl = environment.getProperty(BASE_URL_PROPERTY);
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalStateException(
+                    "Required property '" + BASE_URL_PROPERTY + "' is not set");
+        }
+        RestClient existing = this.cachedRestClient;
+        if (existing != null && baseUrl.equals(this.cachedBaseUrl)) {
+            return existing;
+        }
+        synchronized (this) {
+            if (this.cachedRestClient != null && baseUrl.equals(this.cachedBaseUrl)) {
+                return this.cachedRestClient;
+            }
+            RestClient fresh = ResilienceClientFactory.buildRestClient(
+                    baseUrl, connectTimeoutMs, readTimeoutMs);
+            this.cachedBaseUrl = baseUrl;
+            this.cachedRestClient = fresh;
+            return fresh;
+        }
     }
 
     @Override
@@ -74,7 +154,7 @@ public class AccountServiceClient implements AccountServicePort {
             // account-service returns { accountId, status, statusChangedAt } — map the
             // "status" field onto our port's accountStatus slot.
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.get()
+            Map<String, Object> body = restClient().get()
                     .uri("/internal/accounts/{id}/status", accountId)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
@@ -139,7 +219,7 @@ public class AccountServiceClient implements AccountServicePort {
                     "displayName", displayName != null ? displayName : ""
             );
 
-            return restClient.post()
+            return restClient().post()
                     .uri("/internal/accounts/social-signup")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(requestBody)
@@ -181,7 +261,7 @@ public class AccountServiceClient implements AccountServicePort {
             // account-service returns:
             //   { accountId, email, emailVerified, displayName, preferredUsername, locale,
             //     tenantId, tenantType }
-            Map<String, Object> body = restClient.get()
+            Map<String, Object> body = restClient().get()
                     .uri("/internal/accounts/{id}/profile", accountId)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {

@@ -61,10 +61,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
 // AccountServiceClient bean URL must be rebuilt per class to track this
 // class's WireMock instance.
-// TASK-MONO-046: 6/7 tests fail (refresh_token absent from token response) — deferred
-// to TASK-MONO-046-1 per task spec § Failure Scenarios B (SAS 1.4.1 +
-// JpaRegisteredClientRepository tracing requires Docker reproduction; out of scope here).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-1: SAS refresh_token grant tracing")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -203,6 +199,10 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 2. Normal rotation: refresh_token → new access + refresh token
     // -----------------------------------------------------------------------
 
+    // TASK-MONO-046-7 Cluster A: public-client refresh_token grant returns 401 invalid_client.
+    // SAS stock PublicClientAuthenticationConverter only matches authorization_code+PKCE flows,
+    // not refresh_token grant — requires deeper SAS authentication converter investigation.
+    @Disabled("TASK-MONO-046-7: Cluster A deferred")
     @Test
     @Order(2)
     @DisplayName("refresh_token grant: normal rotation → new tokens, old RT revoked in domain store")
@@ -279,6 +279,9 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 4. Reuse detection: same refresh_token used twice → invalid_grant
     // -----------------------------------------------------------------------
 
+    // TASK-MONO-046-7 Cluster A: depends on Order=2 rotation which is also deferred.
+    // Reuse detection test cannot run until public-client RT grant authentication is fixed.
+    @Disabled("TASK-MONO-046-7: Cluster A deferred")
     @Test
     @Order(4)
     @DisplayName("reuse detection: reusing a rotated refresh_token → 400 invalid_grant")

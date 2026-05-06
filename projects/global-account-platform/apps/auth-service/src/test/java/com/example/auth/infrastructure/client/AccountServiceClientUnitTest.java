@@ -49,7 +49,10 @@ class AccountServiceClientUnitTest {
                 .baseUrl(wireMockServer.baseUrl())
                 .requestFactory(new JdkClientHttpRequestFactory(jdkHttp11))
                 .build();
-        ReflectionTestUtils.setField(client, "restClient", http11RestClient);
+        // TASK-MONO-046-1 Cluster C: AccountServiceClient now caches the RestClient
+        // under the field {@code cachedRestClient}, keyed by base URL. Override that
+        // field with our HTTP/1.1 client so WireMock serves stubs predictably.
+        ReflectionTestUtils.setField(client, "cachedRestClient", http11RestClient);
     }
 
     @AfterEach

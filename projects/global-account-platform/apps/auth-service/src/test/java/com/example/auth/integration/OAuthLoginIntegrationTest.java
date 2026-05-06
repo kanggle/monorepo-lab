@@ -64,11 +64,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code DeviceSessionIntegrationTest} — every class that owns its own
  * WireMock and overrides {@code auth.account-service.base-url}.
  */
-// TASK-MONO-046-1: OAuth social-login callback regression cluster — every test that
-// reaches AccountServiceClient via WireMock fails (status assertions). Class-level
-// disable until 046-1 root cause confirmed (initial 4 method-level markers expanded
-// after 2nd CI run revealed `microsoftExistingEmailAutoLink` regressing too).
-@org.junit.jupiter.api.Disabled("TASK-MONO-046-1: OAuth social-login callback regression")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -178,9 +173,10 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Happy-path tests per provider
     // ----------------------------------------------------------------------
 
-    // TASK-MONO-046: callback returns non-200 — root cause unconfirmed without local
-    // Docker repro. Deferred to TASK-MONO-046-1.
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: OAuth social-login callback regression")
+    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — WireMock stub
+    // registration or account-service downstream call does not complete successfully.
+    // Requires investigation of the full authorize→callback→social-signup flow.
+    @Disabled("TASK-MONO-046-7: Cluster C deferred")
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -200,7 +196,8 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: OAuth social-login callback regression")
+    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
+    @Disabled("TASK-MONO-046-7: Cluster C deferred")
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -237,7 +234,8 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: OAuth social-login callback regression")
+    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
+    @Disabled("TASK-MONO-046-7: Cluster C deferred")
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -255,7 +253,8 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-ms-003", "OAUTH_MICROSOFT");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-1: OAuth social-login callback regression")
+    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
+    @Disabled("TASK-MONO-046-7: Cluster C deferred")
     @Test
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
@@ -278,6 +277,10 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Existing-email auto-link scenario
     // ----------------------------------------------------------------------
 
+    // TASK-MONO-046-7 Cluster C: OAuth callback non-200 — same root cause as
+    // the 4 sibling OAuthLogin happy-path tests already deferred. Method-level
+    // disable per the partial-recovery pattern (046-1 → 046-7).
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7: OAuth callback regression (existing-email auto-link)")
     @Test
     @DisplayName("Microsoft: existing email → isNewAccount false, social_identities created on existing account")
     void microsoftExistingEmailAutoLink() throws Exception {
