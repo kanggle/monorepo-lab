@@ -42,11 +42,12 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-6: DLQ ClassCast fix (046-4) eliminated CCE but uncovered a consumer-pipeline
-// timing issue — 10 auth.login.failed events do not produce a suspicious_events row within 30s
-// in CI. This is unrelated to serialization; root cause is likely burst-saturation or
-// auto-offset-reset race. Deferred to TASK-MONO-046-6 for diagnosis and re-enablement.
-@Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")
+// TASK-MONO-046-6 Phase 1 disproved simple timing: 60s timeout (up from 30s) did NOT help — all
+// still failed at 60s. Root cause is NOT cold-start jitter. Likely consumer commits offset before
+// VelocityRule completes (offset race), OR Redis counter gets reset between Spring contexts, OR
+// auto-offset-reset=latest wins a race despite waitForAssignment. Requires Docker reproduce to
+// inspect Kafka offsets and Redis counter state at runtime. Deferred to TASK-MONO-046-8.
+@Disabled("TASK-MONO-046-8: burst-timing deferred from 046-6")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
