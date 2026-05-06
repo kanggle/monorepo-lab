@@ -28,13 +28,16 @@ subprojects {
     // negotiates Docker API version 1.32 — rejected by modern dockerd implementations
     // (Rancher Desktop's dockerd requires minimum API 1.41). 1.21.3 ships docker-java
     // 3.4.x with newer default API version compatible with Rancher / Colima / Docker
-    // Desktop 4.36+. resolutionStrategy.eachDependency is required because plain BOM
-    // import does not override Spring Boot's strong constraint.
+    // Desktop 4.36+. resolutionStrategy.force is stronger than eachDependency and
+    // overrides Spring Boot's dependency-management constraint.
     configurations.all {
-        resolutionStrategy.eachDependency { details ->
-            if (details.requested.group == 'org.testcontainers') {
-                details.useVersion '1.21.3'
-            }
+        resolutionStrategy {
+            force 'org.testcontainers:testcontainers:1.21.3'
+            force 'org.testcontainers:mysql:1.21.3'
+            force 'org.testcontainers:kafka:1.21.3'
+            force 'org.testcontainers:junit-jupiter:1.21.3'
+            force 'org.testcontainers:database-commons:1.21.3'
+            force 'org.testcontainers:jdbc:1.21.3'
         }
     }
 
