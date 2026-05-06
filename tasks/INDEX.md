@@ -107,8 +107,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
 
-- `TASK-MONO-047-template-extraction-readiness-and-plan.md` — Phase 5 (Template 레포 추출) 진입 게이팅 + tooling. (1) `scripts/extract-template.sh <target-dir>` 신설 — dry-run/init-git flag, shared library 트리 + 빈 single-project shell 생성. (2) `scripts/verify-template-readiness.sh` 신설 — boundary check (현재 false-positive refine), Phase 4 outstanding (SCM-BE-002d / SCM-INT-001) done/ 검증, 1-month no-churn gate, CI baseline green, 모든 PROJECT.md 유효성. (3) TEMPLATE.md § Phase 5 본문을 script pointer + readiness narrative 로 trim. Phase 5 실 추출 자체는 out-of-scope — readiness 충족 시 별도 ADR-MONO-003 candidate. 본 task 는 Docker 무관 (libs/ 본문 변경 0). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (단순 bash + doc).
-
 ## in-progress
 
 (empty)
@@ -118,6 +116,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-047-template-extraction-readiness-and-plan.md` — PR #250 (spec) + PR #251 (impl) + chore PR. Phase 5 (Template 레포 추출) 진입 게이팅 tooling 완성. **scripts/extract-template.sh** 697 lines (dry-run/init-git/verbose flags, 348 files / 5.12 MB extraction 검증, source SHA 임베드 commit) + **scripts/verify-template-readiness.sh** 391 lines (6-check gate: boundary scan with intentional-occurrence excludes / Phase 4 outstanding done/ 검증 / no-churn 1-month gate / CI baseline green via gh / PROJECT.md frontmatter 유효성 / PORT_PREFIX legacy). TEMPLATE.md § Phase 5 Detail body trimmed to script pointers + readiness narrative; § Validation block 갱신. 현 monorepo state 에서 `verify-template-readiness.sh --no-git` 가 정확히 2 blocker 잡음 (Phase 4 outstanding 2 ready/ + ecommerce playwright config dead PORT_PREFIX 주석). 후속 candidate: Check 6 정교화 (live `=` assignment + `${...}` interpolation 만 매치, history doc/주석 제외) + ecommerce playwright config dead-comment cleanup. **Phase 5 actual 추출 자체는 ADR-MONO-003 candidate 발행 후 별 task 로 진행** (verify-template-readiness exit 0 시점). 분석=Opus 4.7 / 구현=Sonnet 4.6. 2026-05-07.
 
 - `TASK-MONO-046-6-consumer-pipeline-burst-timing.md` — PR #236. Phase 1 conservative timing fix (CrossTenantVelocity / DetectionE2E awaitility 30s → 60s + DlqRouting byte[] DLPR path verified structurally OK in spring-kafka source) — 3 test 모두 60s 에서도 fail 으로 timing 단순 이슈 아님 확정. Phase 1 변경 revert + 3 method `@Disabled("TASK-MONO-046-8: ...")` redisable. 진단 가치: timing extension 가설 deterministically 반증 → 046-8 가 deeper 조사 (consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation). GAP Integration Job pass 2m11s, run `25414117559`. 17/20 PASS / 0 FAIL / 3 skipped. 2026-05-06.
 
