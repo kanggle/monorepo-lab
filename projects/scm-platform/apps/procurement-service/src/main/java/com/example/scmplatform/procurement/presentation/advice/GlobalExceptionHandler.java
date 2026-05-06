@@ -23,6 +23,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -167,6 +168,23 @@ public class GlobalExceptionHandler {
         log.warn("illegal state at controller boundary", e);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("ILLEGAL_STATE", e.getMessage()));
+    }
+
+    /**
+     * Pass-through for {@link ResponseStatusException} (e.g. webhook signature
+     * failures thrown inline in controllers). Without this handler the catch-all
+     * {@code handleGeneral} intercepts it and returns 500 instead of the
+     * intended status code.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorBody> handleResponseStatus(ResponseStatusException e) {
+        int status = e.getStatusCode().value();
+        String code = status == 401 ? "UNAUTHORIZED"
+                : status == 403 ? "PERMISSION_DENIED"
+                : "REQUEST_ERROR";
+        String reason = e.getReason() != null ? e.getReason() : e.getMessage();
+        return ResponseEntity.status(status)
+                .body(ApiErrorBody.of(code, reason));
     }
 
     @ExceptionHandler(Exception.class)
