@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-068 | admin-dashboard 의 SSR `API_URL_INTERNAL` fallback 추가 — web-store 와 정합성. axios baseURL 결정 로직을 web-store 와 1:1 동일하게 (SSR=internal→public→localhost, client=public→localhost). docker-compose / k8s manifest / .env.example 의 admin-dashboard env 에 `API_URL_INTERNAL` 노출. 단위 테스트 4개 + frontend-unit-tests CI 통과. TASK-FE-067 cutover 의 follow-up candidate (done 표에 명시). 선행=FE-067 (done). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단일 파일 textual diff + 단위 테스트. | admin-dashboard, web-store (테스트 답습) | code, bug |
+| _(없음)_ | | | |
 
 ## in-progress
 
@@ -88,6 +88,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-068 | admin-dashboard SSR `API_URL_INTERNAL` fallback — web-store 와 정합성. PR #238 머지. axios baseURL 결정 로직 SSR/CSR 분기 (`typeof window === 'undefined'` 가드): SSR=`API_URL_INTERNAL ?? NEXT_PUBLIC_API_URL ?? localhost:8080`, CSR=`NEXT_PUBLIC_API_URL ?? localhost:8080`. web-store 와 1:1 일치. docker-compose admin-dashboard env 에 `API_URL_INTERNAL=http://gateway-service:8080` 추가. `.env.example` 주석 갱신. vitest 4-case 양쪽 (admin-dashboard + web-store drift 회귀 방지) 추가. CI green: frontend lint+build 2m9s, unit tests 2m25s, e2e smoke 2m42s, ecommerce boot jars 53s. 2026-05-06. | admin-dashboard, web-store | code, bug |
 | TASK-BE-132 | ecommerce auth-service 컴포넌트 폐기 — docker-compose / k8s (services + network-policies + secrets + gateway env) / settings.gradle / CI (build-and-test + boot-jars + frontend-e2e) / .env / spec (services rename + auth-api/auth-events/features deprecated). PR #150 (`chore(ecommerce): TASK-BE-132`) 머지. apps/auth-service/ 소스는 보존 (settings.gradle 에서만 제외). follow-up: TASK-MONO-028 candidate — sync-portfolio.sh standalone v1 freeze policy + AUTH_SECRET grep + done task 깨진 spec 경로 cleanup. 2026-05-04. | auth-service (제거), gateway-service, infra | code, security |
 | TASK-FE-067 | web-store + admin-dashboard 의 GAP OIDC cutover — NextAuth v5 신규 도입 + 자체 auth flow 폐기 + sync-portfolio.sh exclusion. PR #148 (`feat(ecommerce)!: TASK-FE-067`) 머지. signIn callback 으로 account_type_mismatch URL 전파 + sync exclusion 7건. follow-up: TASK-BE-132 (auth-service 컴포넌트 폐기), 별도 admin-dashboard SSR baseURL fallback (TASK-FE-068 candidate). 2026-05-04. | web-store, admin-dashboard, packages/api-client | code, security, api, breaking |
 | TASK-BE-131 | ecommerce gateway-service JWT 검증 방식을 HS256 → JWKS/RSA(RS256)로 교체 | gateway-service | code, security, test |
