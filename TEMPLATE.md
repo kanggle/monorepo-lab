@@ -710,18 +710,18 @@ Integration detail: [specs/integration/gap-integration.md](specs/integration/gap
 
 ## Template Extraction (Phase 5 Detail)
 
-_Exact scripts to be authored when Phase 5 approaches. This section is a sketch._
+Two scripts implement Phase 5. Run `scripts/verify-template-readiness.sh` first; if it exits 0, run `scripts/extract-template.sh <target-dir>` to produce the template repo.
 
-`scripts/extract-template.sh <target-dir>` will:
+Run `scripts/verify-template-readiness.sh` periodically (e.g., monthly) to track readiness. When it exits 0, raise an ADR-MONO-003 candidate to decide the Phase 5 trigger; on approval, run `scripts/extract-template.sh <target-dir>` to produce the template repo, then push `<target-dir>` to a new GitHub repository and enable "Template repository" in repo settings.
 
-1. Copy every shared library path (`.claude/`, `platform/`, `rules/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`, Gradle root files, `.git*` dotfiles) to `<target-dir>`.
-2. Create an empty single-project shell: `apps/`, `specs/contracts/{http,events}/`, `specs/services/`, `specs/features/`, `specs/use-cases/`, `tasks/{ready,in-progress,review,done,archive}/`, `knowledge/`, `docs/`, `infra/` — each with a `.gitkeep`.
-3. Write a `PROJECT.md.example` (not `PROJECT.md`) so users customize before committing.
-4. Replace `settings.gradle` with a flat single-project version.
-5. Write a new `README.md` marking the repo as a template.
-6. `git init && git add -A && git commit -m "initial template from <monorepo-commit-sha>"`.
+### Readiness checks (automated by verify-template-readiness.sh)
 
-Until Phase 5, this section is preparation only.
+1. **Boundary check** — no project-specific service names in shared library paths (`platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`). Known false-positive paths excluded automatically; additional paths suppressed via `--ignore=<path>` with audit logging.
+2. **Phase 4 outstanding** — `TASK-SCM-BE-002d` and `TASK-SCM-INT-001` must be in `projects/scm-platform/tasks/done/`.
+3. **No-churn 1-month gate** — no non-tooling commits to shared library paths in the last calendar month.
+4. **CI baseline green** — latest `main` `ci.yml` run must report `success` (checked via `gh` CLI; skipped with `--no-git` or if `gh` is unavailable).
+5. **All projects PROJECT.md valid** — required frontmatter fields present and `domain`/`traits` values in `rules/taxonomy.md`.
+6. **No PORT_PREFIX legacy** — no `PORT_PREFIX` references under `projects/`.
 
 ---
 
@@ -775,29 +775,27 @@ Project-level ADRs live in `projects/<name>/docs/adr/`. The most significant pro
 
 ## Validation
 
-After any significant change, verify:
+After any significant change, run:
 
 ```bash
-# Shared library has no project-specific references
-grep -rE "(auth-service|product-service|order-service|payment-service)" platform/ rules/ .claude/ libs/ tasks/templates/ docs/guides/ 2>/dev/null
-# Expected: no matches
+# Full template-extraction readiness check (boundary + Phase 4 + no-churn + CI + PROJECT.md + PORT_PREFIX)
+bash scripts/verify-template-readiness.sh
+# Exit 0 = READY; non-zero = number of blockers.
+# Suppress a known false-positive: --ignore=<path>
+# Skip git-dependent checks offline: --no-git
 
-# Gradle sees the expected project structure
+# Gradle sees the expected project structure (still useful for build verification)
 ./gradlew projects
 
-# Each project has a PROJECT.md
-find projects -maxdepth 2 -name PROJECT.md
-
-# No PORT_PREFIX references in any project (hostname routing enforced)
-grep -rn "PORT_PREFIX" projects/ 2>/dev/null
-# Expected: no matches
-
 # Each active project has Traefik labels in docker-compose.yml
-for p in wms-platform ecommerce-microservices-platform global-account-platform fan-platform; do
+for p in wms-platform ecommerce-microservices-platform global-account-platform fan-platform scm-platform; do
   echo "=== $p ==="
   grep -A2 "traefik.enable" projects/$p/docker-compose.yml 2>/dev/null || echo "MISSING Traefik labels"
 done
 ```
+
+`verify-template-readiness.sh` automates the checks that were previously manual greps
+(boundary check, PORT_PREFIX, PROJECT.md fields). Run it instead of running those greps by hand.
 
 AI-based validation: `.claude/commands/validate-rules.md` (if present).
 
