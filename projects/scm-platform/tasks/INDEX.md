@@ -78,8 +78,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-002c-procurement-slice-tests.md` — TASK-SCM-BE-002b Phase 4 분리. `@WebMvcTest` 3 controllers (PurchaseOrder/AsnWebhook/SupplierAckWebhook) ≥ 12 tests + `@DataJpaTest` 5 repos ≥ 5 tests. ActorContextResolver 정적 호출은 `MockedStatic` 또는 `TestingAuthenticationToken` 으로 SecurityContextHolder 직접 setup. H2 Flyway 호환 안 될 시 JPA slice 는 002d (IT) 로 통합. Docker 무관. 분석=Opus 4.7 / 구현 권장=Sonnet.
-
 - `TASK-SCM-BE-002d-procurement-testcontainers-it.md` — TASK-SCM-BE-002b Phase 5 분리. Testcontainers IT ≥ 7 (multi-tenant isolation / outbox relay / supplier circuit breaker / supplier idempotency / state machine atomicity / asn overreceipt / audit log). 선결: Docker Desktop 4.36+ socket 회귀 해결 (memory `project_testcontainers_docker_desktop_blocker.md`). CI Linux runner 정상 동작이라 local 차단 시 PR CI 만으로도 진행 가능. 분석=Opus 4.7 / 구현 권장=Sonnet.
 
 ## in-progress
@@ -91,6 +89,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-SCM-BE-002c-procurement-slice-tests.md` — PR #247. Phase 4 slice tests 추가. `@WebMvcTest` 3 controllers: PurchaseOrderControllerSliceTest 11 + AsnWebhookControllerSliceTest 4 + SupplierAckWebhookControllerSliceTest 4 = **20 slice tests**. + GlobalExceptionHandler small fix (`ResponseStatusException` 핸들러 부재로 webhook 401 이 catch-all 의 500 INTERNAL_ERROR 로 잘못 매핑되던 버그 — handler + test 1건 추가, 별 commit). H2 Flyway 호환 결과 **FAIL** — V1__init.sql 가 PostgreSQL syntax (JSONB/TIMESTAMPTZ/BYTEA/BIGSERIAL) → JPA slice 는 002d (Testcontainers IT) 로 통합. Security context 패턴: `TestingAuthenticationToken` + SecurityContextHolder 직접 + `@AutoConfigureMockMvc(addFilters=false)` (MockedStatic 불필요). 누적 procurement-service tests = 121 (002b 101 + 002c 20). 2026-05-06.
 
 - `TASK-SCM-BE-002b-procurement-test-pyramid.md` — PR #243 + #244 + #245. procurement-service test pyramid 1차 완료 (TASK-SCM-BE-002 production code 후속). **101 tests 누적**: Phase 1 domain unit 64 (PoStatusMachine 49 — full transition matrix per actor + terminal/self-transition guards + linear lifecycle, Money VO 15 — factory normalization + null/negative/length validation + add() currency match) + Phase 2 application unit 16 (PurchaseOrderApplicationServiceTest — 6 commands × happy + edge, Mockito strict-safe with `lenient()`) + Phase 3 GlobalExceptionHandler 21 (모든 exception → ApiErrorBody status code 매핑 검증, direct unit test no Spring context). Phase 4 (slice WebMvcTest) → TASK-SCM-BE-002c 분리. Phase 5 (Testcontainers IT) → TASK-SCM-BE-002d 분리 (Docker fix 후). production code 무변경. CI Build & Test all PASS. 2026-05-06.
 
