@@ -4,17 +4,18 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright configuration for web-store full-stack E2E tests.
  *
  * Local usage: start the full stack with `docker compose up -d` from the
- * ecommerce-microservices-platform root (PORT_PREFIX defaults to 1, so
- * web-store is at localhost:13000 and gateway at localhost:18080).
- * Then run `pnpm e2e` or `pnpm --filter web-store run e2e`.
+ * ecommerce-microservices-platform root. Per ADR-MONO-001 (hostname routing
+ * via Traefik), production docker-compose.yml exposes services internally
+ * only — for direct host access during e2e the CI overlay re-publishes
+ * gateway-service on localhost:18080. Then run `pnpm e2e` or
+ * `pnpm --filter web-store run e2e` (override GATEWAY_PORT if needed).
  *
  * CI usage (frontend-e2e job, kanggle/monorepo-lab only): docker compose
- * boots the backend stack without the observability services; Playwright's
- * webServer starts web-store via `pnpm start` and points it at the gateway
- * on localhost:18080 (PORT_PREFIX=1 default).
+ * boots the backend stack with docker-compose.ci.yml overlay (host port
+ * 18080 published on gateway-service); Playwright's webServer starts
+ * web-store via `pnpm start` and points it at localhost:18080.
  */
 
-// PORT_PREFIX defaults to "1" in docker-compose.yml; gateway host port is 18080.
 const GATEWAY_URL = `http://localhost:${process.env.GATEWAY_PORT ?? '18080'}`;
 
 export default defineConfig({

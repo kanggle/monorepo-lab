@@ -357,18 +357,42 @@ if [ "$project_check_pass" = "1" ]; then
 fi
 
 # ───────────────────────── Check 6: No PORT_PREFIX legacy ─────────────────────────
+# Detects only LIVE PORT_PREFIX usage:
+#   - assignment:    PORT_PREFIX=value or PORT_PREFIX = value (line start, not in comment)
+#   - interpolation: ${PORT_PREFIX...} (active shell/template variable usage)
+#
+# Does NOT flag (intentional historical occurrences):
+#   - shell/yaml comments (lines starting with optional whitespace + '#')
+#   - markdown prose / code-block prose mentioning PORT_PREFIX historically
+#   - playwright/jest config block-comments documenting deprecated behavior
+#
+# Untracked files (e.g. local .env) are excluded by scanning git-tracked files only.
 
 printf '\n--- Check 6: No PORT_PREFIX legacy in projects/ ---\n'
 
-port_prefix_hits=$(grep -rn "PORT_PREFIX" projects/ \
-    --include='*.yml' --include='*.yaml' --include='*.env' \
-    --include='*.md' --include='*.sh' --include='*.properties' \
-    --include='*.txt' --include='*.conf' --include='*.gradle' \
-    --include='*.env.example' 2>/dev/null || true)
-if [ -z "$port_prefix_hits" ]; then
-    pass "No PORT_PREFIX references found under projects/."
+# Tracked files only (skip local .env etc.)
+tracked_files=$(git ls-files projects/ 2>/dev/null || true)
+
+port_prefix_hits=""
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    [ -f "$f" ] || continue
+    # Match live assignment OR interpolation, exclude lines whose first non-whitespace char is '#' or '*' or '//'
+    matches=$(grep -nE '(^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=|\$\{PORT_PREFIX|\$PORT_PREFIX[^A-Z_])' "$f" 2>/dev/null \
+        | grep -vE '^[0-9]+:[[:space:]]*(#|//|\*)' \
+        || true)
+    if [ -n "$matches" ]; then
+        while IFS= read -r m; do
+            [ -z "$m" ] && continue
+            port_prefix_hits+="$f:$m"$'\n'
+        done <<< "$matches"
+    fi
+done <<< "$tracked_files"
+
+if [ -z "$(echo "$port_prefix_hits" | tr -d '[:space:]')" ]; then
+    pass "No live PORT_PREFIX usage in tracked projects/ files."
 else
-    fail "PORT_PREFIX references found (should be replaced by Traefik hostname routing):"
+    fail "Live PORT_PREFIX usage found (should be replaced by Traefik hostname routing):"
     while IFS= read -r hit; do
         [ -z "$hit" ] && continue
         printf '        %s\n' "$hit"
