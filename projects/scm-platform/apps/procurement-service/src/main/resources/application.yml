@@ -1,0 +1,152 @@
+spring:
+  application:
+    name: scm-platform-procurement-service
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB_PROCUREMENT:scm_procurement}
+    username: ${POSTGRES_USER:scm}
+    password: ${POSTGRES_PASSWORD:scm}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/procurement
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 2147483647
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          # V0013 SQL seeded scm-platform OIDC client against GAP's standard
+          # /oauth2/jwks endpoint (TASK-MONO-035 alignment).
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.scmplatform.procurement: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} accountId=%X{accountId:-}]"
+
+outbox:
+  polling:
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+    enabled: true
+
+scmplatform:
+  oauth2:
+    # D2-b deprecation window: SAS issuer + legacy "global-account-platform" string.
+    # MUST stay byte-identical to gateway-service's allowed-issuers — if the
+    # gateway accepts an issuer that this service rejects, traffic flowing
+    # through the gateway gets a 401 here despite the gateway's green light
+    # (cross-service issuer drift). When changing this value, update
+    # projects/scm-platform/apps/gateway-service/src/main/resources/application.yml
+    # in the same commit.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
+  procurement:
+    supplier:
+      mock:
+        base-url: ${SUPPLIER_MOCK_BASE_URL:http://supplier-mock:9090}
+        connect-timeout-ms: ${SUPPLIER_CONNECT_TIMEOUT_MS:2000}
+        read-timeout-ms: ${SUPPLIER_READ_TIMEOUT_MS:10000}
+    crypto:
+      # 32-byte (256-bit) key for AES-GCM column-level encryption (S6).
+      # Dev default is intentionally weak; production deployments override
+      # via SUPPLIER_CREDENTIALS_KEY env var (vault integration is v2).
+      supplier-credentials-key: ${SUPPLIER_CREDENTIALS_KEY:scm-dev-supplier-credentials-key-32}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      supplier:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 5s
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  retry:
+    instances:
+      supplier:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        retry-exceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+  bulkhead:
+    instances:
+      supplier:
+        max-concurrent-calls: 20
+        max-wait-duration: 100ms

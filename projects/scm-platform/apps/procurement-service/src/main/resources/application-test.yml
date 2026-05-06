@@ -1,0 +1,39 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.datasource.* (PostgreSQL Testcontainer), spring.kafka.bootstrap-servers
+# (Kafka Testcontainer), spring.data.redis.host (Redis Testcontainer), and
+# spring.security.oauth2.resourceserver.jwt.jwk-set-uri (WireMock JWKS) via
+# @DynamicPropertySource. Slice tests substitute H2 in-memory.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/procurement
+    baseline-on-migrate: true
+
+outbox:
+  polling:
+    # Tighten the loop in tests so the relay reacts within an awaitility
+    # timeout. Disabled by default for slice/unit tests; integration tests
+    # explicitly enable it.
+    enabled: false
+    interval-ms: 200
+    batch-size: 50
+
+scmplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    required-tenant-id: scm
+  procurement:
+    supplier:
+      mock:
+        base-url: http://supplier-mock-test
+        connect-timeout-ms: 1000
+        read-timeout-ms: 2000
+    crypto:
+      supplier-credentials-key: scm-test-supplier-credentials-key-32
