@@ -84,7 +84,7 @@ One project in the monorepo (`wms-platform`). Focus on learning what's truly com
 
 ### Phase 3 — Third and Fourth Project ✅ (completed, 2026-05-03)
 
-`global-account-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). All 4 projects now co-exist:
+`global-account-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). 4 projects co-existed at this point:
 
 | Project | Domain | Integration style | Hostname |
 |---|---|---|---|
@@ -93,11 +93,40 @@ One project in the monorepo (`wms-platform`). Focus on learning what's truly com
 | global-account-platform | saas | direct-include | gap.local |
 | fan-platform | fan-platform | direct-include | fan-platform.local |
 
-"Rule of Three" baseline established. TASK-MONO-029~033 (공통규칙 정리 시리즈) completed the audit and stabilisation. Shared library is approaching Phase 4 readiness.
+"Rule of Three" baseline established. TASK-MONO-029~033 (공통규칙 정리 시리즈) completed the audit and stabilisation.
 
-### Phase 4 — Template Extraction (pending decision)
+### Phase 4 — Catalyst evaluation ✅ (entered 2026-05-04, 1차 evaluation completed 2026-05-06)
 
-When the library has been stable for a month+ with no churn, initiate extraction. Decision is the project owner's call — this document does not presuppose the timing.
+`scm-platform` joined as the 5th project (TASK-MONO-040 / 042 bootstrap, PR #185–#189) and serves as the **catalyst** for Phase 4 readiness — it stress-tests the shared library against a new combination of trait surfaces that prior projects did not exercise simultaneously.
+
+| Project | Domain | Traits | Integration style | Hostname |
+|---|---|---|---|---|
+| wms-platform | wms | transactional, integration-heavy | direct-include | wms.local |
+| ecommerce-microservices-platform | ecommerce | transactional | direct-include | ecommerce.local |
+| global-account-platform | saas | transactional, integration-heavy | direct-include | gap.local |
+| fan-platform | fan-platform | (none mandatory) | direct-include | fan-platform.local |
+| **scm-platform** (catalyst) | **scm** | **transactional, integration-heavy, batch-heavy** | direct-include | scm.local |
+
+scm-platform first stresses:
+
+- **`batch-heavy` trait first production usage** — `inventory-visibility-service` `@Scheduled` + ShedLock distributed lock + alert event publish (TASK-SCM-BE-003).
+- **Cross-project Kafka event consumption** — `inventory-visibility-service` consuming `wms.inventory.{received,adjusted,transferred}.v1` topics from a different project (TASK-SCM-BE-003 + TASK-SCM-INT-001 spec).
+- **`transactional` + `integration-heavy` simultaneous** — `procurement-service` PO state machine + outbox + supplier circuit breaker + retry+jitter + idempotency (TASK-SCM-BE-002).
+- **Library surface validation** — `libs:java-web-servlet` (split out by TASK-MONO-044a) and `libs:java-messaging` outbox both work in fresh domain without changes; first cross-domain library reuse since `libs/` consolidation.
+
+**1차 evaluation outcome (2026-05-06)**: 3 traits + cross-project event + GAP IdP integration + AES credential encryption all passed in production code. CI regression 0. Shared library required no project-specific patches. Test pyramid 121 procurement-service tests (BE-002b 101 + BE-002c 20 slice). E2E spec ready (TASK-SCM-INT-001).
+
+**Phase 4 outstanding** before declaring "ready for Template extraction":
+
+1. `TASK-SCM-BE-002d` — procurement Testcontainers IT ≥ 7 (selector blocked: Docker Desktop 4.36+ socket regression — see memory `project_testcontainers_docker_desktop_blocker.md`)
+2. `TASK-SCM-INT-001` — cross-service E2E ≥ 6 + `docker-compose.scm-e2e.yml` + nightly CI job (same Docker dependency)
+3. Stable period of ≥ 1 month with no shared-library churn after the above land
+
+Until the Docker dependency is resolved, the catalyst evaluation is **1차 complete but not full-cycle**. Template extraction (Phase 5) decision deferred until full-cycle complete.
+
+### Phase 5 — Template Extraction (pending Phase 4 outstanding)
+
+When the Phase 4 outstanding items land and the library has been stable for ≥ 1 month, initiate extraction. Decision is the project owner's call — this document does not presuppose the timing.
 
 1. Run `scripts/extract-template.sh <target-dir>` (to be authored):
    - Copy the shared library layer to `<target-dir>`.
@@ -108,7 +137,7 @@ When the library has been stable for a month+ with no churn, initiate extraction
 3. In GitHub repo settings, enable "Template repository".
 4. New projects use `Use this template` button to fork.
 
-### Phase 5 — Ongoing
+### Phase 6 — Ongoing
 
 - New projects start from the Template Repository (flat layout).
 - Dev monorepo continues to evolve; library improvements sync to the Template Repository periodically (monthly or on demand).
@@ -389,9 +418,9 @@ ls projects/<new-project>/.claude 2>&1                            # "No such fil
 
 ---
 
-## Starting a New Project from the Extracted Template (Phase 5+)
+## Starting a New Project from the Extracted Template (Phase 6+)
 
-_Applies once the Template Repository exists (Phase 4)._
+_Applies once the Template Repository exists (Phase 5)._
 
 1. Go to the Template Repository on GitHub.
 2. Click **Use this template → Create a new repository**.
@@ -679,9 +708,9 @@ Integration detail: [specs/integration/gap-integration.md](specs/integration/gap
 
 ---
 
-## Template Extraction (Phase 4 Detail)
+## Template Extraction (Phase 5 Detail)
 
-_Exact scripts to be authored when Phase 4 approaches. This section is a sketch._
+_Exact scripts to be authored when Phase 5 approaches. This section is a sketch._
 
 `scripts/extract-template.sh <target-dir>` will:
 
@@ -692,7 +721,7 @@ _Exact scripts to be authored when Phase 4 approaches. This section is a sketch.
 5. Write a new `README.md` marking the repo as a template.
 6. `git init && git add -A && git commit -m "initial template from <monorepo-commit-sha>"`.
 
-Until Phase 4, this section is preparation only.
+Until Phase 5, this section is preparation only.
 
 ---
 
@@ -780,13 +809,13 @@ AI-based validation: `.claude/commands/validate-rules.md` (if present).
 A: You don't know what's truly common until you see 3+ projects. Extracting prematurely embeds bias from the first project. The monorepo phase is a **discovery experiment** — only what actually gets reused across projects survives the "Rule of Three" filter into the eventual template.
 
 **Q: How is the monorepo different from just one big repo with everything?**
-A: The **shared/project boundary is strict and enforced** (via `CLAUDE.md` Hard Stop rules). Shared files stay project-agnostic. When you move a project's content out (for independent publication via `scripts/extract-project.sh`, Phase 4+), the shared library comes with it as a vendored snapshot. That's only clean if the boundary has been maintained.
+A: The **shared/project boundary is strict and enforced** (via `CLAUDE.md` Hard Stop rules). Shared files stay project-agnostic. When you move a project's content out (for independent publication via `scripts/sync-portfolio.sh`), the shared library comes with it as a vendored snapshot. That's only clean if the boundary has been maintained.
 
 **Q: Can I extract a single project now for a portfolio submission?**
 A: Yes, see the "Portfolio Submission" section in the dev workflow guides. Briefly: `git filter-repo --subdirectory-filter projects/<p>` plus copying the shared library into the extracted repo gives a standalone project repo. The dev monorepo stays as-is.
 
 **Q: When does the Template Repository actually get created?**
-A: Around Phase 4 — when the shared library has been stable through 3+ projects without churn. Until then, this `TEMPLATE.md` is preparation, not instructions.
+A: Around Phase 5 — when the shared library has been stable through the Phase 4 catalyst evaluation (currently 1차 complete; full-cycle pending Docker-blocked tests) plus an additional ≥ 1-month no-churn period. Until then, this `TEMPLATE.md` is preparation, not instructions.
 
 **Q: What if two projects need slightly different versions of the same rule?**
 A: Either (1) split into a more general base rule with project-specific extensions in `projects/<p>/specs/`, or (2) let the project declare an `## Overrides` block in its `PROJECT.md` referencing the specific shared rule. Do not fork the shared rule file.
