@@ -1,0 +1,92 @@
+package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.filter;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.time.Instant;
+
+/**
+ * Service-level fail-closed re-enforcement of {@code tenant_id}=scm.
+ * Defense-in-depth: gateway, JWT decoder validator, and this filter each
+ * independently enforce the same tenant invariant.
+ * <p>
+ * Mirrors procurement-service TenantClaimEnforcer pattern.
+ */
+@Slf4j
+@Component
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
+public class TenantClaimEnforcer extends OncePerRequestFilter {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String WILDCARD_TENANT = "*";
+    private static final String CLAIM_TENANT_ID = "tenant_id";
+
+    private final String expectedTenantId;
+
+    public TenantClaimEnforcer(
+            @Value("${scmplatform.oauth2.required-tenant-id:scm}") String expectedTenantId) {
+        this.expectedTenantId = expectedTenantId;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/actuator/");
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain) throws ServletException, IOException {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            String tenantId = jwtAuth.getToken().getClaimAsString(CLAIM_TENANT_ID);
+            if (tenantId == null || tenantId.isBlank()) {
+                writeError(response, HttpStatus.UNAUTHORIZED.value(),
+                        "UNAUTHORIZED", "tenant_id claim is required");
+                return;
+            }
+            if (!WILDCARD_TENANT.equals(tenantId) && !expectedTenantId.equals(tenantId)) {
+                log.warn("TenantClaimEnforcer rejected cross-tenant request: tenant={} path={}",
+                        tenantId, request.getRequestURI());
+                writeError(response, HttpStatus.FORBIDDEN.value(),
+                        "TENANT_FORBIDDEN",
+                        "tenant_id '" + tenantId + "' is not allowed");
+                return;
+            }
+        }
+        chain.doFilter(request, response);
+    }
+
+    private static void writeError(HttpServletResponse response, int status,
+                                   String code, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        ObjectNode node = JSON.createObjectNode();
+        node.put("code", code);
+        node.put("message", message);
+        node.put("timestamp", Instant.now().toString());
+        try {
+            response.getWriter().write(JSON.writeValueAsString(node));
+        } catch (JsonProcessingException ex) {
+            response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
+        }
+    }
+}

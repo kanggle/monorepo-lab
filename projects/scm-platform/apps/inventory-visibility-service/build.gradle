@@ -1,0 +1,117 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.example.scmplatform.inventoryvisibility'
+
+// -------------------------------------------------------------------------
+// Source sets:
+//
+// * `test`             — unit + slice tests (default).
+// * `integrationTest`  — Testcontainers-backed integration tests
+//                         (Postgres + Kafka + Redis).
+//                         Tagged @Tag("integration"); excluded from `test`
+//                         so `./gradlew check` stays Docker-free on
+//                         developer machines.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Database
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // ShedLock — distributed scheduler lock (batch-heavy trait first code, Failure Scenario F)
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Structured logging (prod profile)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Shared libs
+    implementation project(':libs:java-common')
+    implementation project(':libs:java-web')
+    implementation project(':libs:java-messaging')
+    implementation project(':libs:java-observability')
+    implementation project(':libs:java-security')
+
+    // Test (unit + slice)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'com.h2database:h2'
+
+    // JWT signing helper used by validator unit tests and the integration suite.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // Testcontainers (integration tests, @Tag("integration"))
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // MockWebServer for the JWKS stand-in.
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+    }
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'inventory-visibility-service.jar'
+}
+
+// Default `test` task: unit + slice only. Excludes Docker-dependent tests so
+// `./gradlew check` stays fast and Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY @Tag("integration") tests.
+// Not wired into `check` so the fast feedback loop stays Docker-free.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+
+    // Generous timeout — Kafka KRaft cold start can exceed 30s on CI.
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+}

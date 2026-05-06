@@ -1,0 +1,58 @@
+spring:
+  datasource:
+    # H2 in-memory for JPA slice tests (@DataJpaTest). Testcontainers-backed
+    # integration tests override this via @DynamicPropertySource.
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: scm-inventory-visibility-v1-test
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: manual
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9999
+          jwk-set-uri: http://localhost:9999/oauth2/jwks
+
+scmplatform:
+  oauth2:
+    allowed-issuers: http://localhost:9999,global-account-platform
+    required-tenant-id: scm
+
+inventory-visibility:
+  staleness:
+    threshold-seconds: 600
+  cache:
+    ttl-seconds: 300
+  alert:
+    dedup-seconds: 300
+
+logging:
+  level:
+    root: WARN
+    com.example.scmplatform.inventoryvisibility: DEBUG
