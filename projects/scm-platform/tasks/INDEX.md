@@ -80,6 +80,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-SCM-BE-002d-procurement-testcontainers-it.md` — TASK-SCM-BE-002b Phase 5 분리. Testcontainers IT ≥ 7 (multi-tenant isolation / outbox relay / supplier circuit breaker / supplier idempotency / state machine atomicity / asn overreceipt / audit log). 선결: Docker Desktop 4.36+ socket 회귀 해결 (memory `project_testcontainers_docker_desktop_blocker.md`). CI Linux runner 정상 동작이라 local 차단 시 PR CI 만으로도 진행 가능. 분석=Opus 4.7 / 구현 권장=Sonnet.
 
+- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption (wms `wms.inventory.adjusted.v1` → scm inventory-visibility). docker-compose.scm-e2e.yml + ≥ 6 E2E tests + nightly CI job. Phase 4 catalyst 평가 1차 마무리 — Template 추출 단계 신호. 선행=BE-002 + BE-003 (모두 done). 분석=Opus 4.7 / 구현 권장=Opus.
+
 ## in-progress
 
 (empty)
