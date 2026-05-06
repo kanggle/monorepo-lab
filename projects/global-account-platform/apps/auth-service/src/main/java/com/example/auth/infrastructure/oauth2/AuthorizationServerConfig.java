@@ -118,8 +118,7 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
             OidcUserInfoMapper oidcUserInfoMapper,
-            OAuth2AuthorizationService oAuth2AuthorizationService,
-            RegisteredClientRepository registeredClientRepository) throws Exception {
+            OAuth2AuthorizationService oAuth2AuthorizationService) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -130,19 +129,6 @@ public class AuthorizationServerConfig {
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, configurer ->
                         configurer
-                                // TASK-MONO-046-1 Cluster A: SAS 1.4's stock
-                                // PublicClientAuthenticationConverter only matches PKCE token
-                                // requests (authorization_code + code_verifier), so refresh_token
-                                // grants from public PKCE clients fail with 401 invalid_client.
-                                // Add a converter + provider pair that authenticates a public
-                                // client by client_id alone for the refresh_token grant.
-                                .clientAuthentication(clientAuth ->
-                                        clientAuth
-                                                .authenticationConverter(
-                                                        new PublicClientRefreshTokenAuthenticationConverter())
-                                                .authenticationProvider(
-                                                        new PublicClientRefreshTokenAuthenticationProvider(
-                                                                registeredClientRepository)))
                                 .oidc(oidc ->
                                         oidc.userInfoEndpoint(userInfo ->
                                                 userInfo.userInfoMapper(oidcUserInfoMapper)))
