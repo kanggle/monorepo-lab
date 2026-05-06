@@ -27,24 +27,16 @@ Servlet services that want the shared `@ControllerAdvice` base extend
 project(':libs:java-web-servlet')` alongside the existing
 `implementation project(':libs:java-web')`.
 
-Current consumers (verified to extend `CommonGlobalExceptionHandler`):
-
-- `projects/global-account-platform/apps/account-service`
-- `projects/global-account-platform/apps/admin-service`
-- `projects/global-account-platform/apps/auth-service`
-- `projects/global-account-platform/apps/community-service`
-- `projects/global-account-platform/apps/membership-service`
-- `projects/global-account-platform/apps/security-service`
-
 Servlet services that use `ErrorResponse` / `AccessDeniedException` but do
-**not** extend `CommonGlobalExceptionHandler` (e.g., the 11 ecommerce
-services, fan-platform `community-service`, fan-platform `artist-service`)
-keep `libs:java-web` only — they don't need this module.
+**not** extend `CommonGlobalExceptionHandler` keep `libs:java-web` only —
+they don't need this module. Consumers track this dependency in their own
+service-level Gradle build files; the canonical list lives there, not here
+(library files stay project-agnostic per `TEMPLATE.md § Library vs Project
+Boundary`).
 
 ## History
 
 Split out of `libs/java-web` by TASK-MONO-044a (2026-05-05) after a regression
-introduced in TASK-MONO-017 (PR #93, commit `cf901f4b`, 2026-04-30) leaked
-servlet API onto the reactive gateway-service classpath of WMS, GAP, and
-fan-platform. See `tasks/done/TASK-MONO-044a-libs-java-web-servlet-leak-fix.md`
-and `knowledge/incidents/2026-05-05-ci-regression.md` for details.
+that leaked servlet API onto a reactive gateway classpath. See
+`tasks/done/TASK-MONO-044a-libs-java-web-servlet-leak-fix.md` and the
+incident report under `knowledge/incidents/` for details.
