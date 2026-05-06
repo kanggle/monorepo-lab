@@ -23,6 +23,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -220,6 +221,17 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ApiErrorBody> r = handler.handleMalformed(
                 new HttpMessageNotReadableException("malformed", (org.springframework.http.HttpInputMessage) null));
         assertStatus(r, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    }
+
+    // ---------------- ResponseStatusException pass-through ----------------
+
+    @Test
+    @DisplayName("ResponseStatusException 401 → 401 UNAUTHORIZED (webhook signature invalid)")
+    void responseStatusException401() {
+        ResponseEntity<ApiErrorBody> r = handler.handleResponseStatus(
+                new ResponseStatusException(HttpStatus.UNAUTHORIZED, "WEBHOOK_SIGNATURE_INVALID"));
+        assertStatus(r, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        assertThat(r.getBody().message()).contains("WEBHOOK_SIGNATURE_INVALID");
     }
 
     // ---------------- 500: INTERNAL_SERVER_ERROR ----------------
