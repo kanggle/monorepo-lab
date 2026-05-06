@@ -23,15 +23,6 @@ subprojects {
         }
     }
 
-    // Override Spring Boot 3.4.1 BOM's testcontainers 1.20.4 -> 1.21.3.
-    // 1.20.4 embeds docker-java that negotiates Docker API version 1.32, rejected
-    // by modern dockerd implementations (Rancher Desktop's dockerd requires
-    // minimum API 1.41). Use Spring Boot's official "testcontainers.version"
-    // override property — works through dependency-management plugin's BOM
-    // resolution, which neither resolutionStrategy.force nor explicit dep
-    // versions can override at this level.
-    ext['testcontainers.version'] = '1.21.3'
-
     dependencies {
         compileOnly 'org.projectlombok:lombok:1.18.36'
         annotationProcessor 'org.projectlombok:lombok:1.18.36'
