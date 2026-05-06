@@ -420,4 +420,49 @@ DlqRoutingIntegrationTest 4 timeouts 는 root cause 미확정. `objectMapper.rea
 
 ---
 
-*작성: 2026-05-05, TASK-MONO-044 / 046 진단 단계 — 갱신 2026-05-06 (046-4 부분 회복).*
+## 추가 갱신 — 2026-05-06 (046-5 / 046-1 / 046-6 시리즈 동시 종결)
+
+3 task 가 같은 날 연속 머지 — partial-recovery 패턴 일관 적용. 후속 작업 2건 (046-7 + 046-8) ready/ 등재.
+
+### TASK-MONO-046-5 — PII trigger bypass (PR #234) — 6/6 회복
+
+V0010 migration 으로 `trg_login_history_no_update` 재정의: `BEGIN/END + IF (@pii_masking_bypass IS NULL OR <> 1) THEN SIGNAL ... END IF;`. Flyway 10 의 BEGIN/END 호환은 `apps/admin-service V0010` 의 패턴으로 사전 검증.
+
+PiiMaskingService 의 `@Transactional public boolean maskPii(...)` 전후로 `jdbcTemplate.execute("SET @pii_masking_bypass = 1")` + finally 에서 `SET ... = NULL`. session variable 은 connection-scoped → @Transactional 단일 connection + Hikari pool 반환 전 reset 보장.
+
+추가 fix: `PiiMaskingIntegrationTest.masking_writesOutboxEntry` 의 JSON path 가 `$.accountId` 였으나 BaseEventPublisher.writeEvent 가 envelope.payload nested 로 wrapping → `$.payload.accountId` + `JSON_UNQUOTE` wrap 으로 수정.
+
+회귀 0 검증: LoginHistoryImmutability 2 통과 (외부 UPDATE 여전히 SQLSTATE 45000). PiiMaskingServiceTest 8 unit 통과 (mock JdbcTemplate 추가).
+
+### TASK-MONO-046-1 — auth-service SAS partial (PR #235) — 5/13 회복
+
+13 baseline → 5 fix + 8 deferred → 046-7. Phase 1 (re-enable 13) → Phase 2 iter 1-4 (5 fix) → iter 5 (PublicClient RT auth) regression 유발 (PKCE wrong code_verifier) → revert + 8 redisable.
+
+**5 fix 체크포인트**:
+- BaseFlowSecurityConfig 의 OAuth login redirect: HTML-only matcher (text/html accept) — Cluster C 부분
+- V0014 migration: refresh_token JTI VARCHAR(255) → VARCHAR(2048) — SAS opaque token width 수용
+- AccountServiceClient: Environment 기반 lazy base-url resolution (`@Autowired` ctor) — WireMock URL race 방지
+- login-redirect scope 분리
+- DirtiesContext BEFORE_CLASS revert — OAuthLogin context cache 영향 회피
+
+**8 deferred (3 cluster)**:
+- A (RT rotation/reuse-detection/revoke 3) — 06y SAS internals 디버깅 필요
+- B (userinfo tenant_id 1) — OidcUserInfoMapper 추가 검토
+- C (OAuth callback 5: Google + Kakao + Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink) — 부분 회복 후에도 callback non-200
+
+### TASK-MONO-046-6 — consumer-pipeline burst (PR #236) — 0/3 회복 + 46-8 deeper investigation
+
+Phase 1 conservative attempt: `await().atMost(30s)` → `60s` for CrossTenantVelocity 50-burst + DetectionE2E 10-burst. byte[] DLPR path 는 spring-kafka 3.3.1 source 추적으로 구조적 OK 확인 (`ErrorHandlingDeserializer` → `VALUE_DESERIALIZER_EXCEPTION_HEADER` → `DLPR.accept()` → `vDeserEx.getData()` → byte[] → `DelegatingByTypeSerializer.byte[]`).
+
+CI 결과: 3 모두 60s 에서 fail — **timing 단순 이슈가 아님 deterministically 반증**. Phase 1 timeout 변경 revert + 3 redisable → 046-8 분리. 진단 가치는 가설 1 (burst saturation) 을 명확히 배제한 것.
+
+### 시리즈 통합 결과 (2026-05-06 23:50 KST)
+
+- main `Integration (GAP)` Job: SUCCESS (security-service 17/20 PASS / 0 FAIL / 3 skipped + auth-service 52/60 PASS / 0 FAIL / 8 skipped)
+- 046 시리즈 통계: 13 회복 (3 + 6 + 5 - 1 redisable revert) + 11 deferred (8 → 046-7 + 3 → 046-8)
+- 시리즈 chore PR 단일 PR 로 3 task 종결 (`feedback_pr_bundling` 정착 패턴)
+- 후속 046-7 / 046-8 모두 Docker reproduce 권장 — WSL Testcontainers 복구 우선이 본 follow-up 의 선결 작업
+
+---
+
+*작성: 2026-05-05, TASK-MONO-044 / 046 진단 단계 — 갱신 2026-05-06 (046-4 부분 회복) / 갱신 2026-05-06 (046-5/-1/-6 시리즈 종결).*
