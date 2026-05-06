@@ -377,8 +377,21 @@ port_prefix_hits=""
 while IFS= read -r f; do
     [ -z "$f" ] && continue
     [ -f "$f" ] || continue
-    # Match live assignment OR interpolation, exclude lines whose first non-whitespace char is '#' or '*' or '//'
-    matches=$(grep -nE '(^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=|\$\{PORT_PREFIX|\$PORT_PREFIX[^A-Z_])' "$f" 2>/dev/null \
+    # Markdown files are prose documentation; ${PORT_PREFIX...} inside inline-code or
+    # blockquotes is historical reference, not live usage. Only flag standalone
+    # live assignments (a real config snippet would also be in a fenced code-block,
+    # but a top-level assignment line is a stronger signal of intent).
+    case "$f" in
+        *.md)
+            pattern='^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*='
+            ;;
+        *)
+            # Shell / yaml / properties / config files: assignment OR interpolation
+            pattern='(^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=|\$\{PORT_PREFIX|\$PORT_PREFIX[^A-Z_])'
+            ;;
+    esac
+    # Exclude lines whose first non-whitespace char is a comment marker (#, //, *)
+    matches=$(grep -nE "$pattern" "$f" 2>/dev/null \
         | grep -vE '^[0-9]+:[[:space:]]*(#|//|\*)' \
         || true)
     if [ -n "$matches" ]; then
