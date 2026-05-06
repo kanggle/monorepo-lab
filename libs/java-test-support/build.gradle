@@ -23,9 +23,5 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        // Override Spring Boot 3.4.1's testcontainers 1.20.4 -> 1.21.3 for newer docker-java
-        // (docker-java in 1.20.4 negotiates API version 1.32, which is rejected by
-        // Rancher Desktop's dockerd: "client version 1.32 is too old, minimum 1.41").
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
 }
