@@ -78,7 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-002b-procurement-test-pyramid.md` — TASK-SCM-BE-002 후속. Production code 89 files 머지 (PR #239) 후 test pyramid 누락 (agent FailedToOpenSocket mid-session). domain unit (PoStatusMachine 8 transition, Money VO, 9 exception 경로) + slice (PurchaseOrderController + AsnWebhook + SupplierAckWebhook) + Testcontainers integration (multi-tenant isolation / outbox relay / supplier circuit breaker / asn overreceipt / state machine atomicity) 추가. 분석=Opus 4.7 / 구현 권장=Sonnet — production code 안정, test 작성 deterministic.
+- `TASK-SCM-BE-002c-procurement-slice-tests.md` — TASK-SCM-BE-002b Phase 4 분리. `@WebMvcTest` 3 controllers (PurchaseOrder/AsnWebhook/SupplierAckWebhook) ≥ 12 tests + `@DataJpaTest` 5 repos ≥ 5 tests. ActorContextResolver 정적 호출은 `MockedStatic` 또는 `TestingAuthenticationToken` 으로 SecurityContextHolder 직접 setup. H2 Flyway 호환 안 될 시 JPA slice 는 002d (IT) 로 통합. Docker 무관. 분석=Opus 4.7 / 구현 권장=Sonnet.
+
+- `TASK-SCM-BE-002d-procurement-testcontainers-it.md` — TASK-SCM-BE-002b Phase 5 분리. Testcontainers IT ≥ 7 (multi-tenant isolation / outbox relay / supplier circuit breaker / supplier idempotency / state machine atomicity / asn overreceipt / audit log). 선결: Docker Desktop 4.36+ socket 회귀 해결 (memory `project_testcontainers_docker_desktop_blocker.md`). CI Linux runner 정상 동작이라 local 차단 시 PR CI 만으로도 진행 가능. 분석=Opus 4.7 / 구현 권장=Sonnet.
 
 ## in-progress
 
@@ -89,6 +91,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-SCM-BE-002b-procurement-test-pyramid.md` — PR #243 + #244 + #245. procurement-service test pyramid 1차 완료 (TASK-SCM-BE-002 production code 후속). **101 tests 누적**: Phase 1 domain unit 64 (PoStatusMachine 49 — full transition matrix per actor + terminal/self-transition guards + linear lifecycle, Money VO 15 — factory normalization + null/negative/length validation + add() currency match) + Phase 2 application unit 16 (PurchaseOrderApplicationServiceTest — 6 commands × happy + edge, Mockito strict-safe with `lenient()`) + Phase 3 GlobalExceptionHandler 21 (모든 exception → ApiErrorBody status code 매핑 검증, direct unit test no Spring context). Phase 4 (slice WebMvcTest) → TASK-SCM-BE-002c 분리. Phase 5 (Testcontainers IT) → TASK-SCM-BE-002d 분리 (Docker fix 후). production code 무변경. CI Build & Test all PASS. 2026-05-06.
 
 - `TASK-SCM-BE-003-inventory-visibility-service-bootstrap.md` — PR #241. scm-platform 두 번째 도메인 service `inventory-visibility-service` 부트스트랩. **Hexagonal architecture** + Service Type=`rest-api`+`event-consumer` + cross-node 재고 read-model (자사 wms / supplier / 3PL / in-transit). **cross-project event consumption 첫 사례** — wms-platform 의 `wms.inventory.{received,adjusted,transferred}.v1` 3 topic 구독 + EventDedupe (eventId 기반 멱등). **batch-heavy trait 첫 코드** — `@Scheduled` 5분 주기 staleness 감지 + ShedLock 분산 lock + alert event publish (`scm.inventory.alert.v1`). 5 read-only API endpoint + 4 entity (InventoryNode / InventorySnapshot / NodeStaleness / EventDedupe) + Flyway V1 schema + OAuth2 RS (RS256 / GAP JWKS / `tenant_id=scm` fail-closed). 81 files / 4409 insertions. Spec 3개 (architecture / data-model / staleness-monitoring) + contracts 2개 (inventory-visibility-api / inventory-visibility-subscriptions). gateway-service `/api/v1/inventory-visibility/**` 라우트 활성화. CI 12/12 PASS — Build & Test 1m42s, GAP/master/gateway/fan-platform IT all pass, frontend e2e pass, 모든 boot jars pass. 2026-05-06.
 
