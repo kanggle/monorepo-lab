@@ -96,7 +96,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-scm}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro  # uncomment in TASK-SCM-BE-001
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scm}"]
       interval: 10s
@@ -159,6 +159,81 @@ services:
       start_period: 30s
     networks:
       - scm-platform-net
+
+  # ---------------------------------------------------------------------------
+  # procurement-service — activated by TASK-SCM-BE-002.
+  # ---------------------------------------------------------------------------
+  procurement-service:
+    image: scm-platform/procurement-service:local
+    container_name: scm-platform-procurement
+    build:
+      context: ./apps/procurement-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB_PROCUREMENT: scm_procurement
+      POSTGRES_USER: ${POSTGRES_USER:-scm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - scm-platform-net
+
+  # ---------------------------------------------------------------------------
+  # inventory-visibility-service — activated by TASK-SCM-BE-003.
+  # Cross-node read-model: wms event consumer + staleness batch + REST API.
+  # ---------------------------------------------------------------------------
+  inventory-visibility-service:
+    image: scm-platform/inventory-visibility-service:local
+    container_name: scm-platform-inventory-visibility
+    build:
+      context: ./apps/inventory-visibility-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: scm_inventory_visibility
+      POSTGRES_USER: ${POSTGRES_USER:-scm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
+      # WMS_KAFKA_BOOTSTRAP: cross-project event source. In dev, same cluster.
+      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      STALENESS_THRESHOLD_SECONDS: ${STALENESS_THRESHOLD_SECONDS:-600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - scm-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres-data:
