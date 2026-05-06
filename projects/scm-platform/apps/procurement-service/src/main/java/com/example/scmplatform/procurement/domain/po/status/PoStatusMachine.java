@@ -1,0 +1,79 @@
+package com.example.scmplatform.procurement.domain.po.status;
+
+import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
+
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * PO state machine. Stateless utility — every transition flows through
+ * {@link #ensureTransitionAllowed} so business logic cannot bypass the rules
+ * (rules/traits/transactional.md T4).
+ *
+ * <p>Transition matrix (TASK-SCM-BE-002 § Acceptance Criteria #9):
+ * <ul>
+ *   <li>BUYER:    DRAFT &rarr; SUBMITTED, DRAFT/SUBMITTED/ACKNOWLEDGED &rarr; CANCELED</li>
+ *   <li>SUPPLIER: SUBMITTED &rarr; ACKNOWLEDGED</li>
+ *   <li>OPERATOR: ACKNOWLEDGED &rarr; CONFIRMED, DRAFT/SUBMITTED/ACKNOWLEDGED &rarr; CANCELED</li>
+ *   <li>SYSTEM:   CONFIRMED &rarr; PARTIALLY_RECEIVED, PARTIALLY_RECEIVED &rarr; RECEIVED,
+ *                 CONFIRMED &rarr; RECEIVED (full ASN in one shot),
+ *                 RECEIVED &rarr; SETTLED, SETTLED &rarr; CLOSED</li>
+ * </ul>
+ *
+ * <p>{@code CANCELED} and {@code CLOSED} are terminal — every outbound
+ * transition is forbidden. Self-transitions are forbidden so callers cannot
+ * silently no-op.
+ */
+public final class PoStatusMachine {
+
+    private static final Map<ActorType, Map<PoStatus, Set<PoStatus>>> TRANSITIONS = Map.of(
+            ActorType.BUYER, Map.of(
+                    PoStatus.DRAFT, Set.of(PoStatus.SUBMITTED, PoStatus.CANCELED),
+                    PoStatus.SUBMITTED, Set.of(PoStatus.CANCELED),
+                    PoStatus.ACKNOWLEDGED, Set.of(PoStatus.CANCELED)
+            ),
+            ActorType.OPERATOR, Map.of(
+                    PoStatus.DRAFT, Set.of(PoStatus.SUBMITTED, PoStatus.CANCELED),
+                    PoStatus.SUBMITTED, Set.of(PoStatus.CANCELED),
+                    PoStatus.ACKNOWLEDGED, Set.of(PoStatus.CONFIRMED, PoStatus.CANCELED)
+            ),
+            ActorType.SUPPLIER, Map.of(
+                    PoStatus.SUBMITTED, Set.of(PoStatus.ACKNOWLEDGED)
+            ),
+            ActorType.SYSTEM, Map.of(
+                    PoStatus.CONFIRMED, Set.of(PoStatus.PARTIALLY_RECEIVED, PoStatus.RECEIVED),
+                    PoStatus.PARTIALLY_RECEIVED, Set.of(PoStatus.RECEIVED),
+                    PoStatus.RECEIVED, Set.of(PoStatus.SETTLED),
+                    PoStatus.SETTLED, Set.of(PoStatus.CLOSED)
+            )
+    );
+
+    private static final Set<PoStatus> TERMINAL = Set.of(PoStatus.CANCELED, PoStatus.CLOSED);
+
+    private PoStatusMachine() {
+    }
+
+    public static void ensureTransitionAllowed(PoStatus current, PoStatus target, ActorType actor) {
+        if (TERMINAL.contains(current)) {
+            throw new PoStatusTransitionInvalidException(current, target, actor);
+        }
+        if (current == target) {
+            throw new PoStatusTransitionInvalidException(current, target, actor);
+        }
+        Set<PoStatus> allowed = TRANSITIONS
+                .getOrDefault(actor, Map.of())
+                .getOrDefault(current, Set.of());
+        if (!allowed.contains(target)) {
+            throw new PoStatusTransitionInvalidException(current, target, actor);
+        }
+    }
+
+    public static boolean isTransitionAllowed(PoStatus current, PoStatus target, ActorType actor) {
+        try {
+            ensureTransitionAllowed(current, target, actor);
+            return true;
+        } catch (PoStatusTransitionInvalidException e) {
+            return false;
+        }
+    }
+}
