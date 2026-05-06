@@ -1136,6 +1136,8 @@ services:
     container_name: ecommerce-admin-dashboard
     init: true
     restart: unless-stopped
+    environment:
+      - API_URL_INTERNAL=http://gateway-service:8080
     expose:
       - "3001"
     deploy:
