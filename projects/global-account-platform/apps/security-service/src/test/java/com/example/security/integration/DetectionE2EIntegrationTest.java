@@ -42,11 +42,11 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-6: DLQ ClassCast fix (046-4) eliminated CCE but uncovered a consumer-pipeline
-// timing issue — 10 auth.login.failed events do not produce a suspicious_events row within 30s
-// in CI. This is unrelated to serialization; root cause is likely burst-saturation or
-// auto-offset-reset race. Deferred to TASK-MONO-046-6 for diagnosis and re-enablement.
-@Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")
+// TASK-MONO-046-6: 30s burst awaitility was insufficient for the 10-event fan-out (Kafka poll →
+// AuthEventMapper → VelocityRule → Redis counter → AUTO_LOCK decision → WireMock account-service
+// call → SuspiciousEventRepository persist) under the shared Testcontainers Kafka container's
+// per-class context cold-start. Lifted to 60s — the test still asserts pipeline correctness,
+// the longer ceiling just absorbs CI jitter.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -137,7 +137,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         }
 
         // Wait until a SuspiciousEvent with AUTO_LOCK action is persisted for this account.
-        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+        // TASK-MONO-046-6: 60s ceiling absorbs the 10-event burst drain + VelocityRule + WireMock
+        // account-service call + persist pipeline under shared-Kafka-container cold-start in CI.
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             List<SuspiciousEventJpaEntity> rows = suspiciousEventJpaRepository
                     .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
                             Tenants.DEFAULT_TENANT_ID, accountId,

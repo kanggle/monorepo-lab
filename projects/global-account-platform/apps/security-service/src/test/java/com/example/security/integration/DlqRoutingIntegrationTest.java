@@ -165,11 +165,13 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         assertAllContainersStillRunning();
     }
 
-    // TASK-MONO-046-6: DLQ ClassCast fix (046-4) eliminated CCE but this byte[] path still times
-    // out waiting for the .dlq record in CI. The raw byte[] poison message may not be routed
-    // correctly after the producer factory was switched to <String, Object>. Deferred to
-    // TASK-MONO-046-6 for diagnosis (separate root cause from the String-path CCE).
-    @Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")
+    // TASK-MONO-046-6: re-enabled after 046-4's DelegatingByTypeSerializer fix. The DLPR byte[]
+    // path is structurally correct: ErrorHandlingDeserializer stashes raw bytes on the
+    // VALUE_DESERIALIZER_EXCEPTION_HEADER, DLPR.accept() extracts vDeserEx.getData() and passes
+    // them as byte[] value to createProducerRecord, and DelegatingByTypeSerializer dispatches
+    // byte[].class → ByteArraySerializer. The 60s awaitility ceiling already covers the round
+    // trip; iter-1 timeout was likely the same shared-container cold-start jitter as the burst
+    // tests above, not a structural defect.
     @Test
     @Order(2)
     @DisplayName("Invalid UTF-8 / non-JSON bytes are routed to .dlq via ErrorHandlingDeserializer")

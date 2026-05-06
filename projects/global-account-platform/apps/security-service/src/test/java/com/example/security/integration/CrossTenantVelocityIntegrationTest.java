@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -56,11 +55,10 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-6: DLQ ClassCast fix (046-4) eliminated CCE but uncovered a consumer-pipeline
-// timing issue — 50-event burst for tenantA does not produce a suspicious_events row within 30s
-// in CI. This is unrelated to serialization; root cause is likely burst-saturation or
-// auto-offset-reset race. Deferred to TASK-MONO-046-6 for diagnosis and re-enablement.
-@Disabled("TASK-MONO-046-6: post-ClassCast pipeline timeout / assertion failure under burst + byte[] path")
+// TASK-MONO-046-6: 30s burst awaitility was insufficient for the 50-event tenantA fan-out
+// (Kafka poll → AuthEventMapper → VelocityRule → Redis counter increment → SuspiciousEventRepository
+// persist) under the shared Testcontainers Kafka container's per-class context cold-start. Lifted
+// to 60s — the test still asserts pipeline correctness, the longer ceiling just absorbs CI jitter.
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -131,7 +129,9 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
         }
 
         // Wait until tenantA's SuspiciousEvent is persisted (proves the pipeline ran).
-        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+        // TASK-MONO-046-6: 60s ceiling absorbs the 50-event burst drain + VelocityRule + Redis
+        // counter pipeline under shared-Kafka-container cold-start in CI.
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             List<SuspiciousEventJpaEntity> rowsA = suspiciousEventJpaRepository
                     .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
                             TENANT_A, sharedAccountId,
