@@ -51,12 +51,6 @@ subprojects {
             environment 'DOCKER_HOST', dockerHost
             systemProperty 'docker.host', dockerHost
         }
-        // docker-java's default API version (1.32) is rejected by modern dockerd
-        // (Rancher Desktop, Docker Desktop 4.36+, Colima). Force a recent version
-        // so docker-java skips the stale default.
-        def apiVersion = System.getenv('DOCKER_API_VERSION') ?: '1.45'
-        environment 'DOCKER_API_VERSION', apiVersion
-        systemProperty 'api.version', apiVersion
     }
 
     // Opt-in task for `@Tag("integration")` tests. Requires Docker.
@@ -79,11 +73,5 @@ subprojects {
             environment 'DOCKER_HOST', dockerHost
             systemProperty 'docker.host', dockerHost
         }
-        // docker-java's default API version (1.32) is rejected by modern dockerd
-        // (Rancher Desktop, Docker Desktop 4.36+, Colima). Force a recent version
-        // so docker-java skips the stale default.
-        def apiVersion = System.getenv('DOCKER_API_VERSION') ?: '1.45'
-        environment 'DOCKER_API_VERSION', apiVersion
-        systemProperty 'api.version', apiVersion
     }
 }

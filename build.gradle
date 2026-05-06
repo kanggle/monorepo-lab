@@ -43,4 +43,22 @@ subprojects {
         useJUnitPlatform()
         jvmArgs '-XX:+EnableDynamicAgentLoading'
     }
+
+    // Forward Docker / Testcontainers env into every Test task (test, integrationTest,
+    // e2eTest, etc.). docker-java's default API version (1.32) is rejected by modern
+    // dockerd implementations — Rancher Desktop's dockerd requires minimum API 1.41,
+    // and Docker Desktop 4.36+ has a CLI proxy that intercepts docker-java probes.
+    // DOCKER_API_VERSION + system property 'api.version' force docker-java to skip
+    // the stale default. DOCKER_HOST forwarding handles Windows named-pipe / WSL2
+    // socket override scenarios.
+    tasks.withType(Test).configureEach {
+        def dockerHost = System.getenv('DOCKER_HOST') ?: System.getProperty('docker.host')
+        if (dockerHost) {
+            environment 'DOCKER_HOST', dockerHost
+            systemProperty 'docker.host', dockerHost
+        }
+        def apiVersion = System.getenv('DOCKER_API_VERSION') ?: '1.45'
+        environment 'DOCKER_API_VERSION', apiVersion
+        systemProperty 'api.version', apiVersion
+    }
 }
