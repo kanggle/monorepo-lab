@@ -23,23 +23,14 @@ subprojects {
         }
     }
 
-    // Force testcontainers 1.21.3 across all subprojects.
-    // Spring Boot 3.4.1 BOM pins testcontainers 1.20.4, whose embedded docker-java
-    // negotiates Docker API version 1.32 — rejected by modern dockerd implementations
-    // (Rancher Desktop's dockerd requires minimum API 1.41). 1.21.3 ships docker-java
-    // 3.4.x with newer default API version compatible with Rancher / Colima / Docker
-    // Desktop 4.36+. resolutionStrategy.force is stronger than eachDependency and
-    // overrides Spring Boot's dependency-management constraint.
-    configurations.all {
-        resolutionStrategy {
-            force 'org.testcontainers:testcontainers:1.21.3'
-            force 'org.testcontainers:mysql:1.21.3'
-            force 'org.testcontainers:kafka:1.21.3'
-            force 'org.testcontainers:junit-jupiter:1.21.3'
-            force 'org.testcontainers:database-commons:1.21.3'
-            force 'org.testcontainers:jdbc:1.21.3'
-        }
-    }
+    // Override Spring Boot 3.4.1 BOM's testcontainers 1.20.4 -> 1.21.3.
+    // 1.20.4 embeds docker-java that negotiates Docker API version 1.32, rejected
+    // by modern dockerd implementations (Rancher Desktop's dockerd requires
+    // minimum API 1.41). Use Spring Boot's official "testcontainers.version"
+    // override property — works through dependency-management plugin's BOM
+    // resolution, which neither resolutionStrategy.force nor explicit dep
+    // versions can override at this level.
+    ext['testcontainers.version'] = '1.21.3'
 
     dependencies {
         compileOnly 'org.projectlombok:lombok:1.18.36'
