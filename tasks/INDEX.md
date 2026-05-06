@@ -107,6 +107,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
 
+- `TASK-MONO-047-template-extraction-readiness-and-plan.md` — Phase 5 (Template 레포 추출) 진입 게이팅 + tooling. (1) `scripts/extract-template.sh <target-dir>` 신설 — dry-run/init-git flag, shared library 트리 + 빈 single-project shell 생성. (2) `scripts/verify-template-readiness.sh` 신설 — boundary check (현재 false-positive refine), Phase 4 outstanding (SCM-BE-002d / SCM-INT-001) done/ 검증, 1-month no-churn gate, CI baseline green, 모든 PROJECT.md 유효성. (3) TEMPLATE.md § Phase 5 본문을 script pointer + readiness narrative 로 trim. Phase 5 실 추출 자체는 out-of-scope — readiness 충족 시 별도 ADR-MONO-003 candidate. 본 task 는 Docker 무관 (libs/ 본문 변경 0). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (단순 bash + doc).
+
 ## in-progress
 
 (empty)
