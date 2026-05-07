@@ -143,7 +143,10 @@ public abstract class AbstractProcurementIntegrationTest {
      */
     protected PurchaseOrder persistDraftPo(String tenantId, String supplierId) {
         String poId = UuidV7.randomString();
-        String poNumber = "PO-IT-" + poId.substring(0, 8).toUpperCase();
+        // Use last 12 chars of the UUID (pure random bits) to avoid timestamp
+        // collision when multiple tests call this helper within the same millisecond.
+        String suffix = poId.replace("-", "").substring(20).toUpperCase();
+        String poNumber = "PO-IT-" + suffix;
         PurchaseOrder po = PurchaseOrder.createDraft(
                 poId, tenantId, poNumber, supplierId, "buyer-it-001", "USD");
         PurchaseOrderLine line = PurchaseOrderLine.create(

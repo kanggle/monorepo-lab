@@ -9,7 +9,7 @@ import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -51,8 +51,8 @@ class AuditLogIntegrationTest extends AbstractProcurementIntegrationTest {
     @Autowired
     private PurchaseOrderApplicationService service;
 
-    @AfterEach
-    void tearDown() throws IOException {
+    @AfterAll
+    static void tearDownMock() throws IOException {
         if (supplierMock != null) {
             supplierMock.shutdown();
         }
