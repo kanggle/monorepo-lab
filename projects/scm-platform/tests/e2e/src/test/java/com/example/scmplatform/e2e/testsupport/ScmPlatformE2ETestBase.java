@@ -168,6 +168,25 @@ public abstract class ScmPlatformE2ETestBase {
                 .withStartupTimeout(Duration.ofMinutes(2)));
         kafka.start();
 
+        // ----- Pre-create cross-project wms.inventory.* topics ----------------
+        // inventory-visibility-service's @KafkaListener subscribes on boot. If
+        // the broker has auto.create.topics.enable but the consumer subscribes
+        // before any producer publish, the assignment can race and the first
+        // event is lost. Creating the topics explicitly before any service
+        // boots eliminates that race (TASK-SCM-INT-001a § Edge Cases #3).
+        java.util.Properties adminProps = new java.util.Properties();
+        adminProps.put(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafka.getBootstrapServers());
+        try (org.apache.kafka.clients.admin.AdminClient admin =
+                org.apache.kafka.clients.admin.AdminClient.create(adminProps)) {
+            admin.createTopics(java.util.List.of(
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.received.v1", 1, (short) 1),
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.adjusted.v1", 1, (short) 1),
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.transferred.v1", 1, (short) 1)
+            )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
+            log.info("Pre-created cross-project wms.inventory.* topics for e2e");
+        }
+
         // ----- JWKS + supplier stand-ins (host JVM, reachable via host.docker.internal) -
         jwt = new JwtTestHelper();
         jwks = new JwksMockServer(jwt);
