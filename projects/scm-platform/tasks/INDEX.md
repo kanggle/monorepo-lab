@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption (wms `wms.inventory.adjusted.v1` → scm inventory-visibility). docker-compose.scm-e2e.yml + ≥ 6 E2E tests + nightly CI job. Phase 4 catalyst 평가 1차 마무리 — Template 추출 단계 신호. 선행=BE-002 + BE-003 (모두 done). 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — TASK-SCM-INT-001a 6 fix 후 잔존 2 fail (SupplierCircuitBreaker 첫 POST 응답 409 instead of 201 + WmsInventoryAdjusted snapshot=0 instead of 42) 의 deeper investigation. Root cause 분리 가설: (a) idempotency / supplier validation / aggregate state, (b) Kafka consumer subscription / partition assignment / WmsInventoryAdjustedConsumer business logic. 진단은 logging 추가 후 cycle 1 → 응답 body + consumer log 확인. 두 `@Disabled` 제거 + 6/6 PASS 가 최종 상태. 선행=TASK-SCM-INT-001a (PR #260 머지). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
@@ -86,7 +86,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption. PR #260 — 4/6 시나리오 PASS, 2 시나리오 `@Disabled("TASK-SCM-INT-001b: ...")` 분리. 6 fix (TASK-SCM-INT-001a) cascade. Phase 5 trigger 의 마지막 outstanding 의 1차 종결.
+
+- `TASK-SCM-INT-001a-e2e-environment-fixup.md` — PR #260 의 6 cascade fix. (1) Slf4jLogConsumer attach 진단 인프라, (2) inventory-visibility V1 outbox + processed_events tables, (3) inventory-visibility JpaConfig (libs:java-messaging suppress 우회), (4) gateway @Primary on accountKeyResolver (TASK-MONO-044d 패턴), (5) e2e classpath PostgreSQL JDBC driver, (6) ProcurementDbFixtures URL host:port 명시 + Kafka topic 사전 생성. 5 fix 중 3 production / 2 test. 4/6 PASS, 2 잔존 → TASK-SCM-INT-001b 분리.
 
 ## done
 
