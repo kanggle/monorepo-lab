@@ -109,7 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-048-scm-integration-ci-job.md` — `scm-integration-tests` CI job 추가 (procurement-service + inventory-visibility-service Testcontainers). `.github/workflows/ci.yml` 단일 파일 변경.
 
 ## review
 
