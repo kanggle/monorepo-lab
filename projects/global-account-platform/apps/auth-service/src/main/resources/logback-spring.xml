@@ -2,7 +2,7 @@
 <configuration>
     <include resource="logback-observability-base.xml"/>
 
-    <springProfile name="default,local,dev">
+    <springProfile name="default,local,dev,test">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
