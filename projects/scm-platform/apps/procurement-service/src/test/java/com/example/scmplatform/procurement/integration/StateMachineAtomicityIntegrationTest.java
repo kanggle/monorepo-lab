@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.io.IOException;
@@ -61,7 +61,7 @@ class StateMachineAtomicityIntegrationTest extends AbstractProcurementIntegratio
     @Autowired
     private PurchaseOrderApplicationService service;
 
-    @SpyBean
+    @MockitoSpyBean
     private OutboxJpaRepository outboxJpaRepository;
 
     @Autowired

@@ -105,8 +105,9 @@ class SupplierCircuitBreakerIntegrationTest extends AbstractProcurementIntegrati
             try {
                 service.submit(new SubmitPurchaseOrderCommand(buyer, po.getId(),
                         "idem-cb-" + i));
-            } catch (SupplierUnavailableException | RuntimeException ignored) {
-                // Expected — each call fails; after 3rd the circuit opens.
+            } catch (RuntimeException ignored) {
+                // Expected — each call fails (SupplierUnavailableException extends RuntimeException);
+                // after the 3rd call the circuit breaker transitions to OPEN.
             }
         }
 

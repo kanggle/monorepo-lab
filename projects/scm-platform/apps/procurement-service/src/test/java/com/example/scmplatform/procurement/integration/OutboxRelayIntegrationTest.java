@@ -6,7 +6,6 @@ import com.example.scmplatform.procurement.application.PurchaseOrderApplicationS
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
-import com.example.scmplatform.procurement.infrastructure.outbox.ProcurementOutboxPollingScheduler;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -95,7 +94,8 @@ class OutboxRelayIntegrationTest extends AbstractProcurementIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(List.of(ProcurementOutboxPollingScheduler.TOPIC_PO_SUBMITTED));
+        // Topic name: ProcurementOutboxPollingScheduler.TOPIC_PO_SUBMITTED (package-private)
+        consumer.subscribe(List.of("scm.procurement.po.submitted.v1"));
         // Poll once to trigger partition assignment before producing.
         consumer.poll(Duration.ofMillis(500));
     }
