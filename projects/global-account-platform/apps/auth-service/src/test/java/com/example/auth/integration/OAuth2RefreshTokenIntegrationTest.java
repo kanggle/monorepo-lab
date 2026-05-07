@@ -199,7 +199,6 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 2. Normal rotation: refresh_token → new access + refresh token
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster A: public-client refresh_token grant — re-enabled for cycle 1 diagnostic.
     @Test
     @Order(2)
     @DisplayName("refresh_token grant: normal rotation → new tokens, old RT revoked in domain store")
@@ -211,15 +210,10 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
                         .param("grant_type", "refresh_token")
                         .param("refresh_token", refreshTokenValue)
                         .param("client_id", "demo-spa-client"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.refresh_token").isNotEmpty())
                 .andReturn();
-        System.err.println("[046-7][A1] refreshTokenGrant_normalRotation status="
-                + result.getResponse().getStatus()
-                + " body=" + result.getResponse().getContentAsString());
-        assertThat(result.getResponse().getStatus())
-                .as("[046-7][A1] expected 200 OK from /oauth2/token (refresh_token grant)")
-                .isEqualTo(200);
-        assertThat(result.getResponse().getContentAsString()).contains("access_token");
-        assertThat(result.getResponse().getContentAsString()).contains("refresh_token");
 
         JsonNode tokenResponse = objectMapper.readTree(result.getResponse().getContentAsString());
         String newRefreshToken = tokenResponse.get("refresh_token").asText();
@@ -281,7 +275,6 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 4. Reuse detection: same refresh_token used twice → invalid_grant
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster A: re-enabled for cycle 1 diagnostic.
     @Test
     @Order(4)
     @DisplayName("reuse detection: reusing a rotated refresh_token → 400 invalid_grant")
@@ -296,13 +289,8 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
                         .param("grant_type", "refresh_token")
                         .param("refresh_token", currentRt)
                         .param("client_id", "demo-spa-client"))
+                .andExpect(status().isOk())
                 .andReturn();
-        System.err.println("[046-7][A2] reuseDetected first-use status="
-                + firstResult.getResponse().getStatus()
-                + " body=" + firstResult.getResponse().getContentAsString());
-        assertThat(firstResult.getResponse().getStatus())
-                .as("[046-7][A2] first refresh must succeed")
-                .isEqualTo(200);
 
         // After first use, currentRt is rotated (revoked in domain store)
         // Second use of the same RT — must be rejected as reuse

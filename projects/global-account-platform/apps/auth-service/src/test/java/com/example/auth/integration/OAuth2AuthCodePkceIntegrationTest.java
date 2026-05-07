@@ -290,7 +290,6 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
     // 4. /oauth2/userinfo — access token → OIDC claims + tenant_id
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster B: re-enabled for cycle 1 diagnostic.
     @Test
     @Order(4)
     @DisplayName("userinfo: valid access_token → 200 with sub + email + tenant_id")
@@ -350,11 +349,9 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
         // Step 3: call /oauth2/userinfo
         MvcResult userInfoResult = mockMvc.perform(get("/oauth2/userinfo")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andReturn();
-        System.err.println("[046-7][B1] /oauth2/userinfo status="
-                + userInfoResult.getResponse().getStatus()
-                + " body=" + userInfoResult.getResponse().getContentAsString());
-        assertThat(userInfoResult.getResponse().getStatus()).isEqualTo(200);
 
         JsonNode userInfo = objectMapper.readTree(userInfoResult.getResponse().getContentAsString());
 
