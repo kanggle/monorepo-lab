@@ -291,6 +291,18 @@ public class AuthorizationServerConfig {
     public AuthorizationServerSettings authorizationServerSettings() {
         return AuthorizationServerSettings.builder()
                 .issuer(issuerUrl)
+                // TASK-MONO-046-7 Cluster B: SAS 1.4 default OIDC user-info endpoint URI is
+                // {@code /userinfo}. Our public OIDC contract publishes
+                // {@code /oauth2/userinfo} (matches the surrounding {@code /oauth2/**}
+                // routing) and our integration tests + frontends already exercise that path.
+                // Override the setting so the {@code OidcUserInfoEndpointFilter}'s request
+                // matcher accepts {@code /oauth2/userinfo}; without this the filter falls
+                // through, the request leaves the SAS security chain and is denied with
+                // 403 by the second {@code @Order(2)} filter chain. The discovery document
+                // (@code /.well-known/openid-configuration#userinfo_endpoint}) is computed
+                // from this setting so it now reports {@code /oauth2/userinfo}, which is
+                // already what the discovery integration test asserts contains.
+                .oidcUserInfoEndpoint("/oauth2/userinfo")
                 .build();
     }
 
