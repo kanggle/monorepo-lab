@@ -82,15 +82,19 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — TASK-SCM-INT-001a 6 fix 후 잔존 2 fail (SupplierCircuitBreaker 첫 POST 응답 409 instead of 201 + WmsInventoryAdjusted snapshot=0 instead of 42) 의 deeper investigation. Root cause 분리 가설: (a) idempotency / supplier validation / aggregate state, (b) Kafka consumer subscription / partition assignment / WmsInventoryAdjustedConsumer business logic. Cycle 1 = `@Disabled` 제거 + 응답 body / consumer log diagnostic. 선행=TASK-SCM-INT-001a (PR #260 머지). 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## review
 
-- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption. PR #260 — 4/6 시나리오 PASS, 2 시나리오 `@Disabled("TASK-SCM-INT-001b: ...")` 분리. 6 fix (TASK-SCM-INT-001a) cascade. Phase 5 trigger 의 마지막 outstanding 의 1차 종결.
-
-- `TASK-SCM-INT-001a-e2e-environment-fixup.md` — PR #260 의 6 cascade fix. (1) Slf4jLogConsumer attach 진단 인프라, (2) inventory-visibility V1 outbox + processed_events tables, (3) inventory-visibility JpaConfig (libs:java-messaging suppress 우회), (4) gateway @Primary on accountKeyResolver (TASK-MONO-044d 패턴), (5) e2e classpath PostgreSQL JDBC driver, (6) ProcurementDbFixtures URL host:port 명시 + Kafka topic 사전 생성. 5 fix 중 3 production / 2 test. 4/6 PASS, 2 잔존 → TASK-SCM-INT-001b 분리.
+(empty)
 
 ## done
+
+- `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — PR #262. TASK-SCM-INT-001a 잔존 2 fail 의 deeper investigation 종결. Cycle 1 (diagnostic): `@Disabled` 제거 + `[INT-001b][cb]` draft response print + `[INT-001b][wms]` Kafka AdminClient dump (topics / consumer-group state + members + assignment / endOffset / committedOffsets). Cycle 1 evidence 로 두 root cause 결정적 분리: (a) **23505 unique_violation** — `PurchaseOrderApplicationService.draft` 의 `poNumber = "PO-" + poId.substring(0, 8)` 에서 UUID v7 첫 32 bits 가 ms timestamp 라 tight loop 충돌. (b) **42804 datatype_mismatch** — `InventoryNodeJpaEntity.contactInfo` JSONB 컬럼에 `@JdbcTypeCode(SqlTypes.JSON)` 누락, Hibernate 6 default String→BYTEA 디스크립터로 jsonb 거부. Cycle 2 (production fix): poId.substring(28) (rand_b tail) + `@JdbcTypeCode(SqlTypes.JSON)`. CI 6/6 PASS (E2E scm-platform 5m13s). Path-filter 로 비-scm 잡 10개 SKIP 으로 cycle 당 ~9 분. 2 cycle 종결. 2026-05-07.
+
+- `TASK-SCM-INT-001a-e2e-environment-fixup.md` — PR #260 의 6 cascade fix. (1) Slf4jLogConsumer attach 진단 인프라, (2) inventory-visibility V1 outbox + processed_events tables, (3) inventory-visibility JpaConfig (libs:java-messaging suppress 우회), (4) gateway @Primary on accountKeyResolver (TASK-MONO-044d 패턴), (5) e2e classpath PostgreSQL JDBC driver, (6) ProcurementDbFixtures URL host:port 명시 + Kafka topic 사전 생성. 5 fix 중 3 production / 2 test. 4/6 PASS, 2 잔존 → INT-001b 가 cycle 2 cycle 로 해소. 2026-05-07.
+
+- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — PR #260. scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption. INT-001a 의 6 fix + INT-001b 의 2 production fix (poNumber 무작위 suffix + `@JdbcTypeCode(JSON)` on contactInfo) 후 6/6 PASS 종결. **Phase 5 trigger 의 마지막 outstanding 해소** — TASK-MONO-047 verify-template-readiness exit 0 후보. 2026-05-07.
 
 - `TASK-SCM-BE-002d-procurement-testcontainers-it.md` — PR #257. TASK-SCM-BE-002b Phase 5 종결 — procurement-service Testcontainers IT 7 클래스 (multi-tenant isolation / outbox relay / supplier circuit breaker / supplier idempotency / state machine atomicity / asn overreceipt / audit log) + AbstractProcurementIntegrationTest base. Production small fix 3 (V1__init.sql `currency CHAR(3)` → `VARCHAR(3)` for PostgreSQL bpchar↔Hibernate VARCHAR mismatch / `@JdbcTypeCode(SqlTypes.JSON)` on `Supplier.contactInfoJson` + `AuditLog.beforeState`/`afterState` for Hibernate 6 JSONB binding) 별 commit 분리. Test infra fix: PO number suffix UUID v7 timestamp → pure random (collision in 65s window), AuditLog `@AfterEach` → `@AfterAll` for MockWebServer cross-test, IT-4 supplier-first call order alignment. local + CI 검증 — `Integration (scm-platform, Testcontainers)` Job pass 1m57s (PR #258 의 CI job 위에서). 9 tests PASS. **Phase 5 trigger 의 첫 outstanding 해소** — 남은 1건 = TASK-SCM-INT-001. 2026-05-07.
 
