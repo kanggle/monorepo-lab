@@ -1,0 +1,116 @@
+// scm-platform v1 cross-service E2E test module (TASK-SCM-INT-001).
+//
+// Runs Testcontainers-backed end-to-end suites that boot the three v1 services
+// (gateway-service + procurement-service + inventory-visibility-service)
+// alongside their backing infra (Postgres, Redis, Kafka KRaft) and a
+// host-side WireMock JWKS stand-in for GAP-issued RS256 tokens. A second
+// host-side WireMock stub plays the supplier role for the procurement happy
+// path / supplier-ack / circuit-breaker scenarios.
+//
+// Key conventions inherited from fan-platform tests/e2e (TASK-FAN-INT-001):
+//   - Pre-built service images: CI builds gateway/procurement/inventory-visibility
+//     images via `docker build`, then passes the image names to this Gradle
+//     module via -Dscm.e2e.{gateway,procurement,inventoryVisibility}Image. The
+//     base test class falls back to ImageFromDockerfile when those system
+//     properties are absent (local dev path), but only when the bootJar
+//     artifacts already exist under apps/<service>/build/libs/.
+//   - JWKS stand-in lives in the host JVM, reachable from containers via
+//     host.docker.internal (added with .withExtraHost on each container).
+//   - @Tag("e2e") + @Testcontainers(disabledWithoutDocker = true) — Windows
+//     dev machines without Docker skip cleanly; CI Linux runs the suite.
+
+plugins {
+    id 'java'
+}
+
+group = 'com.example.scmplatform.e2e'
+
+dependencies {
+    // JUnit 5 + AssertJ
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.assertj:assertj-core:3.27.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+
+    // Testcontainers (Postgres, Kafka, Redis, plus generic for service containers)
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+
+    // Awaitility for outbox -> Kafka eventual-consistency assertions
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // JSON parsing + JWT signing (envelope assertions, buyer/cross-tenant tokens)
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // MockWebServer for the JWKS stand-in + supplier mock (gateway/procurement/IV all hit the JWKS one)
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+
+    // Kafka client — used by the test consumer that asserts outbox -> Kafka
+    // publishes AND by the test producer that emits cross-project wms events.
+    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+    // Logging — Testcontainers + Awaitility benefit from a real backend during debugging
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+    testImplementation 'ch.qos.logback:logback-classic:1.5.12'
+
+    // NOTE: libs:java-test-support intentionally NOT depended on here.
+    // It transitively brings in spring-test + spring-boot dependency
+    // management coordinates that aren't applied to this stand-alone test
+    // module, which fails dependency resolution. The base test class only
+    // needs Testcontainers + JUnit 5 + Awaitility, all already declared above.
+}
+
+// Default `test` task is a no-op for the e2e module — there is no fast/Docker-free
+// test surface here. Everything runs under the dedicated `e2eTest` task below
+// so `./gradlew check` (which depends on `:test`) stays Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`.
+// CI (nightly + scm-e2e) invokes this task explicitly after pre-building the
+// three service docker images.
+tasks.register('e2eTest', Test) {
+    description = 'Runs Testcontainers-backed cross-service E2E tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+    shouldRunAfter tasks.named('test')
+
+    // Ensure the three service boot jars are produced before the containerized
+    // tests spin up — the base test class' ImageFromDockerfile fallback COPYs
+    // each bootJar from build/libs/ into the image. CI skips these
+    // dependencies via `-x :...:bootJar` after restoring jars from artifact.
+    dependsOn ':projects:scm-platform:apps:gateway-service:bootJar'
+    dependsOn ':projects:scm-platform:apps:procurement-service:bootJar'
+    dependsOn ':projects:scm-platform:apps:inventory-visibility-service:bootJar'
+
+    // Forward pre-built image names when set by CI. Local dev (without these
+    // properties) falls back to ImageFromDockerfile in ScmPlatformE2ETestBase.
+    [
+        'scm.e2e.gatewayImage',
+        'scm.e2e.procurementImage',
+        'scm.e2e.inventoryVisibilityImage'
+    ].each { prop ->
+        def val = System.getProperty(prop)
+        if (val) systemProperty prop, val
+    }
+
+    // Generous timeout — Kafka KRaft cold start + 3 Spring Boot services
+    // can exceed 60 s on a constrained CI runner.
+    systemProperty 'junit.jupiter.execution.timeout.default', '6m'
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
