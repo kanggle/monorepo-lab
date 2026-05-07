@@ -109,11 +109,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-048-scm-integration-ci-job.md` — `scm-integration-tests` CI job 추가 (procurement-service + inventory-visibility-service Testcontainers). `.github/workflows/ci.yml` 단일 파일 변경.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-048-scm-integration-ci-job.md` — `scm-integration-tests` CI job 추가 (procurement-service + inventory-visibility-service Testcontainers). `.github/workflows/ci.yml` 단일 파일 변경. inventory-visibility-service integrationTest task 존재 확인 (WSL2 검증). PR #258.
 
 ## done
 
