@@ -19,7 +19,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -66,9 +65,6 @@ class SupplierCircuitBreakerE2ETest extends ScmPlatformE2ETestBase {
 
     @Test
     @DisplayName("supplier 5xx storm -> circuit opens -> 503 SUPPLIER_UNAVAILABLE on submit")
-    @Disabled("TASK-SCM-INT-001b: first POST /api/v1/procurement/po returns 409 instead of 201 — "
-            + "deeper investigation needed (idempotency / supplier validation / aggregate state). "
-            + "All other 4 procurement scenarios pass with same fixture.")
     void supplierFailureStormOpensCircuitAndYields503() throws Exception {
         String buyerToken = jwt.signBuyerToken(randomAccountId());
         String supplierId = ProcurementDbFixtures.insertActiveSupplier(
@@ -103,6 +99,15 @@ class SupplierCircuitBreakerE2ETest extends ScmPlatformE2ETestBase {
                         .header("Idempotency-Key", uniqueIdempotencyKey())
                         .POST(HttpRequest.BodyPublishers.ofString(draftBody))
                         .build());
+                // TASK-SCM-INT-001b cycle-1 diagnostic: print the response of the
+                // first attempt regardless of status code so the CI log carries
+                // the error envelope (code + message) when status != 201. The
+                // ServiceContainerLogDumper TestWatcher fires container logs on
+                // testFailed, but the gateway-side error code is what tells us
+                // which production-code path emitted the 409.
+                System.err.println("[INT-001b][cb] iteration=" + i
+                        + " draft.status=" + draftResp.statusCode()
+                        + " draft.body=" + draftResp.body());
                 assertThat(draftResp.statusCode()).isEqualTo(201);
                 String poId = objectMapper.readTree(draftResp.body()).get("data").get("id").asText();
 
