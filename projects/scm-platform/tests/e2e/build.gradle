@@ -38,6 +38,12 @@ dependencies {
     testImplementation 'org.testcontainers:kafka:1.21.3'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
 
+    // PostgreSQL JDBC driver — required at runtime because ProcurementDbFixtures
+    // opens a direct JDBC connection (DriverManager.getConnection) to seed supplier
+    // rows. The org.testcontainers:postgresql artifact above only provides the
+    // PostgreSQLContainer wrapper, not the driver itself.
+    testRuntimeOnly 'org.postgresql:postgresql:42.7.4'
+
     // Awaitility for outbox -> Kafka eventual-consistency assertions
     testImplementation 'org.awaitility:awaitility:4.2.2'
 
