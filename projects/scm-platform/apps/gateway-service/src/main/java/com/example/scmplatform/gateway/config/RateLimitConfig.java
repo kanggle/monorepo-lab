@@ -50,6 +50,7 @@ public class RateLimitConfig {
      * pre-auth phase).
      */
     @Bean("accountKeyResolver")
+    @Primary
     KeyResolver accountKeyResolver() {
         return exchange -> ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication())

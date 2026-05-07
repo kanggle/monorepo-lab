@@ -88,3 +88,34 @@ CREATE TABLE shedlock (
     locked_by   VARCHAR(255)    NOT NULL,
     PRIMARY KEY (name)
 );
+
+-- ---------------------------------------------------------------------------
+-- outbox — schema matches libs/java-messaging OutboxJpaEntity exactly.
+-- Required because libs/java-messaging OutboxAutoConfiguration imports
+-- OutboxJpaConfig (@EntityScan on OutboxJpaEntity + ProcessedEventJpaEntity),
+-- which Hibernate ddl-auto=validate verifies on boot. Used by this service
+-- to publish SNAPSHOT_STALE alerts (architecture.md § "messaging/ ← KafkaTemplate
+-- alert publisher", § "publishes SNAPSHOT_STALE alerts").
+-- Keep field names + types in sync with libs/java-messaging.
+-- ---------------------------------------------------------------------------
+CREATE TABLE outbox (
+    id              BIGSERIAL    PRIMARY KEY,
+    aggregate_type  VARCHAR(100) NOT NULL,
+    aggregate_id    VARCHAR(255) NOT NULL,
+    event_type      VARCHAR(100) NOT NULL,
+    payload         TEXT         NOT NULL,
+    created_at      TIMESTAMP    NOT NULL,
+    published_at    TIMESTAMP,
+    status          VARCHAR(20)  NOT NULL,
+    CONSTRAINT ck_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED'))
+);
+CREATE INDEX idx_outbox_status_created_at
+    ON outbox (status, created_at);
+
+-- processed_events — required by libs/java-messaging ProcessedEventJpaEntity
+-- (declared via OutboxJpaConfig @EntityScan).
+CREATE TABLE processed_events (
+    event_id        VARCHAR(100) PRIMARY KEY,
+    event_type      VARCHAR(100) NOT NULL,
+    processed_at    TIMESTAMP    NOT NULL
+);

@@ -63,5 +63,6 @@ include(
 include(
     'projects:scm-platform:apps:gateway-service',
     'projects:scm-platform:apps:procurement-service',
-    'projects:scm-platform:apps:inventory-visibility-service'
+    'projects:scm-platform:apps:inventory-visibility-service',
+    'projects:scm-platform:tests:e2e'
 )
