@@ -75,7 +75,14 @@ public class PurchaseOrderApplicationService {
         supplier.ensureUsableForOrdering();
 
         String poId = UuidV7.randomString();
-        String poNumber = "PO-" + poId.substring(0, 8).toUpperCase();
+        // poNumber suffix must be pure random — UUID v7's first 8 hex chars are
+        // a millisecond-resolution timestamp, so two drafts in the same ms (e.g.
+        // a buyer batching 6 POs in a tight loop) hash to the same prefix and
+        // trip the unique (tenant_id, po_number) constraint with a 23505. Use
+        // the random tail of UUID v7 instead (last 8 hex chars are pure rand_b
+        // per RFC 9562). TASK-SCM-INT-001b root cause; matches the IT-side
+        // pattern from TASK-SCM-BE-002d.
+        String poNumber = "PO-" + poId.substring(poId.length() - 8).toUpperCase();
         PurchaseOrder po = PurchaseOrder.createDraft(
                 poId,
                 actor.tenantId(),
