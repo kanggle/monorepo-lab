@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — TASK-SCM-INT-001a 6 fix 후 잔존 2 fail (SupplierCircuitBreaker 첫 POST 응답 409 instead of 201 + WmsInventoryAdjusted snapshot=0 instead of 42) 의 deeper investigation. Root cause 분리 가설: (a) idempotency / supplier validation / aggregate state, (b) Kafka consumer subscription / partition assignment / WmsInventoryAdjustedConsumer business logic. 진단은 logging 추가 후 cycle 1 → 응답 body + consumer log 확인. 두 `@Disabled` 제거 + 6/6 PASS 가 최종 상태. 선행=TASK-SCM-INT-001a (PR #260 머지). 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — TASK-SCM-INT-001a 6 fix 후 잔존 2 fail (SupplierCircuitBreaker 첫 POST 응답 409 instead of 201 + WmsInventoryAdjusted snapshot=0 instead of 42) 의 deeper investigation. Root cause 분리 가설: (a) idempotency / supplier validation / aggregate state, (b) Kafka consumer subscription / partition assignment / WmsInventoryAdjustedConsumer business logic. Cycle 1 = `@Disabled` 제거 + 응답 body / consumer log diagnostic. 선행=TASK-SCM-INT-001a (PR #260 머지). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
