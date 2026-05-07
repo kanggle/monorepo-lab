@@ -1,6 +1,6 @@
 # 2026-05-07 — Docker Desktop 4.36+ CLI proxy regression: Testcontainers blocked
 
-**Status**: BROKEN (autonomous fixes exhausted; user-side action required)
+**Status**: **RESOLVED** (2026-05-07 same day) via Rancher Desktop + DOCKER_API_VERSION env. See § Resolution at the bottom.
 
 **Affected tasks** (all 4 blocked from local Docker reproduction):
 
@@ -138,3 +138,56 @@ When the regression is resolved, append a "Resolution" section to this file with
 - Verification: SecurityServiceIntegrationTest single-test run output (expect `tests=1 failures=0 errors=0 skipped=0`)
 
 Do not delete this incident — keep the trail intact for future regression diagnosis.
+
+---
+
+## Resolution (2026-05-07, same day)
+
+**Path that worked**: Rancher Desktop coexistence + `DOCKER_API_VERSION` / `api.version` env forwarding. **No** Docker Desktop downgrade. **No** testcontainers version upgrade (1.20.4 retained).
+
+### Steps taken
+
+1. **Rancher Desktop install** (https://rancherdesktop.io/): Container Engine = `dockerd (moby)` (NOT `containerd` — Testcontainers requires moby for socket compatibility). Kubernetes optional (OFF saves memory). PATH integration auto.
+2. **Rancher Desktop GUI** > Preferences > **WSL** > **Integrations** > Ubuntu-22.04 toggle ON > Apply.
+3. **Docker Desktop** GUI > Settings > Resources > **WSL Integration** > Ubuntu-22.04 toggle OFF > Apply (CLI proxy disabled in WSL).
+4. **Docker Desktop quit** entirely (system tray right-click > Quit Docker Desktop). This step is required: leaving Docker Desktop running kept its dockerd binding `/var/run/docker.sock` first, blocking Rancher's takeover.
+5. **First Rancher GUI Apply** after Docker Desktop quit recreated socket with correct ownership: `srwxrwxrwx 1 root root /var/run/docker.sock` (Rancher dockerd, ID `46f64629-...`, ServerVersion `29.1.3`, no `com.docker.desktop` label).
+6. **Code change** ([PR #255](https://github.com/kanggle/monorepo-lab/pull/255), root `build.gradle`): forward `DOCKER_API_VERSION=1.45` env + `-Dapi.version=1.45` system property to all `Test` tasks. This forces docker-java to skip its stale default API version (1.32) which Rancher's dockerd rejects (minimum API 1.41).
+
+### What did NOT need to change
+
+| Attempted during diagnosis | Result |
+|---|---|
+| Testcontainers 1.20.4 → 1.21.3 BOM upgrade (`ext['testcontainers.version']`) | Resolved 1.21.3 successfully, but caused regression in `AuthIntegrationTest > Refresh token reuse → 401 TOKEN_REUSE_DETECTED` (1.21.x lifecycle / state-handling differences). **Reverted to 1.20.4.** |
+| docker-java direct version override | Not needed — system property `api.version=1.45` works on testcontainers 1.20.4's embedded docker-java |
+| Docker Desktop downgrade ≤ 4.35 | Not attempted; Rancher path resolved first |
+
+### Verification (WSL2 + Rancher Desktop dockerd 29.1.3)
+
+```
+$ DOCKER_API_VERSION=1.45 ./gradlew :projects:global-account-platform:apps:security-service:integrationTest \
+    --tests "com.example.security.integration.SecurityServiceIntegrationTest.consumeLoginSucceededEvent"
+BUILD SUCCESSFUL in 1m 25s
+# XML: tests="1" skipped="0" failures="0" errors="0" time="5.633"
+```
+
+[PR #255](https://github.com/kanggle/monorepo-lab/pull/255) CI all green: 12/12 jobs PASS including `Integration (global-account-platform, Testcontainers)` (60 tests / 1 failed transient / 9 skipped @Disabled — fail rate equivalent to main baseline).
+
+### Trade-offs of the chosen path
+
+- **Rancher Desktop coexistence**: 다른 dockerd, 별도 image cache. Docker Desktop 의 image / volumes 와 분리. dev 시 active context 골라 사용. `docker context use desktop-linux` 로 Docker Desktop 복귀 가능.
+- **Auto-update gotcha**: Rancher Desktop / Docker Desktop 둘 다 minor patch 받을 때 socket binding 우선순위 변경 가능성. 매번 Rancher 의 WSL Integration toggle 점검 권장.
+- **CI 영향 0**: GitHub Actions Linux runner 는 native dockerd, CLI proxy 무관. PR #255 의 env forwarding 은 CI 에서 no-op.
+
+### Affected tasks unblocked
+
+- TASK-MONO-046-7 (auth-service SAS 8 deferred) — Opus 권장
+- TASK-MONO-046-8 (consumer pipeline burst 3) — Opus 권장
+- TASK-SCM-BE-002d (procurement Testcontainers IT ≥ 7) — Sonnet 권장
+- TASK-SCM-INT-001 (cross-service E2E ≥ 6 + docker-compose.scm-e2e.yml) — Opus 권장
+
+이 4 task 는 다음 세션 (또는 fresh agent) 에서 dispatch.
+
+### Future regression prevention
+
+본 fix 는 `api.version` system property 만으로도 동작 — Spring Boot BOM 의 testcontainers 버전 의존도 없음. 향후 docker-java 가 default API version 갱신하면 본 env 가 no-op 되며 자연 롤백 가능 (kit dirt 0).
