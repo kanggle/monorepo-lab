@@ -204,7 +204,7 @@ jobs:
         # scm-platform integration tests carry @Tag("integration") and are
         # excluded from default :test/:check tasks (see each module's
         # build.gradle). Docker-backed integrationTest is invoked separately
-        # on dev environments / future scm-specific CI job.
+        # on dev environments / scm-integration-tests job below.
         # TASK-SCM-BE-001: gateway-service
         # TASK-SCM-BE-002: procurement-service
         # TASK-SCM-BE-003: inventory-visibility-service
@@ -617,6 +617,57 @@ jobs:
           path: |
             projects/global-account-platform/apps/*/build/reports/tests/integrationTest/
             projects/global-account-platform/apps/*/build/test-results/integrationTest/
+          retention-days: 7
+
+  scm-integration-tests:
+    name: Integration (scm-platform, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # SCM integration suite boots MySQL + Postgres + (per-service WireMock)
+    # via Testcontainers. Scoped to monorepo-lab; standalone repo extraction
+    # relies on its own Docker-free `check` signal.
+    # Activate for SCM changes or cross-project (libs/workflows). TASK-MONO-048.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.scm == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run SCM integration suites
+        run: >-
+          ./gradlew
+          :projects:scm-platform:apps:procurement-service:integrationTest
+          :projects:scm-platform:apps:inventory-visibility-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload SCM integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scm-integration-test-reports
+          path: |
+            projects/scm-platform/apps/*/build/reports/tests/integrationTest/
+            projects/scm-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:
