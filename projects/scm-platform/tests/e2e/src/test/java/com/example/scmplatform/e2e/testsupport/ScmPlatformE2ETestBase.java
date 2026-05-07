@@ -129,8 +129,14 @@ public abstract class ScmPlatformE2ETestBase {
         network = Network.newNetwork();
 
         // ----- Postgres with multi-database init script ---------------------
+        // Use the built-in 'postgres' admin DB so PostgreSQLContainer's automatic
+        // CREATE DATABASE step is a no-op; the init script then creates both
+        // service DBs (scm_procurement + scm_inventory_visibility) atomically.
+        // Pre-fix: withDatabaseName(DB_NAME_PROCUREMENT) caused entrypoint to
+        // CREATE DATABASE scm_procurement, then the init script tried the same
+        // CREATE → ON_ERROR_STOP=1 → exit 3 → wait-strategy timeout.
         postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE)
-                .withDatabaseName(DB_NAME_PROCUREMENT) // first DB; init script creates the second
+                .withDatabaseName("postgres")
                 .withUsername(DB_USERNAME)
                 .withPassword(DB_PASSWORD)
                 .withNetwork(network)
