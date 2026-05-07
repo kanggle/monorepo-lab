@@ -173,10 +173,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Happy-path tests per provider
     // ----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — WireMock stub
-    // registration or account-service downstream call does not complete successfully.
-    // Requires investigation of the full authorize→callback→social-signup flow.
-    @Disabled("TASK-MONO-046-7: Cluster C deferred")
+    // TASK-MONO-046-7 Cluster C: re-enabled for cycle 1 diagnostic.
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -186,18 +183,21 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         stubSocialSignup("acc-google-001", true);
         stubAccountStatus("acc-google-001", "ACTIVE");
 
-        performCallback("google", "auth-code-g", state)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.isNewAccount").value(true));
+        MvcResult cbResult = performCallback("google", "auth-code-g", state).andReturn();
+        System.err.println("[046-7][C-google] callback status="
+                + cbResult.getResponse().getStatus()
+                + " body=" + cbResult.getResponse().getContentAsString());
+        assertThat(cbResult.getResponse().getStatus()).isEqualTo(200);
+        JsonNode cbBody = objectMapper.readTree(cbResult.getResponse().getContentAsString());
+        assertThat(cbBody.path("accessToken").asText()).isNotBlank();
+        assertThat(cbBody.path("refreshToken").asText()).isNotBlank();
+        assertThat(cbBody.path("isNewAccount").asBoolean()).isTrue();
 
         assertSocialIdentity("GOOGLE", "google-sub-001", "acc-google-001");
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
-    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
-    @Disabled("TASK-MONO-046-7: Cluster C deferred")
+    // TASK-MONO-046-7 Cluster C: re-enabled for cycle 1 diagnostic.
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -226,16 +226,19 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         stubSocialSignup("acc-kakao-002", true);
         stubAccountStatus("acc-kakao-002", "ACTIVE");
 
-        performCallback("kakao", "auth-code-k", state)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewAccount").value(true));
+        MvcResult cbResult = performCallback("kakao", "auth-code-k", state).andReturn();
+        System.err.println("[046-7][C-kakao] callback status="
+                + cbResult.getResponse().getStatus()
+                + " body=" + cbResult.getResponse().getContentAsString());
+        assertThat(cbResult.getResponse().getStatus()).isEqualTo(200);
+        JsonNode cbBody = objectMapper.readTree(cbResult.getResponse().getContentAsString());
+        assertThat(cbBody.path("isNewAccount").asBoolean()).isTrue();
 
         assertSocialIdentity("KAKAO", "987654321", "acc-kakao-002");
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
-    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
-    @Disabled("TASK-MONO-046-7: Cluster C deferred")
+    // TASK-MONO-046-7 Cluster C: re-enabled for cycle 1 diagnostic.
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -245,16 +248,19 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         stubSocialSignup("acc-ms-003", true);
         stubAccountStatus("acc-ms-003", "ACTIVE");
 
-        performCallback("microsoft", "auth-code-m", state)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isNewAccount").value(true));
+        MvcResult cbResult = performCallback("microsoft", "auth-code-m", state).andReturn();
+        System.err.println("[046-7][C-msft] callback status="
+                + cbResult.getResponse().getStatus()
+                + " body=" + cbResult.getResponse().getContentAsString());
+        assertThat(cbResult.getResponse().getStatus()).isEqualTo(200);
+        JsonNode cbBody = objectMapper.readTree(cbResult.getResponse().getContentAsString());
+        assertThat(cbBody.path("isNewAccount").asBoolean()).isTrue();
 
         assertSocialIdentity("MICROSOFT", "ms-sub-003", "acc-ms-003");
         assertOutboxLoginMethod("acc-ms-003", "OAUTH_MICROSOFT");
     }
 
-    // TASK-MONO-046-7 Cluster C: OAuth callback integration fails — see googleHappyPath above.
-    @Disabled("TASK-MONO-046-7: Cluster C deferred")
+    // TASK-MONO-046-7 Cluster C: re-enabled for cycle 1 diagnostic.
     @Test
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
@@ -264,8 +270,11 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         stubSocialSignup("acc-ms-004", true);
         stubAccountStatus("acc-ms-004", "ACTIVE");
 
-        performCallback("microsoft", "auth-code-m4", state)
-                .andExpect(status().isOk());
+        MvcResult cbResult = performCallback("microsoft", "auth-code-m4", state).andReturn();
+        System.err.println("[046-7][C-msft-pu] callback status="
+                + cbResult.getResponse().getStatus()
+                + " body=" + cbResult.getResponse().getContentAsString());
+        assertThat(cbResult.getResponse().getStatus()).isEqualTo(200);
 
         String providerEmail = jdbcTemplate.queryForObject(
                 "SELECT provider_email FROM social_identities WHERE provider = 'MICROSOFT' AND provider_user_id = 'ms-sub-004'",

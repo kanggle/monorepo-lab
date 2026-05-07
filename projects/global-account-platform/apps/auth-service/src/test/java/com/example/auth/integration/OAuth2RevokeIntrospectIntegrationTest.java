@@ -189,10 +189,7 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
     // 4. authorization_code flow → revoke refresh_token → introspect → inactive
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster A: public-client revocation of refresh_token returns 401.
-    // SAS /oauth2/revoke requires client authentication; public client (demo-spa-client)
-    // fails because stock converter does not authenticate client_id-only revoke requests.
-    @Disabled("TASK-MONO-046-7: Cluster A deferred")
+    // TASK-MONO-046-7 Cluster A: re-enabled for cycle 1 diagnostic.
     @Test
     @Order(4)
     @DisplayName("authCode flow: issue refresh_token → revoke → introspect → active=false")
@@ -252,11 +249,17 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.active").value(true));
 
         // Revoke the refresh token (public client — no client secret)
-        mockMvc.perform(post("/oauth2/revoke")
+        MvcResult revokeResult = mockMvc.perform(post("/oauth2/revoke")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("token", authCodeRefreshToken)
                         .param("client_id", "demo-spa-client"))
-                .andExpect(status().isOk());
+                .andReturn();
+        System.err.println("[046-7][A3] revoke (public client) status="
+                + revokeResult.getResponse().getStatus()
+                + " body=" + revokeResult.getResponse().getContentAsString());
+        assertThat(revokeResult.getResponse().getStatus())
+                .as("[046-7][A3] /oauth2/revoke for public client must return 200 OK (RFC 7009)")
+                .isEqualTo(200);
 
         // Introspect the refresh token — must be inactive after revocation
         // Note: RFC 7662 allows either active=false or 200/active=false for refresh tokens.
