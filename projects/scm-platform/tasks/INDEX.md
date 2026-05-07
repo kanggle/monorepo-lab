@@ -78,7 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption (wms `wms.inventory.adjusted.v1` → scm inventory-visibility). docker-compose.scm-e2e.yml + ≥ 6 E2E tests + nightly CI job. Phase 4 catalyst 평가 1차 마무리 — Template 추출 단계 신호. 선행=BE-002 + BE-003 (모두 done). 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-SCM-INT-001-procurement-inventory-visibility-e2e.md` — scm-platform 첫 cross-service E2E. procurement → outbox → Kafka → inventory-visibility 흐름 + GAP IdP `tenant_id=scm` fail-closed + supplier circuit breaker E2E + cross-tenant isolation + cross-project event consumption (wms `wms.inventory.adjusted.v1` → scm inventory-visibility). docker-compose.scm-e2e.yml + ≥ 6 E2E tests + nightly CI job. Phase 4 catalyst 평가 1차 마무리 — Template 추출 단계 신호. 선행=BE-002 + BE-003 (모두 done). **현재 PR #260 draft — TASK-SCM-INT-001a 가 e2e 환경 fixup 후속 처리.** 분석=Opus 4.7 / 구현 권장=Opus.
+
+- `TASK-SCM-INT-001a-e2e-environment-fixup.md` — TASK-SCM-INT-001 (PR #260 draft) 의 e2e 환경 부팅 fail 진단·해소. 1차 fix (PG admin DB) 후 inventory-visibility-service 컨테이너 부팅 fail 잔존. 핵심: `Slf4jLogConsumer` attach 로 로그 가시성 확보 → inventory-visibility 만의 차이점 (cross-project Kafka consumer / ShedLock / @Scheduled / 누락 env) 진단. PR #260 head 에 commit 추가 (force-rebase 금지). 머지 시 INT-001 ready-for-review 전환. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
