@@ -42,7 +42,11 @@ public final class ProcurementDbFixtures {
         // Override the container default db name (which is the first DB —
         // scm_procurement in our setup) to be explicit; supports both
         // current setup and a future multi-DB driver.
-        String jdbcUrl = postgres.getJdbcUrl().replaceAll("/\\w+$", "/scm_procurement");
+        // Build the URL explicitly — getJdbcUrl() returns the admin DB ("postgres")
+        // with a trailing query string ("?loggerLevel=OFF") that breaks the
+        // naive `/\w+$` rewrite. Hit the per-service DB directly via host:port.
+        String jdbcUrl = "jdbc:postgresql://" + postgres.getHost() + ":"
+                + postgres.getMappedPort(5432) + "/scm_procurement";
         String sql = """
                 INSERT INTO suppliers (
                     id, tenant_id, name, status, created_at, updated_at, version
@@ -72,7 +76,11 @@ public final class ProcurementDbFixtures {
                                      String tenantId,
                                      String aggregateType,
                                      String aggregateId) throws SQLException {
-        String jdbcUrl = postgres.getJdbcUrl().replaceAll("/\\w+$", "/scm_procurement");
+        // Build the URL explicitly — getJdbcUrl() returns the admin DB ("postgres")
+        // with a trailing query string ("?loggerLevel=OFF") that breaks the
+        // naive `/\w+$` rewrite. Hit the per-service DB directly via host:port.
+        String jdbcUrl = "jdbc:postgresql://" + postgres.getHost() + ":"
+                + postgres.getMappedPort(5432) + "/scm_procurement";
         String sql = """
                 SELECT COUNT(*) FROM audit_log
                 WHERE tenant_id = ? AND aggregate_type = ? AND aggregate_id = ?
