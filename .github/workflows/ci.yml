@@ -383,6 +383,56 @@ jobs:
             projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
           retention-days: 1
 
+  scm-platform-boot-jars:
+    name: Package boot jars (scm-platform)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 15
+    # Activate for scm-platform changes or cross-project (libs/workflows).
+    # Packages the 3 scm-platform v1 backend services (gateway / procurement /
+    # inventory-visibility) as boot jars and uploads them as a single artifact
+    # consumed by the `scm-platform-e2e` job (TASK-SCM-INT-001).
+    if: >-
+      github.event_name == 'push' ||
+      needs.changes.outputs.libs == 'true' ||
+      needs.changes.outputs.workflows == 'true' ||
+      needs.changes.outputs.scm == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build scm-platform boot jars
+        run: >-
+          ./gradlew
+          :projects:scm-platform:apps:gateway-service:bootJar
+          :projects:scm-platform:apps:procurement-service:bootJar
+          :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Upload scm-platform boot jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: scm-platform-boot-jars
+          # upload-artifact@v4 strips the longest common prefix
+          # (`projects/scm-platform/apps/`) so the artifact root contains
+          # `<service>/build/libs/<service>.jar`. The scm-platform-e2e job
+          # restores them to their canonical locations.
+          path: |
+            projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
+            projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
+            projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+          retention-days: 1
+
   frontend-unit-tests:
     name: Frontend unit tests (ecommerce + fan-platform, vitest)
     runs-on: ubuntu-latest
@@ -922,4 +972,105 @@ jobs:
           path: |
             projects/fan-platform/tests/e2e/build/reports/tests/e2eTest/
             projects/fan-platform/tests/e2e/build/test-results/e2eTest/
+          retention-days: 7
+
+  scm-platform-e2e:
+    name: E2E (scm-platform v1 cross-service, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test, scm-platform-boot-jars]
+    timeout-minutes: 25
+    # Cross-service e2e suite (TASK-SCM-INT-001): boots gateway-service +
+    # procurement-service + inventory-visibility-service plus Postgres +
+    # Redis + Kafka via Testcontainers, a host-side WireMock JWKS stand-in,
+    # and a host-side supplier MockWebServer. Mirrors the fan-platform-e2e
+    # job's pattern: pre-build images via the Docker CLI to dodge the
+    # Docker 28 BuildKit gRPC hang in `ImageFromDockerfile`, then pass the
+    # image names via -Dscm.e2e.* so ScmPlatformE2ETestBase uses
+    # GenericContainer directly.
+    # Activate for scm-platform changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.scm == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Download scm-platform boot jars
+        uses: actions/download-artifact@v4
+        with:
+          name: scm-platform-boot-jars
+          path: artifact-staging-scm
+
+      - name: Restore scm-platform boot jar paths
+        # actions/upload-artifact@v4 strips the longest common prefix when
+        # multiple paths are uploaded. The scm-platform-boot-jars artifact
+        # therefore contains `<service>/build/libs/<service>.jar` (with
+        # `projects/scm-platform/apps/` stripped). Move them back to their
+        # canonical locations so the gateway/procurement/inventory-visibility
+        # Dockerfiles COPY the right path during the docker build below, AND
+        # so ScmPlatformE2ETestBase's locateOptionalJar fallback can resolve
+        # them when the dev-path system properties are unset.
+        run: |
+          mkdir -p projects/scm-platform/apps/gateway-service/build/libs/
+          mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
+          mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
+          mv artifact-staging-scm/gateway-service/build/libs/gateway-service.jar \
+             projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
+          mv artifact-staging-scm/procurement-service/build/libs/procurement-service.jar \
+             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
+          mv artifact-staging-scm/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
+             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build scm-platform service images for e2e
+        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
+        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
+        run: |
+          docker build -t scm-platform-gateway-service:e2e \
+            -f projects/scm-platform/apps/gateway-service/Dockerfile \
+            projects/scm-platform/apps/gateway-service/
+          docker build -t scm-platform-procurement-service:e2e \
+            -f projects/scm-platform/apps/procurement-service/Dockerfile \
+            projects/scm-platform/apps/procurement-service/
+          docker build -t scm-platform-inventory-visibility-service:e2e \
+            -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
+            projects/scm-platform/apps/inventory-visibility-service/
+
+      - name: Run scm-platform cross-service e2e suite
+        run: >-
+          ./gradlew
+          :projects:scm-platform:tests:e2e:e2eTest
+          -x :projects:scm-platform:apps:gateway-service:bootJar
+          -x :projects:scm-platform:apps:procurement-service:bootJar
+          -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
+          -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
+          -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload scm-platform e2e test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scm-platform-e2e-test-reports
+          path: |
+            projects/scm-platform/tests/e2e/build/reports/tests/e2eTest/
+            projects/scm-platform/tests/e2e/build/test-results/e2eTest/
           retention-days: 7
