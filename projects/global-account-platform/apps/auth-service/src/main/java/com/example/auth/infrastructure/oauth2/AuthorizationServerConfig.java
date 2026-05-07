@@ -118,12 +118,26 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
             OidcUserInfoMapper oidcUserInfoMapper,
-            OAuth2AuthorizationService oAuth2AuthorizationService) throws Exception {
+            OAuth2AuthorizationService oAuth2AuthorizationService,
+            RegisteredClientRepository registeredClientRepository) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         TenantIntrospectionCustomizer introspectionCustomizer = new TenantIntrospectionCustomizer();
+
+        // TASK-MONO-046-7 Cluster A: register a custom client-auth converter + provider
+        // that authenticates a public PKCE client for refresh_token grant and
+        // /oauth2/revoke when the request body carries client_id without a secret. SAS
+        // 1.4's stock PublicClientAuthenticationConverter only matches PKCE
+        // authorization-code requests (it requires code_verifier), so without these our
+        // demo-spa-client refresh and revoke flows return 401 invalid_client. The new
+        // converter explicitly skips requests that carry code_verifier so the existing
+        // PKCE wrong-code_verifier guard remains intact (Edge Case #1).
+        PublicClientNonPkceAuthenticationConverter publicClientNonPkceConverter =
+                new PublicClientNonPkceAuthenticationConverter();
+        PublicClientNonPkceAuthenticationProvider publicClientNonPkceProvider =
+                new PublicClientNonPkceAuthenticationProvider(registeredClientRepository);
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
@@ -132,6 +146,18 @@ public class AuthorizationServerConfig {
                                 .oidc(oidc ->
                                         oidc.userInfoEndpoint(userInfo ->
                                                 userInfo.userInfoMapper(oidcUserInfoMapper)))
+                                // TASK-MONO-046-7 Cluster A: prepend the non-PKCE
+                                // public client converter + provider so they run before
+                                // SAS's stock PublicClientAuthenticationConverter /
+                                // PublicClientAuthenticationProvider in the
+                                // DelegatingAuthenticationConverter / ProviderManager
+                                // chains. Stock entries continue to handle PKCE
+                                // authorization-code requests unchanged.
+                                .clientAuthentication(client -> client
+                                        .authenticationConverters(converters ->
+                                                converters.add(0, publicClientNonPkceConverter))
+                                        .authenticationProviders(providers ->
+                                                providers.add(0, publicClientNonPkceProvider)))
                                 // Phase 2b: add custom refresh_token provider.
                                 // OAuth2TokenGenerator is available as a shared object on HttpSecurity
                                 // after the SAS configurer has been applied via .with(). We use a
