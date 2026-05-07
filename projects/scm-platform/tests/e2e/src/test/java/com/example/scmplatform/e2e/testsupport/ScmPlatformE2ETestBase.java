@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -146,20 +147,23 @@ public abstract class ScmPlatformE2ETestBase {
                 .withCopyFileToContainer(
                         org.testcontainers.utility.MountableFile.forHostPath(
                                 locateFile("infra/postgres/init/01-create-databases.sh").toString()),
-                        "/docker-entrypoint-initdb.d/01-create-databases.sh");
+                        "/docker-entrypoint-initdb.d/01-create-databases.sh")
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.postgres")));
         postgres.start();
 
         // ----- Redis --------------------------------------------------------
         redis = new RedisContainer(DockerImageName.parse(REDIS_IMAGE))
                 .withNetwork(network)
-                .withNetworkAliases(REDIS_ALIAS);
+                .withNetworkAliases(REDIS_ALIAS)
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.redis")));
         redis.start();
 
         // ----- Kafka (KRaft) ------------------------------------------------
         kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE))
                 .withNetwork(network)
                 .withNetworkAliases(KAFKA_ALIAS)
-                .withListener(KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT);
+                .withListener(KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT)
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.kafka")));
         kafka.waitingFor(Wait.forLogMessage(".*Kafka Server started.*", 1)
                 .withStartupTimeout(Duration.ofMinutes(2)));
         kafka.start();
@@ -195,7 +199,8 @@ public abstract class ScmPlatformE2ETestBase {
                 .withEnv("OUTBOX_POLLING_INTERVAL_MS", "500")
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
-                        .withStartupTimeout(Duration.ofMinutes(3)));
+                        .withStartupTimeout(Duration.ofMinutes(3)))
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.procurement")));
         procurement.start();
 
         // ----- inventory-visibility-service --------------------------------
@@ -219,7 +224,8 @@ public abstract class ScmPlatformE2ETestBase {
                 .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
-                        .withStartupTimeout(Duration.ofMinutes(3)));
+                        .withStartupTimeout(Duration.ofMinutes(3)))
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.inventory-visibility")));
         inventoryVisibility.start();
 
         // ----- gateway-service ---------------------------------------------
@@ -245,7 +251,8 @@ public abstract class ScmPlatformE2ETestBase {
                 .withEnv("GATEWAY_JWKS_STARTUP_PROBE_ENABLED", "false")
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
-                        .withStartupTimeout(Duration.ofMinutes(3)));
+                        .withStartupTimeout(Duration.ofMinutes(3)))
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.gateway")));
         gateway.start();
 
         log.info("scm-platform e2e infrastructure ready: gateway={} procurement={} inventory-visibility={} kafka={}",
