@@ -495,7 +495,13 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
                 .isNotEmpty();
         String payload = (String) rows.get(0).get("payload");
         JsonNode parsed = objectMapper.readTree(payload);
-        assertThat(parsed.path("loginMethod").asText()).isEqualTo(expectedLoginMethod);
+        // TASK-MONO-046-7 Cluster C: BaseEventPublisher wraps the publisher map under the
+        // "payload" envelope field (eventId, eventType, source, occurredAt, schemaVersion,
+        // partitionKey, payload). The legacy assertion read the top-level loginMethod which
+        // does not exist on the envelope and silently returns "" — same drift root cause as
+        // TASK-MONO-046-5 PR #234 PiiMaskingIntegrationTest fix.
+        assertThat(parsed.path("payload").path("loginMethod").asText())
+                .isEqualTo(expectedLoginMethod);
     }
 
     @SuppressWarnings("unused")
