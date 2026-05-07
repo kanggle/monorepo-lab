@@ -113,9 +113,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-048-scm-integration-ci-job.md` — `scm-integration-tests` CI job 추가 (procurement-service + inventory-visibility-service Testcontainers). `.github/workflows/ci.yml` 단일 파일 변경. inventory-visibility-service integrationTest task 존재 확인 (WSL2 검증). PR #258.
+(empty)
 
 ## done
+
+- `TASK-MONO-048-scm-integration-ci-job.md` — PR #258. `.github/workflows/ci.yml` 에 `Integration (scm-platform, Testcontainers)` job 신설 (`gap-integration-tests` 패턴 답습). `procurement-service:integrationTest` + `inventory-visibility-service:integrationTest` 두 service 실행. path-filter `scm` + `workflows`/`libs` cross-project 활성화. `monorepo-lab` repo gating 으로 standalone 추출 안전. self-CI 12/12 PASS (새 job 42s, 회귀 0). 후속: PR #257 (TASK-SCM-BE-002d) rebase + force-push 재 trigger → 새 SCM Integration job pass 1m57s 검증 → 머지. **Phase 5 trigger 평가 입력**: incident report `2026-05-07-docker-cli-proxy-regression.md` § L12 ("CI Linux runner = only reproduction path") 충족 — SCM service-internal IT 가 main CI 에서 deterministic 검증되는 첫 사례. 2026-05-07.
 
 - `TASK-MONO-047-template-extraction-readiness-and-plan.md` — PR #250 (spec) + PR #251 (impl) + chore PR. Phase 5 (Template 레포 추출) 진입 게이팅 tooling 완성. **scripts/extract-template.sh** 697 lines (dry-run/init-git/verbose flags, 348 files / 5.12 MB extraction 검증, source SHA 임베드 commit) + **scripts/verify-template-readiness.sh** 391 lines (6-check gate: boundary scan with intentional-occurrence excludes / Phase 4 outstanding done/ 검증 / no-churn 1-month gate / CI baseline green via gh / PROJECT.md frontmatter 유효성 / PORT_PREFIX legacy). TEMPLATE.md § Phase 5 Detail body trimmed to script pointers + readiness narrative; § Validation block 갱신. 현 monorepo state 에서 `verify-template-readiness.sh --no-git` 가 정확히 2 blocker 잡음 (Phase 4 outstanding 2 ready/ + ecommerce playwright config dead PORT_PREFIX 주석). 후속 candidate: Check 6 정교화 (live `=` assignment + `${...}` interpolation 만 매치, history doc/주석 제외) + ecommerce playwright config dead-comment cleanup. **Phase 5 actual 추출 자체는 ADR-MONO-003 candidate 발행 후 별 task 로 진행** (verify-template-readiness exit 0 시점). 분석=Opus 4.7 / 구현=Sonnet 4.6. 2026-05-07.
 
