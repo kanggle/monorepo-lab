@@ -47,7 +47,7 @@ CREATE TABLE purchase_orders (
     buyer_account_id        VARCHAR(36)    NOT NULL,
     status                  VARCHAR(30)    NOT NULL,
     total_amount            NUMERIC(18,2)  NOT NULL,
-    currency                CHAR(3)        NOT NULL,
+    currency                VARCHAR(3)     NOT NULL,
     submitted_at            TIMESTAMPTZ,
     acknowledged_at         TIMESTAMPTZ,
     confirmed_at            TIMESTAMPTZ,

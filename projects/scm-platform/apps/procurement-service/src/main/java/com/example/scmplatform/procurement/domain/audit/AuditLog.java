@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -49,9 +51,11 @@ public class AuditLog {
     @Column(name = "actor_type", length = 20, nullable = false)
     private ActorType actorType;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "before_state", columnDefinition = "jsonb")
     private String beforeState;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "after_state", columnDefinition = "jsonb")
     private String afterState;
 

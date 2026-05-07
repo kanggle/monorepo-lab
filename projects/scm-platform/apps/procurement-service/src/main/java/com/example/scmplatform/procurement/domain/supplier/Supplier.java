@@ -11,6 +11,8 @@ import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -46,6 +48,7 @@ public class Supplier {
     @Column(name = "contract_expires_at")
     private Instant contractExpiresAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "contact_info", columnDefinition = "jsonb")
     private String contactInfoJson;
 
