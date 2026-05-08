@@ -5,7 +5,6 @@ import com.example.messaging.event.BaseEventPublisher;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -193,7 +192,6 @@ public class AuthEventPublisher extends BaseEventPublisher {
      * <p>TASK-BE-248 Phase 2b: tenantId is required. A null or blank value throws
      * {@link IllegalArgumentException}.
      */
-    @Transactional
     public void publishTokenRefreshed(String accountId, String tenantId,
                                        String previousJti, String newJti, SessionContext ctx) {
         requireTenantId(tenantId);
