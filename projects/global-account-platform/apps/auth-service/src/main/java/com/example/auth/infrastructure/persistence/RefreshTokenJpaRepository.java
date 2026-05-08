@@ -29,14 +29,4 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE RefreshTokenJpaEntity r SET r.revoked = true WHERE r.deviceId = :deviceId AND r.revoked = false")
     int revokeAllByDeviceId(@Param("deviceId") String deviceId);
-
-    /**
-     * Sets {@code rotated_from} on an already-persisted refresh-token row identified by JTI.
-     * Used by {@link com.example.auth.infrastructure.oauth2.SasRefreshTokenAuthenticationProvider}
-     * after {@link com.example.auth.infrastructure.oauth2.DomainSyncOAuth2AuthorizationService}
-     * has inserted the new RT with {@code rotated_from=null}. TASK-MONO-046-7 Cluster A cycle 7.
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE RefreshTokenJpaEntity r SET r.rotatedFrom = :rotatedFrom WHERE r.jti = :jti")
-    int updateRotatedFromByJti(@Param("jti") String jti, @Param("rotatedFrom") String rotatedFrom);
 }

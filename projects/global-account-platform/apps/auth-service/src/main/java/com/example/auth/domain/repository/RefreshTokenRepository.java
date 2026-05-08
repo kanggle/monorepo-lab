@@ -45,12 +45,4 @@ public interface RefreshTokenRepository {
      * @return the number of tokens revoked
      */
     int revokeAllByDeviceId(String deviceId);
-
-    /**
-     * Sets {@code rotated_from} on an already-persisted RT identified by JTI.
-     * Used during refresh-token rotation when DomainSyncOAuth2AuthorizationService
-     * has already inserted the new RT row with {@code rotated_from=null}.
-     * Returns number of rows updated (0 if JTI not found).
-     */
-    int updateRotatedFromByJti(String jti, String rotatedFrom);
 }
