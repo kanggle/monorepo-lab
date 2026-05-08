@@ -24,6 +24,9 @@ v1), no public catalog reads.
 | Path prefix | Owning service |
 |---|---|
 | `/api/v1/master/**` | master-service |
+| `/api/v1/inventory/**` | inventory-service |
+| `/api/v1/inbound/**` | inbound-service |
+| `/api/v1/admin/**` | admin-service |
 | `/actuator/prometheus` | internal scrape only (bind to internal port in prod; fail closed externally) |
 
 All other paths return `404 NOT_FOUND`.
