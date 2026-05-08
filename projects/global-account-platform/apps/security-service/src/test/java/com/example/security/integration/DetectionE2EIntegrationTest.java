@@ -47,7 +47,7 @@ import static org.awaitility.Awaitility.await;
 // VelocityRule completes (offset race), OR Redis counter gets reset between Spring contexts, OR
 // auto-offset-reset=latest wins a race despite waitForAssignment. Requires Docker reproduce to
 // inspect Kafka offsets and Redis counter state at runtime. Deferred to TASK-MONO-046-8.
-@Disabled("TASK-MONO-046-8: burst-timing deferred from 046-6")
+@Disabled("TASK-MONO-046-8: burst-timing deferred — cycle3 (cold-start) reproduced; cycle 4+ env-blocked")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
