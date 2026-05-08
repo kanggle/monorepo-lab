@@ -8,7 +8,7 @@ admin-service Spring Boot bootstrap — Layered (deliberate exception) module + 
 
 # Status
 
-ready
+done — PR #277 (spec) + PR #280 (impl + IT fix) 머지 완료 (2026-05-08). Self-verdict: **APPROVED** (BE-042 / BE-043 패턴 답습 — 82 unit/slice/REST PASS + 5 IT (Testcontainers Postgres + Flyway V1+V99) PASS / bootJar SUCCESS / sibling regression 0 / CI 15/15 SUCCESS). 산출물: 124 file / +7021 lines / Layered architecture (deliberate exception, declared override of sibling Hexagonal) + 4 write-side aggregate (User/Role/UserRoleAssignment/Setting) + AdminDomainException sealed root + 11 subtype + 11 outbox 이벤트 타입 (admin.user.* + admin.role.* + admin.assignment.* + admin.settings.changed) + Spring Security 4 role 매트릭스 (WMS_SUPERADMIN > ADMIN > OPERATOR > VIEWER) + force cascade revoke (SUPERADMIN-only, AOP-proxy 검증) + GAP OIDC JwtDecoder + tenant_id=wms claim 강제 + Idempotency-Key Redis 24h cache + JSONB JdbcTypeCode 회귀가드 + Flyway V1 (6 table) + V99 seed (4 built-in role + admin@wms.internal + 4 default setting). Deviations 4건 정직 보고 (Setting GLOBAL scope sentinel UUID / service-local outbox / WebMvcTest authz 분리 검증 / Outbox Kafka end-to-end IT BE-046 와 함께). Fix 1: IT context 가 standalone profile + Redis autoconfig exclude 적용으로 CI Linux Integration job PASS 확보. 후속 = TASK-BE-046 admin-service-readmodel-projection (CQRS read-side, 18 source topic + 15 read-table + 7 dashboard REST + ops).
 
 # Owner
 
