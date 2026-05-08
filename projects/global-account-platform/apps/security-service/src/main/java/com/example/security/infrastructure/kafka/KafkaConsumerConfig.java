@@ -60,6 +60,19 @@ public class KafkaConsumerConfig {
         // is injected directly into DefaultKafkaProducerFactory via the 3-arg constructor.
         KafkaTemplate<String, Object> dlqTemplate = new KafkaTemplate<>(
                 new DefaultKafkaProducerFactory<>(producerProps, new StringSerializer(), dlqValueSerializer));
+        // TASK-MONO-046-8: surface DLPR publish failures (e.g. serializer mismatch
+        // for byte[] DLPR path) instead of swallowing them silently.
+        dlqTemplate.setProducerListener(new org.springframework.kafka.support.ProducerListener<>() {
+            @Override
+            public void onError(org.apache.kafka.clients.producer.ProducerRecord<String, Object> producerRecord,
+                                org.apache.kafka.clients.producer.RecordMetadata recordMetadata,
+                                Exception exception) {
+                log.error("DLQ publish FAILED for topic={} valueClass={}: {}",
+                        producerRecord.topic(),
+                        producerRecord.value() == null ? "null" : producerRecord.value().getClass().getName(),
+                        exception.getMessage(), exception);
+            }
+        });
 
         // Pre-create counters per reason so they are visible in Prometheus from startup.
         Counter deserializationDlqCounter = Counter.builder(DLQ_SIZE_METRIC)
@@ -82,19 +95,23 @@ public class KafkaConsumerConfig {
                     // because ErrorHandlingDeserializer returned null and stashed them on headers;
                     // DeadLetterPublishingRecoverer restores them transparently.
                     String rootCause = ex.getMessage();
-                    if (ex.getCause() instanceof DeserializationException de) {
-                        rootCause = "DeserializationException: " + de.getMessage();
+                    if (containsCause(ex, DeserializationException.class)) {
+                        rootCause = "DeserializationException: " + ex.getMessage();
                         deserializationDlqCounter.increment();
-                    } else if (ex instanceof MissingTenantIdException || isMissingTenantIdCause(ex)) {
+                    } else if (containsCause(ex, MissingTenantIdException.class)) {
                         tenantIdMissingDlqCounter.increment();
                     } else {
                         otherDlqCounter.increment();
                     }
-                    log.warn("Sending to DLQ: topic={}, eventKey={}, error={}",
-                            record.topic(), record.key(), rootCause);
+                    Object value = record.value();
+                    log.warn("Sending to DLQ: topic={}, eventKey={}, valueClass={}, error={}",
+                            record.topic(), record.key(),
+                            value == null ? "null" : value.getClass().getName(),
+                            rootCause);
                     return new TopicPartition(record.topic() + ".dlq", record.partition());
                 }
         );
+
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
         backOff.setMaxInterval(30000L);
@@ -108,9 +125,15 @@ public class KafkaConsumerConfig {
         return errorHandler;
     }
 
-    private static boolean isMissingTenantIdCause(Throwable ex) {
-        Throwable cause = ex.getCause();
-        return cause instanceof MissingTenantIdException;
+    private static boolean containsCause(Throwable ex, Class<? extends Throwable> target) {
+        Throwable cur = ex;
+        while (cur != null) {
+            if (target.isInstance(cur)) {
+                return true;
+            }
+            cur = cur.getCause() == cur ? null : cur.getCause();
+        }
+        return false;
     }
 
     /**

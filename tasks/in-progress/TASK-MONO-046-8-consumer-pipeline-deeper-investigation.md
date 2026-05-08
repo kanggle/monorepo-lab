@@ -8,7 +8,7 @@ GAP security-service IT — consumer-pipeline deeper investigation (3 tests defe
 
 # Status
 
-ready
+in-progress (Phase 0 partial diagnostics landed 2026-05-08 — environment-blocked, see § Phase 0 below)
 
 # Owner
 
@@ -200,6 +200,94 @@ creation in `AbstractIntegrationTest` or the test `@BeforeEach` setup using
 - [ ] Ready for review
 
 ---
+
+# Phase 0 — partial diagnostics (2026-05-08)
+
+## What landed (kept on `fix/mono-046-8-consumer-pipeline-deeper`)
+
+1. **`KafkaConsumerConfig` instrumentation** — destinationResolver now logs
+   `valueClass` of the in-flight record and uses a `containsCause(...)` walker
+   (replaces the old shallow `ex.getCause() instanceof DeserializationException`
+   check, which missed nested wrappers). `dlqTemplate.setProducerListener(...)`
+   surfaces previously-silent DLQ publish failures (the suspected fail mode for
+   the byte[] path). Production behaviour unchanged for happy paths.
+2. **`security-service/build.gradle` testcontainers BOM 1.21.3 override** —
+   matches the SCM services. The Spring Boot 3.4.1 default (1.20.4) ships a
+   docker-java whose npipe transport chokes on chunked responses from modern
+   dockerd. Effective for any dev who reaches a working dockerd.
+3. **`projects/global-account-platform/build.gradle` `:integrationTest`
+   testLogging** — `events / exceptionFormat / showStandardStreams = true`
+   so future cycles can read SKIP / FAIL reasons without `--info` digging.
+
+## What was diagnosed (cycle 3 — single cold-start window)
+
+| Test | Outcome | Concrete signal |
+|---|---|---|
+| `DlqRoutingIntegrationTest` Order 1, 3, 4 (control) | PASS | DLPR → `.dlq` happy path works for String values |
+| `DlqRoutingIntegrationTest.invalidBytesRoutedToDlq` (Order 2, byte[]) | **FAIL** | `Sending to DLQ: topic=auth.login.failed, eventKey=acc-dlq-002, error=Listener method ... threw exception` logged, then **60s Awaitility timeout** with zero records on `auth.login.failed.dlq`. Error classified into the `else` branch (not `DeserializationException`, not `MissingTenantIdException`), implying the deserialize chain did NOT surface a `DeserializationException` — `StrictJsonStringDeserializer.deserialize(byte[])` throws `org.apache.kafka.common.errors.SerializationException` which `ErrorHandlingDeserializer` may or may not have wrapped on the cause chain |
+| `CrossTenantVelocityIntegrationTest` | not reached | env-blocked before reproduce window |
+| `DetectionE2EIntegrationTest` | not reached | env-blocked before reproduce window |
+
+## Updated working hypotheses (post-cycle-3)
+
+- **byte[] DLPR**: most-likely the DLPR call site IS being reached (log shows
+  `Sending to DLQ`) but the actual publish to `.dlq` is silently lost — either
+  (a) `DelegatingByTypeSerializer` cannot dispatch the record value (which is
+  `null` after EHD swallow + raw bytes only present on the header) and the
+  send future fails, or (b) DLPR's byte[] restoration from header lands on a
+  type that the serializer rejects. The new `setProducerListener.onError(...)`
+  hook will print the exact failure once a future cycle survives env-readiness.
+- **Burst tests** (CrossTenantVelocity / DetectionE2E): not yet reproduced.
+  Original 046-8 hypotheses (offset race, Redis TTL, consumer-group collision,
+  threshold race) remain open.
+
+## Environment blocker (the actual reason burn stopped)
+
+Local Windows + Rancher Desktop dockerd v29.1.3 + the
+`NpipeSocketClientProviderStrategy` from `~/.testcontainers.properties`
+exhibits a **transient regression**: the very first Test JVM after a
+`rdctl shutdown && rdctl start` connects fine
+(`Found Docker environment with local Npipe socket`), every subsequent JVM in
+the same dockerd lifetime fails immediately with
+`com.github.dockerjava.zerodep...MalformedChunkCodingException: Bad chunk header`.
+`docker run hello-world` and `docker version` both keep returning 200s, so the
+issue is specific to docker-java's chunked-response parser against Rancher's
+dockerd post-first-handshake.
+
+This caps the local burn rate at **one IT class per Rancher restart** — too
+expensive for a multi-cycle diagnostic. Commenting out the strategy line in
+`~/.testcontainers.properties` did not help (testcontainers still picks
+NpipeSocket as the only viable Windows strategy on auto-detect). CI Linux
+runners are unaffected.
+
+The PR-#255 incident report
+(`knowledge/incidents/2026-05-07-docker-cli-proxy-regression.md`) covers the
+adjacent Docker Desktop CLI-proxy regression, but the symptom here
+(`MalformedChunkCodingException` on chunked transfer-encoding) is a different
+docker-java vs dockerd interaction and may warrant its own incident note once
+fully isolated.
+
+## Next-cycle entry plan (when env stabilises)
+
+1. Confirm Rancher Desktop yields a stable connection — preferably switch to a
+   dockerd / Docker Desktop combination where docker-java doesn't see the
+   chunk-header regression, OR document a workaround.
+2. Re-enable the three `@Disabled` markers (annotations carry the
+   `TASK-MONO-046-8` tag and a one-line breadcrumb).
+3. Run `:integrationTest --tests DlqRoutingIntegrationTest.invalidBytesRoutedToDlq`
+   under the new `setProducerListener.onError` hook — read the `valueClass=...`
+   line + any `DLQ publish FAILED` callback to confirm whether the byte[]
+   path is (i) silent producer-side serializer mismatch or (ii) a different
+   cause-chain wrapper.
+4. Apply the smallest possible fix: most likely a `byte[].class →
+   ByteArraySerializer` registration tweak in the DLPR producer factory, or a
+   `record.value()` null-guard in `AbstractAuthEventConsumer.processEvent()`
+   so the deserialization-failure path stays NotRetryable.
+5. Move the burst-test diagnostic on top: introduce per-class consumer-group
+   isolation (the production `@KafkaListener` groupId is hardcoded
+   `security-service` whereas SCM's recently-shipped pattern overrides via
+   `${...random}` → much more reproducible offset semantics under
+   `@DirtiesContext(AFTER_CLASS)`).
 
 # Notes
 

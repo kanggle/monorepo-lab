@@ -59,5 +59,11 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        // TASK-MONO-046-8: Spring Boot 3.4.1's BOM pins testcontainers 1.20.4, whose
+        // bundled docker-java (NpipeSocket transport) chokes on chunked responses
+        // from dockerd v29+ with `MalformedChunkCodingException: Bad chunk header`.
+        // 1.21.3 ships a docker-java that handles modern dockerd correctly. SCM
+        // services already do this BOM override — same pattern here.
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
 }
