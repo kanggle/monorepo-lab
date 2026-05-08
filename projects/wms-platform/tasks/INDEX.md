@@ -67,11 +67,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-046-admin-service-readmodel-projection.md` — **TASK-BE-045 후속** (선행=BE-045 ready). admin-service CQRS **read-side** 완성. 4 *ProjectionService class (Master / Inbound / Outbound / Inventory) 가 18 source topic 분배 → `admin-projection` 단일 consumer group + EventDedupe (T8) + last_event_at LWW (`idempotency.md § 2`) → 15 read-side table (6 MasterRef + AsnSummary + InspectionSummary + OrderSummary + ShipmentSummary + InventorySnapshot + AdjustmentAudit + AlertLog + 2 ThroughputDaily) — 모든 JSONB `@JdbcTypeCode(SqlTypes.JSON)` 회귀가드. Flyway V2. `admin-service-api.md § 1` 7 dashboard endpoint (~12 method) + § 6.2 `/operations/projection-status` + § 1.6 alert acknowledge mutation (read-model write 의 유일한 application-layer 경로). Spring Security (`WMS_VIEWER+` dashboard / `WMS_OPERATOR+` ack / `WMS_ADMIN+` ops). Observability 5 metric (lag/dropped/error/query.latency/cache.hit). DLT routing + non-retryable list. ≥ 60 tests (Unit ≥25 + slice + persistence + REST + IT 18+ topic + replay test). 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-BE-046-admin-service-readmodel-projection.md` — **TASK-BE-045 후속** (선행=BE-045 ready). admin-service CQRS **read-side** 완성. 4 *ProjectionService class (Master / Inbound / Outbound / Inventory) 가 18 source topic 분배 → `admin-projection` 단일 consumer group + EventDedupe (T8) + last_event_at LWW (`idempotency.md § 2`) → 15 read-side table (6 MasterRef + AsnSummary + InspectionSummary + OrderSummary + ShipmentSummary + InventorySnapshot + AdjustmentAudit + AlertLog + 2 ThroughputDaily) — 모든 JSONB `@JdbcTypeCode(SqlTypes.JSON)` 회귀가드. Flyway V2. `admin-service-api.md § 1` 7 dashboard endpoint (~12 method) + § 6.2 `/operations/projection-status` + § 1.6 alert acknowledge mutation (read-model write 의 유일한 application-layer 경로). Spring Security (`WMS_VIEWER+` dashboard / `WMS_OPERATOR+` ack / `WMS_ADMIN+` ops). Observability 5 metric (lag/dropped/error/query.latency/cache.hit). DLT routing + non-retryable list. ≥ 60 tests (Unit ≥25 + slice + persistence + REST + IT 18+ topic + replay test). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
