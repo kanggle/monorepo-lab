@@ -103,11 +103,12 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-MONO-046-7a-auth-sas-deferred-5-after-046-7.md` — **046-7 Option X 후속** (선행=046-7 PR #264). 046-7 가 8 CI cycle 후 Cluster A (RT rotation/reuse/revoke 3) 에서 diminishing returns + cycle-7→8 regression → Option X 로 4/8 회복 후 종결. 잔존 5: Cluster A 3 (SasRefreshTokenAuthenticationProvider 아키텍처 재설계 필요 — @Service @Transactional bean 으로 전환, 수동 instantiation 제거) + Cluster C-2 2 (microsoftPreferredUsernameFallback + microsoftExistingEmailAutoLink 503 — Resilience4j circuit-breaker state-pollution 가설). 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분析=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
-- `TASK-MONO-046-7-auth-service-sas-deferred-8.md` — **046-1 Phase 2 분리** (선행=046-1). 046-1 PR #235 가 13 fail 중 5 회복 (login redirect HTML-only path, RT jti VARCHAR widening V0014, lazy account-service base-url 등). 잔존 8 method 3 cluster: A (RT rotation/reuse-detection/revoke 3) + B (userinfo tenant_id 1) + C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername 4). 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-MONO-046-7-auth-service-sas-deferred-8.md` — **046-1 Phase 2 분리** (선행=046-1). 046-1 PR #235 가 13 fail 중 5 회복 (login redirect HTML-only path, RT jti VARCHAR widening V0014, lazy account-service base-url 등). 잔존 8 method 3 cluster: A (RT rotation/reuse-detection/revoke 3) + B (userinfo tenant_id 1) + C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername 4). **Option X (2026-05-08): 8 cycle 후 4/8 회복 (Cluster B 1 + Cluster C happy-path 3) + 5 deferred → TASK-MONO-046-7a.** PR #264 (cycle 9 trigger 중). 분析=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
