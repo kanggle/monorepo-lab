@@ -8,7 +8,7 @@ admin-service read-model projection — 18 source-topic Kafka consumer + 15 read
 
 # Status
 
-ready
+done — PR #278 (spec) + PR #282 (impl) 머지 완료 (2026-05-08). Self-verdict: **APPROVED** (BE-042 / BE-043 / BE-045 패턴 답습 — 127 tests PASS / bootJar SUCCESS / sibling regression 0 (master + inventory + inbound + outbound + notification + gateway) / CI Integration job admin-service 14 IT (BE-045 5 + BE-046 9) PASS). 산출물: 89 file / +6374 lines / **CQRS read-side**. 4 *ProjectionService (Master 6 / Inbound 3 / Outbound 2 / Inventory 7 = 18 topic) + AdminEventDedupePort + last_event_at LWW guard + 3 mutation 패턴 (append-only PK=eventId / upsert with LWW / throughput counter) + 15 read-side table (6 MasterRef + AsnSummary + InspectionSummary + OrderSummary + ShipmentSummary + InventorySnapshot + AdjustmentAudit + AlertLog + 2 ThroughputDaily) + Flyway V2 + 8 dashboard controller + Operations endpoint + alert acknowledge mutation (read-model write 의 유일한 application-layer 경로) + 5 Micrometer metric (lag/dropped/error/query.latency/cache.hit) + DLT routing + non-retryable list (Json/IllegalArg/UnknownEventType) + JSONB JdbcTypeCode 회귀가드. **Deviations 정직 보고 8건**: Kafka Testcontainers IT 미포함 (TASK-BE-047 후보) / dashboard date-range 필터 미와이어 / X-Read-Model-Lag-Seconds 헤더 미와이어 / OperationsController per-topic lag 0/null / Throughput counter JPA upsert (raw SQL 대신) / V2 SQL DB role grants 미적용 (ops 책임) / inbound-events split topics drift / spec/contract 변경 0. **admin-service v1 종결** — portfolio 7 service 운영 진입 (gateway+master+inbound+inventory+outbound+notification+admin).
 
 # Owner
 
