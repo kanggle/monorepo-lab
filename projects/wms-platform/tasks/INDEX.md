@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-045-admin-service-bootstrap.md` — admin-service v1 첫 production-shaped slice. **Layered (deliberate exception, declared override of sibling Hexagonal preference)** 모듈 골격 + 4 write-side aggregate (User / Role / UserRoleAssignment / Setting) + state machine + invariants + JWT/security wiring (GAP OIDC, `tenant_id=wms`) + `admin-service-api.md § 2-5` REST write 경로 + Idempotency-Key (Redis 24h) + outbox 1 TX 안 9 이벤트 타입 (`admin.user.*` / `admin.role.*` / `admin.assignment.granted/revoked` / `admin.settings.changed`) + Spring Security 4 role 매트릭스 (`WMS_VIEWER` / `WMS_OPERATOR` / `WMS_ADMIN` / `WMS_SUPERADMIN`) + force cascade revoke (SUPERADMIN only) + Flyway V1 (4 write + outbox + dedupe) + V99 seed (4 built-in role + admin@wms.internal + 4 default setting). 선행 = TASK-BE-044 (PR #273 admin-service Open Items 8/8 close). **Out of scope (TASK-BE-046 분리)**: § 1 Dashboard / Read-Model 14 source-topic projection consumer + 12 read-side table + dashboard REST + ops endpoints. ≥ 50 tests (Unit ≥30 + slice + persistence Testcontainers + REST `@WebMvcTest` + outbox integration). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
