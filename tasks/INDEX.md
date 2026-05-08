@@ -107,6 +107,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
 
+- `TASK-MONO-046-8a-consumer-pipeline-after-046-8.md` — **046-8 Phase 0 후속** (선행=046-8 Phase 0 머지). Phase 0 instrumentation (KafkaConsumerConfig containsCause + ProducerListener.onError + valueClass logging + testcontainers BOM 1.21.3) 위에서 3 deferred test 의 root cause 확정 + 최소 fix. Phase 1 = byte[] DLPR (가설: AbstractAuthEventConsumer null-guard 또는 DelegatingByTypeSerializer dispatch 보강). Phase 2 = burst tests (가설: production @KafkaListener groupId hardcoded → SpEL ${...random.uuid} override 로 SCM 답습 패턴 적용). target ≤ 3 cycle. D4 churn freeze 면제 (regression fix path 카테고리 자연 확장). 분석=Opus 4.7 / 구현 권장=Opus.
+
 ## in-progress
 
 (empty)
