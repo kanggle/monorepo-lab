@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-005-inventory-visibility-consumer-it.md` — TASK-SCM-INT-001b 의 두 root cause (UUID v7 prefix collision / Hibernate JSONB 42804) 중 #2 (`InventoryNodeJpaEntity.contactInfo` JSONB) 의 service-internal IT 회귀 가드. e2e 5m13s 에서만 catch 되는 회귀를 IT 1.5min 에서 catch 하도록. 6+ Testcontainers IT (consumer apply / dedupe T8 / auto-create JSONB write / multi-tenant / staleness scheduler). BE-002d 패턴 답습. D4 churn freeze 영향 0 (project-internal). 분석=Opus 4.7 / 구현 권장=Sonnet.
 
 ## in-progress
 
