@@ -20,12 +20,17 @@ import org.springframework.test.context.ContextConfiguration;
 @Tag("integration")
 @SpringBootTest(classes = com.wms.admin.AdminServiceApplication.class,
         properties = {
-                "spring.profiles.active=test",
-                "spring.kafka.bootstrap-servers=PLAINTEXT://localhost:9092",
                 "spring.flyway.locations=classpath:db/migration",
-                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
+                "spring.autoconfigure.exclude="
+                        + "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration,"
+                        + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,"
+                        + "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration"
         })
-@ActiveProfiles("test")
+// `standalone` gates AdminOutboxPublisher (@Profile("!standalone")) +
+// RedisIdempotencyStore (@Profile("!standalone")) OFF so Flyway-only IT
+// boots without Kafka/Redis. `test` keeps test-specific config (random
+// consumer group-id reservation for BE-046).
+@ActiveProfiles({"test", "standalone"})
 @ContextConfiguration(initializers = AdminServiceIntegrationBase.Initializer.class)
 class FlywayMigrationIntegrationTest extends AdminServiceIntegrationBase {
 
