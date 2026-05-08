@@ -460,6 +460,11 @@ moved to `tasks/ready/`:
    REST + event-dedupe
 5. ✅ [`specs/services/admin-service/runbooks/read-model-rebuild.md`](runbooks/read-model-rebuild.md) —
    manual replay procedure
+5b. ✅ [`specs/services/admin-service/runbooks/db-role-grants.md`](runbooks/db-role-grants.md) —
+   `admin_app` GRANT / REVOKE narrowing for `admin_adjustment_audit` (full
+   append-only) and `admin_alert_log` (column-level UPDATE on
+   `acknowledged_at` / `acknowledged_by` only). Production / staging ops
+   procedure complementing the V2 SQL append-only comments (TASK-BE-048 #6)
 6. ✅ New error codes registered in
    [`platform/error-handling.md § Admin`](../../../../../platform/error-handling.md):
    `USER_NOT_FOUND`, `ROLE_NOT_FOUND`, `ASSIGNMENT_NOT_FOUND`,

@@ -5,10 +5,11 @@ import com.wms.admin.api.dashboard.dto.InspectionSummaryResponse;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.readmodel.inbound.AsnSummaryEntity;
 import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
-import com.wms.admin.readmodel.inbound.InspectionSummaryEntity;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,11 +41,17 @@ public class AsnDashboardController {
             @RequestParam(required = false) UUID supplierPartnerId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String source,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate expectedArriveDateFrom,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate expectedArriveDateTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+        DateRangeSupport.validate("expectedArriveDate", expectedArriveDateFrom, expectedArriveDateTo);
         Page<AsnSummaryEntity> result = asnRepo.search(warehouseId, supplierPartnerId, status,
-                source, PageableSupport.pageable(page, size, sort));
+                source, expectedArriveDateFrom, expectedArriveDateTo,
+                PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, AsnSummaryResponse::from);
     }
 

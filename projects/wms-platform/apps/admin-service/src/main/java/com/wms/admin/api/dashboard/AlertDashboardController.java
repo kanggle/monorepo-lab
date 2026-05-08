@@ -5,8 +5,10 @@ import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.application.alert.AlertAcknowledgeService;
 import com.wms.admin.readmodel.alert.AlertLogEntity;
 import com.wms.admin.readmodel.alert.AlertLogRepository;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,11 +51,16 @@ public class AlertDashboardController {
             @RequestParam(required = false) String alertType,
             @RequestParam(required = false) UUID warehouseId,
             @RequestParam(required = false) Boolean acknowledged,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant detectedAtFrom,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant detectedAtTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+        DateRangeSupport.validate("detectedAt", detectedAtFrom, detectedAtTo);
         Page<AlertLogEntity> result = repository.search(alertType, warehouseId, acknowledged,
-                PageableSupport.pageable(page, size, sort));
+                detectedAtFrom, detectedAtTo, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, AlertLogResponse::from);
     }
 

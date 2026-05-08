@@ -66,12 +66,21 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 
 | Topic | Event type(s) | Partition key |
 |---|---|---|
-| `wms.inbound.asn.received.v1` | `inbound.asn.received` | `asnId` |
-| `wms.inbound.asn.cancelled.v1` | `inbound.asn.cancelled` | `asnId` |
+| `wms.inbound.asn.received.v1` [^aggregate] | `inbound.asn.received` | `asnId` |
+| `wms.inbound.asn.cancelled.v1` [^aggregate] | `inbound.asn.cancelled` | `asnId` |
 | `wms.inbound.inspection.completed.v1` | `inbound.inspection.completed` | `asnId` |
 | `wms.inbound.putaway.instructed.v1` | `inbound.putaway.instructed` | `asnId` |
 | `wms.inbound.putaway.completed.v1` | `inbound.putaway.completed` | `asnId` |
-| `wms.inbound.asn.closed.v1` | `inbound.asn.closed` | `asnId` |
+| `wms.inbound.asn.closed.v1` [^aggregate] | `inbound.asn.closed` | `asnId` |
+
+[^aggregate]: **ASN topic split is producer-side implementation detail.**
+Consumers (notably `admin-service`'s read-model projection) refer to the
+trio collectively as a single logical aggregate `wms.inbound.asn.v1` in
+[`admin-events.md § Consumed Events`](admin-events.md). This producer-side
+table is authoritative for what is actually published; the consumer-side
+roll-up is a documentation convenience. No production-code coupling
+between the two views — admin-service's listener subscribes to all three
+split topics under one aggregate consumer-group (TASK-BE-048 #7).
 
 - `v1` in topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per

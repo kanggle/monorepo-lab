@@ -1,5 +1,6 @@
 package com.wms.admin.readmodel.outbound;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,10 +14,14 @@ public interface OrderSummaryRepository extends JpaRepository<OrderSummaryEntity
             + "WHERE (:warehouseId IS NULL OR o.warehouseId = :warehouseId) "
             + "AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId) "
             + "AND (:status IS NULL OR o.status = :status) "
-            + "AND (:sagaState IS NULL OR o.sagaState = :sagaState)")
+            + "AND (:sagaState IS NULL OR o.sagaState = :sagaState) "
+            + "AND (:requiredShipDateFrom IS NULL OR o.requiredShipDate >= :requiredShipDateFrom) "
+            + "AND (:requiredShipDateTo IS NULL OR o.requiredShipDate <= :requiredShipDateTo)")
     Page<OrderSummaryEntity> search(@Param("warehouseId") UUID warehouseId,
                                     @Param("customerPartnerId") UUID customerPartnerId,
                                     @Param("status") String status,
                                     @Param("sagaState") String sagaState,
+                                    @Param("requiredShipDateFrom") LocalDate requiredShipDateFrom,
+                                    @Param("requiredShipDateTo") LocalDate requiredShipDateTo,
                                     Pageable pageable);
 }

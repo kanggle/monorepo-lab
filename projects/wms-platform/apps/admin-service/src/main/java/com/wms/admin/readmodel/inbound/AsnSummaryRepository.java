@@ -1,5 +1,6 @@
 package com.wms.admin.readmodel.inbound;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,10 +14,14 @@ public interface AsnSummaryRepository extends JpaRepository<AsnSummaryEntity, UU
             + "WHERE (:warehouseId IS NULL OR a.warehouseId = :warehouseId) "
             + "AND (:supplierPartnerId IS NULL OR a.supplierPartnerId = :supplierPartnerId) "
             + "AND (:status IS NULL OR a.status = :status) "
-            + "AND (:source IS NULL OR a.source = :source)")
+            + "AND (:source IS NULL OR a.source = :source) "
+            + "AND (:expectedArriveDateFrom IS NULL OR a.expectedArriveDate >= :expectedArriveDateFrom) "
+            + "AND (:expectedArriveDateTo IS NULL OR a.expectedArriveDate <= :expectedArriveDateTo)")
     Page<AsnSummaryEntity> search(@Param("warehouseId") UUID warehouseId,
                                   @Param("supplierPartnerId") UUID supplierPartnerId,
                                   @Param("status") String status,
                                   @Param("source") String source,
+                                  @Param("expectedArriveDateFrom") LocalDate expectedArriveDateFrom,
+                                  @Param("expectedArriveDateTo") LocalDate expectedArriveDateTo,
                                   Pageable pageable);
 }

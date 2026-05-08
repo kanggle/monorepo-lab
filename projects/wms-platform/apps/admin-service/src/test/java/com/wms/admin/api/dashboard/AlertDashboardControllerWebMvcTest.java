@@ -50,7 +50,7 @@ class AlertDashboardControllerWebMvcTest {
     void list_viewer_returns200() throws Exception {
         Page<AlertLogEntity> page = new PageImpl<>(List.of(sampleAlert()),
                 PageRequest.of(0, 20), 1);
-        when(alertRepo.search(any(), any(), any(), any())).thenReturn(page);
+        when(alertRepo.search(any(), any(), any(), any(), any(), any())).thenReturn(page);
 
         mockMvc.perform(get("/api/v1/admin/dashboard/alerts")
                         .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
@@ -63,6 +63,38 @@ class AlertDashboardControllerWebMvcTest {
     void list_unauthenticated_returns401() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard/alerts"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void list_dateRangeFilter_passedToRepository() throws Exception {
+        Page<AlertLogEntity> page = new PageImpl<>(java.util.List.of(),
+                PageRequest.of(0, 20), 0);
+        when(alertRepo.search(any(), any(), any(), any(), any(), any())).thenReturn(page);
+
+        Instant from = Instant.parse("2026-05-09T00:00:00Z");
+        Instant to = Instant.parse("2026-05-09T23:59:59Z");
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/alerts")
+                        .param("detectedAtFrom", from.toString())
+                        .param("detectedAtTo", to.toString())
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(alertRepo).search(any(), any(), any(),
+                org.mockito.ArgumentMatchers.eq(from),
+                org.mockito.ArgumentMatchers.eq(to), any());
+    }
+
+    @Test
+    void list_dateRangeInverted_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard/alerts")
+                        .param("detectedAtFrom", "2026-05-09T23:59:59Z")
+                        .param("detectedAtTo", "2026-05-09T00:00:00Z")
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
 
     @Test

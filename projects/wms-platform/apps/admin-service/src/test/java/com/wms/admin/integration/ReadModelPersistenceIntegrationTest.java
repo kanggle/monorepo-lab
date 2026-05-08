@@ -170,4 +170,40 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         assertThat(reloaded.getPutawayCount()).isEqualTo(2);
         assertThat(reloaded.getQtyReceived()).isEqualTo(70);
     }
+
+    @Test
+    void throughputInboundDaily_nativeUpsertIncrement_isAtomicAndLwwGuarded() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 10);
+
+        // First call: INSERT path (no row exists)
+        int firstAffected = throughputInboundRepo.upsertIncrement(date, warehouseId, 50, NOW);
+        assertThat(firstAffected).isEqualTo(1);
+
+        var afterInsert = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(afterInsert.getPutawayCount()).isEqualTo(1);
+        assertThat(afterInsert.getQtyReceived()).isEqualTo(50);
+
+        // Second call: ON CONFLICT DO UPDATE path (newer event)
+        int secondAffected = throughputInboundRepo.upsertIncrement(
+                date, warehouseId, 25, NOW.plusSeconds(60));
+        assertThat(secondAffected).isEqualTo(1);
+
+        var afterUpdate = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(afterUpdate.getPutawayCount()).isEqualTo(2);
+        assertThat(afterUpdate.getQtyReceived()).isEqualTo(75);
+
+        // Third call: stale event (occurredAt < existing last_event_at) — WHERE
+        // guard skips the UPDATE; affected = 0; row unchanged.
+        int staleAffected = throughputInboundRepo.upsertIncrement(
+                date, warehouseId, 999, NOW.minusSeconds(60));
+        assertThat(staleAffected).isEqualTo(0);
+
+        var afterStale = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(afterStale.getPutawayCount()).isEqualTo(2);
+        assertThat(afterStale.getQtyReceived()).isEqualTo(75);
+    }
 }

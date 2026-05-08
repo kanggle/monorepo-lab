@@ -1,5 +1,6 @@
 package com.wms.admin.readmodel.inventory;
 
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,11 +15,15 @@ public interface AdjustmentAuditRepository extends JpaRepository<AdjustmentAudit
             + "AND (:locationId IS NULL OR a.locationId = :locationId) "
             + "AND (:skuId IS NULL OR a.skuId = :skuId) "
             + "AND (:bucket IS NULL OR a.bucket = :bucket) "
-            + "AND (:reasonCode IS NULL OR a.reasonCode = :reasonCode)")
+            + "AND (:reasonCode IS NULL OR a.reasonCode = :reasonCode) "
+            + "AND (:occurredAtFrom IS NULL OR a.occurredAt >= :occurredAtFrom) "
+            + "AND (:occurredAtTo IS NULL OR a.occurredAt <= :occurredAtTo)")
     Page<AdjustmentAuditEntity> search(@Param("warehouseId") UUID warehouseId,
                                        @Param("locationId") UUID locationId,
                                        @Param("skuId") UUID skuId,
                                        @Param("bucket") String bucket,
                                        @Param("reasonCode") String reasonCode,
+                                       @Param("occurredAtFrom") Instant occurredAtFrom,
+                                       @Param("occurredAtTo") Instant occurredAtTo,
                                        Pageable pageable);
 }

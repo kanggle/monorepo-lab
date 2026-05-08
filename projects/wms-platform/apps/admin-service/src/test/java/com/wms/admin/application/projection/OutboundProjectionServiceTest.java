@@ -2,6 +2,8 @@ package com.wms.admin.application.projection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,12 +17,11 @@ import com.wms.admin.readmodel.outbound.OrderSummaryEntity;
 import com.wms.admin.readmodel.outbound.OrderSummaryRepository;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryEntity;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
-import com.wms.admin.readmodel.throughput.ThroughputDailyId;
-import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,13 +70,14 @@ class OutboundProjectionServiceTest {
     }
 
     @Test
-    void shippingConfirmed_insertsShipmentAndIncrementsCounter() throws Exception {
+    void shippingConfirmed_insertsShipmentAndUpsertsCounter() throws Exception {
         UUID shipmentId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         when(shipmentRepo.findById(shipmentId)).thenReturn(Optional.empty());
         when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
-        when(throughputRepo.findById(any(ThroughputDailyId.class))).thenReturn(Optional.empty());
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
 
         ProjectionEnvelope env = envelope("outbound.shipping.confirmed",
                 "wms.outbound.shipping.confirmed.v1",
@@ -86,7 +88,8 @@ class OutboundProjectionServiceTest {
 
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
         verify(shipmentRepo, times(1)).save(any(ShipmentSummaryEntity.class));
-        verify(throughputRepo, times(1)).save(any(ThroughputOutboundDailyEntity.class));
+        verify(throughputRepo, times(1)).upsertIncrement(
+                eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(150), any(Instant.class));
     }
 
     @Test

@@ -4,8 +4,10 @@ import com.wms.admin.api.dashboard.dto.ShipmentSummaryResponse;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryEntity;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,11 +33,16 @@ public class ShipmentDashboardController {
             @RequestParam(required = false) UUID warehouseId,
             @RequestParam(required = false) UUID orderId,
             @RequestParam(required = false) String carrierCode,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant shippedAtFrom,
+            @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant shippedAtTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+        DateRangeSupport.validate("shippedAt", shippedAtFrom, shippedAtTo);
         Page<ShipmentSummaryEntity> result = repository.search(warehouseId, orderId, carrierCode,
-                PageableSupport.pageable(page, size, sort));
+                shippedAtFrom, shippedAtTo, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, ShipmentSummaryResponse::from);
     }
 }

@@ -2,6 +2,8 @@ package com.wms.admin.application.projection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,8 +18,6 @@ import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
 import com.wms.admin.readmodel.inbound.InspectionSummaryEntity;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
-import com.wms.admin.readmodel.throughput.ThroughputDailyId;
-import com.wms.admin.readmodel.throughput.ThroughputInboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -102,10 +102,10 @@ class InboundProjectionServiceTest {
     }
 
     @Test
-    void putawayCompleted_incrementsThroughputCounter() throws Exception {
+    void putawayCompleted_callsAtomicUpsertIncrement() throws Exception {
         UUID warehouseId = UUID.randomUUID();
-        when(throughputRepo.findById(any(ThroughputDailyId.class)))
-                .thenReturn(Optional.empty());
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
 
         ProjectionEnvelope env = envelope("inbound.putaway.completed",
                 "wms.inbound.putaway.completed.v1",
@@ -113,16 +113,15 @@ class InboundProjectionServiceTest {
                         + "\"lines\":[{\"qtyReceived\":10},{\"qtyReceived\":15}]}");
 
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
-        verify(throughputRepo, times(1)).save(any(ThroughputInboundDailyEntity.class));
+        verify(throughputRepo, times(1)).upsertIncrement(
+                eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(25), any(Instant.class));
     }
 
     @Test
-    void putawayCompleted_lwwGuardSkipsStaleIncrement() throws Exception {
+    void putawayCompleted_zeroAffectedRowsMappedToIgnoredDuplicateLate() throws Exception {
         UUID warehouseId = UUID.randomUUID();
-        ThroughputInboundDailyEntity existing = new ThroughputInboundDailyEntity(
-                LocalDate.of(2026, 5, 9), warehouseId, 5, 100, NOW.plusSeconds(60));
-        when(throughputRepo.findById(any(ThroughputDailyId.class)))
-                .thenReturn(Optional.of(existing));
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), any(UUID.class), anyInt(),
+                any(Instant.class))).thenReturn(0);
 
         ProjectionEnvelope env = envelope("inbound.putaway.completed",
                 "wms.inbound.putaway.completed.v1",
@@ -130,7 +129,6 @@ class InboundProjectionServiceTest {
                         + "\"lines\":[{\"qtyReceived\":10}]}");
 
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.IGNORED_DUPLICATE_LATE);
-        assertThat(existing.getPutawayCount()).isEqualTo(5);
     }
 
     @Test
@@ -150,6 +148,7 @@ class InboundProjectionServiceTest {
 
         assertThat(second).isEqualTo(DedupeOutcome.DUPLICATE);
         verify(asnRepo, times(1)).save(any());
+        verify(throughputRepo, never()).upsertIncrement(any(), any(), anyInt(), any());
     }
 
     private ProjectionEnvelope envelope(String eventType, String topic, String payloadJson)

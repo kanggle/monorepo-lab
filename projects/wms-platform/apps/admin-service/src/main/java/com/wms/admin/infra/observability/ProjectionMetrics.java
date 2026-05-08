@@ -23,8 +23,15 @@ import org.springframework.stereotype.Component;
  *   <li>{@code admin.projection.error.count{topic}} — exception rate per
  *       consumer</li>
  *   <li>{@code admin.query.latency.p95{endpoint}} — slow dashboards visible</li>
- *   <li>{@code admin.query.cache.hit.rate} — Redis cache effectiveness (v1
- *       always 0; future v2)</li>
+ *   <li>{@code admin.query.cache.hit.rate} — Redis query-cache effectiveness.
+ *       <strong>v1: always 0</strong> because v1 has no Redis query cache
+ *       (only the idempotency-key cache, which is unrelated). The gauge is
+ *       still registered so the metric exists in the {@code /actuator/prometheus}
+ *       dump and downstream Grafana dashboards / alert rules can be authored
+ *       against a stable name. The gauge will start emitting non-zero values
+ *       once the v2 Redis dashboard cache lands (see
+ *       {@code architecture.md § Extensibility Notes — TimescaleDB / Redis}
+ *       and TASK-BE-048 deviation #8).</li>
  * </ul>
  */
 @Component
@@ -46,8 +53,11 @@ public class ProjectionMetrics {
     public ProjectionMetrics(MeterRegistry meterRegistry, Clock clock) {
         this.meterRegistry = meterRegistry;
         this.clock = clock;
-        // v1: cache miss rate is always 0 — register the gauge so the metric
-        // exists in the /actuator/prometheus dump for downstream alerting.
+        // v1: dashboard cache is not yet wired (no Redis-backed query cache),
+        // so the hit rate is always 0. The gauge is intentionally registered
+        // anyway so Grafana dashboards + Prometheus alert rules authored
+        // against this metric name remain stable across the v1 → v2 boundary.
+        // Per TASK-BE-048 deviation #8 — see also architecture.md § Observability.
         meterRegistry.gauge(CACHE_HIT_RATE_METRIC, 0.0d);
     }
 

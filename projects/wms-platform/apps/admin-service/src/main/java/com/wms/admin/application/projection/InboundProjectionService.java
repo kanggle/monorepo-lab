@@ -18,8 +18,6 @@ import com.wms.admin.readmodel.inbound.InspectionSummaryEntity;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
 import com.wms.admin.readmodel.master.PartnerRefEntity;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
-import com.wms.admin.readmodel.throughput.ThroughputDailyId;
-import com.wms.admin.readmodel.throughput.ThroughputInboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -246,16 +244,12 @@ public class InboundProjectionService {
             qtyDelta += optionalInteger(line, "qtyReceived", 0);
         }
 
-        ThroughputInboundDailyEntity row =
-                throughputRepo.findById(new ThroughputDailyId(date, warehouseId)).orElse(null);
-        if (row != null && row.getLastEventAt().isAfter(occurredAt)) {
+        // Atomic LWW upsert: insert or +1 with WHERE last_event_at <
+        // EXCLUDED.last_event_at. 0 affected rows = stale event silently
+        // skipped (no read-modify-write race window cross-pod).
+        int affected = throughputRepo.upsertIncrement(date, warehouseId, qtyDelta, occurredAt);
+        if (affected == 0) {
             return DedupeOutcome.IGNORED_DUPLICATE_LATE;
-        }
-        if (row == null) {
-            row = new ThroughputInboundDailyEntity(date, warehouseId, 1, qtyDelta, occurredAt);
-            throughputRepo.save(row);
-        } else {
-            row.increment(qtyDelta, occurredAt);
         }
         return DedupeOutcome.APPLIED;
     }
