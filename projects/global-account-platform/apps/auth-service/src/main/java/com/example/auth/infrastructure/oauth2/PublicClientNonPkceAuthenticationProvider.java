@@ -77,7 +77,17 @@ public final class PublicClientNonPkceAuthenticationProvider implements Authenti
 
         // Returning a fresh token marked authenticated. The OAuth2ClientAuthenticationToken
         // constructor that takes a RegisteredClient sets authenticated=true.
-        return new PublicClientNonPkceAuthenticationToken(registeredClient);
+        //
+        // CRITICAL (TASK-MONO-046-7 Cluster A cycle 2): forward the input token's
+        // additionalParameters to the new authenticated token. SAS's stock
+        // OAuth2RefreshTokenAuthenticationConverter / OAuth2TokenRevocationAuthenticationConverter
+        // re-read grant-specific parameters (refresh_token, scope, token, etc.) from
+        // OAuth2ClientAuthenticationToken.getAdditionalParameters() because the form body
+        // was already consumed by the client-auth filter. Dropping these parameters here
+        // makes the downstream converter NPE / fail to locate the refresh_token. The 2-arg
+        // constructor that produced an empty additional-parameter map has been removed.
+        return new PublicClientNonPkceAuthenticationToken(
+                registeredClient, request.getAdditionalParameters());
     }
 
     @Override
