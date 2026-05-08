@@ -7,8 +7,9 @@
 # state. Passwords are taken from environment variables with sensible defaults
 # for local development.
 #
-# gateway-service and notification-service do not appear here because they are
-# stateless (gateway) or event-consumer-only (notification) in v1.
+# gateway-service does not appear here because it is stateless in v1.
+# notification-service was added by TASK-BE-043 — owns delivery audit +
+# routing config + outbox in its own DB.
 # =============================================================================
 
 set -euo pipefail
@@ -32,10 +33,11 @@ create_role_and_db() {
 EOSQL
 }
 
-create_role_and_db master    "${MASTER_DB_PASSWORD:-master}"        master_db
-create_role_and_db inbound   "${INBOUND_DB_PASSWORD:-inbound}"      inbound_db
-create_role_and_db inventory "${INVENTORY_DB_PASSWORD:-inventory}"  inventory_db
-create_role_and_db outbound  "${OUTBOUND_DB_PASSWORD:-outbound}"    outbound_db
-create_role_and_db admin     "${ADMIN_DB_PASSWORD:-admin}"          admin_db
+create_role_and_db master       "${MASTER_DB_PASSWORD:-master}"             master_db
+create_role_and_db inbound      "${INBOUND_DB_PASSWORD:-inbound}"           inbound_db
+create_role_and_db inventory    "${INVENTORY_DB_PASSWORD:-inventory}"       inventory_db
+create_role_and_db outbound     "${OUTBOUND_DB_PASSWORD:-outbound}"         outbound_db
+create_role_and_db admin        "${ADMIN_DB_PASSWORD:-admin}"               admin_db
+create_role_and_db notification "${NOTIFICATION_DB_PASSWORD:-notification}" notification_db
 
-echo "wms postgres init complete: master_db, inbound_db, inventory_db, outbound_db, admin_db"
+echo "wms postgres init complete: master_db, inbound_db, inventory_db, outbound_db, admin_db, notification_db"

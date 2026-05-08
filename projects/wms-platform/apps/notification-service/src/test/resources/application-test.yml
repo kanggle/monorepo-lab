@@ -1,0 +1,28 @@
+# Test profile — picked up by integration tests via @ActiveProfiles("test").
+#
+# Per-class consumer group via ${random.uuid} prevents cross-class offset
+# leak when Spring contexts get re-created between test classes
+# (TASK-MONO-046-3 SCM/security-service learning).
+
+spring:
+  kafka:
+    consumer:
+      group-id: wms-notification-it-${random.uuid}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+
+wms:
+  notification:
+    outbox:
+      # Faster polling under test so awaitility doesn't time out.
+      polling-interval-ms: 200
+    delivery:
+      retry-poll-interval-ms: 1000
