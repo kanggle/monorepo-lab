@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-005-inventory-visibility-consumer-it.md` — TASK-SCM-INT-001b 의 두 root cause (UUID v7 prefix collision / Hibernate JSONB 42804) 중 #2 (`InventoryNodeJpaEntity.contactInfo` JSONB) 의 service-internal IT 회귀 가드. e2e 5m13s 에서만 catch 되는 회귀를 IT 1.5min 에서 catch 하도록. 6+ Testcontainers IT (consumer apply / dedupe T8 / auto-create JSONB write / multi-tenant / staleness scheduler). BE-002d 패턴 답습. D4 churn freeze 영향 0 (project-internal). 분석=Opus 4.7 / 구현 권장=Sonnet.
+(empty)
 
 ## in-progress
 
@@ -89,6 +89,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-SCM-BE-005-inventory-visibility-consumer-it.md` — spec PR #266 + impl PR #267. inventory-visibility-service Testcontainers IT 8 메서드 / 6 클래스 (AbstractInventoryVisibilityIntegrationTest base + WmsInventoryAdjustedConsumer 2 + WmsInventoryReceivedConsumer 2 + EventDedupe 1 + InventoryNodeAutoCreate 1 + CrossTenantIsolation 1 + StalenessScheduler 1). cycle 1 PASS 1m14s on Rancher Desktop dockerd 29.1.3 + DOCKER_API_VERSION=1.45. **JSONB 회귀 가드 검증 완료** — `@JdbcTypeCode(SqlTypes.JSON)` 일시 제거 시 IT-1 + IT-4 둘 다 fail with `PSQLException: column "contact_info" is of type jsonb but expression is of type character varying` (정확히 INT-001b root cause #2 패턴). e2e 5m13s 에서만 catch 되던 회귀를 IT 1.5min 에서 catch. INT-001b → BE-002d 패턴 답습. 2026-05-09.
 
 - `TASK-SCM-INT-001b-deeper-investigation-2-scenarios.md` — PR #262. TASK-SCM-INT-001a 잔존 2 fail 의 deeper investigation 종결. Cycle 1 (diagnostic): `@Disabled` 제거 + `[INT-001b][cb]` draft response print + `[INT-001b][wms]` Kafka AdminClient dump (topics / consumer-group state + members + assignment / endOffset / committedOffsets). Cycle 1 evidence 로 두 root cause 결정적 분리: (a) **23505 unique_violation** — `PurchaseOrderApplicationService.draft` 의 `poNumber = "PO-" + poId.substring(0, 8)` 에서 UUID v7 첫 32 bits 가 ms timestamp 라 tight loop 충돌. (b) **42804 datatype_mismatch** — `InventoryNodeJpaEntity.contactInfo` JSONB 컬럼에 `@JdbcTypeCode(SqlTypes.JSON)` 누락, Hibernate 6 default String→BYTEA 디스크립터로 jsonb 거부. Cycle 2 (production fix): poId.substring(28) (rand_b tail) + `@JdbcTypeCode(SqlTypes.JSON)`. CI 6/6 PASS (E2E scm-platform 5m13s). Path-filter 로 비-scm 잡 10개 SKIP 으로 cycle 당 ~9 분. 2 cycle 종결. 2026-05-07.
 
