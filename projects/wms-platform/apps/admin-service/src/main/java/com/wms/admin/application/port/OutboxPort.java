@@ -1,0 +1,20 @@
+package com.wms.admin.application.port;
+
+/**
+ * Append-an-event-to-outbox port. Caller's transaction (T3 — atomic with the
+ * aggregate row).
+ *
+ * <p>{@code payload} is the fully-serialised JSON envelope (per
+ * {@code admin-events.md § Global Envelope}); the adapter only persists it.
+ *
+ * <p>{@code partitionKey} is the aggregate id (or setting key) — see
+ * {@code admin-events.md § Topic Layout}.
+ */
+public interface OutboxPort {
+
+    void append(String aggregateType,
+                String aggregateId,
+                String eventType,
+                String payload,
+                String partitionKey);
+}

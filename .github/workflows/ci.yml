@@ -256,6 +256,7 @@ jobs:
           :projects:wms-platform:apps:master-service:bootJar
           :projects:wms-platform:apps:gateway-service:bootJar
           :projects:wms-platform:apps:notification-service:bootJar
+          :projects:wms-platform:apps:admin-service:bootJar
           --no-daemon
 
       - name: Upload jars
@@ -266,6 +267,7 @@ jobs:
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/wms-platform/apps/notification-service/build/libs/notification-service.jar
+            projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
           retention-days: 7
 
   ecommerce-boot-jars:
@@ -600,13 +602,15 @@ jobs:
         run: docker info
 
       - name: Run wms integration suites
-        # TASK-BE-043: notification-service joins the wms integration job. Both
-        # services boot Postgres + Kafka via Testcontainers; sharing the job
-        # avoids spinning up a second runner.
+        # TASK-BE-043: notification-service joins the wms integration job.
+        # TASK-BE-045: admin-service joins. All three services boot Postgres
+        # (+ Kafka where applicable) via Testcontainers; sharing the job
+        # avoids spinning up additional runners.
         run: >-
           ./gradlew
           :projects:wms-platform:apps:master-service:integrationTest
           :projects:wms-platform:apps:notification-service:integrationTest
+          :projects:wms-platform:apps:admin-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload integration test reports on failure
@@ -619,6 +623,8 @@ jobs:
             projects/wms-platform/apps/master-service/build/test-results/integrationTest/
             projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
             projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
+            projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
+            projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
           retention-days: 7
 
   gap-integration-tests:
