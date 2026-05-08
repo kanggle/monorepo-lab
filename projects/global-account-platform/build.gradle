@@ -73,5 +73,15 @@ subprojects {
             environment 'DOCKER_HOST', dockerHost
             systemProperty 'docker.host', dockerHost
         }
+
+        // Surface System.out / System.err from inside tests in the CI log so
+        // that diagnostic prints (e.g. `[046-7][cluster-a]` body / stack traces)
+        // are visible without per-test slf4j adapter setup. Same pattern as
+        // scm-platform tests/e2e/build.gradle (TASK-SCM-INT-001).
+        testLogging {
+            events 'passed', 'failed', 'skipped'
+            exceptionFormat 'full'
+            showStandardStreams = true
+        }
     }
 }
