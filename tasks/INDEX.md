@@ -103,11 +103,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
 - `TASK-MONO-046-7-auth-service-sas-deferred-8.md` — **046-1 Phase 2 분리** (선행=046-1). 046-1 PR #235 가 13 fail 중 5 회복 (login redirect HTML-only path, RT jti VARCHAR widening V0014, lazy account-service base-url 등). 잔존 8 method 3 cluster: A (RT rotation/reuse-detection/revoke 3) + B (userinfo tenant_id 1) + C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername 4). 분석=Opus 4.7 / 구현 권장=Opus.
+
+- `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **Phase 0 partial diagnostics landed 2026-05-08** on `fix/mono-046-8-consumer-pipeline-deeper`. Single cold-start cycle reproduced: byte[] DLPR test FAILED with concrete signal (`Sending to DLQ` log, then 60s zero-record on `.dlq`, classified into `else` branch ≠ `DeserializationException`); Order 1/3/4 PASS as control. Burst tests (CrossTenantVelocity / DetectionE2E) not reproduced — env-blocked. Production-side instrumentation kept: `KafkaConsumerConfig` `containsCause(...)` walker + `setProducerListener.onError(...)` to surface previously-silent DLQ publish failures + `valueClass=...` in destinationResolver log. Build-side: `security-service` testcontainers BOM 1.21.3 + `:integrationTest` testLogging. **Environment blocker** — Rancher Desktop dockerd v29.1.3 + docker-java zerodep npipe transport: first JVM after `rdctl shutdown && rdctl start` connects fine, every subsequent JVM `MalformedChunkCodingException`; caps local burn rate at 1 IT class per Rancher restart. Re-entry plan in spec § "Next-cycle entry plan". 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 

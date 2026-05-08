@@ -68,6 +68,12 @@ subprojects {
         jvmArgs '-XX:+EnableDynamicAgentLoading'
         systemProperty 'junit.jupiter.execution.timeout.default', '5m'
 
+        testLogging {
+            events 'passed', 'failed', 'skipped'
+            exceptionFormat 'full'
+            showStandardStreams = true
+        }
+
         def dockerHost = System.getenv('DOCKER_HOST') ?: System.getProperty('docker.host')
         if (dockerHost) {
             environment 'DOCKER_HOST', dockerHost
