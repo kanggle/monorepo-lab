@@ -22,6 +22,7 @@ public sealed class AdminDomainException extends RuntimeException
                 RoleNotFoundException,
                 AssignmentNotFoundException,
                 SettingNotFoundException,
+                AlertNotFoundException,
                 StateTransitionInvalidException {
 
     private final String code;

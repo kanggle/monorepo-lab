@@ -122,3 +122,25 @@ admin:
       role: ${WMS_TOPIC_ADMIN_ROLE:wms.admin.role.v1}
       assignment: ${WMS_TOPIC_ADMIN_ASSIGNMENT:wms.admin.assignment.v1}
       settings: ${WMS_TOPIC_ADMIN_SETTINGS:wms.admin.settings.v1}
+  projection:
+    kafka:
+      dlt-suffix: ${ADMIN_PROJECTION_DLT_SUFFIX:.DLT}
+      topics:
+        master-warehouse: ${ADMIN_PROJECTION_TOPIC_MASTER_WAREHOUSE:wms.master.warehouse.v1}
+        master-zone: ${ADMIN_PROJECTION_TOPIC_MASTER_ZONE:wms.master.zone.v1}
+        master-location: ${ADMIN_PROJECTION_TOPIC_MASTER_LOCATION:wms.master.location.v1}
+        master-sku: ${ADMIN_PROJECTION_TOPIC_MASTER_SKU:wms.master.sku.v1}
+        master-partner: ${ADMIN_PROJECTION_TOPIC_MASTER_PARTNER:wms.master.partner.v1}
+        master-lot: ${ADMIN_PROJECTION_TOPIC_MASTER_LOT:wms.master.lot.v1}
+        inbound-asn: ${ADMIN_PROJECTION_TOPIC_INBOUND_ASN:wms.inbound.asn.v1}
+        inbound-inspection: ${ADMIN_PROJECTION_TOPIC_INBOUND_INSPECTION:wms.inbound.inspection.completed.v1}
+        inbound-putaway: ${ADMIN_PROJECTION_TOPIC_INBOUND_PUTAWAY:wms.inbound.putaway.completed.v1}
+        outbound-order: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_ORDER:wms.outbound.order.v1}
+        outbound-shipping: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_SHIPPING:wms.outbound.shipping.confirmed.v1}
+        inventory-received: ${ADMIN_PROJECTION_TOPIC_INVENTORY_RECEIVED:wms.inventory.received.v1}
+        inventory-adjusted: ${ADMIN_PROJECTION_TOPIC_INVENTORY_ADJUSTED:wms.inventory.adjusted.v1}
+        inventory-transferred: ${ADMIN_PROJECTION_TOPIC_INVENTORY_TRANSFERRED:wms.inventory.transferred.v1}
+        inventory-reserved: ${ADMIN_PROJECTION_TOPIC_INVENTORY_RESERVED:wms.inventory.reserved.v1}
+        inventory-released: ${ADMIN_PROJECTION_TOPIC_INVENTORY_RELEASED:wms.inventory.released.v1}
+        inventory-confirmed: ${ADMIN_PROJECTION_TOPIC_INVENTORY_CONFIRMED:wms.inventory.confirmed.v1}
+        inventory-alert: ${ADMIN_PROJECTION_TOPIC_INVENTORY_ALERT:wms.inventory.alert.v1}

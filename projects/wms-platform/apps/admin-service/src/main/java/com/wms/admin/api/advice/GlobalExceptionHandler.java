@@ -2,6 +2,7 @@ package com.wms.admin.api.advice;
 
 import com.wms.admin.api.dto.ApiErrorEnvelope;
 import com.wms.admin.domain.error.AdminDomainException;
+import com.wms.admin.domain.error.AlertNotFoundException;
 import com.wms.admin.domain.error.AssignmentNotFoundException;
 import com.wms.admin.domain.error.RoleBuiltinImmutableException;
 import com.wms.admin.domain.error.RoleCodeDuplicateException;
@@ -58,6 +59,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SettingNotFoundException.class)
     public ResponseEntity<ApiErrorEnvelope> handleSettingNotFound(SettingNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(AlertNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleAlertNotFound(AlertNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, ex);
     }
 

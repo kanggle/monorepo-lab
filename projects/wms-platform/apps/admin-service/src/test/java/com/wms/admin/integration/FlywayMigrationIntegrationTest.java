@@ -55,6 +55,34 @@ class FlywayMigrationIntegrationTest extends AdminServiceIntegrationBase {
     }
 
     @Test
+    void v2ReadModelTablesExist() {
+        // BE-046 — 15 read-side tables created by V2__init_readmodel.sql.
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        for (String table : new String[]{
+                "admin_warehouse_ref",
+                "admin_zone_ref",
+                "admin_location_ref",
+                "admin_sku_ref",
+                "admin_lot_ref",
+                "admin_partner_ref",
+                "admin_asn_summary",
+                "admin_inspection_summary",
+                "admin_order_summary",
+                "admin_shipment_summary",
+                "admin_inventory_snapshot",
+                "admin_adjustment_audit",
+                "admin_alert_log",
+                "admin_throughput_inbound_daily",
+                "admin_throughput_outbound_daily"
+        }) {
+            Integer count = jdbc.queryForObject(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_name = ?",
+                    Integer.class, table);
+            assertThat(count).as("table %s must exist", table).isEqualTo(1);
+        }
+    }
+
+    @Test
     void v99_seeds_fourBuiltInRoles() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         Integer count = jdbc.queryForObject(
