@@ -1,0 +1,9 @@
+# Integration profile — used by Testcontainers-driven integration tests
+# (NotificationServiceIntegrationBase). Adds metrics endpoint for assertions
+# without relaxing the production actuator exposure.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics

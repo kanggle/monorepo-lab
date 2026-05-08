@@ -1,0 +1,97 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.wms.notification'
+
+dependencies {
+    // Spring Boot starters — note: no `web` starter (no REST surface in v1).
+    // Actuator alone exposes /actuator/health; the rest of the surface is
+    // event-driven only (Kafka in / Kafka-via-outbox out).
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Resilience4j — Slack adapter circuit breaker + retry (I1, I3 of
+    // integration-heavy trait). Decoupled-from-spring-boot starter so we can
+    // use the @CircuitBreaker / @Retry annotations on the adapter's methods.
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-reactor:2.2.0'
+
+    // Database
+    implementation 'org.postgresql:postgresql'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Structured logging (prod profile)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Shared libs — keep narrow. Do NOT pull libs:java-messaging because
+    // notification-service uses a service-local outbox table layout
+    // (notification_outbox with JSONB payload) that differs from the libs'
+    // base `outbox` table (TEXT payload). See architecture.md § Persistence.
+    implementation project(':libs:java-common')
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // WireMock — Slack adapter contract tests
+    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+    }
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'notification-service.jar'
+}
+
+// Mirror sibling pattern: default `test` excludes the integration tag for
+// fast CI. Integration suite is opt-in via `integrationTest`.
+test {
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+tasks.register('unitTest', Test) {
+    description = 'Runs unit and slice tests; excludes the integration tag.'
+    group = 'verification'
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs only @Tag("integration") tests (Testcontainers required).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+}

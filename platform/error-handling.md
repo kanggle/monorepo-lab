@@ -220,6 +220,18 @@ Owned by `admin-service`. See `rules/domains/wms.md` and
 | SETTING_VALIDATION_ERROR | 400 | Setting `valueJson` does not satisfy the persisted `schemaJson` |
 | SETTING_IMMUTABLE_FIELD | 422 | Attempted to change a Setting field that is immutable after creation (`key`, `scope`, `warehouseId`). Reuses `IMMUTABLE_FIELD` semantics with admin-specific naming |
 
+## Notification  `[domain: wms]`
+
+Owned by `notification-service`. See `specs/services/notification-service/`. Surface is non-REST in v1 (event-consumer only) — codes are observed in delivery audit + outbox payloads, not over HTTP. They become HTTP-mapped when v2 introduces the admin retry surface.
+
+| Code | HTTP | Description |
+|---|---|---|
+| DELIVERY_RETRY_EXHAUSTED | 422 | A `NotificationDelivery` reached `attemptCount == max_attempts` (5 in v1) with the last attempt failing. The delivery transitions to terminal `FAILED` and the outbox emits `notification.delivered` with `outcome=FAILED_RETRY_EXHAUSTED`. |
+| DELIVERY_STATE_TRANSITION_INVALID | 422 | Application code attempted a forbidden transition on a terminal `NotificationDelivery` (T4). Programmer error — surfaces only on a code path bug. |
+| IDEMPOTENCY_KEY_DUPLICATE | 409 | UNIQUE constraint on `delivery_idempotency_key` violated under concurrent routing. Caller may safely retry — the existing row is the canonical delivery for the (event, channel) tuple. |
+| ROUTING_AMBIGUOUS | 422 | Multiple enabled rules matched the same `eventType`. The partial UNIQUE index normally prevents this; surfaces only on bad manual DB edit (or two-rule race during admin v2 CRUD). |
+| ROUTING_RULE_NOT_FOUND | 404 | No enabled routing rule for the inbound `eventType`. Logged at WARN; the dedupe row records `outcome=NO_RULE`. Not necessarily an error in v1 — events not in the seeded rule table simply don't trigger alerts. |
+
 ## Product  `[domain: ecommerce]`
 
 Owned by `product-service`. See `rules/domains/ecommerce.md`.

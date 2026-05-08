@@ -62,6 +62,7 @@ services:
       INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory}
       OUTBOUND_DB_PASSWORD: ${OUTBOUND_DB_PASSWORD:-outbound}
       ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:-admin}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
@@ -185,6 +186,13 @@ services:
           "wms.outbound.shipped.v1"
           "wms.alert.low-stock"
           "wms.alert.anomaly-detected"
+          "wms.inventory.alert.v1"
+          "wms.inventory.adjusted.v1"
+          "wms.inbound.inspection.completed.v1"
+          "wms.inbound.asn.cancelled.v1"
+          "wms.outbound.order.cancelled.v1"
+          "wms.outbound.shipping.confirmed.v1"
+          "wms.notification.delivered.v1"
         )
 
         create_topic() {

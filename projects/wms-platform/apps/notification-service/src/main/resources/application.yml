@@ -1,0 +1,146 @@
+spring:
+  application:
+    name: notification-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notification_db}
+    username: ${DB_USERNAME:notification}
+    password: ${DB_PASSWORD:notification}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Architecture § Consumer Rules: one consumer group, per-topic listener
+      # containers within the same group. Per-class containers share the
+      # shared dedupe table for replay safety.
+      group-id: ${KAFKA_CONSUMER_GROUP:wms-notification-v1}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 2147483647
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8086}
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.wms.notification: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} eventId=%X{eventId:-} deliveryId=%X{deliveryId:-} channelId=%X{channelId:-} attempt=%X{attempt:-}]"
+
+# Resilience4j circuit breaker + retry config for the Slack adapter.
+# I1 (timeout) + I2 (circuit breaker) + I3 (retry with backoff) of the
+# integration-heavy trait. Webhook URLs are env-injected; bounded HTTP
+# timeouts come from the adapter's RestClient config (3s connect / 5s read).
+resilience4j:
+  circuitbreaker:
+    instances:
+      slack:
+        slidingWindowType: TIME_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+  retry:
+    instances:
+      slack:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2.0
+        # 4xx → permanent failure, must not retry. SlackChannelAdapter throws
+        # a SlackPermanentFailure subtype that resilience4j ignores via
+        # `ignoreExceptions`.
+        ignoreExceptions:
+          - com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException
+
+wms:
+  notification:
+    # Slack incoming webhook URLs are injected per channel alias. Empty
+    # default → SlackChannelAdapter throws ChannelNotConfiguredException →
+    # NotificationDelivery becomes FAILED (permanent) + outbox audit.
+    # Operators inject SLACK_WEBHOOK_URL_WMS_ALERTS / SLACK_WEBHOOK_URL_WMS_SHIPPING
+    # at deploy time (NEVER persisted to DB; NEVER logged).
+    channels:
+      slack:
+        wms-alerts:
+          webhook-url: ${SLACK_WEBHOOK_URL_WMS_ALERTS:}
+        wms-shipping:
+          webhook-url: ${SLACK_WEBHOOK_URL_WMS_SHIPPING:}
+    delivery:
+      max-attempts: 5
+      # 1s → 5s → 30s → 2m → 10m, capped, with ±20% jitter (architecture.md
+      # § Retry budget).
+      backoff-seconds: [1, 5, 30, 120, 600]
+      retry-poll-interval-ms: 5000
+    outbox:
+      polling-interval-ms: 500
+      batch-size: 100
+    routing:
+      cache-ttl-seconds: 60
+
+  kafka:
+    topics:
+      inventory-alert: ${WMS_TOPIC_INVENTORY_ALERT:wms.inventory.alert.v1}
+      inventory-adjusted: ${WMS_TOPIC_INVENTORY_ADJUSTED:wms.inventory.adjusted.v1}
+      inbound-inspection-completed: ${WMS_TOPIC_INBOUND_INSPECTION_COMPLETED:wms.inbound.inspection.completed.v1}
+      inbound-asn-cancelled: ${WMS_TOPIC_INBOUND_ASN_CANCELLED:wms.inbound.asn.cancelled.v1}
+      outbound-order-cancelled: ${WMS_TOPIC_OUTBOUND_ORDER_CANCELLED:wms.outbound.order.cancelled.v1}
+      outbound-shipping-confirmed: ${WMS_TOPIC_OUTBOUND_SHIPPING_CONFIRMED:wms.outbound.shipping.confirmed.v1}
+      notification-delivered: ${WMS_TOPIC_NOTIFICATION_DELIVERED:wms.notification.delivered.v1}

@@ -255,6 +255,7 @@ jobs:
           ./gradlew
           :projects:wms-platform:apps:master-service:bootJar
           :projects:wms-platform:apps:gateway-service:bootJar
+          :projects:wms-platform:apps:notification-service:bootJar
           --no-daemon
 
       - name: Upload jars
@@ -264,6 +265,7 @@ jobs:
           path: |
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
+            projects/wms-platform/apps/notification-service/build/libs/notification-service.jar
           retention-days: 7
 
   ecommerce-boot-jars:
@@ -563,7 +565,7 @@ jobs:
           retention-days: 7
 
   integration-tests:
-    name: Integration (master-service, Testcontainers)
+    name: Integration (master-service + notification-service, Testcontainers)
     runs-on: ubuntu-latest
     needs: [changes, build-and-test]
     timeout-minutes: 20
@@ -597,10 +599,14 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Run master-service integration suite
+      - name: Run wms integration suites
+        # TASK-BE-043: notification-service joins the wms integration job. Both
+        # services boot Postgres + Kafka via Testcontainers; sharing the job
+        # avoids spinning up a second runner.
         run: >-
           ./gradlew
           :projects:wms-platform:apps:master-service:integrationTest
+          :projects:wms-platform:apps:notification-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload integration test reports on failure
@@ -611,6 +617,8 @@ jobs:
           path: |
             projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
             projects/wms-platform/apps/master-service/build/test-results/integrationTest/
+            projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
+            projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
           retention-days: 7
 
   gap-integration-tests:
