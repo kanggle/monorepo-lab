@@ -79,6 +79,13 @@ WMS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `LOCATION_CODE_DUPLICATE` — 이미 존재하는 로케이션 코드
 - `ZONE_NOT_FOUND` — 존재하지 않는 구역
 
+### Admin / Operations
+- `USER_EMAIL_DUPLICATE` — 이미 사용 중인 사용자 이메일
+- `ROLE_CODE_DUPLICATE` — 이미 사용 중인 역할 코드
+- `USER_HAS_ACTIVE_ASSIGNMENTS` — 활성 역할 할당이 남아 있어 사용자 비활성화 불가 (force=true + SUPERADMIN 으로만 우회)
+- `ROLE_IN_USE` — 활성 사용자 할당이 남아 있어 역할 비활성화 불가 (force=true + SUPERADMIN 으로만 우회)
+- `SETTING_VALIDATION_ERROR` — 설정 `valueJson` 이 등록된 `schemaJson` 을 만족하지 않음
+
 ---
 
 ## Integration Boundaries

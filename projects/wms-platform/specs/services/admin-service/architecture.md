@@ -450,20 +450,28 @@ tables or detected drift.
 These must be completed before any `TASK-BE-*` targeting `admin-service` is
 moved to `tasks/ready/`:
 
-1. `specs/services/admin-service/domain-model.md` — User, Role, Assignment,
-   Setting + read-model table layout (consolidated)
-2. `specs/contracts/http/admin-service-api.md` — REST endpoints (dashboards,
-   user, role, settings)
-3. `specs/contracts/events/admin-events.md` — published event schemas
-4. `specs/services/admin-service/idempotency.md` — REST + event-dedupe
-5. `specs/services/admin-service/runbooks/read-model-rebuild.md` — manual
-   replay procedure
-6. Register new error codes in `platform/error-handling.md`:
-   `USER_EMAIL_DUPLICATE`, `ROLE_CODE_DUPLICATE`, `USER_HAS_ACTIVE_ASSIGNMENTS`,
-   `ROLE_IN_USE`, `SETTING_VALIDATION_ERROR`
-7. Add a gateway route for `admin-service` in `gateway-service`
-8. Add `## Overrides` entry in `PROJECT.md` declaring Layered exception for
-   admin-service
+1. ✅ [`specs/services/admin-service/domain-model.md`](domain-model.md) —
+   User, Role, Assignment, Setting + read-model table layout (consolidated)
+2. ✅ [`specs/contracts/http/admin-service-api.md`](../../contracts/http/admin-service-api.md) —
+   REST endpoints (dashboards, user, role, settings)
+3. ✅ [`specs/contracts/events/admin-events.md`](../../contracts/events/admin-events.md) —
+   published event schemas + consumed event projection effects
+4. ✅ [`specs/services/admin-service/idempotency.md`](idempotency.md) —
+   REST + event-dedupe
+5. ✅ [`specs/services/admin-service/runbooks/read-model-rebuild.md`](runbooks/read-model-rebuild.md) —
+   manual replay procedure
+6. ✅ New error codes registered in
+   [`platform/error-handling.md § Admin`](../../../../../platform/error-handling.md):
+   `USER_NOT_FOUND`, `ROLE_NOT_FOUND`, `ASSIGNMENT_NOT_FOUND`,
+   `SETTING_NOT_FOUND`, `USER_EMAIL_DUPLICATE`, `ROLE_CODE_DUPLICATE`,
+   `USER_HAS_ACTIVE_ASSIGNMENTS`, `ROLE_IN_USE`, `ROLE_BUILTIN_IMMUTABLE`,
+   `SETTING_VALIDATION_ERROR`, `SETTING_IMMUTABLE_FIELD`. Cross-referenced in
+   [`rules/domains/wms.md § Standard Error Codes — Admin / Operations`](../../../../../rules/domains/wms.md).
+7. ✅ Gateway route for `admin-service` declared in
+   [`specs/services/gateway-service/architecture.md § Routes`](../gateway-service/architecture.md)
+   and [`public-routes.md`](../gateway-service/public-routes.md)
+8. ✅ `## Overrides` entry in [`PROJECT.md`](../../../PROJECT.md) declares
+   Layered exception for admin-service (mirrors § Override Declaration above)
 
 ---
 

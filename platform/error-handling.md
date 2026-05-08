@@ -201,6 +201,25 @@ Owned by `outbound-service` (future). See `rules/domains/wms.md`.
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
 
+## Admin  `[domain: wms]`
+
+Owned by `admin-service`. See `rules/domains/wms.md` and
+`specs/services/admin-service/`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| USER_NOT_FOUND | 404 | User with given id does not exist |
+| ROLE_NOT_FOUND | 404 | Role with given id does not exist |
+| ASSIGNMENT_NOT_FOUND | 404 | UserRoleAssignment with given id does not exist |
+| SETTING_NOT_FOUND | 404 | Setting with given `(key, warehouseId)` tuple does not exist |
+| USER_EMAIL_DUPLICATE | 409 | `email` is already taken (case-insensitive uniqueness) |
+| ROLE_CODE_DUPLICATE | 409 | `roleCode` is already taken |
+| USER_HAS_ACTIVE_ASSIGNMENTS | 422 | Cannot deactivate a User who still has `ACTIVE` `UserRoleAssignment` rows. Override requires `force=true` and `WMS_SUPERADMIN` role |
+| ROLE_IN_USE | 422 | Cannot deactivate a Role still referenced by `ACTIVE` `UserRoleAssignment` rows. Override requires `force=true` and `WMS_SUPERADMIN` role |
+| ROLE_BUILTIN_IMMUTABLE | 422 | Built-in roles (`WMS_VIEWER` / `WMS_OPERATOR` / `WMS_ADMIN` / `WMS_SUPERADMIN`) cannot be deleted; only `permissionsJson` may be updated |
+| SETTING_VALIDATION_ERROR | 400 | Setting `valueJson` does not satisfy the persisted `schemaJson` |
+| SETTING_IMMUTABLE_FIELD | 422 | Attempted to change a Setting field that is immutable after creation (`key`, `scope`, `warehouseId`). Reuses `IMMUTABLE_FIELD` semantics with admin-specific naming |
+
 ## Product  `[domain: ecommerce]`
 
 Owned by `product-service`. See `rules/domains/ecommerce.md`.

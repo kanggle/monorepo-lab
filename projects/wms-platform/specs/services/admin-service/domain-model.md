@@ -621,16 +621,22 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`:
 
 ## Open Items
 
-- `specs/services/admin-service/idempotency.md` — REST + event-dedupe strategy
-- `specs/services/admin-service/runbooks/read-model-rebuild.md` — manual replay
-  procedure (architecture.md Open Items §5)
-- `specs/contracts/http/admin-service-api.md` — REST endpoints (dashboards, user,
-  role, settings)
-- `specs/contracts/events/admin-events.md` — published event schemas
-- `platform/error-handling.md` — register: `USER_EMAIL_DUPLICATE`,
-  `ROLE_CODE_DUPLICATE`, `USER_HAS_ACTIVE_ASSIGNMENTS`, `ROLE_IN_USE`,
-  `SETTING_VALIDATION_ERROR`
-- `PROJECT.md § Overrides` — declare Layered exception for admin-service
+- ✅ [`specs/services/admin-service/idempotency.md`](idempotency.md) —
+  REST + event-dedupe strategy
+- ✅ [`specs/services/admin-service/runbooks/read-model-rebuild.md`](runbooks/read-model-rebuild.md) —
+  manual replay procedure (architecture.md Open Items §5)
+- ✅ [`specs/contracts/http/admin-service-api.md`](../../contracts/http/admin-service-api.md) —
+  REST endpoints (dashboards, user, role, settings)
+- ✅ [`specs/contracts/events/admin-events.md`](../../contracts/events/admin-events.md) —
+  published event schemas + consumed projection effects
+- ✅ Error codes registered in
+  [`platform/error-handling.md § Admin`](../../../../../platform/error-handling.md):
+  `USER_EMAIL_DUPLICATE`, `ROLE_CODE_DUPLICATE`,
+  `USER_HAS_ACTIVE_ASSIGNMENTS`, `ROLE_IN_USE`, `SETTING_VALIDATION_ERROR`,
+  + supporting codes (`USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
+  `ASSIGNMENT_NOT_FOUND`, `SETTING_NOT_FOUND`, `ROLE_BUILTIN_IMMUTABLE`,
+  `SETTING_IMMUTABLE_FIELD`)
+- ✅ `PROJECT.md § Overrides` declares Layered exception for admin-service
   (architecture.md Open Items §8)
 
 ---

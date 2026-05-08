@@ -82,12 +82,32 @@ com.wms.gateway/
 | `/api/v1/master/**` | `master-service:8081` | required (any authenticated role) | standard (100 rpm/IP) |
 | `/api/v1/inventory/**` | `inventory-service:8083` | required (any authenticated role) | standard (100 rpm/IP) |
 | `/api/v1/inbound/**` | `inbound-service:8082` | required (any authenticated role) | standard (100 rpm/IP) |
+| `/api/v1/admin/**` | `admin-service:8086` | required (`WMS_VIEWER` minimum for read paths; finer authz at downstream) | admin tier (60 rpm/IP, separate key resolver) |
 | `/webhooks/erp/asn` | `inbound-service:8082` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
-All other paths return `404 NOT_FOUND`. Routes for outbound/admin/
+All other paths return `404 NOT_FOUND`. Routes for outbound and
 notification-service arrive in subsequent `TASK-INT-*` tickets.
+
+### Admin Service Route
+
+The `/api/v1/admin/**` prefix routes dashboard / KPI queries, user-role
+management, settings management, and projection-status to `admin-service`
+per [`specs/contracts/http/admin-service-api.md`](../../contracts/http/admin-service-api.md).
+JWT enforcement and header stripping follow the same pattern as
+`/api/v1/master/**`. Differences:
+
+- **Lower rate-limit tier (60 rpm/IP)** — admin endpoints are operator-driven
+  with low natural QPS; tightening the bucket reduces blast radius if
+  credentials are leaked. Mutating endpoints under `/admin/users`,
+  `/admin/roles`, `/admin/assignments`, `/admin/settings` are coarse-guarded
+  at gateway by role (`WMS_ADMIN` minimum) but **fine-grained authorization
+  remains enforced at admin-service** application layer.
+- **No write throttling at gateway** — `Idempotency-Key` is required on
+  mutations; per-key dedupe at downstream is the correctness boundary.
+- **CORS** — same allowed-origin set as `/api/v1/master/**`; admin UI is
+  served from the same browser origin as the rest of the platform.
 
 ### Inbound Service Route
 
@@ -243,5 +263,7 @@ Per `platform/security-rules.md` and master-service's config:
 - `specs/services/master-service/architecture.md` (downstream target)
 - `specs/services/inventory-service/architecture.md` (downstream target)
 - `specs/services/inbound-service/architecture.md` (downstream target — `/api/v1/inbound/**` and `/webhooks/erp/asn`)
+- `specs/services/admin-service/architecture.md` (downstream target — `/api/v1/admin/**`)
+- `specs/contracts/http/admin-service-api.md` (admin REST contract)
 - `specs/contracts/webhooks/erp-asn-webhook.md` (webhook wire-level contract)
 - `rules/traits/integration-heavy.md` (circuit-breaker / retry patterns)
