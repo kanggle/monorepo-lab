@@ -199,7 +199,6 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 2. Normal rotation: refresh_token → new access + refresh token
     // -----------------------------------------------------------------------
 
-    @Disabled("TASK-MONO-046-7a: SAS public-client refresh_token grant rotation requires architectural rework (8-cycle iteration on PR #264 hit InvalidDataAccessApiUsageException; partial recovery shipped, full fix deferred)")
     @Test
     @Order(2)
     @DisplayName("refresh_token grant: normal rotation → new tokens, old RT revoked in domain store")
@@ -290,7 +289,6 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // 4. Reuse detection: same refresh_token used twice → invalid_grant
     // -----------------------------------------------------------------------
 
-    @Disabled("TASK-MONO-046-7a: cascades on Order=2 (refreshTokenGrant_normalRotation) — both deferred together")
     @Test
     @Order(4)
     @DisplayName("reuse detection: reusing a rotated refresh_token → 400 invalid_grant")
