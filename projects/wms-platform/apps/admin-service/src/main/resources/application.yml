@@ -1,0 +1,124 @@
+spring:
+  application:
+    name: admin-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/admin_db}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:admin}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+
+  # GAP OIDC Resource Server. RS256 + JWKS + tenant_id=wms. See
+  # specs/integration/gap-integration.md.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Preemptive consumer group config — BE-046 will activate Kafka
+      # listeners; BE-045 has no consumers but the group-id is reserved.
+      group-id: ${KAFKA_CONSUMER_GROUP:admin-projection}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 2147483647
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8087}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.wms.admin: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}]"
+
+wms:
+  oauth2:
+    # Acceptable iss claim values during the D2-b deprecation window. First
+    # entry is the SAS issuer URL; the legacy "global-account-platform" string
+    # is kept so existing tokens validate. Drop after deprecation.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
+
+admin:
+  idempotency:
+    ttl-seconds: 86400
+  outbox:
+    polling-interval-ms: 500
+    initial-delay-ms: 5000
+    batch-size: 100
+  kafka:
+    topics:
+      user: ${WMS_TOPIC_ADMIN_USER:wms.admin.user.v1}
+      role: ${WMS_TOPIC_ADMIN_ROLE:wms.admin.role.v1}
+      assignment: ${WMS_TOPIC_ADMIN_ASSIGNMENT:wms.admin.assignment.v1}
+      settings: ${WMS_TOPIC_ADMIN_SETTINGS:wms.admin.settings.v1}
