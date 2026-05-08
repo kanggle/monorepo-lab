@@ -36,3 +36,4 @@ Desktop.ini
 .turbo/
 */data/*.mv.db
 */data/*.lock.db
+cycle1.log

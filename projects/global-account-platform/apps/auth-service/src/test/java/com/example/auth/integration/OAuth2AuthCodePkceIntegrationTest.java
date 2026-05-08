@@ -290,10 +290,6 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
     // 4. /oauth2/userinfo — access token → OIDC claims + tenant_id
     // -----------------------------------------------------------------------
 
-    // TASK-MONO-046-7 Cluster B: /oauth2/userinfo response missing tenant_id claim.
-    // SAS UserInfo endpoint does not automatically include custom JWT claims; requires
-    // OidcUserInfoMapper wiring investigation.
-    @Disabled("TASK-MONO-046-7: Cluster B deferred")
     @Test
     @Order(4)
     @DisplayName("userinfo: valid access_token → 200 with sub + email + tenant_id")

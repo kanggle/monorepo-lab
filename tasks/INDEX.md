@@ -103,13 +103,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-046-7-auth-service-sas-deferred-8.md` — **046-1 Phase 2 분리** (선행=046-1). 046-1 PR #235 가 13 fail 중 5 회복 (login redirect HTML-only path, RT jti VARCHAR widening V0014, lazy account-service base-url 등). 잔존 8 method 3 cluster: A (RT rotation/reuse-detection/revoke 3) + B (userinfo tenant_id 1) + C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink 5). PublicClient RT auth converter/provider 시도가 PKCE wrong-code_verifier regression 유발 → revert. 깊은 SAS internals 분석 + Docker reproduce 필수. 분석=Opus 4.7 / 구현 권장=Opus.
-
 - `TASK-MONO-046-8-consumer-pipeline-deeper-investigation.md` — **046-6 Phase 2 분리** (선행=046-6). 046-6 PR #236 Phase 1 (timeout 30s → 60s) 으로도 3 test 모두 fail — timing 단순 이슈가 아님 확정. CrossTenantVelocity 50-burst + DetectionE2E 10-burst + DlqRouting.invalidBytes byte[] timeout. 깊은 가설: consumer commit-before-VelocityRule race / Redis counter cross-context reset / DLPR header preservation 이슈. Docker reproduce 로 Kafka offset · Redis state · header byte 직접 검증 필요. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-046-7-auth-service-sas-deferred-8.md` — **046-1 Phase 2 분리** (선행=046-1). 046-1 PR #235 가 13 fail 중 5 회복 (login redirect HTML-only path, RT jti VARCHAR widening V0014, lazy account-service base-url 등). 잔존 8 method 3 cluster: A (RT rotation/reuse-detection/revoke 3) + B (userinfo tenant_id 1) + C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername 4). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
