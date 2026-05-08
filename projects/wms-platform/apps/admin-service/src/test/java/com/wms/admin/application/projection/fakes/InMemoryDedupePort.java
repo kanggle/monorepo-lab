@@ -2,8 +2,11 @@ package com.wms.admin.application.projection.fakes;
 
 import com.wms.admin.application.port.AdminEventDedupePort;
 import com.wms.admin.application.projection.DedupeOutcome;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -38,6 +41,23 @@ public class InMemoryDedupePort implements AdminEventDedupePort {
     public LifetimeCounts countLifetime() {
         return new LifetimeCounts(applied, duplicate, late, 0);
     }
+
+    @Override
+    public Map<String, Instant> maxProcessedAtByEventType(Collection<String> eventTypes) {
+        Map<String, Instant> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Instant> entry : eventTypeWatermarks.entrySet()) {
+            if (eventTypes.contains(entry.getKey())) {
+                out.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return out;
+    }
+
+    public void recordWatermark(String eventType, Instant processedAt) {
+        eventTypeWatermarks.put(eventType, processedAt);
+    }
+
+    private final Map<String, Instant> eventTypeWatermarks = new HashMap<>();
 
     public boolean isStale(UUID eventId) {
         return DedupeOutcome.IGNORED_DUPLICATE_LATE.name().equals(outcomes.get(eventId));

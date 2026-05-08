@@ -17,8 +17,6 @@ import com.wms.admin.readmodel.outbound.OrderSummaryEntity;
 import com.wms.admin.readmodel.outbound.OrderSummaryRepository;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryEntity;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
-import com.wms.admin.readmodel.throughput.ThroughputDailyId;
-import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyRepository;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -213,25 +211,12 @@ public class OutboundProjectionService {
             }
         });
 
-        // Throughput counter — atomic increment with LWW guard.
+        // Throughput counter — atomic LWW upsert. INSERT ... ON CONFLICT DO
+        // UPDATE WHERE last_event_at < EXCLUDED.last_event_at handles both the
+        // initial insert and the LWW guard at the SQL layer; 0 affected rows
+        // simply means a newer event already won the race.
         LocalDate date = effectiveShipped.atZone(ZoneOffset.UTC).toLocalDate();
-        ThroughputOutboundDailyEntity counter = throughputRepo
-                .findById(new ThroughputDailyId(date, warehouseId))
-                .orElse(null);
-        // Counter LWW guard is independent of shipment LWW (it's a different row).
-        // If the counter row's last_event_at is newer, skip the increment.
-        if (counter != null && counter.getLastEventAt().isAfter(occurredAt)) {
-            // Throughput skipped but shipment row already updated — treat as
-            // partial success (still APPLIED). The dedupe-row-level outcome is
-            // APPLIED; per-row LWW is the safety net.
-            return DedupeOutcome.APPLIED;
-        }
-        if (counter == null) {
-            counter = new ThroughputOutboundDailyEntity(date, warehouseId, 1, totalQty, occurredAt);
-            throughputRepo.save(counter);
-        } else {
-            counter.increment(totalQty, occurredAt);
-        }
+        throughputRepo.upsertIncrement(date, warehouseId, totalQty, occurredAt);
         return DedupeOutcome.APPLIED;
     }
 

@@ -2,8 +2,10 @@ package com.wms.admin.api.dashboard;
 
 import com.wms.admin.api.dashboard.dto.ProjectionStatusResponse;
 import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.infra.observability.KafkaLagProbe;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,11 +16,13 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * {@code admin-service-api.md § 6.2} — projection lag report.
  *
- * <p>v1 v1: minimal aggregate — lifetime applied/duplicate counts come from
- * {@code admin_event_dedupe}; per-topic lag reflects whatever the
- * {@code KafkaListenerEndpointRegistry} reports (or empty if the
- * {@code standalone} profile disabled consumers). The runbook references this
- * endpoint as a catch-up verification input.
+ * <p>When a {@link KafkaLagProbe} bean is present (default profile, Kafka
+ * available) the response carries per-topic {@code offsetLag},
+ * {@code lastEventAt} (AdminClient {@code OffsetSpec.maxTimestamp()}),
+ * {@code lastProjectedAt} ({@code admin_event_dedupe.processed_at} MAX), and
+ * {@code lagSeconds} (Micrometer Timer max for that topic). Under the
+ * {@code standalone} profile the probe is absent and the listener registry is
+ * the only fallback signal — the response degrades to existence rows.
  */
 @RestController
 @RequestMapping("/api/v1/admin/operations")
@@ -27,15 +31,17 @@ public class OperationsController {
 
     private final AdminEventDedupePort dedupePort;
     private final KafkaListenerEndpointRegistry registry;
+    private final KafkaLagProbe lagProbe;
     private final String consumerGroup;
 
     public OperationsController(AdminEventDedupePort dedupePort,
-                                @org.springframework.beans.factory.annotation.Autowired(
-                                        required = false) KafkaListenerEndpointRegistry registry,
+                                @Autowired(required = false) KafkaListenerEndpointRegistry registry,
+                                @Autowired(required = false) KafkaLagProbe lagProbe,
                                 @Value("${spring.kafka.consumer.group-id:admin-projection}")
                                         String consumerGroup) {
         this.dedupePort = dedupePort;
         this.registry = registry;
+        this.lagProbe = lagProbe;
         this.consumerGroup = consumerGroup;
     }
 
@@ -43,14 +49,21 @@ public class OperationsController {
     public ProjectionStatusResponse projectionStatus() {
         AdminEventDedupePort.LifetimeCounts counts = dedupePort.countLifetime();
         List<ProjectionStatusResponse.ProjectionEntry> entries = new ArrayList<>();
-        // Per-topic lag reporting requires Kafka-side admin client introspection
-        // (consumer-group offsets vs end offsets); v1 surfaces an empty list
-        // when the registry is absent (standalone profile) and an entry per
-        // listener container otherwise. The registry returns container ids
-        // rather than per-topic lag, so v1 limits the response to existence
-        // signals — exact lag SLI is from `admin.projection.lag.seconds` in
-        // Prometheus.
-        if (registry != null) {
+        double worst = 0.0d;
+
+        if (lagProbe != null) {
+            for (KafkaLagProbe.TopicLag tl : lagProbe.probe()) {
+                entries.add(new ProjectionStatusResponse.ProjectionEntry(
+                        tl.topic(),
+                        tl.consumerGroup(),
+                        tl.lagSeconds(),
+                        tl.lastEventAt(),
+                        tl.lastProjectedAt()));
+                if (tl.lagSeconds() > worst) {
+                    worst = tl.lagSeconds();
+                }
+            }
+        } else if (registry != null) {
             for (var container : registry.getListenerContainers()) {
                 String[] topics = container.getContainerProperties().getTopics();
                 if (topics == null) continue;
@@ -66,7 +79,7 @@ public class OperationsController {
         }
         return new ProjectionStatusResponse(
                 entries,
-                0.0d,
+                worst,
                 counts.applied(),
                 counts.ignoredDuplicate(),
                 counts.ignoredDuplicateLate(),

@@ -5,6 +5,10 @@ import com.wms.admin.application.projection.DedupeOutcome;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,5 +80,18 @@ public class AdminEventDedupePersistenceAdapter implements AdminEventDedupePort 
                 repository.countByOutcome(DedupeOutcome.DUPLICATE.name()),
                 repository.countByOutcome(DedupeOutcome.IGNORED_DUPLICATE_LATE.name()),
                 repository.countByOutcome(DedupeOutcome.FAILED.name()));
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
+    public Map<String, Instant> maxProcessedAtByEventType(Collection<String> eventTypes) {
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Instant> out = new LinkedHashMap<>();
+        for (Object[] row : repository.findMaxProcessedAtByEventTypes(eventTypes)) {
+            out.put((String) row[0], (Instant) row[1]);
+        }
+        return out;
     }
 }

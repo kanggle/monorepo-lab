@@ -1,6 +1,9 @@
 package com.wms.admin.application.port;
 
 import com.wms.admin.application.projection.DedupeOutcome;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -33,6 +36,14 @@ public interface AdminEventDedupePort {
 
     /** Lifetime aggregate counts. Powers the {@code /operations/projection-status} endpoint. */
     LifetimeCounts countLifetime();
+
+    /**
+     * Returns {@code MAX(processed_at)} per {@code eventType} for the supplied
+     * event types. Consumers compose this with the topic ↔ eventType-prefix map
+     * (see {@code KafkaLagProbe}) to derive each topic's
+     * {@code lastProjectedAt} value.
+     */
+    Map<String, Instant> maxProcessedAtByEventType(Collection<String> eventTypes);
 
     record LifetimeCounts(long applied, long ignoredDuplicate, long ignoredDuplicateLate, long failed) {
 

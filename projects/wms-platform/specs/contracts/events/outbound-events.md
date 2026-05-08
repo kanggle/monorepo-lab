@@ -70,8 +70,8 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 
 | Topic | Event type(s) | Partition key |
 |---|---|---|
-| `wms.outbound.order.received.v1` | `outbound.order.received` | `orderId` |
-| `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `orderId` |
+| `wms.outbound.order.received.v1` [^aggregate-order] | `outbound.order.received` | `orderId` |
+| `wms.outbound.order.cancelled.v1` [^aggregate-order] | `outbound.order.cancelled` | `orderId` |
 | `wms.outbound.picking.requested.v1` | `outbound.picking.requested` | `sagaId` |
 | `wms.outbound.picking.cancelled.v1` | `outbound.picking.cancelled` | `sagaId` |
 | `wms.outbound.picking.completed.v1` | `outbound.picking.completed` | `sagaId` |
@@ -88,6 +88,16 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 - Cross-service contract events (`outbound.picking.requested`,
   `outbound.picking.cancelled`, `outbound.shipping.confirmed`) are marked
   with `⚠️` and require coordinated schema migration with `inventory-service`.
+
+[^aggregate-order]: **Order topic split is producer-side implementation
+detail.** Consumers (notably `admin-service`'s read-model projection) refer
+to the pair collectively as a single logical aggregate
+`wms.outbound.order.v1` in
+[`admin-events.md § Consumed Events`](admin-events.md). This producer-side
+table is authoritative for what is actually published; the consumer-side
+roll-up is a documentation convenience. No production-code coupling between
+the two views — admin-service's listener subscribes to both split topics
+under one aggregate consumer-group (TASK-BE-048 #7).
 
 ---
 
