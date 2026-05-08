@@ -67,11 +67,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-043-notification-service-bootstrap.md` — wms-platform 첫 알람 라우팅 service 부트스트랩. Hexagonal + `event-consumer` + `integration-heavy` trait 의 가장 직접적 사용 사례. 6 source topic 구독 (inventory.alert / inventory.adjusted threshold / inbound.inspection.completed discrepancy / inbound.asn.cancelled / outbound.order.cancelled post-pick / outbound.shipping.confirmed) → Slack incoming webhook v1. Resilience4j circuit breaker + retry-with-jitter + bounded HTTP client. delivery audit row + outbox `notification.delivered.v1`. Flyway V1 4 table + V2 routing rule seed. ≥ 50 tests (unit + slice + IT 6+ + Slack adapter WireMock 5 case + JSONB 회귀 가드). 선행 spec (`specs/services/notification-service/architecture.md` + `domain-model.md`) 본 PR 에서 머지. 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-BE-043-notification-service-bootstrap.md` — wms-platform 첫 알람 라우팅 service 부트스트랩. Hexagonal + `event-consumer` + `integration-heavy` trait 의 가장 직접적 사용 사례. 6 source topic 구독 (inventory.alert / inventory.adjusted threshold / inbound.inspection.completed discrepancy / inbound.asn.cancelled / outbound.order.cancelled post-pick / outbound.shipping.confirmed) → Slack incoming webhook v1. Resilience4j circuit breaker + retry-with-jitter + bounded HTTP client. delivery audit row + outbox `notification.delivered.v1`. Flyway V1 4 table + V2 routing rule seed. ≥ 50 tests (unit + slice + IT 6+ + Slack adapter WireMock 5 case + JSONB 회귀 가드). 선행 spec (`specs/services/notification-service/architecture.md` + `domain-model.md`) 본 PR 에서 머지. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## review
 
