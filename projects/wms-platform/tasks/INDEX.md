@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-047-admin-projection-kafka-testcontainers-it.md` — **TASK-BE-046 deviation #1 closure** (선행=BE-046 done, PR #282/#283). admin-service v1 read-side 의 Kafka 끝-to-끝 신뢰도 production-ready 수준 확보. 4 IT class (Master/Inbound/Outbound/InventoryProjectionKafkaIT) × Testcontainers Postgres + Kafka 로 18 source topic round-trip + dedupe-hit (4) + LWW-stale (4) + DLT routing (non-retryable: Json/UnknownEventType/IllegalArg, 4) + replay test (1, runbooks/read-model-rebuild.md § Step 6 verification) = ≥ 22 IT. `${random.uuid}` consumer group-id + `ContainerTestUtils.waitForAssignment` + Awaitility. 메트릭 `projection.dropped.count{reason=duplicate|stale}` + `projection.error.count{topic}` 검증. Production code 변경 0 (test-only). D4 churn freeze 면제 (`src/test/**` project-internal). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
