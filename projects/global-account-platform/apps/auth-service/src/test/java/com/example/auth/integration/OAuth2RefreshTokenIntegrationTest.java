@@ -205,15 +205,29 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     void refreshTokenGrant_normalRotation() throws Exception {
         assertThat(refreshTokenValue).as("Requires Order=1 (RT from authCode flow)").isNotBlank();
 
-        MvcResult result = mockMvc.perform(post("/oauth2/token")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("grant_type", "refresh_token")
-                        .param("refresh_token", refreshTokenValue)
-                        .param("client_id", "demo-spa-client"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.access_token").isNotEmpty())
-                .andExpect(jsonPath("$.refresh_token").isNotEmpty())
-                .andReturn();
+        // TASK-MONO-046-7 cycle-3 [046-7][cluster-a] diagnostic: capture the NPE
+        // stack trace + raw response so the next CI run pinpoints which SAS
+        // filter/provider blows up on a public-client refresh_token grant.
+        MvcResult result;
+        try {
+            result = mockMvc.perform(post("/oauth2/token")
+                            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                            .param("grant_type", "refresh_token")
+                            .param("refresh_token", refreshTokenValue)
+                            .param("client_id", "demo-spa-client"))
+                    .andDo(mvcResult -> System.err.println(
+                            "[046-7][cluster-a][rotation] status=" + mvcResult.getResponse().getStatus()
+                                    + " body=" + mvcResult.getResponse().getContentAsString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.access_token").isNotEmpty())
+                    .andExpect(jsonPath("$.refresh_token").isNotEmpty())
+                    .andReturn();
+        } catch (Throwable t) {
+            System.err.println("[046-7][cluster-a][rotation] caught " + t.getClass().getName()
+                    + ": " + t.getMessage());
+            t.printStackTrace(System.err);
+            throw t;
+        }
 
         JsonNode tokenResponse = objectMapper.readTree(result.getResponse().getContentAsString());
         String newRefreshToken = tokenResponse.get("refresh_token").asText();
@@ -284,13 +298,25 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
         assertThat(currentRt).isNotBlank();
 
         // First use — valid rotation
-        MvcResult firstResult = mockMvc.perform(post("/oauth2/token")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("grant_type", "refresh_token")
-                        .param("refresh_token", currentRt)
-                        .param("client_id", "demo-spa-client"))
-                .andExpect(status().isOk())
-                .andReturn();
+        // TASK-MONO-046-7 cycle-3 [046-7][cluster-a] diagnostic.
+        MvcResult firstResult;
+        try {
+            firstResult = mockMvc.perform(post("/oauth2/token")
+                            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                            .param("grant_type", "refresh_token")
+                            .param("refresh_token", currentRt)
+                            .param("client_id", "demo-spa-client"))
+                    .andDo(mvcResult -> System.err.println(
+                            "[046-7][cluster-a][reuse-1st] status=" + mvcResult.getResponse().getStatus()
+                                    + " body=" + mvcResult.getResponse().getContentAsString()))
+                    .andExpect(status().isOk())
+                    .andReturn();
+        } catch (Throwable t) {
+            System.err.println("[046-7][cluster-a][reuse-1st] caught " + t.getClass().getName()
+                    + ": " + t.getMessage());
+            t.printStackTrace(System.err);
+            throw t;
+        }
 
         // After first use, currentRt is rotated (revoked in domain store)
         // Second use of the same RT — must be rejected as reuse
