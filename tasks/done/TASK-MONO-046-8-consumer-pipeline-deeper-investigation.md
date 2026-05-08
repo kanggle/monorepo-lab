@@ -8,7 +8,7 @@ GAP security-service IT — consumer-pipeline deeper investigation (3 tests defe
 
 # Status
 
-in-progress (Phase 0 partial diagnostics landed 2026-05-08 — environment-blocked, see § Phase 0 below)
+done — PR #272 머지 (2026-05-08). Phase 0 (3 production diagnostic + 1 build-side) 정착: KafkaConsumerConfig containsCause walker + dlqTemplate ProducerListener.onError + destinationResolver valueClass logging + security-service testcontainers BOM 1.21.3 override. Cycle3 1 cold-start window 에서 byte[] DLPR test 단독 reproduce 로 concrete signal 확보 (`Sending to DLQ` log → 60s zero-record on `.dlq` → `else` branch). Burst tests (CrossTenantVelocity / DetectionE2E) 은 env blocker (Rancher dockerd v29.1.3 + docker-java zerodep npipe transport: cold-start 1 cycle 만 정상, 후속 JVM `MalformedChunkCodingException`) 로 미reproduce. 3 deferred test root cause 확정 + fix 는 TASK-MONO-046-8a 분리.
 
 # Owner
 

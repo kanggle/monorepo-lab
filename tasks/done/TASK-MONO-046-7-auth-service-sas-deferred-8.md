@@ -8,7 +8,7 @@ GAP auth-service SAS deferred 8 IT — Cluster A (RT rotation/reuse/revoke 3) + 
 
 # Status
 
-ready
+done — PR #264 머지 (2026-05-08). 11-cycle burn 으로 Cluster B (userinfo tenant_id) 1 method 회복 + Cluster A (RT rotation/reuse/revoke 3) + Cluster C (OAuth callback 4) 7 method 재 `@Disabled`. 4 architectural anti-pattern (SAS Customizer timing / DomainSync vs persistRotation race / 수동 instantiation @Transactional 불가능 / test order pollution) + 6-cycle 임계값 (cycle 6 best, 7+ regression) 학습 확보. 잔존 7 method = TASK-MONO-046-7a 분리.
 
 # Owner
 
