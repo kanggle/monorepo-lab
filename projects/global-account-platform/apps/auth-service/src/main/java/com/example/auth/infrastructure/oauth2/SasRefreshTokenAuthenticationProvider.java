@@ -225,25 +225,16 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 newRefreshTokenObj.getIssuedAt(),
                 newRefreshTokenObj.getExpiresAt());
 
-        // --- Persist rotation in domain JPA store FIRST (TASK-MONO-046-7 cycle 6) ---
-        // Domain insert must precede the SAS authorizationService.save() call below.
-        // The authorizationService bean is wrapped by DomainSyncOAuth2AuthorizationService,
-        // which on save() also inserts the new RT into refresh_tokens — but with
-        // rotated_from=null because it has no rotation context. If the SAS save runs
-        // first, the JTI row exists with rotated_from=null and our subsequent
-        // persistRotation INSERT collides on idx_rt_jti (Duplicate entry [...] for key
-        // 'refresh_tokens.idx_rt_jti'). Swapping the order means our persistRotation
-        // inserts the row with rotated_from=oldTokenValue first, then DomainSync sees
-        // JTI present and short-circuits at its line-99 idempotency guard.
-        Instant now = Instant.now();
-        persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
-
         // --- Update SAS authorization store ---
         OAuth2Authorization updatedAuthorization = OAuth2Authorization.from(authorization)
                 .token(sasAccessToken)
                 .token(newRefreshToken)
                 .build();
         authorizationService.save(updatedAuthorization);
+
+        // --- Persist rotation in domain JPA store ---
+        Instant now = Instant.now();
+        persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
 
         // --- Publish auth.token.refreshed event ---
         String accountId = authorization.getPrincipalName();
