@@ -166,10 +166,8 @@ public final class PublicClientNonPkceAuthenticationConverter implements Authent
         }
 
         PublicClientNonPkceAuthenticationToken(
-                org.springframework.security.oauth2.server.authorization.client.RegisteredClient registeredClient,
-                Map<String, Object> additionalParameters) {
-            super(registeredClient, ClientAuthenticationMethod.NONE, /*credentials*/ null,
-                    additionalParameters == null ? new HashMap<>() : additionalParameters);
+                org.springframework.security.oauth2.server.authorization.client.RegisteredClient registeredClient) {
+            super(registeredClient, ClientAuthenticationMethod.NONE, /*credentials*/ null);
         }
     }
 }
