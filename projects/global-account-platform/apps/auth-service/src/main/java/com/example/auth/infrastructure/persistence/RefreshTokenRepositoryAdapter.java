@@ -54,4 +54,9 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
     public int revokeAllByDeviceId(String deviceId) {
         return refreshTokenJpaRepository.revokeAllByDeviceId(deviceId);
     }
+
+    @Override
+    public int updateRotatedFromByJti(String jti, String rotatedFrom) {
+        return refreshTokenJpaRepository.updateRotatedFromByJti(jti, rotatedFrom);
+    }
 }

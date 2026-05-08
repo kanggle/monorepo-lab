@@ -311,17 +311,30 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 ? newRefreshToken.getExpiresAt()
                 : now.plusSeconds(2592000L); // 30-day fallback
 
-        RefreshToken newDomainToken = RefreshToken.create(
-                newRefreshToken.getTokenValue(),
-                accountId,
-                tenantId,
-                now,
-                expiresAt,
-                oldTokenValue,   // rotated_from = old token value (used as JTI)
-                null,            // deviceFingerprint — not available via SAS flow
-                null             // deviceId — not available via SAS flow
-        );
-        refreshTokenRepository.save(newDomainToken);
+        // TASK-MONO-046-7 cycle 7: DomainSyncOAuth2AuthorizationService.save() runs on the
+        // upstream authorizationService.save(updatedAuthorization) call and inserts the new
+        // RT row with rotated_from=null (it has no rotation context). Detect that case and
+        // patch the row in place so the integration test's
+        // "newDomainToken.getRotatedFrom() == oldTokenValue" assertion passes without a
+        // duplicate-INSERT collision on idx_rt_jti.
+        if (refreshTokenRepository.findByJti(newRefreshToken.getTokenValue()).isPresent()) {
+            refreshTokenRepository.updateRotatedFromByJti(
+                    newRefreshToken.getTokenValue(), oldTokenValue);
+        } else {
+            // Defensive: if DomainSync didn't insert (e.g. race or different code path),
+            // perform the full insert ourselves.
+            RefreshToken newDomainToken = RefreshToken.create(
+                    newRefreshToken.getTokenValue(),
+                    accountId,
+                    tenantId,
+                    now,
+                    expiresAt,
+                    oldTokenValue,   // rotated_from = old token value (used as JTI)
+                    null,            // deviceFingerprint — not available via SAS flow
+                    null             // deviceId — not available via SAS flow
+            );
+            refreshTokenRepository.save(newDomainToken);
+        }
 
         // Revoke the old token in the domain store
         refreshTokenRepository.findByJti(oldTokenValue).ifPresent(old -> {
