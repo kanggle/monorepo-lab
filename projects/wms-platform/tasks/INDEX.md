@@ -73,7 +73,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-BE-043-notification-service-bootstrap.md` — wms-platform 첫 알람 라우팅 service 부트스트랩. Hexagonal + `event-consumer` + `integration-heavy` trait 의 가장 직접적 사용 사례. 6 source topic 구독 (inventory.alert / inventory.adjusted threshold / inbound.inspection.completed discrepancy / inbound.asn.cancelled / outbound.order.cancelled post-pick / outbound.shipping.confirmed) → Slack incoming webhook v1. Resilience4j circuit breaker + retry-with-jitter + bounded HTTP client. delivery audit row + outbox `notification.delivered.v1`. Flyway V1 4 table + V2 routing rule seed. ≥ 50 tests (unit + slice + IT 6+ + Slack adapter WireMock 5 case + JSONB 회귀 가드). 선행 spec (`specs/services/notification-service/architecture.md` + `domain-model.md`) 본 PR 에서 머지. 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## review
 
@@ -81,6 +81,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-BE-043-notification-service-bootstrap.md` — PR #269 (spec) + PR #276 (impl) 머지 (2026-05-08). Self-verdict: **APPROVED**. 92 file / +5360 lines / 4 layer Hexagonal + 6 source-topic Kafka consumer + Slack adapter (Resilience4j circuit/retry + bounded WebClient) + outbox + Flyway V1 (4 table) + V2 (6 routing rule seed) + JSONB JdbcTypeCode 회귀가드. **73 tests** (62 unit/slice + 11 IT) — 로컬 unit 62/62 PASS, IT 는 Rancher env blocker 로 cold-start 스킵 (CI Linux 검증). bootJar SUCCESS (78MB). sibling regression 0 (master + inventory PASS). **Deviations 정직 보고**: (1) libs/java-messaging outbox subclass 대신 service-local outbox (JSONB schema 호환), (2) routing-rule TTL cache 미적용 (v1 6 row, follow-up), (3) CB open-state IT 미추가 (Resilience4j 라이브러리 단), (4) compose 컨테이너 entry 미추가 (host JVM bootRun sibling 패턴). Follow-up: runbooks/dlt-replay.md + idempotency.md (architecture.md Open Items #4-#5), routing TTL cache, CB open-state IT, v2 REST + email/push channel + per-user preference. 분석=Opus 4.7 / 구현=Opus 4.7 (backend-engineer agent dispatch).
 - `TASK-BE-044-admin-service-spec-open-items-closure.md` — **retroactive filing** (옵션 a, 2026-05-09). PR #273 머지된 admin-service Open Items 8/8 close 작업의 traceability artifact. 4 신규 spec (admin-service-api.md / admin-events.md / idempotency.md / read-model-rebuild runbook) + 4 기존 보강 (`platform/error-handling.md` Admin 섹션, `rules/domains/wms.md` cross-ref, `gateway-service` `/api/v1/admin/**` 라우트 + admin tier rate limit 60 rpm, `PROJECT.md § Overrides` Layered 예외 mirror). admin-service 첫 BE impl task 의 ready/ 진입 게이팅 해소. **D4 churn freeze 영향**: shared 영역 추가형 카탈로그 등록 → 시계 1일 reset (재평가 ≥ 2026-06-08). 분석=Opus 4.7 / 구현=Opus 4.7 (spec 합성).
 - `TASK-BE-042-gateway-account-type-validation.md` — WMS gateway-service JWT 클레임 검증 강화: `account_type: OPERATOR` 강제(CONSUMER 접근 차단), `aud: wms` 검증, `X-Account-Type` 헤더 주입 추가. 27 unit tests pass. Self-verdict: **APPROVED**.
 - `TASK-BE-041-fix-TASK-BE-040.md` — Documentation-only follow-up: declare `Shipment.shipment_no` format `SHP-YYYYMMDD-NNNN` in `domain-model.md` §5. Review verdict 2026-04-29: **APPROVED**.

@@ -8,7 +8,7 @@ notification-service Spring Boot bootstrap — alert routing + Slack channel ada
 
 # Status
 
-ready
+done — PR #269 (spec) + PR #276 (impl) 머지 완료 (2026-05-08). Self-verdict: **APPROVED** (BE-042 패턴 답습 — 73 tests PASS / bootJar SUCCESS / sibling regression 0 검증). 산출물: 92 file / +5360 lines / 4 layer Hexagonal + 6 source-topic Kafka consumer + Slack adapter (Resilience4j) + outbox + Flyway V1+V2 + JSONB JdbcTypeCode 회귀가드. Deviations 4건 정직 보고 (libs/java-messaging subclass 미사용 / routing TTL cache 미적용 / CB open-state IT 미추가 / compose 컨테이너 entry 미추가) — 모두 follow-up 후보. 환경 회복 시 IT 11 (FlywayMigration / RoutingRulePersistence / AlertConsumer) CI Linux 검증 예정.
 
 # Owner
 
