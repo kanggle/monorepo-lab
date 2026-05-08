@@ -119,7 +119,8 @@ public class AuthorizationServerConfig {
             HttpSecurity http,
             OidcUserInfoMapper oidcUserInfoMapper,
             OAuth2AuthorizationService oAuth2AuthorizationService,
-            RegisteredClientRepository registeredClientRepository) throws Exception {
+            RegisteredClientRepository registeredClientRepository,
+            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -159,12 +160,18 @@ public class AuthorizationServerConfig {
                                         .authenticationProviders(providers ->
                                                 providers.add(0, publicClientNonPkceProvider)))
                                 // Phase 2b: add custom refresh_token provider.
-                                // OAuth2TokenGenerator is available as a shared object on HttpSecurity
-                                // after the SAS configurer has been applied via .with(). We use a
-                                // Customizer that captures http to resolve the generator lazily.
+                                // TASK-MONO-046-7 cycle 5: inject OAuth2TokenGenerator directly via
+                                // method parameter (the @Bean declared below) instead of
+                                // http.getSharedObject(OAuth2TokenGenerator.class). The shared-object
+                                // path returned null when the clientAuthentication() Consumer was
+                                // added in Cluster A's fix — the customizer evaluates synchronously
+                                // when .with() is called, before any sub-configurer init() has run,
+                                // so shared objects are not yet populated. Direct DI removes the
+                                // ordering dependency.
                                 .tokenEndpoint(tokenEndpoint ->
                                         tokenEndpoint.authenticationProvider(
-                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
+                                                buildRefreshTokenProvider(
+                                                        oAuth2TokenGenerator, oAuth2AuthorizationService)))
                                 // Phase 2c: token revocation endpoint (RFC 7009).
                                 // SAS default revocation provider calls authorizationService.remove(),
                                 // which triggers DomainSyncOAuth2AuthorizationService to revoke the
@@ -224,14 +231,9 @@ public class AuthorizationServerConfig {
      * {@link OAuth2TokenGenerator}. Accessing it here is safe and avoids the circular
      * dependency that would occur if we declared it as a standalone {@code @Bean}.
      */
-    @SuppressWarnings("unchecked")
     private SasRefreshTokenAuthenticationProvider buildRefreshTokenProvider(
-            HttpSecurity http,
+            OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator,
             OAuth2AuthorizationService oAuth2AuthorizationService) {
-        // SAS stores OAuth2TokenGenerator in HttpSecurity's shared objects under its own type.
-        // This is the standard SAS extension pattern used by the built-in grant providers.
-        OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator =
-                http.getSharedObject(OAuth2TokenGenerator.class);
         return new SasRefreshTokenAuthenticationProvider(
                 oAuth2AuthorizationService,
                 tokenGenerator,
