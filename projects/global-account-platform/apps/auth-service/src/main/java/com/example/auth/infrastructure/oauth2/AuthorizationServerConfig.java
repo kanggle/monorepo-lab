@@ -41,6 +41,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
@@ -92,6 +93,12 @@ public class AuthorizationServerConfig {
     private DeviceSessionRepository deviceSessionRepository;
     @Autowired
     private AuthEventPublisher authEventPublisher;
+    // TASK-BE-274: SasRefreshTokenAuthenticationProvider needs a PlatformTransactionManager
+    // to wrap its rotation-write path (SAS save + persistRotation) and the reuse-detected
+    // bulk revoke path. Manual instantiation in this @Configuration class disables AOP
+    // (A3 anti-pattern) so we use a programmatic TransactionTemplate inside the provider.
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     /**
      * SAS security filter chain — Order(1).
@@ -257,7 +264,8 @@ public class AuthorizationServerConfig {
                 tokenReuseDetector,
                 bulkInvalidationStore,
                 deviceSessionRepository,
-                authEventPublisher);
+                authEventPublisher,
+                transactionManager);
     }
 
     /**

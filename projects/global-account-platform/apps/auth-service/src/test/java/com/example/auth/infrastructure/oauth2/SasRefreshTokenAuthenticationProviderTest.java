@@ -30,6 +30,9 @@ import org.springframework.security.oauth2.server.authorization.context.Authoriz
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
@@ -75,11 +78,22 @@ class SasRefreshTokenAuthenticationProviderTest {
     private DeviceSessionRepository deviceSessionRepository;
     @Mock
     private AuthEventPublisher authEventPublisher;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private SasRefreshTokenAuthenticationProvider provider;
 
     @BeforeEach
     void setUp() {
+        // Stub TransactionTemplate.execute(...) plumbing — return a dummy
+        // TransactionStatus and let the callback run inline. Lenient because
+        // the unauthenticated-client / unknown-client / unauthorized-client
+        // / token-not-found tests short-circuit before reaching the template.
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(new SimpleTransactionStatus());
+        org.mockito.Mockito.lenient().doNothing().when(transactionManager).commit(any(TransactionStatus.class));
+        org.mockito.Mockito.lenient().doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
+
         provider = new SasRefreshTokenAuthenticationProvider(
                 authorizationService,
                 tokenGenerator,
@@ -87,7 +101,8 @@ class SasRefreshTokenAuthenticationProviderTest {
                 tokenReuseDetector,
                 bulkInvalidationStore,
                 deviceSessionRepository,
-                authEventPublisher);
+                authEventPublisher,
+                transactionManager);
 
         // SAS AuthorizationServerContextHolder is a ThreadLocal — set a minimal context
         AuthorizationServerContext ctx = new AuthorizationServerContext() {
