@@ -154,6 +154,42 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
 
 ---
 
+## Phase 1 Findings
+
+> Populated by TASK-BE-273 Phase 1 once CI emits the diagnostic logs. Until then this
+> section captures the harness shape so a Phase 2 reader can pin the diagnostic source.
+
+### Harness shape (commit `feat/gap-be-273-oauth-callback-diagnostic` cycle 1)
+
+- Production change (kept on success): `AccountServiceClient.java` — all three
+  `RuntimeException` catch blocks (`getAccountStatus`, `socialSignup`,
+  `getAccountProfile`) now log `msg / type / cause / causeType` with the full stack
+  trace appended via the `Throwable` argument. The pre-existing log message prefix is
+  preserved so any external log scrapers do not break.
+- Test change (Phase 1 only, may revert in Phase 2): `OAuthLoginIntegrationTest.java`
+  - Added `WIREMOCK_REQUEST` request listener emitted at INFO via a dedicated SLF4J
+    logger (`OAuthLoginIntegrationTest`), re-registered every `@BeforeEach` because
+    `wireMock.resetAll()` clears listeners.
+  - Added `WIREMOCK_BASE_URL` log line so the captured `baseUrl` + dynamic port that
+    the test fixture publishes to the Spring context is visible in CI Surefire output.
+  - Removed the five `@Disabled` annotations (Google / Kakao / Microsoft happy +
+    Microsoft preferredUsername fallback + Microsoft existing-email auto-link) so the
+    methods run on CI Linux and the diagnostic logs surface.
+
+### CI run + analysis
+
+> To be filled in once CI emits the diagnostic logs. Decision matrix from the task
+> spec § "CI 결과 분석" applies:
+>
+> | Observed pattern | Phase 2 branch |
+> |---|---|
+> | `ConnectException: Connection refused` (no `WIREMOCK_REQUEST` lines) | option B (module-level isolation) |
+> | `WIREMOCK_REQUEST` present + 4xx returned + cause = `RestClient` 4xx wrap | option C (embedded fake) |
+> | `UnknownHostException` | CI runner `/etc/hosts` + IPv6 disable |
+> | All 5 PASS | Phase 2 skipped, restore `@Disabled` removal as permanent |
+
+---
+
 ## References
 
 - TASK-MONO-046-7a (PR #289) — cycle 1+2 evidence (CB reset + forkEvery 1 둘 다 falsified)

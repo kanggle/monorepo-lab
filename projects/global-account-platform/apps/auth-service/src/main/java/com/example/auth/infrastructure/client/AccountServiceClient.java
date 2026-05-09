@@ -144,7 +144,14 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getStatusCode(), e.getMessage());
             return Optional.empty();
         } catch (RuntimeException e) {
-            log.error("Account service status lookup failed after retries: {}", e.getMessage());
+            // TASK-BE-273 Phase 1 diagnostic: surface root cause + nested cause chain so
+            // the CI Linux 503 origin (ConnectException / UnknownHostException /
+            // SocketTimeoutException / Resilience4j CallNotPermittedException) is visible
+            // in CI logs. Pre-existing message preserved for backward log scraping.
+            log.error("Account service status lookup failed after retries: msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
         }
     }
@@ -204,7 +211,15 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getStatusCode(), e.getMessage());
             throw new AccountServiceUnavailableException("Account service social-signup failed", e);
         } catch (RuntimeException e) {
-            log.error("Account service social-signup failed after retries: {}", e.getMessage());
+            // TASK-BE-273 Phase 1 diagnostic: surface root cause + nested cause chain.
+            // This catch block is the source of the OAuthLoginIntegrationTest 503 on CI
+            // Linux (Status expected:<200> but was:<503>). Logging the cause type +
+            // message + full stack lets us decide between Phase 2 option B (network
+            // isolation) and option C (in-process fake controller).
+            log.error("Account service social-signup failed after retries: msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
         }
     }
@@ -250,7 +265,11 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getStatusCode(), e.getMessage());
             return Optional.empty();
         } catch (RuntimeException e) {
-            log.error("Account service profile lookup failed after retries: {}", e.getMessage());
+            // TASK-BE-273 Phase 1 diagnostic: surface root cause + nested cause chain.
+            log.error("Account service profile lookup failed after retries: msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
         }
     }
