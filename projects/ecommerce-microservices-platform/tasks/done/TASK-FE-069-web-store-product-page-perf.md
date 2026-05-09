@@ -8,7 +8,7 @@ web-store 상품 상세 / 홈 LCP·TTI 개선 — Next.js Image 최적화 활성
 
 # Status
 
-review
+done
 
 # Owner
 
