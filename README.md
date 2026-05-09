@@ -187,6 +187,7 @@ Full strategy and rationale: [TEMPLATE.md](TEMPLATE.md).
 | Document | Purpose |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | AI operating rules (read first before any work) |
+| [docs/project-overview.md](docs/project-overview.md) | 5 projects + shared library + ADR catalog navigation snapshot |
 | [TEMPLATE.md](TEMPLATE.md) | Discovery → Distribution strategy |
 | [platform/entrypoint.md](platform/entrypoint.md) | Spec reading order |
 | [platform/architecture.md](platform/architecture.md) | System architecture baseline |
