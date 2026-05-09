@@ -25,8 +25,6 @@ import com.wms.admin.readmodel.master.SkuRefRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +47,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryProjectionService {
 
-    private static final Logger log = LoggerFactory.getLogger(InventoryProjectionService.class);
     private static final String SOURCE_SERVICE = "inventory";
 
     private final InventorySnapshotRepository snapshotRepo;

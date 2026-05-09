@@ -25,8 +25,6 @@ import com.wms.admin.readmodel.master.ZoneRefRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +51,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MasterProjectionService {
 
-    private static final Logger log = LoggerFactory.getLogger(MasterProjectionService.class);
     private static final String SOURCE_SERVICE = "master";
 
     private final WarehouseRefRepository warehouseRepo;
