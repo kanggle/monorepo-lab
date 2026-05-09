@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.wms.admin.api.advice.GlobalExceptionHandler;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +22,12 @@ import org.springframework.test.web.servlet.MockMvc;
 class OperationsControllerWebMvcTest {
 
     @Autowired MockMvc mockMvc;
-    @MockitoBean AdminEventDedupePort dedupePort;
+    @MockitoBean AdminEventDedupeRepository dedupePort;
 
     @Test
     void projectionStatus_admin_returns200() throws Exception {
         when(dedupePort.countLifetime()).thenReturn(
-                new AdminEventDedupePort.LifetimeCounts(120, 3, 1, 0));
+                new AdminEventDedupeRepository.LifetimeCounts(120, 3, 1, 0));
 
         mockMvc.perform(get("/api/v1/admin/operations/projection-status")
                         .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))

@@ -2,9 +2,9 @@ package com.wms.admin.application.user;
 
 import com.example.common.id.UuidV7;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
-import com.wms.admin.application.port.AssignmentRepository;
-import com.wms.admin.application.port.OutboxPort;
-import com.wms.admin.application.port.UserRepository;
+import com.wms.admin.application.repository.AssignmentRepository;
+import com.wms.admin.application.repository.OutboxRepository;
+import com.wms.admin.application.repository.UserRepository;
 import com.wms.admin.domain.User;
 import com.wms.admin.domain.UserRoleAssignment;
 import com.wms.admin.domain.UserStatus;
@@ -45,18 +45,18 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final AssignmentRepository assignmentRepository;
-    private final OutboxPort outboxPort;
+    private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
     private final Clock clock;
 
     public UserService(UserRepository userRepository,
                        AssignmentRepository assignmentRepository,
-                       OutboxPort outboxPort,
+                       OutboxRepository outboxRepository,
                        AdminEventEnvelopeBuilder envelopeBuilder,
                        Clock clock) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
-        this.outboxPort = outboxPort;
+        this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
         this.clock = clock;
     }
@@ -232,7 +232,7 @@ public class UserService {
         String envelope = envelopeBuilder.build(
                 eventType, AGGREGATE_TYPE, userId.toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, userId.toString(), eventType, envelope, userId.toString());
+        outboxRepository.append(AGGREGATE_TYPE, userId.toString(), eventType, envelope, userId.toString());
     }
 
     private void appendAssignmentRevokedEvent(UserRoleAssignment a, String cascadeReason,
@@ -248,7 +248,7 @@ public class UserService {
         String envelope = envelopeBuilder.build(
                 "admin.assignment.revoked", AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
+        outboxRepository.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
                 envelope, a.id().toString());
     }
 }

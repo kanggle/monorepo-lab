@@ -1,4 +1,4 @@
-package com.wms.admin.application.port;
+package com.wms.admin.application.repository;
 
 import com.wms.admin.application.projection.DedupeOutcome;
 import java.time.Instant;
@@ -7,14 +7,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Application-layer port for the {@code admin_event_dedupe} table.
+ * Application-layer repository for the {@code admin_event_dedupe} table.
  *
  * <p>Per {@code idempotency.md § 2.3}, projection consumers must run their
  * mutation in the same {@code @Transactional} boundary as a dedupe insert. This
- * port factors out the insert-then-flush + LWW-late update pattern so the
+ * repository factors out the insert-then-flush + LWW-late update pattern so the
  * 4 projection services share a single implementation.
  */
-public interface AdminEventDedupePort {
+public interface AdminEventDedupeRepository {
 
     /**
      * Attempt to record this {@code eventId} as APPLIED.

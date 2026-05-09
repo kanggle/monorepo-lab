@@ -8,7 +8,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.master.LocationRefEntity;
 import com.wms.admin.readmodel.master.LocationRefRepository;
@@ -59,7 +59,7 @@ public class MasterProjectionService {
     private final SkuRefRepository skuRepo;
     private final LotRefRepository lotRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
 
     public MasterProjectionService(WarehouseRefRepository warehouseRepo,
@@ -68,7 +68,7 @@ public class MasterProjectionService {
                                    SkuRefRepository skuRepo,
                                    LotRefRepository lotRepo,
                                    PartnerRefRepository partnerRepo,
-                                   AdminEventDedupePort dedupe,
+                                   AdminEventDedupeRepository dedupe,
                                    ProjectionMetrics metrics) {
         this.warehouseRepo = warehouseRepo;
         this.zoneRepo = zoneRepo;

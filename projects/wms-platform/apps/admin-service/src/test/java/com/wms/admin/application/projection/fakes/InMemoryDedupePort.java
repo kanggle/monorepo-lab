@@ -1,6 +1,6 @@
 package com.wms.admin.application.projection.fakes;
 
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.application.projection.DedupeOutcome;
 import java.time.Instant;
 import java.util.Collection;
@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /** Hand-coded fake port for projection unit tests. */
-public class InMemoryDedupePort implements AdminEventDedupePort {
+public class InMemoryDedupePort implements AdminEventDedupeRepository {
 
     private final Set<UUID> seen = new HashSet<>();
     private final Map<UUID, String> outcomes = new HashMap<>();

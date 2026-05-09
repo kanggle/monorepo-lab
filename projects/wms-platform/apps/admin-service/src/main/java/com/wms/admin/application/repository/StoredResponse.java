@@ -1,4 +1,4 @@
-package com.wms.admin.application.port;
+package com.wms.admin.application.repository;
 
 import java.time.Instant;
 

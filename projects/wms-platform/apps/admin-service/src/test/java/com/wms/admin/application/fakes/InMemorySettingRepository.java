@@ -1,6 +1,6 @@
 package com.wms.admin.application.fakes;
 
-import com.wms.admin.application.port.SettingRepository;
+import com.wms.admin.application.repository.SettingRepository;
 import com.wms.admin.domain.Setting;
 import com.wms.admin.domain.SettingScope;
 import java.util.LinkedHashMap;
