@@ -209,6 +209,25 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Happy-path tests per provider
     // ----------------------------------------------------------------------
 
+    // TASK-MONO-046-7a Cluster C — re-disabled after PR #289 cycle 1 + 2 burned.
+    // Cycle 1 hypothesis (CB pollution via reflection reset in @BeforeEach) was
+    // sufficient locally (Rancher dockerd, single-class run PASSED 7/7 in 15.3s)
+    // but FAILED 5/5 on CI Linux (full-suite run, identical {@code Account
+    // service social-signup failed after retries: Account service communication
+    // error}). Cycle 2 hypothesis (JVM-shared static state via {@code forkEvery
+    // 1}) was also FAILED 5/5 on CI with the same error pattern, falsifying
+    // suite-isolation as a sufficient fix. Two cycles confirm PR #264's
+    // "auth-service infrastructure isn't fully isolated test-to-test" but the
+    // actual mechanism (Linux-specific HTTP client behaviour / WireMock binding
+    // / Spring DynamicPropertySource ordering / unidentified other) was not
+    // localised within the 6-cycle budget. Per spec § Failure Scenarios option
+    // (a), the IT remains @Disabled with coverage preserved at the unit level
+    // by OAuthLoginUseCaseTest + OAuthLoginTransactionalStepTest. Re-enabling
+    // requires a separate ADR / task that designs deeper isolation (e.g. CI
+    // matrix with -Dauth.account-service.base-url override pointing at a
+    // standalone WireMock container, or splitting the OAuth callback IT into
+    // its own Gradle module with a controlled classpath).
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: 503 SERVICE_UNAVAILABLE on CI Linux (cycle 1 + 2 reproduced) — local Rancher PASSES. Architectural deferral per spec § Failure Scenarios option (a). Coverage at OAuthLoginUseCaseTest unit level.")
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -228,6 +247,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -264,6 +284,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -281,6 +302,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-ms-003", "OAUTH_MICROSOFT");
     }
 
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
     @Test
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
@@ -303,6 +325,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Existing-email auto-link scenario
     // ----------------------------------------------------------------------
 
+    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
     @Test
     @DisplayName("Microsoft: existing email → isNewAccount false, social_identities created on existing account")
     void microsoftExistingEmailAutoLink() throws Exception {
