@@ -30,6 +30,10 @@ import org.springframework.security.oauth2.server.authorization.context.Authoriz
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
@@ -79,6 +83,21 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     private final BulkInvalidationStore bulkInvalidationStore;
     private final DeviceSessionRepository deviceSessionRepository;
     private final AuthEventPublisher authEventPublisher;
+    /**
+     * TASK-BE-274: programmatic transaction template used to wrap the rotation
+     * write path (SAS save + persistRotation) and the reuse-detected write path
+     * (revokeAllByAccountId + bulkInvalidation + per-device revoke).
+     *
+     * <p>Required because the SAS {@code OAuth2TokenEndpointFilter} does not wrap
+     * provider invocations in a Spring-managed transaction, and the provider is
+     * instantiated manually in {@link AuthorizationServerConfig} (so the AOP
+     * {@code @Transactional} interceptor is not applied — A3 anti-pattern). Using
+     * a programmatic {@link TransactionTemplate} avoids the AOP dependency while
+     * keeping {@link AuthEventPublisher#publishTokenRefreshed} (and other event
+     * publishers) outside the DB transaction — that placement was the explicit
+     * negative lesson of PR #264 cycle 8.
+     */
+    private final TransactionTemplate transactionTemplate;
 
     public SasRefreshTokenAuthenticationProvider(
             OAuth2AuthorizationService authorizationService,
@@ -87,7 +106,8 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             TokenReuseDetector tokenReuseDetector,
             BulkInvalidationStore bulkInvalidationStore,
             DeviceSessionRepository deviceSessionRepository,
-            AuthEventPublisher authEventPublisher) {
+            AuthEventPublisher authEventPublisher,
+            PlatformTransactionManager transactionManager) {
         this.authorizationService = authorizationService;
         this.tokenGenerator = tokenGenerator;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -95,6 +115,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         this.bulkInvalidationStore = bulkInvalidationStore;
         this.deviceSessionRepository = deviceSessionRepository;
         this.authEventPublisher = authEventPublisher;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -225,29 +246,84 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 newRefreshTokenObj.getIssuedAt(),
                 newRefreshTokenObj.getExpiresAt());
 
-        // --- Update SAS authorization store ---
+        // --- Update SAS authorization store + persist rotation in domain JPA store ---
+        // TASK-BE-274 / ADR-003 옵션 B: bind a TSM resource flag so that
+        // DomainSyncOAuth2AuthorizationService.syncRefreshTokenToDomainStore() skips
+        // its INSERT during this rotation. The provider's own persistRotation() below
+        // is the single source of truth for the new refresh_tokens row, eliminating
+        // the A2 dual-INSERT race on idx_rt_jti.
+        //
+        // Cleanup strategy (defence-in-depth):
+        //   1. afterCompletion synchronization unbinds when the outer transaction
+        //      ends (commit, rollback, unknown). Guarantees release even on the
+        //      success path.
+        //   2. try-finally fail-safe unbind covers the rare case where this method
+        //      runs without an active synchronization (e.g. unit-test contexts) so
+        //      the static TSM never carries a stale flag into the next call on the
+        //      same thread.
         OAuth2Authorization updatedAuthorization = OAuth2Authorization.from(authorization)
                 .token(sasAccessToken)
                 .token(newRefreshToken)
                 .build();
-        authorizationService.save(updatedAuthorization);
 
-        // --- Persist rotation in domain JPA store ---
-        Instant now = Instant.now();
-        persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
+        // Wrap the dual-write (SAS save + domain persistRotation) in a programmatic
+        // transaction so the JPA save() inside persistRotation() has an active
+        // EntityManager transaction (REQUIRED + new). Inside the callback, bind
+        // the SAS_ROTATION_SKIP_KEY so DomainSyncOAuth2AuthorizationService
+        // skips its INSERT (provider owns the row). Cleanup runs in afterCompletion
+        // (registered while a synchronization is active inside the template) plus
+        // a finally block as fail-safe.
+        transactionTemplate.executeWithoutResult(status -> {
+            // Defensive: if a previous invocation on the same thread leaked the flag
+            // (should never happen with the afterCompletion + finally pair but guards
+            // against future regressions), unbind it before re-binding.
+            unbindRotationFlagIfBound();
+            TransactionSynchronizationManager.bindResource(
+                    DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY, Boolean.TRUE);
+            // The TransactionTemplate guarantees synchronization is active inside this
+            // callback, so afterCompletion is a reliable cleanup hook.
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int s) {
+                            unbindRotationFlagIfBound();
+                        }
+                    });
+            try {
+                authorizationService.save(updatedAuthorization);
 
-        // --- Publish auth.token.refreshed event ---
-        String accountId = authorization.getPrincipalName();
-        String tenantId = extractClientTenantId(registeredClient);
-        authEventPublisher.publishTokenRefreshed(
-                accountId,
-                tenantId != null ? tenantId : "unknown",
-                submittedTokenValue,
-                newRefreshToken.getTokenValue(),
-                buildSessionContext());
+                // --- Persist rotation in domain JPA store ---
+                Instant now = Instant.now();
+                persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
 
-        log.debug("SAS refresh_token rotated: account={}, oldJti={}, newJti={}",
-                accountId, submittedTokenValue, newRefreshToken.getTokenValue());
+                // --- Publish auth.token.refreshed event (outbox row INSERT) ---
+                // OutboxWriter.save() requires an active EntityManager transaction.
+                // Placement INSIDE the same transaction as persistRotation() is the
+                // standard outbox pattern: the outbox row is committed atomically
+                // with the rotation. This is NOT the cycle 8 anti-pattern (cycle 8
+                // added @Transactional via AOP — declarative — which collided with
+                // the dual-INSERT race that wasn't yet resolved). Here the race is
+                // resolved (skip-path) and we are using a programmatic
+                // TransactionTemplate, not annotation-based AOP.
+                String accountId = authorization.getPrincipalName();
+                String tenantId = extractClientTenantId(registeredClient);
+                authEventPublisher.publishTokenRefreshed(
+                        accountId,
+                        tenantId != null ? tenantId : "unknown",
+                        submittedTokenValue,
+                        newRefreshToken.getTokenValue(),
+                        buildSessionContext());
+
+                log.debug("SAS refresh_token rotated: account={}, oldJti={}, newJti={}",
+                        accountId, submittedTokenValue, newRefreshToken.getTokenValue());
+            } catch (RuntimeException ex) {
+                // Ensure the flag is released immediately on failure; afterCompletion
+                // will fire too but unbindRotationFlagIfBound() is idempotent.
+                unbindRotationFlagIfBound();
+                status.setRollbackOnly();
+                throw ex;
+            }
+        });
 
         return new OAuth2AccessTokenAuthenticationToken(
                 registeredClient, clientPrincipal, sasAccessToken, newRefreshToken,
@@ -262,6 +338,22 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Releases the {@link DomainSyncOAuth2AuthorizationService#SAS_ROTATION_SKIP_KEY}
+     * resource on the current thread if it is currently bound. Idempotent.
+     *
+     * <p>TASK-BE-274 / ADR-003 옵션 B: invoked from both the in-method finally block
+     * (no-active-synchronization fallback) and the {@code afterCompletion} hook
+     * registered in {@link #authenticate} (active-transaction primary path).
+     */
+    private static void unbindRotationFlagIfBound() {
+        if (TransactionSynchronizationManager.hasResource(
+                DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY)) {
+            TransactionSynchronizationManager.unbindResource(
+                    DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY);
+        }
+    }
 
     private OAuth2ClientAuthenticationToken getAuthenticatedClientElseThrowInvalidClient(
             Authentication authentication) {
@@ -332,6 +424,13 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
 
     /**
      * Handles refresh-token reuse: revokes all account sessions, emits security event.
+     *
+     * <p>TASK-BE-274: the JPA write path ({@code revokeAllByAccountId} + per-device
+     * {@code deviceSessionRepository.save}) is wrapped in a programmatic
+     * transaction. Reads (lookups + collecting jtisByDevice) and side-effects
+     * (Redis bulk invalidation + Kafka event publish) stay outside so a Kafka
+     * outage cannot roll back the security-critical revoke. Mirrors the cycle 8
+     * negative lesson of PR #264 (don't put publish* under @Transactional).
      */
     private void handleReuseDetected(RefreshToken existingToken, String jti,
                                       OAuth2Authorization authorization) {
@@ -351,53 +450,73 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                     refreshTokenRepository.findActiveJtisByDeviceId(session.getDeviceId()));
         }
 
-        int revokedCount = refreshTokenRepository.revokeAllByAccountId(accountId);
+        // TASK-BE-248 Phase 2b / TASK-BE-259: tenantId from the reused token's DB record
+        // (authoritative). Resolved before publishing so it flows into auth.token.reuse.detected.
+        final String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
+                ? existingToken.getTenantId()
+                : "fan-platform"; // SAS flow default per persistRotation fallback
+
+        // Transactional revoke + outbox publish — all DB writes share one tx so
+        // (a) the @Modifying bulk update has an active EntityManager and
+        // (b) the outbox rows for token-reuse and per-device session-revoked
+        //     events commit atomically with the revoke (standard outbox pattern).
+        // Redis bulk invalidation is intentionally OUTSIDE the tx so a Redis
+        // outage cannot roll back the security-critical revoke.
+        Instant reuseAttemptAt = Instant.now();
+        Integer revokedCountBoxed = transactionTemplate.execute(status -> {
+            int rc = doRevokeAllForReuse(accountId, activeSessions, reuseAttemptAt);
+
+            // Skip event emission if there was nothing to revoke (already-revoked
+            // duplicate-reuse case). Mirrors the prior behaviour.
+            if (alreadyRevoked && rc == 0) {
+                return rc;
+            }
+
+            authEventPublisher.publishTokenReuseDetected(
+                    accountId, tenantId, jti, originalRotationAt, reuseAttemptAt,
+                    "masked", "unknown", true, rc);
+
+            for (DeviceSession session : activeSessions) {
+                if (session.isRevoked()) {
+                    continue;
+                }
+                List<String> deviceJtis = jtisByDevice.getOrDefault(session.getDeviceId(), List.of());
+                authEventPublisher.publishAuthSessionRevoked(
+                        accountId, tenantId, session.getDeviceId(),
+                        RevokeReason.TOKEN_REUSE.name(), deviceJtis, reuseAttemptAt,
+                        ACTOR_TYPE_SYSTEM, null);
+            }
+            return rc;
+        });
+        int revokedCount = revokedCountBoxed != null ? revokedCountBoxed : 0;
+
+        // Outside the DB transaction — Redis side effect must not gate the
+        // committed security revoke.
         bulkInvalidationStore.invalidateAll(accountId, 2592000L); // 30-day window
 
         if (alreadyRevoked && revokedCount == 0) {
             log.info("SAS_REFRESH: reuse on already-revoked token, skip duplicate event. account={}",
                     accountId);
-            return;
         }
+    }
 
-        Instant reuseAttemptAt = Instant.now();
-
-        // TASK-BE-248 Phase 2b / TASK-BE-259: tenantId from the reused token's DB record
-        // (authoritative). Resolved before publishing so it flows into auth.token.reuse.detected.
-        String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
-                ? existingToken.getTenantId()
-                : "fan-platform"; // SAS flow default per persistRotation fallback
-
-        authEventPublisher.publishTokenReuseDetected(
-                accountId,
-                tenantId,
-                jti,
-                originalRotationAt,
-                reuseAttemptAt,
-                "masked",    // IP not available in SAS provider context
-                "unknown",   // device fingerprint not available
-                true,
-                revokedCount
-        );
-
+    /**
+     * Bulk revoke + per-device session revoke under one tx — kept package-private
+     * so it can be exercised by unit tests as a single atomic step.
+     *
+     * <p>Returns the count from {@link RefreshTokenRepository#revokeAllByAccountId(String)}.
+     */
+    private int doRevokeAllForReuse(String accountId, List<DeviceSession> activeSessions,
+                                     Instant reuseAttemptAt) {
+        int revokedCount = refreshTokenRepository.revokeAllByAccountId(accountId);
         for (DeviceSession session : activeSessions) {
             if (session.isRevoked()) {
                 continue;
             }
-            List<String> deviceJtis = jtisByDevice.getOrDefault(session.getDeviceId(), List.of());
             session.revoke(reuseAttemptAt, RevokeReason.TOKEN_REUSE);
             deviceSessionRepository.save(session);
-            authEventPublisher.publishAuthSessionRevoked(
-                    accountId,
-                    tenantId,
-                    session.getDeviceId(),
-                    RevokeReason.TOKEN_REUSE.name(),
-                    deviceJtis,
-                    reuseAttemptAt,
-                    ACTOR_TYPE_SYSTEM,
-                    null
-            );
         }
+        return revokedCount;
     }
 
     /**

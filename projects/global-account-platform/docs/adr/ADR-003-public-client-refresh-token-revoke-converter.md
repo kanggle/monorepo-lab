@@ -1,10 +1,10 @@
 # ADR-003: SAS Public-Client AuthenticationConverter for `refresh_token` and `revoke` Grants
 
-**Status**: ACCEPTED — partial (Cluster A 1/3 recovered, RT 2 deferred to follow-up TASK-BE-274 옵션 B)
-**Date**: 2026-05-09 (proposed) / 2026-05-09 (accepted with partial outcome)
+**Status**: ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (옵션 A partial) / 2026-05-09 (옵션 B closure)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 구현), TASK-BE-274 (옵션 B follow-up)
+**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 부분 성공), TASK-BE-274 (PR #296, 옵션 B closure — Cluster A 3/3 + token customizer 결함 unmasked + fix)
 
 ---
 
@@ -244,6 +244,145 @@ http.with(authorizationServerConfigurer, configurer ->
 
 옵션 D (영구 demote) 는 채택하지 않음 — RT 2 IT 의 도메인 가치 (rotation + reuse detection 은 SAS public-client 의 핵심 보안 행동) 가 unit-test 만으로 충분히 cover 되지 않는다는 판단. 옵션 B 시도 후 재평가.
 
+### A2 진단 결과 (TASK-BE-274)
+
+TASK-BE-274 Phase 1 진단으로 **dual-INSERT 두 위치** 가 정확히 식별됐다.
+
+#### 호출 stack
+
+`POST /oauth2/token (grant_type=refresh_token, client_id=demo-spa-client)` 도착 후:
+
+1. SAS `OAuth2ClientAuthenticationFilter` → `PublicClientRefreshTokenAuthenticationConverter` (TASK-BE-272) → `PublicClientNoPkceAuthenticationProvider` (pass-through) 가 client 인증 통과.
+2. SAS `OAuth2TokenEndpointFilter` → `OAuth2RefreshTokenAuthenticationConverter` 가 `OAuth2RefreshTokenAuthenticationToken` emit.
+3. **`SasRefreshTokenAuthenticationProvider.authenticate(Authentication)`** 진입 (이 메서드 안에서 dual-INSERT 발생):
+
+   - **위치 (a)** — `SasRefreshTokenAuthenticationProvider.java:233`
+     ```java
+     authorizationService.save(updatedAuthorization);
+     ```
+     이는 `DomainSyncOAuth2AuthorizationService.save(authorization)` 로 위임 →
+     - `delegate.save(authorization)` (`JpaOAuth2AuthorizationService` JDBC INSERT 로 SAS oauth2_authorization row + refresh_token 컬럼 저장; `refresh_tokens` 도메인 테이블과 무관)
+     - `syncRefreshTokenToDomainStore(authorization)` (`DomainSyncOAuth2AuthorizationService.java:88-132`) 가 `refreshTokenRepository.findByJti(NEW_RT)` 로 idempotent check 하고 not-found 면 `refreshTokenRepository.save(domainToken)` → `RefreshTokenJpaEntity` 로 변환 후 JPA persist → **첫 번째 INSERT** 큐 enqueue (jti = NEW_RT_VALUE).
+
+   - **위치 (b)** — `SasRefreshTokenAuthenticationProvider.java:237`
+     ```java
+     persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
+     ```
+     `persistRotation()` 내부 (line 301-331) 가 `RefreshToken.create(NEW_RT_VALUE, ..., rotated_from=OLD_RT_VALUE)` 로 새 도메인 entity 생성 후 `refreshTokenRepository.save(newDomainToken)` (line 324) → **두 번째 INSERT** 큐 enqueue (jti = NEW_RT_VALUE).
+
+#### Race 메커니즘
+
+같은 transaction (provider 의 호출 stack 전체가 SAS `OAuth2TokenEndpointFilter` 의 outer transaction 안에 있음) 안에서 **같은 NEW_RT_VALUE 로 두 개의 `RefreshTokenJpaEntity` instance 가 persist** 된다:
+
+- 위치 (a) 의 entity 는 `rotated_from = null` (DomainSync 의 syncRefreshTokenToDomainStore line 117)
+- 위치 (b) 의 entity 는 `rotated_from = OLD_RT_VALUE` (persistRotation line 320)
+
+JPA `save()` 는 transaction commit 시 flush 한다. 두 entity 모두 같은 jti = NEW_RT_VALUE 로 INSERT SQL 발사 → `idx_rt_jti UNIQUE` 제약 위반 → `DataIntegrityViolationException` → outer transaction rollback → `OAuth2RefreshTokenIntegrationTest.refreshTokenGrant_normalRotation` 실패.
+
+**왜 idempotent check 가 효과 없는가**: `DomainSyncOAuth2AuthorizationService.syncRefreshTokenToDomainStore()` 의 idempotent check (line 99 `if (refreshTokenRepository.findByJti(tokenValue).isPresent()) return`) 는 위치 (a) 가 먼저 실행될 때 NEW_RT 가 아직 도메인 store 에 없으므로 통과 → INSERT enqueue. 위치 (b) 의 `persistRotation()` 은 idempotent check 없이 무조건 save → 두 번째 INSERT enqueue. 두 INSERT 모두 같은 transaction 의 flush 큐에 쌓여 commit 시점에 같은 jti 로 발사 → 충돌.
+
+**Initial issuance (AuthCode → tokens) 에서 race 가 발생하지 않는 이유**: AuthCode 흐름은 SAS 의 `OAuth2AuthorizationCodeAuthenticationProvider` 가 마지막에 `authorizationService.save(...)` 한 번만 호출하고 그 호출 한 번이 `DomainSync.syncRefreshTokenToDomainStore()` 를 통해 도메인 INSERT 한 번 발사. provider 의 `persistRotation()` 은 rotation path 에만 존재. 따라서 dual-INSERT 는 rotation path 한정.
+
+#### 옵션 B 채택 (TASK-BE-274)
+
+세 안 (skip-path TransactionSync flag / UPSERT race-safe / save 통합) 중 **(1) skip-path TransactionSync flag** 채택. 사유:
+
+- 변경 범위 최소 (DomainSync + Provider 두 파일 한정).
+- AuthCode initial issuance path 는 flag 가 set 되지 않으므로 기존 single-INSERT 경로 그대로 — 회귀 0 보장.
+- PR #264 cycle 7 (`05ab3203`) UPSERT 시도가 cluster C bleed 일으킨 사례 회피.
+- Provider 가 rotation path 의 도메인 INSERT 책임 single source — A2 anti-pattern 의 architectural 해소 (단순 retry/swallow 가 아닌).
+- TSM `unbindResourceIfPossible` + `TransactionSynchronization.afterCompletion` 으로 stale flag 영구 cleanup.
+
+구현 핵심:
+
+```java
+// SasRefreshTokenAuthenticationProvider.authenticate() — line 233 직전
+TransactionSynchronizationManager.bindResource(
+    SAS_ROTATION_SKIP_KEY, Boolean.TRUE);
+TransactionSynchronizationManager.registerSynchronization(
+    new TransactionSynchronization() {
+        @Override public void afterCompletion(int status) {
+            TransactionSynchronizationManager.unbindResourceIfPossible(SAS_ROTATION_SKIP_KEY);
+        }
+    });
+try {
+    authorizationService.save(updatedAuthorization);  // SAS save 만, 도메인 sync skip
+    persistRotation(...);  // 도메인 INSERT single source
+} finally {
+    // afterCompletion 이 cleanup (try-finally 는 fail-safe)
+}
+
+// DomainSyncOAuth2AuthorizationService.syncRefreshTokenToDomainStore() entry
+if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATION_SKIP_KEY))) {
+    return;  // rotation in progress — provider 가 책임
+}
+```
+
+#### 옵션 B 결과 (TASK-BE-274 / PR #296, 2026-05-09 closure)
+
+**Cluster A 회복 = 3/3 (완전 달성)** — 회귀 매트릭스 8/8 PASS + token customizer 결함 unmasked + fix → 회귀 0.
+
+##### Phase 별 cycle 추적
+
+| Phase | Commit | 변경 | 결과 |
+|---|---|---|---|
+| Phase 1 | `c7c5ecc8` | A2 race 진단 (provider line 233 + 237 dual-INSERT 식별) | 본 ADR sub-section 추가 |
+| Phase 2 cycle 1 | `172216b8` | 옵션 (1) skip-path TSM flag — DomainSync + Provider 양쪽 wire | dual-INSERT race 해소 (local), 새 RC `TransactionRequiredException at OutboxWriter.save()` 노출 |
+| Phase 2 cycle 2 | `a83a4d12` | TransactionTemplate programmatic 도입 (A3 회피) — rotation write+publish 한 tx wrap, reuse path 동일 | unit PASS, IT verify 는 Rancher Docker 회귀로 차단 → CI 검증 위임 |
+| Phase 2 cycle 3 | `7e7719c9` | TenantClaimTokenCustomizer 에 REFRESH_TOKEN grantType 분기 추가 (기존 결함 unmasked, fix) | 단위 24 cases PASS, CI verify 위임 |
+
+CI verify cycle 1+2 결과 (PR #296 / run `25596254251`, 2026-05-09 08:19 UTC): GAP Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
+
+| 흐름 | 기대 | 실제 |
+|---|---|---|
+| authorization_code + PKCE | 200 | **PASS** |
+| authorization_code + 잘못된 code_verifier | 400 | **PASS** |
+| **refresh_token (demo-spa-client) normal rotation** | 200 + 새 RT | **PASS (회복!)** |
+| **refresh_token reuse (demo-spa-client)** | 400 + chain revoked | **PASS (회복!)** |
+| refresh_token (test-internal-client, secret) | 200 | **PASS** |
+| client_credentials | 200 | **PASS** |
+| revoke (demo-spa-client) | 200 | **PASS** (BE-272 회복분 유지) |
+| revoke (test-internal-client, secret) | 200 | **PASS** |
+
+##### Cycle 3 — token customizer 결함 unmasked + fix
+
+cycle 1+2 CI verify 에서 `OAuth2RefreshTokenIntegrationTest.refreshedAccessToken_hasTenantClaims:271` **FAILED** (`[refreshed access_token must contain tenant_id]`). 처음에는 BE-274 변경의 부수 회귀로 의심.
+
+**cycle 3 진단**: 가설 1/2/3 (TransactionTemplate timing / skip-path principal / TokenGenerator instance) **모두 falsified**. 실제 RC = `TenantClaimTokenCustomizer.customize()` 에 `REFRESH_TOKEN` grantType 분기 누락:
+
+```java
+// 본 fix 전: TenantClaimTokenCustomizer.customize()
+if (context.getAuthorizationGrantType().equals(AuthorizationGrantType.AUTHORIZATION_CODE)) {
+    customizeForAuthorizationCode(context);
+} else if (context.getAuthorizationGrantType().equals(AuthorizationGrantType.CLIENT_CREDENTIALS)) {
+    customizeForClientCredentials(context);
+}
+// REFRESH_TOKEN grant 는 fall-through → no-op → claim 누락
+```
+
+**의미**: BE-274 변경과 무관한 **기존 결함**. BE-272 시점 RT 2 IT 가 `@Disabled` 라 customize 호출 자체가 없어 결함이 unmasked 안 됐음. RT 2 가 BE-274 cycle 1 에서 처음 enable 되면서 결함 노출. 즉 회귀 fix 가 아니라 **신규 결함 발견 + 수정** (BE-274 의 추가 가치).
+
+**Fix** (commit `7e7719c9`): `customize()` 에 `REFRESH_TOKEN` 분기 추가, `customizeForAuthorizationCode()` 위임 (principal.getDetails() 우선 + ClientSettings Option B fallback). `TenantClaimTokenCustomizerTest` 에 `refresh_token` grant 단위 test 2 case 신규 (24 cases 총 PASS).
+
+##### CI verify cycle 3 (PR #296 / run `25597001354` / 2026-05-09 08:58 UTC)
+
+GAP Integration **2m 14s SUCCESS**. **OAuth2RefreshTokenIntegrationTest 7/7 PASS** (refreshedAccessToken_hasTenantClaims 회복 포함). 다른 IT (Cluster A revoke / AuthCode/PKCE 7/7 / OAuth2AuthorizationServer 6/6 / OAuth2RevokeIntrospect 7/7 / OAuthLogin 7/7 / DeviceSession / AuthIntegration) 회귀 0.
+
+##### 4 anti-pattern 회피 평가
+
+- **A1** (SAS Customizer 람다 timing): 본 task 영역 무관, 회피
+- **A2** (DomainSync ↔ persistRotation dual-INSERT): **architecturally 해소** (skip-path 로 race 자체 제거)
+- **A3** (`@Transactional` AOP 미적용): TransactionTemplate programmatic 으로 우회 — provider 의 publish 가 active tx 안에서 실행됨이 핵심
+- **A4** (test order pollution): stateless 변경, 기존 `@DirtiesContext` 패턴 유지
+
+##### 결론
+
+옵션 B 의 **유효 영역 = Cluster A 3/3 회복 + 회귀 매트릭스 8/8 PASS + token customizer 결함 unmasked + fix**. **AC-01~07 모두 충족**, cycle 3/6 사용 (남은 3 미사용). 본 task spec 의 success criteria 완전 달성.
+
+**부수 가치**: cycle 3 의 RC 진단으로 **BE-272 시점부터 잠재된 token customizer 결함** (REFRESH_TOKEN grantType 분기 누락) 이 unmasked + fix. 이는 RT 2 IT 가 처음 enable 되지 않았다면 발견되지 않았을 결함 — 본 task 의 추가 portfolio 가치.
+
+ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)`.
+
 ---
 
 ## References
@@ -251,7 +390,7 @@ http.with(authorizationServerConfigurer, configurer ->
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 결과 + 4 anti-pattern 학습
 - TASK-MONO-046-7a (PR #289) — 0/7 recovery, doc-only PR
 - TASK-BE-272 (PR #292) — 옵션 A 구현, 부분 성공 (revoke 1/3)
-- TASK-BE-274 — 옵션 B (provider-side fallback) follow-up
+- TASK-BE-274 (PR #296, commits c7c5ecc8 + 172216b8 + a83a4d12 + 7e7719c9) — 옵션 B closure, Cluster A 3/3 회복 (RT 2 + revoke), 회귀 매트릭스 8/8 PASS, token customizer 결함 (REFRESH_TOKEN 분기 누락) unmasked + fix, 회귀 0
 - ADR-001 (OIDC Adoption) — SAS 도입 결정
 - Spring Authorization Server 1.4 docs — `OAuth2ClientAuthenticationFilter` lifecycle
 - RFC 8252 (OAuth 2.0 for Native Apps) + RFC 9700 (Best Current Practice for OAuth 2.0 Security)
