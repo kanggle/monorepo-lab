@@ -8,8 +8,8 @@ import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
-import com.wms.admin.application.port.OutboxPort;
-import com.wms.admin.application.port.SettingRepository;
+import com.wms.admin.application.repository.OutboxRepository;
+import com.wms.admin.application.repository.SettingRepository;
 import com.wms.admin.domain.Setting;
 import com.wms.admin.domain.SettingScope;
 import com.wms.admin.domain.error.SettingImmutableFieldException;
@@ -39,19 +39,19 @@ public class SettingsService {
     private static final String AGGREGATE_TYPE = "setting";
 
     private final SettingRepository settingRepository;
-    private final OutboxPort outboxPort;
+    private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
     private final ObjectMapper objectMapper;
     private final JsonSchemaFactory schemaFactory;
     private final Clock clock;
 
     public SettingsService(SettingRepository settingRepository,
-                           OutboxPort outboxPort,
+                           OutboxRepository outboxRepository,
                            AdminEventEnvelopeBuilder envelopeBuilder,
                            ObjectMapper objectMapper,
                            Clock clock) {
         this.settingRepository = settingRepository;
-        this.outboxPort = outboxPort;
+        this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
         this.objectMapper = objectMapper;
         this.schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
@@ -146,7 +146,7 @@ public class SettingsService {
         String envelope = envelopeBuilder.build(
                 "admin.settings.changed", AGGREGATE_TYPE, setting.key(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, setting.key(), "admin.settings.changed",
+        outboxRepository.append(AGGREGATE_TYPE, setting.key(), "admin.settings.changed",
                 envelope, setting.key());
     }
 

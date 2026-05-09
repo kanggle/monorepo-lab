@@ -1,7 +1,7 @@
 package com.wms.admin.infra.idempotency;
 
-import com.wms.admin.application.port.IdempotencyStore;
-import com.wms.admin.application.port.StoredResponse;
+import com.wms.admin.application.repository.IdempotencyStore;
+import com.wms.admin.application.repository.StoredResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

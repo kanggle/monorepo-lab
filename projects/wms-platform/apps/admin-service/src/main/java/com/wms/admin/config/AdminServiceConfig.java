@@ -1,8 +1,8 @@
 package com.wms.admin.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.admin.application.port.AdminEventDedupePort;
-import com.wms.admin.application.port.IdempotencyStore;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
+import com.wms.admin.application.repository.IdempotencyStore;
 import com.wms.admin.infra.idempotency.IdempotencyFilter;
 import com.wms.admin.infra.idempotency.InMemoryIdempotencyStore;
 import com.wms.admin.infra.idempotency.RedisIdempotencyStore;
@@ -88,13 +88,13 @@ public class AdminServiceConfig {
     @ConditionalOnBean(KafkaAdmin.class)
     @ConditionalOnMissingBean
     KafkaLagProbe kafkaLagProbe(KafkaAdmin kafkaAdmin,
-                                AdminEventDedupePort dedupePort,
+                                AdminEventDedupeRepository dedupeRepository,
                                 TopicEventTypeMap topicMap,
                                 MeterRegistry meterRegistry,
                                 ProjectionMetrics projectionMetrics,
                                 @Value("${spring.kafka.consumer.group-id:admin-projection}")
                                         String consumerGroup) {
-        return new KafkaLagProbe(kafkaAdmin, dedupePort, topicMap, meterRegistry,
+        return new KafkaLagProbe(kafkaAdmin, dedupeRepository, topicMap, meterRegistry,
                 projectionMetrics, consumerGroup);
     }
 

@@ -1,6 +1,6 @@
 package com.wms.admin.application.fakes;
 
-import com.wms.admin.application.port.RoleRepository;
+import com.wms.admin.application.repository.RoleRepository;
 import com.wms.admin.domain.Role;
 import com.wms.admin.domain.RoleStatus;
 import java.util.LinkedHashMap;

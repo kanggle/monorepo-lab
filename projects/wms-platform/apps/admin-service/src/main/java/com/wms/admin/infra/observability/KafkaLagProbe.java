@@ -1,6 +1,6 @@
 package com.wms.admin.infra.observability;
 
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.search.Search;
@@ -61,7 +61,7 @@ public class KafkaLagProbe {
     private static final String PROBE_ERROR_TOPIC = "__probe__";
 
     private final KafkaAdmin kafkaAdmin;
-    private final AdminEventDedupePort dedupePort;
+    private final AdminEventDedupeRepository dedupeRepository;
     private final TopicEventTypeMap topicMap;
     private final MeterRegistry meterRegistry;
     private final ProjectionMetrics projectionMetrics;
@@ -69,24 +69,24 @@ public class KafkaLagProbe {
     private final Duration timeout;
 
     public KafkaLagProbe(KafkaAdmin kafkaAdmin,
-                         AdminEventDedupePort dedupePort,
+                         AdminEventDedupeRepository dedupeRepository,
                          TopicEventTypeMap topicMap,
                          MeterRegistry meterRegistry,
                          ProjectionMetrics projectionMetrics,
                          String consumerGroup) {
-        this(kafkaAdmin, dedupePort, topicMap, meterRegistry, projectionMetrics, consumerGroup,
+        this(kafkaAdmin, dedupeRepository, topicMap, meterRegistry, projectionMetrics, consumerGroup,
                 DEFAULT_TIMEOUT);
     }
 
     public KafkaLagProbe(KafkaAdmin kafkaAdmin,
-                         AdminEventDedupePort dedupePort,
+                         AdminEventDedupeRepository dedupeRepository,
                          TopicEventTypeMap topicMap,
                          MeterRegistry meterRegistry,
                          ProjectionMetrics projectionMetrics,
                          String consumerGroup,
                          Duration timeout) {
         this.kafkaAdmin = kafkaAdmin;
-        this.dedupePort = dedupePort;
+        this.dedupeRepository = dedupeRepository;
         this.topicMap = topicMap;
         this.meterRegistry = meterRegistry;
         this.projectionMetrics = projectionMetrics;
@@ -215,7 +215,7 @@ public class KafkaLagProbe {
             return Map.of();
         }
         try {
-            return dedupePort.maxProcessedAtByEventType(all);
+            return dedupeRepository.maxProcessedAtByEventType(all);
         } catch (RuntimeException e) {
             recordProbeError("dedupe watermark query failed", e);
             return Map.of();

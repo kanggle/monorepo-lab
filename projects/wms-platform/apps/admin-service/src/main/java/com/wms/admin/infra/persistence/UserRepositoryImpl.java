@@ -1,6 +1,6 @@
 package com.wms.admin.infra.persistence;
 
-import com.wms.admin.application.port.UserRepository;
+import com.wms.admin.application.repository.UserRepository;
 import com.wms.admin.domain.User;
 import com.wms.admin.domain.UserStatus;
 import java.util.Optional;
@@ -10,11 +10,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 @Component
-public class UserRepositoryAdapter implements UserRepository {
+public class UserRepositoryImpl implements UserRepository {
 
     private final AdminUserJpaRepository repo;
 
-    public UserRepositoryAdapter(AdminUserJpaRepository repo) {
+    public UserRepositoryImpl(AdminUserJpaRepository repo) {
         this.repo = repo;
     }
 

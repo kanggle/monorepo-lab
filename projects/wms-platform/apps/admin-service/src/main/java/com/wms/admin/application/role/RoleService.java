@@ -5,9 +5,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
 import com.wms.admin.application.PermissionCatalog;
-import com.wms.admin.application.port.AssignmentRepository;
-import com.wms.admin.application.port.OutboxPort;
-import com.wms.admin.application.port.RoleRepository;
+import com.wms.admin.application.repository.AssignmentRepository;
+import com.wms.admin.application.repository.OutboxRepository;
+import com.wms.admin.application.repository.RoleRepository;
 import com.wms.admin.domain.Role;
 import com.wms.admin.domain.RoleStatus;
 import com.wms.admin.domain.UserRoleAssignment;
@@ -47,20 +47,20 @@ public class RoleService {
 
     private final RoleRepository roleRepository;
     private final AssignmentRepository assignmentRepository;
-    private final OutboxPort outboxPort;
+    private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public RoleService(RoleRepository roleRepository,
                        AssignmentRepository assignmentRepository,
-                       OutboxPort outboxPort,
+                       OutboxRepository outboxRepository,
                        AdminEventEnvelopeBuilder envelopeBuilder,
                        ObjectMapper objectMapper,
                        Clock clock) {
         this.roleRepository = roleRepository;
         this.assignmentRepository = assignmentRepository;
-        this.outboxPort = outboxPort;
+        this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -262,7 +262,7 @@ public class RoleService {
         String envelope = envelopeBuilder.build(
                 eventType, AGGREGATE_TYPE, roleId.toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, roleId.toString(), eventType, envelope, roleId.toString());
+        outboxRepository.append(AGGREGATE_TYPE, roleId.toString(), eventType, envelope, roleId.toString());
     }
 
     private void appendAssignmentRevokedEvent(UserRoleAssignment a, String cascadeReason,
@@ -278,7 +278,7 @@ public class RoleService {
         String envelope = envelopeBuilder.build(
                 "admin.assignment.revoked", AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
+        outboxRepository.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
                 envelope, a.id().toString());
     }
 }

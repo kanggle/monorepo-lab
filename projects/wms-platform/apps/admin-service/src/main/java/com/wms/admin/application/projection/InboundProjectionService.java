@@ -10,7 +10,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.inbound.AsnSummaryEntity;
 import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
@@ -46,7 +46,7 @@ public class InboundProjectionService {
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
     private final Clock clock;
 
@@ -54,7 +54,7 @@ public class InboundProjectionService {
                                     InspectionSummaryRepository inspectionRepo,
                                     ThroughputInboundDailyRepository throughputRepo,
                                     PartnerRefRepository partnerRepo,
-                                    AdminEventDedupePort dedupe,
+                                    AdminEventDedupeRepository dedupe,
                                     ProjectionMetrics metrics,
                                     Clock clock) {
         this.asnRepo = asnRepo;

@@ -1,7 +1,7 @@
 package com.wms.admin.infra.persistence.readmodel;
 
-import com.wms.admin.application.port.AdminEventDedupePort;
 import com.wms.admin.application.projection.DedupeOutcome;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * JPA-backed implementation of {@link AdminEventDedupePort}.
+ * JPA-backed implementation of {@link AdminEventDedupeRepository}.
  *
  * <p>Insert-then-flush so the duplicate signal arrives at the catch site, not
  * at TX commit (the same pattern inventory-service /
@@ -28,10 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
  * and any append rows commit or roll back together.
  */
 @Component
-public class AdminEventDedupePersistenceAdapter implements AdminEventDedupePort {
+public class AdminEventDedupeRepositoryImpl implements AdminEventDedupeRepository {
 
     private static final Logger log =
-            LoggerFactory.getLogger(AdminEventDedupePersistenceAdapter.class);
+            LoggerFactory.getLogger(AdminEventDedupeRepositoryImpl.class);
 
     private final AdminEventDedupeJpaRepository repository;
     private final Clock clock;
@@ -39,8 +39,8 @@ public class AdminEventDedupePersistenceAdapter implements AdminEventDedupePort 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public AdminEventDedupePersistenceAdapter(AdminEventDedupeJpaRepository repository,
-                                              Clock clock) {
+    public AdminEventDedupeRepositoryImpl(AdminEventDedupeJpaRepository repository,
+                                          Clock clock) {
         this.repository = repository;
         this.clock = clock;
     }

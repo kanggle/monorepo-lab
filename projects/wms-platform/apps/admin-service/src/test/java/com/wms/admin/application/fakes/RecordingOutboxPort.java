@@ -1,10 +1,10 @@
 package com.wms.admin.application.fakes;
 
-import com.wms.admin.application.port.OutboxPort;
+import com.wms.admin.application.repository.OutboxRepository;
 import java.util.ArrayList;
 import java.util.List;
 
-public class RecordingOutboxPort implements OutboxPort {
+public class RecordingOutboxPort implements OutboxRepository {
 
     public record Row(String aggregateType, String aggregateId, String eventType,
                       String payload, String partitionKey) {}

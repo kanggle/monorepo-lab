@@ -9,7 +9,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.master.PartnerRefEntity;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
@@ -46,14 +46,14 @@ public class OutboundProjectionService {
     private final ShipmentSummaryRepository shipmentRepo;
     private final ThroughputOutboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
 
     public OutboundProjectionService(OrderSummaryRepository orderRepo,
                                      ShipmentSummaryRepository shipmentRepo,
                                      ThroughputOutboundDailyRepository throughputRepo,
                                      PartnerRefRepository partnerRepo,
-                                     AdminEventDedupePort dedupe,
+                                     AdminEventDedupeRepository dedupe,
                                      ProjectionMetrics metrics) {
         this.orderRepo = orderRepo;
         this.shipmentRepo = shipmentRepo;

@@ -2,10 +2,10 @@ package com.wms.admin.application.assignment;
 
 import com.example.common.id.UuidV7;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
-import com.wms.admin.application.port.AssignmentRepository;
-import com.wms.admin.application.port.OutboxPort;
-import com.wms.admin.application.port.RoleRepository;
-import com.wms.admin.application.port.UserRepository;
+import com.wms.admin.application.repository.AssignmentRepository;
+import com.wms.admin.application.repository.OutboxRepository;
+import com.wms.admin.application.repository.RoleRepository;
+import com.wms.admin.application.repository.UserRepository;
 import com.wms.admin.domain.AssignmentStatus;
 import com.wms.admin.domain.Role;
 import com.wms.admin.domain.RoleStatus;
@@ -44,20 +44,20 @@ public class AssignmentService {
     private final AssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final OutboxPort outboxPort;
+    private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
     private final Clock clock;
 
     public AssignmentService(AssignmentRepository assignmentRepository,
                              UserRepository userRepository,
                              RoleRepository roleRepository,
-                             OutboxPort outboxPort,
+                             OutboxRepository outboxRepository,
                              AdminEventEnvelopeBuilder envelopeBuilder,
                              Clock clock) {
         this.assignmentRepository = assignmentRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
-        this.outboxPort = outboxPort;
+        this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
         this.clock = clock;
     }
@@ -123,7 +123,7 @@ public class AssignmentService {
         String envelope = envelopeBuilder.build(
                 "admin.assignment.granted", AGGREGATE_TYPE, a.id().toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, a.id().toString(), "admin.assignment.granted",
+        outboxRepository.append(AGGREGATE_TYPE, a.id().toString(), "admin.assignment.granted",
                 envelope, a.id().toString());
     }
 
@@ -139,7 +139,7 @@ public class AssignmentService {
         String envelope = envelopeBuilder.build(
                 "admin.assignment.revoked", AGGREGATE_TYPE, a.id().toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, a.id().toString(), "admin.assignment.revoked",
+        outboxRepository.append(AGGREGATE_TYPE, a.id().toString(), "admin.assignment.revoked",
                 envelope, a.id().toString());
     }
 }
