@@ -68,6 +68,19 @@ subprojects {
         jvmArgs '-XX:+EnableDynamicAgentLoading'
         systemProperty 'junit.jupiter.execution.timeout.default', '5m'
 
+        // TASK-MONO-046-7a Cluster C: PR #289 cycle 1 reproduced PR #264's
+        // "auth-service infrastructure isn't fully isolated test-to-test" — local
+        // single-class run PASSED 7/7 but CI full-suite run FAILED 5/5 with
+        // identical {@code Account service social-signup failed after retries}.
+        // Local diff = single class JVM, CI diff = shared-JVM suite. The
+        // suspected JVM-shared static state (WireMock.configureFor singleton,
+        // JDK HttpClient pool, classloader cache, resilience4j-spring-boot3
+        // auto-config registry) is eliminated by forking a fresh JVM per test
+        // class. Cost: each class boots its own MySQL+Kafka via Testcontainers
+        // (~30s × ~10 classes = +5 min CI), accepted in exchange for
+        // deterministic isolation. If a future CI baseline regresses, revisit.
+        forkEvery 1
+
         testLogging {
             events 'passed', 'failed', 'skipped'
             exceptionFormat 'full'
