@@ -1,10 +1,10 @@
 # ADR-004: OAuth Callback IT — CI Linux 503 Deeper Isolation Strategy
 
-**Status**: PROPOSED — Phase 1 진단 완료 (flaky + RC 식별 = HTTP/2 RST_STREAM race), Phase 2 옵션 결정 대기
-**Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 + retry 검증 → flaky 확정 + RC 식별)
+**Status**: ACCEPTED — Phase 2 옵션 1 (HTTP/1.1 강제) 으로 5/5 IT 회복 (CI run `25594196693`, 2026-05-09)
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 + retry 검증 → flaky 확정 + RC 식별) / 2026-05-09 (Phase 2 옵션 1 PASS — ACCEPTED)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2), TASK-BE-273 (PR #294, Phase 1 진단 — flaky + RC 식별)
+**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2), TASK-BE-273 (PR #294, Phase 1 진단 — flaky + RC 식별 + Phase 2 옵션 1 적용)
 
 ---
 
@@ -313,9 +313,52 @@ retry 2/3 진행 안 함 (stop 조건 trigger — 1 FAIL 으로 충분히 determ
 
 ---
 
+## Phase 2 Outcome
+
+**ACCEPTED — 옵션 1 (HTTP/1.1 강제)** 으로 5/5 IT 회복.
+
+### 패치 영역 (commit `ab52b8b4`, PR #294)
+
+4개 outbound HTTP client 모두 `HttpClient.Version.HTTP_1_1` 강제:
+
+| 파일 | 변경 방식 |
+|---|---|
+| `libs/java-common/.../ResilienceClientFactory.java` | `HttpClient.newBuilder()` 에 `.version(HTTP_1_1)` 추가 — `AccountServiceClient` 등 factory 사용 client 전체 커버 |
+| `GoogleOAuthClient.java` (production constructor) | `buildHttp11RestClient()` private static helper 신설, 그 결과를 package-private 생성자에 delegate |
+| `MicrosoftOAuthClient.java` (production constructor) | 동일 패턴 (`buildHttp11RestClient()` helper) |
+| `KakaoOAuthClient.java` (constructor) | `HttpClient.newBuilder().version(HTTP_1_1)...` 인라인 |
+
+기존 timeout / retry / CircuitBreaker / header 설정 보존. test-only package-private constructor (`RestClient` 직접 주입) 는 무변경.
+
+### CI 결과 (run `25594196693`, 2026-05-09 약 06:45 UTC)
+
+```
+Integration (global-account-platform, Testcontainers)  PASS  6m13s
+```
+
+`OAuthLoginIntegrationTest` 7/7 PASS (5 previously-disabled method 포함):
+
+| # | Method | Phase 2 결과 |
+|---|---|---|
+| 2 | Microsoft preferredUsername fallback | PASSED |
+| 3 | Google: authorize + callback | PASSED |
+| 4 | Microsoft: existing email auto-link | PASSED |
+| 5 | Kakao: authorize + callback | PASSED |
+| 7 | Microsoft: authorize + callback | PASSED |
+| 1 | State missing from Redis (always enabled) | PASSED |
+| 6 | Microsoft 5xx (always enabled) | PASSED |
+
+`AccountServiceClient` 강화된 catch 블록 출력 0건 — RST_STREAM 재발 없음. 회귀 가드 (Cluster A 3 / 다른 enabled IT) 전부 PASS.
+
+### 결론
+
+HTTP/2 multiplexing race 는 HTTP/1.1 강제로 완전 제거. Linux epoll event loop 의 타이밍에 독립적. production 영향: HTTP/2 multiplexing 이점 포기이나 single-host internal client 에서 무의미한 trade-off.
+
+---
+
 ## References
 
-- TASK-BE-273 (PR #294) — Phase 1 진단: 원래 5/5 PASS / retry 1 5/5 FAIL → flaky + RC 식별 (HTTP/2 RST_STREAM race)
+- TASK-BE-273 (PR #294) — Phase 1 진단 (5/5 PASS → retry 1 5/5 FAIL → flaky + RC 식별) + Phase 2 옵션 1 적용 (commit `ab52b8b4`, CI run `25594196693`)
 - TASK-MONO-046-7a (PR #289) — cycle 1+2 evidence (CB reset + forkEvery 1 둘 다 falsified)
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 의 cycle 9-11 503 패턴
 - TASK-MONO-044c-1 (PR #218) — `@DirtiesContext(AFTER_CLASS)` + lazy `AccountServiceClient` URL resolution
