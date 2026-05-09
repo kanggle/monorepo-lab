@@ -1,12 +1,18 @@
 export const revalidate = 60;
 
-import { cache } from 'react';
+import { Suspense, cache } from 'react';
+import dynamic from 'next/dynamic';
 import { getProduct } from '@/entities/product';
 import { ProductDetailWithCart } from '@/widgets/product-detail-with-cart';
-import { ReviewList } from '@/features/review';
+import { ReviewListSkeleton } from '@/features/review/ui/ReviewListSkeleton';
 import { ErrorMessage } from '@repo/ui';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+
+const ReviewList = dynamic(
+  () => import('@/features/review/ui/ReviewList').then((m) => ({ default: m.ReviewList })),
+  { loading: () => <ReviewListSkeleton count={3} /> },
+);
 
 const getCachedProduct = cache(async (id: string) => {
   try {
@@ -57,7 +63,9 @@ export default async function ProductDetailPage({ params }: Props) {
   return (
     <div className="container" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-16)' }}>
       <ProductDetailWithCart product={product} />
-      <ReviewList productId={product.id} />
+      <Suspense fallback={<ReviewListSkeleton count={3} />}>
+        <ReviewList productId={product.id} />
+      </Suspense>
     </div>
   );
 }

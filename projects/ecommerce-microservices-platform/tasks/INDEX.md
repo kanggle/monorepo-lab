@@ -82,7 +82,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-FE-069 | web-store 상품 상세/홈 LCP·TTI 개선 — Next.js Image 최적화 활성화(`remotePatterns` 화이트리스트) + ReviewList `next/dynamic` 코드 스플리팅 + Suspense boundary(향후 PPR 진입점). | web-store | code, perf |
 
 ## done
 

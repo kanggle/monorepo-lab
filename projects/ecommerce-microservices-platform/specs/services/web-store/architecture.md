@@ -83,10 +83,17 @@ Dependencies flow **downward only**. Upper layers may import from lower layers, 
 - Do not duplicate server state in client stores
 
 ## Rendering Strategy
-- Product listing and detail pages: SSR or SSG for SEO
+- Product listing and detail pages: SSR or SSG for SEO (currently ISR with `revalidate = 60`)
 - Cart and checkout: Client-side rendering (CSR) — user-specific, dynamic state
 - Search results: SSR with client-side filter updates
 - Follow Next.js App Router conventions: Server Components by default, `'use client'` only when needed
+- Heavy below-the-fold client components (e.g., `ReviewList`) are code-split via `next/dynamic` and wrapped in a `<Suspense>` boundary. The `next/dynamic` `loading` prop renders a skeleton during chunk fetch; the Suspense boundary is a forward-compatibility marker for a future `experimental.ppr` / `useSuspenseQuery` migration where it becomes load-bearing. SSR remains enabled for SEO content.
+
+## Image Strategy
+- `next.config.ts` defines an explicit `images.remotePatterns` whitelist instead of `images.unoptimized: true`. This enables Sharp-driven WebP conversion + per-viewport srcset.
+- Whitelisted hostnames: `images.unsplash.com` (hero banner), `placehold.co` (fallback placeholders), `localhost` / `127.0.0.1` (dev MinIO presigned URLs), and one env-driven hostname `NEXT_PUBLIC_OBJECT_STORAGE_HOSTNAME` for staging / prod object storage (S3 / MinIO behind public DNS).
+- Components opt out of optimization for placeholder / local URLs via `unoptimized={url.includes('placehold.co') || url.startsWith('http://localhost')}` — this remains the safety net for fallback images (`fallback-images.ts`) so external placehold.co requests are not proxied through `_next/image`.
+- LCP-candidate images (HeroBanner first slide, ProductImage gallery first frame) keep `priority` so Next.js auto-emits a preload `<link>` in the document head.
 
 ## Integration Rules
 - All API calls must use `@repo/api-client`
