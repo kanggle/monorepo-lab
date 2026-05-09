@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Projects {@code wms.inventory.*} into:
@@ -44,7 +45,7 @@ import org.springframework.stereotype.Service;
  * avoid deadlocks (failure-scenarios: PostgreSQL upsert deadlock).
  */
 @Service
-public class InventoryProjectionService extends AbstractProjectionService {
+public class InventoryProjectionService {
 
     private static final String SOURCE_SERVICE = "inventory";
 
@@ -54,6 +55,8 @@ public class InventoryProjectionService extends AbstractProjectionService {
     private final LocationRefRepository locationRepo;
     private final SkuRefRepository skuRepo;
     private final LotRefRepository lotRepo;
+    private final AdminEventDedupeRepository dedupe;
+    private final ProjectionMetrics metrics;
     private final Clock clock;
 
     public InventoryProjectionService(InventorySnapshotRepository snapshotRepo,
@@ -65,23 +68,36 @@ public class InventoryProjectionService extends AbstractProjectionService {
                                       AdminEventDedupeRepository dedupe,
                                       ProjectionMetrics metrics,
                                       Clock clock) {
-        super(dedupe, metrics);
         this.snapshotRepo = snapshotRepo;
         this.auditRepo = auditRepo;
         this.alertRepo = alertRepo;
         this.locationRepo = locationRepo;
         this.skuRepo = skuRepo;
         this.lotRepo = lotRepo;
+        this.dedupe = dedupe;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
-    @Override
-    protected String sourceService() {
-        return SOURCE_SERVICE;
+    @Transactional
+    public DedupeOutcome project(ProjectionEnvelope envelope) {
+        DedupeOutcome outcome = dedupe.tryRecord(envelope.eventId(), envelope.eventType());
+        if (outcome == DedupeOutcome.DUPLICATE) {
+            metrics.recordDropped("duplicate");
+            return outcome;
+        }
+
+        DedupeOutcome applied = dispatch(envelope);
+        if (applied == DedupeOutcome.IGNORED_DUPLICATE_LATE) {
+            dedupe.markStale(envelope.eventId());
+            metrics.recordDropped("stale");
+        } else {
+            metrics.recordLag(SOURCE_SERVICE, envelope.sourceTopic(), envelope.occurredAt());
+        }
+        return applied;
     }
 
-    @Override
-    protected DedupeOutcome dispatch(ProjectionEnvelope envelope) {
+    private DedupeOutcome dispatch(ProjectionEnvelope envelope) {
         switch (envelope.eventType()) {
             case "inventory.received":
                 return onLineLevelEvent(envelope, true);
@@ -135,7 +151,34 @@ public class InventoryProjectionService extends AbstractProjectionService {
         JsonNode p = envelope.payload();
         Instant occurredAt = envelope.occurredAt();
 
-        appendAuditRow(envelope, p);
+        // Append-only audit row keyed by eventId.
+        UUID auditId = envelope.eventId();
+        if (!auditRepo.existsById(auditId)) {
+            UUID locationId = uuid(p, "locationId");
+            UUID skuId = uuid(p, "skuId");
+            UUID lotId = optionalUuid(p, "lotId");
+            UUID warehouseId = optionalUuid(p, "warehouseId");
+            if (warehouseId == null) {
+                warehouseId = locationRepo.findById(locationId)
+                        .map(LocationRefEntity::getWarehouseId)
+                        .orElse(new UUID(0, 0));
+            }
+            Integer delta = optionalIntegerBoxed(p, "delta");
+            AdjustmentAuditEntity audit = new AdjustmentAuditEntity(
+                    auditId,
+                    locationId,
+                    skuId,
+                    lotId,
+                    warehouseId,
+                    optionalText(p, "bucket") == null ? "AVAILABLE" : optionalText(p, "bucket"),
+                    delta == null ? 0 : delta,
+                    optionalText(p, "reasonCode"),
+                    optionalText(p, "reasonNote"),
+                    optionalText(p, "actorId"),
+                    occurredAt,
+                    clock.instant());
+            auditRepo.save(audit);
+        }
 
         // Snapshot row update (current state in payload.inventory).
         UUID locationId = uuid(p, "locationId");
@@ -154,42 +197,6 @@ public class InventoryProjectionService extends AbstractProjectionService {
                     reserved, damaged, occurredAt);
         }
         return DedupeOutcome.APPLIED;
-    }
-
-    /**
-     * Append-only audit row keyed by {@code eventId} (PK). Skipped if a row
-     * already exists (Kafka redelivery safety net beyond the
-     * {@code admin_event_dedupe} pre-check).
-     */
-    private void appendAuditRow(ProjectionEnvelope envelope, JsonNode p) {
-        UUID auditId = envelope.eventId();
-        if (auditRepo.existsById(auditId)) {
-            return;
-        }
-        UUID locationId = uuid(p, "locationId");
-        UUID skuId = uuid(p, "skuId");
-        UUID lotId = optionalUuid(p, "lotId");
-        UUID warehouseId = optionalUuid(p, "warehouseId");
-        if (warehouseId == null) {
-            warehouseId = locationRepo.findById(locationId)
-                    .map(LocationRefEntity::getWarehouseId)
-                    .orElse(new UUID(0, 0));
-        }
-        Integer delta = optionalIntegerBoxed(p, "delta");
-        AdjustmentAuditEntity audit = new AdjustmentAuditEntity(
-                auditId,
-                locationId,
-                skuId,
-                lotId,
-                warehouseId,
-                optionalText(p, "bucket") == null ? "AVAILABLE" : optionalText(p, "bucket"),
-                delta == null ? 0 : delta,
-                optionalText(p, "reasonCode"),
-                optionalText(p, "reasonNote"),
-                optionalText(p, "actorId"),
-                envelope.occurredAt(),
-                clock.instant());
-        auditRepo.save(audit);
     }
 
     private DedupeOutcome onTransferred(ProjectionEnvelope envelope) {
@@ -253,61 +260,29 @@ public class InventoryProjectionService extends AbstractProjectionService {
 
     // ----- snapshot mutation helpers -------------------------------------
 
-    /**
-     * Result of {@link #findExistingAndCheckLww}:
-     *
-     * <ul>
-     *   <li>{@code stale = true} — existing row's {@code lastEventAt} is newer
-     *       than the incoming event; the caller must short-circuit with
-     *       {@link DedupeOutcome#IGNORED_DUPLICATE_LATE}.</li>
-     *   <li>{@code stale = false}, {@code existing != null} — existing row is
-     *       older or equal; safe to upsert.</li>
-     *   <li>{@code stale = false}, {@code existing == null} — no row yet; safe
-     *       to insert.</li>
-     * </ul>
-     *
-     * <p>{@code effectiveWarehouseId} encodes the warehouseId resolution rule
-     * shared by all three upsert variants: prefer the event-supplied value,
-     * fall back to the existing row's value, finally fall back to the
-     * all-zero UUID sentinel.
-     */
-    private record LwwLookup(InventorySnapshotEntity existing,
-                             boolean stale,
-                             UUID effectiveWarehouseId) {
-    }
-
-    private LwwLookup findExistingAndCheckLww(UUID locationId, UUID skuId, UUID lotId,
-                                              UUID warehouseId, Instant occurredAt) {
-        InventorySnapshotEntity existing = snapshotRepo.findById(
-                new InventorySnapshotId(locationId, skuId, lotId)).orElse(null);
-        boolean stale = existing != null && existing.getLastEventAt().isAfter(occurredAt);
-        UUID effectiveWh = warehouseId != null ? warehouseId
-                : (existing != null ? existing.getWarehouseId() : new UUID(0, 0));
-        return new LwwLookup(existing, stale, effectiveWh);
-    }
-
     private DedupeOutcome upsertSnapshot(ProjectionEnvelope envelope, UUID warehouseId,
                                          UUID locationId, UUID skuId, UUID lotId,
                                          JsonNode line, Instant occurredAt) {
+        Integer availableAfter = optionalIntegerBoxed(line, "availableQtyAfter");
+        Integer reservedAfter = optionalIntegerBoxed(line, "reservedQtyAfter");
         // damagedQty is rarely emitted on these events — keep current row's
         // value if absent. We use a single-call upsertSnapshotAbsolute
         // signature, so for received/reserved/released/confirmed we read the
         // current row's damagedQty when computing the new state.
-        LwwLookup lookup = findExistingAndCheckLww(locationId, skuId, lotId, warehouseId,
-                occurredAt);
-        if (lookup.stale()) {
+        InventorySnapshotEntity existing = snapshotRepo.findById(
+                new InventorySnapshotId(locationId, skuId, lotId)).orElse(null);
+        if (existing != null && existing.getLastEventAt().isAfter(occurredAt)) {
             return DedupeOutcome.IGNORED_DUPLICATE_LATE;
         }
-        InventorySnapshotEntity existing = lookup.existing();
-        Integer availableAfter = optionalIntegerBoxed(line, "availableQtyAfter");
-        Integer reservedAfter = optionalIntegerBoxed(line, "reservedQtyAfter");
         int avail = availableAfter != null ? availableAfter
                 : (existing != null ? existing.getAvailableQty() : 0);
         int reserved = reservedAfter != null ? reservedAfter
                 : (existing != null ? existing.getReservedQty() : 0);
         int damaged = existing != null ? existing.getDamagedQty() : 0;
-        applySnapshot(existing, locationId, skuId, lotId, lookup.effectiveWarehouseId(), avail,
-                reserved, damaged, occurredAt);
+        UUID effectiveWh = warehouseId != null ? warehouseId
+                : (existing != null ? existing.getWarehouseId() : new UUID(0, 0));
+        applySnapshot(existing, locationId, skuId, lotId, effectiveWh, avail, reserved, damaged,
+                occurredAt);
         return DedupeOutcome.APPLIED;
     }
 
@@ -315,31 +290,34 @@ public class InventoryProjectionService extends AbstractProjectionService {
                                                  UUID warehouseId, int availableQty,
                                                  int reservedQty, int damagedQty,
                                                  Instant occurredAt) {
-        LwwLookup lookup = findExistingAndCheckLww(locationId, skuId, lotId, warehouseId,
-                occurredAt);
-        if (lookup.stale()) {
+        InventorySnapshotEntity existing = snapshotRepo.findById(
+                new InventorySnapshotId(locationId, skuId, lotId)).orElse(null);
+        if (existing != null && existing.getLastEventAt().isAfter(occurredAt)) {
             return DedupeOutcome.IGNORED_DUPLICATE_LATE;
         }
-        applySnapshot(lookup.existing(), locationId, skuId, lotId, lookup.effectiveWarehouseId(),
-                availableQty, reservedQty, damagedQty, occurredAt);
+        UUID effectiveWh = warehouseId != null ? warehouseId
+                : (existing != null ? existing.getWarehouseId() : new UUID(0, 0));
+        applySnapshot(existing, locationId, skuId, lotId, effectiveWh, availableQty, reservedQty,
+                damagedQty, occurredAt);
         return DedupeOutcome.APPLIED;
     }
 
     private DedupeOutcome upsertAvailableOnly(UUID locationId, UUID skuId, UUID lotId,
                                               UUID warehouseId, Integer availableAfter,
                                               Instant occurredAt) {
-        LwwLookup lookup = findExistingAndCheckLww(locationId, skuId, lotId, warehouseId,
-                occurredAt);
-        if (lookup.stale()) {
+        InventorySnapshotEntity existing = snapshotRepo.findById(
+                new InventorySnapshotId(locationId, skuId, lotId)).orElse(null);
+        if (existing != null && existing.getLastEventAt().isAfter(occurredAt)) {
             return DedupeOutcome.IGNORED_DUPLICATE_LATE;
         }
-        InventorySnapshotEntity existing = lookup.existing();
         int avail = availableAfter != null ? availableAfter
                 : (existing != null ? existing.getAvailableQty() : 0);
         int reserved = existing != null ? existing.getReservedQty() : 0;
         int damaged = existing != null ? existing.getDamagedQty() : 0;
-        applySnapshot(existing, locationId, skuId, lotId, lookup.effectiveWarehouseId(), avail,
-                reserved, damaged, occurredAt);
+        UUID effectiveWh = warehouseId != null ? warehouseId
+                : (existing != null ? existing.getWarehouseId() : new UUID(0, 0));
+        applySnapshot(existing, locationId, skuId, lotId, effectiveWh, avail, reserved, damaged,
+                occurredAt);
         return DedupeOutcome.APPLIED;
     }
 

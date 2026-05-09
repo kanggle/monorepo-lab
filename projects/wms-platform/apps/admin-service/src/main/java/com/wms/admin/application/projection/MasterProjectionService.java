@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Projects {@code wms.master.{warehouse|zone|location|sku|partner|lot}.v1} into
@@ -48,7 +49,7 @@ import org.springframework.stereotype.Service;
  * mandatory fields throw {@link IllegalArgumentException} → DLT.
  */
 @Service
-public class MasterProjectionService extends AbstractProjectionService {
+public class MasterProjectionService {
 
     private static final String SOURCE_SERVICE = "master";
 
@@ -58,6 +59,8 @@ public class MasterProjectionService extends AbstractProjectionService {
     private final SkuRefRepository skuRepo;
     private final LotRefRepository lotRepo;
     private final PartnerRefRepository partnerRepo;
+    private final AdminEventDedupeRepository dedupe;
+    private final ProjectionMetrics metrics;
 
     public MasterProjectionService(WarehouseRefRepository warehouseRepo,
                                    ZoneRefRepository zoneRepo,
@@ -67,22 +70,35 @@ public class MasterProjectionService extends AbstractProjectionService {
                                    PartnerRefRepository partnerRepo,
                                    AdminEventDedupeRepository dedupe,
                                    ProjectionMetrics metrics) {
-        super(dedupe, metrics);
         this.warehouseRepo = warehouseRepo;
         this.zoneRepo = zoneRepo;
         this.locationRepo = locationRepo;
         this.skuRepo = skuRepo;
         this.lotRepo = lotRepo;
         this.partnerRepo = partnerRepo;
+        this.dedupe = dedupe;
+        this.metrics = metrics;
     }
 
-    @Override
-    protected String sourceService() {
-        return SOURCE_SERVICE;
+    @Transactional
+    public DedupeOutcome project(ProjectionEnvelope envelope) {
+        DedupeOutcome outcome = dedupe.tryRecord(envelope.eventId(), envelope.eventType());
+        if (outcome == DedupeOutcome.DUPLICATE) {
+            metrics.recordDropped("duplicate");
+            return outcome;
+        }
+
+        DedupeOutcome applied = dispatch(envelope);
+        if (applied == DedupeOutcome.IGNORED_DUPLICATE_LATE) {
+            dedupe.markStale(envelope.eventId());
+            metrics.recordDropped("stale");
+        } else {
+            metrics.recordLag(SOURCE_SERVICE, envelope.sourceTopic(), envelope.occurredAt());
+        }
+        return applied;
     }
 
-    @Override
-    protected DedupeOutcome dispatch(ProjectionEnvelope envelope) {
+    private DedupeOutcome dispatch(ProjectionEnvelope envelope) {
         String type = envelope.eventType();
         if (type.startsWith("master.warehouse.")) {
             return onWarehouse(envelope);

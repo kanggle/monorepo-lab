@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Projects {@code wms.inbound.*} into:
@@ -37,7 +38,7 @@ import org.springframework.stereotype.Service;
  * </ul>
  */
 @Service
-public class InboundProjectionService extends AbstractProjectionService {
+public class InboundProjectionService {
 
     private static final String SOURCE_SERVICE = "inbound";
 
@@ -45,6 +46,8 @@ public class InboundProjectionService extends AbstractProjectionService {
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
+    private final AdminEventDedupeRepository dedupe;
+    private final ProjectionMetrics metrics;
     private final Clock clock;
 
     public InboundProjectionService(AsnSummaryRepository asnRepo,
@@ -54,21 +57,34 @@ public class InboundProjectionService extends AbstractProjectionService {
                                     AdminEventDedupeRepository dedupe,
                                     ProjectionMetrics metrics,
                                     Clock clock) {
-        super(dedupe, metrics);
         this.asnRepo = asnRepo;
         this.inspectionRepo = inspectionRepo;
         this.throughputRepo = throughputRepo;
         this.partnerRepo = partnerRepo;
+        this.dedupe = dedupe;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
-    @Override
-    protected String sourceService() {
-        return SOURCE_SERVICE;
+    @Transactional
+    public DedupeOutcome project(ProjectionEnvelope envelope) {
+        DedupeOutcome outcome = dedupe.tryRecord(envelope.eventId(), envelope.eventType());
+        if (outcome == DedupeOutcome.DUPLICATE) {
+            metrics.recordDropped("duplicate");
+            return outcome;
+        }
+
+        DedupeOutcome applied = dispatch(envelope);
+        if (applied == DedupeOutcome.IGNORED_DUPLICATE_LATE) {
+            dedupe.markStale(envelope.eventId());
+            metrics.recordDropped("stale");
+        } else {
+            metrics.recordLag(SOURCE_SERVICE, envelope.sourceTopic(), envelope.occurredAt());
+        }
+        return applied;
     }
 
-    @Override
-    protected DedupeOutcome dispatch(ProjectionEnvelope envelope) {
+    private DedupeOutcome dispatch(ProjectionEnvelope envelope) {
         switch (envelope.eventType()) {
             case "inbound.asn.received":
                 return onAsnReceived(envelope);
