@@ -146,28 +146,38 @@ public class AuthorizationServerConfig {
                                 .oidc(oidc ->
                                         oidc.userInfoEndpoint(userInfo ->
                                                 userInfo.userInfoMapper(oidcUserInfoMapper)))
+                                // TASK-BE-272 / ADR-003 option A: register the
+                                // public-client converters on the client
+                                // authentication filter (NOT on the
+                                // tokenEndpoint().accessTokenRequestConverter()
+                                // slot — that slot parses GRANT request bodies,
+                                // not client credentials). Both converters live
+                                // in the OAuth2ClientAuthenticationFilter's
+                                // DelegatingAuthenticationConverter chain; the
+                                // refresh_token converter filters by grant_type
+                                // so it only fires on /oauth2/token, the revoke
+                                // converter has no grant_type filter so it
+                                // matches the public-client request shape on
+                                // /oauth2/revoke. Each returns null on
+                                // mismatch, allowing the stock converters
+                                // (client-secret-basic, public-client PKCE,
+                                // etc.) to handle other flows unchanged.
+                                .clientAuthentication(clientAuth ->
+                                        clientAuth
+                                                .authenticationConverter(publicClientRefreshTokenConverter)
+                                                .authenticationConverter(publicClientRevokeConverter))
                                 // Phase 2b: add custom refresh_token provider.
                                 // OAuth2TokenGenerator is available as a shared object on HttpSecurity
                                 // after the SAS configurer has been applied via .with(). We use a
                                 // Customizer that captures http to resolve the generator lazily.
                                 .tokenEndpoint(tokenEndpoint ->
-                                        tokenEndpoint
-                                                // ADR-003: public-client refresh_token converter
-                                                // is registered first so it has a chance to
-                                                // produce an authenticated token before stock
-                                                // converters reject the request.
-                                                .accessTokenRequestConverter(publicClientRefreshTokenConverter)
-                                                .authenticationProvider(
-                                                        buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
+                                        tokenEndpoint.authenticationProvider(
+                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
                                 // Phase 2c: token revocation endpoint (RFC 7009).
                                 // SAS default revocation provider calls authorizationService.remove(),
                                 // which triggers DomainSyncOAuth2AuthorizationService to revoke the
                                 // token in the JPA domain store. No custom provider needed.
-                                // ADR-003: public-client revoke converter wired here so SPAs
-                                // (NONE method) can call POST /oauth2/revoke without
-                                // client_secret_basic.
-                                .tokenRevocationEndpoint(revocation ->
-                                        revocation.revocationRequestConverter(publicClientRevokeConverter))
+                                .tokenRevocationEndpoint(revocation -> { /* use SAS defaults */ })
                                 // Phase 2c: token introspection endpoint (RFC 7662).
                                 // Custom introspectionResponseHandler enriches the response with
                                 // tenant_id and tenant_type extension claims.

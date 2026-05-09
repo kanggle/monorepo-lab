@@ -56,9 +56,11 @@ class PublicClientRevokeAuthenticationConverterTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("client_id + no Authorization + NONE method → authenticated OAuth2ClientAuthenticationToken")
+    @DisplayName("token + client_id + no Authorization + NONE method → authenticated OAuth2ClientAuthenticationToken")
     void matchingRequest_returnsAuthenticatedClientToken() {
         RegisteredClient publicClient = publicClient(PUBLIC_CLIENT_ID);
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn(PUBLIC_CLIENT_ID);
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn(null);
         when(registeredClientRepository.findByClientId(PUBLIC_CLIENT_ID)).thenReturn(publicClient);
@@ -74,12 +76,40 @@ class PublicClientRevokeAuthenticationConverterTest {
     }
 
     // -----------------------------------------------------------------------
+    // Skip — missing token (eg /oauth2/authorize requests share the
+    //                       no-Authorization + client_id shape but lack `token`)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("missing token parameter → null (so /oauth2/authorize is not auto-authenticated)")
+    void missingToken_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn(null);
+
+        Authentication result = converter.convert(request);
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("grant_type present (i.e. /oauth2/token request) → null (defer to RT converter)")
+    void grantTypePresent_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn("refresh_token");
+
+        Authentication result = converter.convert(request);
+
+        assertThat(result).isNull();
+    }
+
+    // -----------------------------------------------------------------------
     // Skip — missing or blank client_id
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("missing client_id → null")
     void missingClientId_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn(null);
 
         Authentication result = converter.convert(request);
@@ -90,6 +120,8 @@ class PublicClientRevokeAuthenticationConverterTest {
     @Test
     @DisplayName("blank client_id → null")
     void blankClientId_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn("");
 
         Authentication result = converter.convert(request);
@@ -104,6 +136,8 @@ class PublicClientRevokeAuthenticationConverterTest {
     @Test
     @DisplayName("Authorization header present → null (defer to stock client-secret-basic)")
     void authorizationHeaderPresent_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn(PUBLIC_CLIENT_ID);
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn("Basic Zm9vOmJhcg==");
 
@@ -119,6 +153,8 @@ class PublicClientRevokeAuthenticationConverterTest {
     @Test
     @DisplayName("unknown client_id → null")
     void unknownClientId_returnsNull() {
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn("does-not-exist");
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn(null);
         when(registeredClientRepository.findByClientId("does-not-exist")).thenReturn(null);
@@ -132,6 +168,8 @@ class PublicClientRevokeAuthenticationConverterTest {
     @DisplayName("client registered but NONE method not allowed → null")
     void confidentialClient_returnsNull() {
         RegisteredClient confidentialClient = confidentialClient("confidential-client");
+        when(request.getParameter(OAuth2ParameterNames.TOKEN)).thenReturn("opaque-token-value");
+        when(request.getParameter(OAuth2ParameterNames.GRANT_TYPE)).thenReturn(null);
         when(request.getParameter(OAuth2ParameterNames.CLIENT_ID)).thenReturn("confidential-client");
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn(null);
         when(registeredClientRepository.findByClientId("confidential-client"))
