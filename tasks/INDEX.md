@@ -103,8 +103,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-046-7a-auth-service-sas-7-deferred.md` — **046-7 11-cycle burn 후속** (선행=046-7 done, PR #264). 8 deferred 중 1 회복 + 7 method 잔존 = Cluster A (RT rotation/reuse/revoke 3) + Cluster C (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername 4). 4 architectural anti-pattern (A1 SAS Customizer lifecycle / A2 DomainSync vs persistRotation race / A3 수동 instantiation `@Transactional` 적용 불가 / A4 test order pollution) 위에서 cluster 별 단독 cycle (Phase 1 A / Phase 2 C) + combined cycle (Phase 3) 으로 분리 진단 + fix. **6-cycle 임계값** (cycle 6 best, 7+ regression — 046-7 burn 학습) 을 burn 비용 상한으로 채택. 환경 회복 (CI Linux runner) 전제. D4 churn freeze 면제 (regression fix path — auth-service project-internal 만 변경 예상). 분석=Opus 4.7 / 구현 권장=Opus.
-
 - `TASK-MONO-046-8a-consumer-pipeline-after-046-8.md` — **046-8 Phase 0 후속** (선행=046-8 Phase 0 머지). Phase 0 instrumentation (KafkaConsumerConfig containsCause + ProducerListener.onError + valueClass logging + testcontainers BOM 1.21.3) 위에서 3 deferred test 의 root cause 확정 + 최소 fix. Phase 1 = byte[] DLPR (가설: AbstractAuthEventConsumer null-guard 또는 DelegatingByTypeSerializer dispatch 보강). Phase 2 = burst tests (가설: production @KafkaListener groupId hardcoded → SpEL ${...random.uuid} override 로 SCM 답습 패턴 적용). target ≤ 3 cycle. D4 churn freeze 면제 (regression fix path 카테고리 자연 확장). 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
@@ -113,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-046-7a-auth-service-sas-7-deferred.md` — **046-7 11-cycle burn 후속, partial recovery**. Cluster C 5 method (OAuth callback Google/Kakao/Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink) 회복 — `@BeforeEach` 에 `AccountServiceClient.circuitBreaker.reset()` reflection hook 추가 (test-only, production 0 churn). PR #264 disable 사유 `Resilience4j circuit-breaker / WireMock state pollution` 가 정확했고 5-line fix 로 종결. local cycle 1 OAuthLoginIntegrationTest 7/7 PASS / 0 skipped / 0 failures (15.3s). Cluster A 3 method (SAS public-client refresh_token grant client-auth) 는 PR #264 가 11 cycle 동안 deterministic 하게 "no surface fix" 결론을 낸 영역 — 본 task 6-cycle 예산으로는 동일 영역 재진입 위험 너무 큼. Failure Scenarios option (a) 채택: IT `@Disabled` 유지 + 사유 강화 + 단위 coverage 보존 (`SasRefreshTokenAuthenticationProviderTest`) + 향후 별 ADR 권고 (custom `AuthenticationConverter` for public-client refresh_token / revoke). AC-01/AC-03/AC-04 (Cluster A enable + 60/60 PASS) 미충족. AC-02/AC-05/AC-06/AC-07/AC-08 충족 (Cluster C enable / 4 anti-pattern 0 위반 / 1 cycle / 회귀 0 / shared churn 0).
 
 ## done
 

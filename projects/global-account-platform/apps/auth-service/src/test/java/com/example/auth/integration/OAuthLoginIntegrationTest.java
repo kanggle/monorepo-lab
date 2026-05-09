@@ -1,10 +1,12 @@
 package com.example.auth.integration;
 
+import com.example.auth.infrastructure.client.AccountServiceClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -120,6 +122,9 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private AccountServiceClient accountServiceClient;
+
     @AfterAll
     static void stopWireMock() {
         if (wireMock != null) {
@@ -167,13 +172,43 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.update("DELETE FROM outbox");
         jdbcTemplate.update("DELETE FROM refresh_tokens");
         jdbcTemplate.update("DELETE FROM device_sessions");
+
+        // TASK-MONO-046-7a Cluster C fix: reset the AccountServiceClient circuit
+        // breaker between tests. AccountServiceClient is a @Component (one instance
+        // per Spring context); within a class with @DirtiesContext(AFTER_CLASS) the
+        // CB instance is reused across all test methods. PR #264 cycle-10 evidence
+        // showed transient 503 responses caused by the CB sliding-window state
+        // accumulating failures from prior methods (e.g. WireMock stubs reset in
+        // this @BeforeEach but a stray async account-service call happens before
+        // the next test re-stubs the endpoint, registers as a failure on the CB).
+        // Resetting the CB here forces every test method to start with a fresh
+        // closed-state CB so pollution cannot leak across tests in the class.
+        resetAccountServiceCircuitBreaker();
+    }
+
+    /**
+     * Reset the {@link CircuitBreaker} held by {@link AccountServiceClient} via
+     * reflection. The CB is a private final field (not exposed via a public API)
+     * because production code never needs to reset it. Test-only helper kept inside
+     * the test class to avoid widening production surface for a test concern.
+     */
+    private void resetAccountServiceCircuitBreaker() {
+        try {
+            java.lang.reflect.Field field = AccountServiceClient.class.getDeclaredField("circuitBreaker");
+            field.setAccessible(true);
+            CircuitBreaker cb = (CircuitBreaker) field.get(accountServiceClient);
+            cb.reset();
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new IllegalStateException(
+                    "AccountServiceClient.circuitBreaker field not accessible — "
+                            + "TASK-MONO-046-7a CB-reset hook cannot run", e);
+        }
     }
 
     // ----------------------------------------------------------------------
     // Happy-path tests per provider
     // ----------------------------------------------------------------------
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: OAuth callback returns 503 in IT — Resilience4j circuit-breaker / WireMock state pollution; cycle-10 evidence in PR #264")
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -193,7 +228,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath")
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -230,7 +264,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath")
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -249,7 +282,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: state-pollution-related 503 — see TASK-MONO-046-7a § Investigation")
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
         String state = performAuthorize("microsoft");
@@ -272,7 +304,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // ----------------------------------------------------------------------
 
     @Test
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: state-pollution-related 503 — see TASK-MONO-046-7a § Investigation")
     @DisplayName("Microsoft: existing email → isNewAccount false, social_identities created on existing account")
     void microsoftExistingEmailAutoLink() throws Exception {
         String state = performAuthorize("microsoft");
