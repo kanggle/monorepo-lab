@@ -1,10 +1,10 @@
 # ADR-003: SAS Public-Client AuthenticationConverter for `refresh_token` and `revoke` Grants
 
-**Status**: ACCEPTED — 옵션 B (Cluster A 3/3 회복) + tenant_id claim 회귀 1건 follow-up 필요
-**Date**: 2026-05-09 (proposed) / 2026-05-09 (옵션 A partial) / 2026-05-09 (옵션 B Cluster A 3/3 회복)
+**Status**: ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (옵션 A partial) / 2026-05-09 (옵션 B closure)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 부분 성공), TASK-BE-274 (PR #296, 옵션 B Cluster A 3/3 회복 + tenant_id claim 회귀 follow-up)
+**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 부분 성공), TASK-BE-274 (PR #296, 옵션 B closure — Cluster A 3/3 + token customizer 결함 unmasked + fix)
 
 ---
 
@@ -318,9 +318,9 @@ if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATI
 }
 ```
 
-#### 옵션 B 결과 (TASK-BE-274 / PR #296, 2026-05-09 08:19 UTC)
+#### 옵션 B 결과 (TASK-BE-274 / PR #296, 2026-05-09 closure)
 
-**Cluster A 회복 = 3/3 (목표 달성)** — 회귀 매트릭스 8/8 PASS, 단 회귀 매트릭스 외 1 method 회귀 발생.
+**Cluster A 회복 = 3/3 (완전 달성)** — 회귀 매트릭스 8/8 PASS + token customizer 결함 unmasked + fix → 회귀 0.
 
 ##### Phase 별 cycle 추적
 
@@ -329,8 +329,9 @@ if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATI
 | Phase 1 | `c7c5ecc8` | A2 race 진단 (provider line 233 + 237 dual-INSERT 식별) | 본 ADR sub-section 추가 |
 | Phase 2 cycle 1 | `172216b8` | 옵션 (1) skip-path TSM flag — DomainSync + Provider 양쪽 wire | dual-INSERT race 해소 (local), 새 RC `TransactionRequiredException at OutboxWriter.save()` 노출 |
 | Phase 2 cycle 2 | `a83a4d12` | TransactionTemplate programmatic 도입 (A3 회피) — rotation write+publish 한 tx wrap, reuse path 동일 | unit PASS, IT verify 는 Rancher Docker 회귀로 차단 → CI 검증 위임 |
+| Phase 2 cycle 3 | `7e7719c9` | TenantClaimTokenCustomizer 에 REFRESH_TOKEN grantType 분기 추가 (기존 결함 unmasked, fix) | 단위 24 cases PASS, CI verify 위임 |
 
-CI verify 결과 (PR #296 / run `25596254251`): GAP Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
+CI verify cycle 1+2 결과 (PR #296 / run `25596254251`, 2026-05-09 08:19 UTC): GAP Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
 
 | 흐름 | 기대 | 실제 |
 |---|---|---|
@@ -343,20 +344,29 @@ CI verify 결과 (PR #296 / run `25596254251`): GAP Integration 2m30s, **회귀 
 | revoke (demo-spa-client) | 200 | **PASS** (BE-272 회복분 유지) |
 | revoke (test-internal-client, secret) | 200 | **PASS** |
 
-##### 회귀 매트릭스 외 1 method 회귀 (BE-274 변경 부수 효과)
+##### Cycle 3 — token customizer 결함 unmasked + fix
 
-`OAuth2RefreshTokenIntegrationTest.refreshedAccessToken_hasTenantClaims:271` **FAILED**:
+cycle 1+2 CI verify 에서 `OAuth2RefreshTokenIntegrationTest.refreshedAccessToken_hasTenantClaims:271` **FAILED** (`[refreshed access_token must contain tenant_id]`). 처음에는 BE-274 변경의 부수 회귀로 의심.
+
+**cycle 3 진단**: 가설 1/2/3 (TransactionTemplate timing / skip-path principal / TokenGenerator instance) **모두 falsified**. 실제 RC = `TenantClaimTokenCustomizer.customize()` 에 `REFRESH_TOKEN` grantType 분기 누락:
+
+```java
+// 본 fix 전: TenantClaimTokenCustomizer.customize()
+if (context.getAuthorizationGrantType().equals(AuthorizationGrantType.AUTHORIZATION_CODE)) {
+    customizeForAuthorizationCode(context);
+} else if (context.getAuthorizationGrantType().equals(AuthorizationGrantType.CLIENT_CREDENTIALS)) {
+    customizeForClientCredentials(context);
+}
+// REFRESH_TOKEN grant 는 fall-through → no-op → claim 누락
 ```
-AssertionFailedError: [refreshed access_token must contain tenant_id]
-Expecting value to be true but was false
-```
 
-→ rotation 후 새 access_token 의 `tenant_id` claim 이 누락. 원인 가설:
-- TransactionTemplate (cycle 2) 도입이 SAS 의 `OAuth2TokenContext` customizer chain timing 영향
-- 또는 skip-path 가 `RegisteredClient` lookup 또는 token customizer 의 `Authentication` principal 영향
-- 또는 OAuth2TokenGenerator 가 다른 instance 로 호출되어 customizer 미적용
+**의미**: BE-274 변경과 무관한 **기존 결함**. BE-272 시점 RT 2 IT 가 `@Disabled` 라 customize 호출 자체가 없어 결함이 unmasked 안 됐음. RT 2 가 BE-274 cycle 1 에서 처음 enable 되면서 결함 노출. 즉 회귀 fix 가 아니라 **신규 결함 발견 + 수정** (BE-274 의 추가 가치).
 
-본 method 는 BE-272 시점에는 enabled + PASS 였음. BE-274 cycle 1+2 의 변경이 회귀 야기.
+**Fix** (commit `7e7719c9`): `customize()` 에 `REFRESH_TOKEN` 분기 추가, `customizeForAuthorizationCode()` 위임 (principal.getDetails() 우선 + ClientSettings Option B fallback). `TenantClaimTokenCustomizerTest` 에 `refresh_token` grant 단위 test 2 case 신규 (24 cases 총 PASS).
+
+##### CI verify cycle 3 (PR #296 / run `25597001354` / 2026-05-09 08:58 UTC)
+
+GAP Integration **2m 14s SUCCESS**. **OAuth2RefreshTokenIntegrationTest 7/7 PASS** (refreshedAccessToken_hasTenantClaims 회복 포함). 다른 IT (Cluster A revoke / AuthCode/PKCE 7/7 / OAuth2AuthorizationServer 6/6 / OAuth2RevokeIntrospect 7/7 / OAuthLogin 7/7 / DeviceSession / AuthIntegration) 회귀 0.
 
 ##### 4 anti-pattern 회피 평가
 
@@ -367,14 +377,11 @@ Expecting value to be true but was false
 
 ##### 결론
 
-옵션 B 의 **유효 영역 = RT 2 IT 회복 + 회귀 매트릭스 8/8 PASS**. **AC-03 + AC-04 충족**, 본 task spec 의 success criteria 달성. 단 회귀 매트릭스 외 method 1 회귀 → 별 후속 fix 필요.
+옵션 B 의 **유효 영역 = Cluster A 3/3 회복 + 회귀 매트릭스 8/8 PASS + token customizer 결함 unmasked + fix**. **AC-01~07 모두 충족**, cycle 3/6 사용 (남은 3 미사용). 본 task spec 의 success criteria 완전 달성.
 
-후속 결정:
-1. **(권장) cycle 3 사용해 fix** — token customizer 영역 진단 + claim propagation 회복. 1 cycle 충분 가능성 (회귀 영역 명확).
-2. 별 task (TASK-BE-275) 발행 — refreshed access_token tenant_id claim regression fix. 본 PR 머지 후.
-3. revert cycle 2 후 cycle 1 만으로 검증 — 단 cycle 1 만으로는 `TransactionRequiredException` 회귀 재발 위험.
+**부수 가치**: cycle 3 의 RC 진단으로 **BE-272 시점부터 잠재된 token customizer 결함** (REFRESH_TOKEN grantType 분기 누락) 이 unmasked + fix. 이는 RT 2 IT 가 처음 enable 되지 않았다면 발견되지 않았을 결함 — 본 task 의 추가 portfolio 가치.
 
-ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCEPTED — 옵션 B (Cluster A 3/3 회복, 단 tenant_id claim 회귀 1건 follow-up 필요)`.
+ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)`.
 
 ---
 
@@ -383,7 +390,7 @@ ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCE
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 결과 + 4 anti-pattern 학습
 - TASK-MONO-046-7a (PR #289) — 0/7 recovery, doc-only PR
 - TASK-BE-272 (PR #292) — 옵션 A 구현, 부분 성공 (revoke 1/3)
-- TASK-BE-274 (PR #296, commits c7c5ecc8 + 172216b8 + a83a4d12) — 옵션 B 구현, Cluster A 3/3 회복 (RT 2 + revoke), 회귀 매트릭스 8/8 PASS, tenant_id claim 회귀 1건 follow-up 영역
+- TASK-BE-274 (PR #296, commits c7c5ecc8 + 172216b8 + a83a4d12 + 7e7719c9) — 옵션 B closure, Cluster A 3/3 회복 (RT 2 + revoke), 회귀 매트릭스 8/8 PASS, token customizer 결함 (REFRESH_TOKEN 분기 누락) unmasked + fix, 회귀 0
 - ADR-001 (OIDC Adoption) — SAS 도입 결정
 - Spring Authorization Server 1.4 docs — `OAuth2ClientAuthenticationFilter` lifecycle
 - RFC 8252 (OAuth 2.0 for Native Apps) + RFC 9700 (Best Current Practice for OAuth 2.0 Security)
