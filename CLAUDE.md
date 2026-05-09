@@ -18,6 +18,8 @@ This is a **monorepo** containing the shared library layer at the repo root and 
 ├── .claude/                  ← AI agent config: skills/, agents/, commands/, config/ (shared)
 ├── libs/                     ← shared Java libraries
 ├── tasks/                    ← monorepo-level task lifecycle: INDEX.md + ready/, in-progress/, review/, done/, templates/ (shared templates)
+├── docs/project-overview.md  ← 5-project navigation snapshot (휴먼 진입점, AI on-demand)
+├── docs/adr/                 ← monorepo-level ADRs (MONO-001/002/003)
 ├── docs/guides/              ← human-oriented guides (shared)
 ├── build.gradle, settings.gradle, gradle/ ...
 └── projects/

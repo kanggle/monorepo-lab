@@ -1,7 +1,7 @@
 # Project Overview — monorepo-lab
 
 > **목적**: 본 monorepo 전체 (플랫폼 전략 + 5 프로젝트 + 공유 인프라) 의 단일 진입 스냅샷.
-> **갱신 시점**: 2026-05-09 (마지막 의미 있는 변화: TASK-BE-047/048 admin-service v1 종결, ADR-MONO-003 Phase 5 DEFERRED).
+> **갱신 시점**: 2026-05-09 (마지막 의미 있는 변화: BE-272/273/274 closure — Cluster A 3/3 + Cluster C 5/5 + token customizer bonus = 9/8 deferred IT 회복, ADR-003/004 ACCEPTED, ADR-MONO-003 D2 ≥ 2026-06-09 갱신).
 > **위치**: `docs/project-overview.md` — `docs/adr/` (결정 기록) · `docs/guides/` (휴먼 워크플로우 가이드) 와 sibling.
 
 ---
@@ -10,7 +10,7 @@
 
 **multi-domain 백엔드/풀스택 포트폴리오 monorepo**. 5 도메인 프로젝트가 단일 라이브러리 (rules / platform / .claude / libs) 를 공유하면서 동거하고, 라이브러리가 stabilise 된 시점에 별도 Template 레포로 추출되는 **Discovery → Distribution** 전략을 따른다 ([TEMPLATE.md](../TEMPLATE.md)).
 
-- **현재 단계**: Phase 4 catalyst (5 프로젝트 동거) 완료, Phase 5 (Template 추출) **DEFERRED** ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) — 30일 churn freeze 후 재평가 ≥ 2026-06-07.
+- **현재 단계**: Phase 4 catalyst (5 프로젝트 동거) 완료, Phase 5 (Template 추출) **DEFERRED** ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) — 30일 churn freeze 후 재평가 ≥ 2026-06-09 (2026-05-09 재평가로 1-2일 시계 reset, BE-273 Phase 2 libs/java-common 변경 = D4 면제 자연 확장).
 - **AI-driven 운영**: Claude Code 기반 rule-driven · spec-driven · task-driven 워크플로우. 80+ skill / 12+ specialized agent / 도메인-trait 자동 dispatch.
 
 ---
@@ -59,6 +59,7 @@
 
 - **multi-tenancy**: row-level isolation (`accounts.tenant_id`). JWT `tenant_id` claim 으로 cross-tenant 거부. 현재 등록 tenant: `wms` / `scm` / `fan-platform` + B2C 기본.
 - **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm) 가 사용자 일괄 생성.
+- **OIDC AS 운영 깊이 증명 (2026-05-09 closure)**: SAS public-client (PKCE) `refresh_token` rotation + reuse detection + `revoke` (custom converter + provider-side fallback) + 3 OAuth provider callback (Google/Kakao/Microsoft) 모두 main CI deterministic PASS. 13-cycle 미해결 9 deferred IT 회복 ([ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md), [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)). Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus 1.
 
 ### 2.3 [ecommerce-microservices-platform](../projects/ecommerce-microservices-platform/PROJECT.md) — B2C 이커머스 (v1 ✅ 풀스택)
 
@@ -260,8 +261,10 @@ traits/<declared-trait>.md for each trait (if present)
 |---|---|---|
 | [ADR-MONO-001](adr/ADR-MONO-001-port-prefix-scaling.md) | ACCEPTED | Traefik hostname routing (Option C). `PORT_PREFIX` scheme 폐기. |
 | [ADR-MONO-002](adr/ADR-MONO-002-phase-4-template-extraction-trigger.md) | ACCEPTED | Phase 4 catalyst = scm-platform 부트스트랩. Phase 5 deferred 의 평가 항목 명시. |
-| [ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md) | DEFERRED | Phase 5 (실제 Template 레포 추출) 보류. shared-library churn freeze 30일 후 재평가 ≥ 2026-06-07. |
+| [ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md) | DEFERRED (2026-05-09 재평가) | Phase 5 (실제 Template 레포 추출) 보류. shared-library churn freeze 30일 후 재평가 ≥ **2026-06-09** (1-2일 reset, BE-273 Phase 2 libs/java-common 변경 = D4 면제 자연 확장). |
 | GAP [ADR-001](../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
+| GAP [ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
+| GAP [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
 
 ---
 
@@ -287,7 +290,7 @@ traits/<declared-trait>.md for each trait (if present)
 | 2. Second project (ecommerce) | ✅ 완료 | 라이브러리 generality 검증 |
 | 3. Third project (GAP) — Rule of Three | ✅ 완료 | true generalization 필터 |
 | 4. catalyst (scm + fan-platform) | ✅ 완료 | 5 프로젝트 동거 + churn 안정화 |
-| 5. Template 추출 | 🔒 DEFERRED ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) | shared churn freeze 30d → ≥ 2026-06-07 재평가 |
+| 5. Template 추출 | 🔒 DEFERRED ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) | shared churn freeze 30d → ≥ **2026-06-09** 재평가 (2026-05-09 재평가로 시계 1-2일 reset) |
 | 6. Ongoing sync | 🔮 Future | 라이브러리 개선의 monorepo → template 주기 sync |
 
 **re-eval gate** (D3 by ADR-MONO-003): `scripts/verify-template-readiness.sh` (full mode, no `--no-git`) exit 0 → ADR-MONO-003 ACCEPTED 또는 ADR-MONO-003a 발행 → `scripts/extract-template.sh` 발사.
