@@ -96,16 +96,35 @@ public class KafkaLagProbe {
 
     public List<TopicLag> probe() {
         List<String> topics = topicMap.topics();
-        Map<String, List<TopicPartition>> partitionsByTopic = describeTopics(topics);
-        Map<TopicPartition, Long> committed = listCommittedOffsets();
-        List<TopicPartition> allPartitions = partitionsByTopic.values().stream()
-                .flatMap(List::stream).toList();
-        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest =
-                listOffsetsBySpec(allPartitions, OffsetSpec.latest());
-        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> maxTs =
-                listOffsetsBySpec(allPartitions, OffsetSpec.maxTimestamp());
-
         Map<String, Instant> lastProjectedByEventType = projectionWatermarks(topics);
+
+        Map<String, List<TopicPartition>> partitionsByTopic;
+        Map<TopicPartition, Long> committed;
+        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest;
+        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> maxTs;
+
+        // Single AdminClient instance shared across describeTopics +
+        // listConsumerGroupOffsets + listOffsets(latest) + listOffsets(maxTimestamp).
+        // Each call retains its own try/catch fail-soft semantics — a transient
+        // failure in one call falls back to its sentinel/empty value and does
+        // NOT short-circuit the others. AdminClient.close() runs exactly once
+        // when this try-with-resources block exits.
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+            partitionsByTopic = describeTopics(admin, topics);
+            committed = listCommittedOffsets(admin);
+            List<TopicPartition> allPartitions = partitionsByTopic.values().stream()
+                    .flatMap(List::stream).toList();
+            latest = listOffsetsBySpec(admin, allPartitions, OffsetSpec.latest());
+            maxTs = listOffsetsBySpec(admin, allPartitions, OffsetSpec.maxTimestamp());
+        } catch (RuntimeException e) {
+            // AdminClient.create() / close() failure — extremely rare (bad
+            // config). Mirror the per-helper fallback so probe() never throws.
+            recordProbeError("AdminClient lifecycle failed", e);
+            partitionsByTopic = Map.of();
+            committed = Map.of();
+            latest = Map.of();
+            maxTs = Map.of();
+        }
 
         List<TopicLag> result = new ArrayList<>(topics.size());
         for (String topic : topics) {
@@ -120,12 +139,12 @@ public class KafkaLagProbe {
         return result;
     }
 
-    private Map<String, List<TopicPartition>> describeTopics(List<String> topics) {
+    private Map<String, List<TopicPartition>> describeTopics(AdminClient admin, List<String> topics) {
         if (topics.isEmpty()) {
             return Map.of();
         }
-        try (AdminClient client = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
-            Map<String, TopicDescription> described = client.describeTopics(topics).allTopicNames()
+        try {
+            Map<String, TopicDescription> described = admin.describeTopics(topics).allTopicNames()
                     .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             Map<String, List<TopicPartition>> out = new HashMap<>();
             for (Map.Entry<String, TopicDescription> entry : described.entrySet()) {
@@ -145,9 +164,9 @@ public class KafkaLagProbe {
         }
     }
 
-    private Map<TopicPartition, Long> listCommittedOffsets() {
-        try (AdminClient client = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
-            ListConsumerGroupOffsetsResult result = client.listConsumerGroupOffsets(consumerGroup);
+    private Map<TopicPartition, Long> listCommittedOffsets(AdminClient admin) {
+        try {
+            ListConsumerGroupOffsetsResult result = admin.listConsumerGroupOffsets(consumerGroup);
             Map<TopicPartition, OffsetAndMetadata> map = result.partitionsToOffsetAndMetadata()
                     .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             Map<TopicPartition, Long> out = new HashMap<>();
@@ -168,16 +187,16 @@ public class KafkaLagProbe {
     }
 
     private Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> listOffsetsBySpec(
-            List<TopicPartition> partitions, OffsetSpec spec) {
+            AdminClient admin, List<TopicPartition> partitions, OffsetSpec spec) {
         if (partitions.isEmpty()) {
             return Map.of();
         }
-        try (AdminClient client = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+        try {
             Map<TopicPartition, OffsetSpec> request = new HashMap<>();
             for (TopicPartition tp : partitions) {
                 request.put(tp, spec);
             }
-            return client.listOffsets(request).all().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return admin.listOffsets(request).all().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             recordProbeError("listOffsets interrupted", ie);
