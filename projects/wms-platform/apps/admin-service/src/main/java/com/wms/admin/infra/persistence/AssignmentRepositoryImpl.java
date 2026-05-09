@@ -1,6 +1,6 @@
 package com.wms.admin.infra.persistence;
 
-import com.wms.admin.application.port.AssignmentRepository;
+import com.wms.admin.application.repository.AssignmentRepository;
 import com.wms.admin.domain.AssignmentStatus;
 import com.wms.admin.domain.UserRoleAssignment;
 import java.util.List;
@@ -11,11 +11,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 @Component
-public class AssignmentRepositoryAdapter implements AssignmentRepository {
+public class AssignmentRepositoryImpl implements AssignmentRepository {
 
     private final AdminAssignmentJpaRepository repo;
 
-    public AssignmentRepositoryAdapter(AdminAssignmentJpaRepository repo) {
+    public AssignmentRepositoryImpl(AdminAssignmentJpaRepository repo) {
         this.repo = repo;
     }
 

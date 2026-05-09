@@ -53,7 +53,7 @@ Typical candidates include notification services (react to business events to se
 ## Observability
 - Per-topic metrics: `consumer_lag`, `messages_processed_total`, `messages_failed_total`, `dlq_depth`
 - Alerts: lag > 1 minute, DLQ growth, processing error rate > 1%
-- See `cross-cutting/observability-setup.md`
+- See `.claude/skills/cross-cutting/observability-setup/SKILL.md`
 
 ---
 

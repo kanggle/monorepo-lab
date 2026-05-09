@@ -9,7 +9,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.master.PartnerRefEntity;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
@@ -22,8 +22,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,21 +40,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboundProjectionService {
 
-    private static final Logger log = LoggerFactory.getLogger(OutboundProjectionService.class);
     private static final String SOURCE_SERVICE = "outbound";
 
     private final OrderSummaryRepository orderRepo;
     private final ShipmentSummaryRepository shipmentRepo;
     private final ThroughputOutboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
 
     public OutboundProjectionService(OrderSummaryRepository orderRepo,
                                      ShipmentSummaryRepository shipmentRepo,
                                      ThroughputOutboundDailyRepository throughputRepo,
                                      PartnerRefRepository partnerRepo,
-                                     AdminEventDedupePort dedupe,
+                                     AdminEventDedupeRepository dedupe,
                                      ProjectionMetrics metrics) {
         this.orderRepo = orderRepo;
         this.shipmentRepo = shipmentRepo;

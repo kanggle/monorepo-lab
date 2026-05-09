@@ -1,6 +1,7 @@
 package com.wms.admin.api.settings;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wms.admin.api.dashboard.PageableSupport;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.api.settings.dto.SettingResponse;
 import com.wms.admin.api.settings.dto.UpsertSettingRequest;
@@ -11,8 +12,6 @@ import com.wms.admin.domain.SettingScope;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,7 +51,7 @@ public class SettingsController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         SettingScope scopeEnum = parseScope(scope);
-        Page<Setting> result = settingsService.search(keyPrefix, scopeEnum, warehouseId, pageable(page, size, sort));
+        Page<Setting> result = settingsService.search(keyPrefix, scopeEnum, warehouseId, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, s -> SettingResponse.from(s, objectMapper));
     }
 
@@ -60,7 +59,7 @@ public class SettingsController {
     public ResponseEntity<SettingResponse> getByKey(@PathVariable String key,
                                                     @RequestParam(required = false) UUID warehouseId) {
         Setting setting = settingsService.findByKey(key, warehouseId);
-        return ResponseEntity.ok().eTag(etag(setting.version())).body(SettingResponse.from(setting, objectMapper));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(setting.version())).body(SettingResponse.from(setting, objectMapper));
     }
 
     @PutMapping("/{key}")
@@ -69,11 +68,7 @@ public class SettingsController {
                                                   @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         Setting saved = settingsService.upsert(new UpsertSettingCommand(
                 key, request.warehouseId(), request.valueJson(), actorId));
-        return ResponseEntity.ok().eTag(etag(saved.version())).body(SettingResponse.from(saved, objectMapper));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
+        return ResponseEntity.ok().eTag(PageableSupport.etag(saved.version())).body(SettingResponse.from(saved, objectMapper));
     }
 
     private static SettingScope parseScope(String raw) {
@@ -83,15 +78,5 @@ public class SettingsController {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("scope must be GLOBAL or WAREHOUSE");
         }
-    }
-
-    private static PageRequest pageable(int page, int size, String sort) {
-        int comma = sort.indexOf(',');
-        String field = comma < 0 ? sort : sort.substring(0, comma);
-        String dir = comma < 0 ? "asc" : sort.substring(comma + 1);
-        Sort.Direction direction = "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, field));
     }
 }

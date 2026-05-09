@@ -1,6 +1,6 @@
 package com.wms.admin.application.fakes;
 
-import com.wms.admin.application.port.AssignmentRepository;
+import com.wms.admin.application.repository.AssignmentRepository;
 import com.wms.admin.domain.AssignmentStatus;
 import com.wms.admin.domain.UserRoleAssignment;
 import java.util.LinkedHashMap;

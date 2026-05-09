@@ -1,7 +1,7 @@
 package com.wms.admin.infra.persistence;
 
 import com.example.common.id.UuidV7;
-import com.wms.admin.application.port.OutboxPort;
+import com.wms.admin.application.repository.OutboxRepository;
 import java.time.Clock;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -12,14 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction (T3 — atomic with the aggregate row).
  */
 @Component
-public class OutboxAdapter implements OutboxPort {
+public class OutboxRepositoryImpl implements OutboxRepository {
 
     private static final String EVENT_VERSION = "v1";
 
     private final AdminOutboxJpaRepository repository;
     private final Clock clock;
 
-    public OutboxAdapter(AdminOutboxJpaRepository repository, Clock clock) {
+    public OutboxRepositoryImpl(AdminOutboxJpaRepository repository, Clock clock) {
         this.repository = repository;
         this.clock = clock;
     }

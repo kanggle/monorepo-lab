@@ -70,4 +70,10 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 
 ## Dependencies
 
-See `dependencies.md`.
+| Direction | Target | Protocol | Notes |
+|---|---|---|---|
+| In | scm-platform gateway-service | HTTP `/api/v1/inventory-visibility/**` | tenant-validated JWT 통과 후 라우팅 |
+| In | wms-platform Kafka | Consumer subscribed to `wms.inventory.{received,adjusted,transferred}.v1` | EventDedupe 멱등; cross-project 첫 사례 |
+| Out | PostgreSQL (inventory-visibility schema) | JDBC | InventoryNode / InventorySnapshot / NodeStaleness / EventDedupe |
+| Out | Redis | TCP | read-model cache (fail-OPEN) |
+| Out | GAP `/oauth2/jwks` | HTTPS | JWT 서명 검증 (libs/java-security) |

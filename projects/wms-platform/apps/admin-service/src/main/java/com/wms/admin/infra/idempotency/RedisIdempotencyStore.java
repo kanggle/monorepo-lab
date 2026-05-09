@@ -2,8 +2,8 @@ package com.wms.admin.infra.idempotency;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.admin.application.port.IdempotencyStore;
-import com.wms.admin.application.port.StoredResponse;
+import com.wms.admin.application.repository.IdempotencyStore;
+import com.wms.admin.application.repository.StoredResponse;
 import java.time.Duration;
 import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;

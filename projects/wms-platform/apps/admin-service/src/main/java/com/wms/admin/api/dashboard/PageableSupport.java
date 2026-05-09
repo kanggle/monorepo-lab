@@ -3,12 +3,16 @@ package com.wms.admin.api.dashboard;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
-/** Shared pageable parsing helper for dashboard controllers. */
-final class PageableSupport {
+/** Shared pageable parsing and ETag helper for all admin controllers. */
+public final class PageableSupport {
 
     private PageableSupport() {}
 
-    static PageRequest pageable(int page, int size, String sort) {
+    public static String etag(long version) {
+        return "\"v" + version + "\"";
+    }
+
+    public static PageRequest pageable(int page, int size, String sort) {
         int comma = sort.indexOf(',');
         String field = comma < 0 ? sort : sort.substring(0, comma);
         String dir = comma < 0 ? "asc" : sort.substring(comma + 1);

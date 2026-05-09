@@ -1,6 +1,6 @@
 package com.wms.admin.infra.persistence;
 
-import com.wms.admin.application.port.RoleRepository;
+import com.wms.admin.application.repository.RoleRepository;
 import com.wms.admin.domain.Role;
 import com.wms.admin.domain.RoleStatus;
 import java.util.Optional;
@@ -10,11 +10,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 @Component
-public class RoleRepositoryAdapter implements RoleRepository {
+public class RoleRepositoryImpl implements RoleRepository {
 
     private final AdminRoleJpaRepository repo;
 
-    public RoleRepositoryAdapter(AdminRoleJpaRepository repo) {
+    public RoleRepositoryImpl(AdminRoleJpaRepository repo) {
         this.repo = repo;
     }
 

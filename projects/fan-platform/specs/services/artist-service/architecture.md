@@ -195,9 +195,9 @@ user in the same tenant.
   - `artist.group_created`         → `artist.group_created.v1`
   - `artist.group_member_changed`  → `artist.group_member_changed.v1`
 - Envelope shape (from `BaseEventPublisher`): `{ eventId, eventType, source,
-  occurredAt, schemaVersion, partitionKey, payload }`. `eventId` is currently
-  UUID v4 — see `TASK-MONO-025` for the v7 migration plan that affects all
-  services using `BaseEventPublisher`.
+  occurredAt, schemaVersion, partitionKey, payload }`. `eventId` is **UUID v7**
+  per `TASK-MONO-025` (머지 완료, `libs/java-messaging` BaseEventPublisher 이
+  `UuidV7.randomString()` 발급).
 
 ---
 

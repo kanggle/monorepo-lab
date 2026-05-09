@@ -71,7 +71,7 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 | `wms.inventory.alert.v1` | `inventory.low-stock-detected` | `locationId` |
 
 - `v1` in the topic name: contract version. Breaking schema changes require a parallel `v2`
-  topic with coexistence period (per `cross-cutting/api-versioning.md`).
+  topic with coexistence period (per `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
 - Retention: minimum 7 days. 30-day preferred for DLQ replay windows.
 - Partitions: start with 6 per topic (inventory is higher throughput than master).
 - Dead-letter topic: `<topic>.DLT` — for consumers, not the producer.
@@ -476,7 +476,7 @@ Consumed actions:
 - Breaking changes (renamed/removed field, type change) bump `eventVersion` AND
   publish on a new topic (e.g., `wms.inventory.reserved.v2`) with a coexistence period.
 - Deprecation deadline, producer cut-over, and topic retirement are governed by
-  `cross-cutting/api-versioning.md`.
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`.
 
 ---
 

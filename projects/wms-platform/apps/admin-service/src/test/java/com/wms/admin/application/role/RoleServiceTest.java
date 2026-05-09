@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
+import com.wms.admin.application.assignment.AssignmentEventHelper;
 import com.wms.admin.application.fakes.InMemoryAssignmentRepository;
 import com.wms.admin.application.fakes.InMemoryRoleRepository;
 import com.wms.admin.application.fakes.RecordingOutboxPort;
@@ -39,8 +40,9 @@ class RoleServiceTest {
         outbox = new RecordingOutboxPort();
         mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         Clock fixed = Clock.fixed(Instant.parse("2026-05-09T10:00:00Z"), ZoneOffset.UTC);
+        AdminEventEnvelopeBuilder envelopeBuilder = new AdminEventEnvelopeBuilder(mapper);
         service = new RoleService(roleRepo, assignmentRepo, outbox,
-                new AdminEventEnvelopeBuilder(mapper), mapper, fixed);
+                envelopeBuilder, new AssignmentEventHelper(outbox, envelopeBuilder), mapper, fixed);
     }
 
     @Test

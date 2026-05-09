@@ -122,7 +122,7 @@ Projects may override these defaults per consumer in `specs/services/<service>/a
 - Additive changes (new optional field) keep the same `eventVersion`.
 - Breaking changes (renamed/removed field, type change, semantic change) bump `eventVersion` AND publish on a new topic version (`<topic>.v<N>`).
 - Producers MUST NOT reuse a topic version after removing it.
-- See `cross-cutting/api-versioning.md` for deprecation timelines.
+- See `.claude/skills/cross-cutting/api-versioning/SKILL.md` for deprecation timelines.
 
 ---
 

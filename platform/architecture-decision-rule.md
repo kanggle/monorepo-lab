@@ -27,7 +27,7 @@ The architecture for each service must be declared in:
 
 # Selection Guidelines
 
-For guidance on when to use each architecture style, see `knowledge/architecture/architecture-selection-guide.md`.
+For guidance on when to use each architecture style, consult the matching skill under `.claude/skills/backend/architecture/<style>/SKILL.md` (e.g. `hexagonal/`, `layered/`, `clean/`).
 
 ---
 

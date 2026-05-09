@@ -26,7 +26,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 
 ## Versioning
 - Use URI path versioning for public endpoints (`/v1/`, `/v2/`)
-- Follow `platform/versioning-policy.md` and `cross-cutting/api-versioning.md`
+- Follow `platform/versioning-policy.md` and `.claude/skills/cross-cutting/api-versioning/SKILL.md`
 
 ## Error Handling
 - Use the project-wide error envelope defined in `platform/error-handling.md`
@@ -48,7 +48,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - See `backend/pagination.md`
 
 ## Observability
-- Every endpoint emits request rate, error rate, and latency metrics (see `cross-cutting/observability-setup.md`)
+- Every endpoint emits request rate, error rate, and latency metrics (see `.claude/skills/cross-cutting/observability-setup/SKILL.md`)
 - Trace context propagated via OTel headers across all outbound calls
 - Structured JSON logs with `traceId`, `userId`, `requestId` MDC
 
@@ -57,7 +57,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 # Allowed Patterns
 
 - Synchronous HTTP request/response
-- Asynchronous publishing of domain events via outbox (`messaging/outbox-pattern.md`)
+- Asynchronous publishing of domain events via outbox (`.claude/skills/messaging/outbox-pattern/SKILL.md`)
 - Subscribing to events as a secondary capability (document under Integration Rules)
 - Caching reads via Redis (`cross-cutting/caching.md`)
 

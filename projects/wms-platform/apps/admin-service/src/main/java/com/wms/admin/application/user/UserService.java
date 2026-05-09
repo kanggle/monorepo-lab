@@ -2,9 +2,11 @@ package com.wms.admin.application.user;
 
 import com.example.common.id.UuidV7;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
-import com.wms.admin.application.port.AssignmentRepository;
-import com.wms.admin.application.port.OutboxPort;
-import com.wms.admin.application.port.UserRepository;
+import com.wms.admin.application.DomainUtils;
+import com.wms.admin.application.assignment.AssignmentEventHelper;
+import com.wms.admin.application.repository.AssignmentRepository;
+import com.wms.admin.application.repository.OutboxRepository;
+import com.wms.admin.application.repository.UserRepository;
 import com.wms.admin.domain.User;
 import com.wms.admin.domain.UserRoleAssignment;
 import com.wms.admin.domain.UserStatus;
@@ -41,23 +43,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private static final String AGGREGATE_TYPE = "user";
-    private static final String AGGREGATE_TYPE_ASSIGNMENT = "assignment";
 
     private final UserRepository userRepository;
     private final AssignmentRepository assignmentRepository;
-    private final OutboxPort outboxPort;
+    private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
+    private final AssignmentEventHelper assignmentEventHelper;
     private final Clock clock;
 
     public UserService(UserRepository userRepository,
                        AssignmentRepository assignmentRepository,
-                       OutboxPort outboxPort,
+                       OutboxRepository outboxRepository,
                        AdminEventEnvelopeBuilder envelopeBuilder,
+                       AssignmentEventHelper assignmentEventHelper,
                        Clock clock) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
-        this.outboxPort = outboxPort;
+        this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
+        this.assignmentEventHelper = assignmentEventHelper;
         this.clock = clock;
     }
 
@@ -130,7 +134,7 @@ public class UserService {
                 UserRoleAssignment revoked = a.revoke(now, cmd.actorId());
                 UserRoleAssignment saved = assignmentRepository.save(revoked);
                 revokedIds.add(saved.id());
-                appendAssignmentRevokedEvent(saved, "USER_DEACTIVATED", cmd.actorId(), now);
+                assignmentEventHelper.appendAssignmentRevokedEvent(saved, "USER_DEACTIVATED", cmd.actorId(), now);
             }
         }
         Instant now = clock.instant();
@@ -169,15 +173,11 @@ public class UserService {
 
     private static List<String> computeChangedFields(User before, User after) {
         List<String> fields = new ArrayList<>();
-        if (!equalsNullable(before.name(), after.name())) fields.add("name");
-        if (!equalsNullable(before.email(), after.email())) fields.add("email");
-        if (!equalsNullable(before.phone(), after.phone())) fields.add("phone");
-        if (!equalsNullable(before.defaultWarehouseId(), after.defaultWarehouseId())) fields.add("defaultWarehouseId");
+        if (!DomainUtils.equalsNullable(before.name(), after.name())) fields.add("name");
+        if (!DomainUtils.equalsNullable(before.email(), after.email())) fields.add("email");
+        if (!DomainUtils.equalsNullable(before.phone(), after.phone())) fields.add("phone");
+        if (!DomainUtils.equalsNullable(before.defaultWarehouseId(), after.defaultWarehouseId())) fields.add("defaultWarehouseId");
         return fields;
-    }
-
-    private static boolean equalsNullable(Object a, Object b) {
-        return a == null ? b == null : a.equals(b);
     }
 
     // ----- Outbox event helpers ----------------------------------------------
@@ -232,23 +232,7 @@ public class UserService {
         String envelope = envelopeBuilder.build(
                 eventType, AGGREGATE_TYPE, userId.toString(),
                 actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE, userId.toString(), eventType, envelope, userId.toString());
+        outboxRepository.append(AGGREGATE_TYPE, userId.toString(), eventType, envelope, userId.toString());
     }
 
-    private void appendAssignmentRevokedEvent(UserRoleAssignment a, String cascadeReason,
-                                              String actorId, Instant occurredAt) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("assignmentId", a.id().toString());
-        payload.put("userId", a.userId().toString());
-        payload.put("roleId", a.roleId().toString());
-        payload.put("warehouseId", a.warehouseId() != null ? a.warehouseId().toString() : null);
-        payload.put("revokedAt", a.revokedAt() != null ? a.revokedAt().toString() : null);
-        payload.put("revokedBy", a.revokedBy());
-        payload.put("cascadeReason", cascadeReason);
-        String envelope = envelopeBuilder.build(
-                "admin.assignment.revoked", AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(),
-                actorId, occurredAt, payload);
-        outboxPort.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
-                envelope, a.id().toString());
-    }
 }

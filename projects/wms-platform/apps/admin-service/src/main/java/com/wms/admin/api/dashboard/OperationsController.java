@@ -1,11 +1,11 @@
 package com.wms.admin.api.dashboard;
 
 import com.wms.admin.api.dashboard.dto.ProjectionStatusResponse;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.KafkaLagProbe;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,25 +29,25 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('WMS_ADMIN')")
 public class OperationsController {
 
-    private final AdminEventDedupePort dedupePort;
+    private final AdminEventDedupeRepository dedupeRepository;
     private final KafkaListenerEndpointRegistry registry;
     private final KafkaLagProbe lagProbe;
     private final String consumerGroup;
 
-    public OperationsController(AdminEventDedupePort dedupePort,
-                                @Autowired(required = false) KafkaListenerEndpointRegistry registry,
-                                @Autowired(required = false) KafkaLagProbe lagProbe,
+    public OperationsController(AdminEventDedupeRepository dedupeRepository,
+                                ObjectProvider<KafkaListenerEndpointRegistry> registryProvider,
+                                ObjectProvider<KafkaLagProbe> probeProvider,
                                 @Value("${spring.kafka.consumer.group-id:admin-projection}")
                                         String consumerGroup) {
-        this.dedupePort = dedupePort;
-        this.registry = registry;
-        this.lagProbe = lagProbe;
+        this.dedupeRepository = dedupeRepository;
+        this.registry = registryProvider.getIfAvailable();
+        this.lagProbe = probeProvider.getIfAvailable();
         this.consumerGroup = consumerGroup;
     }
 
     @GetMapping("/projection-status")
     public ProjectionStatusResponse projectionStatus() {
-        AdminEventDedupePort.LifetimeCounts counts = dedupePort.countLifetime();
+        AdminEventDedupeRepository.LifetimeCounts counts = dedupeRepository.countLifetime();
         List<ProjectionStatusResponse.ProjectionEntry> entries = new ArrayList<>();
         double worst = 0.0d;
 

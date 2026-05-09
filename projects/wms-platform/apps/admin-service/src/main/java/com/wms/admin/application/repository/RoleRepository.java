@@ -1,4 +1,4 @@
-package com.wms.admin.application.port;
+package com.wms.admin.application.repository;
 
 import com.wms.admin.domain.Role;
 import com.wms.admin.domain.RoleStatus;

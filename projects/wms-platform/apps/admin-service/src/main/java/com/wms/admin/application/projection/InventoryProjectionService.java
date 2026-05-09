@@ -7,7 +7,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.alert.AlertLogEntity;
 import com.wms.admin.readmodel.alert.AlertLogRepository;
@@ -25,8 +25,6 @@ import com.wms.admin.readmodel.master.SkuRefRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +47,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryProjectionService {
 
-    private static final Logger log = LoggerFactory.getLogger(InventoryProjectionService.class);
     private static final String SOURCE_SERVICE = "inventory";
 
     private final InventorySnapshotRepository snapshotRepo;
@@ -58,7 +55,7 @@ public class InventoryProjectionService {
     private final LocationRefRepository locationRepo;
     private final SkuRefRepository skuRepo;
     private final LotRefRepository lotRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
     private final Clock clock;
 
@@ -68,7 +65,7 @@ public class InventoryProjectionService {
                                       LocationRefRepository locationRepo,
                                       SkuRefRepository skuRepo,
                                       LotRefRepository lotRepo,
-                                      AdminEventDedupePort dedupe,
+                                      AdminEventDedupeRepository dedupe,
                                       ProjectionMetrics metrics,
                                       Clock clock) {
         this.snapshotRepo = snapshotRepo;

@@ -5,8 +5,6 @@ import com.wms.admin.application.projection.ProjectionEnvelope;
 import com.wms.admin.application.projection.ProjectionEnvelopeParser;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -27,8 +25,6 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("!standalone")
 public class MasterProjectionConsumer {
-
-    private static final Logger log = LoggerFactory.getLogger(MasterProjectionConsumer.class);
 
     private final MasterProjectionService projectionService;
     private final ProjectionEnvelopeParser parser;

@@ -1,6 +1,6 @@
 package com.wms.admin.application.fakes;
 
-import com.wms.admin.application.port.UserRepository;
+import com.wms.admin.application.repository.UserRepository;
 import com.wms.admin.domain.User;
 import com.wms.admin.domain.UserStatus;
 import java.util.LinkedHashMap;

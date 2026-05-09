@@ -1,6 +1,7 @@
 package com.wms.admin.api.user;
 
 import com.wms.admin.api.SecurityContextHelper;
+import com.wms.admin.api.dashboard.PageableSupport;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.api.user.dto.CreateUserRequest;
 import com.wms.admin.api.user.dto.DeactivateUserRequest;
@@ -19,8 +20,6 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -56,7 +55,7 @@ public class UserController {
                 request.defaultWarehouseId(), actorId));
         return ResponseEntity
                 .created(URI.create("/api/v1/admin/users/" + saved.id()))
-                .eTag(etag(saved.version()))
+                .eTag(PageableSupport.etag(saved.version()))
                 .body(UserResponse.from(saved));
     }
 
@@ -69,14 +68,14 @@ public class UserController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         UserStatus statusEnum = parseStatus(status);
-        Page<User> result = userService.search(statusEnum, warehouseId, q, pageable(page, size, sort));
+        Page<User> result = userService.search(statusEnum, warehouseId, q, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, UserResponse::from);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getById(@PathVariable UUID id) {
         User user = userService.findById(id);
-        return ResponseEntity.ok().eTag(etag(user.version())).body(UserResponse.from(user));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(user.version())).body(UserResponse.from(user));
     }
 
     @PatchMapping("/{id}")
@@ -86,7 +85,7 @@ public class UserController {
         User saved = userService.update(new UpdateUserCommand(
                 id, request.name(), request.email(), request.phone(),
                 request.defaultWarehouseId(), actorId));
-        return ResponseEntity.ok().eTag(etag(saved.version())).body(UserResponse.from(saved));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(saved.version())).body(UserResponse.from(saved));
     }
 
     @PostMapping("/{id}/deactivate")
@@ -99,7 +98,7 @@ public class UserController {
         DeactivateUserResult result = userService.deactivate(
                 new DeactivateUserCommand(id, force, actorId, callerIsSuperadmin));
         return ResponseEntity.ok()
-                .eTag(etag(result.user().version()))
+                .eTag(PageableSupport.etag(result.user().version()))
                 .body(DeactivateUserResponse.from(result));
     }
 
@@ -107,11 +106,7 @@ public class UserController {
     public ResponseEntity<UserResponse> reactivate(@PathVariable UUID id,
                                                    @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         User saved = userService.reactivate(id, actorId);
-        return ResponseEntity.ok().eTag(etag(saved.version())).body(UserResponse.from(saved));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
+        return ResponseEntity.ok().eTag(PageableSupport.etag(saved.version())).body(UserResponse.from(saved));
     }
 
     private static UserStatus parseStatus(String raw) {
@@ -123,15 +118,5 @@ public class UserController {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("status must be ACTIVE or INACTIVE");
         }
-    }
-
-    private static PageRequest pageable(int page, int size, String sort) {
-        int comma = sort.indexOf(',');
-        String field = comma < 0 ? sort : sort.substring(0, comma);
-        String dir = comma < 0 ? "asc" : sort.substring(comma + 1);
-        Sort.Direction direction = "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, field));
     }
 }

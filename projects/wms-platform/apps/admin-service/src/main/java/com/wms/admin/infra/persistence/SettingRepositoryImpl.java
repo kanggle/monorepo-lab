@@ -1,6 +1,6 @@
 package com.wms.admin.infra.persistence;
 
-import com.wms.admin.application.port.SettingRepository;
+import com.wms.admin.application.repository.SettingRepository;
 import com.wms.admin.domain.Setting;
 import com.wms.admin.domain.SettingScope;
 import java.util.Optional;
@@ -10,11 +10,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 @Component
-public class SettingRepositoryAdapter implements SettingRepository {
+public class SettingRepositoryImpl implements SettingRepository {
 
     private final AdminSettingJpaRepository repo;
 
-    public SettingRepositoryAdapter(AdminSettingJpaRepository repo) {
+    public SettingRepositoryImpl(AdminSettingJpaRepository repo) {
         this.repo = repo;
     }
 

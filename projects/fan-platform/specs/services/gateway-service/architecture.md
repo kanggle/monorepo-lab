@@ -28,8 +28,10 @@ All implementation tasks targeting this service must follow this declaration,
 `gateway-service` is the **single external entry point** for all fan-platform traffic.
 Per `platform/api-gateway-policy.md` it MUST:
 
-- Route every `/api/v1/community/**` and `/api/v1/artist/**` request (and future
-  membership/notification/admin paths) to the owning service.
+- Route every `/api/v1/community/**`, `/api/v1/artists/**`, `/api/v1/artist-groups/**`,
+  `/api/v1/fandoms/**` request (and future membership/notification/admin paths) to
+  the owning service. RewritePath filters strip the `/api/v1/...` public prefix to
+  the service-internal path (see § Routes — TASK-FAN-BE-005 머지로 production 적용).
 - Validate JWT bearer tokens (OAuth2 Resource Server) against GAP's JWKS.
 - Enforce tenant isolation: only `tenant_id=fan-platform` (or the SUPER_ADMIN
   wildcard `*`) is admitted; cross-tenant tokens are rejected at the edge with

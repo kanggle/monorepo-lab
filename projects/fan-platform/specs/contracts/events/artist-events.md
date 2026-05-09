@@ -14,7 +14,7 @@ Each Kafka message body is the JSON envelope below. The Kafka topic name is
 
 ```json
 {
-  "eventId":       "string (UUID v7 per [TASK-MONO-025](../../../../../tasks/ready/TASK-MONO-025-base-event-publisher-uuidv7.md) — currently v4 until that lands)",
+  "eventId":       "string (UUID v7 per [TASK-MONO-025](../../../../../tasks/done/TASK-MONO-025-base-event-publisher-uuidv7.md) — 머지 완료, libs/java-messaging BaseEventPublisher 이 UuidV7.randomString() 발급)",
   "eventType":     "string (e.g. artist.published)",
   "source":        "fan-platform-artist-service",
   "occurredAt":    "string (ISO-8601 UTC)",

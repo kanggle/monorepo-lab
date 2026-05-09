@@ -10,7 +10,7 @@ import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.admin.application.port.AdminEventDedupePort;
+import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.readmodel.inbound.AsnSummaryEntity;
 import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
@@ -24,8 +24,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,14 +40,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InboundProjectionService {
 
-    private static final Logger log = LoggerFactory.getLogger(InboundProjectionService.class);
     private static final String SOURCE_SERVICE = "inbound";
 
     private final AsnSummaryRepository asnRepo;
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupePort dedupe;
+    private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
     private final Clock clock;
 
@@ -57,7 +54,7 @@ public class InboundProjectionService {
                                     InspectionSummaryRepository inspectionRepo,
                                     ThroughputInboundDailyRepository throughputRepo,
                                     PartnerRefRepository partnerRepo,
-                                    AdminEventDedupePort dedupe,
+                                    AdminEventDedupeRepository dedupe,
                                     ProjectionMetrics metrics,
                                     Clock clock) {
         this.asnRepo = asnRepo;

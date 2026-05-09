@@ -80,7 +80,7 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 
 - `v1` in topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per
-  `cross-cutting/api-versioning.md`).
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
 - Retention: minimum 7 days. 30-day preferred for DLQ replay windows.
 - Partitions: start with 6 per topic (outbound throughput and saga
   fan-out demand higher partition count than inbound).
@@ -597,7 +597,7 @@ not publish anything in response to consuming a master event.
   `outbound.picking.cancelled`, `outbound.shipping.confirmed`) require
   `inventory-service` to be ready for the new topic before producer cut-over.
 - Deprecation deadline, producer cut-over, and topic retirement are governed
-  by `cross-cutting/api-versioning.md`.
+  by `.claude/skills/cross-cutting/api-versioning/SKILL.md`.
 
 ---
 

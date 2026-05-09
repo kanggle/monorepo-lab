@@ -5,7 +5,7 @@
 > `src/test/java/com/example/fanplatform/e2e/scenario/` maps 1:1 to a section
 > below.
 >
-> Spec authored as part of [TASK-FAN-INT-001](../../tasks/in-progress/TASK-FAN-INT-001-v1-services-e2e.md).
+> Spec authored as part of [TASK-FAN-INT-001](../../tasks/done/TASK-FAN-INT-001-v1-services-e2e.md).
 
 ---
 
@@ -82,41 +82,26 @@ group id so concurrent scenarios do not contend for partitions.
 
 ---
 
-## Production routing bug — known issue
+## Routing — production state (post TASK-FAN-BE-005 merge)
 
-The current `application.yml` for fan-platform's gateway maps:
-
-```
-/api/v1/community/** -> community-service URI       (no rewrite filter)
-/api/v1/artist/**    -> artist-service URI          (no rewrite filter)
-```
-
-The downstream services serve their controllers under `/api/community/**`
-and `/api/artists` + `/api/artist-groups` + `/api/fandoms` respectively.
-A request to `GET /api/v1/community/posts` therefore arrives at the
-community container as `/api/v1/community/posts` and 404s — no controller
-matches. The community-api contract spec
-([../contracts/http/community-api.md § Versioning](../contracts/http/community-api.md))
-documents the expected mapping ("the gateway maps `/api/v1/community/**`
-to community-service's `/api/community/**`") but the gateway is missing
-the corresponding `RewritePath` filter.
-
-Per TASK-FAN-INT-001 hard rule, this e2e suite **does not modify
-production code**. Instead, the e2e base test class injects a
-`SPRING_APPLICATION_JSON` env var that overrides the gateway's routes with
-the missing filters:
+The fan-platform gateway production `application.yml` declares 4 routes with
+`RewritePath` filters that strip the `/api/v1/...` public prefix to the
+service-internal path:
 
 ```
-RewritePath=/api/v1/community/(?<segment>.*),/api/community/${segment}
-RewritePath=/api/v1/artist/(?<segment>.*),/api/${segment}
+/api/v1/community/**     -> community-service     RewritePath=/api/v1/community/(?<seg>.*),/api/community/${seg}
+/api/v1/artists/**       -> artist-service        RewritePath=/api/v1/artists/(?<seg>.*),/api/artists/${seg}
+/api/v1/artist-groups/** -> artist-service        RewritePath=/api/v1/artist-groups/(?<seg>.*),/api/artist-groups/${seg}
+/api/v1/fandoms/**       -> artist-service        RewritePath=/api/v1/fandoms/(?<seg>.*),/api/fandoms/${seg}
 ```
 
-The artist rewrite drops the `artist/` segment entirely so
-`/api/v1/artist/artists` -> `/api/artists`,
-`/api/v1/artist/artist-groups` -> `/api/artist-groups`, etc.
+See `services/gateway-service/architecture.md` § Routes for the canonical filter set.
 
-The PR summary files this as a follow-up task to add the rewrites to the
-production `application.yml`.
+> Historical note: an earlier draft of this spec described an e2e
+> `SPRING_APPLICATION_JSON` workaround for missing RewritePath filters; that
+> workaround is no longer required. The TASK-FAN-INT-001 e2e suite still does
+> not modify production code, but the production gateway already declares the
+> filters above.
 
 ---
 
@@ -160,9 +145,9 @@ Tokens carry `tenant_id=fan-platform`.
    - `artist.published.v1` keyed by the same id, payload contains a non-null
      `publishedAt`.
    - Each envelope is asserted on `eventType`, `source=fan-platform-artist-service`,
-     `partitionKey`, and `eventId` parseability (UUID v7 once
-     [TASK-MONO-025](../../../tasks/ready/TASK-MONO-025-base-event-publisher-uuidv7.md)
-     lands; UUID v4 today — both parse).
+     `partitionKey`, and `eventId` parseability (UUID v7 per
+     [TASK-MONO-025](../../../tasks/done/TASK-MONO-025-base-event-publisher-uuidv7.md)
+     머지 완료).
 4. **Fan follows the artist** — `POST /api/v1/community/follows` with
    `{ "artistAccountId": "<random UUID>" }`. The contract treats
    `artistAccountId` as opaque (v1 community-service does not
@@ -183,7 +168,7 @@ Each scenario uses unique-per-class fixture markers
 (`uniqueStageName(prefix)`, `uniquePostBody(prefix)`) so the Awaitility
 filter on Kafka events cannot accidentally match a record produced by a
 parallel scenario class. Mirrors the
-[TASK-MONO-023d](../../../tasks/ready/) pattern.
+[TASK-MONO-023d](../../../tasks/done/TASK-MONO-023d-outbox-related-failures.md) pattern.
 
 ---
 

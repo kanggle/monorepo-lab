@@ -13,7 +13,7 @@
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | VARCHAR(36) PK | UUID (v7 once TASK-MONO-025 lands; v4 for now) |
+| `id` | VARCHAR(36) PK | UUID v7 (TASK-MONO-025 머지 완료, BaseEventPublisher) |
 | `tenant_id` | VARCHAR(64) NOT NULL | `fan-platform` v1; isolation key |
 | `artist_type` | VARCHAR(20) NOT NULL | `SOLO` / `GROUP_MEMBER` |
 | `status` | VARCHAR(20) NOT NULL | `DRAFT` / `PUBLISHED` / `ARCHIVED` |

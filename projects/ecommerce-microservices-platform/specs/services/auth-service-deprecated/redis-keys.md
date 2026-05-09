@@ -2,7 +2,7 @@
 
 Defines Redis key naming patterns specific to auth-service.
 
-General Redis key rules are defined in `specs/platform/naming-conventions.md`.
+General Redis key rules are defined in `platform/naming-conventions.md`.
 
 ---
 

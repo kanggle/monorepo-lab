@@ -1,4 +1,4 @@
-package com.wms.admin.application.port;
+package com.wms.admin.application.repository;
 
 import com.wms.admin.domain.Setting;
 import com.wms.admin.domain.SettingScope;
