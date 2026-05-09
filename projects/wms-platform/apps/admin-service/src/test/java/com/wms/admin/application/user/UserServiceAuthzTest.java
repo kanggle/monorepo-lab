@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
+import com.wms.admin.application.assignment.AssignmentEventHelper;
 import com.wms.admin.application.fakes.InMemoryAssignmentRepository;
 import com.wms.admin.application.fakes.InMemoryUserRepository;
 import com.wms.admin.application.fakes.RecordingOutboxPort;
@@ -45,8 +46,9 @@ class UserServiceAuthzTest {
         RecordingOutboxPort outbox = new RecordingOutboxPort();
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         Clock fixed = Clock.fixed(Instant.parse("2026-05-09T10:00:00Z"), ZoneOffset.UTC);
+        AdminEventEnvelopeBuilder envelopeBuilder = new AdminEventEnvelopeBuilder(mapper);
         UserService raw = new UserService(userRepo, assignmentRepo, outbox,
-                new AdminEventEnvelopeBuilder(mapper), fixed);
+                envelopeBuilder, new AssignmentEventHelper(outbox, envelopeBuilder), fixed);
 
         ProxyFactory pf = new ProxyFactory(raw);
         pf.addAdvice(AuthorizationManagerBeforeMethodInterceptor

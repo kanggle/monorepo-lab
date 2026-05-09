@@ -4,7 +4,9 @@ import com.example.common.id.UuidV7;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.application.AdminEventEnvelopeBuilder;
+import com.wms.admin.application.DomainUtils;
 import com.wms.admin.application.PermissionCatalog;
+import com.wms.admin.application.assignment.AssignmentEventHelper;
 import com.wms.admin.application.repository.AssignmentRepository;
 import com.wms.admin.application.repository.OutboxRepository;
 import com.wms.admin.application.repository.RoleRepository;
@@ -43,12 +45,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class RoleService {
 
     private static final String AGGREGATE_TYPE = "role";
-    private static final String AGGREGATE_TYPE_ASSIGNMENT = "assignment";
 
     private final RoleRepository roleRepository;
     private final AssignmentRepository assignmentRepository;
     private final OutboxRepository outboxRepository;
     private final AdminEventEnvelopeBuilder envelopeBuilder;
+    private final AssignmentEventHelper assignmentEventHelper;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -56,12 +58,14 @@ public class RoleService {
                        AssignmentRepository assignmentRepository,
                        OutboxRepository outboxRepository,
                        AdminEventEnvelopeBuilder envelopeBuilder,
+                       AssignmentEventHelper assignmentEventHelper,
                        ObjectMapper objectMapper,
                        Clock clock) {
         this.roleRepository = roleRepository;
         this.assignmentRepository = assignmentRepository;
         this.outboxRepository = outboxRepository;
         this.envelopeBuilder = envelopeBuilder;
+        this.assignmentEventHelper = assignmentEventHelper;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -136,7 +140,7 @@ public class RoleService {
                 UserRoleAssignment revoked = a.revoke(now, cmd.actorId());
                 UserRoleAssignment saved = assignmentRepository.save(revoked);
                 revokedIds.add(saved.id());
-                appendAssignmentRevokedEvent(saved, "ROLE_DEACTIVATED", cmd.actorId(), now);
+                assignmentEventHelper.appendAssignmentRevokedEvent(saved, "ROLE_DEACTIVATED", cmd.actorId(), now);
             }
         }
         Instant now = clock.instant();
@@ -202,14 +206,10 @@ public class RoleService {
 
     private List<String> computeChangedFields(Role before, Role after) {
         List<String> fields = new ArrayList<>();
-        if (!equalsNullable(before.name(), after.name())) fields.add("name");
-        if (!equalsNullable(before.description(), after.description())) fields.add("description");
-        if (!equalsNullable(before.permissionsJson(), after.permissionsJson())) fields.add("permissionsJson");
+        if (!DomainUtils.equalsNullable(before.name(), after.name())) fields.add("name");
+        if (!DomainUtils.equalsNullable(before.description(), after.description())) fields.add("description");
+        if (!DomainUtils.equalsNullable(before.permissionsJson(), after.permissionsJson())) fields.add("permissionsJson");
         return fields;
-    }
-
-    private static boolean equalsNullable(Object a, Object b) {
-        return a == null ? b == null : a.equals(b);
     }
 
     // ----- Outbox event helpers ----------------------------------------------
@@ -265,20 +265,4 @@ public class RoleService {
         outboxRepository.append(AGGREGATE_TYPE, roleId.toString(), eventType, envelope, roleId.toString());
     }
 
-    private void appendAssignmentRevokedEvent(UserRoleAssignment a, String cascadeReason,
-                                              String actorId, Instant occurredAt) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("assignmentId", a.id().toString());
-        payload.put("userId", a.userId().toString());
-        payload.put("roleId", a.roleId().toString());
-        payload.put("warehouseId", a.warehouseId() != null ? a.warehouseId().toString() : null);
-        payload.put("revokedAt", a.revokedAt() != null ? a.revokedAt().toString() : null);
-        payload.put("revokedBy", a.revokedBy());
-        payload.put("cascadeReason", cascadeReason);
-        String envelope = envelopeBuilder.build(
-                "admin.assignment.revoked", AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(),
-                actorId, occurredAt, payload);
-        outboxRepository.append(AGGREGATE_TYPE_ASSIGNMENT, a.id().toString(), "admin.assignment.revoked",
-                envelope, a.id().toString());
-    }
 }
