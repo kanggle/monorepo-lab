@@ -90,7 +90,7 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 
 - `v1` in the topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per
-  `cross-cutting/api-versioning.md`).
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
 - Retention: minimum 7 days. 30-day preferred for DLQ replay windows.
 - Partitions: 3 per topic. Admin events are very low throughput — start small.
 - Dead-letter topic: `<topic>.DLT` — for consumers, not the producer.
@@ -446,7 +446,7 @@ guaranteed and is tolerated by:
   topic required.
 - **Removing or renaming fields, changing types, semantic changes**:
   breaking. Require parallel `v2` topic with coexistence per
-  `cross-cutting/api-versioning.md`.
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`.
 - **eventType renames**: breaking. Same coexistence requirement.
 
 ---

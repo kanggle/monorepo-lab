@@ -2,7 +2,7 @@
 
 Defines business metrics specific to review-service.
 
-Platform-wide observability rules are defined in `specs/platform/observability.md`.
+Platform-wide observability rules are defined in `platform/observability.md`.
 
 ---
 

@@ -32,7 +32,7 @@ Defines **platform-wide** terms used across specs, tasks, and documentation. Thi
 | **Contract** | A published interface definition (HTTP or event) that producers and consumers must follow. Lives in `specs/contracts/` |
 | **Spec** | A specification document defining rules, policies, or behavior. Source of truth |
 | **Task** | An execution unit for implementing a defined piece of work. Lifecycle: backlog → ready → in-progress → review → done |
-| **ADR** | Architecture Decision Record. Documents significant architecture decisions and their rationale. Lives in `knowledge/adr/` |
+| **ADR** | Architecture Decision Record. Documents significant architecture decisions and their rationale. Lives in `docs/adr/` (monorepo-level, e.g. `ADR-MONO-*`) and `projects/<project>/docs/adr/` (project-level) |
 | **Aggregate** | A cluster of domain objects treated as a single unit for consistency. One transaction affects one aggregate |
 | **Bounded Context** | A boundary within which a domain model is consistent. Typically maps to a service or a small group of services |
 | **Layered Architecture** | Internal service structure with layers: presentation → application → domain → infrastructure |

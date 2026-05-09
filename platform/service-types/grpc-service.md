@@ -35,7 +35,7 @@ Otherwise, use `rest-api`.
 
 ## Versioning
 - Use proto package version: `<service>.v1`, `<service>.v2`
-- Breaking changes require a new version package; coexistence rules apply (`cross-cutting/api-versioning.md`)
+- Breaking changes require a new version package; coexistence rules apply (`.claude/skills/cross-cutting/api-versioning/SKILL.md`)
 - Run Buf breaking change detector in CI: `buf breaking --against ".git#branch=main"`
 
 ## Authentication
@@ -55,7 +55,7 @@ Otherwise, use `rest-api`.
 ## Observability
 - Use OTel gRPC instrumentation for traces
 - Emit standard RPC metrics: `rpc_server_duration`, `rpc_server_request_count`, broken down by method and status code
-- See `cross-cutting/observability-setup.md`
+- See `.claude/skills/cross-cutting/observability-setup/SKILL.md`
 
 ## Encryption
 - mTLS REQUIRED for all production traffic

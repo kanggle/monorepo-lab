@@ -71,12 +71,12 @@ Per aggregate type. Partition key: `aggregateId` (guarantees per-aggregate order
 | `wms.master.lot.v1` | `master.lot.*` events |
 
 - `v1` in the topic name: contract version. Breaking schema changes require a
-  parallel `v2` topic with coexistence period (per `cross-cutting/api-versioning.md`).
+  parallel `v2` topic with coexistence period (per `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
 - Retention: minimum 7 days (lets a broken consumer replay). Longer retention
   (e.g., 30 days) preferred for ops but not a contract guarantee.
 - Partitions: start with 3 per topic (tune later based on throughput).
 
-Dead-letter topic per source topic: `<topic>.dlq` — for consumers, not producer.
+Dead-letter topic per source topic: `<topic>.DLT` — for consumers, not producer.
 
 ---
 
@@ -328,7 +328,7 @@ Emitted by a scheduled domain job. `actorId` is `null`.
   publish on a new topic (`wms.master.<aggregate>.v2`) with a coexistence period.
   Consumers migrate explicitly.
 - Deprecation deadline, producer cut-over, and topic retirement are governed by
-  `cross-cutting/api-versioning.md`.
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`.
 
 ---
 
@@ -343,7 +343,7 @@ Every downstream consumer MUST:
 4. Handle actions received in non-strict order (e.g., `updated` then `created` for
    the same `aggregateId` is theoretically possible across a rebalance; consumer
    should compare `version` and keep the higher one)
-5. On unparseable event, move to `<topic>.dlq` and alert (per
+5. On unparseable event, move to `<topic>.DLT` and alert (per
    `messaging/consumer-retry-dlq/SKILL.md`)
 
 ---

@@ -77,7 +77,7 @@ frontend (`fan-platform-web`) 는 `next-auth` + GAP OIDC custom provider 로 `au
 
 ## Local Network
 
-[ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C 채택 — `fan-platform.local` 호스트네임으로 Traefik routing. PORT_PREFIX 미사용. 부트스트랩 시점부터 [TASK-MONO-022](../../tasks/review/) 의 `infra/traefik/` 인프라에 join.
+[ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C 채택 — `fan-platform.local` 호스트네임으로 Traefik routing. PORT_PREFIX 미사용. 부트스트랩 시점부터 [TASK-MONO-022](../../tasks/done/TASK-MONO-022-traefik-hostname-routing-migration.md) 의 `infra/traefik/` 인프라에 join.
 
 ## Out of Scope (의도적 제외)
 

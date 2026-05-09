@@ -182,7 +182,7 @@ Adjust inventory stock. Requires admin role.
 ### POST /api/admin/products/{productId}/images/upload-url
 Request a presigned PUT URL for direct image upload to object storage.
 Requires admin role.
-See `specs/platform/object-storage-policy.md` for the full upload flow.
+See `platform/object-storage-policy.md` for the full upload flow.
 
 **Request Body**
 ```json

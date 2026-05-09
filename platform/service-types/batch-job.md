@@ -57,7 +57,7 @@ Typical candidates include a generic batch worker, data warehouse ingestion jobs
 - Cron-scheduled execution
 - Cursor-based reads from databases or APIs
 - Chunked writes with commit per chunk
-- Outbox polling and dispatch (already implemented in `messaging/outbox-pattern.md`)
+- Outbox polling and dispatch (already implemented in `.claude/skills/messaging/outbox-pattern/SKILL.md`)
 - Reading from event streams as bounded historical replay
 
 ---

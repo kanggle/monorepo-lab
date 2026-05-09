@@ -84,7 +84,7 @@ split topics under one aggregate consumer-group (TASK-BE-048 #7).
 
 - `v1` in topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per
-  `cross-cutting/api-versioning.md`).
+  `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
 - Retention: minimum 7 days. 30-day preferred for DLQ replay windows.
 - Partitions: start with 3 per topic (inbound throughput is lower than
   inventory's mutation surface).
@@ -382,7 +382,7 @@ v1.
 - Cross-service contract events (`inbound.putaway.completed`) require
   inventory-service to be ready for the new topic before producer cut-over.
 - Deprecation deadline, producer cut-over, and topic retirement are governed
-  by `cross-cutting/api-versioning.md`.
+  by `.claude/skills/cross-cutting/api-versioning/SKILL.md`.
 
 ---
 

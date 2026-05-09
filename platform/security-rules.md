@@ -68,4 +68,4 @@ Defines platform-wide security requirements that all services must follow.
 # Change Rule
 
 Any deviation from these rules requires an explicit ADR (Architecture Decision Record)
-documented under `knowledge/adr/` before implementation.
+documented under `docs/adr/` (monorepo-wide) or `projects/<project>/docs/adr/` (project-scoped) before implementation.

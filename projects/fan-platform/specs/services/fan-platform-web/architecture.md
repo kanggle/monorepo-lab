@@ -139,13 +139,9 @@ token from the session via `'server-only'`.
 
 ### OIDC client registration
 
-GAP V0010 seed currently has only `wms` clients. The fan-platform client
-(`fan-platform-user-flow-client` per `specs/integration/gap-integration.md`)
-must be added to GAP's Flyway seed before end-to-end OIDC works. Until that
-seed lands the frontend boots / lints / smoke-tests fine; only the
-`signIn('gap')` round-trip fails.
-
-Follow-up task: TASK-MONO-NNN — GAP V0011 seed for `fan-platform-user-flow-client`.
+GAP V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
++ `fan-platform-realm-internal-services-client` + `fan-platform` tenant 시드 적용.
+end-to-end OIDC `signIn('gap')` round-trip 정상 작동. dev secret = `fan-platform-dev`.
 
 ---
 
