@@ -1,10 +1,10 @@
 # ADR-004: OAuth Callback IT — CI Linux 503 Deeper Isolation Strategy
 
-**Status**: PROPOSED — Phase 1 단일 CI run 5/5 PASS (retry 검증 대기, 추후 ACCEPTED 또는 FALLBACK 갱신)
-**Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 완료, retry 검증 진행 중)
+**Status**: PROPOSED — Phase 1 진단 완료 (flaky + RC 식별 = HTTP/2 RST_STREAM race), Phase 2 옵션 결정 대기
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 + retry 검증 → flaky 확정 + RC 식별)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2), TASK-BE-273 (PR #294, Phase 1 진단 5/5 PASS)
+**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2), TASK-BE-273 (PR #294, Phase 1 진단 — flaky + RC 식별)
 
 ---
 
@@ -214,23 +214,108 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
 2. **GitHub Actions runner 이미지 갱신**: `ubuntu-latest` 의 transitive dependency (Docker / curl / network stack) 가 timing 변화. 본 ADR 은 task spec 의 Edge Case 에 이 가능성을 이미 적시 (line 158).
 3. **JVM / Spring Boot transitive 의존성**: build.gradle 의 plugin 또는 BOM 갱신이 race window 변화 야기.
 
-#### 권장 — Phase 2 SKIP
+### CI run + analysis (PR #294 retry 1 / commit `f1585caa` / run `25593789807` / 2026-05-09 06:17 UTC)
 
-진단 결과가 **5/5 PASS** 이므로 task spec 의 4-row matrix 마지막 분기 ("Phase 2 불필요. 단 가능성 매우 낮음") 가 적용. 다만 **단일 CI run 만으로 deterministic 결론을 내리기에는 13-cycle FAIL 이력이 너무 무거움** — 다음 검증 권장:
+**Observed pattern**: **5/5 FAIL** (status 503). 원래 run 의 5/5 PASS 와 정반대 — **flaky 확정**.
 
-1. **2-3회 추가 retry**: PR #294 에 empty commit push (또는 `Update branch`) 로 같은 변경을 재실행. 모두 PASS 면 "본 PR 시점부터 deterministic PASS" 결론.
-2. retry 모두 PASS 시: ADR-004 status `PROPOSED` → `ACCEPTED — Phase 1 진단으로 자연 해소 (RC 영역 외 누적 변경 효과)` 로 갱신, Phase 2 불필요, 5 method `@Disabled` 영구 제거 + Phase 1 변경 (log 강화 + WireMock listener) 영구 채택.
-3. 1회라도 FAIL 발생 시: flaky 결론 → 그때 Phase 2 옵션 B/C 의사결정 재개.
+#### OAuthLoginIntegrationTest 5/5 disabled method FAIL
+
+| # | Method | retry 1 결과 |
+|---|---|---|
+| 2 | Microsoft preferredUsername fallback | **FAILED** (`expected:<200> but was:<503>`) |
+| 3 | Google: authorize + callback | **FAILED** (`expected:<200> but was:<503>`) |
+| 4 | Microsoft: existing email auto-link | **FAILED** (`expected:<200> but was:<503>`) |
+| 5 | Kakao: authorize + callback | **FAILED** (`expected:<200> but was:<503>`) |
+| 7 | Microsoft: authorize + callback | **FAILED** (`expected:<200> but was:<503>`) |
+| 1 | State missing from Redis (enabled) | PASSED |
+| 6 | Microsoft 5xx (enabled) | PASSED |
+
+**같은 base + 같은 변경에서 PASS / FAIL 둘 다 관측 → flaky 확정**. 13-cycle deterministic FAIL 패턴 재현. 원래 run 의 PASS 는 우연 (race window 일시 좁힘) 으로 결론.
+
+#### 진단 log 가 보여준 RC
+
+retry 1 의 강화된 log 가 **정확한 RC 를 surface**:
+
+```
+ERROR c.e.a.i.client.AccountServiceClient -
+  Account service social-signup failed after retries:
+  msg=Account service communication error
+  type=java.lang.RuntimeException
+  cause=I/O error on POST request for "http://localhost:33969/internal/accounts/social-signup":
+        Received RST_STREAM: Stream cancelled
+  causeType=org.springframework.web.client.ResourceAccessException
+
+Caused by: java.net.http.HttpTimeoutException: Request timed out
+```
+
+**핵심 메시지** = `Received RST_STREAM: Stream cancelled` + `HttpTimeoutException`.
+
+WireMock 의 listener 는 같은 시점에 **status=200 응답을 보냈다고 기록**:
+
+```
+INFO WIREMOCK_REQUEST method=POST url=/internal/accounts/social-signup status=200 bodyLen=0
+```
+
+즉 — **WireMock 은 200 OK 를 보냈는데 client (JDK HttpClient) 가 RST_STREAM frame 으로 stream cancel 받음**. body 가 client 에 도달 못함 → `ResourceAccessException` → Resilience4j retry 모두 실패 → CB open → `AccountServiceUnavailableException` → 503 SERVICE_UNAVAILABLE.
+
+#### RC 분석 — JDK HttpClient HTTP/2 race
+
+`Spring RestClient` 는 default 로 JDK `HttpClient` 사용 (Spring 6+). JDK `HttpClient` 의 default protocol = **HTTP/2** (서버가 지원하면 자동 upgrade). WireMock 도 HTTP/2 지원 (recent versions).
+
+증상 패턴:
+- WireMock 서버 측 = response 정상 (status=200 logged at server side)
+- client 측 = stream cancellation, body 미수신
+- client 가 재시도 → 모든 재시도가 같은 HTTP/2 connection multiplexing 에서 cancel
+- 결국 retry exhausted + CB open
+
+이는 JDK HttpClient HTTP/2 구현의 **multiplexing race** 또는 **WireMock 의 HTTP/2 frame handling 불완전성**. Linux 의 epoll-based event loop timing 에 매우 민감 (그래서 Windows local 에서는 PASS, Linux CI 에서 deterministic FAIL).
+
+**왜 13-cycle 동안 이걸 못 봤나**: `AccountServiceClient` 의 catch 블록이 `e.getCause()` 를 log 에 출력하지 않았기 때문. 본 task spec § Phase 1 의 강화된 log (cause + causeType + stack trace) 가 *처음으로* RC 를 surface 시킴.
+
+#### 4-row decision matrix 매핑
+
+task spec § "CI 결과 분석" 의 4-row 분기 중 **2번째에 가장 가까움** (`WIREMOCK_REQUEST present + 4xx returned + cause = RestClient wrap`) — 단, 정확히는 **새로운 5번째 분기**:
+
+| 분기 (신규) | 처방 |
+|---|---|
+| `WIREMOCK_REQUEST present + status=200 logged at WireMock + RST_STREAM at client` | **HTTP/2 → HTTP/1.1 강제** (옵션 1 신설) |
+
+#### Phase 2 권장 — 옵션 1 (HTTP/1.1 강제, 신설)
+
+기존 옵션 비교 (B/C) 보다 더 작은 변경:
+
+```java
+// 기존 — RestClient 가 default JDK HttpClient (HTTP/2 default)
+RestClient restClient = RestClient.create(baseUrl);
+
+// 신규 — explicit JDK HttpClient with HTTP/1.1 강제
+HttpClient httpClient = HttpClient.newBuilder()
+    .version(HttpClient.Version.HTTP_1_1)
+    .connectTimeout(Duration.ofSeconds(2))
+    .build();
+RestClient restClient = RestClient.builder()
+    .baseUrl(baseUrl)
+    .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+    .build();
+```
+
+영향 영역: `AccountServiceClient` + 3 `*OAuthClient` (Google/Kakao/Microsoft) — 모두 outbound HTTP. production behaviour 에는 약간의 영향 (HTTP/2 multiplexing 이점 포기 — 보통 single client 에서는 무의미한 trade-off).
+
+대안:
+- **옵션 1.b**: WireMock 의 `disableHttp2Plain` 으로 server 측 강제 → test-only 변경 (production 무영향). 단 production 에서도 RST_STREAM 발생 가능성은 그대로.
+- **옵션 B (별 source set + CI step)** / **옵션 C (embedded fake)**: 더 큰 변경. RC 식별된 이상 over-engineering.
 
 #### Cluster C ↔ Cluster A 영향
 
-본 진단 PR 은 PR #292 (BE-272, Cluster A) 와 base 가 같은 main (commit `278435bd`) 이고 `feat/gap-be-272-public-client-converter` branch 변경을 미포함. 즉 BE-272 의 converter 변경이 Cluster C 결과에 직접 영향 0. 이는 BE-272 task spec 의 AC-07 (Cluster C 무영향) 와 **양방향 일치** — 두 ADR 영역이 architecturally 독립.
+retry 1 base = `2ea3b9b4` (PR #292 BE-272 머지 전, BE-272 변경 미포함). 5/5 FAIL 발생 → BE-272 변경이 RC 와 무관 재확인. 두 ADR 영역 architecturally 독립.
+
+retry 2/3 진행 안 함 (stop 조건 trigger — 1 FAIL 으로 충분히 deterministic flaky 결론 + RC 식별).
 
 ---
 
 ## References
 
-- TASK-BE-273 (PR #294) — Phase 1 진단 5/5 PASS (예상 외 — 4-row matrix 마지막 분기), retry 검증 대기
+- TASK-BE-273 (PR #294) — Phase 1 진단: 원래 5/5 PASS / retry 1 5/5 FAIL → flaky + RC 식별 (HTTP/2 RST_STREAM race)
 - TASK-MONO-046-7a (PR #289) — cycle 1+2 evidence (CB reset + forkEvery 1 둘 다 falsified)
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 의 cycle 9-11 503 패턴
 - TASK-MONO-044c-1 (PR #218) — `@DirtiesContext(AFTER_CLASS)` + lazy `AccountServiceClient` URL resolution
