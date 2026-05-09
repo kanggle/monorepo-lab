@@ -191,14 +191,8 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(4)
-    // TASK-MONO-046-7a Cluster A: shares root cause with
-    // OAuth2RefreshTokenIntegrationTest — POST /oauth2/revoke from a public client
-    // (demo-spa-client, no client_secret) is rejected by SAS's stock
-    // OAuth2ClientAuthenticationFilter. Public-client revoke needs the same custom
-    // AuthenticationConverter as the refresh_token grant. Deferred per the same
-    // Failure Scenarios option (a) — see the longer comment on
-    // OAuth2RefreshTokenIntegrationTest.refreshTokenGrant_normalRotation.
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: SAS public-client revoke client-auth — same architectural rework as Cluster A refresh_token grant. PR #264 11-cycle deterministic blocker.")
+    // TASK-BE-272 / ADR-003 option A: PublicClientRevokeAuthenticationConverter
+    // now provides the public-client auth entry for POST /oauth2/revoke.
     @DisplayName("authCode flow: issue refresh_token → revoke → introspect → active=false")
     void authCode_revokeRefreshToken_introspectInactive() throws Exception {
         // PKCE setup

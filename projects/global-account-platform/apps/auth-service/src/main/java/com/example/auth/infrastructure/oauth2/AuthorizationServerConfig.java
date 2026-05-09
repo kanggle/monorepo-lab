@@ -118,12 +118,26 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
             OidcUserInfoMapper oidcUserInfoMapper,
-            OAuth2AuthorizationService oAuth2AuthorizationService) throws Exception {
+            OAuth2AuthorizationService oAuth2AuthorizationService,
+            RegisteredClientRepository registeredClientRepository) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         TenantIntrospectionCustomizer introspectionCustomizer = new TenantIntrospectionCustomizer();
+
+        // TASK-BE-272 / ADR-003 option A: public-client converters for
+        // refresh_token grant + revoke endpoint. Stock SAS converters do not
+        // accept (client_id only, no client_secret, no PKCE code_verifier)
+        // requests from public clients (NONE auth method). These two
+        // converters auth-only — they emit an authenticated
+        // OAuth2ClientAuthenticationToken and let the existing providers
+        // (SasRefreshTokenAuthenticationProvider /
+        // OAuth2TokenRevocationAuthenticationProvider) own the domain logic.
+        PublicClientRefreshTokenAuthenticationConverter publicClientRefreshTokenConverter =
+                new PublicClientRefreshTokenAuthenticationConverter(registeredClientRepository);
+        PublicClientRevokeAuthenticationConverter publicClientRevokeConverter =
+                new PublicClientRevokeAuthenticationConverter(registeredClientRepository);
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
@@ -137,13 +151,23 @@ public class AuthorizationServerConfig {
                                 // after the SAS configurer has been applied via .with(). We use a
                                 // Customizer that captures http to resolve the generator lazily.
                                 .tokenEndpoint(tokenEndpoint ->
-                                        tokenEndpoint.authenticationProvider(
-                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
+                                        tokenEndpoint
+                                                // ADR-003: public-client refresh_token converter
+                                                // is registered first so it has a chance to
+                                                // produce an authenticated token before stock
+                                                // converters reject the request.
+                                                .accessTokenRequestConverter(publicClientRefreshTokenConverter)
+                                                .authenticationProvider(
+                                                        buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
                                 // Phase 2c: token revocation endpoint (RFC 7009).
                                 // SAS default revocation provider calls authorizationService.remove(),
                                 // which triggers DomainSyncOAuth2AuthorizationService to revoke the
                                 // token in the JPA domain store. No custom provider needed.
-                                .tokenRevocationEndpoint(revocation -> { /* use SAS defaults */ })
+                                // ADR-003: public-client revoke converter wired here so SPAs
+                                // (NONE method) can call POST /oauth2/revoke without
+                                // client_secret_basic.
+                                .tokenRevocationEndpoint(revocation ->
+                                        revocation.revocationRequestConverter(publicClientRevokeConverter))
                                 // Phase 2c: token introspection endpoint (RFC 7662).
                                 // Custom introspectionResponseHandler enriches the response with
                                 // tenant_id and tenant_type extension claims.
