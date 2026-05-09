@@ -7,6 +7,7 @@ import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 
@@ -44,6 +45,21 @@ import java.time.Instant;
  */
 @Slf4j
 public class DomainSyncOAuth2AuthorizationService implements OAuth2AuthorizationService {
+
+    /**
+     * TSM resource key set by {@link SasRefreshTokenAuthenticationProvider} immediately
+     * before its {@code authorizationService.save(updatedAuthorization)} call.
+     *
+     * <p>When present (== {@link Boolean#TRUE}), {@link #syncRefreshTokenToDomainStore}
+     * skips its domain-store INSERT — the provider takes responsibility for the
+     * domain-store row via its own {@code persistRotation()} step. This breaks the
+     * A2 anti-pattern (dual-INSERT race on {@code refresh_tokens.idx_rt_jti}) without
+     * altering the initial-issuance path (where this flag is never set).
+     *
+     * <p>See ADR-003 § "A2 진단 결과 (TASK-BE-274)" + TASK-BE-274.
+     */
+    public static final String SAS_ROTATION_SKIP_KEY =
+            "com.example.auth.infrastructure.oauth2.DomainSyncOAuth2AuthorizationService.ROTATION_SKIP";
 
     private final OAuth2AuthorizationService delegate;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -84,11 +100,27 @@ public class DomainSyncOAuth2AuthorizationService implements OAuth2Authorization
     /**
      * Persists the refresh token into the domain JPA store if it is not already present.
      * Uses the SAS token value as the JTI (unique key).
+     *
+     * <p>TASK-BE-274 / ADR-003 옵션 B: when {@link #SAS_ROTATION_SKIP_KEY} is bound on the
+     * current TransactionSynchronizationManager, this method is a no-op. That signal is
+     * raised by {@link SasRefreshTokenAuthenticationProvider#authenticate} immediately
+     * before its {@code authorizationService.save(updatedAuthorization)} call so that
+     * the domain INSERT is performed exactly once via the provider's
+     * {@code persistRotation()} (single source of truth on the rotation path). Initial
+     * AuthCode issuance does not raise the flag — the existing single-INSERT path is
+     * preserved without regression.
      */
     private void syncRefreshTokenToDomainStore(OAuth2Authorization authorization) {
         OAuth2Authorization.Token<OAuth2RefreshToken> rtHolder =
                 authorization.getToken(OAuth2RefreshToken.class);
         if (rtHolder == null || rtHolder.getToken() == null) {
+            return;
+        }
+
+        // TASK-BE-274: rotation in progress — provider owns the domain INSERT
+        if (Boolean.TRUE.equals(
+                TransactionSynchronizationManager.getResource(SAS_ROTATION_SKIP_KEY))) {
+            log.debug("SAS_SYNC: rotation flag set, skipping domain INSERT (provider takes over)");
             return;
         }
 

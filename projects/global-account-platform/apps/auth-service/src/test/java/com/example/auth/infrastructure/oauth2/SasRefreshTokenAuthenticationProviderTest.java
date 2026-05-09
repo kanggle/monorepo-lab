@@ -6,6 +6,7 @@ import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenReuseDetector;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.security.oauth2.server.authorization.context.Authoriz
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -97,6 +99,18 @@ class SasRefreshTokenAuthenticationProviderTest {
             }
         };
         AuthorizationServerContextHolder.setContext(ctx);
+    }
+
+    @AfterEach
+    void tearDown() {
+        // TASK-BE-274: defensive — ensure no test leaves the SAS_ROTATION_SKIP_KEY
+        // bound on the static TransactionSynchronizationManager.
+        if (TransactionSynchronizationManager.hasResource(
+                DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY)) {
+            TransactionSynchronizationManager.unbindResource(
+                    DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY);
+        }
+        AuthorizationServerContextHolder.resetContext();
     }
 
     // -----------------------------------------------------------------------

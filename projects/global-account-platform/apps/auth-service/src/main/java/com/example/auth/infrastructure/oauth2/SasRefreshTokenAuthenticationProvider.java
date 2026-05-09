@@ -30,6 +30,8 @@ import org.springframework.security.oauth2.server.authorization.context.Authoriz
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -225,16 +227,55 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 newRefreshTokenObj.getIssuedAt(),
                 newRefreshTokenObj.getExpiresAt());
 
-        // --- Update SAS authorization store ---
+        // --- Update SAS authorization store + persist rotation in domain JPA store ---
+        // TASK-BE-274 / ADR-003 옵션 B: bind a TSM resource flag so that
+        // DomainSyncOAuth2AuthorizationService.syncRefreshTokenToDomainStore() skips
+        // its INSERT during this rotation. The provider's own persistRotation() below
+        // is the single source of truth for the new refresh_tokens row, eliminating
+        // the A2 dual-INSERT race on idx_rt_jti.
+        //
+        // Cleanup strategy (defence-in-depth):
+        //   1. afterCompletion synchronization unbinds when the outer transaction
+        //      ends (commit, rollback, unknown). Guarantees release even on the
+        //      success path.
+        //   2. try-finally fail-safe unbind covers the rare case where this method
+        //      runs without an active synchronization (e.g. unit-test contexts) so
+        //      the static TSM never carries a stale flag into the next call on the
+        //      same thread.
         OAuth2Authorization updatedAuthorization = OAuth2Authorization.from(authorization)
                 .token(sasAccessToken)
                 .token(newRefreshToken)
                 .build();
-        authorizationService.save(updatedAuthorization);
 
-        // --- Persist rotation in domain JPA store ---
-        Instant now = Instant.now();
-        persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
+        boolean syncActive = TransactionSynchronizationManager.isSynchronizationActive();
+        // Defensive: if a previous invocation on the same thread leaked the flag
+        // (should never happen with the afterCompletion + finally pair but guards
+        // against future regressions), unbind it before re-binding.
+        unbindRotationFlagIfBound();
+        TransactionSynchronizationManager.bindResource(
+                DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY, Boolean.TRUE);
+        if (syncActive) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int status) {
+                            unbindRotationFlagIfBound();
+                        }
+                    });
+        }
+        try {
+            authorizationService.save(updatedAuthorization);
+
+            // --- Persist rotation in domain JPA store ---
+            Instant now = Instant.now();
+            persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
+        } finally {
+            // Fail-safe: if no synchronization fired (e.g. no active transaction),
+            // ensure the flag never leaks to the next call on this thread.
+            if (!syncActive) {
+                unbindRotationFlagIfBound();
+            }
+        }
 
         // --- Publish auth.token.refreshed event ---
         String accountId = authorization.getPrincipalName();
@@ -262,6 +303,22 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Releases the {@link DomainSyncOAuth2AuthorizationService#SAS_ROTATION_SKIP_KEY}
+     * resource on the current thread if it is currently bound. Idempotent.
+     *
+     * <p>TASK-BE-274 / ADR-003 옵션 B: invoked from both the in-method finally block
+     * (no-active-synchronization fallback) and the {@code afterCompletion} hook
+     * registered in {@link #authenticate} (active-transaction primary path).
+     */
+    private static void unbindRotationFlagIfBound() {
+        if (TransactionSynchronizationManager.hasResource(
+                DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY)) {
+            TransactionSynchronizationManager.unbindResource(
+                    DomainSyncOAuth2AuthorizationService.SAS_ROTATION_SKIP_KEY);
+        }
+    }
 
     private OAuth2ClientAuthenticationToken getAuthenticatedClientElseThrowInvalidClient(
             Authentication authentication) {
