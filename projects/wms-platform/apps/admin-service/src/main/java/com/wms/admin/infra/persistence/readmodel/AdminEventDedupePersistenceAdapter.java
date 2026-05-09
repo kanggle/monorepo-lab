@@ -54,13 +54,35 @@ public class AdminEventDedupePersistenceAdapter implements AdminEventDedupePort 
         try {
             AdminEventDedupeJpaEntity row = new AdminEventDedupeJpaEntity(
                     eventId, eventType, clock.instant(), DedupeOutcome.APPLIED.name());
-            repository.save(row);
+            // persist() (not repository.save()) is required: Spring Data save()
+            // routes to merge() for entities whose @Id is non-null and @Version
+            // is primitive — and merge() does an SELECT-then-UPDATE on
+            // duplicates instead of throwing the unique-violation we depend on
+            // for dedupe. Discovered via TASK-BE-047 Kafka IT.
+            entityManager.persist(row);
             entityManager.flush();
             return DedupeOutcome.APPLIED;
         } catch (DataIntegrityViolationException duplicate) {
             log.debug("event {} ({}) already processed; skipping", eventId, eventType);
             return DedupeOutcome.DUPLICATE;
+        } catch (jakarta.persistence.PersistenceException pe) {
+            if (containsConstraintViolation(pe)) {
+                log.debug("event {} ({}) already processed; skipping", eventId, eventType);
+                return DedupeOutcome.DUPLICATE;
+            }
+            throw pe;
         }
+    }
+
+    private static boolean containsConstraintViolation(Throwable t) {
+        Throwable cur = t;
+        while (cur != null) {
+            if (cur.getClass().getName().contains("ConstraintViolationException")) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     @Override
