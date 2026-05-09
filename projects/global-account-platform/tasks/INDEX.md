@@ -72,13 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-272-public-client-refresh-token-revoke-converter.md` — **선행=ADR-003**. SAS public-client `AuthenticationConverter` 신설로 Cluster A 3 IT (refresh × 2 + revoke) 회복. 11-cycle PR #264 의 4 anti-pattern (A1 Customizer timing / A2 DomainSync race / A3 manual instantiation @Transactional / A4 test order pollution) 회피 설계. SAS stock `PublicClientAuthenticationConverter` 가 `authorization_code + code_verifier` 만 매칭 → public-client refresh_token / revoke 인증 경로 부재 = 본 task 의 핵심 RC. Phase 1 converter + unit test (≤2 cycle) → Phase 2 IT enable + CI verify (≤2 cycle) → Phase 3 Cluster C 부수효과 검증 (≤1 cycle). 총 cycle ≤ 5. 분석=Opus 4.7 / 구현 권장=Opus.
-
-- `TASK-BE-273-oauth-callback-ci-linux-503-diagnostic.md` — **선행=ADR-004**. `OAuthLoginIntegrationTest` 5 IT (Google/Kakao/Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink) 의 CI Linux 503 회복. PR #264 + 046-7a 13-cycle 학습 — CB pollution / JVM-shared static state 가설 모두 falsified, 더 깊은 Linux-specific RC (HTTP client / WireMock binding / DNS / Spring DynamicPropertySource 순서 후보). Phase 1 diagnostic harness (`AccountServiceClient` log 강화 + WireMock request listener, ≤2 cycle) → Phase 2 옵션 B (별 Gradle source set) 또는 옵션 C (embedded fake controller, ≤4 cycle) 분기. 6 cycle 초과 시 ADR-004 § 옵션 D fallback (영구 demote). 분석=Opus 4.7 / 구현 권장=Opus.
-
 - `TASK-BE-274-sas-refresh-token-provider-side-fallback.md` — **선행=ADR-003 옵션 B (BE-272 partial outcome follow-up)**. BE-272 (PR #292) 가 옵션 A 로 Cluster A 3 IT 중 1 (revoke) 만 회복하고 RT 2 method 는 A2 anti-pattern (`idx_rt_jti` UNIQUE violation, `DomainSyncOAuth2AuthorizationService.save()` ↔ `SasRefreshTokenAuthenticationProvider.persistRotation()` dual-INSERT race) 재발로 재@Disabled. 본 task 는 옵션 B (provider-side fallback) 적용 — 도메인 INSERT 경로 race 해소. Phase 1 진단 (≤1) → Phase 2 fallback 구현 (skip-path / UPSERT / save 통합 중 1, ≤3) → Phase 3 IT enable + CI verify (≤2). 총 cycle ≤ 6. 6 초과 시 ADR-003 옵션 D (영구 demote) 적용. 분석=Opus 4.7 / 구현 권장=Opus.
 
-Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09 (046-7a doc-only, 0/7 IT 회복; 후속 = 본 BE-272/273/274).
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273 closed 2026-05-09 (둘 다 PR #292/#294 main 머지 완료). 잔존 = BE-274 (RT 2 회복 follow-up).
 
 ## in-progress
 
@@ -89,6 +85,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 (empty — TASK-BE-271 reviewed and moved to done on 2026-05-02)
 
 ## done
+
+- `TASK-BE-273-oauth-callback-ci-linux-503-diagnostic.md` — PR #294 머지 (2026-05-09, commit `e7e9f08f`). Self-verdict: **APPROVED**. 8 file / +307 -14 lines / **OAuthLoginIntegrationTest 5/5 disabled IT method 완전 회복** (Google/Kakao/Microsoft happy + Microsoft preferredUsername fallback + Microsoft existing email auto-link). Phase 1 (`f8742134` log 강화 + WireMock listener) → 원래 run 5/5 PASS / retry 1 5/5 FAIL → flaky 확정 + RC 식별 (`Received RST_STREAM: Stream cancelled` = JDK HttpClient HTTP/2 multiplexing race). Phase 2 옵션 1 (`ab52b8b4` HTTP/1.1 강제, 4 client + libs/java-common ResilienceClientFactory DRY) 구현 후 GAP Integration 5m12s PASS. ADR-004 status `PROPOSED` → `ACCEPTED — 옵션 1` + Phase 1 Findings + Phase 2 Outcome 섹션 추가 (`8b62be41`). 13-cycle 미해결 RC 가 1 cycle 강화 log + 1 cycle simple patch 로 종결 — 메모리 메타학습 (local PASS / CI FAIL split → diagnostic harness 우선) ROI 정점 사례. 분석=Opus 4.7 / 구현=Opus 4.7 (Phase 1 진단) + Sonnet 4.6 (Phase 2 옵션 1 패치).
+- `TASK-BE-272-public-client-refresh-token-revoke-converter.md` — PR #292 머지 (2026-05-09, commit `d05bef23`). Self-verdict: **PARTIAL — APPROVED with follow-up**. 5 cycle / **public-client RT/revoke converter 신설 + Cluster A revoke 1/3 회복**, RT 2 method 는 A2 anti-pattern (`idx_rt_jti` dual-INSERT race) 재발로 재@Disabled. ADR-003 status `PROPOSED` → `ACCEPTED — partial (Cluster A 1/3 recovered, RT 2 deferred to TASK-BE-274 옵션 B)`. 회귀 매트릭스 6/8 (RT 2 deferred). 4 anti-pattern 평가: A1/A3/A4 회피, A2 재발 (도메인 영역, scope 외). Cycle 추적: cycle 1 (slot 잘못, CI 401), cycle 2 (slot 이동, CI 400), cycle 3 (NoPkceProvider 추가, revoke 회복), cycle 4 (A1 회피, RT NPE→A2), cycle 5 (RT 2 재disable, CI GREEN). 도메인 follow-up = TASK-BE-274 (옵션 B provider-side fallback). 분석=Opus 4.7 / 구현=Opus 4.7 (backend-engineer agent dispatch).
 
 264 backend tasks + 26 frontend tasks completed. Latest BE batch (2026-05-01..02):
 TASK-BE-248 (security tenant events), TASK-BE-249 (admin tenant audit schema),
