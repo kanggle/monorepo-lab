@@ -8,6 +8,8 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -72,6 +74,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
+
+    // TASK-BE-273 Phase 1 diagnostic: dedicated logger so WireMock request-listener
+    // emissions land at INFO and are visible in CI Surefire output without depending
+    // on the production AccountServiceClient logger configuration.
+    private static final Logger DIAG_LOG = LoggerFactory.getLogger(OAuthLoginIntegrationTest.class);
 
     // MySQL + Kafka containers inherited from AbstractIntegrationTest (TASK-BE-076).
     // Redis is service-specific so stays declared here.
@@ -156,6 +163,21 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     void resetStubs() {
         wireMock.resetAll();
 
+        // TASK-BE-273 Phase 1 diagnostic: track every request that reaches the
+        // WireMock server (account-service stubs + provider stubs). If the IT 503
+        // is a network-level reach failure (ConnectException / UnknownHostException)
+        // this listener will emit zero WIREMOCK_REQUEST lines for the failing
+        // method. If reach is fine but stub matching is missing the listener will
+        // log incoming URL + status returned (404 = stub miss, 200 = stub matched).
+        // The listener is re-registered on every @BeforeEach because resetAll()
+        // clears the listener registry as well as the stub registry.
+        wireMock.addMockServiceRequestListener((request, response) ->
+                DIAG_LOG.info("WIREMOCK_REQUEST method={} url={} status={} bodyLen={}",
+                        request.getMethod(), request.getUrl(), response.getStatus(),
+                        request.getBody() == null ? 0 : request.getBody().length));
+        DIAG_LOG.info("WIREMOCK_BASE_URL baseUrl={} port={}",
+                wireMock.baseUrl(), wireMock.port());
+
         // TASK-BE-145: re-publish JWKS endpoints after WireMock reset so id_token
         // verification finds the public key in either provider's verifier cache.
         stubJwks("/google/jwks");
@@ -227,7 +249,11 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // matrix with -Dauth.account-service.base-url override pointing at a
     // standalone WireMock container, or splitting the OAuth callback IT into
     // its own Gradle module with a controlled classpath).
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: 503 SERVICE_UNAVAILABLE on CI Linux (cycle 1 + 2 reproduced) — local Rancher PASSES. Architectural deferral per spec § Failure Scenarios option (a). Coverage at OAuthLoginUseCaseTest unit level.")
+    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily so the 5
+    // happy-path methods run on CI and surface the underlying 503 root cause
+    // through the AccountServiceClient cause-chain logging + the WireMock
+    // request-listener. Phase 2 will either restore @Disabled (option D) or
+    // apply a targeted fix (option B/C) per ADR-004 § Phase 1 Findings.
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -247,7 +273,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
+    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -284,7 +310,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
+    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -302,7 +328,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-ms-003", "OAUTH_MICROSOFT");
     }
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
+    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
@@ -325,7 +351,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Existing-email auto-link scenario
     // ----------------------------------------------------------------------
 
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: same 503 root cause as googleHappyPath — see that method's comment.")
+    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: existing email → isNewAccount false, social_identities created on existing account")
     void microsoftExistingEmailAutoLink() throws Exception {
