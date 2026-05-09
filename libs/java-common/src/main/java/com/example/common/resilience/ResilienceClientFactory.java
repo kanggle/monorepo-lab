@@ -45,11 +45,20 @@ public final class ResilienceClientFactory {
     /**
      * Build a {@link RestClient} backed by the JDK {@link HttpClient} with
      * explicit connect and read timeouts.
+     *
+     * <p>HTTP/1.1 is enforced explicitly. JDK {@link HttpClient} defaults to
+     * HTTP/2 (with H2C upgrade), but WireMock's HTTP/2 frame handling exhibits
+     * a race on Linux epoll event loops where the server logs a successful
+     * response (status=200) yet the client receives {@code RST_STREAM: Stream
+     * cancelled}. Forcing HTTP/1.1 eliminates multiplexing and removes this
+     * race entirely. For single-host internal clients the performance difference
+     * is negligible. (TASK-BE-273 Phase 2, ADR-004 § Phase 1 Findings)
      */
     public static RestClient buildRestClient(String baseUrl,
                                              Duration connectTimeout,
                                              Duration readTimeout) {
         HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connectTimeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
