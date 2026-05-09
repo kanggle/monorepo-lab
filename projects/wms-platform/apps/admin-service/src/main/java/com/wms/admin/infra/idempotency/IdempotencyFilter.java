@@ -77,19 +77,22 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         return !MUTATING.contains(method) || path == null || !path.startsWith(PATH_PREFIX);
     }
 
+    /** Tri-state result of the lock-acquisition phase. */
+    private enum LockOutcome {
+        /** Lock acquired; proceed to execute. */
+        ACQUIRED,
+        /** A replay or conflict response was already written to the client. */
+        RESPONSE_WRITTEN,
+        /** Store was unavailable or lock could not be obtained within the deadline. */
+        STOP
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String key = request.getHeader(HEADER);
-        if (key == null || key.isBlank()) {
-            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
-                    "Idempotency-Key header is required on mutating endpoints");
-            return;
-        }
-        if (key.length() > MAX_KEY_LENGTH) {
-            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
-                    "Idempotency-Key must be <= " + MAX_KEY_LENGTH + " chars");
+        Optional<String> validatedKey = validateKey(request, response);
+        if (validatedKey.isEmpty()) {
             return;
         }
 
@@ -97,7 +100,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         String method = cachedRequest.getMethod();
         String path = cachedRequest.getRequestURI();
         String requestHash = sha256Hex(canonicalizer.canonicalize(cachedRequest.getBody()));
-        String storageKey = sha256Hex(key + ":" + method + ":" + path);
+        String storageKey = sha256Hex(validatedKey.get() + ":" + method + ":" + path);
 
         Optional<StoredResponse> existing;
         try {
@@ -108,12 +111,49 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                     "Idempotency store is unavailable");
             return;
         }
-        if (existing.isPresent()) {
-            if (replayOrConflict(response, existing.get(), requestHash)) {
-                return;
-            }
+        if (existing.isPresent() && replayOrConflict(response, existing.get(), requestHash)) {
+            return;
         }
 
+        LockOutcome lockOutcome = acquireLock(storageKey, requestHash, response);
+        if (lockOutcome != LockOutcome.ACQUIRED) {
+            return;
+        }
+
+        executeAndStore(cachedRequest, response, chain, storageKey, requestHash);
+    }
+
+    /**
+     * Phase A — validates the {@code Idempotency-Key} header (presence + length).
+     * Writes an error response and returns empty when validation fails.
+     */
+    private Optional<String> validateKey(HttpServletRequest request,
+                                         HttpServletResponse response) throws IOException {
+        String key = request.getHeader(HEADER);
+        if (key == null || key.isBlank()) {
+            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
+                    "Idempotency-Key header is required on mutating endpoints");
+            return Optional.empty();
+        }
+        if (key.length() > MAX_KEY_LENGTH) {
+            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
+                    "Idempotency-Key must be <= " + MAX_KEY_LENGTH + " chars");
+            return Optional.empty();
+        }
+        return Optional.of(key);
+    }
+
+    /**
+     * Phase B — acquires the idempotency lock for {@code storageKey}, retrying up to
+     * {@link #lockWaitMax}. May write a replay or conflict response to {@code response}
+     * during the retry loop if a stored result appears.
+     *
+     * @return {@link LockOutcome#ACQUIRED} if the lock was taken,
+     *         {@link LockOutcome#RESPONSE_WRITTEN} if a replay/conflict was written,
+     *         {@link LockOutcome#STOP} if the store was unavailable or the deadline expired
+     */
+    private LockOutcome acquireLock(String storageKey, String requestHash,
+                                    HttpServletResponse response) throws IOException {
         boolean acquired;
         try {
             acquired = store.tryAcquireLock(storageKey, lockTtl);
@@ -126,10 +166,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                     break;
                 }
                 Optional<StoredResponse> raced = store.lookup(storageKey);
-                if (raced.isPresent()) {
-                    if (replayOrConflict(response, raced.get(), requestHash)) {
-                        return;
-                    }
+                if (raced.isPresent() && replayOrConflict(response, raced.get(), requestHash)) {
+                    return LockOutcome.RESPONSE_WRITTEN;
                 }
                 acquired = store.tryAcquireLock(storageKey, lockTtl);
             }
@@ -137,20 +175,30 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             log.error("Idempotency store unavailable on lock", e);
             writeError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                     "Idempotency store is unavailable");
-            return;
+            return LockOutcome.STOP;
         }
         if (!acquired) {
             writeError(response, HttpServletResponse.SC_CONFLICT, "CONFLICT",
                     "Idempotent retry in progress, please retry later");
-            return;
+            return LockOutcome.STOP;
         }
+        return LockOutcome.ACQUIRED;
+    }
 
+    /**
+     * Phase C — executes the downstream filter chain and stores the response in the
+     * idempotency store. Releases the lock unconditionally in the finally block.
+     * Responses with status &ge; 500 or aborted by exception are not stored.
+     */
+    private void executeAndStore(CachedBodyHttpServletRequest cachedRequest,
+                                 HttpServletResponse response,
+                                 FilterChain chain,
+                                 String storageKey,
+                                 String requestHash) throws IOException, ServletException {
         try {
             Optional<StoredResponse> recheck = store.lookup(storageKey);
-            if (recheck.isPresent()) {
-                if (replayOrConflict(response, recheck.get(), requestHash)) {
-                    return;
-                }
+            if (recheck.isPresent() && replayOrConflict(response, recheck.get(), requestHash)) {
+                return;
             }
 
             ContentCachingResponseWrapper cachedResponse = new ContentCachingResponseWrapper(response);
