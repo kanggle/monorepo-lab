@@ -23,7 +23,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Projects {@code wms.outbound.*} into:
@@ -38,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
-public class OutboundProjectionService {
+public class OutboundProjectionService extends AbstractProjectionService {
 
     private static final String SOURCE_SERVICE = "outbound";
 
@@ -46,8 +45,6 @@ public class OutboundProjectionService {
     private final ShipmentSummaryRepository shipmentRepo;
     private final ThroughputOutboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupeRepository dedupe;
-    private final ProjectionMetrics metrics;
 
     public OutboundProjectionService(OrderSummaryRepository orderRepo,
                                      ShipmentSummaryRepository shipmentRepo,
@@ -55,33 +52,20 @@ public class OutboundProjectionService {
                                      PartnerRefRepository partnerRepo,
                                      AdminEventDedupeRepository dedupe,
                                      ProjectionMetrics metrics) {
+        super(dedupe, metrics);
         this.orderRepo = orderRepo;
         this.shipmentRepo = shipmentRepo;
         this.throughputRepo = throughputRepo;
         this.partnerRepo = partnerRepo;
-        this.dedupe = dedupe;
-        this.metrics = metrics;
     }
 
-    @Transactional
-    public DedupeOutcome project(ProjectionEnvelope envelope) {
-        DedupeOutcome outcome = dedupe.tryRecord(envelope.eventId(), envelope.eventType());
-        if (outcome == DedupeOutcome.DUPLICATE) {
-            metrics.recordDropped("duplicate");
-            return outcome;
-        }
-
-        DedupeOutcome applied = dispatch(envelope);
-        if (applied == DedupeOutcome.IGNORED_DUPLICATE_LATE) {
-            dedupe.markStale(envelope.eventId());
-            metrics.recordDropped("stale");
-        } else {
-            metrics.recordLag(SOURCE_SERVICE, envelope.sourceTopic(), envelope.occurredAt());
-        }
-        return applied;
+    @Override
+    protected String sourceService() {
+        return SOURCE_SERVICE;
     }
 
-    private DedupeOutcome dispatch(ProjectionEnvelope envelope) {
+    @Override
+    protected DedupeOutcome dispatch(ProjectionEnvelope envelope) {
         switch (envelope.eventType()) {
             case "outbound.order.received":
                 return onOrderReceived(envelope);

@@ -25,7 +25,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Projects {@code wms.inbound.*} into:
@@ -38,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
-public class InboundProjectionService {
+public class InboundProjectionService extends AbstractProjectionService {
 
     private static final String SOURCE_SERVICE = "inbound";
 
@@ -46,8 +45,6 @@ public class InboundProjectionService {
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
-    private final AdminEventDedupeRepository dedupe;
-    private final ProjectionMetrics metrics;
     private final Clock clock;
 
     public InboundProjectionService(AsnSummaryRepository asnRepo,
@@ -57,34 +54,21 @@ public class InboundProjectionService {
                                     AdminEventDedupeRepository dedupe,
                                     ProjectionMetrics metrics,
                                     Clock clock) {
+        super(dedupe, metrics);
         this.asnRepo = asnRepo;
         this.inspectionRepo = inspectionRepo;
         this.throughputRepo = throughputRepo;
         this.partnerRepo = partnerRepo;
-        this.dedupe = dedupe;
-        this.metrics = metrics;
         this.clock = clock;
     }
 
-    @Transactional
-    public DedupeOutcome project(ProjectionEnvelope envelope) {
-        DedupeOutcome outcome = dedupe.tryRecord(envelope.eventId(), envelope.eventType());
-        if (outcome == DedupeOutcome.DUPLICATE) {
-            metrics.recordDropped("duplicate");
-            return outcome;
-        }
-
-        DedupeOutcome applied = dispatch(envelope);
-        if (applied == DedupeOutcome.IGNORED_DUPLICATE_LATE) {
-            dedupe.markStale(envelope.eventId());
-            metrics.recordDropped("stale");
-        } else {
-            metrics.recordLag(SOURCE_SERVICE, envelope.sourceTopic(), envelope.occurredAt());
-        }
-        return applied;
+    @Override
+    protected String sourceService() {
+        return SOURCE_SERVICE;
     }
 
-    private DedupeOutcome dispatch(ProjectionEnvelope envelope) {
+    @Override
+    protected DedupeOutcome dispatch(ProjectionEnvelope envelope) {
         switch (envelope.eventType()) {
             case "inbound.asn.received":
                 return onAsnReceived(envelope);
