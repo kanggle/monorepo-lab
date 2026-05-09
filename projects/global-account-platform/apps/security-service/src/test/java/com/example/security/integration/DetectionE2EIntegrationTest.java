@@ -42,12 +42,6 @@ import static org.awaitility.Awaitility.await;
  * account-service /internal/accounts/{id}/lock call (WireMock) →
  * suspicious_events row + outbox row for security.auto.lock.triggered.
  */
-// TASK-MONO-046-6 Phase 1 disproved simple timing: 60s timeout (up from 30s) did NOT help — all
-// still failed at 60s. Root cause is NOT cold-start jitter. Likely consumer commits offset before
-// VelocityRule completes (offset race), OR Redis counter gets reset between Spring contexts, OR
-// auto-offset-reset=latest wins a race despite waitForAssignment. Requires Docker reproduce to
-// inspect Kafka offsets and Redis counter state at runtime. Deferred to TASK-MONO-046-8.
-@Disabled("TASK-MONO-046-8: burst-timing deferred — cycle3 (cold-start) reproduced; cycle 4+ env-blocked")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -119,7 +113,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("10x auth.login.failed events → VelocityRule AUTO_LOCK → account-service lock called, suspicious_events row + outbox event")
     void velocityTriggersAutoLockE2E() {
-        String accountId = "acc-e2e-velocity-" + UUID.randomUUID();
+        // VARCHAR(36) — keep this exactly UUID-shaped (TASK-MONO-046-8a fix
+        // for "Data truncation: Data too long for column 'account_id'").
+        String accountId = UUID.randomUUID().toString();
 
         // Stub account-service lock endpoint
         wireMockServer.stubFor(post(urlEqualTo("/internal/accounts/" + accountId + "/lock"))
@@ -165,13 +161,27 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
                         .withHeader("Content-Type", equalTo("application/json")));
 
         // Outbox row for security.auto.lock.triggered event with normalized lockRequestResult=SUCCESS.
+        // The burst publishes 10 events → up to 10 auto-lock-triggered outbox rows
+        // (one per suspicious event); pick the row whose suspiciousEventId matches
+        // the one we just located in the suspicious_events table — outbox findAll()
+        // ordering is not guaranteed.
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            List<OutboxJpaEntity> events = outboxJpaRepository.findAll().stream()
+            OutboxJpaEntity matching = outboxJpaRepository.findAll().stream()
                     .filter(e -> "security.auto.lock.triggered".equals(e.getEventType()))
                     .filter(e -> accountId.equals(e.getAggregateId()))
-                    .toList();
-            assertThat(events).as("outbox row for security.auto.lock.triggered").isNotEmpty();
-            JsonNode envelope = objectMapper.readTree(events.get(0).getPayload());
+                    .filter(e -> {
+                        try {
+                            JsonNode env = objectMapper.readTree(e.getPayload());
+                            return suspiciousEventId.equals(env.path("payload").path("suspiciousEventId").asText());
+                        } catch (Exception ex) {
+                            return false;
+                        }
+                    })
+                    .findFirst()
+                    .orElse(null);
+            assertThat(matching).as("outbox row for security.auto.lock.triggered with suspiciousEventId=%s",
+                    suspiciousEventId).isNotNull();
+            JsonNode envelope = objectMapper.readTree(matching.getPayload());
             assertThat(envelope.path("eventType").asText()).isEqualTo("security.auto.lock.triggered");
             assertThat(envelope.path("source").asText()).isEqualTo("security-service");
             JsonNode payload = envelope.path("payload");

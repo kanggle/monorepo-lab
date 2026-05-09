@@ -7,6 +7,8 @@ import com.example.security.domain.pii.PiiMaskingRecord;
 import com.example.security.domain.suspicious.SuspiciousEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -47,6 +49,17 @@ public class SecurityEventPublisher extends BaseEventPublisher {
         }
     }
 
+    /**
+     * TASK-MONO-046-8a: each publish opens its own outbox-write transaction
+     * (REQUIRED). Callers from DetectSuspiciousActivityUseCase and
+     * IssueAutoLockCommandUseCase invoke these methods outside any active TX
+     * (recordSuspiciousEvent / updateLockResult opened + closed their own TX
+     * before returning), so without an explicit @Transactional here the outbox
+     * INSERT failed with "No EntityManager with actual transaction available".
+     * Use REQUIRED so any caller that already holds a TX (e.g., PiiMaskingService)
+     * still participates in it instead of forking a nested TX.
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
     public void publishSuspiciousDetected(SuspiciousEvent event) {
         requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
@@ -57,6 +70,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
         writeEnvelope(TOPIC_SUSPICIOUS_DETECTED, event.getAccountId(), payload);
     }
 
+    @Transactional(propagation = Propagation.REQUIRED)
     public void publishAutoLockTriggered(SuspiciousEvent event, AccountLockClient.Status status) {
         requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
@@ -69,6 +83,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
      * Emitted when all retries to account-service have been exhausted. Consumed
      * by the operator manual-intervention path.
      */
+    @Transactional(propagation = Propagation.REQUIRED)
     public void publishAutoLockPending(SuspiciousEvent event) {
         requireTenantId(event);
         Map<String, Object> payload = buildSuspiciousEventBase(event);
