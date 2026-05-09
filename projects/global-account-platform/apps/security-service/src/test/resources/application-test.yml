@@ -46,8 +46,15 @@ spring:
       # the @BeforeEach hook in each IT class.
       auto-offset-reset: latest
       enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # TASK-MONO-046-8a: align with production deserializer chain so
+      # DlqRoutingIntegrationTest.invalidBytesRoutedToDlq exercises the same
+      # ErrorHandlingDeserializer + StrictJsonStringDeserializer path that
+      # production uses. Plain StringDeserializer (the previous override)
+      # silently decoded poison bytes to garbage strings + bypassed EHD's
+      # header-stash + byte[]-restore path, so the byte[] DLPR test never
+      # received the original bytes on .dlq.
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       # TASK-BE-075: reconnect backoff tuning for Testcontainers Kafka.
       # CI sees random port assignment between container restarts; aggressive
       # reconnect helps the Consumer recover from transient broker drops.
@@ -55,6 +62,9 @@ spring:
         reconnect.backoff.ms: 500
         reconnect.backoff.max.ms: 10000
         request.timeout.ms: 60000
+        # ErrorHandlingDeserializer delegates — match production wiring.
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: com.example.security.infrastructure.kafka.StrictJsonStringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer

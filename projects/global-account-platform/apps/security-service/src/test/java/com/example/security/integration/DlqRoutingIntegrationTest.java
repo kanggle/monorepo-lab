@@ -165,14 +165,6 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         assertAllContainersStillRunning();
     }
 
-    // TASK-MONO-046-6 Phase 1 disproved simple timing: the byte[] DLPR path is structurally
-    // correct (ErrorHandlingDeserializer → vDeserEx.getData() → DelegatingByTypeSerializer →
-    // ByteArraySerializer), yet the message still does not reach .dlq within 60s. The 60s
-    // ceiling was already in place; the failure is not timing jitter. Likely cause: header
-    // preservation broken when EHD value=null + DLPR republishes byte[], OR Kafka topic
-    // auto-create for .dlq does not happen for raw byte[] producer. Requires Docker reproduce.
-    // Deferred to TASK-MONO-046-8.
-    @Disabled("TASK-MONO-046-8: byte[] DLPR path — cycle3 reproduced silent publish loss after `Sending to DLQ` log; cycle 4+ env-blocked")
     @Test
     @Order(2)
     @DisplayName("Invalid UTF-8 / non-JSON bytes are routed to .dlq via ErrorHandlingDeserializer")

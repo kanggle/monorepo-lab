@@ -56,12 +56,6 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  * </p>
  */
-// TASK-MONO-046-6 Phase 1 disproved simple timing: 60s timeout (up from 30s) did NOT help — all
-// still failed at 60s. Root cause is NOT cold-start jitter. Likely consumer commits offset before
-// VelocityRule completes (offset race), OR Redis counter gets reset between Spring contexts, OR
-// auto-offset-reset=latest wins a race despite waitForAssignment. Requires Docker reproduce to
-// inspect Kafka offsets and Redis counter state at runtime. Deferred to TASK-MONO-046-8.
-@Disabled("TASK-MONO-046-8: burst-timing deferred — cycle3 (cold-start) reproduced; cycle 4+ env-blocked")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
@@ -123,7 +117,9 @@ class CrossTenantVelocityIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("[cross-tenant] tenantA 50회 실패 → tenantB 동일 account 임계치 무영향")
     void tenantABurst_doesNotTriggerTenantBDetection() {
         // Use a unique accountId to isolate this test from other runs.
-        String sharedAccountId = "acc-cross-tenant-" + UUID.randomUUID();
+        // VARCHAR(36) — keep this exactly UUID-shaped (TASK-MONO-046-8a fix
+        // for "Data truncation: Data too long for column 'account_id'").
+        String sharedAccountId = UUID.randomUUID().toString();
 
         // ── Send 50 failed logins for tenantA ──────────────────────────────────
         for (int i = 0; i < 50; i++) {
