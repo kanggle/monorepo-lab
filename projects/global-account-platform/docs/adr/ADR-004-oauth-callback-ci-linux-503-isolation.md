@@ -1,10 +1,10 @@
 # ADR-004: OAuth Callback IT — CI Linux 503 Deeper Isolation Strategy
 
-**Status**: PROPOSED
-**Date**: 2026-05-09
+**Status**: PROPOSED — Phase 1 단일 CI run 5/5 PASS (retry 검증 대기, 추후 ACCEPTED 또는 FALLBACK 갱신)
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 완료, retry 검증 진행 중)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2)
+**Relates to**: TASK-MONO-044c-1 (PR #218), TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, cycle 1+2), TASK-BE-273 (PR #294, Phase 1 진단 5/5 PASS)
 
 ---
 
@@ -176,22 +176,61 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
     Microsoft preferredUsername fallback + Microsoft existing-email auto-link) so the
     methods run on CI Linux and the diagnostic logs surface.
 
-### CI run + analysis
+### CI run + analysis (PR #294 / run `25593440445` / 2026-05-09 06:00 UTC)
 
-> To be filled in once CI emits the diagnostic logs. Decision matrix from the task
-> spec § "CI 결과 분석" applies:
->
-> | Observed pattern | Phase 2 branch |
-> |---|---|
-> | `ConnectException: Connection refused` (no `WIREMOCK_REQUEST` lines) | option B (module-level isolation) |
-> | `WIREMOCK_REQUEST` present + 4xx returned + cause = `RestClient` 4xx wrap | option C (embedded fake) |
-> | `UnknownHostException` | CI runner `/etc/hosts` + IPv6 disable |
-> | All 5 PASS | Phase 2 skipped, restore `@Disabled` removal as permanent |
+**Observed pattern**: `All 5 PASS` — 4-row decision matrix 의 마지막 분기 (task spec 이 "가능성 매우 낮음" 으로 기록한 outcome) 에 정확히 해당.
+
+#### OAuthLoginIntegrationTest 7/7 PASSED
+
+| # | Method | 이전 상태 | 본 PR 결과 |
+|---|---|---|---|
+| 1 | State missing from Redis → 401 INVALID_STATE | enabled | PASSED |
+| 2 | **Microsoft: email absent → preferred_username fallback** | **`@Disabled`** | **PASSED** |
+| 3 | **Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE** | **`@Disabled`** | **PASSED** |
+| 4 | **Microsoft: existing email → isNewAccount false, social_identities created on existing account** | **`@Disabled`** | **PASSED** |
+| 5 | **Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO** | **`@Disabled`** | **PASSED** |
+| 6 | Microsoft token endpoint 5xx → 502 PROVIDER_ERROR | enabled | PASSED |
+| 7 | **Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT** | **`@Disabled`** | **PASSED** |
+
+순회복 = **5/5**.
+
+#### 진단 log 가 보여준 것
+
+- `WIREMOCK_BASE_URL` 가 매 method 시작 시 출력 — `baseUrl=http://localhost:44699` (CI 의 dynamic port 정상 binding).
+- `WIREMOCK_REQUEST` listener 가 모든 outbound call 을 정상 capture:
+  - 각 provider `/{provider}/token` POST → `status=200 bodyLen=187` (Microsoft) / `180` (Google) / `178` (Kakao)
+  - 각 provider `/{google,microsoft}/jwks` GET → `status=200`
+  - `/kakao/userinfo` GET → `status=200`
+  - `/internal/accounts/social-signup` POST → `status=200` (body 100~114 bytes)
+  - `/internal/accounts/{id}/status` GET → `status=200`
+- `AccountServiceClient` 의 강화된 catch 블록 (`msg / type / cause / causeType` + stack trace) 출력 0 — **즉 어떤 outbound 호출도 fail 하지 않았음** (no `RuntimeException`, no retry, no CB open).
+
+#### 가설 — 왜 이번에는 PASS?
+
+13-cycle 동안 deterministic FAIL 이었던 5 method 가 본 PR 에서 PASS 한 이유는 본 PR 의 변경 (log 강화 + listener) 이 RC 를 **건드릴 수 있는 표면이 없음** (production behaviour 무영향 + test code 는 listener 만 추가). 따라서 RC 가 본 PR 외 영역에서 **자연 해소** 됐다고 판단.
+
+후보:
+1. **누적 main 변경**: 046-7a (PR #289) 머지 이후 PR #287 (BE-047 admin-service Kafka IT) / #288 (security consumer) / #290~#293 등이 같은 GAP CI 환경에 영향. 특히 BE-047 의 Testcontainers Kafka 구성 추가가 GAP 와 같은 worker pool 에서 race window 를 좁혔을 가능성 (정확한 메커니즘은 추가 검증 필요).
+2. **GitHub Actions runner 이미지 갱신**: `ubuntu-latest` 의 transitive dependency (Docker / curl / network stack) 가 timing 변화. 본 ADR 은 task spec 의 Edge Case 에 이 가능성을 이미 적시 (line 158).
+3. **JVM / Spring Boot transitive 의존성**: build.gradle 의 plugin 또는 BOM 갱신이 race window 변화 야기.
+
+#### 권장 — Phase 2 SKIP
+
+진단 결과가 **5/5 PASS** 이므로 task spec 의 4-row matrix 마지막 분기 ("Phase 2 불필요. 단 가능성 매우 낮음") 가 적용. 다만 **단일 CI run 만으로 deterministic 결론을 내리기에는 13-cycle FAIL 이력이 너무 무거움** — 다음 검증 권장:
+
+1. **2-3회 추가 retry**: PR #294 에 empty commit push (또는 `Update branch`) 로 같은 변경을 재실행. 모두 PASS 면 "본 PR 시점부터 deterministic PASS" 결론.
+2. retry 모두 PASS 시: ADR-004 status `PROPOSED` → `ACCEPTED — Phase 1 진단으로 자연 해소 (RC 영역 외 누적 변경 효과)` 로 갱신, Phase 2 불필요, 5 method `@Disabled` 영구 제거 + Phase 1 변경 (log 강화 + WireMock listener) 영구 채택.
+3. 1회라도 FAIL 발생 시: flaky 결론 → 그때 Phase 2 옵션 B/C 의사결정 재개.
+
+#### Cluster C ↔ Cluster A 영향
+
+본 진단 PR 은 PR #292 (BE-272, Cluster A) 와 base 가 같은 main (commit `278435bd`) 이고 `feat/gap-be-272-public-client-converter` branch 변경을 미포함. 즉 BE-272 의 converter 변경이 Cluster C 결과에 직접 영향 0. 이는 BE-272 task spec 의 AC-07 (Cluster C 무영향) 와 **양방향 일치** — 두 ADR 영역이 architecturally 독립.
 
 ---
 
 ## References
 
+- TASK-BE-273 (PR #294) — Phase 1 진단 5/5 PASS (예상 외 — 4-row matrix 마지막 분기), retry 검증 대기
 - TASK-MONO-046-7a (PR #289) — cycle 1+2 evidence (CB reset + forkEvery 1 둘 다 falsified)
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 의 cycle 9-11 503 패턴
 - TASK-MONO-044c-1 (PR #218) — `@DirtiesContext(AFTER_CLASS)` + lazy `AccountServiceClient` URL resolution
