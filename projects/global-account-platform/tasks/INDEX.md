@@ -72,9 +72,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — TASK-BE-271 implementation complete and moved to review on 2026-05-02. GAP IdP 승급 main batch + 모든 follow-up 이 review/done 진입.)
+- `TASK-BE-272-public-client-refresh-token-revoke-converter.md` — **선행=ADR-003**. SAS public-client `AuthenticationConverter` 신설로 Cluster A 3 IT (refresh × 2 + revoke) 회복. 11-cycle PR #264 의 4 anti-pattern (A1 Customizer timing / A2 DomainSync race / A3 manual instantiation @Transactional / A4 test order pollution) 회피 설계. SAS stock `PublicClientAuthenticationConverter` 가 `authorization_code + code_verifier` 만 매칭 → public-client refresh_token / revoke 인증 경로 부재 = 본 task 의 핵심 RC. Phase 1 converter + unit test (≤2 cycle) → Phase 2 IT enable + CI verify (≤2 cycle) → Phase 3 Cluster C 부수효과 검증 (≤1 cycle). 총 cycle ≤ 5. 분석=Opus 4.7 / 구현 권장=Opus.
 
-Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02.
+- `TASK-BE-273-oauth-callback-ci-linux-503-diagnostic.md` — **선행=ADR-004**. `OAuthLoginIntegrationTest` 5 IT (Google/Kakao/Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink) 의 CI Linux 503 회복. PR #264 + 046-7a 13-cycle 학습 — CB pollution / JVM-shared static state 가설 모두 falsified, 더 깊은 Linux-specific RC (HTTP client / WireMock binding / DNS / Spring DynamicPropertySource 순서 후보). Phase 1 diagnostic harness (`AccountServiceClient` log 강화 + WireMock request listener, ≤2 cycle) → Phase 2 옵션 B (별 Gradle source set) 또는 옵션 C (embedded fake controller, ≤4 cycle) 분기. 6 cycle 초과 시 ADR-004 § 옵션 D fallback (영구 demote). 분석=Opus 4.7 / 구현 권장=Opus.
+
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09 (046-7a doc-only, 0/7 IT 회복; 후속 = 본 BE-272/273).
 
 ## in-progress
 
