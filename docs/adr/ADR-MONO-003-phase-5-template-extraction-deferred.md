@@ -1,14 +1,14 @@
 # ADR-MONO-003 — Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED
 
-**Status:** DEFERRED
-**Date:** 2026-05-08 (PROPOSED 2026-05-08, DEFERRED 2026-05-08)
-**Decision driver:** TASK-SCM-INT-001 series 종결로 ADR-MONO-002 의 D3 deferred 조건 (scm 머지 + 라이브러리 churn 안정 평가) 재평가 트리거 도래. `scripts/verify-template-readiness.sh` (full mode) 실행 결과 1 blocker (Check 3: shared-library churn in last 30 days) → Phase 5 발사 보류 결정.
+**Status:** DEFERRED (2026-05-09 재평가 — D4 면제 자연 확장 인정, D2 시점 갱신)
+**Date:** 2026-05-08 (PROPOSED + DEFERRED) / 2026-05-09 (재평가, BE-273 Phase 2 closure 후)
+**Decision driver:** TASK-SCM-INT-001 series 종결로 ADR-MONO-002 의 D3 deferred 조건 재평가 트리거 도래. `scripts/verify-template-readiness.sh` (full mode) 실행 결과 1 blocker (Check 3: shared-library churn in last 30 days) → Phase 5 발사 보류 결정. **2026-05-09 재평가**: TASK-BE-273 Phase 2 (PR #294, ADR-004 옵션 1) 가 `libs/java-common/.../ResilienceClientFactory.java` 변경 동반 (HTTP/1.1 강제, OAuthLogin 5 IT JDK HttpClient HTTP/2 RST_STREAM race fix) — D4 § "면제" 의 critical regression fix 자연 확장 카테고리. churn 시계 1일 reset (마지막 churn 2026-05-09).
 **Supersedes:** none
-**Related:** [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md), [TEMPLATE.md](../../TEMPLATE.md), [scripts/verify-template-readiness.sh](../../scripts/verify-template-readiness.sh), [scripts/extract-template.sh](../../scripts/extract-template.sh), 메모리 [`project_monorepo_template_strategy`](../../../memory/project_monorepo_template_strategy.md)
+**Related:** [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md), [ADR-003](../../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) (옵션 B closure, BE-274), [ADR-004](../../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) (옵션 1 closure, BE-273), [TEMPLATE.md](../../TEMPLATE.md), [scripts/verify-template-readiness.sh](../../scripts/verify-template-readiness.sh), [scripts/extract-template.sh](../../scripts/extract-template.sh), 메모리 [`project_monorepo_template_strategy`](../../../memory/project_monorepo_template_strategy.md)
 
 **Accepted Decisions:**
 - **D1 = DEFERRED** — Phase 5 (실제 Template 레포 추출 + `Use this template` 부트스트랩) 발사 보류
-- **D2 = 재평가 트리거** — 마지막 shared-library churn (`c6140bb2` 2026-05-08) 으로부터 30일 wait. 다음 평가 시점 ≥ **2026-06-07**.
+- **D2 = 재평가 트리거** — 마지막 shared-library churn = `e7e9f08f` (2026-05-09 16:27 KST, BE-273 Phase 2 머지 동반 `libs/java-common` 변경) 으로부터 30일 wait. 다음 평가 시점 ≥ **2026-06-09** (이전 ≥ 2026-06-07 에서 1-2일 밀림).
 - **D3 = 재평가 게이트** — `scripts/verify-template-readiness.sh` (full mode, `--no-git` 없이) exit 0 시점에 본 ADR 을 ACCEPTED 로 전환 또는 ADR-MONO-003a 발행.
 - **D4 = churn freeze 의도** — 재평가 시점까지 `libs/`, `platform/`, `rules/`, `.claude/`, root build files (`build.gradle` / `settings.gradle` / `package.json`) 의 변경은 critical fix / breaking regression 한정. 새 도메인 부트스트랩 (예: finance / erp) 도 동일 wait.
 
@@ -115,8 +115,10 @@ option α 가 권장 (ADR linearity 보존). 실제 Phase 5 발사 행위 (`scri
 
 - **TASK-MONO-046-7** (auth-service SAS deferred 8) — Docker reproduce 후 GAP IT fix. 영향: `libs/java-security` 가능. 우선 진행.
 - **TASK-MONO-046-8** (consumer pipeline deeper investigation) — Docker reproduce 후 GAP IT fix. 영향: `libs/java-messaging` 가능. 우선 진행.
+- **TASK-BE-273 Phase 2 (옵션 1, ADR-004)** — OAuthLogin 5 IT JDK HttpClient HTTP/2 RST_STREAM race fix. 영향: `libs/java-common/.../ResilienceClientFactory.java` (HTTP/1.1 강제, project-agnostic DRY). 046 series 의 자연 확장 (Cluster C 5 회복 = 046-7 의 8 deferred 중 5 method 동일 영역). 진행 완료 (PR #294 머지 2026-05-09).
+- **TASK-BE-272 / 274 (ADR-003)** — Cluster A 3 method 회복 시리즈. 영향: project-internal (`apps/auth-service/**`) — shared 영역 무변경. freeze 영향 0.
 
-위 두 task 는 freeze 의 "regression fix" 면제. 진행 후 churn timer 가 reset → 재평가 시점이 그만큼 미뤄짐.
+위 task 들은 freeze 의 "regression fix" 면제. 진행 후 churn timer 가 reset → 재평가 시점이 그만큼 미뤄짐.
 
 ---
 
@@ -201,3 +203,39 @@ option α 가 권장 (ADR linearity 보존). 실제 Phase 5 발사 행위 (`scri
 - **ADR-MONO-003a** — Phase 5 발사 ACCEPTED 결정. D3 게이트 통과 후.
 - **ADR-MONO-004** — Template repo 명명 + 외부 repo URL + sync 정책 (월 1회 vs 트리거 기반). ADR-003a 와 동시 또는 직후.
 - **ADR-MONO-005** — finance / erp / mes 부트스트랩 순서 (ADR-MONO-002 § D4 의 deferred). Phase 5 발사 후.
+
+---
+
+## 6. Updates
+
+### 2026-05-09 — 재평가 (BE-272/273/274 closure 후)
+
+**Trigger**: 046 series 의 outcome closure 도래 (ADR-003 ACCEPTED 옵션 B closure / ADR-004 ACCEPTED 옵션 1) — 누적 deferred IT 9/8 회복. monorepo template Phase 5 재평가 사용자 요청.
+
+**verify-template-readiness 결과 (2026-05-09)**:
+
+| Check | 결과 | 비고 |
+|---|---|---|
+| 1. Shared library boundary | PASS (추정) | 본 conversation 변경: libs/java-common ResilienceClientFactory (project-agnostic) — 0 violation |
+| 2. Phase 4 outstanding | PASS | 모든 큐 비어있음 |
+| 3. **No shared-library churn (1 month)** | **FAIL** | 본 conversation 의 BE-273 Phase 2 churn (`e7e9f08f`, 2026-05-09) — D4 면제 카테고리 자연 확장이지만 verify 자동 검증은 의도 인식 못 함 |
+| 4. CI baseline green | PASS | main 최신 commit `00d25cf6` PR #297 머지 후 |
+| 5. PROJECT.md validity | PASS | 5 projects 유효 |
+| 6. PORT_PREFIX legacy | PASS | TASK-MONO-024 정리 완료 |
+
+**1 blocker (Check 3) 그대로** — Phase 5 발사 보류 유지.
+
+**D4 면제 자연 확장 인정**:
+
+본 conversation 의 churn 영역 분석:
+- `libs/java-common/.../ResilienceClientFactory.java` (BE-273 Phase 2) = HTTP/1.1 강제 enforcement, project-agnostic DRY, 046 series 자연 확장 → § "면제" 의 "regression fix" 카테고리 정확히 해당
+- `apps/auth-service/**` (BE-272/273/274) = project-internal, shared 영역 무관
+- `docs/adr/**`, `tasks/`, `specs/` (모두) = project-internal 또는 ADR doc, shared 영역 무관
+
+D4 의도와 충돌 0. 단 verify 의 자동 검증은 D4 면제 의미 인식 못 함 (의도적 — 자동화는 실수 방지가 목적).
+
+**D2 시점 갱신**: ≥ 2026-06-07 → ≥ **2026-06-09** (1-2일 밀림, 자연 쿨다운).
+
+**다음 행동**: 추가 churn 발생 안 하면 ≥ 2026-06-09 자연 트리거. 그 전 사용자 의향 변경 시 본 ADR SUPERSEDED 후 ADR-MONO-003-override 발행 path (§ 3.4 risk 2 참조).
+
+**046 series 의 portfolio 가치**: Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus = 9/8 deferred IT 완전 회복. SAS public-client refresh_token + revoke + userinfo + OAuth callback (3 provider) 모두 main CI deterministic PASS — portfolio 의 OIDC AS 깊이 증명 완성. Phase 5 launch 시점에 Template 추출의 base 도 이 OIDC AS 패턴이 안정 자산으로 포함.
