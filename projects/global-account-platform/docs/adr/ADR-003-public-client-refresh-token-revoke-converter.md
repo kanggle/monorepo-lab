@@ -1,10 +1,10 @@
 # ADR-003: SAS Public-Client AuthenticationConverter for `refresh_token` and `revoke` Grants
 
-**Status**: PROPOSED
-**Date**: 2026-05-09
+**Status**: ACCEPTED — partial (Cluster A 1/3 recovered, RT 2 deferred to follow-up TASK-BE-274 옵션 B)
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (accepted with partial outcome)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption)
+**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 구현), TASK-BE-274 (옵션 B follow-up)
 
 ---
 
@@ -202,10 +202,56 @@ http.with(authorizationServerConfigurer, configurer ->
 
 ---
 
+## Outcome (TASK-BE-272 / PR #292, 2026-05-09)
+
+옵션 A 를 5 cycle 안에 구현, **부분 성공** — Cluster A 3 IT 중 1 회복 (revoke), 2 미회복 (refresh_token normal rotation + reuse detection).
+
+### 회귀 매트릭스 8 케이스 채점 (ADR-003 § "회귀 매트릭스" 결과)
+
+| 흐름 | 기대 | 실제 |
+|---|---|---|
+| `authorization_code` + PKCE | 200 | **PASS** |
+| `authorization_code` + 잘못된 code_verifier | 400 | **PASS** |
+| `refresh_token` (demo-spa-client) normal | 200 + 새 RT | **FAIL → A2 재발, 재@Disabled** |
+| `refresh_token` reuse (demo-spa-client) | 400 + chain revoked | **FAIL → A2 재발, 재@Disabled** |
+| `refresh_token` (test-internal-client, secret) | 200 (stock 경로) | **PASS** |
+| `client_credentials` (test-internal-client) | 200 | **PASS** |
+| `revoke` (demo-spa-client) | 200 → introspect inactive | **PASS (회복)** |
+| `revoke` (test-internal-client, secret) | 200 (stock 경로) | **PASS** |
+
+순회복 = revoke 1/3. 회귀 0.
+
+### Cycle 소비 추적 (PR #292 commit 별)
+
+| Cycle | 변경 | 결과 |
+|---|---|---|
+| 1 (`b12cbd80`) | converter 2개 + tokenEndpoint slot wiring | unit PASS, **CI 401 INVALID_CLIENT** (slot 잘못) |
+| 2 (`51f8f988`) | clientAuthentication slot 으로 이동 + revoke 가드 | unit PASS, **CI 400 invalid_grant** (PKCE 강제) |
+| 3 (`606652d7`) | `PublicClientNoPkceAuthenticationProvider` (pass-through) 추가 | **revoke 1/3 회복**, RT 2 NPE |
+| 4 (`de8ebe3a`) | A1 회피 — `OAuth2TokenGenerator` 직접 inject | RT 2 가 NPE → A2 (`idx_rt_jti` UNIQUE violation) |
+| 5 (`e84e4d5b`) | RT 2 IT 재@Disabled + 사유 명시 | **CI GREEN** (Integration GAP success) |
+
+### 4 anti-pattern 회피 평가
+
+- **A1** (SAS Customizer 람다 안 shared-object lookup): cycle 4 fix 로 영구 회피 — `OAuth2TokenGenerator` 직접 inject.
+- **A2** (DomainSync vs persistRotation race, `idx_rt_jti` dual-INSERT): **재발**. 본 ADR 의 옵션 A 가 cover 하지 못하는 영역 — converter 추가만으로는 도메인 INSERT 경로의 race 해소 불가. RT 2 IT 회복은 옵션 B (provider-side fallback) 필요.
+- **A3** (manual instantiation `@Transactional` 미적용): 신규 provider 들이 모두 `@Transactional` 미사용 → AOP 영향 0.
+- **A4** (test order pollution): 신규 클래스 stateless, `@DirtiesContext(AFTER_CLASS)` 패턴 유지.
+
+### 결론
+
+옵션 A 의 **유효 영역 = revoke + 인증 진입 경로**. RT rotation/reuse 의 도메인 INSERT race 는 ADR-003 의 "도메인 코드 변경 0" 전제로는 미해결. ADR-003 status `ACCEPTED — partial` 로 closed. **다음 단계는 follow-up TASK-BE-274 (옵션 B provider-side fallback)**.
+
+옵션 D (영구 demote) 는 채택하지 않음 — RT 2 IT 의 도메인 가치 (rotation + reuse detection 은 SAS public-client 의 핵심 보안 행동) 가 unit-test 만으로 충분히 cover 되지 않는다는 판단. 옵션 B 시도 후 재평가.
+
+---
+
 ## References
 
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 결과 + 4 anti-pattern 학습
 - TASK-MONO-046-7a (PR #289) — 0/7 recovery, doc-only PR
+- TASK-BE-272 (PR #292) — 옵션 A 구현, 부분 성공 (revoke 1/3)
+- TASK-BE-274 — 옵션 B (provider-side fallback) follow-up
 - ADR-001 (OIDC Adoption) — SAS 도입 결정
 - Spring Authorization Server 1.4 docs — `OAuth2ClientAuthenticationFilter` lifecycle
 - RFC 8252 (OAuth 2.0 for Native Apps) + RFC 9700 (Best Current Practice for OAuth 2.0 Security)

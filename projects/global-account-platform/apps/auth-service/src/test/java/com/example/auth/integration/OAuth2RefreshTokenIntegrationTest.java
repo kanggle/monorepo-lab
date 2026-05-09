@@ -201,21 +201,15 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(2)
-    // TASK-MONO-046-7a Cluster A: PR #264 (11 cycles) deterministically reproduced
-    // a SAS public-client refresh_token grant blocker. The stock Spring Authorization
-    // Server PublicClientAuthenticationConverter only fires for authorization_code +
-    // code_verifier, so a public-client refresh_token request (client_id only, no
-    // client_secret) reaches our SasRefreshTokenAuthenticationProvider with no
-    // authenticated OAuth2ClientAuthenticationToken on the principal slot, and the
-    // provider rejects it with INVALID_CLIENT. PR #264 cycles 1-10 attempted custom
-    // converters and providers; all were reverted (commit 34242215 final reapply).
-    // 046-7a re-evaluation honoured the 6-cycle budget: in-place fix would re-enter
-    // the same 11-cycle territory. Coverage is preserved at the unit level by
-    // SasRefreshTokenAuthenticationProviderTest (provider rotation, reuse-detection,
-    // revoke logic against port fakes) — this IT remains @Disabled until the
-    // public-client converter is designed under a separate task / ADR per spec
-    // Failure Scenarios option (a).
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: SAS public-client refresh_token grant client-auth — needs custom AuthenticationConverter (architectural rework). PR #264 11-cycle deterministic blocker. Coverage preserved in SasRefreshTokenAuthenticationProviderTest.")
+    // TASK-BE-272 partial: ADR-003 option A converters successfully unblocked
+    // public-client client-auth (revoke is now green), but the rotation path
+    // hits the A2 anti-pattern (DomainSyncOAuth2AuthorizationService.save() vs
+    // SasRefreshTokenAuthenticationProvider.persistRotation() dual-INSERT on
+    // refresh_tokens.idx_rt_jti). A2 lives in domain code that is explicitly
+    // out of scope for TASK-BE-272 (converter-only). Re-disable until a
+    // follow-up task addresses the dual-store rotation race per ADR-003 §
+    // "Alternative Path" option B (provider-side fallback) or a new ADR.
+    @org.junit.jupiter.api.Disabled("TASK-BE-272 deferred: A2 anti-pattern (DomainSync vs persistRotation dual-INSERT on idx_rt_jti). Domain rework outside this task's converter-only scope.")
     @DisplayName("refresh_token grant: normal rotation → new tokens, old RT revoked in domain store")
     void refreshTokenGrant_normalRotation() throws Exception {
         assertThat(refreshTokenValue).as("Requires Order=1 (RT from authCode flow)").isNotBlank();
@@ -292,21 +286,9 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(4)
-    // TASK-MONO-046-7a Cluster A: PR #264 (11 cycles) deterministically reproduced
-    // a SAS public-client refresh_token grant blocker. The stock Spring Authorization
-    // Server PublicClientAuthenticationConverter only fires for authorization_code +
-    // code_verifier, so a public-client refresh_token request (client_id only, no
-    // client_secret) reaches our SasRefreshTokenAuthenticationProvider with no
-    // authenticated OAuth2ClientAuthenticationToken on the principal slot, and the
-    // provider rejects it with INVALID_CLIENT. PR #264 cycles 1-10 attempted custom
-    // converters and providers; all were reverted (commit 34242215 final reapply).
-    // 046-7a re-evaluation honoured the 6-cycle budget: in-place fix would re-enter
-    // the same 11-cycle territory. Coverage is preserved at the unit level by
-    // SasRefreshTokenAuthenticationProviderTest (provider rotation, reuse-detection,
-    // revoke logic against port fakes) — this IT remains @Disabled until the
-    // public-client converter is designed under a separate task / ADR per spec
-    // Failure Scenarios option (a).
-    @org.junit.jupiter.api.Disabled("TASK-MONO-046-7a: SAS public-client refresh_token grant client-auth — needs custom AuthenticationConverter (architectural rework). PR #264 11-cycle deterministic blocker. Coverage preserved in SasRefreshTokenAuthenticationProviderTest.")
+    // TASK-BE-272 partial: deferred for the same A2 reason as
+    // refreshTokenGrant_normalRotation above.
+    @org.junit.jupiter.api.Disabled("TASK-BE-272 deferred: depends on rotation path; A2 dual-INSERT blocker (out of scope).")
     @DisplayName("reuse detection: reusing a rotated refresh_token → 400 invalid_grant")
     void refreshTokenGrant_reuseDetected_returns400() throws Exception {
         // Capture current (valid) RT

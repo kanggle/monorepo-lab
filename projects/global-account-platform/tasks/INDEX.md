@@ -76,7 +76,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-BE-273-oauth-callback-ci-linux-503-diagnostic.md` — **선행=ADR-004**. `OAuthLoginIntegrationTest` 5 IT (Google/Kakao/Microsoft happy + Microsoft preferredUsername + Microsoft existingEmailAutoLink) 의 CI Linux 503 회복. PR #264 + 046-7a 13-cycle 학습 — CB pollution / JVM-shared static state 가설 모두 falsified, 더 깊은 Linux-specific RC (HTTP client / WireMock binding / DNS / Spring DynamicPropertySource 순서 후보). Phase 1 diagnostic harness (`AccountServiceClient` log 강화 + WireMock request listener, ≤2 cycle) → Phase 2 옵션 B (별 Gradle source set) 또는 옵션 C (embedded fake controller, ≤4 cycle) 분기. 6 cycle 초과 시 ADR-004 § 옵션 D fallback (영구 demote). 분석=Opus 4.7 / 구현 권장=Opus.
 
-Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09 (046-7a doc-only, 0/7 IT 회복; 후속 = 본 BE-272/273).
+- `TASK-BE-274-sas-refresh-token-provider-side-fallback.md` — **선행=ADR-003 옵션 B (BE-272 partial outcome follow-up)**. BE-272 (PR #292) 가 옵션 A 로 Cluster A 3 IT 중 1 (revoke) 만 회복하고 RT 2 method 는 A2 anti-pattern (`idx_rt_jti` UNIQUE violation, `DomainSyncOAuth2AuthorizationService.save()` ↔ `SasRefreshTokenAuthenticationProvider.persistRotation()` dual-INSERT race) 재발로 재@Disabled. 본 task 는 옵션 B (provider-side fallback) 적용 — 도메인 INSERT 경로 race 해소. Phase 1 진단 (≤1) → Phase 2 fallback 구현 (skip-path / UPSERT / save 통합 중 1, ≤3) → Phase 3 IT enable + CI verify (≤2). 총 cycle ≤ 6. 6 초과 시 ADR-003 옵션 D (영구 demote) 적용. 분석=Opus 4.7 / 구현 권장=Opus.
+
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09 (046-7a doc-only, 0/7 IT 회복; 후속 = 본 BE-272/273/274).
 
 ## in-progress
 

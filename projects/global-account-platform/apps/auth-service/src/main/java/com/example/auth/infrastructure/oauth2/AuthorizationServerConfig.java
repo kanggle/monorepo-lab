@@ -118,12 +118,27 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
             OidcUserInfoMapper oidcUserInfoMapper,
-            OAuth2AuthorizationService oAuth2AuthorizationService) throws Exception {
+            OAuth2AuthorizationService oAuth2AuthorizationService,
+            RegisteredClientRepository registeredClientRepository,
+            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         TenantIntrospectionCustomizer introspectionCustomizer = new TenantIntrospectionCustomizer();
+
+        // TASK-BE-272 / ADR-003 option A: public-client converters for
+        // refresh_token grant + revoke endpoint. Stock SAS converters do not
+        // accept (client_id only, no client_secret, no PKCE code_verifier)
+        // requests from public clients (NONE auth method). These two
+        // converters auth-only — they emit an authenticated
+        // OAuth2ClientAuthenticationToken and let the existing providers
+        // (SasRefreshTokenAuthenticationProvider /
+        // OAuth2TokenRevocationAuthenticationProvider) own the domain logic.
+        PublicClientRefreshTokenAuthenticationConverter publicClientRefreshTokenConverter =
+                new PublicClientRefreshTokenAuthenticationConverter(registeredClientRepository);
+        PublicClientRevokeAuthenticationConverter publicClientRevokeConverter =
+                new PublicClientRevokeAuthenticationConverter(registeredClientRepository);
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
@@ -132,13 +147,44 @@ public class AuthorizationServerConfig {
                                 .oidc(oidc ->
                                         oidc.userInfoEndpoint(userInfo ->
                                                 userInfo.userInfoMapper(oidcUserInfoMapper)))
+                                // TASK-BE-272 / ADR-003 option A: register the
+                                // public-client converters on the client
+                                // authentication filter (NOT on the
+                                // tokenEndpoint().accessTokenRequestConverter()
+                                // slot — that slot parses GRANT request bodies,
+                                // not client credentials). Both converters live
+                                // in the OAuth2ClientAuthenticationFilter's
+                                // DelegatingAuthenticationConverter chain; the
+                                // refresh_token converter filters by grant_type
+                                // so it only fires on /oauth2/token, the revoke
+                                // converter has no grant_type filter so it
+                                // matches the public-client request shape on
+                                // /oauth2/revoke. Each returns null on
+                                // mismatch, allowing the stock converters
+                                // (client-secret-basic, public-client PKCE,
+                                // etc.) to handle other flows unchanged.
+                                .clientAuthentication(clientAuth ->
+                                        clientAuth
+                                                .authenticationConverter(publicClientRefreshTokenConverter)
+                                                .authenticationConverter(publicClientRevokeConverter)
+                                                // Pass-through provider for the
+                                                // already-authenticated tokens
+                                                // emitted by our converters.
+                                                // Without it, stock's
+                                                // PublicClientAuthenticationProvider
+                                                // runs CodeVerifierAuthenticator,
+                                                // which throws invalid_grant for
+                                                // requests with no code_verifier
+                                                // (refresh_token + revoke).
+                                                .authenticationProvider(
+                                                        new PublicClientNoPkceAuthenticationProvider()))
                                 // Phase 2b: add custom refresh_token provider.
                                 // OAuth2TokenGenerator is available as a shared object on HttpSecurity
                                 // after the SAS configurer has been applied via .with(). We use a
                                 // Customizer that captures http to resolve the generator lazily.
                                 .tokenEndpoint(tokenEndpoint ->
                                         tokenEndpoint.authenticationProvider(
-                                                buildRefreshTokenProvider(http, oAuth2AuthorizationService)))
+                                                buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator)))
                                 // Phase 2c: token revocation endpoint (RFC 7009).
                                 // SAS default revocation provider calls authorizationService.remove(),
                                 // which triggers DomainSyncOAuth2AuthorizationService to revoke the
@@ -190,25 +236,23 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * Builds the {@link SasRefreshTokenAuthenticationProvider} using the
-     * {@link OAuth2TokenGenerator} shared object from the {@link HttpSecurity} configurer chain.
+     * Builds the {@link SasRefreshTokenAuthenticationProvider}.
      *
-     * <p>This method is called from inside the SAS configurer's Customizer lambda, which means
-     * SAS has already applied its own configurers and populated the shared objects map with
-     * {@link OAuth2TokenGenerator}. Accessing it here is safe and avoids the circular
-     * dependency that would occur if we declared it as a standalone {@code @Bean}.
+     * <p>TASK-BE-272 cycle 4: previously this method called
+     * {@code http.getSharedObject(OAuth2TokenGenerator.class)} from inside the SAS
+     * configurer's Customizer lambda. That call returned {@code null} (verified in
+     * CI when the converters started letting public-client refresh_token requests
+     * reach the provider — A1 anti-pattern from PR #264). The fix is to inject
+     * the {@link OAuth2TokenGenerator} bean (built by the {@code @Bean} factory
+     * below) into the surrounding {@link #authorizationServerSecurityFilterChain}
+     * method signature and pass it through.
      */
-    @SuppressWarnings("unchecked")
     private SasRefreshTokenAuthenticationProvider buildRefreshTokenProvider(
-            HttpSecurity http,
-            OAuth2AuthorizationService oAuth2AuthorizationService) {
-        // SAS stores OAuth2TokenGenerator in HttpSecurity's shared objects under its own type.
-        // This is the standard SAS extension pattern used by the built-in grant providers.
-        OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator =
-                http.getSharedObject(OAuth2TokenGenerator.class);
+            OAuth2AuthorizationService oAuth2AuthorizationService,
+            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator) {
         return new SasRefreshTokenAuthenticationProvider(
                 oAuth2AuthorizationService,
-                tokenGenerator,
+                oAuth2TokenGenerator,
                 refreshTokenRepository,
                 tokenReuseDetector,
                 bulkInvalidationStore,
