@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 
 import java.time.Instant;
@@ -299,6 +301,63 @@ class TenantClaimTokenCustomizerTest {
     }
 
     // -----------------------------------------------------------------------
+    // refresh_token grant — tenant claims preserved on rotated access_token
+    // -----------------------------------------------------------------------
+
+    /**
+     * TASK-BE-274 cycle 3: SasRefreshTokenAuthenticationProvider calls
+     * tokenGenerator.generate() with authorizationGrantType=REFRESH_TOKEN when
+     * producing the rotated access_token. Without the REFRESH_TOKEN branch in
+     * TenantClaimTokenCustomizer the tenant claims would be absent.
+     */
+    @Test
+    @DisplayName("refresh_token grant: tenant from ClientSettings injected into rotated access_token")
+    void refreshTokenGrant_tenantFromClientSettings_injected() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "fan-platform", "B2C", AuthorizationGrantType.REFRESH_TOKEN);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        // principal with no details — forces ClientSettings fallback (Option B)
+        when(principal.getDetails()).thenReturn(null);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.REFRESH_TOKEN);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("fan-platform");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2C");
+    }
+
+    @Test
+    @DisplayName("refresh_token grant: tenant from principal details injected into rotated access_token")
+    void refreshTokenGrant_tenantFromPrincipalDetails_injected() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "fan-platform", "B2C", AuthorizationGrantType.REFRESH_TOKEN);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of("tenant_id", "wms-tenant", "tenant_type", "B2B");
+        when(principal.getDetails()).thenReturn(details);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.REFRESH_TOKEN);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // principal details take priority
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B");
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -322,6 +381,26 @@ class TenantClaimTokenCustomizerTest {
             builder.clientSecret("{noop}secret");
         }
         return builder.build();
+    }
+
+    /**
+     * Builds a {@link RegisteredClient} carrying {@link OAuthClientMapper#SETTING_TENANT_ID}
+     * and {@link OAuthClientMapper#SETTING_TENANT_TYPE} in its {@link ClientSettings}, as
+     * produced by {@link OAuthClientMapper#toRegisteredClient} for the real DB-backed path.
+     */
+    private RegisteredClient buildClientWithTenantSettings(
+            String tenantId, String tenantType, AuthorizationGrantType grantType) {
+        ClientSettings cs = ClientSettings.builder()
+                .setting(OAuthClientMapper.SETTING_TENANT_ID, tenantId)
+                .setting(OAuthClientMapper.SETTING_TENANT_TYPE, tenantType)
+                .build();
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("demo-spa-client")
+                .clientName("Demo SPA")
+                .authorizationGrantType(grantType)
+                .redirectUri("http://localhost:3000/callback")
+                .clientSettings(cs)
+                .build();
     }
 
     private JwtClaimsSet.Builder baseClaimsBuilder() {

@@ -27,6 +27,13 @@ import org.springframework.stereotype.Component;
  *       the clientName split for backward compatibility.
  *   <li>{@code authorization_code}: reads tenant context from the authenticated
  *       principal's JWT attributes. Falls back to ClientSettings if absent.
+ *   <li>{@code refresh_token}: TASK-BE-274 cycle 3 — {@link SasRefreshTokenAuthenticationProvider}
+ *       generates a brand-new JWT for the rotated access token using a fresh
+ *       {@link org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext}
+ *       whose {@code authorizationGrantType} is {@code refresh_token}. The previous
+ *       assumption that SAS built-in reuses claims does not apply to our custom
+ *       provider. Reuses {@code customizeForAuthorizationCode} logic: principal
+ *       details map first, ClientSettings Option B fallback second.
  * </ul>
  *
  * <p><b>Token types covered</b>
@@ -66,8 +73,23 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             customizeForClientCredentials(context);
         } else if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(grantType)) {
             customizeForAuthorizationCode(context);
+        } else if (AuthorizationGrantType.REFRESH_TOKEN.equals(grantType)) {
+            // TASK-BE-274 cycle 3: SasRefreshTokenAuthenticationProvider generates a
+            // brand-new JWT for the rotated access token using a fresh TokenContext whose
+            // authorizationGrantType is REFRESH_TOKEN. The previous no-op assumption
+            // (SAS built-in reuse) does not apply to our custom provider — it calls
+            // tokenGenerator.generate() which invokes this customizer. Without handling
+            // REFRESH_TOKEN here the tenant_id / tenant_type claims are absent from the
+            // rotated access token.
+            //
+            // Strategy: reuse customizeForAuthorizationCode logic which already handles
+            // the dual fallback (principal.getDetails() map → ClientSettings Option B →
+            // clientName legacy). The principal in the REFRESH_TOKEN context is the same
+            // Authentication stored in the OAuth2Authorization at authorization_code time,
+            // and the registeredClient carries custom.tenant_id / custom.tenant_type via
+            // OAuthClientMapper (Option B). Either path resolves tenant_id correctly.
+            customizeForAuthorizationCode(context);
         }
-        // refresh_token grant reuses access token claims — no separate customization needed
     }
 
     private void customizeForClientCredentials(JwtEncodingContext context) {
