@@ -4,36 +4,35 @@ import com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase;
 import com.wms.notification.application.port.outbound.ChannelPort;
 import com.wms.notification.application.port.outbound.DeliveryRepository;
 import com.wms.notification.application.port.outbound.OutboxPort;
-import com.wms.notification.adapter.outbound.slack.ChannelNotConfiguredException;
-import com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException;
 import com.wms.notification.domain.delivery.DeliveryStatus;
 import com.wms.notification.domain.delivery.NotificationDelivery;
-import com.wms.notification.domain.error.DeliveryRetryExhaustedException;
-import com.wms.notification.domain.routing.ChannelType;
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Dispatches each PENDING delivery to its channel adapter, then transitions
- * the delivery state machine based on the adapter outcome. Each call is
- * its own transaction — the routing service has already committed the
- * dedupe + delivery + outbox rows.
+ * Picks PENDING deliveries (scheduled retries or post-commit fresh rows)
+ * and forwards each to {@link DeliveryDispatchPerRow#dispatch(NotificationDelivery)}.
+ *
+ * <h2>Why a separate per-row bean?</h2>
+ *
+ * <p>Per-row dispatch is annotated {@code @Transactional(REQUIRES_NEW)} so
+ * that one failing delivery does not roll back already-succeeded sibling
+ * rows in the same scheduler tick. Earlier the dispatch body lived on
+ * this class and was self-invoked from {@link #dispatchDueRetries()} /
+ * {@link #retry(UUID)} — Spring AOP only honours {@code @Transactional}
+ * on cross-bean calls, so the self-invocation silently ran the dispatch
+ * inside the outer transaction. Splitting the dispatch into
+ * {@link DeliveryDispatchPerRow} restores the documented isolation.
  *
  * <h2>Retry budget</h2>
  *
@@ -45,18 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeliveryExecutor implements RetryFailedDeliveryUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(DeliveryExecutor.class);
-    private static final double JITTER_RATIO = 0.2;
 
     private final DeliveryRepository deliveries;
-    private final OutboxPort outbox;
-    private final Map<ChannelType, ChannelPort> channelsByType;
-    private final List<Integer> backoffSeconds;
     private final Clock clock;
-
-    private final Counter attemptsSucceeded;
-    private final Counter attemptsRetried;
-    private final Counter attemptsFailed;
-    private final Timer deliveryDuration;
+    private final DeliveryDispatchPerRow perRow;
 
     public DeliveryExecutor(DeliveryRepository deliveries,
                             OutboxPort outbox,
@@ -65,24 +56,28 @@ public class DeliveryExecutor implements RetryFailedDeliveryUseCase {
                                     List<Integer> backoffSeconds,
                             Clock clock,
                             MeterRegistry meters) {
+        this(deliveries, clock,
+                new DeliveryDispatchPerRow(deliveries, outbox, channelPorts, backoffSeconds, clock, meters));
+    }
+
+    /**
+     * Production wiring — Spring prefers this constructor (marked
+     * {@link Autowired @Autowired}) because {@link DeliveryDispatchPerRow}
+     * is available as a {@code @Component}. The legacy constructor
+     * above is retained only for unit-test wiring that builds the
+     * executor directly with fakes.
+     */
+    @Autowired
+    public DeliveryExecutor(DeliveryRepository deliveries,
+                            Clock clock,
+                            DeliveryDispatchPerRow perRow) {
         this.deliveries = deliveries;
-        this.outbox = outbox;
-        this.channelsByType = new HashMap<>();
-        for (ChannelPort port : channelPorts) {
-            this.channelsByType.put(port.channelType(), port);
-        }
-        this.backoffSeconds = List.copyOf(backoffSeconds);
         this.clock = clock;
-        this.attemptsSucceeded = meters.counter("notification.delivery.attempts", "channel", "any", "status", "SUCCEEDED");
-        this.attemptsRetried = meters.counter("notification.delivery.attempts", "channel", "any", "status", "RETRIED");
-        this.attemptsFailed = meters.counter("notification.delivery.attempts", "channel", "any", "status", "FAILED");
-        this.deliveryDuration = Timer.builder("notification.delivery.duration.seconds")
-                .description("Vendor latency for channel send")
-                .register(meters);
+        this.perRow = perRow;
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void retry(UUID deliveryId) {
         NotificationDelivery delivery = deliveries.findById(deliveryId).orElse(null);
         if (delivery == null) {
@@ -93,7 +88,7 @@ public class DeliveryExecutor implements RetryFailedDeliveryUseCase {
             log.debug("retry skipped — delivery {} already in terminal {}", deliveryId, delivery.status());
             return;
         }
-        execute(delivery);
+        perRow.dispatch(delivery);
     }
 
     @Override
@@ -102,81 +97,30 @@ public class DeliveryExecutor implements RetryFailedDeliveryUseCase {
         Instant now = clock.instant();
         List<NotificationDelivery> due = deliveries.findAndLockPendingDueForRetry(now, 50);
         for (NotificationDelivery delivery : due) {
-            execute(delivery);
+            perRow.dispatch(delivery);
         }
         return due.size();
     }
 
-    /** Inline dispatch used by the post-commit hook on the routing service. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /**
+     * Test seam — preserved as a 1-line delegation so existing
+     * {@code DeliveryExecutorTest} can drive the dispatch path directly.
+     * Production callers go through {@link #retry(UUID)} or
+     * {@link #dispatchDueRetries()} which invoke {@link DeliveryDispatchPerRow}
+     * via the proxy (so {@code REQUIRES_NEW} is honoured).
+     */
     public void execute(NotificationDelivery delivery) {
-        ChannelPort port = channelsByType.get(ChannelType.SLACK);
-        if (port == null) {
-            log.error("No channel adapter wired for SLACK; deliveryId={}", delivery.id());
-            return;
-        }
-        MDC.put("deliveryId", delivery.id().toString());
-        MDC.put("channelId", delivery.channelId());
-        MDC.put("attempt", String.valueOf(delivery.attemptCount() + 1));
-        long started = System.nanoTime();
-        try {
-            port.send(delivery.recipient(), delivery.payloadSnapshot());
-            delivery.markSucceeded(clock.instant());
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "SUCCEEDED");
-            attemptsSucceeded.increment();
-        } catch (ChannelNotConfiguredException permanent) {
-            delivery.markFailedPermanent("CHANNEL_NOT_CONFIGURED: " + permanent.getMessage(), clock.instant());
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "FAILED_CHANNEL_NOT_CONFIGURED");
-            attemptsFailed.increment();
-        } catch (SlackPermanentFailureException permanent) {
-            delivery.markFailedPermanent("VENDOR_4XX: " + permanent.getMessage(), clock.instant());
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "FAILED_PERMANENT");
-            attemptsFailed.increment();
-        } catch (RuntimeException retryable) {
-            handleRetryable(delivery, retryable);
-        } finally {
-            deliveryDuration.record(Duration.ofNanos(System.nanoTime() - started));
-            MDC.remove("deliveryId");
-            MDC.remove("channelId");
-            MDC.remove("attempt");
-        }
+        perRow.dispatch(delivery);
     }
 
-    private void handleRetryable(NotificationDelivery delivery, RuntimeException error) {
-        Duration backoff = nextBackoff(delivery.attemptCount());
-        try {
-            delivery.markRetryable(error.getMessage(), backoff, clock.instant());
-            deliveries.update(delivery);
-            attemptsRetried.increment();
-            log.info("Delivery {} attempt {} failed transiently; scheduling retry at {}",
-                    delivery.id(), delivery.attemptCount(), delivery.scheduledRetryAt().orElse(null));
-        } catch (DeliveryRetryExhaustedException exhausted) {
-            // markRetryable already transitioned to FAILED before throwing.
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "FAILED_RETRY_EXHAUSTED");
-            attemptsFailed.increment();
-            log.warn("Delivery {} exhausted retry budget after {} attempts",
-                    delivery.id(), exhausted.attempts());
-        }
-    }
-
-    /** Exponential backoff with ±20% jitter. Public for test reflection. */
+    /** Test seam — exponential backoff with ±20% jitter. */
     public Duration nextBackoff(int attemptZeroBased) {
-        int idx = Math.min(attemptZeroBased, backoffSeconds.size() - 1);
-        long baseSeconds = backoffSeconds.get(idx);
-        double jitter = baseSeconds * JITTER_RATIO;
-        double offset = ThreadLocalRandom.current().nextDouble(-jitter, jitter + 1e-9);
-        long jitteredMillis = Math.max(0L, (long) ((baseSeconds + offset) * 1000));
-        return Duration.ofMillis(jitteredMillis);
+        return perRow.nextBackoff(attemptZeroBased);
     }
 
     /** Test seam — checked by {@code DeliveryExecutorRetryArithmeticTest}. */
     long backoffBaseSeconds(int attemptZeroBased) {
-        int idx = Math.min(attemptZeroBased, backoffSeconds.size() - 1);
-        return backoffSeconds.get(idx);
+        return perRow.backoffBaseSeconds(attemptZeroBased);
     }
 
     /** Test seam — required by {@code DeliveryStatus} enum check. */
