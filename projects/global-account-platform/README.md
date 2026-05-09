@@ -73,9 +73,27 @@
 ### Authentication & Authorization
 - **JWT 기반 인증** — self-signed JWKS, access/refresh 토큰 분리
 - **Refresh Token Rotation** — 재사용 탐지 시 전체 체인 revoke
-- **OAuth 소셜 로그인** — Google, Kakao (Authorization Code + BFF 패턴)
+- **OAuth 소셜 로그인** — Google, Kakao, Microsoft (Authorization Code + BFF 패턴)
 - **디바이스 세션 관리** — 동시 세션 제한, 세션별 revoke
 - **Rate Limiting** — Redis 기반 per-endpoint throttling
+
+### OIDC Authorization Server (Spring Authorization Server)
+- **표준 endpoints** — `/oauth2/{authorize, token, jwks, userinfo, revoke, introspect}` + `/.well-known/openid-configuration`
+- **Public client (PKCE)** — `demo-spa-client` 의 `authorization_code + PKCE` + `refresh_token` rotation + `revoke` 모두 지원. SAS stock 미지원 영역은 custom converter (`PublicClientRefreshTokenAuthenticationConverter` / `PublicClientRevokeAuthenticationConverter`) + provider-side fallback (`SasRefreshTokenAuthenticationProvider` skip-path TSM flag) 으로 보강 — [ADR-003](docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md)
+- **Multi-tenant claim 보존** — token customizer 가 access token rotation 시 `tenant_id` + `tenant_type` claim 자동 propagate (REFRESH_TOKEN grant 분기 포함)
+- **OAuth callback Production 안정성** — JDK HttpClient 의 HTTP/2 multiplexing race (`Received RST_STREAM: Stream cancelled`) 회피를 위해 4 outbound client (account-service + 3 OAuth provider) 모두 HTTP/1.1 강제. CI Linux 환경에서 deterministic PASS — [ADR-004](docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)
+
+### IT Coverage 증명 (2026-05-09 closure)
+13-cycle 미해결 deferred IT 8개 + 우연 발견 결함 1개 = **9/8 회복**:
+
+| Cluster | Method | 회복 |
+|---|---|---|
+| A — public-client RT/revoke | refresh_token normal rotation / reuse detection / revoke (3) | **3/3** |
+| B — userinfo | OIDC userinfo claim mapping (1) | 1/1 |
+| C — OAuth callback | Google / Kakao / Microsoft (happy + preferredUsername fallback + existing-email auto-link) (5) | **5/5** |
+| Bonus | TenantClaimTokenCustomizer REFRESH_TOKEN grantType 분기 누락 (기존 결함, RT IT enable 으로 unmasked) | **+1** |
+
+main CI 의 GAP Integration job 에서 모두 deterministic PASS. **portfolio 의 OIDC AS 운영 깊이 증명 완성**.
 
 ### Admin Operations (RBAC)
 - **역할 기반 접근 제어** — SUPER_ADMIN, ACCOUNT_ADMIN, AUDITOR
