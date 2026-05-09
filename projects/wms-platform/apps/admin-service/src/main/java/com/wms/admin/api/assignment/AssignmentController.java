@@ -2,6 +2,7 @@ package com.wms.admin.api.assignment;
 
 import com.wms.admin.api.assignment.dto.AssignmentResponse;
 import com.wms.admin.api.assignment.dto.GrantAssignmentRequest;
+import com.wms.admin.api.dashboard.PageableSupport;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.application.assignment.AssignmentService;
 import com.wms.admin.application.assignment.GrantAssignmentCommand;
@@ -12,8 +13,6 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,11 +49,11 @@ public class AssignmentController {
         if (result.created()) {
             return ResponseEntity
                     .created(URI.create("/api/v1/admin/assignments/" + a.id()))
-                    .eTag(etag(a.version()))
+                    .eTag(PageableSupport.etag(a.version()))
                     .body(AssignmentResponse.from(a));
         }
         // Idempotent grant: existing active row → 200.
-        return ResponseEntity.ok().eTag(etag(a.version())).body(AssignmentResponse.from(a));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(a.version())).body(AssignmentResponse.from(a));
     }
 
     @GetMapping
@@ -68,7 +67,7 @@ public class AssignmentController {
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         AssignmentStatus statusEnum = parseStatus(status);
         Page<UserRoleAssignment> result =
-                assignmentService.search(userId, roleId, warehouseId, statusEnum, pageable(page, size, sort));
+                assignmentService.search(userId, roleId, warehouseId, statusEnum, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, AssignmentResponse::from);
     }
 
@@ -79,10 +78,6 @@ public class AssignmentController {
         return ResponseEntity.noContent().build();
     }
 
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
-    }
-
     private static AssignmentStatus parseStatus(String raw) {
         if (raw == null || raw.isBlank()) return null;
         try {
@@ -90,15 +85,5 @@ public class AssignmentController {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("status must be ACTIVE or REVOKED");
         }
-    }
-
-    private static PageRequest pageable(int page, int size, String sort) {
-        int comma = sort.indexOf(',');
-        String field = comma < 0 ? sort : sort.substring(0, comma);
-        String dir = comma < 0 ? "asc" : sort.substring(comma + 1);
-        Sort.Direction direction = "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, field));
     }
 }

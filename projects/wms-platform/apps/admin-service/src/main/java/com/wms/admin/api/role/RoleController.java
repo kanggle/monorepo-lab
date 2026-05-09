@@ -2,6 +2,7 @@ package com.wms.admin.api.role;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.api.SecurityContextHelper;
+import com.wms.admin.api.dashboard.PageableSupport;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.api.role.dto.CreateRoleRequest;
 import com.wms.admin.api.role.dto.DeactivateRoleRequest;
@@ -19,8 +20,6 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -58,7 +57,7 @@ public class RoleController {
                 request.permissionsJson(), actorId));
         return ResponseEntity
                 .created(URI.create("/api/v1/admin/roles/" + saved.id()))
-                .eTag(etag(saved.version()))
+                .eTag(PageableSupport.etag(saved.version()))
                 .body(RoleResponse.from(saved, objectMapper));
     }
 
@@ -69,14 +68,14 @@ public class RoleController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         RoleStatus statusEnum = parseStatus(status);
-        Page<Role> result = roleService.search(statusEnum, pageable(page, size, sort));
+        Page<Role> result = roleService.search(statusEnum, PageableSupport.pageable(page, size, sort));
         return PageResponse.from(result, sort, r -> RoleResponse.from(r, objectMapper));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<RoleResponse> getById(@PathVariable UUID id) {
         Role role = roleService.findById(id);
-        return ResponseEntity.ok().eTag(etag(role.version())).body(RoleResponse.from(role, objectMapper));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(role.version())).body(RoleResponse.from(role, objectMapper));
     }
 
     @PatchMapping("/{id}")
@@ -85,7 +84,7 @@ public class RoleController {
                                                @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         Role saved = roleService.update(new UpdateRoleCommand(
                 id, request.name(), request.description(), request.permissionsJson(), actorId));
-        return ResponseEntity.ok().eTag(etag(saved.version())).body(RoleResponse.from(saved, objectMapper));
+        return ResponseEntity.ok().eTag(PageableSupport.etag(saved.version())).body(RoleResponse.from(saved, objectMapper));
     }
 
     @PostMapping("/{id}/deactivate")
@@ -98,7 +97,7 @@ public class RoleController {
         DeactivateRoleResult result = roleService.deactivate(
                 new DeactivateRoleCommand(id, force, actorId, callerIsSuperadmin));
         return ResponseEntity.ok()
-                .eTag(etag(result.role().version()))
+                .eTag(PageableSupport.etag(result.role().version()))
                 .body(DeactivateRoleResponse.from(result, objectMapper));
     }
 
@@ -106,11 +105,7 @@ public class RoleController {
     public ResponseEntity<RoleResponse> reactivate(@PathVariable UUID id,
                                                    @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         Role saved = roleService.reactivate(id, actorId);
-        return ResponseEntity.ok().eTag(etag(saved.version())).body(RoleResponse.from(saved, objectMapper));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
+        return ResponseEntity.ok().eTag(PageableSupport.etag(saved.version())).body(RoleResponse.from(saved, objectMapper));
     }
 
     private static RoleStatus parseStatus(String raw) {
@@ -120,15 +115,5 @@ public class RoleController {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("status must be ACTIVE or INACTIVE");
         }
-    }
-
-    private static PageRequest pageable(int page, int size, String sort) {
-        int comma = sort.indexOf(',');
-        String field = comma < 0 ? sort : sort.substring(0, comma);
-        String dir = comma < 0 ? "asc" : sort.substring(comma + 1);
-        Sort.Direction direction = "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, field));
     }
 }
