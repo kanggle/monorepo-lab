@@ -165,7 +165,18 @@ public class AuthorizationServerConfig {
                                 .clientAuthentication(clientAuth ->
                                         clientAuth
                                                 .authenticationConverter(publicClientRefreshTokenConverter)
-                                                .authenticationConverter(publicClientRevokeConverter))
+                                                .authenticationConverter(publicClientRevokeConverter)
+                                                // Pass-through provider for the
+                                                // already-authenticated tokens
+                                                // emitted by our converters.
+                                                // Without it, stock's
+                                                // PublicClientAuthenticationProvider
+                                                // runs CodeVerifierAuthenticator,
+                                                // which throws invalid_grant for
+                                                // requests with no code_verifier
+                                                // (refresh_token + revoke).
+                                                .authenticationProvider(
+                                                        new PublicClientNoPkceAuthenticationProvider()))
                                 // Phase 2b: add custom refresh_token provider.
                                 // OAuth2TokenGenerator is available as a shared object on HttpSecurity
                                 // after the SAS configurer has been applied via .with(). We use a
