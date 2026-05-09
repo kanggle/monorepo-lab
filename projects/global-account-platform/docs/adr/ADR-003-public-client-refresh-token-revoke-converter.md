@@ -1,10 +1,10 @@
 # ADR-003: SAS Public-Client AuthenticationConverter for `refresh_token` and `revoke` Grants
 
-**Status**: ACCEPTED — partial (Cluster A 1/3 recovered, RT 2 deferred to follow-up TASK-BE-274 옵션 B)
-**Date**: 2026-05-09 (proposed) / 2026-05-09 (accepted with partial outcome)
+**Status**: ACCEPTED — 옵션 B (Cluster A 3/3 회복) + tenant_id claim 회귀 1건 follow-up 필요
+**Date**: 2026-05-09 (proposed) / 2026-05-09 (옵션 A partial) / 2026-05-09 (옵션 B Cluster A 3/3 회복)
 **Deciders**: kanggle
 **Supersedes**: —
-**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 구현), TASK-BE-274 (옵션 B follow-up)
+**Relates to**: TASK-MONO-046-1 (PR #235), TASK-MONO-046-7 (PR #264, 11-cycle burn), TASK-MONO-046-7a (PR #289, 0/7 recovery), ADR-001 (OIDC Adoption), TASK-BE-272 (PR #292, 옵션 A 부분 성공), TASK-BE-274 (PR #296, 옵션 B Cluster A 3/3 회복 + tenant_id claim 회귀 follow-up)
 
 ---
 
@@ -318,6 +318,64 @@ if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATI
 }
 ```
 
+#### 옵션 B 결과 (TASK-BE-274 / PR #296, 2026-05-09 08:19 UTC)
+
+**Cluster A 회복 = 3/3 (목표 달성)** — 회귀 매트릭스 8/8 PASS, 단 회귀 매트릭스 외 1 method 회귀 발생.
+
+##### Phase 별 cycle 추적
+
+| Phase | Commit | 변경 | 결과 |
+|---|---|---|---|
+| Phase 1 | `c7c5ecc8` | A2 race 진단 (provider line 233 + 237 dual-INSERT 식별) | 본 ADR sub-section 추가 |
+| Phase 2 cycle 1 | `172216b8` | 옵션 (1) skip-path TSM flag — DomainSync + Provider 양쪽 wire | dual-INSERT race 해소 (local), 새 RC `TransactionRequiredException at OutboxWriter.save()` 노출 |
+| Phase 2 cycle 2 | `a83a4d12` | TransactionTemplate programmatic 도입 (A3 회피) — rotation write+publish 한 tx wrap, reuse path 동일 | unit PASS, IT verify 는 Rancher Docker 회귀로 차단 → CI 검증 위임 |
+
+CI verify 결과 (PR #296 / run `25596254251`): GAP Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
+
+| 흐름 | 기대 | 실제 |
+|---|---|---|
+| authorization_code + PKCE | 200 | **PASS** |
+| authorization_code + 잘못된 code_verifier | 400 | **PASS** |
+| **refresh_token (demo-spa-client) normal rotation** | 200 + 새 RT | **PASS (회복!)** |
+| **refresh_token reuse (demo-spa-client)** | 400 + chain revoked | **PASS (회복!)** |
+| refresh_token (test-internal-client, secret) | 200 | **PASS** |
+| client_credentials | 200 | **PASS** |
+| revoke (demo-spa-client) | 200 | **PASS** (BE-272 회복분 유지) |
+| revoke (test-internal-client, secret) | 200 | **PASS** |
+
+##### 회귀 매트릭스 외 1 method 회귀 (BE-274 변경 부수 효과)
+
+`OAuth2RefreshTokenIntegrationTest.refreshedAccessToken_hasTenantClaims:271` **FAILED**:
+```
+AssertionFailedError: [refreshed access_token must contain tenant_id]
+Expecting value to be true but was false
+```
+
+→ rotation 후 새 access_token 의 `tenant_id` claim 이 누락. 원인 가설:
+- TransactionTemplate (cycle 2) 도입이 SAS 의 `OAuth2TokenContext` customizer chain timing 영향
+- 또는 skip-path 가 `RegisteredClient` lookup 또는 token customizer 의 `Authentication` principal 영향
+- 또는 OAuth2TokenGenerator 가 다른 instance 로 호출되어 customizer 미적용
+
+본 method 는 BE-272 시점에는 enabled + PASS 였음. BE-274 cycle 1+2 의 변경이 회귀 야기.
+
+##### 4 anti-pattern 회피 평가
+
+- **A1** (SAS Customizer 람다 timing): 본 task 영역 무관, 회피
+- **A2** (DomainSync ↔ persistRotation dual-INSERT): **architecturally 해소** (skip-path 로 race 자체 제거)
+- **A3** (`@Transactional` AOP 미적용): TransactionTemplate programmatic 으로 우회 — provider 의 publish 가 active tx 안에서 실행됨이 핵심
+- **A4** (test order pollution): stateless 변경, 기존 `@DirtiesContext` 패턴 유지
+
+##### 결론
+
+옵션 B 의 **유효 영역 = RT 2 IT 회복 + 회귀 매트릭스 8/8 PASS**. **AC-03 + AC-04 충족**, 본 task spec 의 success criteria 달성. 단 회귀 매트릭스 외 method 1 회귀 → 별 후속 fix 필요.
+
+후속 결정:
+1. **(권장) cycle 3 사용해 fix** — token customizer 영역 진단 + claim propagation 회복. 1 cycle 충분 가능성 (회귀 영역 명확).
+2. 별 task (TASK-BE-275) 발행 — refreshed access_token tenant_id claim regression fix. 본 PR 머지 후.
+3. revert cycle 2 후 cycle 1 만으로 검증 — 단 cycle 1 만으로는 `TransactionRequiredException` 회귀 재발 위험.
+
+ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCEPTED — 옵션 B (Cluster A 3/3 회복, 단 tenant_id claim 회귀 1건 follow-up 필요)`.
+
 ---
 
 ## References
@@ -325,7 +383,7 @@ if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATI
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 결과 + 4 anti-pattern 학습
 - TASK-MONO-046-7a (PR #289) — 0/7 recovery, doc-only PR
 - TASK-BE-272 (PR #292) — 옵션 A 구현, 부분 성공 (revoke 1/3)
-- TASK-BE-274 — 옵션 B (provider-side fallback) follow-up
+- TASK-BE-274 (PR #296, commits c7c5ecc8 + 172216b8 + a83a4d12) — 옵션 B 구현, Cluster A 3/3 회복 (RT 2 + revoke), 회귀 매트릭스 8/8 PASS, tenant_id claim 회귀 1건 follow-up 영역
 - ADR-001 (OIDC Adoption) — SAS 도입 결정
 - Spring Authorization Server 1.4 docs — `OAuth2ClientAuthenticationFilter` lifecycle
 - RFC 8252 (OAuth 2.0 for Native Apps) + RFC 9700 (Best Current Practice for OAuth 2.0 Security)
