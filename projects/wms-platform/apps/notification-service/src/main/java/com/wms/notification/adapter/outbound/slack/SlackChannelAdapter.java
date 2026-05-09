@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.notification.application.port.outbound.SlackChannelPort;
+import com.wms.notification.domain.error.ChannelNotConfiguredException;
+import com.wms.notification.domain.error.ChannelPermanentFailureException;
 import com.wms.notification.domain.routing.ChannelType;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -27,7 +29,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>Slack 2xx → success (return).</li>
- *   <li>Slack 4xx → {@link SlackPermanentFailureException} (404 channel
+ *   <li>Slack 4xx → {@link ChannelPermanentFailureException} (404 channel
  *       not found, 410 token revoked). Resilience4j retry is configured
  *       with this exception in {@code ignoreExceptions} so retry doesn't
  *       fire — the caller transitions the delivery to FAILED.</li>
@@ -74,7 +76,8 @@ public class SlackChannelAdapter implements SlackChannelPort {
     public void send(String channelAlias, String payloadJson) {
         String webhookUrl = properties.webhookUrlFor(channelAlias);
         if (webhookUrl == null || webhookUrl.isBlank()) {
-            throw new ChannelNotConfiguredException(channelAlias);
+            throw new ChannelNotConfiguredException(
+                    "Slack webhook URL not configured for channel alias: " + channelAlias);
         }
         String slackBody = renderSlackBody(payloadJson, channelAlias);
         HttpRequest request = HttpRequest.newBuilder()
@@ -101,7 +104,7 @@ public class SlackChannelAdapter implements SlackChannelPort {
             // 4xx is contract-permanent — never retry (vendor policy I3).
             // Body intentionally NOT logged in production: incoming-webhooks
             // can echo the channel id, and the URL itself contains a token.
-            throw new SlackPermanentFailureException(status,
+            throw new ChannelPermanentFailureException(status,
                     "Slack permanent failure status=" + status + " alias=" + channelAlias);
         }
         // 5xx or unexpected → retryable.

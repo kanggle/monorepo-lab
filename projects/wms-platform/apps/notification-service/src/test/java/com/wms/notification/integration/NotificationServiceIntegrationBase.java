@@ -69,8 +69,8 @@ public abstract class NotificationServiceIntegrationBase {
                     "spring.flyway.locations=classpath:db/migration",
                     "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
                     // Slack webhook intentionally unset → adapter throws
-                    // ChannelNotConfiguredException → delivery FAILED — exactly the
-                    // edge case #1 fail-closed behaviour we want to exercise.
+                    // domain ChannelNotConfiguredException → delivery FAILED — exactly
+                    // the edge case #1 fail-closed behaviour we want to exercise.
                     "wms.notification.channels.slack.wms-alerts.webhook-url=",
                     "wms.notification.channels.slack.wms-shipping.webhook-url="
             ).applyTo(context.getEnvironment());

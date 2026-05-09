@@ -2,14 +2,14 @@ package com.wms.notification.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.notification.adapter.outbound.slack.ChannelNotConfiguredException;
-import com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException;
 import com.wms.notification.application.port.outbound.ChannelPort;
 import com.wms.notification.application.port.outbound.SlackChannelPort;
 import com.wms.notification.application.service.fakes.InMemoryDeliveryRepository;
 import com.wms.notification.application.service.fakes.RecordingOutboxPort;
 import com.wms.notification.domain.delivery.DeliveryStatus;
 import com.wms.notification.domain.delivery.NotificationDelivery;
+import com.wms.notification.domain.error.ChannelNotConfiguredException;
+import com.wms.notification.domain.error.ChannelPermanentFailureException;
 import com.wms.notification.domain.routing.ChannelType;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -183,8 +183,9 @@ class DeliveryExecutorTest {
             switch (mode) {
                 case SUCCESS -> { /* ok */ }
                 case TRANSIENT -> throw new RuntimeException("503 vendor outage");
-                case PERMANENT_4XX -> throw new SlackPermanentFailureException(404, "channel not found");
-                case NOT_CONFIGURED -> throw new ChannelNotConfiguredException(recipient);
+                case PERMANENT_4XX -> throw new ChannelPermanentFailureException(404, "channel not found");
+                case NOT_CONFIGURED -> throw new ChannelNotConfiguredException(
+                        "Slack webhook URL not configured for channel alias: " + recipient);
             }
         }
     }

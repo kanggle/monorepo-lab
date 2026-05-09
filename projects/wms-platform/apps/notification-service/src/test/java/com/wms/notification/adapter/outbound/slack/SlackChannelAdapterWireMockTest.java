@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.wms.notification.domain.error.ChannelNotConfiguredException;
+import com.wms.notification.domain.error.ChannelPermanentFailureException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,7 +71,7 @@ class SlackChannelAdapterWireMockTest {
         assertThatThrownBy(() -> adapter.send("wms-alerts", "{}"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("503")
-                .isNotInstanceOf(SlackPermanentFailureException.class);
+                .isNotInstanceOf(ChannelPermanentFailureException.class);
     }
 
     @Test
@@ -77,7 +79,7 @@ class SlackChannelAdapterWireMockTest {
         wireMock.stubFor(post(urlPathEqualTo("/services/T0/B0/X"))
                 .willReturn(aResponse().withStatus(404)));
         assertThatThrownBy(() -> adapter.send("wms-alerts", "{}"))
-                .isInstanceOf(SlackPermanentFailureException.class)
+                .isInstanceOf(ChannelPermanentFailureException.class)
                 .extracting("statusCode").isEqualTo(404);
     }
 
@@ -89,7 +91,7 @@ class SlackChannelAdapterWireMockTest {
         long started = System.currentTimeMillis();
         assertThatThrownBy(() -> adapter.send("wms-alerts", "{}"))
                 .isInstanceOf(RuntimeException.class)
-                .isNotInstanceOf(SlackPermanentFailureException.class);
+                .isNotInstanceOf(ChannelPermanentFailureException.class);
         long elapsed = System.currentTimeMillis() - started;
         // Sanity: must abort well under WireMock's 7s delay.
         assertThat(elapsed).isLessThan(6_500L);
