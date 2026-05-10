@@ -27,16 +27,19 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 | 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
 |---|---|---|---|---|
 | `id` | BIGINT | PK | internal | — |
-| `jti` | VARCHAR(36) | UNIQUE, NOT NULL | confidential | JWT ID (UUID v7 권장) |
+| `jti` | VARCHAR(255) | UNIQUE, NOT NULL | confidential | JWT ID. V0001은 VARCHAR(36)으로 시작했으나 V0014에서 SAS의 96-byte URL-safe base64 RT 값을 수용하기 위해 VARCHAR(255)로 widening (TASK-MONO-046-1, Cluster A) |
 | `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | — |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT (NOT NULL 유지). TASK-BE-229 multi-tenant Phase 2/3 |
 | `issued_at` | DATETIME(6) | NOT NULL | internal | — |
 | `expires_at` | DATETIME(6) | NOT NULL | internal | — |
-| `rotated_from` | VARCHAR(36) | NULL, INDEX | confidential | 이전 토큰의 jti. NULL이면 최초 발급 |
+| `rotated_from` | VARCHAR(255) | NULL, INDEX | confidential | 이전 토큰의 jti. NULL이면 최초 발급. V0001은 VARCHAR(36)으로 시작했으나 V0014에서 jti와 동일하게 widening (대칭) |
 | `revoked` | BOOLEAN | NOT NULL, DEFAULT FALSE | internal | 명시적 revoke 여부 |
 | `device_id` | VARCHAR(36) | NULL, INDEX | internal | `device_sessions.device_id` 참조 (FK 없음). NULL 허용 (D5 백필 전 기존 row). [device-session.md](./device-session.md) D5 canonical |
 | `device_fingerprint` | VARCHAR(128) | NULL | confidential | (deprecated, superseded by `device_id`) 디바이스 식별 (해시) |
 
 **인덱스**: `idx_rt_jti` (UNIQUE), `idx_rt_account_id`, `idx_rt_rotated_from`, `idx_rt_device_id`
+
+> `tenant_id` 단독 인덱스 또는 `(tenant_id, account_id)` 복합 인덱스는 V0007에서 추가하지 않았다. 현재 RT lookup은 항상 `jti`(UNIQUE) 또는 `account_id`(INDEX) 경로로 이루어지고, tenant 필터는 application 레벨에서 `WHERE account_id = ? AND tenant_id = ?` 형태로 보조 술어로만 적용된다 — RT 테이블은 account 당 카디널리티가 낮아 `idx_rt_account_id` 만으로 selectivity 충분. 향후 multi-tenant 트래픽이 tenant당 account 수를 크게 늘리면 `(tenant_id, account_id)` 복합 인덱스 도입 후보.
 
 **토큰 재사용 탐지 로직**: `POST /api/auth/refresh`가 `jti=A`로 rotation을 요청했을 때, A에 이미 `rotated_from`을 참조하는 자식이 존재하면 → 재사용 탐지. 해당 `account_id`의 모든 refresh_token을 `revoked=TRUE`로 일괄 처리 + `auth.token.reuse.detected` 이벤트 발행.
 
