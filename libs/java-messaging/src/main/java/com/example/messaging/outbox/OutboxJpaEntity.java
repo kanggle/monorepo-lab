@@ -54,4 +54,23 @@ public class OutboxJpaEntity {
         this.status = "PUBLISHED";
         this.publishedAt = Instant.now();
     }
+
+    /**
+     * Transition this row to the {@code FAILED} terminal state — used when the
+     * publish failure is permanent (e.g. unknown {@code eventType} that no
+     * resolver matches, unserializable payload). FAILED rows are excluded from
+     * subsequent {@code findPendingWithLock} polls so they no longer block the
+     * batch drain. The terminal timestamp is captured via {@code publishedAt}.
+     *
+     * <p>The failure reason is recorded at the call site (via {@code log.error}
+     * by {@code OutboxPollingScheduler.sendToKafka}); operators correlate a
+     * FAILED row with logs by {@code eventType} + {@code aggregateId} +
+     * {@code publishedAt}. Persisting the reason on-row was deferred to keep
+     * this lib evolution backwards-compatible with existing service Flyway
+     * schemas (no new column required).
+     */
+    public void markFailed() {
+        this.status = "FAILED";
+        this.publishedAt = Instant.now();
+    }
 }

@@ -55,9 +55,9 @@ class OutboxPollingSchedulerTest {
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
         OutboxPublisher.EventSender sender = senderCaptor.getValue();
-        boolean result = sender.send("OrderPlaced", "order-1", "{\"test\":true}");
+        OutboxPublisher.SendOutcome outcome = sender.send("OrderPlaced", "order-1", "{\"test\":true}");
 
-        assertThat(result).isTrue();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.SUCCESS);
         verify(kafkaTemplate).send("order.order.placed", "order-1", "{\"test\":true}");
     }
 
@@ -71,15 +71,15 @@ class OutboxPollingSchedulerTest {
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
         OutboxPublisher.EventSender sender = senderCaptor.getValue();
-        boolean result = sender.send("OrderCancelled", "order-1", "{\"test\":true}");
+        OutboxPublisher.SendOutcome outcome = sender.send("OrderCancelled", "order-1", "{\"test\":true}");
 
-        assertThat(result).isTrue();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.SUCCESS);
         verify(kafkaTemplate).send("order.order.cancelled", "order-1", "{\"test\":true}");
     }
 
     @Test
-    @DisplayName("Kafka 전송 실패 시 false를 반환하고 메트릭을 기록한다")
-    void sendToKafka_failure_returnsFalseAndRecordsMetric() {
+    @DisplayName("Kafka transient 실패 시 FAILURE_TRANSIENT 반환하고 메트릭을 기록한다")
+    void sendToKafka_transientFailure_returnsTransientAndRecordsMetric() {
         when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Kafka unavailable")));
 
@@ -87,9 +87,9 @@ class OutboxPollingSchedulerTest {
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
         OutboxPublisher.EventSender sender = senderCaptor.getValue();
-        boolean result = sender.send("OrderPlaced", "order-1", "{\"test\":true}");
+        OutboxPublisher.SendOutcome outcome = sender.send("OrderPlaced", "order-1", "{\"test\":true}");
 
-        assertThat(result).isFalse();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.FAILURE_TRANSIENT);
         verify(orderMetrics).recordEventPublishFailure("OrderPlaced");
     }
 }
