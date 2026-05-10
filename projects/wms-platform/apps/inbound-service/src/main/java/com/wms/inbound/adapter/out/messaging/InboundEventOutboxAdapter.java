@@ -10,13 +10,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-public class OutboxWriterAdapter implements InboundEventPort {
+public class InboundEventOutboxAdapter implements InboundEventPort {
 
     private final InboundOutboxJpaRepository repository;
     private final InboundEventEnvelopeSerializer serializer;
     private final Clock clock;
 
-    public OutboxWriterAdapter(InboundOutboxJpaRepository repository,
+    public InboundEventOutboxAdapter(InboundOutboxJpaRepository repository,
                                 InboundEventEnvelopeSerializer serializer,
                                 Clock clock) {
         this.repository = repository;
