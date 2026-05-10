@@ -37,7 +37,7 @@ Package organization follows package-by-layer.
 - This service must not contain business/domain logic
 - Filters must not call downstream services directly — routing is declarative via configuration
 - This service must not own persistent data (stateless gateway)
-- Security layer must not duplicate auth-service domain rules — only validate tokens
+- Security layer must not duplicate GAP (global-account-platform) authorization rules — only validate RS256 signatures, `aud=ecommerce`, and `tenant_id=ecommerce` claims
 
 ## Boundary Rules
 - Filters handle cross-cutting concerns: authentication, logging, rate limiting
@@ -47,7 +47,7 @@ Package organization follows package-by-layer.
 
 ## Integration Rules
 - Routing targets must match published service URLs
-- JWT validation must follow the token contract defined by auth-service
+- JWT validation must follow the GAP OIDC token contract (RS256 via JWKS, `aud=ecommerce`, `tenant_id=ecommerce`); see [`../../integration/gap-integration.md`](../../integration/gap-integration.md)
 - Rate limiting configuration must use Redis for distributed state
 - Shared libraries may be used only under shared-library policy
 

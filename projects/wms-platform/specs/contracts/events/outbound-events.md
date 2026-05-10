@@ -623,8 +623,10 @@ Every downstream consumer MUST:
 ## Producer Guarantees (outbound-service)
 
 - Exactly one outbox row per committed state change.
-- `eventId` generated at outbox write time and stable across retries
-  (sweeper re-emits the same outbox row, not a new one).
+- `eventId` generated at outbox write time and stable across publisher
+  retries on the same row. Saga-sweeper re-emission **inserts a new
+  outbox row with a fresh `eventId`** (cloning the prior row's payload);
+  see § Saga Sweeper Re-emission below.
 - `occurredAt` = DB transaction commit time.
 - `traceId` propagates from HTTP request, webhook ingest, or consumed Kafka
   event (OTel context propagation).
@@ -639,15 +641,31 @@ Every downstream consumer MUST:
 
 ## Saga Sweeper Re-emission
 
-The saga sweeper (60-second background job) re-emits outbox events for sagas
-stuck in transitional states. Re-emitted events carry the **original** `eventId`
-from the outbox row, making re-emission fully idempotent at the consumer.
+The saga sweeper (60-second background job, `@ConditionalOnProperty
+outbound.saga.sweeper.enabled`) re-emits outbox events for sagas stuck
+in transitional states. Re-emission **clones the prior row's payload
+into a fresh outbox row with a new envelope `eventId` (UUIDv7)**. The
+fresh `eventId` is the dedupe key on the consumer side
+(`inventory_event_dedupe`, 30-day TTL); reusing the original `eventId`
+would race against that TTL window. Idempotency at the inventory
+consumer is guaranteed instead by:
+
+1. `Reservation` UNIQUE on `picking_request_id` (= our outbound
+   `picking_request.id`) — second reserve sees existing row → no-op
+2. `inventory_event_dedupe` on the new `eventId` — second delivery of
+   the *same* re-emitted row is absorbed.
 
 | Stuck saga state | Threshold | Event re-emitted |
 |---|---|---|
 | `REQUESTED` | > 5 min | `outbound.picking.requested` |
 | `CANCELLATION_REQUESTED` | > 5 min | `outbound.picking.cancelled` |
-| `SHIPPED` | > 5 min | `outbound.shipping.confirmed` |
+| `SHIPPED` | > 5 min, no `inventory.confirmed` reply | `outbound.shipping.confirmed` |
+
+Cap: 5 re-emissions per saga (configurable
+`outbound.saga.sweeper.max-attempts`). After cap → saga moves to
+terminal `STUCK_RECOVERY_FAILED` and the
+`outbound.alert.saga.recovery.exhausted` v1 alert event is emitted (see
+[`admin-events.md`](admin-events.md) §A1).
 
 `actorId` in the re-emitted envelope: `system:saga-sweeper`.
 
