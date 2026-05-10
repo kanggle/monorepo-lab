@@ -5,16 +5,18 @@
 
 ## Allowed Direct Dependencies
 - `libs/java-web` (shared web exception primitives, REST infrastructure)
+- `libs/java-common` (UUID v7 primitives)
+- `libs/java-messaging` (transactional outbox — `OutboxWriter`, `OutboxPollingScheduler`)
 - `libs/java-observability` (metrics, tracing)
 - `io.micrometer:micrometer-core`
 - `org.springframework.boot:spring-boot-starter-web`
 - `org.springframework.boot:spring-boot-starter-data-jpa`
 - `org.springframework.boot:spring-boot-starter-validation`
-- `org.springframework.kafka:spring-kafka` (event consumer and direct Kafka producer)
+- `org.springframework.kafka:spring-kafka` (event consumer + outbox relay producer)
 - `org.flywaydb:flyway-core` + `flyway-database-postgresql`
 - `org.postgresql:postgresql`
 - `org.springdoc:springdoc-openapi-starter-webmvc-ui`
-- own database (`payment_db` — payments)
+- own database (`payment_db` — payments, outbox, processed_events)
 - Toss Payments PG API (external — outbound HTTP via `TossPaymentsAdapter`)
 
 ## Allowed Service Interactions
@@ -45,13 +47,13 @@
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
 
-**Delivery semantic (ADR-006)**: payment-service is currently
-**best-effort** for both `payment.payment.completed` and
-`payment.payment.refunded` (`KafkaPaymentEventPublisher` uses
-`KafkaTemplate.send` directly, swallowing `KafkaException` after metric
-increment). [`ADR-006`](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md)
-classifies this as **Scenario A — Migrate to transactional outbox**;
-TASK-BE-136 carries the impl. Until that lands, downstream consumers
-(order-service for both events; promotion-service for refunded) MUST
-treat occasional silent loss as possible and provide compensating
-recovery paths.
+**Delivery semantic (ADR-006 Scenario A — COMPLETED, TASK-BE-136)**:
+payment-service publishes both `payment.payment.completed` and
+`payment.payment.refunded` through the **transactional outbox**
+(`libs/java-messaging`). The envelope row commits atomically with the
+payment state mutation; `PaymentEventOutboxRelay` (extends
+`OutboxPollingScheduler`) polls `outbox` at the configured interval and
+retries Kafka publish until broker ack. Producer-side silent loss on
+`KafkaException` is no longer possible. See
+[ADR-006](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md) and
+`specs/services/payment-service/architecture.md` § Event Publication.
