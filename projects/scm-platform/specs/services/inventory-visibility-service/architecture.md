@@ -47,6 +47,48 @@ config/         ← Spring @Configuration beans only
 - Standard error envelope `{ code, message }`
 - Paginated list endpoints
 
+### REST endpoints (v1)
+
+All 4 read-only endpoints share the `/api/inventory-visibility` base path
+(rewritten from `/api/v1/inventory-visibility/**` by gateway-service). All
+require a JWT with `tenant_id ∈ {scm, *}`; no per-endpoint role/scope
+differentiation in v1 (defense-in-depth via `TenantClaimEnforcer` filter).
+All are **gateway-routed (public)** and listed in
+[`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md).
+Formal request / response shapes live in
+[`inventory-visibility-api.md`](../../contracts/http/inventory-visibility-api.md).
+
+| Method | Path | Public/Internal | Controller | Purpose |
+|---|---|---|---|---|
+| GET | `/api/inventory-visibility/snapshot` | public | `InventoryVisibilityController#getSnapshot` | cross-node paginated snapshot list (or single-node when `?nodeId=` passed) |
+| GET | `/api/inventory-visibility/sku/{sku}` | public | `InventoryVisibilityController#getSkuSnapshot` | per-SKU cross-node breakdown with Redis cache (`X-Cache: HIT/MISS/UNAVAILABLE`) |
+| GET | `/api/inventory-visibility/staleness` | public | `NodeStalenessController#getStaleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
+| GET | `/api/inventory-visibility/nodes` | public | `InventoryVisibilityController#getNodes` | node list with status (id, externalId, type, name, status) |
+
+`/nodes` exposure decision (TASK-SCM-BE-008): **public**. Rationale:
+1. The controller method has no `@PreAuthorize` and no role guard — code-level
+   security is identical to the other 3 endpoints.
+2. `inventory-visibility-api.md` already enumerates `/nodes` with the same
+   response envelope shape as the other endpoints, treating it as part of the
+   public contract.
+3. Use case = ops dashboards that need to render the node list before letting
+   an operator drill into per-node `/snapshot?nodeId=` or `/staleness` —
+   public access is required for the dashboard flow to work end-to-end.
+4. No PII or credential exposure (the response only includes `id`,
+   `nodeExternalId`, `nodeType`, `name`, `status`).
+
+All 4 endpoints carry the **S5 warning** (`meta.warning: "Not for procurement
+decisions (S5)"`) so that consumers cannot mistake the eventually-consistent
+read-model for an authoritative source.
+
+### Local management endpoints
+
+| Path | Auth | Description |
+|---|---|---|
+| `GET /actuator/health` | none | liveness/readiness probe |
+| `GET /actuator/info` | none | build info |
+| `GET /actuator/prometheus` | network-isolated | metrics scrape (internal docker network only) |
+
 ### event-consumer
 - Consumer group: `scm-inventory-visibility-v1`
 - 3 topics from wms-platform (cross-project): `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`
