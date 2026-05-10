@@ -33,32 +33,37 @@ class OutboxPublisherTest {
     }
 
     @Test
-    @DisplayName("PENDING 이벤트가 있으면 sender를 호출하고 발행 완료로 표시한다")
-    void publishPendingEvents_pendingExists_sendsAndMarksPublished() {
-        OutboxJpaEntity entry = OutboxJpaEntity.create("Order", "order-1", "OrderPlaced", "{\"test\":true}");
+    @DisplayName("SUCCESS 결과는 row 를 PUBLISHED 로 표시하고 batch 를 계속 진행한다")
+    void publishPendingEvents_success_marksPublishedAndContinues() {
+        OutboxJpaEntity entry1 = OutboxJpaEntity.create("Order", "order-1", "OrderPlaced", "{\"test\":1}");
+        OutboxJpaEntity entry2 = OutboxJpaEntity.create("Order", "order-2", "OrderPlaced", "{\"test\":2}");
         given(outboxJpaRepository.findPendingWithLock(any(PageRequest.class)))
-                .willReturn(List.of(entry));
+                .willReturn(List.of(entry1, entry2));
 
         OutboxPublisher.EventSender sender = mock(OutboxPublisher.EventSender.class);
-        given(sender.send("OrderPlaced", "order-1", "{\"test\":true}")).willReturn(true);
+        given(sender.send(any(), any(), any())).willReturn(OutboxPublisher.SendOutcome.SUCCESS);
 
         outboxPublisher.publishPendingEvents(sender);
 
-        verify(sender).send("OrderPlaced", "order-1", "{\"test\":true}");
-        assertThat(entry.getStatus()).isEqualTo("PUBLISHED");
-        assertThat(entry.getPublishedAt()).isNotNull();
+        verify(sender).send("OrderPlaced", "order-1", "{\"test\":1}");
+        verify(sender).send("OrderPlaced", "order-2", "{\"test\":2}");
+        assertThat(entry1.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(entry2.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(entry1.getPublishedAt()).isNotNull();
+        assertThat(entry2.getPublishedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("sender가 실패하면 이벤트를 PENDING 상태로 유지하고 나머지를 건너뛴다")
-    void publishPendingEvents_senderFails_stopsAndKeepsPending() {
+    @DisplayName("FAILURE_TRANSIENT 결과는 row 를 PENDING 으로 유지하고 batch 를 break 한다 (retry storm 회피)")
+    void publishPendingEvents_transientFailure_keepsPendingAndBreaks() {
         OutboxJpaEntity entry1 = OutboxJpaEntity.create("Order", "order-1", "OrderPlaced", "{}");
         OutboxJpaEntity entry2 = OutboxJpaEntity.create("Order", "order-2", "OrderPlaced", "{}");
         given(outboxJpaRepository.findPendingWithLock(any(PageRequest.class)))
                 .willReturn(List.of(entry1, entry2));
 
         OutboxPublisher.EventSender sender = mock(OutboxPublisher.EventSender.class);
-        given(sender.send("OrderPlaced", "order-1", "{}")).willReturn(false);
+        given(sender.send("OrderPlaced", "order-1", "{}"))
+                .willReturn(OutboxPublisher.SendOutcome.FAILURE_TRANSIENT);
 
         outboxPublisher.publishPendingEvents(sender);
 
@@ -69,7 +74,55 @@ class OutboxPublisherTest {
     }
 
     @Test
-    @DisplayName("PENDING 이벤트가 없으면 sender를 호출하지 않는다")
+    @DisplayName("FAILURE_PERMANENT 결과는 row 를 FAILED 로 표시하고 batch drain 을 계속한다 (poison-pill 격리)")
+    void publishPendingEvents_permanentFailure_marksFailedAndContinues() {
+        OutboxJpaEntity entry1 = OutboxJpaEntity.create("Order", "order-1", "OrderPlaced", "{}");
+        OutboxJpaEntity entry2 = OutboxJpaEntity.create("Order", "order-2", "OrderPlaced", "{}");
+        given(outboxJpaRepository.findPendingWithLock(any(PageRequest.class)))
+                .willReturn(List.of(entry1, entry2));
+
+        OutboxPublisher.EventSender sender = mock(OutboxPublisher.EventSender.class);
+        given(sender.send("OrderPlaced", "order-1", "{}"))
+                .willReturn(OutboxPublisher.SendOutcome.FAILURE_PERMANENT);
+        given(sender.send("OrderPlaced", "order-2", "{}"))
+                .willReturn(OutboxPublisher.SendOutcome.SUCCESS);
+
+        outboxPublisher.publishPendingEvents(sender);
+
+        verify(sender).send("OrderPlaced", "order-1", "{}");
+        verify(sender).send("OrderPlaced", "order-2", "{}");
+        assertThat(entry1.getStatus()).isEqualTo("FAILED");
+        assertThat(entry1.getPublishedAt()).as("FAILED row 에도 terminal timestamp 가 기록된다").isNotNull();
+        assertThat(entry2.getStatus()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    @DisplayName("PERMANENT 후속 TRANSIENT 혼합 — PERMANENT row 는 FAILED, 후속 TRANSIENT 에서 break")
+    void publishPendingEvents_permanentThenTransient_marksFailedThenBreaks() {
+        OutboxJpaEntity entry1 = OutboxJpaEntity.create("Order", "order-1", "Bogus", "{}");
+        OutboxJpaEntity entry2 = OutboxJpaEntity.create("Order", "order-2", "OrderPlaced", "{}");
+        OutboxJpaEntity entry3 = OutboxJpaEntity.create("Order", "order-3", "OrderPlaced", "{}");
+        given(outboxJpaRepository.findPendingWithLock(any(PageRequest.class)))
+                .willReturn(List.of(entry1, entry2, entry3));
+
+        OutboxPublisher.EventSender sender = mock(OutboxPublisher.EventSender.class);
+        given(sender.send("Bogus", "order-1", "{}"))
+                .willReturn(OutboxPublisher.SendOutcome.FAILURE_PERMANENT);
+        given(sender.send("OrderPlaced", "order-2", "{}"))
+                .willReturn(OutboxPublisher.SendOutcome.FAILURE_TRANSIENT);
+
+        outboxPublisher.publishPendingEvents(sender);
+
+        verify(sender).send("Bogus", "order-1", "{}");
+        verify(sender).send("OrderPlaced", "order-2", "{}");
+        verify(sender, never()).send("OrderPlaced", "order-3", "{}");
+        assertThat(entry1.getStatus()).isEqualTo("FAILED");
+        assertThat(entry2.getStatus()).isEqualTo("PENDING");
+        assertThat(entry3.getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("PENDING 이벤트가 없으면 sender 를 호출하지 않는다")
     void publishPendingEvents_noPending_doesNotCallSender() {
         given(outboxJpaRepository.findPendingWithLock(any(PageRequest.class)))
                 .willReturn(List.of());

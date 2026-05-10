@@ -179,6 +179,33 @@ Future V2 work (separate ADRs):
 
 ---
 
+## 4.6 Batch Resilience amendment (TASK-MONO-050, 2026-05-11)
+
+Surfaced by TASK-BE-136 (PR #345, payment-service outbox migration) self-review: the v1 `OutboxPublisher.publishPendingEvents` loop calls `break` on the first row whose `EventSender.send` returns `false`. A single poison-pill row (e.g. unknown `event_type` for which no subclass's `resolveTopic` matches) returns `false` permanently; on every subsequent polling cycle, `findPendingWithLock` returns the same row first and the loop breaks again → the entire batch stalls indefinitely until manual operator intervention.
+
+**Amendment** (TASK-MONO-050, lands together with this ADR update):
+
+- `OutboxPublisher.EventSender.send` reshaped from `boolean` to a 3-value `SendOutcome` enum (`SUCCESS` / `FAILURE_TRANSIENT` / `FAILURE_PERMANENT`).
+- `OutboxPollingScheduler.sendToKafka` classifies exceptions:
+  - `IllegalArgumentException` from `resolveTopic` → `FAILURE_PERMANENT`
+  - `EventSerializationException` from envelope path → `FAILURE_PERMANENT`
+  - Any other `Exception` (broker timeout, `KafkaException`, etc.) → `FAILURE_TRANSIENT`
+- `OutboxPublisher.publishPendingEvents` dispatches per outcome:
+  - `SUCCESS` → `row.markPublished()` + continue
+  - `FAILURE_TRANSIENT` → keep `PENDING` + `return` (preserve retry-storm avoidance against broker-wide outages)
+  - `FAILURE_PERMANENT` → `row.markFailed()` + continue (drain remainder; `findPendingWithLock` filters on `status='PENDING'` so the FAILED row is naturally excluded from future polls)
+- New `OutboxJpaEntity.markFailed()` (status → `FAILED`, `publishedAt` → terminal timestamp). Failure reason is captured at the call site via `log.error` (eventType + aggregateId), not persisted on-row — avoids requiring `outbox.failure_reason` column migration across the 13 existing service Flyway schemas. Operators correlate FAILED rows with logs by `eventType` + `aggregateId` + `publishedAt`.
+- New `OutboxPollingScheduler.onPermanentFailure(eventType, aggregateId, exception)` hook (default = log-only). Subclasses can opt in to publish to a dead-letter topic or fire an alert.
+
+**API breaking surface (intentional, semver not applicable to internal lib):**
+
+- `EventSender.send` signature change forces compile error on any subclass that overrides `sendToKafka` directly (none in the current 13 subclasses — they all only override `resolveTopic` + `onKafkaSendFailure`, so blast radius is zero).
+- `OutboxJpaEntity.markFailed(String reason)` → `markFailed()` (no-arg) — the reason argument was never persisted; replaced by call-site logging.
+
+**Verification:** `:libs:java-messaging:test` 45/45 pass (4 new outcome-dispatch + 4 new classification tests + 1 existing rewrite). `order-service` + `payment-service` (the two services with direct `EventSender` test invocations) regress green (260/260 + 98/98). Other 11 subclasses verified by `compileJava`; their unit tests deferred to CI Linux runner (per `feedback_refactor_code_baseline_it.md` Windows paging blocker).
+
+---
+
 ## 5. Verification
 
 - `./gradlew :libs:java-messaging:test` — 39/39 PASS (12 new + 27 existing).

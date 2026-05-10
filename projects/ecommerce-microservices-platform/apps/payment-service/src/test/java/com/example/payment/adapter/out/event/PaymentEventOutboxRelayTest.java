@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,9 +58,10 @@ class PaymentEventOutboxRelayTest {
         relay.pollAndPublish();
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
-        boolean result = senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
+        OutboxPublisher.SendOutcome outcome =
+                senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
 
-        assertThat(result).isTrue();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.SUCCESS);
         verify(kafkaTemplate).send("payment.payment.completed", "pay-1", "{\"test\":1}");
     }
 
@@ -72,37 +74,40 @@ class PaymentEventOutboxRelayTest {
         relay.pollAndPublish();
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
-        boolean result = senderCaptor.getValue().send("PaymentRefunded", "pay-1", "{\"test\":1}");
+        OutboxPublisher.SendOutcome outcome =
+                senderCaptor.getValue().send("PaymentRefunded", "pay-1", "{\"test\":1}");
 
-        assertThat(result).isTrue();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.SUCCESS);
         verify(kafkaTemplate).send("payment.payment.refunded", "pay-1", "{\"test\":1}");
     }
 
     @Test
-    @DisplayName("Kafka 전송 실패 시 false 반환 + PaymentMetricRecorder.incrementEventPublishFailure 호출")
-    void sendToKafka_failure_returnsFalseAndIncrementsMetric() {
+    @DisplayName("Kafka transient 실패 시 FAILURE_TRANSIENT 반환 + PaymentMetricRecorder.incrementEventPublishFailure 호출")
+    void sendToKafka_transientFailure_returnsTransientAndIncrementsMetric() {
         when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Kafka broker unavailable")));
 
         relay.pollAndPublish();
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
-        boolean result = senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
+        OutboxPublisher.SendOutcome outcome =
+                senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
 
-        assertThat(result).isFalse();
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.FAILURE_TRANSIENT);
         verify(paymentMetricRecorder).incrementEventPublishFailure("PaymentCompleted");
     }
 
     @Test
-    @DisplayName("알 수 없는 eventType 은 base scheduler 에서 send 실패로 처리되고 failure 메트릭이 기록된다")
-    void sendToKafka_unknownEventType_recordsFailureMetric() {
+    @DisplayName("알 수 없는 eventType 은 FAILURE_PERMANENT 로 분류되어 row 가 FAILED 격리 — Kafka 미호출")
+    void sendToKafka_unknownEventType_returnsPermanentAndDoesNotCallKafka() {
         relay.pollAndPublish();
         verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
 
-        boolean result = senderCaptor.getValue().send("PaymentMutated", "pay-x", "{}");
+        OutboxPublisher.SendOutcome outcome =
+                senderCaptor.getValue().send("PaymentMutated", "pay-x", "{}");
 
-        assertThat(result).isFalse();
-        verify(paymentMetricRecorder).incrementEventPublishFailure("PaymentMutated");
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.FAILURE_PERMANENT);
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
