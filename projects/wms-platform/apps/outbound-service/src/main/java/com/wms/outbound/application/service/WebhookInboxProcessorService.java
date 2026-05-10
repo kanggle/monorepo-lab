@@ -1,15 +1,15 @@
 package com.wms.outbound.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.adapter.in.webhook.erp.dto.ErpOrderLineRequest;
-import com.wms.outbound.adapter.in.webhook.erp.dto.ErpOrderWebhookRequest;
-import com.wms.outbound.adapter.out.persistence.entity.ErpOrderWebhookInbox;
-import com.wms.outbound.adapter.out.persistence.repository.ErpOrderWebhookInboxRepository;
+import com.wms.outbound.application.command.ErpOrderLineRequest;
+import com.wms.outbound.application.command.ErpOrderWebhookRequest;
 import com.wms.outbound.application.command.ReceiveOrderCommand;
 import com.wms.outbound.application.command.ReceiveOrderLineCommand;
 import com.wms.outbound.application.port.in.ProcessWebhookInboxUseCase;
 import com.wms.outbound.application.port.in.ReceiveOrderUseCase;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
+import com.wms.outbound.application.port.out.WebhookInboxStorePort;
+import com.wms.outbound.application.port.out.WebhookInboxStorePort.PendingWebhookInbox;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.exception.PartnerInvalidTypeException;
 import com.wms.outbound.domain.exception.SkuInactiveException;
@@ -24,10 +24,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Background processor implementing {@link ProcessWebhookInboxUseCase}.
@@ -38,8 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Per-row processing — {@code ReceiveOrderUseCase.receive()} is itself
  * {@code @Transactional} and opens its own TX; the inbox row's status flip
- * runs in a separate TX through the {@code @Lazy} self-proxy. This way one
- * row's failure does not block the rest of the batch.
+ * runs in a separate TX through {@link WebhookInboxStatusUpdater}, which is a
+ * separate bean (so the Spring AOP proxy applies). One row's failure does not
+ * block the rest of the batch.
  *
  * <p>{@link OrderNoDuplicateException} is treated as success — re-delivery
  * of the same ERP event is idempotent at the {@code orderNo} unique
@@ -52,48 +50,47 @@ public class WebhookInboxProcessorService implements ProcessWebhookInboxUseCase 
     private static final String SYSTEM_ACTOR = "system:erp-webhook";
     private static final int MAX_REASON_LEN = 500;
 
-    private final ErpOrderWebhookInboxRepository inboxRepo;
+    private final WebhookInboxStorePort inboxStore;
+    private final WebhookInboxStatusUpdater statusUpdater;
     private final ReceiveOrderUseCase receiveOrderUseCase;
     private final MasterReadModelPort masterReadModel;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int batchSize;
-    private final WebhookInboxProcessorService self;
 
-    public WebhookInboxProcessorService(ErpOrderWebhookInboxRepository inboxRepo,
+    public WebhookInboxProcessorService(WebhookInboxStorePort inboxStore,
+                                        WebhookInboxStatusUpdater statusUpdater,
                                         ReceiveOrderUseCase receiveOrderUseCase,
                                         MasterReadModelPort masterReadModel,
                                         ObjectMapper objectMapper,
                                         Clock clock,
-                                        @Value("${outbound.webhook.inbox.processor.batch-size:50}") int batchSize,
-                                        @Lazy WebhookInboxProcessorService self) {
-        this.inboxRepo = inboxRepo;
+                                        @Value("${outbound.webhook.inbox.processor.batch-size:50}") int batchSize) {
+        this.inboxStore = inboxStore;
+        this.statusUpdater = statusUpdater;
         this.receiveOrderUseCase = receiveOrderUseCase;
         this.masterReadModel = masterReadModel;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.batchSize = batchSize;
-        this.self = self;
     }
 
     @Override
     public int processNextBatch() {
-        List<ErpOrderWebhookInbox> pending = inboxRepo
-                .findAllByStatusOrderByReceivedAtAsc("PENDING", Limit.of(batchSize));
+        List<PendingWebhookInbox> pending = inboxStore.findPending(batchSize);
         if (pending.isEmpty()) {
             return 0;
         }
-        for (ErpOrderWebhookInbox row : pending) {
+        for (PendingWebhookInbox row : pending) {
             processOneRow(row);
         }
         return pending.size();
     }
 
-    void processOneRow(ErpOrderWebhookInbox row) {
-        UUID rowId = row.getId();
-        String eventId = row.getEventId();
+    void processOneRow(PendingWebhookInbox row) {
+        UUID rowId = row.id();
+        String eventId = row.eventId();
         try {
-            ErpOrderWebhookRequest req = objectMapper.readValue(row.getPayload(),
+            ErpOrderWebhookRequest req = objectMapper.readValue(row.payload(),
                     ErpOrderWebhookRequest.class);
             try {
                 receiveOrderUseCase.receive(toCommand(req));
@@ -102,24 +99,14 @@ public class WebhookInboxProcessorService implements ProcessWebhookInboxUseCase 
                 log.info("webhook_inbox_duplicate eventId={} orderNo={} -> APPLIED",
                         eventId, req.orderNo());
             }
-            self.markApplied(rowId);
+            statusUpdater.markApplied(rowId, clock.instant());
             log.info("webhook_inbox_applied eventId={}", eventId);
         } catch (Exception e) {
             String reason = truncate(e.getMessage() != null
                     ? e.getMessage() : e.getClass().getSimpleName());
-            self.markFailed(rowId, reason);
+            statusUpdater.markFailed(rowId, clock.instant(), reason);
             log.warn("webhook_inbox_failed eventId={} reason={}", eventId, reason);
         }
-    }
-
-    @Transactional
-    public void markApplied(UUID rowId) {
-        inboxRepo.findById(rowId).ifPresent(row -> row.markApplied(clock.instant()));
-    }
-
-    @Transactional
-    public void markFailed(UUID rowId, String reason) {
-        inboxRepo.findById(rowId).ifPresent(row -> row.markFailed(clock.instant()));
     }
 
     private ReceiveOrderCommand toCommand(ErpOrderWebhookRequest req) {

@@ -6,8 +6,9 @@ import com.wms.outbound.adapter.in.messaging.consumer.MasterEventParser;
 import com.wms.outbound.adapter.in.webhook.erp.ErpOrderWebhookController;
 import com.wms.outbound.adapter.in.webhook.erp.HmacVerifier;
 import com.wms.outbound.adapter.in.webhook.erp.TimestampWindowValidator;
-import com.wms.outbound.adapter.out.persistence.adapter.WebhookInboxPersistenceAdapter;
+import com.wms.outbound.application.port.in.IngestWebhookEventUseCase;
 import com.wms.outbound.application.port.in.ProcessWebhookInboxUseCase;
+import com.wms.outbound.application.port.out.WebhookInboxStorePort;
 import com.wms.outbound.application.port.out.EventDedupePort;
 import com.wms.outbound.application.port.out.IdempotencyStore;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
@@ -53,12 +54,13 @@ class OutboundServiceSmokeTest {
         assertThat(context.getBean(ShipmentNotificationPort.class)).isNotNull();
         assertThat(context.getBean(OutboundSagaCoordinator.class)).isNotNull();
         assertThat(context.getBean(ProcessWebhookInboxUseCase.class)).isNotNull();
+        assertThat(context.getBean(IngestWebhookEventUseCase.class)).isNotNull();
+        assertThat(context.getBean(WebhookInboxStorePort.class)).isNotNull();
     }
 
     @Test
     void webhookBeansAreWired() {
         assertThat(context.getBean(ErpOrderWebhookController.class)).isNotNull();
-        assertThat(context.getBean(WebhookInboxPersistenceAdapter.class)).isNotNull();
         assertThat(context.getBean(HmacVerifier.class)).isNotNull();
         assertThat(context.getBean(TimestampWindowValidator.class)).isNotNull();
         assertThat(context.getBean(WebhookSecretPort.class)).isNotNull();

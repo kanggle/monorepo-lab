@@ -1,4 +1,4 @@
-package com.wms.outbound.adapter.in.webhook.erp.dto;
+package com.wms.outbound.application.command;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -8,7 +8,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Wire format of an ERP order push webhook body.
+ * Wire format of an ERP order push webhook body, also used as the application
+ * command shape for the inbox processor.
  *
  * <p>Schema authority: {@code specs/contracts/webhooks/erp-order-webhook.md} §
  * Request Body. v1 ignores unknown fields for forward-compatibility.
