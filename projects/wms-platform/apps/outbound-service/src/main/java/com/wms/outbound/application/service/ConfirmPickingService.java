@@ -83,28 +83,91 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
     public PickingConfirmationResult confirm(ConfirmPickingCommand command) {
         AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
-        // 1) Load Order; must be in PICKING (Order.completePicking enforces).
-        Order order = orderPersistence.findById(command.orderId())
-                .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
-
-        // 2) Load PickingRequest by orderId; required.
-        PickingRequest pickingRequest = pickingPersistence.findByOrderId(command.orderId())
-                .orElseThrow(() -> new PickingRequestNotFoundException(command.orderId()));
-
-        // 3) Load Saga; coordinator will assert RESERVED → PICKING_CONFIRMED.
-        OutboundSaga saga = sagaPersistence.findByOrderId(command.orderId())
-                .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+        PickingAggregates agg = loadPickingAggregates(command.orderId());
 
         Instant now = clock.instant();
 
-        // 4) Validate every line vs OrderLine (qty match + LOT requirement).
+        // Validate every line vs OrderLine (qty match + LOT requirement).
         Map<UUID, OrderLine> orderLinesById = new HashMap<>();
-        for (OrderLine ol : order.getLines()) {
+        for (OrderLine ol : agg.order().getLines()) {
             orderLinesById.put(ol.getId(), ol);
         }
         validateLines(command.lines(), orderLinesById);
 
-        // 5) Build the PickingConfirmation aggregate (append-only).
+        // Build the PickingConfirmation aggregate (append-only).
+        PickingConfirmation confirmation = buildConfirmation(
+                command, agg.pickingRequest().getId(), orderLinesById, now);
+        PickingConfirmation savedConfirmation = pickingConfirmationPersistence.save(confirmation);
+
+        // Order: PICKING → PICKED.
+        agg.order().completePicking(now, command.actorId());
+        orderPersistence.save(agg.order());
+
+        // Saga: RESERVED → PICKING_CONFIRMED via coordinator.
+        sagaCoordinator.onPickingConfirmed(agg.saga().sagaId());
+
+        // Outbox row (same TX).
+        List<PickingCompletedEvent.Line> eventLines = emitPickingCompletedOutbox(
+                savedConfirmation, agg.order(), agg.saga().sagaId(), now, command.actorId());
+
+        log.info("picking_confirmed orderId={} pickingRequestId={} sagaId={}",
+                agg.order().getId(), agg.pickingRequest().getId(), agg.saga().sagaId());
+
+        return new PickingConfirmationResult(
+                savedConfirmation.getId(),
+                agg.pickingRequest().getId(),
+                agg.order().getId(),
+                savedConfirmation.getConfirmedBy(),
+                savedConfirmation.getConfirmedAt(),
+                savedConfirmation.getNotes(),
+                eventLines.stream()
+                        .map(l -> new PickingConfirmationLineResult(
+                                /* surrogate line id is not surfaced */ null,
+                                l.orderLineId(), l.skuId(), l.lotId(),
+                                l.actualLocationId(), l.qtyConfirmed()))
+                        .toList(),
+                agg.order().getStatus().name(),
+                SagaStatus.PICKING_CONFIRMED.name());
+    }
+
+    // ------------------------------------------------------------------
+    //  Private helpers
+    // ------------------------------------------------------------------
+
+    /** Carries the three aggregates loaded at the start of the confirm flow. */
+    private record PickingAggregates(
+            Order order,
+            PickingRequest pickingRequest,
+            OutboundSaga saga) {}
+
+    /**
+     * Loads {@link Order}, {@link PickingRequest}, and {@link OutboundSaga}
+     * by {@code orderId}.
+     *
+     * @throws OrderNotFoundException           if the order or saga is missing
+     * @throws PickingRequestNotFoundException  if the picking request is missing
+     */
+    private PickingAggregates loadPickingAggregates(UUID orderId) {
+        // 1) Load Order; must be in PICKING (Order.completePicking enforces).
+        Order order = orderPersistence.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        // 2) Load PickingRequest by orderId; required.
+        PickingRequest pickingRequest = pickingPersistence.findByOrderId(orderId)
+                .orElseThrow(() -> new PickingRequestNotFoundException(orderId));
+        // 3) Load Saga; coordinator will assert RESERVED → PICKING_CONFIRMED.
+        OutboundSaga saga = sagaPersistence.findByOrderId(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        return new PickingAggregates(order, pickingRequest, saga);
+    }
+
+    /**
+     * Constructs the {@link PickingConfirmation} aggregate (append-only) from
+     * the command lines. Does NOT persist.
+     */
+    private static PickingConfirmation buildConfirmation(ConfirmPickingCommand command,
+                                                         UUID pickingRequestId,
+                                                         Map<UUID, OrderLine> orderLinesById,
+                                                         Instant now) {
         UUID pickingConfirmationId = UuidV7.randomUuid();
         List<PickingConfirmationLine> confirmationLines = new ArrayList<>(command.lines().size());
         for (ConfirmPickingLineCommand cl : command.lines()) {
@@ -117,24 +180,29 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
                     cl.actualLocationId(),
                     cl.qtyConfirmed()));
         }
-        PickingConfirmation confirmation = new PickingConfirmation(
+        return new PickingConfirmation(
                 pickingConfirmationId,
-                pickingRequest.getId(),
-                order.getId(),
+                pickingRequestId,
+                command.orderId(),
                 command.actorId(),
                 now,
                 command.notes(),
                 confirmationLines);
-        PickingConfirmation savedConfirmation = pickingConfirmationPersistence.save(confirmation);
+    }
 
-        // 6) Order: PICKING → PICKED.
-        order.completePicking(now, command.actorId());
-        orderPersistence.save(order);
-
-        // 7) Saga: RESERVED → PICKING_CONFIRMED via coordinator.
-        sagaCoordinator.onPickingConfirmed(saga.sagaId());
-
-        // 8) Outbox row (same TX).
+    /**
+     * Builds the {@link PickingCompletedEvent.Line} list from the saved
+     * confirmation and writes the {@code outbound.picking.completed} outbox
+     * row within the current transaction boundary.
+     *
+     * @return the built event lines (reused for the result DTO)
+     */
+    private List<PickingCompletedEvent.Line> emitPickingCompletedOutbox(
+            PickingConfirmation savedConfirmation,
+            Order order,
+            UUID sagaId,
+            Instant now,
+            String actorId) {
         List<PickingCompletedEvent.Line> eventLines = savedConfirmation.getLines().stream()
                 .map(l -> new PickingCompletedEvent.Line(
                         l.getOrderLineId(),
@@ -144,33 +212,15 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
                         l.getQtyConfirmed()))
                 .toList();
         outboxWriter.publish(new PickingCompletedEvent(
-                saga.sagaId(),
+                sagaId,
                 order.getId(),
                 savedConfirmation.getId(),
                 savedConfirmation.getConfirmedBy(),
                 savedConfirmation.getConfirmedAt(),
                 eventLines,
                 now,
-                command.actorId()));
-
-        log.info("picking_confirmed orderId={} pickingRequestId={} sagaId={}",
-                order.getId(), pickingRequest.getId(), saga.sagaId());
-
-        return new PickingConfirmationResult(
-                savedConfirmation.getId(),
-                pickingRequest.getId(),
-                order.getId(),
-                savedConfirmation.getConfirmedBy(),
-                savedConfirmation.getConfirmedAt(),
-                savedConfirmation.getNotes(),
-                eventLines.stream()
-                        .map(l -> new PickingConfirmationLineResult(
-                                /* surrogate line id is not surfaced */ null,
-                                l.orderLineId(), l.skuId(), l.lotId(),
-                                l.actualLocationId(), l.qtyConfirmed()))
-                        .toList(),
-                order.getStatus().name(),
-                SagaStatus.PICKING_CONFIRMED.name());
+                actorId));
+        return eventLines;
     }
 
     private void validateLines(List<ConfirmPickingLineCommand> lines,
