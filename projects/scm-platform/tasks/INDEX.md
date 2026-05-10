@@ -78,7 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-006-procurement-service-architecture-spec.md` — TASK-SCM-BE-002 (PR #239 머지) 가 89 file production code 만 ship 하고 `procurement-service/architecture.md` 미작성. retroactive spec 저작 — Hexagonal style + PO 8단계 상태기계 + Resilience4j (CB+Retry+jitter+Idempotency) + outbox + audit_log + AES-GCM + JWT. inventory-visibility-service/architecture.md 패턴 mirror. /refactor-spec all (PR #326) Finding [SCM 2]. 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-SCM-BE-007-int-001b-schema-doc-backfill.md` — TASK-SCM-INT-001b cycle 2 schema fix (poNumber UUID v7 substring(28) + InventoryNode.contactInfo @JdbcTypeCode(JSON)) 가 production code 에만 반영, data-model.md 미반영. backfill spec only. /refactor-spec all Finding [SCM 6]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+- `TASK-SCM-BE-008-inventory-visibility-nodes-endpoint-cross-ref.md` — inventory-visibility 4 REST endpoint 중 `/nodes` 가 architecture.md 미명시 + gateway-public-routes.md 미반영. public 또는 internal-only 결정 + 두 spec 동기. /refactor-spec all Finding [SCM 7]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 

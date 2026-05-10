@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-052-master-lot-cross-service-consumer-audit.md` — `MasterLotConsumer` 가 outbound-service 에만 등록됐는지 vs inbound/inventory 에서도 의도된 미참조인지 audit. Scenario A (drift) → follow-up impl task / Scenario B (intentional) → 두 architecture.md 에 explicit "no Lot consumer — Lot tracking is outbound-only in v1" 노트 추가. spec-only. /refactor-spec all (PR #326) Finding [WMS 4]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
