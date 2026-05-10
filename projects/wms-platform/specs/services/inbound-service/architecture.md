@@ -89,7 +89,9 @@ com.wms.inbound/
 │   │   ├── webhook/
 │   │   │   └── erp/             # ErpAsnWebhookController + signature/replay validators
 │   │   └── messaging/
-│   │       └── consumer/        # MasterLocationConsumer, MasterSkuConsumer, MasterPartnerConsumer
+│   │       └── consumer/        # MasterEventConsumer (single dispatcher with 6 @KafkaListener methods,
+│   │                            #   one per master aggregate) delegating to MasterWarehouse/Zone/Location/
+│   │                            #   Sku/Partner/Lot Projector
 │   └── out/
 │       ├── persistence/
 │       │   ├── entity/          # JPA entities — package-private
@@ -204,6 +206,7 @@ Per `service-types/event-consumer.md` and trait `transactional` rule T8:
 | `master.location.*` | `wms.master.location.v1` | Same; deactivated locations rejected as putaway destinations |
 | `master.sku.*` | `wms.master.sku.v1` | Same; deactivated SKUs rejected on new ASN |
 | `master.partner.*` | `wms.master.partner.v1` | Same; deactivated partners rejected as ASN supplier |
+| `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; LOT-tracked SKU putaway requires the lot to exist as ACTIVE in the local snapshot (see `LOT_REQUIRED` rule below) |
 
 Same dedupe + DLQ pattern as `inventory-service`:
 
