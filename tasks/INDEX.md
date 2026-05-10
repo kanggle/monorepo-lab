@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-049-libs-java-messaging-outbox.md` — outbox+publisher+dedupe+envelope+parser scaffolding 을 `libs/java-messaging` 으로 추출. 5 wms backend service + admin-projection consumer + GAP/ecommerce 1개 동시 마이그레이션 (`CLAUDE.md` § Cross-Project Changes 원자 PR). `OutboxRow` interface + reference JPA / `OutboxPublisher` poll loop / `EventDedupePort` / `EventEnvelope` record / `EventEnvelopeParser` / MDC + 메트릭 contract. ADR-MONO-XXX 선행, `shared-library-policy.md` 경계 갱신, `messaging/outbox-pattern/SKILL.md` 갱신. D4 churn freeze 영향 — D2 reset 인정 + PR description 에 명시. 분석=Opus 4.7 / 구현 권장=Opus (HIGH blast radius). /refactor-code wms outbound-service dry-run Manual Finding #1 surfaced.
 
 ## in-progress
 

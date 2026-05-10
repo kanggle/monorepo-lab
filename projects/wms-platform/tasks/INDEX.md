@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-049-tms-real-adapter.md` — outbound-service `StubTmsClientAdapter` 를 실제 `TmsClientAdapter` 로 교체. Resilience4j circuit breaker + retry + timeout + bulkhead + WireMock IT (I1-I4 / I7-I10), `tms_request_dedupe` Flyway, manual retry endpoint, 4 Micrometer 메트릭. /refactor-code wms outbound-service dry-run Manual Finding #2 surfaced. PRs #309–#313 sweep 종결 후 후속. 분석=Opus 4.7 / 구현 권장=Opus.
 
 ## in-progress
 
