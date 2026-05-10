@@ -1,6 +1,7 @@
 package com.wms.outbound.adapter.in.web.advice;
 
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.wms.outbound.domain.exception.ExternalServiceUnavailableException;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.OutboundDomainException;
@@ -76,6 +77,24 @@ public class GlobalExceptionHandler {
         log.debug("data integrity violation: {}", e.getMessage());
         return body(HttpStatus.CONFLICT, "CONFLICT",
                 "Resource already exists or violates a constraint");
+    }
+
+    // ---- 503 — upstream/integration unavailable -------------------------
+
+    /**
+     * External vendor (TMS, ERP webhook out, etc.) unreachable / circuit-open
+     * / retry-exhausted. Mapped to 503 per {@code platform/error-handling.md}
+     * (registered globally for {@code integration-heavy} trait).
+     *
+     * <p>The {@code RetryTmsNotificationService} catches this internally for
+     * the manual-retry endpoint (returning 200 with the failed snapshot per
+     * {@code outbound-service-api.md} §4.3), so this handler is the
+     * defensive fallback for any other path that lets it escape.
+     */
+    @ExceptionHandler(ExternalServiceUnavailableException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleExternalUnavailable(ExternalServiceUnavailableException e) {
+        log.warn("external_service_unavailable vendor={} reason={}", e.getVendor(), e.getMessage());
+        return body(HttpStatus.SERVICE_UNAVAILABLE, e.errorCode(), e.getMessage());
     }
 
     // ---- 422 — domain rule violations -----------------------------------

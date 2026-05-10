@@ -16,6 +16,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.kafka:spring-kafka'
 
+    // TASK-BE-049: outbound TMS HTTP client (Apache HttpClient 5 backing
+    // RestClient) + Resilience4j (circuit breaker / retry / timeout / bulkhead).
+    implementation 'org.apache.httpcomponents.client5:httpclient5'
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.2.0'
+
     // Database
     implementation 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
@@ -52,6 +58,8 @@ dependencies {
     testImplementation 'org.assertj:assertj-core'
     testImplementation 'org.awaitility:awaitility:4.2.2'
     testImplementation 'com.nimbusds:nimbus-jose-jwt:9.40'
+    // TASK-BE-049: WireMock for TMS adapter integration tests (I10).
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
 }
 
 dependencyManagement {

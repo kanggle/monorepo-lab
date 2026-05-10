@@ -5,16 +5,24 @@ import com.wms.outbound.application.port.out.TmsAcknowledgement;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Stub implementation of {@link ShipmentNotificationPort}.
+ * Standalone-profile fallback for {@link ShipmentNotificationPort}: logs the
+ * call and returns a synthetic acknowledgement so local dev / smoke tests
+ * (no TMS sandbox available) can exercise the full saga end-to-end.
  *
- * <p>Per TASK-BE-034 scope: logs the call and returns success immediately
- * with a fresh request id. The real Resilience4j-backed adapter (timeouts,
- * circuit breaker, retry, bulkhead) lands in TASK-BE-037.
+ * <p>The real Resilience4j-backed adapter ({@link TmsClientAdapter}) is
+ * gated with {@code @Profile("!standalone")}; the two adapters are mutually
+ * exclusive at runtime and Spring picks one based on the active profile
+ * (standalone-profile/SKILL.md pattern).
+ *
+ * <p>This is the production stub used by the {@code application-standalone.yml}
+ * configuration only — never wired in {@code dev} / {@code prod} profiles.
  */
 @Component
+@Profile("standalone")
 public class StubTmsClientAdapter implements ShipmentNotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(StubTmsClientAdapter.class);
@@ -22,7 +30,7 @@ public class StubTmsClientAdapter implements ShipmentNotificationPort {
     @Override
     public TmsAcknowledgement notify(UUID shipmentId) {
         String requestId = UUID.randomUUID().toString();
-        log.info("TMS notify stub: shipment {} requestId={}", shipmentId, requestId);
-        return new TmsAcknowledgement(true, requestId);
+        log.info("TMS notify (standalone stub): shipmentId={} requestId={}", shipmentId, requestId);
+        return TmsAcknowledgement.success(requestId);
     }
 }
