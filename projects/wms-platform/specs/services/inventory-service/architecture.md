@@ -121,7 +121,8 @@ com.wms.inventory/
 │   │   │   └── dto/{request,response}/
 │   │   └── messaging/
 │   │       └── consumer/        # PutawayCompletedConsumer, PickingRequestedConsumer,
-│   │                            # ShippingConfirmedConsumer, MasterLocationConsumer, MasterSkuConsumer
+│   │                            # ShippingConfirmedConsumer, MasterLocationConsumer, MasterSkuConsumer,
+│   │                            # MasterLotConsumer
 │   └── out/
 │       ├── persistence/
 │       │   ├── entity/          # JPA entities — package-private
@@ -239,6 +240,7 @@ Per `service-types/event-consumer.md` and trait `transactional` rule T8
 | `master.sku.deactivated` | `wms.master.sku.v1` | Same, for SKU |
 | `master.location.created` / `.updated` | `wms.master.location.v1` | Refresh local read-model |
 | `master.sku.created` / `.updated` | `wms.master.sku.v1` | Same, for SKU |
+| `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; lot identity is referenced by `Inventory`, `ReservationLine`, `StockTransfer` rows (LOT-tracked SKUs) |
 
 ### Consumer Rules
 
