@@ -8,11 +8,43 @@ category: messaging
 
 Patterns for reliable event publishing using the transactional outbox.
 
-Prerequisite: read `platform/event-driven-policy.md` before using this skill.
+Prerequisite: read `platform/event-driven-policy.md` and
+[`platform/shared-library-policy.md`](../../../../platform/shared-library-policy.md)
+before using this skill.
+
+The shared scaffolding lives in `libs/java-messaging` per
+[ADR-MONO-004](../../../../docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md) —
+services import the generic publisher loop, envelope record, parser, dedupe
+port, and MDC helpers. Service-specific code is limited to the row writer,
+topic mapping, and `@Scheduled` wiring. See also `specs/contracts/events/`
+for each project's per-event-family schema.
 
 ---
 
 ## Outbox Table
+
+Each service owns its own outbox table; the column shape implements the shared
+`com.example.messaging.outbox.OutboxRow` contract. Reference v2 schema (used
+by the wms big-3 — outbound / inbound / inventory):
+
+```sql
+CREATE TABLE <service>_outbox (
+    id              UUID         PRIMARY KEY,
+    aggregate_type  VARCHAR(60)  NOT NULL,
+    aggregate_id    UUID         NOT NULL,
+    event_type      VARCHAR(60)  NOT NULL,
+    event_version   VARCHAR(10)  NOT NULL,
+    payload         JSONB        NOT NULL,
+    partition_key   VARCHAR(60),
+    created_at      TIMESTAMP    NOT NULL,
+    published_at    TIMESTAMP
+);
+CREATE INDEX idx_<service>_outbox_pending
+    ON <service>_outbox (created_at) WHERE published_at IS NULL;
+```
+
+V1 schema (legacy, used by master-service and most GAP / ecommerce services
+that extend `OutboxPollingScheduler`):
 
 ```sql
 CREATE TABLE outbox (

@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-049-libs-java-messaging-outbox.md` — outbox+publisher+dedupe+envelope+parser scaffolding 을 `libs/java-messaging` 으로 추출. 5 wms backend service + admin-projection consumer + GAP/ecommerce 1개 동시 마이그레이션 (`CLAUDE.md` § Cross-Project Changes 원자 PR). `OutboxRow` interface + reference JPA / `OutboxPublisher` poll loop / `EventDedupePort` / `EventEnvelope` record / `EventEnvelopeParser` / MDC + 메트릭 contract. ADR-MONO-XXX 선행, `shared-library-policy.md` 경계 갱신, `messaging/outbox-pattern/SKILL.md` 갱신. D4 churn freeze 영향 — D2 reset 인정 + PR description 에 명시. 분석=Opus 4.7 / 구현 권장=Opus (HIGH blast radius). /refactor-code wms outbound-service dry-run Manual Finding #1 surfaced.
+(empty)
 
 ## in-progress
 
@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-049-libs-java-messaging-outbox.md` — outbox + publisher + dedupe + envelope + parser scaffolding 을 `libs/java-messaging` 으로 추출 + ADR-MONO-004 ACCEPTED. 8 lib exports 신설 (`OutboxRow` interface, `OutboxRowEntity` reference JPA `@MappedSuperclass`, `AbstractOutboxPublisher<R>` generic poll loop, `OutboxRowRepository<R>` + `SpringDataOutboxRowRepository.wrap()` adapter, `TopicResolver` strategy, `OutboxMetrics` interface + `MicrometerOutboxMetrics` impl, `EventEnvelope` record + `EventEnvelopeParser` `@Component`, `EventDedupePort` interface, `MessagingMdc` try-with-resources helper). 3 wms big service migration: outbound-service / inbound-service / inventory-service 의 `OutboxPublisher` 가 `AbstractOutboxPublisher<EntityType>` 의 50줄 subclass 로 축소 + 기존 entity 가 `OutboxRow` 구현. v1 lib API (`OutboxPublisher`/`OutboxPollingScheduler`/`OutboxJpaEntity`/`OutboxWriter`/`BaseEventPublisher`/`ProcessedEventJpaEntity`) 보존 → master-service / GAP / ecommerce / fan-platform / scm 미마이그레이션 (별도 follow-up). `platform/shared-library-policy.md` 메시징 경계 explicit (`*.event.*` 도메인 이벤트 forbidden), `.claude/skills/messaging/outbox-pattern/SKILL.md` + `idempotent-consumer/SKILL.md` v2 패턴 + `EventDedupePort` 사용법으로 갱신. `docs/adr/INDEX.md` 신설 (4 ADR catalog). 테스트: lib unit 39/39 PASS (12 신규 + 27 기존), 5 wms service unit 모두 PASS (master/admin regression check 포함). Hard Stop boundary grep clean (lib 코드 0 service-name leak). D4 churn freeze 영향 — last_churn 2026-05-10, ADR-MONO-003 D2 다음 평가 ≥ 2026-06-09 + 1d. **분석=Opus 4.7 (1M) / 구현=Opus**. PR pending. 2026-05-10.
 
 ## done
 

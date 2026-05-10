@@ -25,6 +25,24 @@ Shared libraries may contain:
 - test support utilities
 - common DTO primitives only if they are truly cross-service and stable
 
+## Messaging-specific guidance (per ADR-MONO-004)
+
+For `libs/java-messaging` — the boundary between transport scaffolding (allowed)
+and domain events (forbidden) is explicit:
+
+| Allowed | Forbidden |
+|---|---|
+| `OutboxRow` interface, `OutboxRowEntity` reference JPA mapping | Service-specific outbox entity classes that live alongside domain types |
+| `AbstractOutboxPublisher<R>` generic poll loop | Domain-typed publisher subclasses with `switch (event)` branching over service-specific event types |
+| `EventEnvelope` (record with `payload : JsonNode`) | Typed payload classes (e.g. `WarehouseCreatedPayload`, `OrderPlacedPayload`) |
+| `EventEnvelopeParser` (`@Component`, malformed JSON → `IllegalArgumentException`) | Per-service envelope subtypes that bake in `aggregateId : UUID` instead of `: String`, or carry domain-specific fields like `sourceTopic` / `tenantId` |
+| `EventDedupePort` interface + `Outcome` enum | Per-service dedupe table entities, retention-cleanup schedulers, tenant-scoping logic |
+| `MessagingMdc` helper for `traceId` / `eventId` / `consumerLabel` | Consumer-pipeline classes that bake in service-specific listener-group naming |
+| `OutboxMetrics` interface + `MicrometerOutboxMetrics` reference impl | Per-service metric naming conventions (the lib accepts a prefix; the service supplies it) |
+| `TopicResolver` strategy interface | Per-service topic-resolution lambdas — these stay inside the service's `OutboxPublisher` subclass |
+
+Reference: [ADR-MONO-004](../docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md).
+
 ---
 
 # Forbidden in Shared Libraries
@@ -38,6 +56,7 @@ Shared libraries must not contain:
 - service-private policies
 - service-specific orchestration logic
 - code that forces unrelated services to depend on a domain they do not own
+- domain event payload classes (`*.event.<Verb>Event`) — these stay per-service per ADR-MONO-004
 
 ---
 

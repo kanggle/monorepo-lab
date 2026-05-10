@@ -1,5 +1,6 @@
 package com.wms.inventory.adapter.out.persistence.outbox;
 
+import com.example.messaging.outbox.OutboxRow;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -19,10 +20,15 @@ import org.hibernate.type.SqlTypes;
  * tells Hibernate 6+ to serialise the {@link String} as JSONB. Domain
  * serialisation is handled outside this adapter — by the time the row reaches
  * the entity, {@link #payload} is already a serialised envelope JSON string.
+ *
+ * <p>Implements the shared {@link OutboxRow} contract (TASK-MONO-049 +
+ * ADR-MONO-004) so the generic {@code AbstractOutboxPublisher} in
+ * {@code libs/java-messaging} can drive this table without taking a hard
+ * dependency on this entity class.
  */
 @Entity
 @Table(name = "inventory_outbox")
-public class InventoryOutboxJpaEntity {
+public class InventoryOutboxJpaEntity implements OutboxRow {
 
     @Id
     private UUID id;
@@ -69,16 +75,35 @@ public class InventoryOutboxJpaEntity {
     }
 
     public UUID getId() { return id; }
-    public String getAggregateType() { return aggregateType; }
-    public UUID getAggregateId() { return aggregateId; }
-    public String getEventType() { return eventType; }
+    @Override public String getAggregateType() { return aggregateType; }
+    /** Native UUID accessor — the {@link OutboxRow} contract returns the String form. */
+    public UUID getAggregateUuid() { return aggregateId; }
+    @Override public String getEventType() { return eventType; }
     public String getEventVersion() { return eventVersion; }
-    public String getPayload() { return payload; }
-    public String getPartitionKey() { return partitionKey; }
+    @Override public String getPayload() { return payload; }
+    @Override public String getPartitionKey() { return partitionKey; }
     public Instant getCreatedAt() { return createdAt; }
-    public Instant getPublishedAt() { return publishedAt; }
+    @Override public Instant getPublishedAt() { return publishedAt; }
 
+    @Override
     public void markPublished(Instant at) {
         this.publishedAt = at;
+    }
+
+    // --- OutboxRow contract adapters (TASK-MONO-049) -------------------------
+
+    @Override
+    public UUID getEventId() {
+        return id;
+    }
+
+    @Override
+    public String getAggregateId() {
+        return aggregateId == null ? null : aggregateId.toString();
+    }
+
+    @Override
+    public Instant getOccurredAt() {
+        return createdAt;
     }
 }
