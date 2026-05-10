@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.outbound.application.port.out.EventDedupePort;
-import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
+import com.wms.outbound.application.saga.SagaIdResolver;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
@@ -23,7 +23,7 @@ class InventoryReservedConsumerTest {
     private static final Instant T0 = Instant.parse("2026-04-29T10:00:00Z");
     private final Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
 
-    private InventoryEventParser parser;
+    private EventEnvelopeParser parser;
     private FakeEventDedupePort dedupePort;
     private FakeSagaPersistencePort sagaPersistence;
     private FakeOrderPersistencePort orderPersistence;
@@ -32,13 +32,14 @@ class InventoryReservedConsumerTest {
 
     @BeforeEach
     void setUp() {
-        parser = new InventoryEventParser(new ObjectMapper());
+        parser = new EventEnvelopeParser(new ObjectMapper());
         dedupePort = new FakeEventDedupePort();
         sagaPersistence = new FakeSagaPersistencePort();
         orderPersistence = new FakeOrderPersistencePort();
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, clock);
-        consumer = new InventoryReservedConsumer(parser, dedupePort, coordinator,
-                (SagaPersistencePort) sagaPersistence);
+        InventoryConsumerSupport support = new InventoryConsumerSupport(
+                parser, dedupePort, new SagaIdResolver(sagaPersistence));
+        consumer = new InventoryReservedConsumer(support, coordinator);
     }
 
     @Test
