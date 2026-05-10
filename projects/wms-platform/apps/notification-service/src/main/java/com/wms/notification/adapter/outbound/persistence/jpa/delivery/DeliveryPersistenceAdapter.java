@@ -5,7 +5,6 @@ import com.wms.notification.domain.delivery.DeliveryStatus;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import com.wms.notification.domain.error.IdempotencyKeyDuplicateException;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -20,12 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeliveryPersistenceAdapter implements DeliveryRepository {
 
     private final NotificationDeliveryJpaRepository repository;
+    private final EntityManager entityManager;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    public DeliveryPersistenceAdapter(NotificationDeliveryJpaRepository repository) {
+    public DeliveryPersistenceAdapter(NotificationDeliveryJpaRepository repository,
+                                      EntityManager entityManager) {
         this.repository = repository;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -59,12 +58,7 @@ public class DeliveryPersistenceAdapter implements DeliveryRepository {
     public void update(NotificationDelivery delivery) {
         NotificationDeliveryJpaEntity managed = repository.findById(delivery.id())
                 .orElseThrow(() -> new IllegalStateException("Delivery vanished: " + delivery.id()));
-        managed.apply(
-                delivery.status().name(),
-                delivery.attemptCount(),
-                delivery.scheduledRetryAt().orElse(null),
-                delivery.lastError().orElse(null),
-                delivery.updatedAt());
+        applyMutableState(managed, delivery);
         repository.save(managed);
     }
 
@@ -95,6 +89,21 @@ public class DeliveryPersistenceAdapter implements DeliveryRepository {
         return repository.findPendingDueForRetry(now, PageRequest.of(0, batchSize)).stream()
                 .map(DeliveryPersistenceAdapter::toDomain)
                 .toList();
+    }
+
+    /**
+     * Copies the mutable state fields from a domain object onto a managed JPA entity.
+     * Used by both {@link #save} (new entity) and {@link #update} (existing entity)
+     * to eliminate the duplicated 5-field extraction.
+     */
+    private static void applyMutableState(NotificationDeliveryJpaEntity entity,
+                                          NotificationDelivery delivery) {
+        entity.apply(
+                delivery.status().name(),
+                delivery.attemptCount(),
+                delivery.scheduledRetryAt().orElse(null),
+                delivery.lastError().orElse(null),
+                delivery.updatedAt());
     }
 
     static NotificationDelivery toDomain(NotificationDeliveryJpaEntity row) {

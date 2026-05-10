@@ -1,5 +1,6 @@
 package com.wms.notification.adapter.outbound.persistence.jpa.routing;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,9 +63,9 @@ public class RoutingMatcherJsonCodec {
             List<ChannelTarget> result = new ArrayList<>(dtos.size());
             for (ChannelTargetDto dto : dtos) {
                 result.add(new ChannelTarget(
-                        ChannelType.valueOf(dto.channelType),
-                        dto.channelId,
-                        dto.templateKey));
+                        ChannelType.valueOf(dto.channelType()),
+                        dto.channelId(),
+                        dto.templateKey()));
             }
             return result;
         } catch (Exception e) {
@@ -97,10 +98,8 @@ public class RoutingMatcherJsonCodec {
     }
 
     /** Public for tests / future admin v2 writes. */
-    @SuppressWarnings("unused")
-    private static class ChannelTargetDto {
-        public String channelType;
-        public String channelId;
-        public String templateKey;
-    }
+    private record ChannelTargetDto(
+            @JsonProperty("channelType") String channelType,
+            @JsonProperty("channelId") String channelId,
+            @JsonProperty("templateKey") String templateKey) {}
 }

@@ -3,7 +3,6 @@ package com.wms.notification.adapter.outbound.persistence.jpa.dedupe;
 import com.wms.notification.application.port.outbound.AlertDedupePort;
 import com.wms.notification.domain.delivery.DedupeOutcome;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,13 +21,14 @@ public class AlertDedupePersistenceAdapter implements AlertDedupePort {
 
     private final NotificationEventDedupeJpaRepository repository;
     private final Clock clock;
+    private final EntityManager entityManager;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    public AlertDedupePersistenceAdapter(NotificationEventDedupeJpaRepository repository, Clock clock) {
+    public AlertDedupePersistenceAdapter(NotificationEventDedupeJpaRepository repository,
+                                         Clock clock,
+                                         EntityManager entityManager) {
         this.repository = repository;
         this.clock = clock;
+        this.entityManager = entityManager;
     }
 
     @Override

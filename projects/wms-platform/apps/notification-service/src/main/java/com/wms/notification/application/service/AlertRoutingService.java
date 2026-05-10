@@ -86,17 +86,53 @@ public class AlertRoutingService implements ProcessInboundEventUseCase {
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
     public Outcome process(AlertEnvelope envelope) {
+        // Phase 1: dedupe fast-exit
         if (dedupe.exists(envelope.eventId())) {
             dedupeDuplicate.increment();
             log.debug("eventId={} already processed; skipping", envelope.eventId());
             return Outcome.DUPLICATE;
         }
 
+        // Phase 2: resolve routing rule
+        RoutingRule rule = findUniqueRule(envelope);
+        if (rule == null) {
+            return Outcome.NO_RULE;
+        }
+
+        // Phase 3: matcher predicate evaluation
+        if (!rule.matches(envelope)) {
+            // Best-effort dedupe write; DUPLICATE is a no-op for observability.
+            dedupe.recordIfAbsent(envelope.eventId(), envelope.sourceTopic(), DedupeOutcome.FILTERED);
+            classifiedFiltered.increment();
+            log.debug("eventType={} matched rule but matcher predicate filtered eventId={}",
+                    envelope.eventType(), envelope.eventId());
+            return Outcome.FILTERED;
+        }
+
+        // Phase 4: record QUEUED dedupe
+        if (!recordQueuedDedupe(envelope)) {
+            return Outcome.DUPLICATE;
+        }
+
+        // Phase 5: enqueue deliveries for matched rule
+        enqueueDeliveriesForRule(rule, envelope);
+        classifiedQueued.increment();
+        return Outcome.QUEUED;
+    }
+
+    /**
+     * Phase 2 — resolves exactly one enabled rule for the event type.
+     * Returns {@code null} when no rule exists (NO_RULE path).
+     * Throws {@link RoutingAmbiguousException} when multiple rules collide
+     * (bad manual DB edit; sends to DLT).
+     */
+    private RoutingRule findUniqueRule(AlertEnvelope envelope) {
         List<RoutingRule> matchingType = routingRules.findEnabledByEventType(envelope.eventType());
         if (matchingType.isEmpty()) {
-            recordDedupeOrSkip(envelope, DedupeOutcome.NO_RULE);
+            // Best-effort dedupe write; DUPLICATE is a no-op for observability.
+            dedupe.recordIfAbsent(envelope.eventId(), envelope.sourceTopic(), DedupeOutcome.NO_RULE);
             classifiedNoRule.increment();
-            return Outcome.NO_RULE;
+            return null;
         }
         if (matchingType.size() > 1) {
             classifiedAmbiguous.increment();
@@ -104,27 +140,33 @@ public class AlertRoutingService implements ProcessInboundEventUseCase {
             // only on bad manual DB edit. Record the dedupe row with
             // outcome=ERROR so the diagnostic is visible in the cleanup
             // sweeper, then re-throw so the consumer's DLT path fires.
-            recordDedupeOrSkip(envelope, DedupeOutcome.ERROR);
+            dedupe.recordIfAbsent(envelope.eventId(), envelope.sourceTopic(), DedupeOutcome.ERROR);
             throw new RoutingAmbiguousException(envelope.eventType(),
                     matchingType.stream().map(RoutingRule::id).toList());
         }
-        RoutingRule rule = matchingType.get(0);
+        return matchingType.get(0);
+    }
 
-        if (!rule.matches(envelope)) {
-            recordDedupeOrSkip(envelope, DedupeOutcome.FILTERED);
-            classifiedFiltered.increment();
-            log.debug("eventType={} matched rule but matcher predicate filtered eventId={}",
-                    envelope.eventType(), envelope.eventId());
-            return Outcome.FILTERED;
-        }
-
+    /**
+     * Phase 4 — inserts the QUEUED dedupe row.
+     * Returns {@code false} when a concurrent insert already committed the row
+     * (DUPLICATE race); the caller exits with {@link Outcome#DUPLICATE}.
+     */
+    private boolean recordQueuedDedupe(AlertEnvelope envelope) {
         AlertDedupePort.Result dedupeResult =
                 dedupe.recordIfAbsent(envelope.eventId(), envelope.sourceTopic(), DedupeOutcome.QUEUED);
         if (dedupeResult == AlertDedupePort.Result.DUPLICATE) {
             dedupeDuplicate.increment();
-            return Outcome.DUPLICATE;
+            return false;
         }
+        return true;
+    }
 
+    /**
+     * Phase 5 — creates one {@link NotificationDelivery} per channel target,
+     * persists each, appends the outbox row, and schedules post-commit dispatch.
+     */
+    private void enqueueDeliveriesForRule(RoutingRule rule, AlertEnvelope envelope) {
         Instant now = clock.instant();
         String payloadSnapshot = serialise(envelope);
 
@@ -145,14 +187,6 @@ public class AlertRoutingService implements ProcessInboundEventUseCase {
             // Post-commit dispatch — vendor 5xx cannot poison the ingest TX.
             postCommitDispatcher.scheduleAfterCommit(delivery);
         }
-        classifiedQueued.increment();
-        return Outcome.QUEUED;
-    }
-
-    private void recordDedupeOrSkip(AlertEnvelope envelope, DedupeOutcome outcome) {
-        // Best-effort: a concurrent insert may have just committed the row
-        // first; treat DUPLICATE as a no-op for observability writes.
-        dedupe.recordIfAbsent(envelope.eventId(), envelope.sourceTopic(), outcome);
     }
 
     private String serialise(AlertEnvelope envelope) {

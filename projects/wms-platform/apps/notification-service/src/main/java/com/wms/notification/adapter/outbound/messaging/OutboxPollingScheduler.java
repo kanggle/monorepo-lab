@@ -38,9 +38,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 @Profile("!standalone")
-public class NotificationOutboxPublisher {
+public class OutboxPollingScheduler {
 
-    private static final Logger log = LoggerFactory.getLogger(NotificationOutboxPublisher.class);
+    private static final Logger log = LoggerFactory.getLogger(OutboxPollingScheduler.class);
     private static final long INITIAL_BACKOFF_MS = 1_000L;
     private static final long MAX_BACKOFF_MS = 30_000L;
     private static final double BACKOFF_MULTIPLIER = 2.0;
@@ -58,7 +58,7 @@ public class NotificationOutboxPublisher {
     private final Counter publishSuccessCounter;
     private final Counter publishFailureCounter;
 
-    public NotificationOutboxPublisher(NotificationOutboxJpaRepository repository,
+    public OutboxPollingScheduler(NotificationOutboxJpaRepository repository,
                                        KafkaTemplate<String, String> kafkaTemplate,
                                        TransactionTemplate transactionTemplate,
                                        Clock clock,
