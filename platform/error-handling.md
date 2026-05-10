@@ -172,34 +172,48 @@ Owned by `inbound-service`. See `rules/domains/wms.md` and
 | PUTAWAY_LINE_NOT_FOUND | 404 | PutawayLine does not exist within the given instruction |
 | PUTAWAY_QUANTITY_EXCEEDED | 422 | Sum of `qtyToPutaway` for an AsnLine exceeds the corresponding `qtyPassed` from inspection |
 | PUTAWAY_LOCATION_FULL | 422 | Target location has insufficient remaining capacity (advisory in v1; reserved for v2 hard-guard) |
-| WAREHOUSE_MISMATCH | 422 | Destination location belongs to a different warehouse than the ASN |
+| WAREHOUSE_MISMATCH | 422 | Destination location belongs to a different warehouse than the ASN (cross-service: also emitted by `outbound-service` for `Shipment.warehouseId` vs `Order.warehouseId` consistency — same semantic) |
 | PARTNER_INVALID_TYPE | 422 | Supplier resolved by `supplierPartnerId/Code` is not `ACTIVE` and of `partner_type ∈ {SUPPLIER, BOTH}` |
 | LOT_REQUIRED | 422 | LOT-tracked SKU received without `lotId` or `lotNo` at inspection |
+| SKU_INACTIVE | 422 | Referenced SKU exists but is not `ACTIVE` (cannot be received or putaway). Cross-service: also emitted by `outbound-service` during picking. |
+| LOCATION_INACTIVE | 422 | Putaway target location is not `ACTIVE` (deactivated by ops or under maintenance) |
 | WEBHOOK_SIGNATURE_INVALID | 401 | ERP webhook HMAC signature missing, malformed, or mismatched |
 | WEBHOOK_TIMESTAMP_INVALID | 401 | ERP webhook `X-Erp-Timestamp` header missing, unparseable, or outside the ±5-minute window |
 | WEBHOOK_REPLAY_DETECTED | 401 | Reserved for future webhook-source replay protection (not used in v1; v1 returns 200 `ignored_duplicate` for repeat `X-Erp-Event-Id`) |
 
 ## Inventory  `[domain: wms]`
 
-Owned by `inventory-service` (future). See `rules/domains/wms.md`.
+Owned by `inventory-service`. See `rules/domains/wms.md` and
+`specs/services/inventory-service/`.
 
 | Code | HTTP | Description |
 |---|---|---|
 | INVENTORY_NOT_FOUND | 404 | No inventory row exists for the given location/SKU/lot tuple |
 | INSUFFICIENT_STOCK | 422 | Requested quantity exceeds available (non-reserved) stock |
+| ADJUSTMENT_NOT_FOUND | 404 | Inventory adjustment with given id does not exist |
 | ADJUSTMENT_REASON_REQUIRED | 400 | Inventory adjustment submitted without a reason |
+| TRANSFER_NOT_FOUND | 404 | Stock transfer with given id does not exist |
 | TRANSFER_SAME_LOCATION | 400 | Source and destination location are the same |
+| RESERVATION_NOT_FOUND | 404 | Reservation with given id does not exist |
+| RESERVATION_QUANTITY_MISMATCH | 422 | Release/consume quantity exceeds the reservation's reserved quantity |
 
 ## Outbound  `[domain: wms]`
 
-Owned by `outbound-service` (future). See `rules/domains/wms.md`.
+Owned by `outbound-service`. See `rules/domains/wms.md` and
+`specs/services/outbound-service/`.
 
 | Code | HTTP | Description |
 |---|---|---|
 | ORDER_NOT_FOUND | 404 | Outbound order does not exist |
 | ORDER_ALREADY_SHIPPED | 422 | Operation attempted on an already-shipped order |
+| ORDER_NO_DUPLICATE | 409 | `orderNo` is already taken (mirror of inbound `ASN_NO_DUPLICATE`). Note: current `OrderNoDuplicateException` returns `CONFLICT` (Transactional Trait generic) — code rename to `ORDER_NO_DUPLICATE` is a deferred housekeeping item. |
+| PICKING_REQUEST_NOT_FOUND | 404 | Picking request (assignment from order to picker) does not exist |
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
+| PICKING_INCOMPLETE | 422 | Packing attempted before picking is complete |
+| PACKING_UNIT_NOT_FOUND | 404 | Packing unit (carton/pallet) does not exist for the given id or order |
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
+| SHIPMENT_NOT_FOUND | 404 | Shipment record does not exist for the given id or order |
+| EXTERNAL_SERVICE_UNAVAILABLE | 503 | Third-party integration (TMS / supplier / external WMS adapter) is unreachable after retries / circuit-breaker exhausted. Distinct from `SERVICE_UNAVAILABLE` (internal monorepo service) — different operator playbook (3rd-party SLA, support ticket vs internal restart). |
 
 ## Admin  `[domain: wms]`
 
