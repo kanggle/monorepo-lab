@@ -6,6 +6,27 @@ Consumers must not depend on fields not defined in this contract.
 
 ---
 
+## Topics
+
+Canonical Kafka topic names for events declared in this contract. Topic
+names follow the ecommerce convention `<context>.<aggregate>.<event>` —
+multi-word event suffixes use hyphens (mirroring `shipping.shipping.status-changed`).
+
+| Event | Kafka topic | Status |
+|---|---|---|
+| `UserProfileUpdated` | `user.user.profile-updated` | live (no production consumer in v1; declared for admin-dashboard / notification-service future use) |
+| `UserWithdrawn` | `user.user.withdrawn` | live (consumed by order-service + auth-service) |
+
+> **Renaming history (TASK-BE-134, 2026-05-11)**: prior to this task the
+> publisher used `user.user-profile.updated` and `user.user-withdrawn`
+> (hyphen as the separator between aggregate and event), but every
+> consumer subscribed to `user.user.withdrawn` (dot). UserWithdrawn events
+> were silently lost. This contract now pins the canonical names; the
+> publisher was aligned in the same PR. No backwards-compatibility window
+> was retained — there were no consumers receiving the broken topic.
+
+---
+
 ## Event Envelope (common to all events)
 ```json
 {

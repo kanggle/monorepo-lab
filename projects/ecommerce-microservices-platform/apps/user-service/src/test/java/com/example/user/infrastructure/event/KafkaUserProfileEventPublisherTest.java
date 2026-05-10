@@ -83,7 +83,7 @@ class KafkaUserProfileEventPublisherTest {
     @DisplayName("Kafka 비동기 전송 실패 시 메트릭이 증가하고 ERROR 로그가 기록된다")
     void handleProfileUpdated_kafkaAsyncFailure_incrementsMetricAndLogsError() {
         CompletableFuture future = new CompletableFuture();
-        given(kafkaTemplate.send(eq("user.user-profile.updated"), any(), any())).willReturn(future);
+        given(kafkaTemplate.send(eq("user.user.profile-updated"), any(), any())).willReturn(future);
 
         publisher.handleProfileUpdated(sampleSpringEvent());
 

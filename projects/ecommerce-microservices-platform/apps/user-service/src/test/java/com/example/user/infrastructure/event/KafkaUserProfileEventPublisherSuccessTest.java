@@ -76,7 +76,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
         then(kafkaTemplate).should().send(topicCaptor.capture(), keyCaptor.capture(), messageCaptor.capture());
 
-        assertThat(topicCaptor.getValue()).isEqualTo("user.user-profile.updated");
+        assertThat(topicCaptor.getValue()).isEqualTo("user.user.profile-updated");
         assertThat(keyCaptor.getValue()).isEqualTo(userId.toString());
         assertThat(messageCaptor.getValue()).contains("UserProfileUpdated");
     }
@@ -105,7 +105,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
 
         publisher.handleUserWithdrawn(springEvent);
 
-        then(kafkaTemplate).should().send(eq("user.user-withdrawn"), eq(userId.toString()), any());
+        then(kafkaTemplate).should().send(eq("user.user.withdrawn"), eq(userId.toString()), any());
     }
 
     @Test

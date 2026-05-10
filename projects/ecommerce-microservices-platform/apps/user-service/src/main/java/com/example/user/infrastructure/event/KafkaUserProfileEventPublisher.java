@@ -22,8 +22,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KafkaUserProfileEventPublisher {
 
-    private static final String PROFILE_UPDATED_TOPIC = "user.user-profile.updated";
-    private static final String USER_WITHDRAWN_TOPIC = "user.user-withdrawn";
+    private static final String PROFILE_UPDATED_TOPIC = "user.user.profile-updated";
+    private static final String USER_WITHDRAWN_TOPIC = "user.user.withdrawn";
     private static final String EVENT_TYPE_PROFILE_UPDATED = "UserProfileUpdated";
     private static final String EVENT_TYPE_USER_WITHDRAWN = "UserWithdrawn";
 
