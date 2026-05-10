@@ -1,4 +1,4 @@
-package com.wms.notification.adapter.outbound.messaging;
+package com.wms.notification.adapter.outbound.scheduling;
 
 import com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase;
 import org.slf4j.Logger;

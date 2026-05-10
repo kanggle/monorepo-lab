@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Component
-public class OutboxAdapter implements OutboxPort {
+public class OutboxWriterAdapter implements OutboxPort {
 
     private static final String AGGREGATE_TYPE = "notification.delivery";
     private static final String EVENT_VERSION = "v1";
@@ -40,7 +40,7 @@ public class OutboxAdapter implements OutboxPort {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public OutboxAdapter(NotificationOutboxJpaRepository repository,
+    public OutboxWriterAdapter(NotificationOutboxJpaRepository repository,
                          ObjectMapper objectMapper,
                          Clock clock) {
         this.repository = repository;

@@ -1,7 +1,5 @@
 package com.wms.notification.adapter.outbound.slack;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.notification.application.port.outbound.SlackChannelPort;
 import com.wms.notification.domain.error.ChannelNotConfiguredException;
@@ -15,7 +13,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -79,7 +76,7 @@ public class SlackChannelAdapter implements SlackChannelPort {
             throw new ChannelNotConfiguredException(
                     "Slack webhook URL not configured for channel alias: " + channelAlias);
         }
-        String slackBody = renderSlackBody(payloadJson, channelAlias);
+        String slackBody = SlackBodyRenderer.render(objectMapper, payloadJson, channelAlias);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(webhookUrl))
                 .timeout(READ_TIMEOUT)
@@ -111,25 +108,4 @@ public class SlackChannelAdapter implements SlackChannelPort {
         throw new RuntimeException("Slack transient failure status=" + status + " alias=" + channelAlias);
     }
 
-    private String renderSlackBody(String payloadJson, String channelAlias) {
-        // Best-effort plaintext rendering. Robust to malformed payload —
-        // we fall back to a literal stamp so the message at least reaches
-        // ops, even if the routing service tampered with the snapshot.
-        try {
-            JsonNode root = objectMapper.readTree(payloadJson);
-            String eventType = root.path("eventType").asText("unknown-event");
-            String aggregateId = root.path("aggregateId").asText("");
-            String text = "[" + channelAlias + "] " + eventType
-                    + (aggregateId.isEmpty() ? "" : " @ " + aggregateId);
-            return objectMapper.writeValueAsString(Map.of("text", text));
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to render Slack body for alias={}; falling back to stamp", channelAlias);
-            try {
-                return objectMapper.writeValueAsString(Map.of(
-                        "text", "[" + channelAlias + "] notification (payload render failed)"));
-            } catch (JsonProcessingException impossible) {
-                throw new IllegalStateException("Jackson failed to serialise a Map<String,String>", impossible);
-            }
-        }
-    }
 }
