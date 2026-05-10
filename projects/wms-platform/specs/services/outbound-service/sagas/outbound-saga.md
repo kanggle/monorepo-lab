@@ -360,9 +360,13 @@ crashes.
   `outbound.saga.sweeper.batch-size`).
 - **Threshold**: 5 minutes since `last_transition_at` (configurable
   `outbound.saga.sweeper.threshold-seconds`).
-- **Cap**: 10 re-emissions per saga (configurable
-  `outbound.saga.sweeper.max-attempts`). After cap → saga moves to
-  `STUCK` (alert; ops investigates).
+- **Cap**: 5 re-emissions per saga (configurable
+  `outbound.saga.sweeper.max-attempts`, default `5`). After cap → saga
+  transitions to terminal `STUCK_RECOVERY_FAILED` and emits
+  `outbound.alert.saga.recovery.exhausted` v1 alert event (see
+  [state-machines/saga-status.md](../state-machines/saga-status.md) +
+  [contracts/events/admin-events.md](../../../contracts/events/admin-events.md)
+  §A1 for the alert schema). Ops investigates.
 
 ### 4.3 Recovery Actions
 
@@ -393,11 +397,14 @@ dedupe + saga state guard) is the load-bearing correctness boundary; see
 
 ### 4.5 Stuck Sagas
 
-When a saga exceeds `max-attempts` re-emissions, the sweeper marks the
-saga internally as `STUCK` (a tombstone — the `state` column does NOT
-change, but `failure_reason` is populated and a metric fires). Ops
-investigates via the `outbound.saga.stuck.count` alert + the per-saga
-runbook.
+When a saga exceeds `max-attempts` re-emissions, the sweeper transitions
+the saga to terminal state `STUCK_RECOVERY_FAILED` (see
+[state-machines/saga-status.md](../state-machines/saga-status.md)),
+populates `failure_reason`, increments
+`outbound.saga.sweeper.exhausted.count{from_state}`, and emits
+`outbound.alert.saga.recovery.exhausted` v1 alert event into the outbox
+in the same transaction (T3 atomicity). Ops investigates via the alert
+event + the per-saga runbook.
 
 ---
 
@@ -465,7 +472,7 @@ operator actions.
 | **CANCELLED (pre-pick)** | Saga: `CANCELLED` (terminal, no compensation needed). Order: `CANCELLED`. | None — clean cancellation. |
 | **CANCELLED (mid-flow, post-reserve)** | Saga: `CANCELLED` (after compensation). Order: `CANCELLED`. | None — compensation completed asynchronously. |
 | **SHIPPED_NOT_NOTIFIED** | Saga: `SHIPPED_NOT_NOTIFIED` (non-terminal alert). Order: `SHIPPED`. Stock: consumed. Shipment.tms_status: `NOTIFY_FAILED`. | Investigate TMS health via `outbound.tms.*` metrics. Once TMS is healthy: `POST /shipments/{id}:retry-tms-notify`. On success → saga moves to `COMPLETED` (if `inventory.confirmed` already received). |
-| **STUCK (sweeper exhausted)** | Saga state unchanged (e.g., `REQUESTED`, `CANCELLATION_REQUESTED`, `SHIPPED`). `failure_reason` = "sweeper_max_attempts_exceeded". Metric fires. | Investigate Kafka health, inventory-service health. Manual remediation per runbook (admin endpoint `POST /sagas/{id}:force-fail` planned in v2; v1: direct DB inspection + targeted re-emission). |
+| **STUCK_RECOVERY_FAILED (sweeper exhausted)** | Saga: `STUCK_RECOVERY_FAILED` (terminal). `failure_reason` = "sweeper_max_attempts_exceeded". `outbound.saga.sweeper.exhausted.count{from_state}` increments. `outbound.alert.saga.recovery.exhausted` v1 alert event emitted into outbox in same TX. | Investigate Kafka health, inventory-service health. Manual remediation per runbook (admin endpoint `POST /sagas/{id}:force-fail` planned in v2; v1: direct DB inspection + targeted re-emission). |
 | **DLT (genuinely impossible saga transition)** | Message routed to `<topic>.DLT`; saga unchanged. | Investigate the originating event. Common cause: protocol violation (inventory emitted a reply that doesn't match outbound's saga state — usually a bug, never a steady-state condition). |
 
 ### 6.1 SHIPPED_NOT_NOTIFIED: Non-Terminal Alert
@@ -511,13 +518,14 @@ Per [`../architecture.md`](../architecture.md) § Observability:
 | `outbound.saga.active.count` | gauge | Currently in-progress sagas (state ∉ terminal set) |
 | `outbound.saga.state.transitions{from, to}` | counter | Transition counter, labelled by from/to state |
 | `outbound.saga.completed.duration.seconds` | histogram | Receipt-to-COMPLETED latency, p50/p95/p99 |
-| `outbound.saga.failed.count{reason=reserve_failed | tms_notify_failed | stuck}` | counter | Terminal failures by reason |
+| `outbound.saga.failed.count{reason=reserve_failed | tms_notify_failed | stuck_recovery_failed}` | counter | Terminal failures by reason |
 | `outbound.saga.compensation.fired.count` | counter | `outbound.picking.cancelled` outbox emissions |
 | `outbound.saga.event.already_applied.count{saga_state, event_kind}` | counter | Saga-guard no-op count |
 | `outbound.saga.event.invalid_transition.count{saga_state, event_kind}` | counter | Genuinely impossible transitions (alert at >0) |
-| `outbound.saga.sweeper.reemissions.count{state}` | counter | Sweeper re-emission count per state |
+| `outbound.saga.sweeper.run.count` | counter | Sweeper scheduler tick count |
+| `outbound.saga.sweeper.recovery.fired{from_state}` | counter | Sweeper re-emission count per stuck state (`REQUESTED|CANCELLATION_REQUESTED|SHIPPED`) |
+| `outbound.saga.sweeper.exhausted.count{from_state}` | counter | Saga transitions to `STUCK_RECOVERY_FAILED` (cap exceeded), tagged by originating state |
 | `outbound.saga.shipped_not_notified.count` | gauge | Sagas currently in `SHIPPED_NOT_NOTIFIED` (alert at >0) |
-| `outbound.saga.stuck.count` | gauge | Sagas exceeding sweeper max-attempts (alert at >0) |
 
 ### 7.2 Logs (structured JSON)
 
@@ -564,7 +572,7 @@ the saga has the following test surfaces.
   § Re-Delivery Behavior)
 - `version` increments on every successful transition
 - `failure_reason` populated on `RESERVE_FAILED` / `SHIPPED_NOT_NOTIFIED`
-  / `STUCK`
+  / `STUCK_RECOVERY_FAILED`
 
 ### 8.2 Application Service (port fakes)
 

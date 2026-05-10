@@ -6,7 +6,7 @@ All implementation tasks targeting this service must follow this declaration,
 
 ---
 
-## Identity
+## Service Identity
 
 | Field | Value |
 |---|---|
@@ -23,7 +23,7 @@ All implementation tasks targeting this service must follow this declaration,
 
 ---
 
-## Role
+## Responsibilities
 
 `gateway-service` is the **single external entry point** for all scm-platform
 traffic. Per `platform/api-gateway-policy.md` it MUST:

@@ -8,14 +8,14 @@
 - Redis (rate limiting state — transient data only)
 
 ## Allowed Service Interactions
-- JWT secret shared with auth-service for token validation
+- OIDC token validation against GAP (global-account-platform) — issuer + JWKS endpoint configuration only; no shared secret
 - declarative routing to all downstream backend services via Spring Cloud Gateway configuration
 
 ## Consumes From
 
 | Source | Contract | Purpose |
 |---|---|---|
-| auth-service | JWT token contract | Token validation (shared secret) |
+| GAP (global-account-platform) | OIDC RS256 / JWKS | Token signature validation + `aud=ecommerce` + `tenant_id=ecommerce` claim enforcement (see [`../../integration/gap-integration.md`](../../integration/gap-integration.md)) |
 
 ## Publishes To
 - None (gateway does not publish events or own APIs beyond proxied routes)
