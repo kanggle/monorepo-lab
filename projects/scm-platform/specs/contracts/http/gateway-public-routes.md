@@ -1,16 +1,16 @@
 ---
-status: placeholder
-last_updated: 2026-05-05
+status: live
+last_updated: 2026-05-11
 owners: scm-platform/backend
 ---
 
 # scm-platform — Public Gateway Routes
 
-> **Status**: v1 placeholder catalogue. The gateway-service (TASK-SCM-BE-001)
-> declares two routes; the downstream services are not yet bootstrapped
-> (TASK-SCM-BE-002 procurement-service, TASK-SCM-BE-003 inventory-visibility-service).
-> Until those land, calls to these paths receive 503 Service Unavailable
-> (Spring Cloud Gateway default for unreachable downstream).
+> **Status**: v1 live catalogue as of 2026-05-11. gateway-service
+> (TASK-SCM-BE-001), procurement-service (TASK-SCM-BE-002), and
+> inventory-visibility-service (TASK-SCM-BE-003) are all shipped. This file
+> was reconciled against the live controller surfaces by TASK-SCM-BE-008
+> (inventory-visibility) and TASK-SCM-BE-006 (procurement findings #1).
 
 This document enumerates every externally reachable HTTP route on
 `http://scm.local/` (Traefik-routed). All routes are owned by
@@ -52,44 +52,62 @@ All gateway-emitted errors follow `platform/error-handling.md`:
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `scm` (and is not `*`) |
 | 403 | FORBIDDEN | authorised token but lacks scope/role for the operation (downstream-emitted) |
 | 429 | RATE_LIMIT_EXCEEDED | per-account-or-IP quota exhausted; `Retry-After: 1` set |
-| 503 | SERVICE_UNAVAILABLE | downstream service unreachable (v1 placeholder routes) |
+| 503 | SERVICE_UNAVAILABLE | downstream service unreachable |
 
 ## Route catalogue
 
-### `procurement-service` (placeholder — TASK-SCM-BE-002)
+### `procurement-service` (TASK-SCM-BE-002, shipped)
 
 | Field | Value |
 |---|---|
 | External path predicate | `Path=/api/v1/procurement/**` |
 | Internal target | `${PROCUREMENT_SERVICE_URI:http://procurement-service:8080}` |
 | RewritePath | `/api/v1/procurement/(?<segment>.*) → /api/procurement/${segment}` |
-| Auth | required |
+| Auth | required (JWT) for `/api/procurement/po/**`; **public** (shared-secret) for `/api/procurement/webhooks/**` |
 | Rate limit | `replenishRate=1`, `burstCapacity=120`, key = `accountKeyResolver` |
-| Status | placeholder — downstream not implemented in v1 of the gateway |
+| Status | live |
 
-Anticipated v1 endpoints (formal contract lands with TASK-SCM-BE-002):
+Live v1 endpoints (formal contract:
+[`procurement-api.md`](./procurement-api.md)):
 
-- `POST /api/v1/procurement/po` — create PO (purchase order)
-- `POST /api/v1/procurement/po/{poId}/confirm` — confirm PO
-- `POST /api/v1/procurement/po/{poId}/cancel` — cancel PO
-- `POST /api/v1/procurement/po/{poId}/asn` — receive supplier ASN
-- `GET /api/v1/procurement/po/{poId}` — fetch PO
+| Method | External path | Auth | Idempotency |
+|---|---|---|---|
+| POST | `/api/v1/procurement/po` | JWT | `Idempotency-Key` |
+| GET | `/api/v1/procurement/po` | JWT | n/a (search) |
+| GET | `/api/v1/procurement/po/{poId}` | JWT | n/a |
+| POST | `/api/v1/procurement/po/{poId}/submit` | JWT | `Idempotency-Key` |
+| POST | `/api/v1/procurement/po/{poId}/confirm` | JWT | `Idempotency-Key` |
+| POST | `/api/v1/procurement/po/{poId}/cancel` | JWT | `Idempotency-Key` |
+| POST | `/api/v1/procurement/webhooks/supplier-ack` | shared-secret `X-Supplier-Signature` | `(tenantId, poId)` semantic |
+| POST | `/api/v1/procurement/webhooks/asn` | shared-secret `X-Supplier-Signature` | `(tenantId, supplierAsnRef)` UNIQUE |
 
-### `inventory-visibility-service` (placeholder — TASK-SCM-BE-003)
+> **Drift fixed**: the prior placeholder list claimed `POST /po/{poId}/asn`
+> (buyer-side) but the shipped implementation delivers ASN via the
+> `/api/v1/procurement/webhooks/asn` supplier webhook — caller asymmetry
+> matters for clients reading this catalogue. Reconciled by
+> TASK-SCM-BE-008 (extending TASK-SCM-BE-006 finding #1).
+
+### `inventory-visibility-service` (TASK-SCM-BE-003, shipped)
 
 | Field | Value |
 |---|---|
 | External path predicate | `Path=/api/v1/inventory-visibility/**` |
 | Internal target | `${INVENTORY_VISIBILITY_SERVICE_URI:http://inventory-visibility-service:8080}` |
 | RewritePath | `/api/v1/inventory-visibility/(?<segment>.*) → /api/inventory-visibility/${segment}` |
-| Auth | required |
+| Auth | required (JWT) for all endpoints |
 | Rate limit | `replenishRate=1`, `burstCapacity=120`, key = `accountKeyResolver` |
-| Status | placeholder — downstream not implemented in v1 of the gateway |
+| Status | live |
 
-Anticipated v1 endpoints (formal contract lands with TASK-SCM-BE-003):
+Live v1 endpoints (formal contract:
+[`inventory-visibility-api.md`](./inventory-visibility-api.md)). All return
+the `meta.warning: "Not for procurement decisions (S5)"` envelope:
 
-- `GET /api/v1/inventory-visibility/snapshot` — cross-node snapshot read-model
-- `GET /api/v1/inventory-visibility/sku/{sku}` — per-SKU visibility
+| Method | External path | Purpose |
+|---|---|---|
+| GET | `/api/v1/inventory-visibility/snapshot` | cross-node paginated snapshot list (or single-node when `?nodeId=`) |
+| GET | `/api/v1/inventory-visibility/sku/{sku}` | per-SKU cross-node breakdown (Redis cache, `X-Cache` header) |
+| GET | `/api/v1/inventory-visibility/staleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
+| GET | `/api/v1/inventory-visibility/nodes` | node list with status (id, externalId, type, name, status) — **public** per TASK-SCM-BE-008 decision (ops dashboard prerequisite) |
 
 ### Local management endpoints
 
