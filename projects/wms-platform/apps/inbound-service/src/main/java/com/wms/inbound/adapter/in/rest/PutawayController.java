@@ -6,6 +6,7 @@ import com.wms.inbound.adapter.in.rest.dto.PutawayConfirmationResponse;
 import com.wms.inbound.adapter.in.rest.dto.PutawayInstructionResponse;
 import com.wms.inbound.adapter.in.rest.dto.PutawaySkipResponse;
 import com.wms.inbound.adapter.in.rest.dto.SkipPutawayLineRequest;
+import com.wms.inbound.adapter.in.rest.util.RequestContext;
 import com.wms.inbound.application.command.ConfirmPutawayLineCommand;
 import com.wms.inbound.application.command.InstructPutawayCommand;
 import com.wms.inbound.application.command.SkipPutawayLineCommand;
@@ -66,7 +67,7 @@ public class PutawayController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         InstructPutawayCommand command = new InstructPutawayCommand(
                 asnId,
                 request.lines().stream()
@@ -74,8 +75,8 @@ public class PutawayController {
                                 l.asnLineId(), l.destinationLocationId(), l.qtyToPutaway()))
                         .toList(),
                 request.version(),
-                AsnController.actorId(jwt),
-                AsnController.callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         PutawayInstructionResult result = instructPutaway.instruct(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(String.valueOf(result.version()))
@@ -91,10 +92,10 @@ public class PutawayController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         ConfirmPutawayLineCommand command = new ConfirmPutawayLineCommand(
                 instructionId, lineId, request.actualLocationId(), request.qtyConfirmed(),
-                AsnController.actorId(jwt), AsnController.callerRoles(authentication));
+                RequestContext.actorId(jwt), RequestContext.callerRoles(authentication));
         PutawayConfirmationResult result = confirmPutawayLine.confirm(command);
         return ResponseEntity.ok(PutawayConfirmationResponse.from(result));
     }
@@ -108,10 +109,10 @@ public class PutawayController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         SkipPutawayLineCommand command = new SkipPutawayLineCommand(
                 instructionId, lineId, request.reason(),
-                AsnController.actorId(jwt), AsnController.callerRoles(authentication));
+                RequestContext.actorId(jwt), RequestContext.callerRoles(authentication));
         PutawaySkipResult result = skipPutawayLine.skip(command);
         return ResponseEntity.ok(PutawaySkipResponse.from(result));
     }
@@ -139,9 +140,4 @@ public class PutawayController {
         return ResponseEntity.ok(PutawayConfirmationResponse.from(result));
     }
 
-    private static void requireIdempotencyKey(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
-    }
 }

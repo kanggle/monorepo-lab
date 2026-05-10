@@ -12,7 +12,6 @@ import com.wms.inbound.domain.exception.AsnNotFoundException;
 import com.wms.inbound.domain.model.Asn;
 import com.wms.inbound.domain.model.AsnLine;
 import com.wms.inbound.domain.model.Inspection;
-import com.wms.inbound.domain.model.InspectionDiscrepancy;
 import com.wms.inbound.domain.model.InspectionLine;
 import com.wms.inbound.domain.model.PutawayConfirmation;
 import com.wms.inbound.domain.model.PutawayInstruction;
@@ -22,14 +21,12 @@ import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CloseAsnService implements CloseAsnUseCase {
 
-    private static final String ROLE_INBOUND_WRITE = "ROLE_INBOUND_WRITE";
     private static final Logger log = LoggerFactory.getLogger(CloseAsnService.class);
 
     private final AsnPersistencePort asnPersistence;
@@ -53,7 +50,7 @@ public class CloseAsnService implements CloseAsnUseCase {
     @Override
     @Transactional
     public CloseAsnResult close(CloseAsnCommand command) {
-        requireRole(command.callerRoles(), ROLE_INBOUND_WRITE);
+        AuthorizationGuards.requireRole(command.callerRoles(), InboundRoles.ROLE_INBOUND_WRITE);
 
         Asn asn = asnPersistence.findById(command.asnId())
                 .orElseThrow(() -> new AsnNotFoundException(command.asnId()));
@@ -121,9 +118,4 @@ public class CloseAsnService implements CloseAsnUseCase {
                 putawayConfirmedTotal, discrepancyCount);
     }
 
-    private static void requireRole(java.util.Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
-    }
 }
