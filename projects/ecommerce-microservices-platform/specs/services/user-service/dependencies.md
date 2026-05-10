@@ -32,8 +32,8 @@
 
 | Topic | Contract | Purpose |
 |---|---|---|
-| `user.user-profile.updated` | `specs/contracts/events/user-events.md` | Notify downstream services (admin-dashboard, future notification-service) of profile changes |
-| `user.user-withdrawn` | `specs/contracts/events/user-events.md` | Notify downstream services (order-service, auth-service) when a user withdraws their account |
+| `user.user.profile-updated` | `specs/contracts/events/user-events.md` (Topics table) | Notify downstream services (admin-dashboard, future notification-service) of profile changes |
+| `user.user.withdrawn` | `specs/contracts/events/user-events.md` (Topics table) | Notify downstream services (order-service, auth-service) when a user withdraws their account |
 
 ## Forbidden Dependencies
 - direct database access to another service (per `service-boundaries.md`)
@@ -43,3 +43,23 @@
 
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
+
+**Topic naming**: post-TASK-BE-134 (PR #338), the canonical topic names
+are `user.user.profile-updated` and `user.user.withdrawn` (dot
+separators between context / aggregate / event, hyphens only inside
+multi-word event suffixes — `shipping.shipping.status-changed`
+pattern). The earlier hyphen-between-aggregate-and-event names
+(`user.user-withdrawn`, `user.user-profile.updated`) were the
+publisher-side bug that caused silent UserWithdrawn loss before BE-134.
+
+**Delivery semantic (ADR-006)**: user-service publishes both topics via
+`@TransactionalEventListener(AFTER_COMMIT)` + `KafkaTemplate.send` —
+**best-effort** with a narrow ms-window failure mode (commit succeeds
+→ process crash before broker ack). [`ADR-006`](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md)
+classifies this as **Scenario B — Accept best-effort + observability
+boost**: `userMetrics.incrementEventPublishFailure(eventType)` is the
+observability tap; an ops runbook covers the manual recovery path
+(scan `user_profiles.status='WITHDRAWN'` to find rows where downstream
+side-effects did not run). Promotion to outbox is **deferred** until a
+non-recoverable user event (e.g., financial credit issuance) is
+introduced.

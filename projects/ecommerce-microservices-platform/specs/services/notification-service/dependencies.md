@@ -42,3 +42,15 @@
 
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
+
+**Delivery semantic (ADR-006)**: notification-service uses
+`EmailNotificationSender` → `JavaMailSender.send` synchronous SMTP —
+**best-effort** by SMTP-protocol design. notification is the *terminal*
+of the saga (no downstream consumer); silent loss = "user did not
+receive email", not "system state diverges". [`ADR-006`](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md)
+classifies this as **Scenario B — Accept best-effort + DLQ runbook**:
+the upstream consumer's spring-kafka NACK + retry + DLT
+(`<topic>.DLT`) is the durable retry path. An email-send-failure
+Micrometer counter + DLQ replay runbook is the v1 mitigation.
+Transactional outbox would over-engineer (gating SMTP on local DB
+durability) without protecting the actual SMTP→inbox edge.
