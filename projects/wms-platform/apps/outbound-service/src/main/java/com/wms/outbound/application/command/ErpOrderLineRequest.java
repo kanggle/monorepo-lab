@@ -1,4 +1,4 @@
-package com.wms.outbound.adapter.in.webhook.erp.dto;
+package com.wms.outbound.application.command;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -7,7 +7,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 /**
- * Per-line entry on the ERP order webhook payload. Schema declared in
+ * Per-line entry on the ERP order webhook payload, also used as the application
+ * command shape for the inbox processor. Schema declared in
  * {@code specs/contracts/webhooks/erp-order-webhook.md} § Request Body.
  */
 public record ErpOrderLineRequest(

@@ -2,6 +2,7 @@ package com.wms.outbound.adapter.in.webhook.erp;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,7 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.wms.outbound.adapter.in.web.advice.GlobalExceptionHandler;
-import com.wms.outbound.adapter.out.persistence.adapter.WebhookInboxPersistenceAdapter;
+import com.wms.outbound.application.command.IngestWebhookEventCommand;
+import com.wms.outbound.application.port.in.IngestWebhookEventUseCase;
+import com.wms.outbound.application.port.in.IngestWebhookEventUseCase.IngestResult;
 import com.wms.outbound.application.port.out.WebhookSecretPort;
 import com.wms.outbound.config.SecurityConfig;
 import java.nio.charset.StandardCharsets;
@@ -66,7 +69,7 @@ class ErpOrderWebhookControllerTest {
     private WebhookSecretPort secretPort;
 
     @MockBean
-    private WebhookInboxPersistenceAdapter inboxAdapter;
+    private IngestWebhookEventUseCase ingestUseCase;
 
     @TestConfiguration
     static class FixedClockConfig {
@@ -99,12 +102,23 @@ class ErpOrderWebhookControllerTest {
         when(secretPort.getSecret(anyString())).thenReturn(Optional.empty());
     }
 
+    /**
+     * Argument matcher mirroring the legacy 3-parameter assertion:
+     * matches an {@link IngestWebhookEventCommand} with {@code eventId} and
+     * {@code source} equal to the expected values; payload may be anything.
+     */
+    private static IngestWebhookEventCommand commandFor(String eventId, String source) {
+        return argThat(cmd -> cmd != null
+                && eventId.equals(cmd.eventId())
+                && source.equals(cmd.source()));
+    }
+
     @Test
     @DisplayName("Case 1: valid signature + timestamp + new event-id → 200 accepted")
     void case01_validRequestAccepted() throws Exception {
         mockSecretPortFor(SOURCE);
-        when(inboxAdapter.ingest(eq("evt-1"), anyString(), eq(SOURCE)))
-                .thenReturn(WebhookInboxPersistenceAdapter.Result.accepted(FIXED_NOW));
+        when(ingestUseCase.ingest(commandFor("evt-1", SOURCE)))
+                .thenReturn(IngestResult.accepted(FIXED_NOW));
 
         mockMvc.perform(validRequest())
                 .andExpect(status().isOk())
@@ -112,7 +126,7 @@ class ErpOrderWebhookControllerTest {
                 .andExpect(jsonPath("$.eventId").value("evt-1"))
                 .andExpect(jsonPath("$.orderNo").value("ORD-20260428-0001"));
 
-        verify(inboxAdapter).ingest(eq("evt-1"), anyString(), eq(SOURCE));
+        verify(ingestUseCase).ingest(commandFor("evt-1", SOURCE));
     }
 
     @Test
@@ -129,7 +143,7 @@ class ErpOrderWebhookControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("WEBHOOK_SIGNATURE_INVALID"));
 
-        verify(inboxAdapter, never()).ingest(anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
     @Test
@@ -235,7 +249,7 @@ class ErpOrderWebhookControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(inboxAdapter, never()).ingest(anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
     @Test
@@ -283,8 +297,8 @@ class ErpOrderWebhookControllerTest {
     void case09_duplicateEventId() throws Exception {
         mockSecretPortFor(SOURCE);
         Instant previously = FIXED_NOW.minus(Duration.ofMinutes(2));
-        when(inboxAdapter.ingest(eq("evt-9"), anyString(), eq(SOURCE)))
-                .thenReturn(WebhookInboxPersistenceAdapter.Result.duplicate(previously));
+        when(ingestUseCase.ingest(commandFor("evt-9", SOURCE)))
+                .thenReturn(IngestResult.duplicate(previously));
 
         mockMvc.perform(post("/webhooks/erp/order")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -332,15 +346,15 @@ class ErpOrderWebhookControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("WEBHOOK_SIGNATURE_INVALID"));
 
-        verify(inboxAdapter, never()).ingest(anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
     @Test
     @DisplayName("Case 11: backend slow → still returns 200 fast (commit is fast)")
     void case11_backendSlowStillFastResponse() throws Exception {
         mockSecretPortFor(SOURCE);
-        when(inboxAdapter.ingest(eq("evt-11"), anyString(), eq(SOURCE)))
-                .thenReturn(WebhookInboxPersistenceAdapter.Result.accepted(FIXED_NOW));
+        when(ingestUseCase.ingest(commandFor("evt-11", SOURCE)))
+                .thenReturn(IngestResult.accepted(FIXED_NOW));
 
         mockMvc.perform(post("/webhooks/erp/order")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -383,6 +397,6 @@ class ErpOrderWebhookControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(inboxAdapter, never()).ingest(anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 }
