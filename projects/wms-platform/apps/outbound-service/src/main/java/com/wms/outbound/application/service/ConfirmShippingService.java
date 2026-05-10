@@ -101,22 +101,9 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
-        if (command.expectedVersion() >= 0 && order.getVersion() != command.expectedVersion()) {
-            throw new ObjectOptimisticLockingFailureException(Order.class, command.orderId());
-        }
-        if (order.getStatus() != OrderStatus.PACKED) {
-            throw new StateTransitionInvalidException(order.getStatus().name(), OrderStatus.SHIPPED.name());
-        }
+        assertVersionAndStatus(order, command);
 
-        OutboundSaga saga = sagaPersistence.findByOrderId(command.orderId())
-                .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
-
-        PickingRequest pickingRequest = pickingPersistence.findByOrderId(command.orderId())
-                .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
-
-        PickingConfirmation pickingConfirmation =
-                pickingConfirmationPersistence.findByPickingRequestId(pickingRequest.getId())
-                        .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+        ShippingAggregates agg = loadShippingAggregates(command.orderId());
 
         Instant now = clock.instant();
 
@@ -125,9 +112,91 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         Order savedOrder = orderPersistence.save(order);
 
         // Shipment record (PENDING) with deterministic shipment_no.
+        Shipment shipment = buildShipmentRecord(savedOrder, command, now);
+        Shipment savedShipment = shipmentPersistence.save(shipment);
+
+        // Saga: PACKING_CONFIRMED → SHIPPED.
+        sagaCoordinator.onShippingConfirmed(agg.saga().sagaId());
+
+        // Build event payload lines and write outbox row.
+        List<PackingUnit> packingUnits = packingPersistence.findByOrderId(savedOrder.getId());
+        List<ShippingConfirmedEvent.Line> eventLines =
+                buildShippingEventLines(savedOrder, packingUnits, agg.pickingConfirmation());
+        emitShippingOutbox(savedShipment, agg.saga(), agg.pickingRequest(),
+                savedOrder.getWarehouseId(), eventLines, now, command.actorId());
+
+        log.info("shipping_confirmed orderId={} shipmentId={} sagaId={}",
+                savedOrder.getId(), savedShipment.getId(), agg.saga().sagaId());
+
+        // Fire post-commit event for TMS push.
+        eventPublisher.publishEvent(new ShipmentNotifyTrigger(agg.saga().sagaId(), savedShipment.getId()));
+
+        return new ShipmentResult(
+                savedShipment.getId(),
+                savedShipment.getShipmentNo(),
+                savedOrder.getId(),
+                savedOrder.getOrderNo(),
+                savedShipment.getCarrierCode(),
+                savedShipment.getTrackingNo(),
+                savedShipment.getShippedAt(),
+                savedShipment.getTmsStatus().name(),
+                savedShipment.getTmsNotifiedAt(),
+                savedOrder.getStatus().name(),
+                SagaStatus.SHIPPED.name(),
+                savedShipment.getVersion(),
+                savedShipment.getCreatedAt(),
+                savedShipment.getCreatedBy());
+    }
+
+    // ------------------------------------------------------------------
+    //  Private helpers
+    // ------------------------------------------------------------------
+
+    /** Carries the three aggregates fetched after the order is already loaded. */
+    private record ShippingAggregates(
+            OutboundSaga saga,
+            PickingRequest pickingRequest,
+            PickingConfirmation pickingConfirmation) {}
+
+    /**
+     * Asserts the optimistic-lock version matches (if the caller supplied one)
+     * and that the order is in the expected {@code PACKED} status.
+     */
+    private static void assertVersionAndStatus(Order order, ConfirmShippingCommand command) {
+        if (command.expectedVersion() >= 0 && order.getVersion() != command.expectedVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Order.class, command.orderId());
+        }
+        if (order.getStatus() != OrderStatus.PACKED) {
+            throw new StateTransitionInvalidException(order.getStatus().name(), OrderStatus.SHIPPED.name());
+        }
+    }
+
+    /**
+     * Loads saga, picking-request, and picking-confirmation by {@code orderId}.
+     * Each lookup uses {@link OrderNotFoundException} as the sentinel so callers
+     * receive a consistent error code when any aggregate is missing.
+     */
+    private ShippingAggregates loadShippingAggregates(UUID orderId) {
+        OutboundSaga saga = sagaPersistence.findByOrderId(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        PickingRequest pickingRequest = pickingPersistence.findByOrderId(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        PickingConfirmation pickingConfirmation =
+                pickingConfirmationPersistence.findByPickingRequestId(pickingRequest.getId())
+                        .orElseThrow(() -> new OrderNotFoundException(orderId));
+        return new ShippingAggregates(saga, pickingRequest, pickingConfirmation);
+    }
+
+    /**
+     * Constructs the {@link Shipment} domain object with a deterministic
+     * {@code shipmentNo} and {@link TmsStatus#PENDING}. Does NOT persist.
+     */
+    private static Shipment buildShipmentRecord(Order savedOrder,
+                                                ConfirmShippingCommand command,
+                                                Instant now) {
         UUID shipmentId = UuidV7.randomUuid();
         String shipmentNo = generateShipmentNo(now);
-        Shipment shipment = new Shipment(
+        return new Shipment(
                 shipmentId,
                 savedOrder.getId(),
                 shipmentNo,
@@ -141,19 +210,24 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 now,
                 command.actorId(),
                 now);
-        Shipment savedShipment = shipmentPersistence.save(shipment);
+    }
 
-        // Saga: PACKING_CONFIRMED → SHIPPED.
-        sagaCoordinator.onShippingConfirmed(saga.sagaId());
+    /**
+     * Builds the {@link ShippingConfirmedEvent.Line} list from the saved order
+     * lines, using the picking-confirmation as the source of truth for
+     * SKU/lot/location, with the packed-quantity map as a secondary safety net.
+     */
+    private static List<ShippingConfirmedEvent.Line> buildShippingEventLines(
+            Order savedOrder,
+            List<PackingUnit> packingUnits,
+            PickingConfirmation pickingConfirmation) {
 
-        // Outbox row carrying reservationId + per-line confirmed quantities.
         Map<UUID, PickingConfirmationLine> confirmedLineByOrderLineId = new HashMap<>();
         for (PickingConfirmationLine pcl : pickingConfirmation.getLines()) {
             confirmedLineByOrderLineId.put(pcl.getOrderLineId(), pcl);
         }
         // Aggregate packed quantities per orderLineId for additional safety —
         // confirmation lines are the source of truth for SKU/lot/location.
-        List<PackingUnit> packingUnits = packingPersistence.findByOrderId(savedOrder.getId());
         Map<UUID, Long> packedSumByOrderLine = new HashMap<>();
         for (PackingUnit u : packingUnits) {
             for (PackingUnitLine pul : u.getLines()) {
@@ -172,41 +246,32 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                     pcl != null ? pcl.getActualLocationId() : null,
                     qty));
         }
+        return eventLines;
+    }
 
+    /**
+     * Writes the {@code outbound.shipping.confirmed} outbox row within the
+     * current transaction boundary.
+     */
+    private void emitShippingOutbox(Shipment savedShipment,
+                                    OutboundSaga saga,
+                                    PickingRequest pickingRequest,
+                                    UUID warehouseId,
+                                    List<ShippingConfirmedEvent.Line> eventLines,
+                                    Instant now,
+                                    String actorId) {
         outboxWriter.publish(new ShippingConfirmedEvent(
                 saga.sagaId(),
                 pickingRequest.getId() /* reservationId */,
-                savedOrder.getId(),
+                savedShipment.getOrderId(),
                 savedShipment.getId(),
                 savedShipment.getShipmentNo(),
-                savedOrder.getWarehouseId(),
+                warehouseId,
                 savedShipment.getShippedAt(),
                 savedShipment.getCarrierCode(),
                 eventLines,
                 now,
-                command.actorId()));
-
-        log.info("shipping_confirmed orderId={} shipmentId={} sagaId={}",
-                savedOrder.getId(), savedShipment.getId(), saga.sagaId());
-
-        // Fire post-commit event for TMS push.
-        eventPublisher.publishEvent(new ShipmentNotifyTrigger(saga.sagaId(), savedShipment.getId()));
-
-        return new ShipmentResult(
-                savedShipment.getId(),
-                savedShipment.getShipmentNo(),
-                savedOrder.getId(),
-                savedOrder.getOrderNo(),
-                savedShipment.getCarrierCode(),
-                savedShipment.getTrackingNo(),
-                savedShipment.getShippedAt(),
-                savedShipment.getTmsStatus().name(),
-                savedShipment.getTmsNotifiedAt(),
-                savedOrder.getStatus().name(),
-                SagaStatus.SHIPPED.name(),
-                savedShipment.getVersion(),
-                savedShipment.getCreatedAt(),
-                savedShipment.getCreatedBy());
+                actorId));
     }
 
     /**
