@@ -22,6 +22,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+/**
+ * Behaviour tests for the warehouse-topic listener on
+ * {@link MasterEventConsumer}. Mirrors the semantics of the former
+ * {@code MasterWarehouseConsumer} unit tests; the dispatcher consolidation
+ * collapsed all six per-topic consumers into a single bean, but each
+ * topic's behaviour is preserved unchanged via {@link MasterWarehouseProjector}.
+ */
 class MasterWarehouseConsumerTest {
 
     private static final UUID WAREHOUSE_ID = UUID.fromString("01910000-0000-7000-8000-000000000001");
@@ -29,7 +36,7 @@ class MasterWarehouseConsumerTest {
 
     private MasterReadModelWriterPort writer;
     private EventDedupePort dedupe;
-    private MasterWarehouseConsumer consumer;
+    private MasterEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
@@ -37,7 +44,16 @@ class MasterWarehouseConsumerTest {
         writer = mock(MasterReadModelWriterPort.class);
         dedupe = mock(EventDedupePort.class);
         Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        consumer = new MasterWarehouseConsumer(new MasterEventParser(objectMapper), writer, dedupe, clock);
+        EventEnvelopeParser parser = new EventEnvelopeParser(objectMapper);
+        consumer = new MasterEventConsumer(
+                parser,
+                dedupe,
+                new MasterWarehouseProjector(writer, clock),
+                new MasterZoneProjector(writer, clock),
+                new MasterLocationProjector(writer, clock),
+                new MasterSkuProjector(writer, clock),
+                new MasterPartnerProjector(writer, clock),
+                new MasterLotProjector(writer, clock));
 
         // Default behaviour: dedupe runs the supplied work exactly once
         doAnswer(invocation -> {
@@ -50,7 +66,7 @@ class MasterWarehouseConsumerTest {
     @Test
     void appliesCreatedEventThroughWriter() {
         when(writer.upsertWarehouse(any())).thenReturn(true);
-        consumer.handle(buildEvent("master.warehouse.created", "ACTIVE", 0L), "key-1");
+        consumer.onWarehouseEvent(buildEvent("master.warehouse.created", "ACTIVE", 0L), "key-1");
 
         ArgumentCaptor<WarehouseSnapshot> captor = ArgumentCaptor.forClass(WarehouseSnapshot.class);
         verify(writer).upsertWarehouse(captor.capture());
@@ -65,7 +81,7 @@ class MasterWarehouseConsumerTest {
     @Test
     void mapsDeactivatedToInactiveStatus() {
         when(writer.upsertWarehouse(any())).thenReturn(true);
-        consumer.handle(buildEvent("master.warehouse.deactivated", "INACTIVE", 1L), "key-1");
+        consumer.onWarehouseEvent(buildEvent("master.warehouse.deactivated", "INACTIVE", 1L), "key-1");
 
         ArgumentCaptor<WarehouseSnapshot> captor = ArgumentCaptor.forClass(WarehouseSnapshot.class);
         verify(writer).upsertWarehouse(captor.capture());
@@ -75,7 +91,7 @@ class MasterWarehouseConsumerTest {
     @Test
     void staleEventIsDroppedSilently() {
         when(writer.upsertWarehouse(any())).thenReturn(false);
-        consumer.handle(buildEvent("master.warehouse.updated", "ACTIVE", 1L), "key-1");
+        consumer.onWarehouseEvent(buildEvent("master.warehouse.updated", "ACTIVE", 1L), "key-1");
         verify(writer, times(1)).upsertWarehouse(any());
     }
 
@@ -83,7 +99,7 @@ class MasterWarehouseConsumerTest {
     void duplicateEventSkipsApplyEntirely() {
         when(dedupe.process(any(UUID.class), any(String.class), any(Runnable.class)))
                 .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
-        consumer.handle(buildEvent("master.warehouse.created", "ACTIVE", 0L), "key-1");
+        consumer.onWarehouseEvent(buildEvent("master.warehouse.created", "ACTIVE", 0L), "key-1");
         verify(writer, never()).upsertWarehouse(any());
     }
 

@@ -8,21 +8,25 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
- * Parses raw Kafka payloads into a typed {@link MasterEventEnvelope}.
+ * Parses raw Kafka payloads into a typed {@link EventEnvelope}.
+ *
+ * <p>Used by both the saga consumers (inventory-event family) and the
+ * master-data read-model consumers; the on-wire envelope shape is identical
+ * across both families.
  *
  * <p>Failures throw {@link IllegalArgumentException} so the consumer's error
  * handler treats the record as non-retryable and routes it to the DLT.
  */
 @Component
-public class MasterEventParser {
+public class EventEnvelopeParser {
 
     private final ObjectMapper objectMapper;
 
-    public MasterEventParser(ObjectMapper objectMapper) {
+    public EventEnvelopeParser(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
-    public MasterEventEnvelope parse(String json) {
+    public EventEnvelope parse(String json) {
         try {
             JsonNode root = objectMapper.readTree(json);
             UUID eventId = UUID.fromString(requireText(root, "eventId"));
@@ -34,10 +38,10 @@ public class MasterEventParser {
             if (payload == null || payload.isNull()) {
                 throw new IllegalArgumentException("event missing payload: " + eventType);
             }
-            return new MasterEventEnvelope(
+            return new EventEnvelope(
                     eventId, eventType, occurredAt, aggregateId, aggregateType, payload);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("malformed master event JSON", e);
+            throw new IllegalArgumentException("malformed event JSON", e);
         }
     }
 

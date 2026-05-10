@@ -2,7 +2,7 @@ package com.wms.outbound;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.outbound.adapter.in.messaging.consumer.MasterEventParser;
+import com.wms.outbound.adapter.in.messaging.consumer.EventEnvelopeParser;
 import com.wms.outbound.adapter.in.webhook.erp.ErpOrderWebhookController;
 import com.wms.outbound.adapter.in.webhook.erp.HmacVerifier;
 import com.wms.outbound.adapter.in.webhook.erp.TimestampWindowValidator;
@@ -44,7 +44,7 @@ class OutboundServiceSmokeTest {
 
     @Test
     void infrastructureBeansAreWired() {
-        assertThat(context.getBean(MasterEventParser.class)).isNotNull();
+        assertThat(context.getBean(EventEnvelopeParser.class)).isNotNull();
         assertThat(context.getBean(EventDedupePort.class)).isNotNull();
         assertThat(context.getBean(MasterReadModelPort.class)).isNotNull();
         assertThat(context.getBean(MasterReadModelWriterPort.class)).isNotNull();

@@ -21,6 +21,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+/**
+ * Behaviour tests for the lot-topic listener on {@link MasterEventConsumer}.
+ * Mirrors the semantics of the former {@code MasterLotConsumer} unit tests.
+ */
 class MasterLotConsumerTest {
 
     private static final UUID LOT_ID = UUID.fromString("01910000-0000-7000-8000-000000000601");
@@ -29,7 +33,7 @@ class MasterLotConsumerTest {
 
     private MasterReadModelWriterPort writer;
     private EventDedupePort dedupe;
-    private MasterLotConsumer consumer;
+    private MasterEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
@@ -37,7 +41,16 @@ class MasterLotConsumerTest {
         writer = mock(MasterReadModelWriterPort.class);
         dedupe = mock(EventDedupePort.class);
         Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        consumer = new MasterLotConsumer(new MasterEventParser(objectMapper), writer, dedupe, clock);
+        EventEnvelopeParser parser = new EventEnvelopeParser(objectMapper);
+        consumer = new MasterEventConsumer(
+                parser,
+                dedupe,
+                new MasterWarehouseProjector(writer, clock),
+                new MasterZoneProjector(writer, clock),
+                new MasterLocationProjector(writer, clock),
+                new MasterSkuProjector(writer, clock),
+                new MasterPartnerProjector(writer, clock),
+                new MasterLotProjector(writer, clock));
 
         doAnswer(invocation -> {
             Runnable work = invocation.getArgument(2);
@@ -49,7 +62,7 @@ class MasterLotConsumerTest {
     @Test
     void mapsExpiredEventToExpiredStatus() {
         when(writer.upsertLot(any())).thenReturn(true);
-        consumer.handle(buildEvent("master.lot.expired", "EXPIRED", 2L), "key-1");
+        consumer.onLotEvent(buildEvent("master.lot.expired", "EXPIRED", 2L), "key-1");
 
         ArgumentCaptor<LotSnapshot> captor = ArgumentCaptor.forClass(LotSnapshot.class);
         verify(writer).upsertLot(captor.capture());
@@ -63,7 +76,7 @@ class MasterLotConsumerTest {
     @Test
     void appliesCreatedEventWithActiveStatus() {
         when(writer.upsertLot(any())).thenReturn(true);
-        consumer.handle(buildEvent("master.lot.created", "ACTIVE", 0L), "key-1");
+        consumer.onLotEvent(buildEvent("master.lot.created", "ACTIVE", 0L), "key-1");
 
         ArgumentCaptor<LotSnapshot> captor = ArgumentCaptor.forClass(LotSnapshot.class);
         verify(writer).upsertLot(captor.capture());
