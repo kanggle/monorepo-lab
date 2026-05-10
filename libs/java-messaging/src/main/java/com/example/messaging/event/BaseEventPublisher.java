@@ -11,16 +11,24 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Shared base for all service-level event publishers.
+ * Shared base for all service-level event publishers (lib v1 path).
  *
  * <p>Provides two persistence paths:
  * <ul>
- *   <li>{@link #writeEvent} — builds a standard envelope (eventId, eventType, source,
- *       occurredAt, schemaVersion, partitionKey, payload) and persists to the outbox.
- *       Used by auth, community, membership, and security publishers.</li>
- *   <li>{@link #saveEvent} — serializes the given payload object as-is (no envelope).
- *       Used by account and admin publishers whose payload format differs.</li>
+ *   <li>{@link #writeEvent} — builds the standard envelope (eventId, eventType,
+ *       source, occurredAt, schemaVersion, partitionKey, payload) and persists
+ *       to the outbox. Used by service publishers that emit events with a
+ *       canonical envelope wrapping a JSON payload.</li>
+ *   <li>{@link #saveEvent} — serializes the given payload object as-is (no
+ *       envelope). Used by service publishers whose downstream contract
+ *       intentionally omits the envelope (legacy or per-service custom
+ *       shape).</li>
  * </ul>
+ *
+ * <p>For services emitting events with the v2 envelope contract (canonical
+ * 10-field {@code EventEnvelope}), prefer {@code AbstractOutboxPublisher}
+ * from this same module + per-service {@code OutboxRow} entity. See
+ * {@code docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md}.
  */
 @Slf4j
 public abstract class BaseEventPublisher {

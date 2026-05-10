@@ -376,6 +376,76 @@ Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventu
 
 ---
 
+## Account  `[domain: saas]`
+
+Owned by `account-service` (Identity Platform — multi-tenant account lifecycle).
+
+| Code | HTTP | Description |
+|---|---|---|
+| ACCOUNT_NOT_FOUND | 404 | Account does not exist (or cross-tenant — see `multi-tenant.md` M3) |
+| ACCOUNT_ALREADY_EXISTS | 409 | Account with the given email/identifier already exists in this tenant |
+| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded) |
+| ACCOUNT_DELETED | 410 | Account is soft-deleted (anonymized) |
+| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required |
+| ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
+| ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
+
+## Auth / Token  `[domain: saas]`
+
+Owned by `auth-service` (Spring Authorization Server).
+
+| Code | HTTP | Description |
+|---|---|---|
+| AUTH_SERVICE_UNAVAILABLE | 503 | Internal `auth-service` call failed (transient) |
+| TOKEN_EXPIRED | 401 | Bearer token expired |
+| TOKEN_EXPIRED_OR_INVALID | 401 | Bearer token malformed, signature invalid, or expired (combined fallback) |
+| TOKEN_REUSE | 401 | Refresh token reuse detected (RT rotation invariant) |
+| TOKEN_REUSE_DETECTED | 401 | Same as TOKEN_REUSE; published as audit event `auth.token.reuse.detected` |
+| TOKEN_TENANT_MISMATCH | 403 | Token `tenant_id` claim does not match the targeted resource tenant |
+| OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2) |
+| OAUTH_INVALID_CLIENT | 401 | OAuth2 client authentication failed |
+| OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
+| LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
+| LOGIN_TENANT_AMBIGUOUS | 400 | Login identifier matches accounts across multiple tenants without disambiguator |
+
+## Tenant  `[domain: saas]`
+
+Owned by `account-service` + `admin-service` (per multi-tenant trait M1).
+
+| Code | HTTP | Description |
+|---|---|---|
+| TENANT_NOT_FOUND | 404 | Tenant does not exist (or actor lacks visibility) |
+| TENANT_ALREADY_EXISTS | 409 | Tenant identifier already taken |
+| TENANT_FORBIDDEN | 403 | Cross-tenant write or invalid `tenant_id` claim (per `multi-tenant.md` M2/M3) |
+| TENANT_SCOPE_DENIED | 403 | Token scope does not include the requested tenant context |
+| TENANT_SUSPENDED | 423 | Tenant is suspended (administrative action) |
+
+## Community  `[domain: fan-platform]`
+
+Owned by `community-service` (post / comment / reaction / follow).
+
+| Code | HTTP | Description |
+|---|---|---|
+| POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
+| POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED) |
+| MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
+| COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch |
+| REACTION_INVALID_TYPE | 400 | Reaction type not in the allowed enum |
+| FEED_QUERY_INVALID | 400 | Feed cursor or filter combination is invalid |
+
+## Artist  `[domain: fan-platform]`
+
+Owned by `artist-service` (artist identity / fandom metadata).
+
+| Code | HTTP | Description |
+|---|---|---|
+| ARTIST_NOT_FOUND | 404 | Artist does not exist OR cross-tenant OR DRAFT/ARCHIVED (non-admin → 404 not 403, per content-heavy display rule) |
+| ARTIST_INVALID_STATE | 422 | Requested transition not allowed from current artist state (DRAFT/PUBLISHED/ARCHIVED) |
+| FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded |
+| FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation |
+
+---
+
 # Rules
 
 - Services must never expose stack traces, internal class names, or SQL in error responses.
