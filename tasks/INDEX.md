@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-054-saga-timeout-escalation-dead-letter-policy.md` — ADR-MONO-005 PROPOSED. Saga timeout / attempt-cap / escalation / dead-letter policy across the monorepo. 4-category taxonomy (A multi-step saga / B synchronous external / C single-step retry+DLT / D TTL expiry sweep). Audit of 7 in-scope flows (outbound saga ref / ecommerce order+refund / scm procurement / payment confirm / notification delivery / inventory reservation TTL + fan-platform N/A v1). Per-saga Scenario A/B decision pattern reuses ADR-006. Impl PR ships ADR + `docs/adr/INDEX.md` only (production code = 0, spec surface deferred to TASK-MONO-055). 4 follow-up tasks named: TASK-BE-138 deferred order stuck-detector / TASK-BE-139 ready Toss Payments R4j wrap / TASK-BE-140 deferred reservation metric / TASK-MONO-055 ready spec surface bundle (6 service `architecture.md` + `rules/traits/transactional.md` + `platform/event-driven-policy.md` pointers). TASK-BE-139 + TASK-MONO-055 gate ADR PROPOSED → ACCEPTED. 분석=Opus 4.7 / 구현=Opus.
 
 ## in-progress
 
