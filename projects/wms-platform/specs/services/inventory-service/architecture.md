@@ -242,6 +242,39 @@ Per `service-types/event-consumer.md` and trait `transactional` rule T8
 | `master.sku.created` / `.updated` | `wms.master.sku.v1` | Same, for SKU |
 | `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; lot identity is referenced by `Inventory`, `ReservationLine`, `StockTransfer` rows (LOT-tracked SKUs) |
 
+### Master aggregate coverage in v1 (intentional gaps)
+
+The Identity table (above) lists six master aggregates that `master-service`
+publishes — `Warehouse / Zone / Location / SKU / Partner / Lot`. v1
+inventory-service consumes only `Location / SKU / Lot`. The other three are
+**intentionally not consumed** (TASK-BE-053 audit, 2026-05-11):
+
+- **Warehouse** — `warehouse_id` is a denormalized FK column on
+  `inventory`, `inventory_movement`, `stock_transfer`, etc., but
+  inventory-service never reads warehouse master attributes (name,
+  status, address). The `MasterReadModelPort` does **not** declare
+  `findWarehouse(...)` — there is no v1 use case that needs the warehouse
+  display name or active-flag. If the future operator console requires
+  warehouse name resolution, a `MasterWarehouseConsumer` is added then;
+  v1 cost was unjustified.
+- **Zone** — `zone_id` is **not** a separate read-model. It rides on
+  `LocationSnapshot` (`zoneId` field — populated by
+  `MasterLocationConsumer` from the same `wms.master.location.v1` event
+  payload). Zone-level inventory invariants (e.g., picking eligibility
+  by DRY/COLD zone) are not v1 features; if introduced in v2, the
+  `LocationSnapshot.zoneId` already provides the lookup key without a
+  separate `MasterZoneConsumer`.
+- **Partner** — zero references in inventory-service code (verified by
+  repository-wide grep: `partner_id` / `partnerId` / `MasterPartner` /
+  `PartnerSnapshot` all 0 results). Partner identity is owned by
+  `inbound-service` (ASN supplier) and `outbound-service` (shipping
+  customer), not by inventory.
+
+If a v2 invariant requires any of these consumers, add the consumer + a
+matching row to the **Subscribed Event** table above. The negative-coverage
+note here exists so a future reviewer can confirm the absence is
+intentional, not drift.
+
 ### Consumer Rules
 
 - **EventId-based dedupe** (T8): every consumed message carries an `eventId`; consumer
