@@ -14,13 +14,17 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 |---|---|---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | — |
 | `account_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | account-service의 account.id 참조 (FK 없음 — 서비스 간 FK 금지) |
+| `email` | VARCHAR(320) | NULL | confidential | V0006 (TASK-BE-063)에서 추가. 로그인 식별자 — auth-service가 email→credential 조회를 자체 수행해 account-service 왕복 제거. 소스 오브 트루스는 여전히 account-service.accounts.email; 본 컬럼은 역정규화 사본. NULL 허용 (백필 전 row 대응) |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT (NOT NULL 유지). TASK-BE-229 multi-tenant Phase 2/3 |
 | `credential_hash` | VARCHAR(255) | NOT NULL | **restricted** | argon2id 해시. 평문 저장 금지 (R2) |
 | `hash_algorithm` | VARCHAR(30) | NOT NULL, DEFAULT 'argon2id' | internal | 향후 알고리즘 업그레이드 시 구분 |
 | `created_at` | DATETIME(6) | NOT NULL | internal | — |
 | `updated_at` | DATETIME(6) | NOT NULL | internal | 패스워드 변경 시 갱신 |
 | `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) |
 
-**인덱스**: `idx_credentials_account_id` (UNIQUE)
+**인덱스**:
+- `idx_credentials_account_id` (UNIQUE) — V0001 그대로 유지
+- `uk_credentials_tenant_email (tenant_id, email)` UNIQUE — V0007에서 신설. V0006이 추가한 단순 `idx_credentials_email (email)` UNIQUE는 V0007에서 DROP하고 본 복합 인덱스로 대체 (테넌트 간 동일 email 허용).
 
 ### `refresh_tokens`
 
@@ -43,6 +47,31 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 
 **토큰 재사용 탐지 로직**: `POST /api/auth/refresh`가 `jti=A`로 rotation을 요청했을 때, A에 이미 `rotated_from`을 참조하는 자식이 존재하면 → 재사용 탐지. 해당 `account_id`의 모든 refresh_token을 `revoked=TRUE`로 일괄 처리 + `auth.token.reuse.detected` 이벤트 발행.
 
+### `social_identities`
+
+OAuth/OIDC 외부 IdP(예: Google, Apple, Naver, Kakao)와 GAP 계정의 연결
+관계. 동일 사용자가 다수 provider 를 연결 가능. V0005에서 신설,
+V0007 (TASK-BE-229)에서 `tenant_id` 컬럼 + 인덱스 swap.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `id` | BIGINT | PK, AUTO_INCREMENT | internal | — |
+| `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | account-service.accounts.id 참조 (FK 없음 — 서비스 간 FK 금지) |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT. TASK-BE-229 multi-tenant Phase 2/3 |
+| `provider` | VARCHAR(20) | NOT NULL | internal | OAuth provider 식별자 (e.g., `google`, `apple`, `naver`, `kakao`) |
+| `provider_user_id` | VARCHAR(255) | NOT NULL | confidential | provider 측 사용자 식별자 (e.g., Google `sub` claim). 외부 PII 출처 — 노출 시 cross-provider 사용자 추적 가능 |
+| `provider_email` | VARCHAR(255) | NULL | confidential | 연결 시점에 provider가 반환한 email. 사용자가 provider 측에서 email 변경 시 stale 가능 — auth-service는 이 값을 신뢰하지 않고 표시용으로만 사용 |
+| `connected_at` | DATETIME(6) | NOT NULL | internal | 최초 연결 시각 |
+| `last_used_at` | DATETIME(6) | NOT NULL | internal | 마지막 로그인 시각 (provider별 활성도 모니터링) |
+
+**인덱스**:
+- `uk_social_tenant_provider_user (tenant_id, provider, provider_user_id)` UNIQUE — V0007에서 신설. V0005가 추가한 `uk_social_provider_user (provider, provider_user_id)` UNIQUE는 V0007에서 DROP하고 본 복합 인덱스로 대체 (테넌트 간 동일 provider/provider_user_id 허용 — 멀티 테넌트 OAuth 시나리오 대응).
+- `idx_social_account_id (account_id)` — V0005 그대로 유지
+
+**Lookup 패턴**: 로그인 콜백 시 `(tenant_id, provider, provider_user_id)`
+unique 조회로 기존 연결을 찾고, 미존재 시 신규 row 생성. account 측에서
+provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
+
 ### `outbox`
 
 [libs/java-messaging](../../../libs/java-messaging) 표준 스키마 사용. 테이블 이름은 라이브러리의 `OutboxJpaEntity`가 `@Table(name = "outbox")`으로 선언하므로 `outbox`를 사용한다.
@@ -63,8 +92,15 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 ## Migration Strategy
 
 - **Flyway**: `V{nnnn}__{description}.sql` 네이밍
-- 첫 마이그레이션: `V0001__create_credentials_and_refresh_tokens.sql`
-- Outbox 테이블: `V0002__create_outbox_events.sql` (libs/java-messaging DDL 재사용, 테이블 이름은 `outbox`)
+- V0001: `credentials`, `refresh_tokens` 초기 생성
+- V0002: `outbox` 테이블 (libs/java-messaging DDL 재사용)
+- V0003: `device_sessions` 신설 (TASK-BE-023)
+- V0004: `processed_events` (libs/java-messaging consumer dedupe — TASK-BE-042)
+- V0005: `social_identities` 신설 (OAuth 연결)
+- V0006: `credentials.email` 컬럼 추가 (TASK-BE-063 — 로그인 식별자)
+- V0007: `credentials` / `refresh_tokens` / `social_identities` 에 `tenant_id` 추가 + 인덱스 swap (TASK-BE-229 multi-tenant Phase 2/3)
+- V0008–V0013: OAuth/OIDC SAS 영속 + 시드 (oauth_clients / oauth_scopes / oauth_consent / oauth2_authorization + tenant 시드)
+- V0014: `refresh_tokens.jti` / `rotated_from` VARCHAR(36)→VARCHAR(255) widening (TASK-MONO-046-1 Cluster A — SAS 96-byte URL-safe base64 RT 수용)
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---
@@ -74,8 +110,8 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 | 등급 | 컬럼 |
 |---|---|
 | **restricted** | `credentials.credential_hash` |
-| **confidential** | `refresh_tokens.jti`, `refresh_tokens.rotated_from`, `refresh_tokens.device_fingerprint`, `device_sessions.device_fingerprint`, `device_sessions.ip_last` |
-| **internal** | `refresh_tokens.device_id`, 그리고 위에 명시되지 않은 `credentials`, `refresh_tokens`, `device_sessions`, `outbox`의 모든 컬럼 (예: `device_sessions.device_id`, `account_id`, `user_agent`, `geo_last`, `issued_at`, `last_seen_at`, `revoked_at`, `revoke_reason`) |
+| **confidential** | `credentials.email`, `refresh_tokens.jti`, `refresh_tokens.rotated_from`, `refresh_tokens.device_fingerprint`, `social_identities.provider_user_id`, `social_identities.provider_email`, `device_sessions.device_fingerprint`, `device_sessions.ip_last` |
+| **internal** | `credentials.tenant_id`, `refresh_tokens.tenant_id`, `refresh_tokens.device_id`, `social_identities.tenant_id`, `social_identities.provider`, `social_identities.connected_at`, `social_identities.last_used_at`, 그리고 위에 명시되지 않은 `credentials`, `refresh_tokens`, `social_identities`, `device_sessions`, `outbox`의 모든 컬럼 (예: `device_sessions.device_id`, `account_id`, `user_agent`, `geo_last`, `issued_at`, `last_seen_at`, `revoked_at`, `revoke_reason`) |
 | **public** | 없음 |
 
 [rules/traits/regulated.md](../../../rules/traits/regulated.md) R1 준수.
