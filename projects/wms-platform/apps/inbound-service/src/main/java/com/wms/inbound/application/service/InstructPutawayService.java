@@ -75,17 +75,59 @@ public class InstructPutawayService implements InstructPutawayUseCase {
                 .orElseThrow(() -> new InspectionNotFoundException(
                         "Inspection not found for ASN: " + command.asnId()));
 
-        // Build maps for fast lookup.
+        Map<UUID, AsnLine> asnLineById = buildAsnLineMap(asn);
+        Map<UUID, InspectionLine> inspectionLineByAsnLineId = buildInspectionLineMap(inspection);
+
+        validateLineCoverageAndCumQty(command, inspectionLineByAsnLineId);
+
+        Instant now = clock.instant();
+        UUID instructionId = UuidV7.randomUuid();
+
+        List<PutawayLine> putawayLines = new ArrayList<>();
+        List<PutawayInstructedEvent.Line> eventLines = new ArrayList<>();
+        buildPutawayLines(command, asn, instructionId, asnLineById, inspectionLineByAsnLineId,
+                putawayLines, eventLines);
+
+        PutawayInstruction instruction = PutawayInstruction.createNew(
+                instructionId, asn.getId(), asn.getWarehouseId(),
+                command.actorId(), now, putawayLines);
+        PutawayInstruction saved = putawayPersistence.save(instruction);
+
+        asn.instructPutaway(now, command.actorId());
+        Asn savedAsn = asnPersistence.save(asn);
+
+        publishInstructed(saved, savedAsn, command.actorId(), eventLines, now);
+
+        log.info("putaway_instructed asnId={} instructionId={} lines={}",
+                savedAsn.getId(), saved.getId(), saved.totalLineCount());
+
+        return PutawayResultMapper.toInstructionResult(saved, savedAsn.getStatus().name(), masterReadModel);
+    }
+
+    /** Builds a fast-lookup map of AsnLine by id. */
+    private Map<UUID, AsnLine> buildAsnLineMap(Asn asn) {
         Map<UUID, AsnLine> asnLineById = new HashMap<>();
         for (AsnLine al : asn.getLines()) {
             asnLineById.put(al.getId(), al);
         }
+        return asnLineById;
+    }
+
+    /** Builds a fast-lookup map of InspectionLine indexed by its parent AsnLine id. */
+    private Map<UUID, InspectionLine> buildInspectionLineMap(Inspection inspection) {
         Map<UUID, InspectionLine> inspectionLineByAsnLineId = new HashMap<>();
         for (InspectionLine il : inspection.getLines()) {
             inspectionLineByAsnLineId.put(il.getAsnLineId(), il);
         }
+        return inspectionLineByAsnLineId;
+    }
 
-        // Aggregate qty-to-putaway by AsnLine to verify it never exceeds qty_passed.
+    /**
+     * Validates that every command line references a known inspection line and that
+     * the cumulative qty-to-putaway never exceeds the qty_passed from inspection.
+     */
+    private void validateLineCoverageAndCumQty(InstructPutawayCommand command,
+                                               Map<UUID, InspectionLine> inspectionLineByAsnLineId) {
         Map<UUID, Integer> qtySumByAsnLineId = new HashMap<>();
         for (InstructPutawayCommand.Line cmdLine : command.lines()) {
             qtySumByAsnLineId.merge(cmdLine.asnLineId(), cmdLine.qtyToPutaway(), Integer::sum);
@@ -100,13 +142,22 @@ public class InstructPutawayService implements InstructPutawayUseCase {
                 throw new PutawayQuantityExceededException(e.getKey(), e.getValue(), il.getQtyPassed());
             }
         }
+    }
 
-        Instant now = clock.instant();
-        UUID instructionId = UuidV7.randomUuid();
-
-        // Build domain PutawayLines and validate location + lot guards.
-        List<PutawayLine> putawayLines = new ArrayList<>();
-        List<PutawayInstructedEvent.Line> eventLines = new ArrayList<>();
+    /**
+     * Builds PutawayLine domain objects and their corresponding event line DTOs,
+     * enforcing location/lot/warehouse guards per line.
+     *
+     * <p>Results are accumulated into the provided {@code putawayLines} and
+     * {@code eventLines} lists (output parameters).
+     */
+    private void buildPutawayLines(InstructPutawayCommand command,
+                                   Asn asn,
+                                   UUID instructionId,
+                                   Map<UUID, AsnLine> asnLineById,
+                                   Map<UUID, InspectionLine> inspectionLineByAsnLineId,
+                                   List<PutawayLine> putawayLines,
+                                   List<PutawayInstructedEvent.Line> eventLines) {
         for (InstructPutawayCommand.Line cmdLine : command.lines()) {
             AsnLine asnLine = asnLineById.get(cmdLine.asnLineId());
             if (asnLine == null) {
@@ -145,23 +196,17 @@ public class InstructPutawayService implements InstructPutawayUseCase {
                     cmdLine.destinationLocationId(), loc.locationCode(),
                     cmdLine.qtyToPutaway()));
         }
+    }
 
-        PutawayInstruction instruction = PutawayInstruction.createNew(
-                instructionId, asn.getId(), asn.getWarehouseId(),
-                command.actorId(), now, putawayLines);
-        PutawayInstruction saved = putawayPersistence.save(instruction);
-
-        asn.instructPutaway(now, command.actorId());
-        Asn savedAsn = asnPersistence.save(asn);
-
+    /** Transitions ASN state, publishes the PutawayInstructed domain event. */
+    private void publishInstructed(PutawayInstruction saved,
+                                   Asn savedAsn,
+                                   String actorId,
+                                   List<PutawayInstructedEvent.Line> eventLines,
+                                   Instant now) {
         PutawayInstructedEvent event = new PutawayInstructedEvent(
                 saved.getId(), savedAsn.getId(), savedAsn.getWarehouseId(),
-                command.actorId(), eventLines, now, command.actorId());
+                actorId, eventLines, now, actorId);
         eventPort.publish(event);
-
-        log.info("putaway_instructed asnId={} instructionId={} lines={}",
-                savedAsn.getId(), saved.getId(), saved.totalLineCount());
-
-        return PutawayResultMapper.toInstructionResult(saved, savedAsn.getStatus().name(), masterReadModel);
     }
 }
