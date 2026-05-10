@@ -350,6 +350,32 @@ Owned by `shipping-service`.
 
 ---
 
+## Procurement  `[domain: scm]`
+
+Owned by `procurement-service`. PO state machine + supplier integration.
+
+| Code | HTTP | Description |
+|---|---|---|
+| PO_NOT_FOUND | 404 | Purchase order does not exist |
+| PO_STATE_TRANSITION_INVALID | 422 | Requested PO state transition is not allowed from current state (use `STATE_TRANSITION_INVALID` from Transactional Trait if generic) |
+| SUPPLIER_NOT_FOUND | 404 | Supplier reference does not exist |
+| SUPPLIER_INACTIVE | 422 | Supplier is deactivated; cannot create new PO |
+| SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) |
+| ASN_OVERRECEIPT | 422 | ASN reports more units than the PO line ordered (per spec deviation policy) |
+| RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) |
+
+## Inventory Visibility  `[domain: scm]`
+
+Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventual consistency).
+
+| Code | HTTP | Description |
+|---|---|---|
+| NODE_NOT_FOUND | 404 | Inventory node does not exist |
+| SNAPSHOT_NOT_FOUND | 404 | Snapshot for the requested key does not exist |
+| STALENESS_THRESHOLD_EXCEEDED | 200 (warning header) | Read response includes `meta.staleness` warning; not an error code per se but documented for caller awareness (S5) |
+
+---
+
 # Rules
 
 - Services must never expose stack traces, internal class names, or SQL in error responses.

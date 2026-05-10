@@ -60,6 +60,7 @@ After Core, read the file under `platform/service-types/` that matches the targe
 | `graphql-service` | `service-types/graphql-service.md` |
 | `ml-pipeline` | `service-types/ml-pipeline.md` |
 | `frontend-app` | `service-types/frontend-app.md` |
+| `identity-platform` | `service-types/identity-platform.md` |
 
 Reading more than one service-type spec for a single task is forbidden — pick the one declared by the target service.
 

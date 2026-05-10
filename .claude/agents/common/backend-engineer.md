@@ -7,7 +7,7 @@ skills: backend/implementation-workflow, backend/springboot-api, backend/testing
 capabilities: [api-implementation, data-access, transaction-management, event-publishing, event-consumption, testing]
 languages: [java, kotlin]
 domains: [all]
-service_types: [rest-api, event-consumer, batch-job]
+service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, identity-platform]
 ---
 
 You are the project backend engineer.
