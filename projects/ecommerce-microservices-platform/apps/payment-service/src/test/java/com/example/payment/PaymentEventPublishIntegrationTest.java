@@ -4,6 +4,7 @@ import com.example.payment.adapter.in.event.OrderPlacedEventConsumer;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
 import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.service.PaymentConfirmService;
+import com.example.payment.application.service.PaymentRefundService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -80,6 +81,9 @@ class PaymentEventPublishIntegrationTest {
 
     @Autowired
     private PaymentConfirmService paymentConfirmService;
+
+    @Autowired
+    private PaymentRefundService paymentRefundService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -164,6 +168,46 @@ class PaymentEventPublishIntegrationTest {
                 "SELECT * FROM outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
                 "%" + orderId + "%");
         assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("status")).isEqualTo("PUBLISHED");
+        assertThat(rows.get(0).get("published_at")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("폴링 relay 가 PaymentRefunded outbox row 도 PUBLISHED 로 전이시키고 payment.payment.refunded 토픽에 envelope 을 발행한다 (TASK-BE-137 W3)")
+    void pollingRelay_refundedRoundTrip_publishesToKafkaAndMarksRowPublished() throws Exception {
+        String orderId = "order-refund-" + System.nanoTime();
+        String userId = "user-refund-" + System.nanoTime();
+
+        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
+                "payment-event-refund-it-" + UUID.randomUUID(), "true", embeddedKafkaBroker);
+        try (Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<>(consumerProps,
+                new org.apache.kafka.common.serialization.StringDeserializer(),
+                new org.apache.kafka.common.serialization.StringDeserializer()).createConsumer()) {
+            embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, "payment.payment.refunded");
+
+            // commit chain: OrderPlaced → PENDING Payment → COMPLETED → REFUNDED
+            orderPlacedEventConsumer.onMessage(buildOrderPlacedJson(orderId, userId, 75000L));
+            paymentConfirmService.confirm(userId, "pk_test_" + orderId, orderId, 75000L);
+            paymentRefundService.refundPayment(orderId);
+
+            ConsumerRecord<String, String> record = pollForRecord(consumer, orderId);
+
+            assertThat(record).as("Kafka 토픽에서 PaymentRefunded 이벤트를 수신해야 한다").isNotNull();
+            JsonNode envelope = objectMapper.readTree(record.value());
+            assertThat(envelope.get("event_type").asText()).isEqualTo("PaymentRefunded");
+            assertThat(envelope.get("source").asText()).isEqualTo("payment-service");
+            assertThat(envelope.get("payload").get("orderId").asText()).isEqualTo(orderId);
+            assertThat(envelope.get("payload").get("userId").asText()).isEqualTo(userId);
+            assertThat(envelope.get("payload").get("amount").asLong()).isEqualTo(75000L);
+            assertThat(envelope.get("payload").get("refundedAt").asText()).isNotBlank();
+            assertThat(record.key()).isEqualTo(envelope.get("payload").get("paymentId").asText());
+        }
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT * FROM outbox WHERE event_type = 'PaymentRefunded' AND payload LIKE ?",
+                "%" + orderId + "%");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("aggregate_type")).isEqualTo("Payment");
         assertThat(rows.get(0).get("status")).isEqualTo("PUBLISHED");
         assertThat(rows.get(0).get("published_at")).isNotNull();
     }
