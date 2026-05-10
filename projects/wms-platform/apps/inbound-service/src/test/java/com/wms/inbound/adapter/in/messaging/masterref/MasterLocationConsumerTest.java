@@ -24,9 +24,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * Unit tests for {@link MasterLocationConsumer} dedupe + version-guard
- * orchestration. The Kafka listener machinery and DB are not exercised — the
- * port contracts are mocked to verify the consumer's wiring.
+ * Unit tests for {@link MasterEventConsumer#onLocationEvent} dedupe +
+ * version-guard orchestration. The Kafka listener machinery and DB are not
+ * exercised — the port contracts are mocked to verify the consumer's wiring.
+ *
+ * <p>The test was originally written for the per-topic
+ * {@code MasterLocationConsumer}; after the dispatcher consolidation (Stage 1
+ * U2) it now constructs the unified {@link MasterEventConsumer} and invokes
+ * the location-specific listener method. Behaviour assertions are unchanged.
  */
 class MasterLocationConsumerTest {
 
@@ -37,7 +42,7 @@ class MasterLocationConsumerTest {
 
     private MasterReadModelWriterPort writer;
     private EventDedupePort dedupe;
-    private MasterLocationConsumer consumer;
+    private MasterEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
@@ -45,7 +50,18 @@ class MasterLocationConsumerTest {
         writer = mock(MasterReadModelWriterPort.class);
         dedupe = mock(EventDedupePort.class);
         Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        consumer = new MasterLocationConsumer(new MasterEventParser(objectMapper), writer, dedupe, clock);
+        MasterEventParser parser = new MasterEventParser(objectMapper);
+        // Only the location projector is exercised here; other projectors are
+        // wired in but their listener methods are not invoked.
+        MasterWarehouseProjector warehouseProjector = new MasterWarehouseProjector(writer, clock);
+        MasterZoneProjector zoneProjector = new MasterZoneProjector(writer, clock);
+        MasterLocationProjector locationProjector = new MasterLocationProjector(writer, clock);
+        MasterSkuProjector skuProjector = new MasterSkuProjector(writer, clock);
+        MasterPartnerProjector partnerProjector = new MasterPartnerProjector(writer, clock);
+        MasterLotProjector lotProjector = new MasterLotProjector(writer, clock);
+        consumer = new MasterEventConsumer(parser, dedupe,
+                warehouseProjector, zoneProjector, locationProjector,
+                skuProjector, partnerProjector, lotProjector);
 
         // Default behaviour: dedupe runs the supplied work exactly once
         doAnswer(invocation -> {
@@ -58,7 +74,7 @@ class MasterLocationConsumerTest {
     @Test
     void appliesCreatedEventThroughWriter() {
         when(writer.upsertLocation(any())).thenReturn(true);
-        consumer.handle(buildLocationEvent("master.location.created", "ACTIVE", 0L), "key-1");
+        consumer.onLocationEvent(buildLocationEvent("master.location.created", "ACTIVE", 0L));
 
         ArgumentCaptor<LocationSnapshot> captor = ArgumentCaptor.forClass(LocationSnapshot.class);
         verify(writer).upsertLocation(captor.capture());
@@ -76,7 +92,7 @@ class MasterLocationConsumerTest {
     @Test
     void mapsDeactivatedToInactiveStatus() {
         when(writer.upsertLocation(any())).thenReturn(true);
-        consumer.handle(buildLocationEvent("master.location.deactivated", "INACTIVE", 1L), "key-1");
+        consumer.onLocationEvent(buildLocationEvent("master.location.deactivated", "INACTIVE", 1L));
 
         ArgumentCaptor<LocationSnapshot> captor = ArgumentCaptor.forClass(LocationSnapshot.class);
         verify(writer).upsertLocation(captor.capture());
@@ -86,7 +102,7 @@ class MasterLocationConsumerTest {
     @Test
     void staleEventIsDroppedSilently() {
         when(writer.upsertLocation(any())).thenReturn(false);
-        consumer.handle(buildLocationEvent("master.location.updated", "ACTIVE", 1L), "key-1");
+        consumer.onLocationEvent(buildLocationEvent("master.location.updated", "ACTIVE", 1L));
         verify(writer, times(1)).upsertLocation(any());
     }
 
@@ -94,13 +110,13 @@ class MasterLocationConsumerTest {
     void duplicateEventSkipsApplyEntirely() {
         when(dedupe.process(any(UUID.class), any(String.class), any(Runnable.class)))
                 .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
-        consumer.handle(buildLocationEvent("master.location.created", "ACTIVE", 0L), "key-1");
+        consumer.onLocationEvent(buildLocationEvent("master.location.created", "ACTIVE", 0L));
         verify(writer, never()).upsertLocation(any());
     }
 
     @Test
     void malformedJsonIsRejectedAsIllegalArgument() {
-        assertThatThrownBy(() -> consumer.handle("not json", "key-1"))
+        assertThatThrownBy(() -> consumer.onLocationEvent("not json"))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(dedupe, never()).process(any(), any(), any());
         verify(writer, never()).upsertLocation(any());
@@ -118,7 +134,7 @@ class MasterLocationConsumerTest {
                   "payload": {}
                 }
                 """.formatted(UUID.randomUUID(), LOCATION_ID);
-        assertThatThrownBy(() -> consumer.handle(json, "key-1"))
+        assertThatThrownBy(() -> consumer.onLocationEvent(json))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("payload.location");
     }

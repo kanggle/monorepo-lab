@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master Lot.
  *
- * <p>Populated by {@code MasterLotConsumer} from {@code wms.master.lot.v1}
+ * <p>Populated by {@code MasterEventConsumer#onLotEvent} from {@code wms.master.lot.v1}
  * events. Lots flow through {@code ACTIVE → EXPIRED} via the master scheduler
  * and {@code ACTIVE → INACTIVE} via manual deactivate.
  */

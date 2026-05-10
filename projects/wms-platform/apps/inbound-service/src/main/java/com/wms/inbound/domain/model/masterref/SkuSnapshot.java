@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master SKU.
  *
- * <p>Populated by {@code MasterSkuConsumer} from {@code wms.master.sku.v1}
+ * <p>Populated by {@code MasterEventConsumer#onSkuEvent} from {@code wms.master.sku.v1}
  * events. Drives ASN creation validation ({@code SKU_INACTIVE}) and
  * lot-tracking presence at inspection time ({@code LOT_REQUIRED}).
  */

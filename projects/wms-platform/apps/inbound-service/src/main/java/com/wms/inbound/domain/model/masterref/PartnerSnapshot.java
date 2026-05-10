@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master Partner.
  *
- * <p>Populated by {@code MasterPartnerConsumer} from
+ * <p>Populated by {@code MasterEventConsumer#onPartnerEvent} from
  * {@code wms.master.partner.v1} events. Drives ASN supplier validation
  * ({@code PARTNER_INVALID_TYPE}).
  */

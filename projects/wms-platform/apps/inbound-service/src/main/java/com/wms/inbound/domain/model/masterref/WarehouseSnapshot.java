@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master Warehouse.
  *
- * <p>Populated by {@code MasterWarehouseConsumer} from
+ * <p>Populated by {@code MasterEventConsumer#onWarehouseEvent} from
  * {@code wms.master.warehouse.v1} events. ASN creation validates that the
  * destination warehouse exists and is {@code ACTIVE}.
  */

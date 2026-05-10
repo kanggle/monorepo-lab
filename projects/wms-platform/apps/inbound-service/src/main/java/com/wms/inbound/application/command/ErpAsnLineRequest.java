@@ -1,4 +1,4 @@
-package com.wms.inbound.adapter.in.webhook.erp.dto;
+package com.wms.inbound.application.command;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
