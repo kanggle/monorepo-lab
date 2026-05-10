@@ -90,30 +90,9 @@ public class InspectionService implements StartInspectionUseCase, RecordInspecti
         for (RecordInspectionCommand.Line cmdLine : command.lines()) {
             AsnLine asnLine = lineMap.get(cmdLine.asnLineId());
 
-            SkuSnapshot sku = masterReadModel.findSku(asnLine.getSkuId()).orElse(null);
-            if (sku != null && sku.requiresLot()
-                    && cmdLine.lotId() == null && (cmdLine.lotNo() == null || cmdLine.lotNo().isBlank())) {
-                throw new LotRequiredException(asnLine.getSkuId());
-            }
-
-            int total = cmdLine.qtyPassed() + cmdLine.qtyDamaged() + cmdLine.qtyShort();
-            if (total > asnLine.getExpectedQty()) {
-                throw new InspectionQuantityMismatchException(
-                        cmdLine.asnLineId(), asnLine.getExpectedQty(), total);
-            }
-
-            UUID lineId = UuidV7.randomUuid();
-            inspectionLines.add(new InspectionLine(lineId, inspectionId,
-                    cmdLine.asnLineId(), asnLine.getSkuId(),
-                    cmdLine.lotId(), cmdLine.lotNo(),
-                    cmdLine.qtyPassed(), cmdLine.qtyDamaged(), cmdLine.qtyShort()));
-
-            if (total < asnLine.getExpectedQty()) {
-                discrepancies.add(InspectionDiscrepancy.createNew(
-                        UuidV7.randomUuid(), inspectionId, cmdLine.asnLineId(),
-                        DiscrepancyType.QUANTITY_MISMATCH,
-                        asnLine.getExpectedQty(), total));
-            }
+            inspectionLines.add(buildInspectionLineFromCommand(cmdLine, asnLine, inspectionId));
+            appendDiscrepancyIfShort(asnLine, cmdLine.qtyPassed() + cmdLine.qtyDamaged() + cmdLine.qtyShort(),
+                    inspectionId, cmdLine.asnLineId(), discrepancies);
         }
 
         boolean allAcked = discrepancies.stream().allMatch(InspectionDiscrepancy::isAcknowledged);
@@ -154,6 +133,48 @@ public class InspectionService implements StartInspectionUseCase, RecordInspecti
                 .toList();
         if (!unknown.isEmpty()) {
             throw new IllegalArgumentException("Unknown asnLineIds in inspection: " + unknown);
+        }
+    }
+
+    /**
+     * Constructs a single {@link InspectionLine} from the command line, enforcing
+     * the lot-required guard and the total-qty-does-not-exceed-expected guard.
+     */
+    private InspectionLine buildInspectionLineFromCommand(RecordInspectionCommand.Line cmdLine,
+                                                          AsnLine asnLine,
+                                                          UUID inspectionId) {
+        SkuSnapshot sku = masterReadModel.findSku(asnLine.getSkuId()).orElse(null);
+        if (sku != null && sku.requiresLot()
+                && cmdLine.lotId() == null && (cmdLine.lotNo() == null || cmdLine.lotNo().isBlank())) {
+            throw new LotRequiredException(asnLine.getSkuId());
+        }
+
+        int total = cmdLine.qtyPassed() + cmdLine.qtyDamaged() + cmdLine.qtyShort();
+        if (total > asnLine.getExpectedQty()) {
+            throw new InspectionQuantityMismatchException(
+                    cmdLine.asnLineId(), asnLine.getExpectedQty(), total);
+        }
+
+        UUID lineId = UuidV7.randomUuid();
+        return new InspectionLine(lineId, inspectionId,
+                cmdLine.asnLineId(), asnLine.getSkuId(),
+                cmdLine.lotId(), cmdLine.lotNo(),
+                cmdLine.qtyPassed(), cmdLine.qtyDamaged(), cmdLine.qtyShort());
+    }
+
+    /**
+     * Appends a {@link InspectionDiscrepancy} of type {@code QUANTITY_MISMATCH} to
+     * {@code discrepancies} when the actual total quantity is less than the
+     * expected quantity on the ASN line. No-ops when quantities match exactly.
+     */
+    private void appendDiscrepancyIfShort(AsnLine asnLine, int totalActual,
+                                          UUID inspectionId, UUID asnLineId,
+                                          List<InspectionDiscrepancy> discrepancies) {
+        if (totalActual < asnLine.getExpectedQty()) {
+            discrepancies.add(InspectionDiscrepancy.createNew(
+                    UuidV7.randomUuid(), inspectionId, asnLineId,
+                    DiscrepancyType.QUANTITY_MISMATCH,
+                    asnLine.getExpectedQty(), totalActual));
         }
     }
 
