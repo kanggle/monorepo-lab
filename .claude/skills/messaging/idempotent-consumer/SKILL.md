@@ -9,6 +9,14 @@ category: messaging
 Patterns for ensuring Kafka consumers process each event exactly once.
 
 Prerequisite: read `platform/event-driven-policy.md` before using this skill.
+Also reference `rules/traits/transactional.md` §T8 and each project's
+`specs/services/<service>/idempotency.md`.
+
+The shared dedupe contract lives in `libs/java-messaging`
+(`com.example.messaging.dedupe.EventDedupePort`) per
+[ADR-MONO-004](../../../../docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md) —
+each service implements the port against its own dedupe table because
+retention policy and tenant scoping are service-specific.
 
 ---
 

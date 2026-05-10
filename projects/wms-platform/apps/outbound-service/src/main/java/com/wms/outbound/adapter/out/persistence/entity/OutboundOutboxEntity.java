@@ -1,5 +1,6 @@
 package com.wms.outbound.adapter.out.persistence.entity;
 
+import com.example.messaging.outbox.OutboxRow;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -11,6 +12,10 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * JPA entity backing {@code outbound_outbox}.
+ *
+ * <p>Implements the shared {@link OutboxRow} contract (TASK-MONO-049 + ADR-MONO-004)
+ * so the generic {@code AbstractOutboxPublisher} in {@code libs/java-messaging} can
+ * drive this table without taking a hard dependency on the entity class.
  *
  * <p>Columns align with {@code specs/services/outbound-service/domain-model.md} §7:
  * <ul>
@@ -30,7 +35,7 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "outbound_outbox")
-public class OutboundOutboxEntity {
+public class OutboundOutboxEntity implements OutboxRow {
 
     @Id
     private UUID id;
@@ -105,14 +110,17 @@ public class OutboundOutboxEntity {
         return id;
     }
 
+    @Override
     public String getAggregateType() {
         return aggregateType;
     }
 
-    public UUID getAggregateId() {
+    /** Native UUID accessor for callers that operate in UUID space. */
+    public UUID getAggregateUuid() {
         return aggregateId;
     }
 
+    @Override
     public String getEventType() {
         return eventType;
     }
@@ -121,10 +129,12 @@ public class OutboundOutboxEntity {
         return eventVersion;
     }
 
+    @Override
     public String getPayload() {
         return payload;
     }
 
+    @Override
     public String getPartitionKey() {
         return partitionKey;
     }
@@ -137,6 +147,7 @@ public class OutboundOutboxEntity {
         return createdAt;
     }
 
+    @Override
     public Instant getPublishedAt() {
         return publishedAt;
     }
@@ -145,6 +156,7 @@ public class OutboundOutboxEntity {
         return retryCount;
     }
 
+    @Override
     public void markPublished(Instant at) {
         this.publishedAt = at;
         this.status = "PUBLISHED";
@@ -152,5 +164,40 @@ public class OutboundOutboxEntity {
 
     public void incrementRetry() {
         this.retryCount++;
+    }
+
+    // --- OutboxRow contract adapters (TASK-MONO-049) ---------------------------
+
+    /**
+     * The shared contract names the unique key {@code eventId}; this entity
+     * stores it as {@code id}. Both refer to the same UUIDv7 column.
+     */
+    @Override
+    public UUID getEventId() {
+        return id;
+    }
+
+    /**
+     * The shared contract returns {@code aggregateId} as String for
+     * project-agnostic reasons; this entity uses {@link UUID} natively. The
+     * String form is the {@code toString()} of the UUID.
+     */
+    @Override
+    public String getAggregateId() {
+        return aggregateId == null ? null : aggregateId.toString();
+    }
+
+    /**
+     * The shared contract calls the domain timestamp {@code occurredAt}; this
+     * entity stores the same value under {@code created_at} (write timestamp).
+     */
+    @Override
+    public Instant getOccurredAt() {
+        return createdAt;
+    }
+
+    @Override
+    public int getRetries() {
+        return retryCount;
     }
 }
