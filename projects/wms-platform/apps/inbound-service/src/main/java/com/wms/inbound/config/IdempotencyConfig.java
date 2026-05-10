@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.adapter.in.web.filter.InboundIdempotencyFilter;
 import com.wms.inbound.adapter.out.idempotency.InMemoryIdempotencyStore;
 import com.wms.inbound.adapter.out.idempotency.RedisIdempotencyStore;
-import com.wms.inbound.application.port.out.IdempotencyStore;
+import com.wms.inbound.application.port.out.IdempotencyStorePort;
 import jakarta.servlet.Filter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -15,7 +15,7 @@ import org.springframework.core.Ordered;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * Wires the {@link IdempotencyStore} bean and registers the
+ * Wires the {@link IdempotencyStorePort} bean and registers the
  * {@link InboundIdempotencyFilter}.
  *
  * <p>Redis-backed store under all real profiles; in-memory under {@code standalone}.
@@ -29,22 +29,22 @@ public class IdempotencyConfig {
 
     @Bean
     @Profile("standalone")
-    @ConditionalOnMissingBean(IdempotencyStore.class)
-    IdempotencyStore inMemoryIdempotencyStore() {
+    @ConditionalOnMissingBean(IdempotencyStorePort.class)
+    IdempotencyStorePort inMemoryIdempotencyStore() {
         return new InMemoryIdempotencyStore();
     }
 
     @Bean
     @Profile("!standalone")
-    @ConditionalOnMissingBean(IdempotencyStore.class)
-    IdempotencyStore redisIdempotencyStore(StringRedisTemplate redisTemplate,
+    @ConditionalOnMissingBean(IdempotencyStorePort.class)
+    IdempotencyStorePort redisIdempotencyStore(StringRedisTemplate redisTemplate,
                                            ObjectMapper objectMapper) {
         return new RedisIdempotencyStore(redisTemplate, objectMapper);
     }
 
     @Bean
     public FilterRegistrationBean<InboundIdempotencyFilter> idempotencyFilterRegistration(
-            IdempotencyStore idempotencyStore,
+            IdempotencyStorePort idempotencyStore,
             ObjectMapper objectMapper) {
         var filter = new InboundIdempotencyFilter(idempotencyStore, objectMapper);
         var reg = new FilterRegistrationBean<>(filter);

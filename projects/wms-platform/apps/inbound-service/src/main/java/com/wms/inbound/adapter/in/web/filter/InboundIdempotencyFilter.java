@@ -2,7 +2,7 @@ package com.wms.inbound.adapter.in.web.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.adapter.in.web.dto.response.ApiErrorEnvelope;
-import com.wms.inbound.application.port.out.IdempotencyStore;
+import com.wms.inbound.application.port.out.IdempotencyStorePort;
 import com.wms.inbound.application.port.out.StoredResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -32,7 +32,7 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  *   <li>Read and cache the request body so it is replayable for Spring's
  *       message converters after this filter has consumed the input stream.</li>
  *   <li>Compute a canonical body hash (sorted-keys JSON → SHA-256).</li>
- *   <li>Look up the storage key in {@link IdempotencyStore}:
+ *   <li>Look up the storage key in {@link IdempotencyStorePort}:
  *       <ul>
  *         <li>Hit + same hash → replay cached response.</li>
  *         <li>Hit + different hash → 409 DUPLICATE_REQUEST.</li>
@@ -56,10 +56,10 @@ public class InboundIdempotencyFilter extends OncePerRequestFilter {
     static final Duration LOCK_TTL = Duration.ofSeconds(30);
     static final Duration ENTRY_TTL = Duration.ofHours(24);
 
-    private final IdempotencyStore idempotencyStore;
+    private final IdempotencyStorePort idempotencyStore;
     private final ObjectMapper objectMapper;
 
-    public InboundIdempotencyFilter(IdempotencyStore idempotencyStore, ObjectMapper objectMapper) {
+    public InboundIdempotencyFilter(IdempotencyStorePort idempotencyStore, ObjectMapper objectMapper) {
         this.idempotencyStore = idempotencyStore;
         this.objectMapper = objectMapper;
     }

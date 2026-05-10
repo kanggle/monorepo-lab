@@ -22,7 +22,7 @@ import java.util.Optional;
  * inventory-service's TASK-BE-025 lesson — the shorter {@code inbound:idem:}
  * shape was rejected as latent risk).
  */
-public interface IdempotencyStore {
+public interface IdempotencyStorePort {
 
     Optional<StoredResponse> lookup(String storageKey);
 

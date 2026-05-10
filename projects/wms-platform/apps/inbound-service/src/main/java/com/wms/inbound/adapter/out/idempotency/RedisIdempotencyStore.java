@@ -2,14 +2,14 @@ package com.wms.inbound.adapter.out.idempotency;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.inbound.application.port.out.IdempotencyStore;
+import com.wms.inbound.application.port.out.IdempotencyStorePort;
 import com.wms.inbound.application.port.out.StoredResponse;
 import java.time.Duration;
 import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * Redis-backed {@link IdempotencyStore}.
+ * Redis-backed {@link IdempotencyStorePort}.
  *
  * <p>Authoritative key shape (see {@code idempotency.md} §1.3):
  * {@code inbound:idempotency:{method}:{path_hash}:{idempotency_key}}.
@@ -33,7 +33,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  *
  * <p>TTL is applied per operation; no renewal on read.
  */
-public class RedisIdempotencyStore implements IdempotencyStore {
+public class RedisIdempotencyStore implements IdempotencyStorePort {
 
     /** Canonical prefix for the cached-response entry. Matches {@code idempotency.md} §1.3. */
     public static final String ENTRY_PREFIX = "inbound:idempotency:";
