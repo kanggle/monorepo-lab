@@ -83,12 +83,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-BE-136 | payment-service transactional outbox migration (ADR-006 Scenario A impl — PaymentCompleted/PaymentRefunded). PR #345 open 2026-05-11. | payment-service | code, event |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-136 | payment-service transactional outbox migration — ADR-006 Scenario A impl (PaymentCompleted/PaymentRefunded → outbox). Producer-side silent-loss 가능성 제거; at-least-once 그룹 합류. PR #345 머지 2026-05-11. | payment-service | code, event |
 | TASK-BE-135 | ecommerce at-least-once delivery consistency audit + ADR-006 (per-service decision; payment=Scenario A→TASK-BE-136, user/notification=Scenario B). PR #344 머지 2026-05-11. | 7 services | spec, adr |
 | TASK-BE-134 | `user.user.withdrawn` topic alignment — production silent-loss bug fix + canonical Topics table 정합. PR #338 머지 2026-05-11. | user-service | code, event, bug |
 | TASK-BE-133 | ecommerce 7 service `dependencies.md` spec backfill — Consumes From / Publishes To / Notes 표준화. PR #337 머지 2026-05-11. | 7 services | spec |
