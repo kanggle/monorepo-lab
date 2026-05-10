@@ -34,6 +34,7 @@ public final class OutboundSaga {
     private final Instant startedAt;
     private Instant lastTransitionAt;
     private long version;
+    private int reEmitCount;
 
     public OutboundSaga(UUID sagaId,
                         UUID orderId,
@@ -43,6 +44,19 @@ public final class OutboundSaga {
                         Instant startedAt,
                         Instant lastTransitionAt,
                         long version) {
+        this(sagaId, orderId, status, pickingRequestId, failureReason,
+                startedAt, lastTransitionAt, version, 0);
+    }
+
+    public OutboundSaga(UUID sagaId,
+                        UUID orderId,
+                        SagaStatus status,
+                        UUID pickingRequestId,
+                        String failureReason,
+                        Instant startedAt,
+                        Instant lastTransitionAt,
+                        long version,
+                        int reEmitCount) {
         this.sagaId = Objects.requireNonNull(sagaId, "sagaId");
         this.orderId = Objects.requireNonNull(orderId, "orderId");
         this.status = Objects.requireNonNull(status, "status");
@@ -51,6 +65,7 @@ public final class OutboundSaga {
         this.startedAt = Objects.requireNonNull(startedAt, "startedAt");
         this.lastTransitionAt = Objects.requireNonNull(lastTransitionAt, "lastTransitionAt");
         this.version = version;
+        this.reEmitCount = reEmitCount;
     }
 
     /**
@@ -61,7 +76,7 @@ public final class OutboundSaga {
     public static OutboundSaga newRequested(UUID sagaId, UUID orderId, Instant now) {
         return new OutboundSaga(sagaId, orderId, SagaStatus.REQUESTED,
                 sagaId /* pickingRequestId == sagaId in v1 scope */,
-                null, now, now, 0L);
+                null, now, now, 0L, 0);
     }
 
     /**
@@ -287,5 +302,51 @@ public final class OutboundSaga {
 
     public long version() {
         return version;
+    }
+
+    public int reEmitCount() {
+        return reEmitCount;
+    }
+
+    /**
+     * Saga sweeper hook (TASK-BE-050). Bumps {@link #reEmitCount} after a
+     * successful re-emission; the application layer is responsible for
+     * writing the fresh outbox row in the same transaction.
+     *
+     * <p>This method does NOT change saga state; it is a side counter. When
+     * {@link #reEmitCount} reaches the sweeper's configured cap, the
+     * sweeper invokes {@link #markStuckRecoveryFailed(String, Instant)}
+     * instead of incrementing further.
+     */
+    public void recordReEmission(Instant now) {
+        this.reEmitCount++;
+        this.lastTransitionAt = now;
+    }
+
+    /**
+     * Saga sweeper terminal: any non-terminal stuck state →
+     * {@link SagaStatus#STUCK_RECOVERY_FAILED} (terminal, ops-investigated).
+     *
+     * <p>Allowed predecessors per the sweeper's recovery matrix:
+     * {@link SagaStatus#REQUESTED}, {@link SagaStatus#CANCELLATION_REQUESTED},
+     * {@link SagaStatus#SHIPPED}. Calling this method from any other state
+     * raises {@link com.wms.outbound.domain.exception.StateTransitionInvalidException}.
+     *
+     * <p>Re-invocation on an already-{@link SagaStatus#STUCK_RECOVERY_FAILED}
+     * saga is a silent no-op so concurrent sweeper ticks remain idempotent.
+     */
+    public void markStuckRecoveryFailed(String reason, Instant now) {
+        if (status == SagaStatus.STUCK_RECOVERY_FAILED) {
+            return;
+        }
+        switch (status) {
+            case REQUESTED, CANCELLATION_REQUESTED, SHIPPED -> {
+                this.status = SagaStatus.STUCK_RECOVERY_FAILED;
+                this.failureReason = reason;
+                this.lastTransitionAt = now;
+            }
+            default -> throw new StateTransitionInvalidException(status.name(),
+                    SagaStatus.STUCK_RECOVERY_FAILED.name());
+        }
     }
 }

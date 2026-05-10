@@ -33,6 +33,7 @@ Order machine, see [`order-status.md`](order-status.md).
 | `CANCELLATION_REQUESTED` | no | `CancelOrderUseCase` from `RESERVED`/`PICKING_CONFIRMED`/`PACKING_CONFIRMED` | Cancel issued; `outbound.picking.cancelled` written to outbox. Awaiting `inventory.released`. |
 | `CANCELLED` | **yes** | `InventoryReleasedConsumer` (Kafka), OR `CancelOrderUseCase` directly when saga was still `REQUESTED` (no reservation exists) | Compensation complete. Saga done. |
 | `SHIPPED_NOT_NOTIFIED` | no (alert) | TMS retry exhaustion (after-commit handler) | Shipment was published to outbox + `inventory.confirmed` may have arrived; TMS push failed after retry/circuit/bulkhead exhaustion. Stock already consumed. Stays here until manual `:retry-tms-notify` succeeds (→ `COMPLETED` if `inventory.confirmed` arrived) or operator force-completes. |
+| `STUCK_RECOVERY_FAILED` | **yes (operator)** | Saga sweeper exhausted (TASK-BE-050) | Sweeper re-emitted the appropriate event the configured maximum number of times (default 5) without the saga advancing. Alert event `outbound.alert.saga.recovery.exhausted` fired in the same TX as this transition. Ops investigates per the per-saga runbook. Distinct from `SHIPPED_NOT_NOTIFIED` — that one is TMS-side; this one is sweeper-exhaustion across the ↔ inventory channel. |
 
 ---
 

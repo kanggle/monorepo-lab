@@ -121,6 +121,18 @@ outbound:
         enabled: true
         fixed-delay-ms: 1000
         batch-size: 50
+  # TASK-BE-050: Outbound saga sweeper (1-minute recovery loop). Re-emits
+  # the appropriate outbox event for sagas stuck in non-terminal states
+  # beyond `threshold-seconds`. After `max-attempts` failed re-emissions,
+  # the saga moves to STUCK_RECOVERY_FAILED and an alert event fires.
+  saga:
+    sweeper:
+      enabled: true
+      fixed-delay-ms: 60000        # 1 minute per spec § Saga Sweeper
+      initial-delay-ms: 30000      # 30s grace after boot before first tick
+      threshold-seconds: 300       # 5 minutes per spec § Saga Sweeper
+      batch-size: 100              # max sagas swept per tick per state
+      max-attempts: 5              # cap before STUCK_RECOVERY_FAILED
   kafka:
     dlt-suffix: .DLT
     topics:

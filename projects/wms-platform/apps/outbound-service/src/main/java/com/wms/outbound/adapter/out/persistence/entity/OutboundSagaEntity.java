@@ -50,6 +50,10 @@ public class OutboundSagaEntity {
     @Column(name = "version", nullable = false)
     private long version;
 
+    /** TASK-BE-050: saga sweeper re-emission counter. */
+    @Column(name = "re_emit_count", nullable = false)
+    private int reEmitCount;
+
     protected OutboundSagaEntity() {
     }
 
@@ -57,6 +61,15 @@ public class OutboundSagaEntity {
                               UUID pickingRequestId,
                               String failureReason,
                               Instant createdAt, Instant updatedAt) {
+        this(id, orderId, status, pickingRequestId, failureReason,
+                createdAt, updatedAt, 0);
+    }
+
+    public OutboundSagaEntity(UUID id, UUID orderId, String status,
+                              UUID pickingRequestId,
+                              String failureReason,
+                              Instant createdAt, Instant updatedAt,
+                              int reEmitCount) {
         this.id = id;
         this.orderId = orderId;
         this.status = status;
@@ -64,6 +77,7 @@ public class OutboundSagaEntity {
         this.failureReason = failureReason;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.reEmitCount = reEmitCount;
     }
 
     public UUID getId() {
@@ -106,6 +120,10 @@ public class OutboundSagaEntity {
         return version;
     }
 
+    public int getReEmitCount() {
+        return reEmitCount;
+    }
+
     public void setStatus(String status) {
         this.status = status;
     }
@@ -120,5 +138,9 @@ public class OutboundSagaEntity {
 
     public void setPickingRequestId(UUID pickingRequestId) {
         this.pickingRequestId = pickingRequestId;
+    }
+
+    public void setReEmitCount(int reEmitCount) {
+        this.reEmitCount = reEmitCount;
     }
 }

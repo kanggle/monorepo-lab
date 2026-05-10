@@ -2,8 +2,14 @@ package com.wms.outbound.application.service.fakes;
 
 import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
+import com.wms.outbound.domain.model.SagaStatus;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +24,14 @@ public class FakeSagaPersistencePort implements SagaPersistencePort {
      * lookups (AC-03).
      */
     public int findByOrderIdCallCount;
+
+    /**
+     * Clock used by {@link #findStuck} to compute the staleness threshold.
+     * Tests can substitute a fixed clock to deterministically position
+     * stuck sagas. Defaults to {@link Clock#systemUTC()} so existing tests
+     * that don't exercise the sweeper continue to work unchanged.
+     */
+    public Clock clock = Clock.systemUTC();
 
     @Override
     public OutboundSaga save(OutboundSaga saga) {
@@ -43,6 +57,25 @@ public class FakeSagaPersistencePort implements SagaPersistencePort {
         return store.values().stream()
                 .filter(s -> pickingRequestId.equals(s.pickingRequestId()))
                 .findFirst();
+    }
+
+    @Override
+    public List<OutboundSaga> findStuck(SagaStatus status, Duration gracePeriod, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        java.time.Instant threshold = clock.instant().minus(
+                gracePeriod == null ? Duration.ZERO : gracePeriod);
+        List<OutboundSaga> candidates = new ArrayList<>();
+        for (OutboundSaga s : store.values()) {
+            if (s.status() == status && s.lastTransitionAt().isBefore(threshold)) {
+                candidates.add(s);
+            }
+        }
+        candidates.sort(Comparator.comparing(OutboundSaga::lastTransitionAt));
+        return candidates.size() <= limit
+                ? candidates
+                : new ArrayList<>(candidates.subList(0, limit));
     }
 
     @Override
