@@ -44,3 +44,14 @@
 
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
+
+**Delivery semantic (ADR-006)**: payment-service is currently
+**best-effort** for both `payment.payment.completed` and
+`payment.payment.refunded` (`KafkaPaymentEventPublisher` uses
+`KafkaTemplate.send` directly, swallowing `KafkaException` after metric
+increment). [`ADR-006`](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md)
+classifies this as **Scenario A — Migrate to transactional outbox**;
+TASK-BE-136 carries the impl. Until that lands, downstream consumers
+(order-service for both events; promotion-service for refunded) MUST
+treat occasional silent loss as possible and provide compensating
+recovery paths.
