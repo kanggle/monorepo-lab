@@ -10,6 +10,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) | Phase 4 (Template 레포 추출 진입 결정 + scm catalyst) | ACCEPTED | 2026-05-04 |
 | [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) | Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED | DEFERRED | 2026-05-08 (재평가 2026-05-09) |
 | [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) | Shared Messaging Scaffolding in `libs/java-messaging` | ACCEPTED | 2026-05-10 |
+| [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) | Saga Timeout / Escalation / Dead-Letter Policy (4-category taxonomy) | PROPOSED | 2026-05-11 |
 
 ---
 
