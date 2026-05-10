@@ -1,0 +1,115 @@
+package com.example.payment.adapter.out.event;
+
+import com.example.messaging.outbox.OutboxPublisher;
+import com.example.payment.application.port.out.PaymentMetricRecorder;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
+
+import java.util.concurrent.CompletableFuture;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PaymentEventOutboxRelay 단위 테스트")
+class PaymentEventOutboxRelayTest {
+
+    @InjectMocks
+    private PaymentEventOutboxRelay relay;
+
+    @Mock
+    private OutboxPublisher outboxPublisher;
+
+    @Mock
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Mock
+    private PaymentMetricRecorder paymentMetricRecorder;
+
+    @Captor
+    private ArgumentCaptor<OutboxPublisher.EventSender> senderCaptor;
+
+    @Test
+    @DisplayName("pollAndPublish 호출 시 OutboxPublisher.publishPendingEvents 를 위임 호출한다")
+    void pollAndPublish_delegatesToOutboxPublisher() {
+        relay.pollAndPublish();
+
+        verify(outboxPublisher).publishPendingEvents(any());
+    }
+
+    @Test
+    @DisplayName("PaymentCompleted 이벤트는 payment.payment.completed 토픽으로 Kafka 전송된다")
+    void sendToKafka_paymentCompleted_sendsToCorrectTopic() {
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        relay.pollAndPublish();
+        verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
+
+        boolean result = senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
+
+        assertThat(result).isTrue();
+        verify(kafkaTemplate).send("payment.payment.completed", "pay-1", "{\"test\":1}");
+    }
+
+    @Test
+    @DisplayName("PaymentRefunded 이벤트는 payment.payment.refunded 토픽으로 Kafka 전송된다")
+    void sendToKafka_paymentRefunded_sendsToCorrectTopic() {
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        relay.pollAndPublish();
+        verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
+
+        boolean result = senderCaptor.getValue().send("PaymentRefunded", "pay-1", "{\"test\":1}");
+
+        assertThat(result).isTrue();
+        verify(kafkaTemplate).send("payment.payment.refunded", "pay-1", "{\"test\":1}");
+    }
+
+    @Test
+    @DisplayName("Kafka 전송 실패 시 false 반환 + PaymentMetricRecorder.incrementEventPublishFailure 호출")
+    void sendToKafka_failure_returnsFalseAndIncrementsMetric() {
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Kafka broker unavailable")));
+
+        relay.pollAndPublish();
+        verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
+
+        boolean result = senderCaptor.getValue().send("PaymentCompleted", "pay-1", "{\"test\":1}");
+
+        assertThat(result).isFalse();
+        verify(paymentMetricRecorder).incrementEventPublishFailure("PaymentCompleted");
+    }
+
+    @Test
+    @DisplayName("알 수 없는 eventType 은 base scheduler 에서 send 실패로 처리되고 failure 메트릭이 기록된다")
+    void sendToKafka_unknownEventType_recordsFailureMetric() {
+        relay.pollAndPublish();
+        verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
+
+        boolean result = senderCaptor.getValue().send("PaymentMutated", "pay-x", "{}");
+
+        assertThat(result).isFalse();
+        verify(paymentMetricRecorder).incrementEventPublishFailure("PaymentMutated");
+    }
+
+    @Test
+    @DisplayName("자체 resolveTopic 호출 시 알 수 없는 eventType 은 즉시 IllegalArgumentException 던진다")
+    void resolveTopic_direct_unknownThrows() {
+        assertThatThrownBy(() -> relay.resolveTopic("Bogus"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Bogus");
+    }
+}

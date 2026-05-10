@@ -7,6 +7,12 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Common
+    implementation project(':libs:java-common')
+
+    // Messaging (Outbox pattern)
+    implementation project(':libs:java-messaging')
+
     // Observability
     implementation project(':libs:java-observability')
 

@@ -27,9 +27,7 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: false
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
       group-id: payment-service
       auto-offset-reset: earliest
@@ -57,11 +55,11 @@ management:
     tags:
       service: ${spring.application.name}
 
-app:
-  kafka:
-    topics:
-      payment-completed: payment.payment.completed
-      payment-refunded: payment.payment.refunded
+outbox:
+  polling:
+    enabled: ${OUTBOX_POLLING_ENABLED:true}
+    interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
 toss:
   payments:

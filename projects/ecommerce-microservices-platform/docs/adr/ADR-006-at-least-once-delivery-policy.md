@@ -1,10 +1,11 @@
 # ADR-006: At-Least-Once Delivery Policy (per-service decisions)
 
-- **Status**: PROPOSED (2026-05-11) — accepted on PR merge
+- **Status**: ACCEPTED (2026-05-11)
 - **Date**: 2026-05-11
 - **Authors**: backend (TASK-BE-135 audit)
 - **Supersedes**: —
 - **Superseded by**: —
+- **History**: PROPOSED 2026-05-11 (filed with TASK-BE-135 audit) → ACCEPTED 2026-05-11 (TASK-BE-136 Scenario A impl landed; user-service and notification-service Scenario B mitigations already in place per audit table)
 
 ## Context
 
@@ -19,7 +20,7 @@ dependencies.md backfill) surfaced the gap; per-service evidence:
 | review-service | `ReviewEventOutboxRelay` | transactional outbox | at-least-once |
 | shipping-service | `ShippingEventOutboxRelay` | transactional outbox | at-least-once |
 | **user-service** | `KafkaUserProfileEventPublisher` (BE-134 fixed) | `KafkaTemplate.send` inside `@TransactionalEventListener(AFTER_COMMIT)` | best-effort (commit succeeds → broker send may fail → no row to retry) |
-| **payment-service** | `KafkaPaymentEventPublisher` | `KafkaTemplate.send` inside use-case service; failure → metric increment + swallow | best-effort (DB commit independent of broker ack — silent loss on `KafkaException`) |
+| payment-service | `PaymentEventOutboxRelay` (libs/java-messaging) | transactional outbox + polling relay | **at-least-once** (post TASK-BE-136 / Scenario A migration) |
 | **notification-service** | `EmailNotificationSender` (JavaMailSender) | direct SMTP send via Spring Mail | best-effort (broker SMTP send not durable; no replay) |
 
 This ADR records a **per-service decision** for each direct-publish
@@ -32,7 +33,7 @@ ingress (or the inverse), the overall saga drops to the weakest link.
 
 ## Decisions
 
-### payment-service → **Scenario A (Migrate to transactional outbox)**
+### payment-service → **Scenario A (Migrate to transactional outbox)** — COMPLETED via TASK-BE-136
 
 **Events:** `payment.payment.completed`, `payment.payment.refunded`.
 
@@ -53,20 +54,24 @@ ingress (or the inverse), the overall saga drops to the weakest link.
   ~2 days of work; saga reliability is **portfolio-grade** (the demo
   narrative explicitly claims at-least-once for payment).
 
-**Migration path** (filed as TASK-BE-136 follow-up):
+**Migration path** (delivered by TASK-BE-136):
 
-1. New Flyway migration: `outbox` + `processed_events` (mirror libs/java-messaging schema).
-2. Replace `KafkaPaymentEventPublisher.publishXxx` with
-   `OutboxWriter.save(...)` (same Tx as the payment state mutation).
-3. New `PaymentEventOutboxRelay extends OutboxPollingScheduler` —
-   `resolveTopic` switch for the 2 event types.
-4. Existing `PaymentMetricRecorder.incrementEventPublishFailure(eventType)`
-   wired to relay failure callback (consistent metric label).
-5. Integration test (Testcontainers Kafka + Postgres) — payment commits
-   + relay polls within N seconds + consumer receives.
+1. ✅ New Flyway migration (`V3__create_outbox_table.sql`, `V4__create_processed_events_table.sql`) — mirrors libs/java-messaging schema.
+2. ✅ `KafkaPaymentEventPublisher` deleted; `PaymentEventOutboxWriter` persists
+   the envelope via `OutboxWriter.save(...)` inside the use-case
+   `@Transactional` boundary.
+3. ✅ `PaymentEventOutboxRelay extends OutboxPollingScheduler` —
+   `resolveTopic` switch maps `PaymentCompleted` → `payment.payment.completed`
+   and `PaymentRefunded` → `payment.payment.refunded`.
+4. ✅ Existing `PaymentMetricRecorder.incrementEventPublishFailure(eventType)`
+   wired to relay's `onKafkaSendFailure` (consistent metric label, no
+   dashboard / alert breakage).
+5. ✅ Integration test (Testcontainers Postgres + embedded Kafka) covers the
+   full round-trip: commit → outbox PENDING → relay polls → PUBLISHED →
+   consumer receives envelope unchanged.
 
-**Acceptance after migration:** payment-service joins the at-least-once
-column of the table above.
+**Outcome:** payment-service joined the at-least-once column of the audit
+table above (2026-05-11).
 
 ---
 
@@ -152,12 +157,13 @@ Two saga edges to verify after this ADR lands:
 1. **order → payment → order** (place → capture → confirm):
    - `order.order.placed` (outbox, at-least-once) → payment-service
      consumes
-   - payment processes capture → `payment.payment.completed`
-     (**currently best-effort**; Scenario A migration closes the gap)
+   - payment processes capture → `payment.payment.completed` (**outbox,
+     at-least-once** post TASK-BE-136 / Scenario A migration)
    - order-service consumes → confirm
 
-   **Today**: weakest link is the payment.completed publish — single
-   silent loss freezes the order. Post-migration: full at-least-once.
+   **Post-migration**: full at-least-once across the saga. The original
+   gap (single silent loss on `payment.completed` freezes the order in
+   `PAYMENT_PENDING`) is closed.
 
 2. **order → notification → email**:
    - `order.order.placed` (outbox) → notification-service consumes
@@ -169,22 +175,23 @@ Two saga edges to verify after this ADR lands:
 
 ## Consequences
 
-- **Positive**: payment-service joins the at-least-once peer group;
-  cross-service saga reliability claim becomes consistent for the
-  load-bearing path. user/notification documented divergence with
+- **Positive**: payment-service has joined the at-least-once peer group
+  (TASK-BE-136); cross-service saga reliability claim is now consistent
+  for the load-bearing path. user/notification documented divergence with
   rationale + observability fallback (no silent technical debt).
-- **Negative**: payment-service migration is engineering work
-  (~2 days). user-service / notification-service still emit
-  best-effort events — explicit in their `dependencies.md § Notes` so
-  consumers cannot mistake them for at-least-once.
+- **Negative**: payment-service migration was engineering work (~2 days,
+  delivered). user-service / notification-service still emit best-effort
+  events — explicit in their `dependencies.md § Notes` so consumers
+  cannot mistake them for at-least-once.
 - **Neutral**: ADR-002 (saga over distributed transaction) constrains
   the design space; this ADR is consistent — payment outbox is the
   saga-step compensation hook.
 
 ## Follow-up tasks
 
-- **TASK-BE-136** (filed in this PR, ready/) — payment-service outbox
-  migration (Scenario A impl).
+- **TASK-BE-136** ✅ DONE 2026-05-11 — payment-service outbox migration
+  (Scenario A impl). Closes the producer-side silent-loss gap; see
+  `specs/services/payment-service/architecture.md` § Event Publication.
 - **TASK-BE-137** (DEFERRED) — user-service AFTER_COMMIT → outbox
   promotion. Filed only if v2 introduces a non-recoverable user event.
 - **TASK-BE-138** (DEFERRED) — notification DLQ + email retry runbook.
