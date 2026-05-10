@@ -20,7 +20,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,9 +81,9 @@ public class CancelOrderService implements CancelOrderUseCase {
 
         // Authorization: post-pick cancel requires ADMIN.
         if (POST_PICK_STATES.contains(previousStatus)) {
-            requireRole(command.callerRoles(), ROLE_OUTBOUND_ADMIN);
+            AuthorizationGuards.requireRole(command.callerRoles(), ROLE_OUTBOUND_ADMIN);
         } else {
-            requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
+            AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
         }
 
         // Optimistic lock check (T5 + outbound-service-api.md §1.4):
@@ -147,21 +146,4 @@ public class CancelOrderService implements CancelOrderUseCase {
                 command.actorId());
     }
 
-    private static void requireRole(Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
-    }
-
-    private static void requireAnyRole(Set<String> roles, String... required) {
-        if (roles == null) {
-            throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-        }
-        for (String r : required) {
-            if (roles.contains(r)) {
-                return;
-            }
-        }
-        throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-    }
 }

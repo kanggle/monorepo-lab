@@ -1,13 +1,11 @@
 package com.wms.outbound.adapter.in.web.controller;
 
-import static com.wms.outbound.adapter.in.web.controller.PickingController.actorId;
-import static com.wms.outbound.adapter.in.web.controller.PickingController.callerRoles;
-
 import com.wms.outbound.adapter.in.web.dto.request.ConfirmPackingRequest;
 import com.wms.outbound.adapter.in.web.dto.request.CreatePackingUnitRequest;
 import com.wms.outbound.adapter.in.web.dto.request.SealPackingUnitRequest;
 import com.wms.outbound.adapter.in.web.dto.response.OrderResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PackingUnitResponse;
+import com.wms.outbound.adapter.in.web.util.RequestContext;
 import com.wms.outbound.application.command.ConfirmPackingCommand;
 import com.wms.outbound.application.command.CreatePackingUnitCommand;
 import com.wms.outbound.application.command.CreatePackingUnitLineCommand;
@@ -71,7 +69,7 @@ public class PackingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         CreatePackingUnitCommand command = new CreatePackingUnitCommand(
                 orderId,
                 request.cartonNo(),
@@ -85,8 +83,8 @@ public class PackingController {
                         .map(l -> new CreatePackingUnitLineCommand(
                                 l.orderLineId(), l.skuId(), l.lotId(), l.qty()))
                         .toList(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         PackingUnitResult result = createPackingUnit.create(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(PackingUnitResponse.from(result));
     }
@@ -98,7 +96,7 @@ public class PackingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         // Resolve orderId via the read in-port; the controller never touches
         // the persistence out-port (AC-04 of TASK-BE-040).
         PackingUnitResult unit = queryPackingUnit.findById(packingUnitId)
@@ -107,8 +105,8 @@ public class PackingController {
                 unit.orderId(),
                 packingUnitId,
                 request.version(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         PackingUnitResult result = sealPackingUnit.seal(command);
         return ResponseEntity.ok(PackingUnitResponse.from(result));
     }
@@ -120,19 +118,14 @@ public class PackingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         ConfirmPackingCommand command = new ConfirmPackingCommand(
                 orderId,
                 request.version(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         OrderResult result = confirmPacking.confirm(command);
         return ResponseEntity.ok(OrderResponse.from(result));
     }
 
-    private static void requireIdempotencyKey(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
-    }
 }

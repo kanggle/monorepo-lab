@@ -3,6 +3,7 @@ package com.wms.outbound.adapter.in.web.controller;
 import com.wms.outbound.adapter.in.web.dto.request.CancelOrderRequest;
 import com.wms.outbound.adapter.in.web.dto.request.CreateOrderRequest;
 import com.wms.outbound.adapter.in.web.dto.response.OrderResponse;
+import com.wms.outbound.adapter.in.web.util.RequestContext;
 import com.wms.outbound.application.command.CancelOrderCommand;
 import com.wms.outbound.application.command.ReceiveOrderCommand;
 import com.wms.outbound.application.command.ReceiveOrderLineCommand;
@@ -11,13 +12,10 @@ import com.wms.outbound.application.port.in.ReceiveOrderUseCase;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.domain.exception.WarehouseMismatchException;
 import jakarta.validation.Valid;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,7 +55,7 @@ public class OrderController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         validateLinesShareWarehouse(request);
         ReceiveOrderCommand command = new ReceiveOrderCommand(
                 request.orderNo(),
@@ -70,8 +68,8 @@ public class OrderController {
                         .map(l -> new ReceiveOrderLineCommand(
                                 l.lineNo(), l.skuId(), l.lotId(), l.qtyOrdered()))
                         .toList(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         OrderResult result = receiveOrder.receive(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(String.valueOf(result.version()))
@@ -85,21 +83,15 @@ public class OrderController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         CancelOrderCommand command = new CancelOrderCommand(
                 id,
                 request.reason(),
                 request.version(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         OrderResult result = cancelOrder.cancel(command);
         return ResponseEntity.ok(OrderResponse.from(result));
-    }
-
-    private static void requireIdempotencyKey(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
     }
 
     /**
@@ -116,21 +108,4 @@ public class OrderController {
         }
     }
 
-    static Set<String> callerRoles(Authentication authentication) {
-        if (authentication == null || authentication.getAuthorities() == null) {
-            return Set.of();
-        }
-        Set<String> roles = new HashSet<>();
-        for (GrantedAuthority a : authentication.getAuthorities()) {
-            roles.add(a.getAuthority());
-        }
-        return Set.copyOf(roles);
-    }
-
-    static String actorId(Jwt jwt) {
-        if (jwt == null) {
-            return "anonymous";
-        }
-        return jwt.getSubject() != null ? jwt.getSubject() : jwt.getClaimAsString("actorId");
-    }
 }

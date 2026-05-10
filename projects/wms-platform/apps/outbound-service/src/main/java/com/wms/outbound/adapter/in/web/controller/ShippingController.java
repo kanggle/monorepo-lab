@@ -1,10 +1,8 @@
 package com.wms.outbound.adapter.in.web.controller;
 
-import static com.wms.outbound.adapter.in.web.controller.PickingController.actorId;
-import static com.wms.outbound.adapter.in.web.controller.PickingController.callerRoles;
-
 import com.wms.outbound.adapter.in.web.dto.request.ConfirmShippingRequest;
 import com.wms.outbound.adapter.in.web.dto.response.ShipmentResponse;
+import com.wms.outbound.adapter.in.web.util.RequestContext;
 import com.wms.outbound.application.command.ConfirmShippingCommand;
 import com.wms.outbound.application.port.in.ConfirmShippingUseCase;
 import com.wms.outbound.application.result.ShipmentResult;
@@ -45,20 +43,15 @@ public class ShippingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         ConfirmShippingCommand command = new ConfirmShippingCommand(
                 orderId,
                 request.version(),
                 request.carrierCode(),
-                actorId(jwt),
-                callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         ShipmentResult result = confirmShipping.confirm(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentResponse.from(result));
     }
 
-    private static void requireIdempotencyKey(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
-    }
 }
