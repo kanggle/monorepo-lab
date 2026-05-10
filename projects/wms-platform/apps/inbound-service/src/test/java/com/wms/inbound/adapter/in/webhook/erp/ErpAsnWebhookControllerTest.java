@@ -1,8 +1,7 @@
 package com.wms.inbound.adapter.in.webhook.erp;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.wms.inbound.adapter.in.web.advice.GlobalExceptionHandler;
+import com.wms.inbound.application.command.IngestWebhookEventCommand;
+import com.wms.inbound.application.port.in.IngestWebhookEventUseCase;
+import com.wms.inbound.application.port.in.IngestWebhookEventUseCase.IngestResult;
 import com.wms.inbound.application.port.out.WebhookSecretPort;
 import com.wms.inbound.config.SecurityConfig;
 import java.nio.charset.StandardCharsets;
@@ -38,9 +40,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * cases from {@code specs/contracts/webhooks/erp-asn-webhook.md} §
  * Failure-mode Test Cases.
  *
- * <p>The {@link ErpWebhookIngestService} is mocked because its persistence
- * dependencies are integration concerns — the controller's contract surface
- * is the focus here.
+ * <p>The {@link IngestWebhookEventUseCase} port is mocked because its
+ * persistence dependencies are integration concerns — the controller's
+ * contract surface is the focus here.
  *
  * <p>Clock is pinned to {@link #FIXED_NOW}; HMAC secret resolves only for
  * {@code erp-stg}, allowing the "unknown env" case to land naturally.
@@ -72,7 +74,7 @@ class ErpAsnWebhookControllerTest {
     private WebhookSecretPort secretPort;
 
     @MockBean
-    private ErpWebhookIngestService ingestService;
+    private IngestWebhookEventUseCase ingestUseCase;
 
     @TestConfiguration
     static class FixedClockConfig {
@@ -98,11 +100,24 @@ class ErpAsnWebhookControllerTest {
     }
 
     private void mockSecretPortFor(String source) {
-        when(secretPort.resolveSecret(eq(source))).thenReturn(Optional.of(SECRET));
+        when(secretPort.resolveSecret(argThat(s -> source.equals(s))))
+                .thenReturn(Optional.of(SECRET));
     }
 
     private void mockSecretPortMissing() {
-        when(secretPort.resolveSecret(anyString())).thenReturn(Optional.empty());
+        when(secretPort.resolveSecret(any())).thenReturn(Optional.empty());
+    }
+
+    /**
+     * Mockito matcher for an {@link IngestWebhookEventCommand} with the given
+     * eventId + source. The signature and rawPayload are not asserted here
+     * (controller already verified them); the controller's contract is "build
+     * a command for this eventId+source and dispatch it".
+     */
+    private static IngestWebhookEventCommand commandFor(String eventId, String source) {
+        return argThat(c -> c != null
+                && eventId.equals(c.eventId())
+                && source.equals(c.source()));
     }
 
     // -------------------------------------------------------------------------
@@ -112,8 +127,8 @@ class ErpAsnWebhookControllerTest {
     @DisplayName("Case 1: valid signature + timestamp + new event-id → 200 accepted")
     void case01_validRequestAccepted() throws Exception {
         mockSecretPortFor(SOURCE);
-        when(ingestService.ingest(eq("evt-1"), anyString(), anyString(), eq(SOURCE)))
-                .thenReturn(ErpWebhookIngestService.Result.accepted(FIXED_NOW));
+        when(ingestUseCase.ingest(commandFor("evt-1", SOURCE)))
+                .thenReturn(IngestResult.accepted(FIXED_NOW));
 
         mockMvc.perform(validRequest())
                 .andExpect(status().isOk())
@@ -121,7 +136,7 @@ class ErpAsnWebhookControllerTest {
                 .andExpect(jsonPath("$.eventId").value("evt-1"))
                 .andExpect(jsonPath("$.asnNo").value("ASN-20260428-0001"));
 
-        verify(ingestService).ingest(eq("evt-1"), anyString(), anyString(), eq(SOURCE));
+        verify(ingestUseCase).ingest(commandFor("evt-1", SOURCE));
     }
 
     // -------------------------------------------------------------------------
@@ -141,7 +156,7 @@ class ErpAsnWebhookControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("WEBHOOK_SIGNATURE_INVALID"));
 
-        verify(ingestService, never()).ingest(anyString(), anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
     // -------------------------------------------------------------------------
@@ -265,7 +280,7 @@ class ErpAsnWebhookControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(ingestService, never()).ingest(anyString(), anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
     // -------------------------------------------------------------------------
@@ -276,8 +291,8 @@ class ErpAsnWebhookControllerTest {
     void case09_duplicateEventId() throws Exception {
         mockSecretPortFor(SOURCE);
         Instant previously = FIXED_NOW.minus(Duration.ofMinutes(2));
-        when(ingestService.ingest(eq("evt-9"), anyString(), anyString(), eq(SOURCE)))
-                .thenReturn(ErpWebhookIngestService.Result.duplicate(previously));
+        when(ingestUseCase.ingest(commandFor("evt-9", SOURCE)))
+                .thenReturn(IngestResult.duplicate(previously));
 
         mockMvc.perform(post("/webhooks/erp/asn")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -319,8 +334,8 @@ class ErpAsnWebhookControllerTest {
     @DisplayName("Case 11: backend slow → still returns 200 (commit is fast — only inbox + dedupe)")
     void case11_backendSlowStillFastResponse() throws Exception {
         mockSecretPortFor(SOURCE);
-        when(ingestService.ingest(eq("evt-11"), anyString(), anyString(), eq(SOURCE)))
-                .thenReturn(ErpWebhookIngestService.Result.accepted(FIXED_NOW));
+        when(ingestUseCase.ingest(commandFor("evt-11", SOURCE)))
+                .thenReturn(IngestResult.accepted(FIXED_NOW));
 
         mockMvc.perform(post("/webhooks/erp/asn")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -370,7 +385,7 @@ class ErpAsnWebhookControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verify(ingestService, never()).ingest(anyString(), anyString(), anyString(), anyString());
+        verify(ingestUseCase, never()).ingest(any(IngestWebhookEventCommand.class));
     }
 
 }

@@ -3,8 +3,11 @@ package com.wms.inbound.adapter.in.webhook.erp;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.adapter.in.web.dto.response.ApiErrorEnvelope;
-import com.wms.inbound.adapter.in.webhook.erp.dto.ErpAsnWebhookRequest;
 import com.wms.inbound.adapter.in.webhook.erp.dto.ErpAsnWebhookResponse;
+import com.wms.inbound.application.command.ErpAsnWebhookRequest;
+import com.wms.inbound.application.command.IngestWebhookEventCommand;
+import com.wms.inbound.application.port.in.IngestWebhookEventUseCase;
+import com.wms.inbound.application.port.in.IngestWebhookEventUseCase.IngestResult;
 import com.wms.inbound.application.port.out.WebhookSecretPort;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -40,7 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>HMAC verification over <em>raw request bytes</em>. Mismatch → 401
  *       {@code WEBHOOK_SIGNATURE_INVALID}.</li>
  *   <li>JSON parse + bean validation. Failure → 422 {@code VALIDATION_ERROR}.</li>
- *   <li>Atomic dedupe + inbox write via {@link ErpWebhookIngestService}.
+ *   <li>Atomic dedupe + inbox write via {@link IngestWebhookEventUseCase}.
  *       Conflict → 200 {@code ignored_duplicate}; first delivery → 200
  *       {@code accepted}.</li>
  * </ol>
@@ -63,20 +66,20 @@ public class ErpAsnWebhookController {
     private final HmacSignatureVerifier hmacVerifier;
     private final TimestampWindowVerifier timestampVerifier;
     private final WebhookSecretPort secretPort;
-    private final ErpWebhookIngestService ingestService;
+    private final IngestWebhookEventUseCase ingestUseCase;
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
     public ErpAsnWebhookController(HmacSignatureVerifier hmacVerifier,
                                    TimestampWindowVerifier timestampVerifier,
                                    WebhookSecretPort secretPort,
-                                   ErpWebhookIngestService ingestService,
+                                   IngestWebhookEventUseCase ingestUseCase,
                                    ObjectMapper objectMapper,
                                    Validator validator) {
         this.hmacVerifier = hmacVerifier;
         this.timestampVerifier = timestampVerifier;
         this.secretPort = secretPort;
-        this.ingestService = ingestService;
+        this.ingestUseCase = ingestUseCase;
         this.objectMapper = objectMapper;
         this.validator = validator;
     }
@@ -146,15 +149,15 @@ public class ErpAsnWebhookController {
                 return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", message);
             }
 
-            // Step 4: dedupe + inbox in one TX.
+            // Step 4: dedupe + inbox in one TX (delegated to the application use-case port).
             String rawPayloadJson = new String(body, StandardCharsets.UTF_8);
-            ErpWebhookIngestService.Result result = ingestService.ingest(
-                    eventId, rawPayloadJson, signatureHeader, source);
-            if (result instanceof ErpWebhookIngestService.Result.Duplicate dup) {
+            IngestResult result = ingestUseCase.ingest(
+                    new IngestWebhookEventCommand(eventId, rawPayloadJson, signatureHeader, source));
+            if (result instanceof IngestResult.Duplicate dup) {
                 return ResponseEntity.ok(
                         ErpAsnWebhookResponse.ignoredDuplicate(eventId, dup.previouslyReceivedAt()));
             }
-            ErpWebhookIngestService.Result.Accepted acc = (ErpWebhookIngestService.Result.Accepted) result;
+            IngestResult.Accepted acc = (IngestResult.Accepted) result;
             return ResponseEntity.ok(
                     ErpAsnWebhookResponse.accepted(eventId, parsed.asnNo(), acc.receivedAt()));
         } finally {

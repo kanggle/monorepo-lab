@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master Location.
  *
- * <p>Populated by {@code MasterLocationConsumer} from
+ * <p>Populated by {@code MasterEventConsumer#onLocationEvent} from
  * {@code wms.master.location.v1} events. Drives putaway destination validation
  * ({@code LOCATION_INACTIVE}, {@code WAREHOUSE_MISMATCH}).
  */

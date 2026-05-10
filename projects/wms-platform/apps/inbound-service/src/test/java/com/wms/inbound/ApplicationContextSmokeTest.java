@@ -4,14 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.inbound.adapter.in.messaging.masterref.MasterEventParser;
 import com.wms.inbound.adapter.in.webhook.erp.ErpAsnWebhookController;
-import com.wms.inbound.adapter.in.webhook.erp.ErpWebhookIngestService;
 import com.wms.inbound.adapter.in.webhook.erp.HmacSignatureVerifier;
 import com.wms.inbound.adapter.in.webhook.erp.TimestampWindowVerifier;
+import com.wms.inbound.application.port.in.IngestWebhookEventUseCase;
 import com.wms.inbound.application.port.out.EventDedupePort;
 import com.wms.inbound.application.port.out.IdempotencyStore;
 import com.wms.inbound.application.port.out.MasterReadModelPort;
 import com.wms.inbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.inbound.application.port.out.InboundEventPort;
+import com.wms.inbound.application.port.out.WebhookInboxStorePort;
 import com.wms.inbound.application.port.out.WebhookSecretPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,7 +58,8 @@ class ApplicationContextSmokeTest {
     @Test
     void webhookBeansAreWired() {
         assertThat(context.getBean(ErpAsnWebhookController.class)).isNotNull();
-        assertThat(context.getBean(ErpWebhookIngestService.class)).isNotNull();
+        assertThat(context.getBean(IngestWebhookEventUseCase.class)).isNotNull();
+        assertThat(context.getBean(WebhookInboxStorePort.class)).isNotNull();
         assertThat(context.getBean(HmacSignatureVerifier.class)).isNotNull();
         assertThat(context.getBean(TimestampWindowVerifier.class)).isNotNull();
         assertThat(context.getBean(WebhookSecretPort.class)).isNotNull();

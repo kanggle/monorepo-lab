@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Local read-model snapshot of a master Zone.
  *
- * <p>Populated by {@code MasterZoneConsumer} from {@code wms.master.zone.v1}
+ * <p>Populated by {@code MasterEventConsumer#onZoneEvent} from {@code wms.master.zone.v1}
  * events.
  */
 public record ZoneSnapshot(

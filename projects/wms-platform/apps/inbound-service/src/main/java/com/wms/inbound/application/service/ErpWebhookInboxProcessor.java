@@ -1,36 +1,39 @@
 package com.wms.inbound.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.inbound.adapter.in.webhook.erp.dto.ErpAsnWebhookRequest;
-import com.wms.inbound.adapter.out.persistence.webhook.ErpWebhookInboxJpaEntity;
-import com.wms.inbound.adapter.out.persistence.webhook.ErpWebhookInboxJpaRepository;
+import com.wms.inbound.application.command.ErpAsnWebhookRequest;
 import com.wms.inbound.application.command.ReceiveAsnCommand;
 import com.wms.inbound.application.port.in.ReceiveAsnUseCase;
 import com.wms.inbound.application.port.out.MasterReadModelPort;
+import com.wms.inbound.application.port.out.WebhookInboxStorePort;
+import com.wms.inbound.application.port.out.WebhookInboxStorePort.PendingWebhookInbox;
 import java.time.Clock;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.domain.Limit;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Background processor that walks the {@code erp_webhook_inbox} for
  * {@code PENDING} rows, deserializes each payload, calls {@link ReceiveAsnUseCase},
  * and marks the row {@code APPLIED} on success or {@code FAILED} on error.
  *
- * <p>Each row is processed independently: {@link #processOneRow} is not
- * transactional, so {@code ReceiveAsnUseCase} (which is {@code @Transactional})
- * opens and commits its own TX. The inbox status update is done via
- * {@link #updateStatus} which uses {@code @Transactional} through the self-proxy
- * ({@code @Lazy} injection to break the circular reference).
+ * <p>Per-row processing — {@code ReceiveAsnUseCase.receive()} is itself
+ * {@code @Transactional} and opens its own TX; the inbox row's status flip
+ * runs in a separate TX through {@link WebhookInboxStatusUpdater}, which is a
+ * separate bean (so the Spring AOP proxy applies). One row's failure does not
+ * block the rest of the batch.
+ *
+ * <p>The previous implementation used a {@code @Lazy self} self-injection to
+ * route through the proxy for a {@code @Transactional} {@code updateStatus}
+ * method on this bean. That workaround is now eliminated by extracting the
+ * status flip into the dedicated {@link WebhookInboxStatusUpdater} bean —
+ * cross-bean delegation, no self-invocation hazard.
  */
 @Component
 @ConditionalOnProperty(name = "inbound.webhook.inbox.processor.enabled",
@@ -41,28 +44,28 @@ public class ErpWebhookInboxProcessor {
     private static final String SYSTEM_ACTOR = "system:erp-webhook";
     private static final int MAX_REASON_LEN = 500;
 
-    private final ErpWebhookInboxJpaRepository inboxRepo;
+    private final WebhookInboxStorePort inboxStore;
+    private final WebhookInboxStatusUpdater statusUpdater;
     private final ReceiveAsnUseCase receiveAsnUseCase;
     private final MasterReadModelPort masterReadModel;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int batchSize;
-    private final ErpWebhookInboxProcessor self;
 
-    public ErpWebhookInboxProcessor(ErpWebhookInboxJpaRepository inboxRepo,
+    public ErpWebhookInboxProcessor(WebhookInboxStorePort inboxStore,
+                                    WebhookInboxStatusUpdater statusUpdater,
                                     ReceiveAsnUseCase receiveAsnUseCase,
                                     MasterReadModelPort masterReadModel,
                                     ObjectMapper objectMapper,
                                     Clock clock,
-                                    @Value("${inbound.webhook.inbox.processor.batch-size:50}") int batchSize,
-                                    @Lazy ErpWebhookInboxProcessor self) {
-        this.inboxRepo = inboxRepo;
+                                    @Value("${inbound.webhook.inbox.processor.batch-size:50}") int batchSize) {
+        this.inboxStore = inboxStore;
+        this.statusUpdater = statusUpdater;
         this.receiveAsnUseCase = receiveAsnUseCase;
         this.masterReadModel = masterReadModel;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.batchSize = batchSize;
-        this.self = self;
     }
 
     @Scheduled(fixedDelayString = "${inbound.webhook.inbox.processor.fixed-delay-ms:1000}")
@@ -78,41 +81,29 @@ public class ErpWebhookInboxProcessor {
     }
 
     public int processBatch() {
-        List<ErpWebhookInboxJpaEntity> pending = inboxRepo
-                .findAllByStatusOrderByReceivedAtAsc("PENDING", Limit.of(batchSize));
+        List<PendingWebhookInbox> pending = inboxStore.findPending(batchSize);
         if (pending.isEmpty()) {
             return 0;
         }
-        for (ErpWebhookInboxJpaEntity row : pending) {
+        for (PendingWebhookInbox row : pending) {
             processOneRow(row);
         }
         return pending.size();
     }
 
-    void processOneRow(ErpWebhookInboxJpaEntity row) {
-        String eventId = row.getEventId();
+    void processOneRow(PendingWebhookInbox row) {
+        String eventId = row.eventId();
         try {
-            ErpAsnWebhookRequest req = objectMapper.readValue(row.getRawPayload(), ErpAsnWebhookRequest.class);
-            ReceiveAsnCommand command = toCommand(req, row.getSource());
+            ErpAsnWebhookRequest req = objectMapper.readValue(row.payload(), ErpAsnWebhookRequest.class);
+            ReceiveAsnCommand command = toCommand(req, row.source());
             receiveAsnUseCase.receive(command);
-            self.updateStatus(eventId, true, null);
+            statusUpdater.markApplied(eventId, clock.instant());
             log.info("webhook_inbox_applied eventId={}", eventId);
         } catch (Exception e) {
             String reason = truncate(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            self.updateStatus(eventId, false, reason);
+            statusUpdater.markFailed(eventId, clock.instant(), reason);
             log.warn("webhook_inbox_failed eventId={} reason={}", eventId, reason);
         }
-    }
-
-    @Transactional
-    public void updateStatus(String eventId, boolean applied, String failureReason) {
-        inboxRepo.findById(eventId).ifPresent(row -> {
-            if (applied) {
-                row.markApplied(clock.instant());
-            } else {
-                row.markFailed(clock.instant(), failureReason);
-            }
-        });
     }
 
     private ReceiveAsnCommand toCommand(ErpAsnWebhookRequest req, String source) {
