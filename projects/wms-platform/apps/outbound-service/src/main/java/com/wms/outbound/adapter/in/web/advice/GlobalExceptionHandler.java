@@ -1,7 +1,6 @@
 package com.wms.outbound.adapter.in.web.advice;
 
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
-import com.wms.outbound.domain.exception.OrderAlreadyShippedException;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.OutboundDomainException;
@@ -81,12 +80,12 @@ public class GlobalExceptionHandler {
 
     // ---- 422 — domain rule violations -----------------------------------
 
-    @ExceptionHandler(OrderAlreadyShippedException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleAlreadyShipped(OrderAlreadyShippedException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    /** Catch-all for outbound domain exceptions → 422 with the granular code. */
+    /**
+     * Catch-all for all {@link OutboundDomainException} subclasses → 422 with the
+     * granular contract-defined error code.  Covers every concrete subtype including
+     * {@code OrderAlreadyShippedException} (identical response shape — no dedicated
+     * handler needed).
+     */
     @ExceptionHandler(OutboundDomainException.class)
     public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {
         return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());

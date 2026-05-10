@@ -97,10 +97,9 @@ public class ErpOrderWebhookController {
             MDC.put("source", source);
         }
         try {
-            // Step 1: resolve secret from X-Erp-Source.
-            // Unknown source → 401 WEBHOOK_SIGNATURE_INVALID before timestamp is evaluated.
-            Optional<String> secret = secretPort.getSecret(source);
-            if (secret.isEmpty()) {
+            // Step 1: resolve secret (unknown source → 401 before timestamp is evaluated).
+            Optional<String> secretOpt = resolveSecret(source);
+            if (secretOpt.isEmpty()) {
                 log.warn("webhook_signature_invalid eventId={} source={} reason=secret_missing",
                         eventId, source);
                 return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_SIGNATURE_INVALID",
@@ -108,7 +107,7 @@ public class ErpOrderWebhookController {
             }
 
             // Step 2: timestamp window check.
-            if (!timestampValidator.isWithinWindow(timestampHeader)) {
+            if (!validateTimestampWindow(timestampHeader)) {
                 log.warn("webhook_timestamp_invalid eventId={} source={}", eventId, source);
                 return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_TIMESTAMP_INVALID",
                         "X-Erp-Timestamp missing or outside acceptance window");
@@ -116,35 +115,21 @@ public class ErpOrderWebhookController {
 
             // Step 3: HMAC verification over raw body.
             byte[] body = rawBody == null ? new byte[0] : rawBody;
-            if (!hmacVerifier.verify(body, secret.get(), signatureHeader)) {
+            if (!verifySignature(body, signatureHeader, secretOpt.get())) {
                 log.warn("webhook_signature_invalid eventId={} source={}", eventId, source);
                 return error(HttpStatus.UNAUTHORIZED, "WEBHOOK_SIGNATURE_INVALID",
                         "HMAC signature mismatch");
             }
 
             // Step 4: parse + validate body schema.
-            ErpOrderWebhookRequest parsed;
-            try {
-                parsed = objectMapper.readValue(body, ErpOrderWebhookRequest.class);
-            } catch (JsonProcessingException e) {
-                return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR",
-                        "Webhook payload is not valid JSON");
-            } catch (Exception e) {
-                return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR",
-                        "Webhook payload is malformed");
+            ParseResult parseResult = parseAndValidate(body);
+            if (parseResult.error() != null) {
+                return parseResult.error();
             }
-            Set<ConstraintViolation<ErpOrderWebhookRequest>> violations = validator.validate(parsed);
-            if (!violations.isEmpty()) {
-                String message = violations.stream()
-                        .map(v -> v.getPropertyPath() + " " + v.getMessage())
-                        .collect(Collectors.joining("; "));
-                return error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", message);
-            }
+            ErpOrderWebhookRequest parsed = parseResult.request();
 
             // Step 5: dedupe + inbox in one TX (delegated to the application service).
-            String rawPayloadJson = new String(body, StandardCharsets.UTF_8);
-            IngestResult result = ingestUseCase.ingest(
-                    new IngestWebhookEventCommand(eventId, rawPayloadJson, source));
+            IngestResult result = ingest(eventId, body, source);
             if (result instanceof IngestResult.Duplicate dup) {
                 return ResponseEntity.ok(
                         WebhookAckResponse.ignoredDuplicate(eventId, dup.previouslyReceivedAt()));
@@ -158,6 +143,60 @@ public class ErpOrderWebhookController {
             MDC.remove("eventId");
             MDC.remove("source");
         }
+    }
+
+    /** Step 1: look up the HMAC secret for the given source environment. */
+    private Optional<String> resolveSecret(String source) {
+        return secretPort.getSecret(source);
+    }
+
+    /** Step 2: verify the request timestamp is within the configured acceptance window. */
+    private boolean validateTimestampWindow(String timestampHeader) {
+        return timestampValidator.isWithinWindow(timestampHeader);
+    }
+
+    /** Step 3: verify HMAC-SHA256 signature over the raw request body. */
+    private boolean verifySignature(byte[] body, String signatureHeader, String secret) {
+        return hmacVerifier.verify(body, secret, signatureHeader);
+    }
+
+    /**
+     * Step 4: parse + bean-validate the raw body.
+     *
+     * @return a {@link ParseResult} carrying either the validated request object or a
+     *         422 error response (never both non-null).
+     */
+    private ParseResult parseAndValidate(byte[] body) {
+        ErpOrderWebhookRequest parsed;
+        try {
+            parsed = objectMapper.readValue(body, ErpOrderWebhookRequest.class);
+        } catch (JsonProcessingException e) {
+            return ParseResult.failure(error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR",
+                    "Webhook payload is not valid JSON"));
+        } catch (Exception e) {
+            return ParseResult.failure(error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR",
+                    "Webhook payload is malformed"));
+        }
+        Set<ConstraintViolation<ErpOrderWebhookRequest>> violations = validator.validate(parsed);
+        if (!violations.isEmpty()) {
+            String message = violations.stream()
+                    .map(v -> v.getPropertyPath() + " " + v.getMessage())
+                    .collect(Collectors.joining("; "));
+            return ParseResult.failure(error(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", message));
+        }
+        return ParseResult.success(parsed);
+    }
+
+    /** Carries either a successfully parsed request or a 422 error response (never both). */
+    private record ParseResult(ErpOrderWebhookRequest request, ResponseEntity<?> error) {
+        static ParseResult success(ErpOrderWebhookRequest req) { return new ParseResult(req, null); }
+        static ParseResult failure(ResponseEntity<?> err)       { return new ParseResult(null, err); }
+    }
+
+    /** Step 5: write to the webhook inbox via the application use-case port. */
+    private IngestResult ingest(String eventId, byte[] body, String source) {
+        String rawPayloadJson = new String(body, StandardCharsets.UTF_8);
+        return ingestUseCase.ingest(new IngestWebhookEventCommand(eventId, rawPayloadJson, source));
     }
 
     private static ResponseEntity<ApiErrorEnvelope> error(HttpStatus status, String code, String message) {
