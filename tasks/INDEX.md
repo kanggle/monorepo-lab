@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-050-outbox-publisher-batch-resilience.md` — `libs/java-messaging` `OutboxPublisher.publishPendingEvents` 가 단일 row 실패 시 `break` 하여 같은 batch 의 후속 PENDING row 가 다음 polling cycle 까지 stall. 부패한 outbox row (unknown `event_type` 등) 1건이 batch 전체를 영구 차단 가능. `EventSender` 의 `boolean` 반환을 `SendOutcome` enum (`SUCCESS`/`FAILURE_TRANSIENT`/`FAILURE_PERMANENT`) 로 evolve, `OutboxPollingScheduler.sendToKafka` 가 `IllegalArgumentException`/`EventSerializationException` → PERMANENT / 그 외 → TRANSIENT 로 분류, PERMANENT 면 row `status='FAILED'` mark + batch drain 계속. 6 service (order/promotion/review/shipping/payment/procurement) 모두 `sendToKafka` 미override → subclass 영향 0. ADR-MONO-004 amendment 동반. TASK-BE-136 (PR #345) 자기 review W2 surface. 분석=Opus 4.7 / 구현 권장=Opus (lib-level invariant + 6 service regression surface).
 
 ## in-progress
 
