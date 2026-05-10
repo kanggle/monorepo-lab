@@ -6,8 +6,11 @@ import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
 import com.wms.outbound.domain.model.SagaStatus;
 import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,13 +45,15 @@ public class SagaPersistenceAdapter implements SagaPersistencePort {
                     saga.pickingRequestId(),
                     saga.failureReason(),
                     saga.startedAt(),
-                    saga.lastTransitionAt());
+                    saga.lastTransitionAt(),
+                    saga.reEmitCount());
         } else {
             entity = existing.get();
             entity.setStatus(saga.status().name());
             entity.setFailureReason(saga.failureReason());
             entity.setUpdatedAt(saga.lastTransitionAt());
             entity.setPickingRequestId(saga.pickingRequestId());
+            entity.setReEmitCount(saga.reEmitCount());
         }
         entity = repo.save(entity);
         return toDomain(entity);
@@ -75,6 +80,22 @@ public class SagaPersistenceAdapter implements SagaPersistencePort {
 
     @Override
     @Transactional(readOnly = true)
+    public List<OutboundSaga> findStuck(SagaStatus status, Duration gracePeriod, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        long graceSeconds = gracePeriod == null ? 0L : Math.max(0L, gracePeriod.getSeconds());
+        List<OutboundSagaEntity> rows = repo.findStuckByStatusUsingDbClock(
+                status.name(), graceSeconds, limit);
+        List<OutboundSaga> out = new ArrayList<>(rows.size());
+        for (OutboundSagaEntity e : rows) {
+            out.add(toDomain(e));
+        }
+        return out;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<UUID, String> findSagaStatesByOrderIds(Collection<UUID> orderIds) {
         if (orderIds == null || orderIds.isEmpty()) {
             return Map.of();
@@ -95,6 +116,7 @@ public class SagaPersistenceAdapter implements SagaPersistencePort {
                 e.getFailureReason(),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
-                e.getVersion());
+                e.getVersion(),
+                e.getReEmitCount());
     }
 }

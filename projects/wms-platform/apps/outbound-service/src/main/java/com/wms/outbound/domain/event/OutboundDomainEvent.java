@@ -18,13 +18,14 @@ import java.util.UUID;
  *   <li>{@link PickingCompletedEvent}</li>
  *   <li>{@link PackingCompletedEvent}</li>
  *   <li>{@link ShippingConfirmedEvent}</li>
+ *   <li>{@link SagaRecoveryExhaustedEvent}</li>
  * </ul>
  */
 public sealed interface OutboundDomainEvent
         permits OrderReceivedEvent, OrderCancelledEvent,
                 PickingRequestedEvent, PickingCancelledEvent,
                 PickingCompletedEvent, PackingCompletedEvent,
-                ShippingConfirmedEvent {
+                ShippingConfirmedEvent, SagaRecoveryExhaustedEvent {
 
     UUID aggregateId();
 

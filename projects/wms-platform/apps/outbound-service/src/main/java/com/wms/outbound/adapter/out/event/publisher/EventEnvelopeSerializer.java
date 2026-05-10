@@ -10,6 +10,7 @@ import com.wms.outbound.domain.event.PackingCompletedEvent;
 import com.wms.outbound.domain.event.PickingCancelledEvent;
 import com.wms.outbound.domain.event.PickingCompletedEvent;
 import com.wms.outbound.domain.event.PickingRequestedEvent;
+import com.wms.outbound.domain.event.SagaRecoveryExhaustedEvent;
 import com.wms.outbound.domain.event.ShippingConfirmedEvent;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,6 +73,7 @@ public class EventEnvelopeSerializer {
             case PickingCompletedEvent e -> pickingCompletedPayload(e);
             case PackingCompletedEvent e -> packingCompletedPayload(e);
             case ShippingConfirmedEvent e -> shippingConfirmedPayload(e);
+            case SagaRecoveryExhaustedEvent e -> sagaRecoveryExhaustedPayload(e);
         };
     }
 
@@ -216,6 +218,22 @@ public class EventEnvelopeSerializer {
             return lm;
         }).toList();
         p.put("lines", lines);
+        return p;
+    }
+
+    private static Map<String, Object> sagaRecoveryExhaustedPayload(SagaRecoveryExhaustedEvent e) {
+        // Field set per admin-events.md §A1
+        // "outbound.alert.saga.recovery.exhausted" (TASK-BE-050).
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("sagaId", e.sagaId().toString());
+        p.put("orderId", e.orderId().toString());
+        p.put("stuckState", e.stuckState());
+        p.put("reEmitCount", e.reEmitCount());
+        p.put("lastTransitionAt", e.lastTransitionAt() != null
+                ? e.lastTransitionAt().toString() : null);
+        p.put("failureReason", e.failureReason());
+        p.put("exhaustedAt", e.exhaustedAt() != null
+                ? e.exhaustedAt().toString() : null);
         return p;
     }
 

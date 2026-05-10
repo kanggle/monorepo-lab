@@ -33,3 +33,8 @@ outbound:
     inbox:
       processor:
         enabled: false
+  # TASK-BE-050: standalone profile has no Kafka / inventory channel to
+  # recover into; disable the sweeper to avoid noise.
+  saga:
+    sweeper:
+      enabled: false

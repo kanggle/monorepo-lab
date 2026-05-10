@@ -88,6 +88,17 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 | `wms.admin.assignment.v1` | `admin.assignment.granted`, `admin.assignment.revoked` | `assignmentId` |
 | `wms.admin.settings.v1` | `admin.settings.changed` | `key` |
 
+### Alert Topics (Published by other WMS services, consumed by admin-service)
+
+| Topic | Event types | Partition key | Producer |
+|---|---|---|---|
+| `wms.outbound.alert.saga.recovery.exhausted.v1` | `outbound.alert.saga.recovery.exhausted` | `sagaId` | `outbound-service` |
+
+These alert topics live in the admin-events catalog because they exist
+primarily for the admin-service alert dashboard / notification-service
+escalation. The producing service emits via its own outbox; admin-service
+consumes them under the same `admin-projection` consumer group.
+
 - `v1` in the topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per
   `.claude/skills/cross-cutting/api-versioning/SKILL.md`).
@@ -334,6 +345,59 @@ Consumer expectations:
 - `inbound-service`: re-reads `inbound.asn.auto_close_delay_hours`
 - `outbound-service`: re-reads `outbound.saga.sweeper_interval_seconds`
 - `admin-service`: ignores its own emitted `admin.settings.changed`
+
+---
+
+## Alert Events (Published by other services)
+
+### A1. `outbound.alert.saga.recovery.exhausted`
+
+**Producer**: `outbound-service` (saga sweeper, TASK-BE-050).
+
+**Trigger**: a saga has been re-emitted by the saga sweeper the maximum
+number of times (default: 5 attempts) and has not advanced to a terminal
+state. The saga is transitioned to `STUCK_RECOVERY_FAILED` (terminal-by-ops)
+and this alert event is emitted in the **same DB transaction** as the state
+change (T3 atomicity).
+
+**Topic**: `wms.outbound.alert.saga.recovery.exhausted.v1`
+**Partition key**: `sagaId`
+**`aggregateType`**: `outbound_saga`
+**`aggregateId`**: `OutboundSaga.saga_id`
+
+```json
+"payload": {
+  "sagaId": "uuid",
+  "orderId": "uuid",
+  "stuckState": "REQUESTED",
+  "reEmitCount": 5,
+  "lastTransitionAt": "2026-05-10T10:00:00.000Z",
+  "failureReason": "saga_recovery_attempts_exhausted",
+  "exhaustedAt": "2026-05-10T10:30:00.000Z"
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `sagaId` | UUID | no | |
+| `orderId` | UUID | no | |
+| `stuckState` | string | no | The non-terminal state from which recovery was attempted (`REQUESTED` \| `CANCELLATION_REQUESTED` \| `SHIPPED`) |
+| `reEmitCount` | int | no | Number of re-emission attempts before exhaustion (= configured max-attempts) |
+| `lastTransitionAt` | ISO-8601 UTC | no | When the saga last changed state — base for the staleness calculation |
+| `failureReason` | string | no | Constant `saga_recovery_attempts_exhausted` |
+| `exhaustedAt` | ISO-8601 UTC | no | When the sweeper marked the saga `STUCK_RECOVERY_FAILED` |
+
+Consumer expectations:
+
+- `admin-service` (alert dashboard projection): inserts an `alert_log` row
+  visible to ops; auto-deduplicates per `eventId`.
+- `notification-service` (future): may escalate to Slack / PagerDuty.
+
+> **Recovery path**: this event signals an operational failure (Kafka
+> outage, inventory-service DB down, etc.) that the automatic sweeper
+> cannot resolve. Ops investigates per the per-saga runbook; a v2 admin
+> endpoint (`POST /sagas/{id}:force-fail` / `:force-complete`) will
+> provide direct remediation.
 
 ---
 
