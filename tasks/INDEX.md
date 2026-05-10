@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-051-error-handling-catalog-audit.md` — `platform/error-handling.md` catalog ↔ implementation drift backfill (B common-rule refactor wave 2, wms domain). Initial grep audit of `*Exception.java` 가 4 wms service 에서 11 error code 가 catalog 에 부재한 drift 발견 (SKU_INACTIVE / LOCATION_INACTIVE / TRANSFER_NOT_FOUND / RESERVATION_NOT_FOUND / RESERVATION_QUANTITY_MISMATCH / ADJUSTMENT_NOT_FOUND / SHIPMENT_NOT_FOUND / PICKING_REQUEST_NOT_FOUND / PICKING_INCOMPLETE / PACKING_UNIT_NOT_FOUND / EXTERNAL_SERVICE_UNAVAILABLE). 추가 decision items: WAREHOUSE_MISMATCH cross-service usage / ORDER_NO_DUPLICATE vs CONFLICT naming / EXTERNAL_SERVICE_UNAVAILABLE 위치. spec-only, 코드 변경 0. ecommerce/scm/GAP/fan-platform 도메인 audit 은 follow-up TASK-MONO-052 candidate. D4 OVERRIDE (메모리 project_b_common_rule_refactor_pending.md 후보 #2). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical catalog append).
 
 ## in-progress
 
