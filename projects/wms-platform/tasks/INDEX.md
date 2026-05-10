@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-052-master-lot-cross-service-consumer-audit.md` — `MasterLotConsumer` 가 outbound-service 에만 등록됐는지 vs inbound/inventory 에서도 의도된 미참조인지 audit. Scenario A (drift) → follow-up impl task / Scenario B (intentional) → 두 architecture.md 에 explicit "no Lot consumer — Lot tracking is outbound-only in v1" 노트 추가. spec-only. /refactor-spec all (PR #326) Finding [WMS 4]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -78,6 +78,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-BE-053-inventory-service-master-event-coverage-audit.md` — PR #343 머지 (2026-05-11). inventory-service master event consumer 커버리지 audit — Warehouse/Zone/Partner 의 의도된 미참조 명시 (architecture.md `## Notes` 섹션 + dependencies.md `Consumes From` 표 컬럼). drift 가 아닌 v1 intentional gap 으로 closure. spec-only.
+
+- `TASK-BE-052-master-lot-cross-service-consumer-audit.md` — PR #336 머지 (2026-05-11). `MasterLotConsumer` 가 outbound-service 에만 등록된 사실 audit — Scenario B (intentional, "Lot tracking is outbound-only in v1") 으로 결정. inbound + inventory architecture.md 양쪽 explicit note + dependencies.md Consumes From 표 갱신. /refactor-spec all (PR #326) Finding [WMS 4] closure.
 
 - `TASK-BE-051-outbound-idempotency-key-e2e.md` — PR #324 머지 (2026-05-11). outbound-service 의 8 mutation endpoint 에 `Idempotency-Key` end-to-end 발효. `OutboundIdempotencyFilter` (`HIGHEST_PRECEDENCE + 20`, Spring Security 후 / DispatcherServlet 전, `POST/PATCH/PUT/DELETE /api/v1/outbound/**` 적용, `/webhooks/**` 제외) + `BodyHashUtil` (canonical-JSON SHA-256, whitespace 무관 / key 순서 무관) + `CachedBodyHttpServletRequestWrapper` (request body re-readable). Storage key namespace = `(method, sha256(URI), idempotencyKey)` — endpoint 또는 method 별 독립 dedupe. 같은 key + 같은 body → cached response byte-identical replay (no side-effect), 같은 key + 다른 body → **409 `DUPLICATE_REQUEST`**. TTL 24h (Redis `SET NX EX`) + 30s lock window 으로 동시 same-key race 차단. Standalone profile 폴백 = 기존 `InMemoryIdempotencyStore`. 메트릭 3개 (`outbound.idempotency.lookup.count{result=hit|miss|conflict}` / `lookup.duration.seconds` / `store.failure.total`). 신규 unit 26 (`OutboundIdempotencyFilterTest` 14 + `BodyHashUtilTest` 12) — 156 → **182 unit pass**. IT 7 (`IdempotencyFilterRedisIT`, Testcontainers Redis) — 6/7 PASS local, 1 flaky (Rancher Desktop docker-java `MalformedChunkCodingException`, 같은 path unit `bodyMismatch_returns409` PASS). CI Linux Integration job 검증 위임. spec 갱신: `idempotency.md` Open Item closure (impl banner / 키 길이 128→255 / namespace 명시 / Redis layout 정확화 / metric+error code 표). **D4 churn freeze 영향 0** — 초안 commit 의 `platform/error-handling.md` 1줄 alias 변경은 amend revert (impl 은 canonical `DUPLICATE_REQUEST` emit, alias 는 project-internal idempotency.md banner 에서 처리). 분석=Opus 4.7 / 구현=Opus 4.7 (backend-engineer agent dispatch).
 

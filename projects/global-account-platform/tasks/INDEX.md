@@ -72,8 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-275-admin-web-frontend-app-section-pattern.md` — admin-web/architecture.md 가 backend 6 service canonical pattern (Service / Service Type / Architecture Style / ...) 와 다른 sections (Architecture Pattern / Tech Stack / Package Structure) 사용 — frontend-app service-type 의 canonical pattern 결정 필요. sibling frontend-app (web-store / admin-dashboard / fan-platform-web) cross-comparison + 옵션 A/B/C 결정. /refactor-spec all (PR #326) Finding [GAP 1]. 분석=Opus 4.7 / 구현 권장=Opus.
-- `TASK-BE-276-auth-service-refresh-tokens-tenant-id-doc.md` — auth-service/data-model.md `refresh_tokens` 표가 `tenant_id` column 미명시. 그러나 spec narrative + memory `project_gap_idp_promotion.md` 가 multi-tenant Phase 2/3 에서 모든 table NOT NULL 마이그레이션 명시. DB schema vs doc drift 검증 + backfill or migration gap escalation. /refactor-spec all Finding [GAP 2]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **잔존 = 없음 — 046 series 모든 deferred IT 종결, ADR-003/004 outcome closure**.
 
@@ -86,6 +85,12 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 (empty — TASK-BE-271 reviewed and moved to done on 2026-05-02)
 
 ## done
+
+- `TASK-BE-277-auth-credentials-social-identities-data-model-backfill.md` — PR #342 머지 (2026-05-11). auth-service `credentials` + `social_identities` 두 table 의 data-model.md 백필. 컬럼 / NOT NULL / PK / FK / 인덱스 / 보안 노트 (bcrypt cost, AES-GCM column 명시). spec-only.
+
+- `TASK-BE-276-auth-service-refresh-tokens-tenant-id-doc.md` — PR #335 머지 (2026-05-11). `refresh_tokens.tenant_id` column 명시 + `jti` 길이 widening (255→500) backfill. data-model.md 표 + 인덱스 + multi-tenant Phase 2/3 NOT NULL 보장 명시. /refactor-spec all (PR #326) Finding [GAP 2] closure.
+
+- `TASK-BE-275-admin-web-frontend-app-section-pattern.md` — PR #334 머지 (2026-05-11). admin-web/architecture.md 를 backend 6 service canonical pattern (Service / Service Type / Architecture Style / Internal Structure / Allowed Dependencies / ...) 으로 재정렬. frontend-app service-type canonical pattern 확립 — sibling frontend-app (web-store / admin-dashboard / fan-platform-web) 와 정합. /refactor-spec all Finding [GAP 1] closure.
 
 - `TASK-BE-274-sas-refresh-token-provider-side-fallback.md` — PR #296 머지 (2026-05-09, commit `48c9edc1`). Self-verdict: **APPROVED**. cycle 3/6 사용 (남은 3 미사용). **Cluster A 3/3 완전 회복** (RT 2 + revoke). Phase 1 진단 (provider line 233+237 dual-INSERT 식별) → Phase 2 cycle 1 (`172216b8` skip-path TSM flag, race 해소) → cycle 2 (`a83a4d12` TransactionTemplate publish in-tx, A3 회피) → cycle 3 (`7e7719c9` TenantClaimTokenCustomizer REFRESH_TOKEN 분기 누락 = 기존 결함 unmasked + fix). 회귀 0, AC-01~07 모두 충족. ADR-003 status `ACCEPTED — partial` → `ACCEPTED — 옵션 B closure`. **누적 deferred IT 회복 = 9/8** (8 + token customizer bonus). 4 anti-pattern: A2 architectural 해소, A1/A3/A4 회피. 분석=Opus 4.7 / 구현=Opus 4.7 (Phase 1+2) + Sonnet 4.6 (Phase 2 cycle 3 customizer fix).
 - `TASK-BE-273-oauth-callback-ci-linux-503-diagnostic.md` — PR #294 머지 (2026-05-09, commit `e7e9f08f`). Self-verdict: **APPROVED**. 8 file / +307 -14 lines / **OAuthLoginIntegrationTest 5/5 disabled IT method 완전 회복** (Google/Kakao/Microsoft happy + Microsoft preferredUsername fallback + Microsoft existing email auto-link). Phase 1 (`f8742134` log 강화 + WireMock listener) → 원래 run 5/5 PASS / retry 1 5/5 FAIL → flaky 확정 + RC 식별 (`Received RST_STREAM: Stream cancelled` = JDK HttpClient HTTP/2 multiplexing race). Phase 2 옵션 1 (`ab52b8b4` HTTP/1.1 강제, 4 client + libs/java-common ResilienceClientFactory DRY) 구현 후 GAP Integration 5m12s PASS. ADR-004 status `PROPOSED` → `ACCEPTED — 옵션 1` + Phase 1 Findings + Phase 2 Outcome 섹션 추가 (`8b62be41`). 13-cycle 미해결 RC 가 1 cycle 강화 log + 1 cycle simple patch 로 종결 — 메모리 메타학습 (local PASS / CI FAIL split → diagnostic harness 우선) ROI 정점 사례. 분석=Opus 4.7 / 구현=Opus 4.7 (Phase 1 진단) + Sonnet 4.6 (Phase 2 옵션 1 패치).

@@ -78,9 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-006-procurement-service-architecture-spec.md` — TASK-SCM-BE-002 (PR #239 머지) 가 89 file production code 만 ship 하고 `procurement-service/architecture.md` 미작성. retroactive spec 저작 — Hexagonal style + PO 8단계 상태기계 + Resilience4j (CB+Retry+jitter+Idempotency) + outbox + audit_log + AES-GCM + JWT. inventory-visibility-service/architecture.md 패턴 mirror. /refactor-spec all (PR #326) Finding [SCM 2]. 분석=Opus 4.7 / 구현 권장=Opus.
-- `TASK-SCM-BE-007-int-001b-schema-doc-backfill.md` — TASK-SCM-INT-001b cycle 2 schema fix (poNumber UUID v7 substring(28) + InventoryNode.contactInfo @JdbcTypeCode(JSON)) 가 production code 에만 반영, data-model.md 미반영. backfill spec only. /refactor-spec all Finding [SCM 6]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
-- `TASK-SCM-BE-008-inventory-visibility-nodes-endpoint-cross-ref.md` — inventory-visibility 4 REST endpoint 중 `/nodes` 가 architecture.md 미명시 + gateway-public-routes.md 미반영. public 또는 internal-only 결정 + 두 spec 동기. /refactor-spec all Finding [SCM 7]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -91,6 +89,14 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-SCM-BE-009-procurement-events-contract-authoring.md` — PR #341 머지 (2026-05-11). 7 published topics 정형화 (scm.procurement.po.submitted/acknowledged/confirmed/canceled/received/closed + scm.procurement.asn.received) — envelope shape + payload schema + idempotency key + consumer dedupe + retention 명시. spec-only. fan-platform/scm event contract 패턴 mirror.
+
+- `TASK-SCM-BE-008-inventory-visibility-nodes-endpoint-cross-ref.md` — PR #333 머지 (2026-05-11). inventory-visibility 4 REST endpoint 중 `/nodes` 가 public 으로 결정 + architecture.md/gateway-public-routes.md 양쪽 동기. /refactor-spec all (PR #326) Finding [SCM 7] closure.
+
+- `TASK-SCM-BE-007-int-001b-schema-doc-backfill.md` — PR #332 머지 (2026-05-11). INT-001b cycle 2 production fix (poNumber UUID v7 rand_b tail + InventoryNode.contactInfo @JdbcTypeCode(JSON)) data-model.md 반영. spec-only. /refactor-spec all Finding [SCM 6] closure.
+
+- `TASK-SCM-BE-006-procurement-service-architecture-spec.md` — PR #331 머지 (2026-05-11). retroactive `procurement-service/architecture.md` + `procurement-api.md` 저작 (TASK-SCM-BE-002 PR #239 production code 후속). Hexagonal + PO 8단계 + Resilience4j + outbox + audit_log + AES-GCM + JWT. inventory-visibility-service/architecture.md 패턴 mirror. /refactor-spec all Finding [SCM 2] closure.
 
 - `TASK-SCM-BE-005-inventory-visibility-consumer-it.md` — spec PR #266 + impl PR #267. inventory-visibility-service Testcontainers IT 8 메서드 / 6 클래스 (AbstractInventoryVisibilityIntegrationTest base + WmsInventoryAdjustedConsumer 2 + WmsInventoryReceivedConsumer 2 + EventDedupe 1 + InventoryNodeAutoCreate 1 + CrossTenantIsolation 1 + StalenessScheduler 1). cycle 1 PASS 1m14s on Rancher Desktop dockerd 29.1.3 + DOCKER_API_VERSION=1.45. **JSONB 회귀 가드 검증 완료** — `@JdbcTypeCode(SqlTypes.JSON)` 일시 제거 시 IT-1 + IT-4 둘 다 fail with `PSQLException: column "contact_info" is of type jsonb but expression is of type character varying` (정확히 INT-001b root cause #2 패턴). e2e 5m13s 에서만 catch 되던 회귀를 IT 1.5min 에서 catch. INT-001b → BE-002d 패턴 답습. 2026-05-09.
 
