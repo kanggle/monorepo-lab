@@ -228,6 +228,7 @@ Full schemas: `specs/contracts/events/outbound-events.md` (Open Items).
 | `master.location.*` | `wms.master.location.v1` | Same |
 | `master.sku.*` | `wms.master.sku.v1` | Same |
 | `master.partner.*` | `wms.master.partner.v1` | Same; deactivated partners rejected as new order customer |
+| `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; lot expiry cascades to picking eligibility (LOT-tracked SKU order lines) |
 
 Same dedupe + DLQ pattern as siblings:
 

@@ -67,7 +67,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-050-outbound-saga-sweeper.md` — 1분 주기 백그라운드 잡으로 `REQUESTED` / `CANCELLATION_REQUESTED` / `SHIPPED` (>5분) 사가 재발신 (idempotent at inventory consumer). `re_emit_count` Flyway + 5회 cap + `STUCK_RECOVERY_FAILED` terminal + `outbound.alert.saga.recovery.exhausted` 알림. 3 메트릭. /refactor-code dry-run Manual Finding #3. 분석=Opus 4.7 / 구현 권장=Opus (saga state-machine + cross-bean delegation).
+- `TASK-BE-051-outbound-idempotency-key-e2e.md` — 8 mutation endpoint Idempotency-Key end-to-end (Redis Lua atomic SET-NX-EX + 24h TTL + canonical-JSON body hash + 409 reuse-invalid). 현재 `requireIdempotencyKey` presence 만 있음 → T1 contract gap 마감. standalone 폴백 in-memory store. /refactor-code dry-run Manual Finding #4. 분석=Opus 4.7 / 구현 권장=Opus (Lua + aspect + 8-endpoint surface).
 
 ## in-progress
 
