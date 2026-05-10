@@ -3,9 +3,9 @@ package com.wms.notification.application.service;
 import com.wms.notification.application.port.outbound.ChannelPort;
 import com.wms.notification.application.port.outbound.DeliveryRepository;
 import com.wms.notification.application.port.outbound.OutboxPort;
-import com.wms.notification.adapter.outbound.slack.ChannelNotConfiguredException;
-import com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException;
 import com.wms.notification.domain.delivery.NotificationDelivery;
+import com.wms.notification.domain.error.ChannelNotConfiguredException;
+import com.wms.notification.domain.error.ChannelPermanentFailureException;
 import com.wms.notification.domain.error.DeliveryRetryExhaustedException;
 import com.wms.notification.domain.routing.ChannelType;
 import io.micrometer.core.instrument.Counter;
@@ -108,7 +108,7 @@ class DeliveryDispatchPerRow {
             deliveries.update(delivery);
             outbox.writeDeliveryCompleted(delivery, "FAILED_CHANNEL_NOT_CONFIGURED");
             attemptsFailed.increment();
-        } catch (SlackPermanentFailureException permanent) {
+        } catch (ChannelPermanentFailureException permanent) {
             delivery.markFailedPermanent("VENDOR_4XX: " + permanent.getMessage(), clock.instant());
             deliveries.update(delivery);
             outbox.writeDeliveryCompleted(delivery, "FAILED_PERMANENT");

@@ -105,16 +105,16 @@ resilience4j:
         enableExponentialBackoff: true
         exponentialBackoffMultiplier: 2.0
         # 4xx → permanent failure, must not retry. SlackChannelAdapter throws
-        # a SlackPermanentFailure subtype that resilience4j ignores via
-        # `ignoreExceptions`.
+        # a domain ChannelPermanentFailureException that resilience4j ignores
+        # via `ignoreExceptions`.
         ignoreExceptions:
-          - com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException
+          - com.wms.notification.domain.error.ChannelPermanentFailureException
 
 wms:
   notification:
     # Slack incoming webhook URLs are injected per channel alias. Empty
-    # default → SlackChannelAdapter throws ChannelNotConfiguredException →
-    # NotificationDelivery becomes FAILED (permanent) + outbox audit.
+    # default → SlackChannelAdapter throws domain ChannelNotConfiguredException
+    # → NotificationDelivery becomes FAILED (permanent) + outbox audit.
     # Operators inject SLACK_WEBHOOK_URL_WMS_ALERTS / SLACK_WEBHOOK_URL_WMS_SHIPPING
     # at deploy time (NEVER persisted to DB; NEVER logged).
     channels:

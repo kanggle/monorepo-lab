@@ -24,10 +24,13 @@ public sealed interface ChannelPort permits SlackChannelPort {
      * <ol>
      *   <li>Honour their bounded HTTP timeouts (3s connect / 5s read for Slack).</li>
      *   <li>Translate non-retryable vendor responses (4xx, malformed) into
-     *       a {@link com.wms.notification.adapter.outbound.slack.SlackPermanentFailureException}-shaped exception
+     *       a {@link com.wms.notification.domain.error.ChannelPermanentFailureException}
      *       so the caller doesn't waste retry budget.</li>
      *   <li>Translate retryable failures (5xx, IO, timeout) into a generic
      *       {@link RuntimeException} so Resilience4j's retry kicks in.</li>
+     *   <li>Raise {@link com.wms.notification.domain.error.ChannelNotConfiguredException}
+     *       if the channel alias has no configured vendor endpoint
+     *       (fail-closed; treated as permanent at the application layer).</li>
      * </ol>
      *
      * @param recipient logical alias from {@link com.wms.notification.domain.routing.ChannelTarget#channelId()}
