@@ -6,7 +6,7 @@ tools: Read, Glob, Grep, Bash
 capabilities: [code-quality-review, security-review, performance-review, convention-check, spec-compliance-check]
 languages: [java, kotlin, typescript, sql]
 domains: [all]
-service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app]
+service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app, identity-platform]
 ---
 
 You are the project code reviewer.

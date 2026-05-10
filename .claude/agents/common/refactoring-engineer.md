@@ -7,7 +7,7 @@ skills: backend/refactoring
 capabilities: [refactoring, dead-code-removal, duplication-elimination, layer-fix, naming-correction]
 languages: [java, kotlin, typescript]
 domains: [all]
-service_types: [rest-api, event-consumer, batch-job, frontend-app]
+service_types: [rest-api, event-consumer, batch-job, frontend-app, grpc-service, graphql-service, ml-pipeline, identity-platform]
 ---
 
 You are the project refactoring engineer.

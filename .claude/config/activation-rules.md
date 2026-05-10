@@ -119,7 +119,7 @@ Activate rules for:
 - tenant-safe caching
 - per-tenant quota
 
-→ Detailed rules: *(file to be created when a project declares this trait)*
+→ Detailed rules: [`rules/traits/multi-tenant.md`](../../rules/traits/multi-tenant.md)
 
 ---
 
@@ -144,7 +144,7 @@ Activate rules for:
 - operational batch metrics
 - batch-online contention management
 
-→ Detailed rules: *(file to be created when a project declares this trait)*
+→ Detailed rules: [`rules/traits/batch-heavy.md`](../../rules/traits/batch-heavy.md)
 
 ---
 

@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Glob, Grep
 capabilities: [architecture-decision, design-review, adr-authoring, layer-violation-detection, trade-off-analysis]
 languages: [java, kotlin, typescript, python]
 domains: [all]
-service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app]
+service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app, identity-platform]
 ---
 
 You are the project software architect.
