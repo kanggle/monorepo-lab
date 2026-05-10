@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-049-tms-real-adapter.md` — outbound-service `StubTmsClientAdapter` 를 실제 `TmsClientAdapter` 로 교체. Resilience4j circuit breaker + retry + timeout + bulkhead + WireMock IT (I1-I4 / I7-I10), `tms_request_dedupe` Flyway, manual retry endpoint, 4 Micrometer 메트릭. /refactor-code wms outbound-service dry-run Manual Finding #2 surfaced. PRs #309–#313 sweep 종결 후 후속. 분석=Opus 4.7 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-049-tms-real-adapter.md` — outbound-service `StubTmsClientAdapter` → 실제 `TmsClientAdapter` 교체 완료. Spring `RestClient` + Apache HttpClient 5 (dedicated `PoolingHttpClientConnectionManager` size 10) + Resilience4j (`@CircuitBreaker` 50%/20/60s + `@Retry` 3 attempts 1s/2s/4s + jitter `randomizedWaitFactor=0.2` + `@Bulkhead` SEMAPHORE 10) + `tms_request_dedupe` Flyway V13 + REQUIRES_NEW dedupe persistence adapter + `POST /api/v1/outbound/shipments/{id}:retry-tms-notify` (OUTBOUND_ADMIN, Idempotency-Key required) + `OutboundSaga.recoverFromNotifyFailed` 신규 도메인 전이 (SHIPPED_NOT_NOTIFIED → SHIPPED) + `ExternalServiceUnavailableException` (503 매핑) + `TmsRetryNotAllowedException` + 4 Micrometer 메트릭 (`outbound.tms.request.count{result}` / `request.duration.seconds` / `circuit.state{vendor=tms}` gauge / `retry.count{attempt}` + `dedupe.cache_hit.count` 보너스). standalone profile fallback `StubTmsClientAdapter` 를 `@Profile("standalone")` 로 분리 — 실제 어댑터는 `@Profile("!standalone")`. 신규 unit 18 (TmsClientAdapter 9 + RetryTmsNotificationService 5 + OutboundSaga recoverFromNotifyFailed 3 + ShipmentNotificationListenerTest 1 sig fix) — 138 → **156 unit pass**. WireMock IT 6 시나리오 (success / timeout 3-retry / 5xx 3-retry / 4xx no-retry / circuit open fast-fail / manual retry success) — Rancher Desktop blocker 로 로컬 IT skip, CI Linux runner Integration job 으로 검증 위임 (memory: project_testcontainers_docker_desktop_blocker.md). spec 갱신: `external-integrations.md` §2.3 (adapter layout), §2.4 (RestClient 채택 + sync 정당화), §2.5/§2.6 (adapter-internal `TmsTransientException`/`TmsPermanentException` exception 사용), §2.8 (SEMAPHORE bulkhead + ConnectionPool 정당화). 분석=Opus 4.7 / 구현=Opus 4.7 (backend-engineer agent dispatch).
 
 ## done
 

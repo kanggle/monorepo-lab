@@ -73,7 +73,7 @@ class ShipmentNotificationListenerTest {
         seedShipment(TmsStatus.PENDING);
         seedSaga(SagaStatus.SHIPPED);
 
-        ShipmentNotificationPort tms = id -> new TmsAcknowledgement(true, UUID.randomUUID().toString());
+        ShipmentNotificationPort tms = id -> TmsAcknowledgement.success(UUID.randomUUID().toString());
         ShipmentNotificationListener listener = new ShipmentNotificationListener(
                 tms, persistence, fixedClock);
 

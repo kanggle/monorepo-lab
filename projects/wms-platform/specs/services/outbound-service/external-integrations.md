@@ -172,16 +172,26 @@ Per Hexagonal architecture
 
 ```
 adapter/out/tms/
-├── TmsClientAdapter.java            // implements ShipmentNotificationPort
+├── TmsClientAdapter.java            // @Profile("!standalone") implements ShipmentNotificationPort
+├── StandaloneTmsClientAdapter.java  // @Profile("standalone") in-memory fallback
 ├── TmsShipmentRequest.java          // vendor-shaped DTO (out)
-├── TmsAcknowledgement.java          // vendor-shaped DTO (in)
-└── TmsShipmentMapper.java           // Shipment ↔ TmsShipmentRequest (I8)
+├── TmsShipmentResponse.java         // vendor-shaped DTO (in)
+├── TmsShipmentMapper.java           // Shipment ↔ TmsShipmentRequest (I8)
+├── TmsClientProperties.java         // @ConfigurationProperties
+├── TmsClientConfig.java             // RestClient + connection pool bean
+├── TmsMetrics.java                  // Micrometer counter / timer / gauge
+└── persistence/                     // tms_request_dedupe entity + repo + adapter
+    ├── TmsRequestDedupeEntity.java
+    ├── TmsRequestDedupeRepository.java
+    └── TmsRequestDedupePersistenceAdapter.java
 ```
 
-`ShipmentNotificationPort` lives in `application/port/out/`. The domain
-calls `port.notify(shipment)` without knowing TMS exists — full ports &
-adapters separation per `integration-heavy` I7 (vendor adapter) and I8
-(internal model translation).
+`ShipmentNotificationPort` and the internal `TmsAcknowledgement` record live
+in `application/port/out/`. The domain calls `port.notify(shipmentId)`
+without knowing TMS exists — full ports & adapters separation per
+`integration-heavy` I7 (vendor adapter) and I8 (internal model
+translation). `TmsShipmentRequest` / `TmsShipmentResponse` are
+adapter-internal vendor DTOs and never leak across the port boundary.
 
 ### 2.4 Timeouts (I1)
 
@@ -191,9 +201,14 @@ adapters separation per `integration-heavy` I7 (vendor adapter) and I8
 | `readTimeout` | **30 s** | TMS p99 response time observed at 8–12s during peak; 30s gives 2–3× buffer |
 | Total per-attempt budget | ~30 s | Sum of connect + read |
 
-Implementation: WebClient (Spring WebFlux) with reactor-netty client.
-Configured through a dedicated `WebClient` bean named `tmsWebClient`, not
-shared with any other vendor.
+Implementation: Spring `RestClient` (Java 21, synchronous) layered over
+Apache HttpClient 5 with a dedicated `PoolingHttpClientConnectionManager`
+(see §2.8 Bulkhead). The TMS step is invoked synchronously from the
+post-commit `TransactionalEventListener` (after the saga TX has already
+committed) — reactive plumbing is not required and would add complexity
+to the bulkhead / metrics integration. The connection pool, RestClient
+bean, and Resilience4j wiring are all named `tms-client` and dedicated to
+TMS only (not shared with other vendors per I9).
 
 ### 2.5 Circuit Breaker (I2)
 
@@ -208,12 +223,12 @@ Resilience4j `tmsShipmentCircuit`:
 | `waitDurationInOpenState` | **60 s** |
 | `permittedNumberOfCallsInHalfOpenState` | 3 |
 | `automaticTransitionFromOpenToHalfOpenEnabled` | true |
-| `recordExceptions` | `WebClientResponseException.InternalServerError`, `WebClientRequestException`, `TimeoutException` |
-| `ignoreExceptions` | `WebClientResponseException.BadRequest` (4xx is caller bug, not TMS health) |
+| `recordExceptions` | `com.wms.outbound.adapter.out.tms.TmsTransientException` (5xx, timeout, IO) |
+| `ignoreExceptions` | `com.wms.outbound.adapter.out.tms.TmsPermanentException` (4xx — caller bug, not TMS health) |
 
 When OPEN: calls fail fast with `CallNotPermittedException`. The adapter
-translates this to a domain-level
-`ExternalServiceUnavailableException` and the saga moves to
+catches and translates to the domain-level
+`ExternalServiceUnavailableException`; the saga moves to
 `SHIPPED_NOT_NOTIFIED` (see §2.10).
 
 State exposed as gauge `outbound.tms.circuit.state` (0=closed, 1=half-open,
@@ -229,8 +244,8 @@ Resilience4j `tmsShipmentRetry`:
 | `waitDuration` | starts at 1s |
 | `intervalFunction` | exponential `2^(attempt-1)` capped at 4s, plus jitter |
 | Jitter | uniform random ±200ms per attempt |
-| `retryExceptions` | `WebClientResponseException.InternalServerError`, `WebClientResponseException.ServiceUnavailable`, `WebClientResponseException.GatewayTimeout`, `TimeoutException`, `WebClientRequestException` (transport-level) |
-| `ignoreExceptions` | `WebClientResponseException.BadRequest`, `WebClientResponseException.Unauthorized`, `WebClientResponseException.Forbidden`, `WebClientResponseException.UnprocessableEntity`, `CallNotPermittedException` (circuit fast-fail does not retry) |
+| `retryExceptions` | `com.wms.outbound.adapter.out.tms.TmsTransientException` (5xx, 429, timeout, IO) |
+| `ignoreExceptions` | `com.wms.outbound.adapter.out.tms.TmsPermanentException` (4xx ≠ 429), `io.github.resilience4j.circuitbreaker.CallNotPermittedException` (circuit fast-fail does not retry) |
 
 Effective delay sequence: ~1s, ~2s, ~4s (each ±200ms).
 
@@ -271,21 +286,33 @@ so the saga's main TX can already be committed (TMS call happens
 
 ### 2.8 Bulkhead (I9)
 
-- Resilience4j `ThreadPoolBulkhead` `tmsShipmentBulkhead`:
+Two layers cooperate to bound TMS concurrency:
 
-  | Property | Value |
-  |---|---|
-  | `maxThreadPoolSize` | **10** |
-  | `coreThreadPoolSize` | 5 |
-  | `queueCapacity` | 20 |
-  | `keepAliveDuration` | 20 ms |
+1. **Apache HttpClient 5 connection pool** — dedicated
+   `PoolingHttpClientConnectionManager` with `maxTotal=10`,
+   `defaultMaxPerRoute=10`, configured in `TmsClientConfig`. This is
+   the primary bound — at most 10 simultaneous TMS sockets across the
+   JVM, regardless of caller pattern.
+2. **Resilience4j `Bulkhead` (SEMAPHORE type)** — declarative annotation
+   on the adapter method:
 
-- Dedicated to TMS only. **Not shared** with HTTP server pool, DB pool,
-  Kafka pool, or any future vendor pool.
-- Saturation behavior: if all 10 threads are busy and the 20-slot queue
-  is full, additional submissions throw `BulkheadFullException`. Adapter
-  treats as `EXTERNAL_SERVICE_UNAVAILABLE` and saga moves to
-  `SHIPPED_NOT_NOTIFIED`.
+   | Property | Value |
+   |---|---|
+   | `maxConcurrentCalls` | **10** |
+   | `maxWaitDuration` | 0 (fail-fast — saturation throws `BulkheadFullException`) |
+
+   `SEMAPHORE` is the synchronous-friendly bulkhead variant — the
+   `THREADPOOL` variant requires a `CompletableFuture` return type, which
+   would require restructuring the saga listener to be async-aware for
+   no operational benefit (the listener already runs on a separate
+   thread from the request handler — see §2.10).
+
+Dedicated to TMS only — **not shared** with HTTP server pool, DB
+HikariCP pool, Kafka producer/consumer pools, or any future vendor
+pool. Saturation behavior: when all 10 semaphore permits are held,
+additional invocations throw `BulkheadFullException`; the adapter
+catches and translates to `ExternalServiceUnavailableException`, which
+the saga handler captures as `SHIPPED_NOT_NOTIFIED`.
 
 ### 2.9 Internal Model Translation (I7, I8)
 

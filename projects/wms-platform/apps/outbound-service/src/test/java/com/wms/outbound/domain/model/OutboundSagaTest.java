@@ -163,6 +163,28 @@ class OutboundSagaTest {
         assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED_NOT_NOTIFIED);
     }
 
+    @Test
+    void recoverFromNotifyFailedAdvancesToShipped() {
+        OutboundSaga saga = sagaIn(SagaStatus.SHIPPED_NOT_NOTIFIED);
+        saga.recoverFromNotifyFailed(T0);
+        assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED);
+        assertThat(saga.failureReason()).isNull();
+    }
+
+    @Test
+    void recoverFromNotifyFailedReDeliveryIsIdempotent() {
+        OutboundSaga saga = sagaIn(SagaStatus.SHIPPED);
+        saga.recoverFromNotifyFailed(T0); // no-op
+        assertThat(saga.status()).isEqualTo(SagaStatus.SHIPPED);
+    }
+
+    @Test
+    void recoverFromNotifyFailedRejectsFromInvalidState() {
+        OutboundSaga saga = sagaIn(SagaStatus.RESERVED);
+        assertThatThrownBy(() -> saga.recoverFromNotifyFailed(T0))
+                .isInstanceOf(StateTransitionInvalidException.class);
+    }
+
     private static OutboundSaga newRequested() {
         return OutboundSaga.newRequested(UUID.randomUUID(), UUID.randomUUID(), T0);
     }

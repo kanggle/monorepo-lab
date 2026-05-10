@@ -16,8 +16,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * would not be scanned.
  */
 @Configuration
-@EntityScan(basePackages = "com.wms.outbound.adapter.out.persistence")
-@EnableJpaRepositories(basePackages = "com.wms.outbound.adapter.out.persistence")
+@EntityScan(basePackages = {
+        "com.wms.outbound.adapter.out.persistence",
+        "com.wms.outbound.adapter.out.tms.persistence" // TASK-BE-049
+})
+@EnableJpaRepositories(basePackages = {
+        "com.wms.outbound.adapter.out.persistence",
+        "com.wms.outbound.adapter.out.tms.persistence" // TASK-BE-049
+})
 public class OutboundServicePersistenceConfig {
 
     /**

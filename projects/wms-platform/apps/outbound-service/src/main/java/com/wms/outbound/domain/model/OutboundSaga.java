@@ -224,6 +224,26 @@ public final class OutboundSaga {
     }
 
     /**
+     * Manual TMS retry succeeded (TASK-BE-049): {@code SHIPPED_NOT_NOTIFIED →
+     * SHIPPED}. The caller subsequently calls
+     * {@link #onInventoryConfirmed(Instant)} to advance to
+     * {@link SagaStatus#COMPLETED} — stock was already consumed during the
+     * original {@code confirmShipping} commit, so the retry path doesn't
+     * wait for a fresh {@code inventory.confirmed} event.
+     */
+    public void recoverFromNotifyFailed(Instant now) {
+        if (status == SagaStatus.SHIPPED || status == SagaStatus.COMPLETED) {
+            return;
+        }
+        if (status != SagaStatus.SHIPPED_NOT_NOTIFIED) {
+            throw new StateTransitionInvalidException(status.name(), SagaStatus.SHIPPED.name());
+        }
+        this.status = SagaStatus.SHIPPED;
+        this.failureReason = null;
+        this.lastTransitionAt = now;
+    }
+
+    /**
      * Bind the freshly-created PickingRequest's id to the saga so subsequent
      * inventory replies (which carry {@code reservationId == picking_request.id})
      * can be correlated. Called once when {@code PickingRequest} is materialised.
