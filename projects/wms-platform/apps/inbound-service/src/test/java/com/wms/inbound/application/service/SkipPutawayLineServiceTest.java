@@ -55,8 +55,10 @@ class SkipPutawayLineServiceTest {
 
     @BeforeEach
     void setUp() {
-        sut = new SkipPutawayLineService(putawayPersistence, asnPersistence, eventPort,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        PutawayCompletionPublisher publisher =
+                new PutawayCompletionPublisher(asnPersistence, putawayPersistence, eventPort);
+        sut = new SkipPutawayLineService(putawayPersistence, asnPersistence,
+                publisher, Clock.fixed(NOW, ZoneOffset.UTC));
         asnId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
         instructionId = UUID.randomUUID();

@@ -6,6 +6,7 @@ import com.wms.inbound.adapter.in.rest.dto.CancelAsnRequest;
 import com.wms.inbound.adapter.in.rest.dto.CloseAsnRequest;
 import com.wms.inbound.adapter.in.rest.dto.CloseAsnResponse;
 import com.wms.inbound.adapter.in.rest.dto.CreateAsnRequest;
+import com.wms.inbound.adapter.in.rest.util.RequestContext;
 import com.wms.inbound.application.command.CancelAsnCommand;
 import com.wms.inbound.application.command.CloseAsnCommand;
 import com.wms.inbound.application.command.ReceiveAsnCommand;
@@ -17,14 +18,11 @@ import com.wms.inbound.application.result.AsnResult;
 import com.wms.inbound.application.result.CloseAsnResult;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -62,7 +60,7 @@ public class AsnController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         ReceiveAsnCommand command = new ReceiveAsnCommand(
                 request.asnNo(), "MANUAL",
                 request.supplierPartnerId(), request.warehouseId(),
@@ -70,7 +68,7 @@ public class AsnController {
                 request.lines().stream()
                         .map(l -> new ReceiveAsnCommand.Line(l.skuId(), l.lotId(), l.expectedQty()))
                         .toList(),
-                actorId(jwt), callerRoles(authentication));
+                RequestContext.actorId(jwt), RequestContext.callerRoles(authentication));
         AsnResult result = receiveAsn.receive(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(String.valueOf(result.version()))
@@ -107,10 +105,10 @@ public class AsnController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         CancelAsnCommand command = new CancelAsnCommand(
                 id, request.reason(), request.version(),
-                actorId(jwt), callerRoles(authentication));
+                RequestContext.actorId(jwt), RequestContext.callerRoles(authentication));
         AsnResult result = cancelAsn.cancel(command);
         return ResponseEntity.ok(AsnResponse.from(result));
     }
@@ -123,34 +121,12 @@ public class AsnController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        requireIdempotencyKey(idempotencyKey);
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         long version = request != null ? request.version() : 0L;
         CloseAsnCommand command = new CloseAsnCommand(
-                id, version, actorId(jwt), callerRoles(authentication));
+                id, version, RequestContext.actorId(jwt), RequestContext.callerRoles(authentication));
         CloseAsnResult result = closeAsn.close(command);
         return ResponseEntity.ok(CloseAsnResponse.from(result));
-    }
-
-    private static void requireIdempotencyKey(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
-    }
-
-    static Set<String> callerRoles(Authentication authentication) {
-        if (authentication == null || authentication.getAuthorities() == null) {
-            return Set.of();
-        }
-        return authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    static String actorId(Jwt jwt) {
-        if (jwt == null) {
-            return "anonymous";
-        }
-        return jwt.getSubject() != null ? jwt.getSubject() : jwt.getClaimAsString("actorId");
     }
 
     public record PagedResponse<T>(List<T> items, int page, int size, long total) {}

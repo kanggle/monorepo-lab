@@ -159,22 +159,10 @@ public class InspectionService implements StartInspectionUseCase, RecordInspecti
 
     private void publishInspectionCompleted(Inspection inspection, UUID warehouseId,
                                              String asnNo, Instant now, String actorId) {
-        List<InspectionCompletedEvent.Line> lines = inspection.getLines().stream()
-                .map(l -> new InspectionCompletedEvent.Line(
-                        l.getId(), l.getAsnLineId(), l.getSkuId(), l.getLotId(), l.getLotNo(),
-                        0, l.getQtyPassed(), l.getQtyDamaged(), l.getQtyShort()))
-                .toList();
-        List<InspectionCompletedEvent.DiscrepancySummary> discSummary = inspection.getDiscrepancies().stream()
-                .map(d -> new InspectionCompletedEvent.DiscrepancySummary(
-                        d.getId(), d.getAsnLineId(),
-                        d.getDiscrepancyType().name(), d.getVariance(), d.isAcknowledged()))
-                .toList();
         int discCount = (int) inspection.getDiscrepancies().stream()
                 .filter(d -> !d.isAcknowledged()).count();
-        InspectionCompletedEvent event = new InspectionCompletedEvent(
-                inspection.getId(), inspection.getAsnId(), asnNo, warehouseId,
-                inspection.getInspectorId(), inspection.getCompletedAt(),
-                lines, discCount, discSummary, now, actorId);
+        InspectionCompletedEvent event = InspectionCompletedEvent.fromInspection(
+                inspection, asnNo, warehouseId, discCount, now, actorId);
         eventPort.publish(event);
     }
 

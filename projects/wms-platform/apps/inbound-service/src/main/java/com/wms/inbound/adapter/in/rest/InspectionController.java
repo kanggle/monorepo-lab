@@ -3,6 +3,7 @@ package com.wms.inbound.adapter.in.rest;
 import com.wms.inbound.adapter.in.rest.dto.AcknowledgeDiscrepancyRequest;
 import com.wms.inbound.adapter.in.rest.dto.InspectionResponse;
 import com.wms.inbound.adapter.in.rest.dto.RecordInspectionRequest;
+import com.wms.inbound.adapter.in.rest.util.RequestContext;
 import com.wms.inbound.application.command.AcknowledgeDiscrepancyCommand;
 import com.wms.inbound.application.command.RecordInspectionCommand;
 import com.wms.inbound.application.command.StartInspectionCommand;
@@ -49,7 +50,7 @@ public class InspectionController {
     public ResponseEntity<Void> startInspection(
             @PathVariable UUID asnId,
             @AuthenticationPrincipal Jwt jwt) {
-        StartInspectionCommand command = new StartInspectionCommand(asnId, AsnController.actorId(jwt));
+        StartInspectionCommand command = new StartInspectionCommand(asnId, RequestContext.actorId(jwt));
         startInspection.start(command);
         return ResponseEntity.ok().build();
     }
@@ -67,7 +68,7 @@ public class InspectionController {
                                 l.asnLineId(), l.lotId(), l.lotNo(),
                                 l.qtyPassed(), l.qtyDamaged(), l.qtyShort()))
                         .toList(),
-                AsnController.actorId(jwt));
+                RequestContext.actorId(jwt));
         InspectionResult result = recordInspection.record(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(String.valueOf(result.version()))
@@ -83,14 +84,12 @@ public class InspectionController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new IllegalArgumentException("Idempotency-Key header is required");
-        }
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         AcknowledgeDiscrepancyCommand command = new AcknowledgeDiscrepancyCommand(
                 id, discrepancyId,
                 request != null ? request.notes() : null,
-                AsnController.actorId(jwt),
-                AsnController.callerRoles(authentication));
+                RequestContext.actorId(jwt),
+                RequestContext.callerRoles(authentication));
         InspectionResult result = acknowledgeDiscrepancy.acknowledge(command);
         return ResponseEntity.ok()
                 .eTag(String.valueOf(result.version()))

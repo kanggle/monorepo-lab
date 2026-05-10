@@ -12,14 +12,12 @@ import java.time.Clock;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CancelAsnService implements CancelAsnUseCase {
 
-    private static final String ROLE_INBOUND_ADMIN = "ROLE_INBOUND_ADMIN";
     private static final Logger log = LoggerFactory.getLogger(CancelAsnService.class);
 
     private final AsnPersistencePort asnPersistence;
@@ -37,7 +35,7 @@ public class CancelAsnService implements CancelAsnUseCase {
     @Override
     @Transactional
     public AsnResult cancel(CancelAsnCommand command) {
-        requireRole(command.callerRoles(), ROLE_INBOUND_ADMIN);
+        AuthorizationGuards.requireRole(command.callerRoles(), InboundRoles.ROLE_INBOUND_ADMIN);
 
         Asn asn = asnPersistence.findById(command.asnId())
                 .orElseThrow(() -> new AsnNotFoundException(command.asnId()));
@@ -56,9 +54,4 @@ public class CancelAsnService implements CancelAsnUseCase {
         return ReceiveAsnService.toResult(saved);
     }
 
-    private static void requireRole(java.util.Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
-    }
 }

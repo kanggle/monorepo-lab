@@ -60,8 +60,10 @@ class ConfirmPutawayLineServiceTest {
 
     @BeforeEach
     void setUp() {
-        sut = new ConfirmPutawayLineService(putawayPersistence, asnPersistence, eventPort,
-                masterReadModel, Clock.fixed(NOW, ZoneOffset.UTC));
+        PutawayCompletionPublisher publisher =
+                new PutawayCompletionPublisher(asnPersistence, putawayPersistence, eventPort);
+        sut = new ConfirmPutawayLineService(putawayPersistence, asnPersistence,
+                masterReadModel, publisher, Clock.fixed(NOW, ZoneOffset.UTC));
         asnId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
         instructionId = UUID.randomUUID();

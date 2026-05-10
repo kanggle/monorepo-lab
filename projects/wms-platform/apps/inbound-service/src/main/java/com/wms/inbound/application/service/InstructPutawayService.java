@@ -34,14 +34,12 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InstructPutawayService implements InstructPutawayUseCase {
 
-    private static final String ROLE_INBOUND_WRITE = "ROLE_INBOUND_WRITE";
     private static final Logger log = LoggerFactory.getLogger(InstructPutawayService.class);
 
     private final AsnPersistencePort asnPersistence;
@@ -68,7 +66,7 @@ public class InstructPutawayService implements InstructPutawayUseCase {
     @Override
     @Transactional
     public PutawayInstructionResult instruct(InstructPutawayCommand command) {
-        requireRole(command.callerRoles(), ROLE_INBOUND_WRITE);
+        AuthorizationGuards.requireRole(command.callerRoles(), InboundRoles.ROLE_INBOUND_WRITE);
 
         Asn asn = asnPersistence.findById(command.asnId())
                 .orElseThrow(() -> new AsnNotFoundException(command.asnId()));
@@ -165,11 +163,5 @@ public class InstructPutawayService implements InstructPutawayUseCase {
                 savedAsn.getId(), saved.getId(), saved.totalLineCount());
 
         return PutawayResultMapper.toInstructionResult(saved, savedAsn.getStatus().name(), masterReadModel);
-    }
-
-    private static void requireRole(java.util.Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
     }
 }

@@ -27,15 +27,11 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ReceiveAsnService implements ReceiveAsnUseCase {
-
-    private static final String ROLE_INBOUND_WRITE = "ROLE_INBOUND_WRITE";
-    private static final String SYSTEM_ACTOR = "system:erp-webhook";
 
     private static final Logger log = LoggerFactory.getLogger(ReceiveAsnService.class);
 
@@ -61,7 +57,7 @@ public class ReceiveAsnService implements ReceiveAsnUseCase {
     @Transactional
     public AsnResult receive(ReceiveAsnCommand command) {
         if (!isSystemActor(command.actorId())) {
-            requireRole(command.callerRoles(), ROLE_INBOUND_WRITE);
+            AuthorizationGuards.requireRole(command.callerRoles(), InboundRoles.ROLE_INBOUND_WRITE);
         }
 
         WarehouseSnapshot warehouse = masterReadModel.findWarehouse(command.warehouseId())
@@ -119,13 +115,7 @@ public class ReceiveAsnService implements ReceiveAsnUseCase {
     }
 
     private static boolean isSystemActor(String actorId) {
-        return actorId != null && actorId.startsWith("system:");
-    }
-
-    private static void requireRole(java.util.Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
+        return actorId != null && actorId.startsWith(InboundRoles.SYSTEM_ACTOR_PREFIX);
     }
 
     private static List<AsnReceivedEvent.Line> buildEventLines(Asn asn,
