@@ -35,12 +35,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,7 +90,7 @@ public class PackingService implements CreatePackingUnitUseCase,
     @Override
     @Transactional
     public PackingUnitResult create(CreatePackingUnitCommand command) {
-        requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
+        AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
@@ -162,7 +160,7 @@ public class PackingService implements CreatePackingUnitUseCase,
     @Override
     @Transactional
     public PackingUnitResult seal(SealPackingUnitCommand command) {
-        requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
+        AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
         PackingUnit unit = packingPersistence.findById(command.packingUnitId())
                 .orElseThrow(() -> new PackingUnitNotFoundException(command.packingUnitId()));
@@ -279,7 +277,7 @@ public class PackingService implements CreatePackingUnitUseCase,
     @Override
     @Transactional
     public OrderResult confirm(ConfirmPackingCommand command) {
-        requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
+        AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
@@ -386,15 +384,4 @@ public class PackingService implements CreatePackingUnitUseCase,
                 u.getUpdatedAt());
     }
 
-    private static void requireAnyRole(Set<String> roles, String... required) {
-        if (roles == null) {
-            throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-        }
-        for (String r : required) {
-            if (roles.contains(r)) {
-                return;
-            }
-        }
-        throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-    }
 }

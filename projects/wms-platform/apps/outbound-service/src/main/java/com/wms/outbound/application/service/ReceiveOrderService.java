@@ -25,11 +25,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,7 +67,7 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
     @Transactional
     public OrderResult receive(ReceiveOrderCommand command) {
         if (!isSystemActor(command.actorId())) {
-            requireRole(command.callerRoles(), ROLE_OUTBOUND_WRITE);
+            AuthorizationGuards.requireRole(command.callerRoles(), ROLE_OUTBOUND_WRITE);
         }
 
         // 1) Validate the customer partner.
@@ -167,11 +165,5 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
 
     private static boolean isSystemActor(String actorId) {
         return actorId != null && actorId.startsWith(SYSTEM_ACTOR_PREFIX);
-    }
-
-    private static void requireRole(Set<String> roles, String required) {
-        if (roles == null || !roles.contains(required)) {
-            throw new AccessDeniedException("Role required: " + required);
-        }
     }
 }

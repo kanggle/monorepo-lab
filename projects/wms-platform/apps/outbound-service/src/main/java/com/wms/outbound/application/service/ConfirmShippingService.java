@@ -35,14 +35,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,7 +97,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
     @Override
     @Transactional
     public ShipmentResult confirm(ConfirmShippingCommand command) {
-        requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
+        AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
@@ -227,15 +225,4 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         return "SHP-" + date + "-" + suffix;
     }
 
-    private static void requireAnyRole(Set<String> roles, String... required) {
-        if (roles == null) {
-            throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-        }
-        for (String r : required) {
-            if (roles.contains(r)) {
-                return;
-            }
-        }
-        throw new AccessDeniedException("Role required: any of " + java.util.Arrays.toString(required));
-    }
 }
