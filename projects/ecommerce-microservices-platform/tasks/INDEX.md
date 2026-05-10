@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| _(없음)_ | | | |
+| TASK-BE-133 | ecommerce 7 service `dependencies.md` spec backfill (notification/order/payment/promotion/review/shipping/user — `batch-worker/dependencies.md` 패턴 mirror) | 7 services | spec |
 
 ## in-progress
 

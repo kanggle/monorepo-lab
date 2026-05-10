@@ -72,7 +72,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-275-admin-web-frontend-app-section-pattern.md` — admin-web/architecture.md 가 backend 6 service canonical pattern (Service / Service Type / Architecture Style / ...) 와 다른 sections (Architecture Pattern / Tech Stack / Package Structure) 사용 — frontend-app service-type 의 canonical pattern 결정 필요. sibling frontend-app (web-store / admin-dashboard / fan-platform-web) cross-comparison + 옵션 A/B/C 결정. /refactor-spec all (PR #326) Finding [GAP 1]. 분석=Opus 4.7 / 구현 권장=Opus.
+- `TASK-BE-276-auth-service-refresh-tokens-tenant-id-doc.md` — auth-service/data-model.md `refresh_tokens` 표가 `tenant_id` column 미명시. 그러나 spec narrative + memory `project_gap_idp_promotion.md` 가 multi-tenant Phase 2/3 에서 모든 table NOT NULL 마이그레이션 명시. DB schema vs doc drift 검증 + backfill or migration gap escalation. /refactor-spec all Finding [GAP 2]. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **잔존 = 없음 — 046 series 모든 deferred IT 종결, ADR-003/004 outcome closure**.
 
