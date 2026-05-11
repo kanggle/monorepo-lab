@@ -3,6 +3,8 @@ package com.wms.inventory.application.service;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.domain.exception.StateTransitionInvalidException;
 import com.wms.inventory.domain.model.Reservation;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -38,10 +40,12 @@ public class ReservationExpiryJob {
     private final Clock clock;
     private final int batchSize;
     private final boolean enabled;
+    private final Counter sweptCounter;
 
     public ReservationExpiryJob(ReservationRepository reservationRepository,
                                 ReleaseReservationService releaseService,
                                 Clock clock,
+                                MeterRegistry meterRegistry,
                                 @Value("${inventory.reservation.ttl-job.batch-size:200}") int batchSize,
                                 @Value("${inventory.reservation.ttl-job.enabled:true}") boolean enabled) {
         this.reservationRepository = reservationRepository;
@@ -49,6 +53,9 @@ public class ReservationExpiryJob {
         this.clock = clock;
         this.batchSize = batchSize;
         this.enabled = enabled;
+        this.sweptCounter = Counter.builder("inventory.reservation.expiry.swept.total")
+                .description("Reservations released by the TTL expiry job (ADR-MONO-005 § D5)")
+                .register(meterRegistry);
     }
 
     @Scheduled(fixedDelayString = "${inventory.reservation.ttl-job.interval-ms:60000}",
@@ -87,6 +94,9 @@ public class ReservationExpiryJob {
             } catch (RuntimeException e) {
                 log.warn("Reservation {} TTL release failed: {}", r.id(), e.getMessage());
             }
+        }
+        if (released > 0) {
+            sweptCounter.increment(released);
         }
         return released;
     }

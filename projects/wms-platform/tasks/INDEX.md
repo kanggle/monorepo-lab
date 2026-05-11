@@ -79,6 +79,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-BE-140-inventory-reservation-expiry-swept-counter.md` — PR # — 머지 (2026-05-11). inventory-service `ReservationExpiryJob` 에 `inventory.reservation.expiry.swept.total` Micrometer counter 추가. ADR-MONO-005 § D5 Category D minimal compliance — per-tick `released` 카운트 만큼 increment, `released > 0` 일 때만 호출 (Counter API no-op 회피). 생성자에 `MeterRegistry` 주입, counter 빌더 1개 등록. `ReservationExpiryJobTest` 4 method × counter assertion (no-expired / N-row release / mid-batch failure / disabled flag — disabled 케이스는 별도 SimpleMeterRegistry). ADR § 1.1 audit row 7 + § D6 inventory 행 + § 5 outstanding follow-up + History 갱신 + `architecture.md` Saga 행 cosmetic note 제거 + § Business metrics 라인 신설. **ADR-MONO-005 outstanding follow-ups 0** — saga timeout/escalation/dead-letter 정책의 substantive + cosmetic 모두 closure. 분석=Opus 4.7 / 구현=Sonnet 4.6 (single counter + test tweak + spec rows).
+
 - `TASK-BE-053-inventory-service-master-event-coverage-audit.md` — PR #343 머지 (2026-05-11). inventory-service master event consumer 커버리지 audit — Warehouse/Zone/Partner 의 의도된 미참조 명시 (architecture.md `## Notes` 섹션 + dependencies.md `Consumes From` 표 컬럼). drift 가 아닌 v1 intentional gap 으로 closure. spec-only.
 
 - `TASK-BE-052-master-lot-cross-service-consumer-audit.md` — PR #336 머지 (2026-05-11). `MasterLotConsumer` 가 outbound-service 에만 등록된 사실 audit — Scenario B (intentional, "Lot tracking is outbound-only in v1") 으로 결정. inbound + inventory architecture.md 양쪽 explicit note + dependencies.md Consumes From 표 갱신. /refactor-spec all (PR #326) Finding [WMS 4] closure.

@@ -16,6 +16,8 @@ import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.domain.exception.StateTransitionInvalidException;
 import com.wms.inventory.domain.model.Reservation;
 import com.wms.inventory.domain.model.ReservationLine;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -28,16 +30,20 @@ class ReservationExpiryJobTest {
 
     private static final Instant NOW = Instant.parse("2026-04-25T15:00:00Z");
 
+    private static final String SWEPT_METRIC = "inventory.reservation.expiry.swept.total";
+
     private ReservationRepository reservationRepo;
     private ReleaseReservationService releaseService;
+    private MeterRegistry meterRegistry;
     private ReservationExpiryJob job;
 
     @BeforeEach
     void setUp() {
         reservationRepo = mock(ReservationRepository.class);
         releaseService = mock(ReleaseReservationService.class);
+        meterRegistry = new SimpleMeterRegistry();
         job = new ReservationExpiryJob(reservationRepo, releaseService,
-                Clock.fixed(NOW, ZoneOffset.UTC), 200, true);
+                Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry, 200, true);
     }
 
     @Test
@@ -45,6 +51,7 @@ class ReservationExpiryJobTest {
         when(reservationRepo.findExpired(any(), anyInt())).thenReturn(List.of());
         int released = job.runOnce();
         assertThat(released).isZero();
+        assertThat(meterRegistry.counter(SWEPT_METRIC).count()).isZero();
     }
 
     @Test
@@ -58,6 +65,7 @@ class ReservationExpiryJobTest {
         assertThat(released).isEqualTo(2);
         verify(releaseService).releaseExpired(r1.id(), "system:reservation-ttl-job");
         verify(releaseService).releaseExpired(r2.id(), "system:reservation-ttl-job");
+        assertThat(meterRegistry.counter(SWEPT_METRIC).count()).isEqualTo(2.0);
     }
 
     @Test
@@ -77,12 +85,13 @@ class ReservationExpiryJobTest {
         assertThat(released).isEqualTo(2); // r1 and r3 succeeded; r2 skipped
         verify(releaseService, atLeast(1)).releaseExpired(r1.id(), "system:reservation-ttl-job");
         verify(releaseService, times(1)).releaseExpired(r3.id(), "system:reservation-ttl-job");
+        assertThat(meterRegistry.counter(SWEPT_METRIC).count()).isEqualTo(2.0);
     }
 
     @Test
     void disabledViaPropertySkipsScheduledRun() {
         ReservationExpiryJob disabled = new ReservationExpiryJob(reservationRepo, releaseService,
-                Clock.fixed(NOW, ZoneOffset.UTC), 200, false);
+                Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry(), 200, false);
         disabled.runOnSchedule();
         verify(reservationRepo, times(0)).findExpired(any(), anyInt());
     }
