@@ -157,11 +157,11 @@ path-filter `rules` + `platform` flags match → `Build & Test` + `changes` jobs
 
 | # | Task | Status | Owner |
 |---|---|---|---|
-| 1 | `TASK-MONO-060-hook-inject-remediation-message.md` — Phase 3 hook automation (PreToolUse / Stop hook that auto-detects Hard Stop trigger conditions and injects the formatted message into the agent's next-turn prompt) | not yet filed (this PR delivers Phase 1+2 only) | monorepo |
+| 1 | `TASK-MONO-060-hook-inject-remediation-message.md` — Phase 3 hook automation: new `.claude/hooks/hardstop-detect.ps1` (PreToolUse Edit/Write) auto-injects the 4-block stanza for 5 mechanical triggers (HARDSTOP-01 / -03 / -05 / -09 / -10); existing `spec-check.ps1` + `rule-consistency-check.ps1` realigned to emit 4-block stanzas (`SPEC-CHECK-NN`, `RULE-CONSISTENCY-NN`). 6 fixture scripts under `.claude/hooks/__tests__/`, 14 assertions all PASS. | DELIVERED 2026-05-12 (TASK-MONO-060 — see `tasks/done/TASK-MONO-060…md` for PR# + commit) | monorepo |
 | 2 | `validate-rules` / `audit-memory` skill body alignment to emit 4-block stanzas natively | DEFERRED to plugin-repo PR (skills are user-level / plugin-supplied; out of scope per D3) | plugin-repo owner |
 | 3 | `review-checklist` skill update to gate format compliance at PR review time | not filed — only if reviewers find drift in practice; pre-emptive would expand scope before format proves itself | reviewer |
 
-§ 6 outstanding = 1 substantive (Phase 3 hook) + 2 advisory (skill alignment / review-checklist gate). Phase 1+2 ROI ≈ 50% gap-A closure; Phase 3 closes the rest.
+§ 6 outstanding = 0 substantive (Phase 3 DELIVERED for mechanical triggers via TASK-MONO-060) + 2 advisory (skill alignment / review-checklist gate). Gap-A is now closed at both layers (format + injection) for the mechanical trigger set; semantic triggers deferred to Phase 3b future task only if heuristics emerge.
 
 ---
 
