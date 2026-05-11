@@ -82,7 +82,7 @@ AI 에이전트와 개발자는 다음 순서로 규칙을 로드·적용한다:
 
 2. **Trait 간 충돌** — 두 trait이 서로 모순된 요구를 하면 (예: `real-time` vs `batch-heavy`) 먼저 [taxonomy.md](taxonomy.md)의 Incompatibilities 표를 확인한다. 공존이 허용되지만 경고된 조합이면 `PROJECT.md`의 `## Overrides` 섹션에 공존 정당화를 기록한다.
 
-3. **해결 불가 시 Hard Stop** — [CLAUDE.md](../CLAUDE.md)의 Hard Stop Rules에 따라 구현을 중단하고 보고한다.
+3. **해결 불가 시 Hard Stop** — [CLAUDE.md](../CLAUDE.md)의 Hard Stop Rules (특히 HARDSTOP-04) 에 따라 구현을 중단하고 [`../platform/lint-remediation-message-standard.md`](../platform/lint-remediation-message-standard.md) 의 4-block 포맷으로 보고한다.
 
 ---
 

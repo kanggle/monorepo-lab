@@ -21,7 +21,17 @@ The architecture for each service must be declared in:
 - Every service must declare its architecture explicitly.
 - AI agents and developers must follow the declared architecture.
 - Do not change service architecture implicitly during implementation.
-- If the declared architecture is missing, stop and report the issue.
+- If the declared architecture is missing, emit the Hard Stop stanza below (per [`lint-remediation-message-standard.md`](lint-remediation-message-standard.md)) and halt implementation tool calls until a remediation option is chosen:
+
+```
+[VIOLATION] ARCH-RULE-01: Service architecture is not declared in `<project>/specs/services/<service>/architecture.md`.
+[WHY] Architecture chosen during implementation cannot be defended against future "why was this chosen" review questions and shapes every downstream task on the service; the rule library forbids implicit architecture decisions.
+[REMEDIATION] Choose one:
+  1. Author the architecture spec under `<project>/specs/services/<service>/architecture.md` declaring the chosen style (Hexagonal / Layered / Clean / …) with rejected alternatives + reason; land the spec change before any code commit.
+  2. If the decision is cross-service or irreversible, record it in `<project>/docs/adr/ADR-<scope>-XXX-<slug>.md` and PAUSE until ACCEPTED.
+  3. If the decision is reversible and local, file a `tasks/ready/` follow-up task to backfill the architecture.md and reference its task ID in an inline code comment.
+[REFERENCE] platform/architecture-decision-rule.md § Mandatory Rule + CLAUDE.md § HARDSTOP-09
+```
 
 ---
 
