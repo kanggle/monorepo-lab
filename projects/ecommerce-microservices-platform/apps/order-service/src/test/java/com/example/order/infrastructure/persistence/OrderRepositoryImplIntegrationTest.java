@@ -137,6 +137,8 @@ class OrderRepositoryImplIntegrationTest {
                 savedOrder.getPaymentId(),
                 savedOrder.getPaidAt(),
                 savedOrder.getRefundedAt(),
+                savedOrder.getStuckRecoveryAttemptCount(),
+                savedOrder.getStuckRecoveryAt(),
                 savedOrder.getVersion()
         );
         orderToUpdate.confirm(Clock.systemUTC());
@@ -187,6 +189,8 @@ class OrderRepositoryImplIntegrationTest {
                 savedOrder.getPaymentId(),
                 savedOrder.getPaidAt(),
                 savedOrder.getRefundedAt(),
+                savedOrder.getStuckRecoveryAttemptCount(),
+                savedOrder.getStuckRecoveryAt(),
                 savedOrder.getVersion()
         );
         firstUpdate.confirm(Clock.systemUTC());
@@ -205,6 +209,8 @@ class OrderRepositoryImplIntegrationTest {
                 savedOrder.getPaymentId(),
                 savedOrder.getPaidAt(),
                 savedOrder.getRefundedAt(),
+                savedOrder.getStuckRecoveryAttemptCount(),
+                savedOrder.getStuckRecoveryAt(),
                 savedOrder.getVersion() // stale version (이미 1로 증가됨)
         );
 
@@ -244,7 +250,9 @@ class OrderRepositoryImplIntegrationTest {
                             saved.getStatus(), saved.getTotalPrice(), saved.getShippingAddress(),
                             saved.getCreatedAt(), saved.getUpdatedAt(),
                             saved.getPaymentId(), saved.getPaidAt(),
-                            saved.getRefundedAt(), saved.getVersion()
+                            saved.getRefundedAt(),
+                            saved.getStuckRecoveryAttemptCount(), saved.getStuckRecoveryAt(),
+                            saved.getVersion()
                     );
                     order.cancel(Clock.systemUTC());
                     return order;
@@ -328,7 +336,7 @@ class OrderRepositoryImplIntegrationTest {
                 OrderStatus.CANCELLED, 0L,
                 new ShippingAddress("홍길동", "010-1234-5678", "12345", "서울시 강남구", null),
                 java.time.Instant.now(), java.time.Instant.now(),
-                null, null, null, 0L
+                null, null, null, 0, null, 0L
         );
 
         // when & then

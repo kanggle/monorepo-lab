@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -137,6 +138,15 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public boolean existsByUserIdAndProductIdAndStatus(String userId, String productId, OrderStatus status) {
         return jpaRepository.existsByUserIdAndProductIdAndStatus(userId, productId, status);
+    }
+
+    @Override
+    public List<Order> findStuckPaymentPending(Instant placedBefore, int batchSize) {
+        return jpaRepository.findStuckPaymentPending(
+                        OrderStatus.PENDING, placedBefore, PageRequest.of(0, batchSize))
+                .stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
     private PageRequest toPageRequest(PageQuery pageQuery) {

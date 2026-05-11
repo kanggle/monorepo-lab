@@ -2,6 +2,7 @@ package com.example.order.infrastructure.event;
 
 import com.example.order.application.event.OrderCancelledEvent;
 import com.example.order.application.event.OrderPlacedEvent;
+import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,5 +44,11 @@ public class StandaloneOrderEventPublisher implements OrderEventPublisher {
     @Override
     public void publishOrderCancelled(OrderCancelledEvent event) {
         log.debug("[standalone] OrderCancelled event (no-op): {}", event.payload().orderId());
+    }
+
+    @Override
+    public void publishOrderSagaRecoveryExhausted(OrderSagaRecoveryExhaustedEvent event) {
+        log.debug("[standalone] OrderSagaRecoveryExhausted event (no-op): {}",
+                event.payload().orderId());
     }
 }

@@ -13,6 +13,8 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
 
     static final String TOPIC_ORDER_PLACED = "order.order.placed";
     static final String TOPIC_ORDER_CANCELLED = "order.order.cancelled";
+    static final String TOPIC_ORDER_SAGA_RECOVERY_EXHAUSTED =
+            "order.alert.saga.recovery.exhausted";
 
     private final OrderMetricsPort orderMetrics;
 
@@ -28,6 +30,7 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
         return switch (eventType) {
             case "OrderPlaced" -> TOPIC_ORDER_PLACED;
             case "OrderCancelled" -> TOPIC_ORDER_CANCELLED;
+            case "OrderSagaRecoveryExhausted" -> TOPIC_ORDER_SAGA_RECOVERY_EXHAUSTED;
             default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
         };
     }

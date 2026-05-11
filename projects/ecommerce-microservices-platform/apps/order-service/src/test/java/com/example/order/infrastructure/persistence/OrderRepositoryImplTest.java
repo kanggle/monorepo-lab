@@ -44,7 +44,7 @@ class OrderRepositoryImplTest {
                 List.of(OrderItem.reconstitute("item-1", "prod-1", "var-1", "상품A", "옵션1", 2, 10000L)),
                 OrderStatus.PENDING, 20000L,
                 new ShippingAddress("홍길동", "010-1234-5678", "12345", "서울시 강남구", "101호"),
-                NOW, NOW, null, null, null,
+                NOW, NOW, null, null, null, 0, null,
                 null  // version null = 신규
         );
     }
@@ -55,7 +55,7 @@ class OrderRepositoryImplTest {
                 List.of(OrderItem.reconstitute("item-1", "prod-1", "var-1", "상품A", "옵션1", 2, 10000L)),
                 OrderStatus.CONFIRMED, 20000L,
                 new ShippingAddress("홍길동", "010-1234-5678", "12345", "서울시 강남구", "101호"),
-                NOW, NOW, null, null, null,
+                NOW, NOW, null, null, null, 0, null,
                 1L  // version non-null = 기존
         );
     }

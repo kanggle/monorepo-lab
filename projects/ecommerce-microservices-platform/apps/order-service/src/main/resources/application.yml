@@ -60,6 +60,16 @@ outbox:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
+order:
+  saga:
+    stuck-detector:
+      enabled: ${ORDER_STUCK_DETECTOR_ENABLED:true}
+      fixed-delay-ms: ${ORDER_STUCK_DETECTOR_FIXED_DELAY_MS:60000}
+      initial-delay-ms: ${ORDER_STUCK_DETECTOR_INITIAL_DELAY_MS:30000}
+      threshold-seconds: ${ORDER_STUCK_DETECTOR_THRESHOLD_SECONDS:1800}
+      batch-size: ${ORDER_STUCK_DETECTOR_BATCH_SIZE:100}
+      max-attempts: ${ORDER_STUCK_DETECTOR_MAX_ATTEMPTS:5}
+
 logging:
   level:
     com.example.order: INFO

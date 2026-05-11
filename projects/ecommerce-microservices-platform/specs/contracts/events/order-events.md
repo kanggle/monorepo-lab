@@ -89,6 +89,35 @@ Published when an order is cancelled.
 
 ---
 
+## OrderSagaRecoveryExhausted
+
+Published by the order-service stuck-detector (TASK-BE-138, ADR-MONO-005 § D3
+Category A) when an order has remained in `PENDING + payment_id IS NULL` past
+the configured grace period for the maximum number of attempts and has been
+transitioned to the terminal `STUCK_RECOVERY_FAILED` status. Co-committed (T3)
+with that status transition through the standard transactional outbox.
+
+**Topic:** `order.alert.saga.recovery.exhausted`
+
+**Consumers:** notification-service / operator alert dashboard (out-of-scope
+for ecommerce v1; the topic is published so future alert subscribers can
+consume it without spec drift).
+
+**Payload**
+```json
+{
+  "orderId": "string (UUID)",
+  "userId": "string (UUID)",
+  "lastState": "PENDING",
+  "attemptCount": 5,
+  "placedAt": "string (ISO 8601)",
+  "lastTransitionAt": "string (ISO 8601)",
+  "failureReason": "order_stuck_payment_pending_attempts_exhausted"
+}
+```
+
+---
+
 ## Consumer Rules
 
 - Consumers must handle duplicate events idempotently.

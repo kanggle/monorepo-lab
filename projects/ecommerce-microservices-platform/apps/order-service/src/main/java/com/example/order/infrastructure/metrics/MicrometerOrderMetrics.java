@@ -18,6 +18,7 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
     private final Counter orderCancelledByUserWithdrawn;
     private final Counter orderCancelledByTimeout;
     private final Counter orderAmountSum;
+    private final Counter stuckDetectorRunTotal;
     private final MeterRegistry registry;
 
     public MicrometerOrderMetrics(MeterRegistry registry) {
@@ -39,6 +40,10 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
 
         this.orderAmountSum = Counter.builder("order_amount_sum")
                 .description("Cumulative order amount")
+                .register(registry);
+
+        this.stuckDetectorRunTotal = Counter.builder("order_stuck_detector_run_total")
+                .description("Total saga stuck-detector ticks")
                 .register(registry);
     }
 
@@ -86,5 +91,22 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
                 EventMetricNames.TAG_SERVICE, "order-service",
                 EventMetricNames.TAG_EVENT_TYPE, eventType)
                 .increment();
+    }
+
+    @Override
+    public void recordStuckDetectorRun() {
+        stuckDetectorRunTotal.increment();
+    }
+
+    @Override
+    public void recordStuckDetectorRecoveryFired(String fromState) {
+        registry.counter("order_stuck_detector_recovery_fired_total",
+                "from_state", fromState).increment();
+    }
+
+    @Override
+    public void recordStuckDetectorExhausted(String fromState) {
+        registry.counter("order_stuck_detector_exhausted_total",
+                "from_state", fromState).increment();
     }
 }
