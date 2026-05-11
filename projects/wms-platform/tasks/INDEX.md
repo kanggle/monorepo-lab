@@ -67,8 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-141-master-service-aggregate-version-guard-extraction.md` — master-service 5 application service (`Warehouse`/`Zone`/`Location`/`Sku`/`Lot`) 가 보유한 `requireVersionMatch(UUID, long, long)` + `saveWithOptimisticLock(T)` private helper 5쌍 복붙 → `AggregateVersionGuard` 정적 utility 1개 통합. ~-40 LOC. dry-run 2026-05-11 Finding B1 cherry-pick (B2/B3/B4 는 DEFER). HTTP/event contract 변경 0.
-- `TASK-BE-142-master-service-partner-aggregate-spec-gap-audit.md` — master-service spec § Responsibility 6 aggregate 선언 중 **Partner production code 부재**. 의도/누락 결정 audit + 결과에 따라 Branch A (architecture.md 정정 spec-only) 또는 Branch B (backlog 신규 implementation task 발행) 분기. dry-run 2026-05-11 spec gap finding closure.
+(empty)
 
 ## in-progress
 
@@ -79,6 +78,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-BE-141-master-service-aggregate-version-guard-extraction.md` — PR #381 머지 (2026-05-12, commit 737ab718). master-service 5 application service (`Warehouse`/`Zone`/`Location`/`Sku`/`Lot`) 의 `requireVersionMatch(UUID, long, long)` + `saveWithOptimisticLock(T)` private helper 5쌍 복붙 → `AggregateVersionGuard` 정적 utility 1개 통합. ~-40 LOC. dry-run 2026-05-11 Finding B1 cherry-pick (B2/B3/B4 는 DEFER). HTTP/event contract 변경 0. **CI 15/15 PASS** (cycle 2 — cycle 1 `LocationIntegrationTest.globalLocationCode_collision` flake via `shortSuffix()` 890-value collision, rerun green). BE-142 와 동일 PR 묶음. 분석=Opus 4.7 / 구현=Opus.
+
+- `TASK-BE-142-master-service-partner-aggregate-spec-gap-audit.md` — PR #381 머지 (2026-05-12, commit 737ab718). master-service spec § Responsibility 6 aggregate 선언 중 **Partner production code 부재 audit** — Branch B (누락 확정) 결론, follow-up `TASK-BE-143` backlog filing (PR #382, commit f38575ff). architecture.md spec drift 의 production risk 명시 (ASN/Order 의 `findPartner` 검증 staging/prod 에서 영원히 empty). v2 Lot.supplier_partner_id hard FK 활성화는 별 task. spec-only audit, code 변경 0. 분석=Opus 4.7 / 구현=Opus.
 
 - `TASK-BE-140-inventory-reservation-expiry-swept-counter.md` — PR # — 머지 (2026-05-11). inventory-service `ReservationExpiryJob` 에 `inventory.reservation.expiry.swept.total` Micrometer counter 추가. ADR-MONO-005 § D5 Category D minimal compliance — per-tick `released` 카운트 만큼 increment, `released > 0` 일 때만 호출 (Counter API no-op 회피). 생성자에 `MeterRegistry` 주입, counter 빌더 1개 등록. `ReservationExpiryJobTest` 4 method × counter assertion (no-expired / N-row release / mid-batch failure / disabled flag — disabled 케이스는 별도 SimpleMeterRegistry). ADR § 1.1 audit row 7 + § D6 inventory 행 + § 5 outstanding follow-up + History 갱신 + `architecture.md` Saga 행 cosmetic note 제거 + § Business metrics 라인 신설. **ADR-MONO-005 outstanding follow-ups 0** — saga timeout/escalation/dead-letter 정책의 substantive + cosmetic 모두 closure. 분석=Opus 4.7 / 구현=Sonnet 4.6 (single counter + test tweak + spec rows).
 
