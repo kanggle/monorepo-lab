@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-061-hardstop-detect-orphan-fail-open.md` — 2026-05-12. `hardstop-detect.ps1` HARDSTOP-01 false-positive 수정 — TASK-MONO-060 머지 직후 발견 (auto-memory 디렉토리 write 가 hook 의 jurisdiction 밖이라 fail-open 해야 하지만 HARDSTOP-01 발화). 1-line fix (`Get-RepoRoot` null → exit 0) + 새 negative fixture. 15 → 16 assertion. 두 번째 dogfooding 사건 (첫 번째 = `9a81b459` contextual Status-field). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-061-hardstop-detect-orphan-fail-open.md` — 2026-05-12. `hardstop-detect.ps1` HARDSTOP-01 false-positive 수정 — TASK-MONO-060 머지 직후 발견 (auto-memory 디렉토리 write 가 hook 의 jurisdiction 밖이라 fail-open 해야 하지만 HARDSTOP-01 발화). 1-line fix (`Get-RepoRoot` null → exit 0) + 새 negative fixture. 15 → 16 assertion. 두 번째 dogfooding 사건 (첫 번째 = `9a81b459` contextual Status-field). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## done
 
