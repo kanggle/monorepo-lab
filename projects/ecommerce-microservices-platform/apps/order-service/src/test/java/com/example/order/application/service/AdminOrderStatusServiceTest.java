@@ -1,5 +1,6 @@
 package com.example.order.application.service;
 
+import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.exception.OrderCannotBeCancelledException;
 import com.example.order.domain.exception.OrderNotFoundException;
@@ -8,6 +9,7 @@ import com.example.order.domain.model.OrderItem;
 import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.model.ShippingAddress;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.presentation.exception.InvalidOrderStatusException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,7 +62,7 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
-    @DisplayName("PENDING 상태 주문을 CONFIRMED로 변경하면 성공하고 변경된 주문을 반환한다")
+    @DisplayName("PENDING 상태 주문을 CONFIRMED로 변경하면 성공하고 변경된 DTO를 반환한다")
     void changeStatus_pendingToConfirmed_successReturnsUpdatedOrder() {
         String orderId = "order-001";
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
@@ -68,14 +70,14 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        Order result = adminOrderStatusService.changeStatus(orderId, OrderStatus.CONFIRMED);
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
 
-        assertThat(result.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(result.getOrderId()).isEqualTo(orderId);
+        assertThat(result.status()).isEqualTo("CONFIRMED");
+        assertThat(result.orderId()).isEqualTo(orderId);
     }
 
     @Test
-    @DisplayName("CONFIRMED 상태 주문을 SHIPPED로 변경하면 성공하고 변경된 주문을 반환한다")
+    @DisplayName("CONFIRMED 상태 주문을 SHIPPED로 변경하면 성공하고 변경된 DTO를 반환한다")
     void changeStatus_confirmedToShipped_successReturnsUpdatedOrder() {
         String orderId = "order-002";
         Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
@@ -83,13 +85,13 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        Order result = adminOrderStatusService.changeStatus(orderId, OrderStatus.SHIPPED);
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "SHIPPED");
 
-        assertThat(result.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(result.status()).isEqualTo("SHIPPED");
     }
 
     @Test
-    @DisplayName("SHIPPED 상태 주문을 DELIVERED로 변경하면 성공하고 변경된 주문을 반환한다")
+    @DisplayName("SHIPPED 상태 주문을 DELIVERED로 변경하면 성공하고 변경된 DTO를 반환한다")
     void changeStatus_shippedToDelivered_successReturnsUpdatedOrder() {
         String orderId = "order-003";
         Order order = createOrderWithStatus(orderId, OrderStatus.SHIPPED);
@@ -97,13 +99,13 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        Order result = adminOrderStatusService.changeStatus(orderId, OrderStatus.DELIVERED);
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "DELIVERED");
 
-        assertThat(result.getStatus()).isEqualTo(OrderStatus.DELIVERED);
+        assertThat(result.status()).isEqualTo("DELIVERED");
     }
 
     @Test
-    @DisplayName("PENDING 상태 주문을 CANCELLED로 변경하면 성공하고 변경된 주문을 반환한다")
+    @DisplayName("PENDING 상태 주문을 CANCELLED로 변경하면 성공하고 변경된 DTO를 반환한다")
     void changeStatus_pendingToCancelled_successReturnsUpdatedOrder() {
         String orderId = "order-004";
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
@@ -111,13 +113,13 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        Order result = adminOrderStatusService.changeStatus(orderId, OrderStatus.CANCELLED);
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CANCELLED");
 
-        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(result.status()).isEqualTo("CANCELLED");
     }
 
     @Test
-    @DisplayName("CONFIRMED 상태 주문을 CANCELLED로 변경하면 성공하고 변경된 주문을 반환한다")
+    @DisplayName("CONFIRMED 상태 주문을 CANCELLED로 변경하면 성공하고 변경된 DTO를 반환한다")
     void changeStatus_confirmedToCancelled_successReturnsUpdatedOrder() {
         String orderId = "order-005";
         Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
@@ -125,9 +127,9 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        Order result = adminOrderStatusService.changeStatus(orderId, OrderStatus.CANCELLED);
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CANCELLED");
 
-        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(result.status()).isEqualTo("CANCELLED");
     }
 
     @Test
@@ -135,7 +137,7 @@ class AdminOrderStatusServiceTest {
     void changeStatus_orderNotFound_throwsOrderNotFoundException() {
         given(orderRepository.findById("nonexistent")).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> adminOrderStatusService.changeStatus("nonexistent", OrderStatus.CONFIRMED))
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus("nonexistent", "CONFIRMED"))
                 .isInstanceOf(OrderNotFoundException.class);
 
         verify(orderRepository, never()).save(any());
@@ -148,7 +150,7 @@ class AdminOrderStatusServiceTest {
         Order order = createOrderWithStatus(orderId, OrderStatus.SHIPPED);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, OrderStatus.CONFIRMED))
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
                 .isInstanceOf(InvalidOrderException.class);
 
         verify(orderRepository, never()).save(any());
@@ -161,7 +163,7 @@ class AdminOrderStatusServiceTest {
         Order order = createOrderWithStatus(orderId, OrderStatus.SHIPPED);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, OrderStatus.CANCELLED))
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CANCELLED"))
                 .isInstanceOf(OrderCannotBeCancelledException.class);
 
         verify(orderRepository, never()).save(any());
@@ -174,7 +176,7 @@ class AdminOrderStatusServiceTest {
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, OrderStatus.PENDING))
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "PENDING"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported target status: PENDING");
 
@@ -190,8 +192,20 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        adminOrderStatusService.changeStatus(orderId, OrderStatus.CONFIRMED);
+        adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
 
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    @DisplayName("raw status가 잘못된 enum 값이거나 null이면 InvalidOrderStatusException이 발생한다")
+    void changeStatus_throwsInvalidOrderStatusExceptionWhenRawStatusIsInvalid() {
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus("order-x", "FOO"))
+                .isInstanceOf(InvalidOrderStatusException.class);
+
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus("order-x", null))
+                .isInstanceOf(InvalidOrderStatusException.class);
+
+        verify(orderRepository, never()).save(any());
     }
 }

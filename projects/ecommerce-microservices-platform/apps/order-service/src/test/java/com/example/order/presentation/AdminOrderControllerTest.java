@@ -2,15 +2,13 @@ package com.example.order.presentation;
 
 import com.example.order.TestOrderServiceApplication;
 import com.example.order.application.dto.AdminOrderDetail;
+import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.application.dto.AdminOrderSummary;
 import com.example.order.application.dto.OrderDetail;
 import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
 import com.example.order.domain.exception.OrderNotFoundException;
-import com.example.order.domain.model.Order;
-import com.example.order.domain.model.OrderItem;
 import com.example.order.domain.model.OrderStatus;
-import com.example.order.domain.model.ShippingAddress;
 import com.example.common.page.PageResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -150,16 +148,8 @@ class AdminOrderControllerTest {
     @Test
     @DisplayName("관리자 역할로 유효한 상태 CONFIRMED로 변경 시 200과 변경된 상태 반환")
     void changeStatus_adminRoleValidStatus_returns200WithUpdatedStatus() throws Exception {
-        Instant now = Instant.now();
-        Order order = Order.reconstitute(
-                "order-1", "user-1",
-                List.of(OrderItem.reconstitute("item-1", "p1", "v1", "노트북", null, 1, 50000L)),
-                OrderStatus.CONFIRMED, 50000L,
-                ShippingAddress.reconstitute("홍길동", "010-1234-5678", "12345", "서울시 강남구", null),
-                now, now, null, null, null, 0, null, 1L
-        );
-        given(adminOrderStatusService.changeStatus(eq("order-1"), eq(OrderStatus.CONFIRMED)))
-                .willReturn(order);
+        given(adminOrderStatusService.changeStatus(eq("order-1"), eq("CONFIRMED")))
+                .willReturn(new AdminOrderStatusChangeResult("order-1", "CONFIRMED"));
 
         mockMvc.perform(post("/api/admin/orders/order-1/status")
                         .header("X-User-Role", "ADMIN")
@@ -187,6 +177,9 @@ class AdminOrderControllerTest {
     @Test
     @DisplayName("유효하지 않은 상태 값 INVALID로 변경 요청 시 400 반환")
     void changeStatus_invalidStatus_returns400() throws Exception {
+        given(adminOrderStatusService.changeStatus(any(), eq("INVALID")))
+                .willThrow(new com.example.order.presentation.exception.InvalidOrderStatusException("INVALID"));
+
         mockMvc.perform(post("/api/admin/orders/order-1/status")
                         .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -217,8 +210,8 @@ class AdminOrderControllerTest {
                 .willThrow(new OrderNotFoundException("order-x"));
 
         mockMvc.perform(post("/api/admin/orders/order-x/status")
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Role", "ADMIN")
                         .content("""
                                 {"status": "CONFIRMED"}
                                 """))
