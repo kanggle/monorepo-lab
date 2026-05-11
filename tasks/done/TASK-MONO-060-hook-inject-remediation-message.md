@@ -8,7 +8,7 @@ Phase 3 — auto-inject Hard Stop remediation message via `.claude/hooks/` (Open
 
 # Status
 
-review
+done
 
 # Owner
 
