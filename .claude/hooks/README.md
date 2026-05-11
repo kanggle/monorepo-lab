@@ -21,6 +21,19 @@ Hook configuration lives in [`.claude/settings.json`](../settings.json). The lis
 
 ---
 
+# Scheduled routines (gap #2)
+
+Recurring **doc-gardening** agents that fire weekly via the harness's `/schedule` skill (NOT via `.claude/hooks/`). They detect documentation drift on a fixed cadence — the asynchronous complement to the synchronous `PreToolUse` detectors above.
+
+| Routine | Skill | Schedule | Output |
+|---|---|---|---|
+| `monorepo-lab-validate-rules-weekly` | `validate-rules` (user-level plugin) | Mon 09:00 KST | Draft PR `chore(rules): weekly validate-rules audit (<date>)` with `RULE-CONSISTENCY-05+` stanzas, or no-op |
+| `monorepo-lab-audit-memory-weekly` | `audit-memory` (user-level plugin) | Mon 09:30 KST | Memory file `audit_findings_<date>.md` with `MEMORY-AUDIT-NN` stanzas, or no-op |
+
+Routine config (prompt bodies, registration procedure, failure modes) lives in [`../workflows/doc-gardening.md`](../workflows/doc-gardening.md). The harness keeps the registration state — re-create from that document if routines are deleted via UI.
+
+---
+
 # Hook output format
 
 All rule-violation emissions across `hardstop-detect.ps1` / `spec-check.ps1` / `rule-consistency-check.ps1` follow the **4-block remediation message standard** defined in [`../../platform/lint-remediation-message-standard.md`](../../platform/lint-remediation-message-standard.md):
@@ -39,7 +52,8 @@ Rule IDs in use:
 
 - `HARDSTOP-NN` (NN = 01–10) — sourced from [`../../CLAUDE.md § Hard Stop Rules`](../../CLAUDE.md#hard-stop-rules). The hook injects only file path / line number; the `[WHY]` / `[REMEDIATION]` / `[REFERENCE]` blocks match the canonical CLAUDE.md stanza verbatim (single source of truth).
 - `SPEC-CHECK-NN` — emitted by `spec-check.ps1` (currently 01 contract-edit, 02 platform-edit).
-- `RULE-CONSISTENCY-NN` — emitted by `rule-consistency-check.ps1` (currently 01 skill-missing-spec, 02 agent-missing-fields, 03 command-missing-frontmatter, 04 broken-spec-ref).
+- `RULE-CONSISTENCY-NN` — synchronous PreToolUse hook reserves 01–04 (skill-missing-spec, agent-missing-fields, command-missing-frontmatter, broken-spec-ref). Asynchronous scheduled routine (`monorepo-lab-validate-rules-weekly`) emits 05+ for structural multi-file drift the hook can't detect synchronously.
+- `MEMORY-AUDIT-NN` — emitted by `monorepo-lab-audit-memory-weekly` scheduled routine (01 stale, 02 contradiction, 03 dangling ref, 04 CLAUDE.md duplicate).
 
 `protect-main-branch.ps1` is intentionally exempt — its message is a safety-rail enforcement (Bash-tool guard), not a rule-surface violation, so the standard does not apply.
 
