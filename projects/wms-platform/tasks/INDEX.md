@@ -63,7 +63,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-BE-143-master-service-partner-aggregate-bootstrap.md` — master-service Partner aggregate producer-side minimal v1 bootstrap (domain/port/service/controller/persistence/Flyway V7 + 4 domain event). TASK-BE-142 audit (Branch B = 누락 확정) closure. **현 production drift**: downstream (inbound/outbound/admin) 의 PartnerSnapshot consumer + ASN/Order 의 `findPartner` 검증은 production code 인데, master-service producer 측 전부 부재 = staging/prod 에서 PartnerSnapshot 영원히 empty = ASN/Order 처리 불가능. Lot.supplier_partner_id hard FK 활성화는 v2 (별도 task).
 
 ## ready
 
