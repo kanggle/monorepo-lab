@@ -15,7 +15,6 @@ import com.wms.master.domain.event.SkuCreatedEvent;
 import com.wms.master.domain.event.SkuDeactivatedEvent;
 import com.wms.master.domain.event.SkuReactivatedEvent;
 import com.wms.master.domain.event.SkuUpdatedEvent;
-import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuNotFoundException;
 import com.wms.master.domain.model.Sku;
@@ -24,7 +23,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +85,7 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
                 command.skuCodeAttempt(),
                 command.baseUomAttempt(),
                 command.trackingTypeAttempt());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         List<String> changedFields = collectChangedFields(loaded, command);
         loaded.applyUpdate(
@@ -100,7 +98,8 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
                 command.shelfLifeDays(),
                 command.actorId());
 
-        Sku saved = saveWithOptimisticLock(loaded);
+        Sku saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
 
         if (!changedFields.isEmpty()) {
             eventPort.publish(List.of(SkuUpdatedEvent.from(saved, changedFields)));
@@ -112,7 +111,7 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public SkuResult deactivate(DeactivateSkuCommand command) {
         Sku loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         if (persistencePort.hasActiveLotsFor(loaded.getId())) {
             throw new ReferenceIntegrityViolationException(
@@ -120,7 +119,8 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
         }
         loaded.deactivate(command.actorId());
 
-        Sku saved = saveWithOptimisticLock(loaded);
+        Sku saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(SkuDeactivatedEvent.from(saved, command.reason())));
         return SkuResult.from(saved);
     }
@@ -129,10 +129,11 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public SkuResult reactivate(ReactivateSkuCommand command) {
         Sku loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         loaded.reactivate(command.actorId());
-        Sku saved = saveWithOptimisticLock(loaded);
+        Sku saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(SkuReactivatedEvent.from(saved)));
         return SkuResult.from(saved);
     }
@@ -180,20 +181,6 @@ public class SkuService implements SkuCrudUseCase, SkuQueryUseCase {
     private Sku loadOrThrow(UUID id) {
         return persistencePort.findById(id)
                 .orElseThrow(() -> new SkuNotFoundException(id.toString()));
-    }
-
-    private void requireVersionMatch(UUID id, long expected, long actual) {
-        if (expected != actual) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, id.toString(), expected, actual);
-        }
-    }
-
-    private Sku saveWithOptimisticLock(Sku sku) {
-        try {
-            return persistencePort.update(sku);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, sku.getId().toString());
-        }
     }
 
     private static List<String> collectChangedFields(Sku current, UpdateSkuCommand cmd) {

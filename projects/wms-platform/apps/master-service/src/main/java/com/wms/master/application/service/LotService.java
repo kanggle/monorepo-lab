@@ -17,7 +17,6 @@ import com.wms.master.domain.event.LotCreatedEvent;
 import com.wms.master.domain.event.LotDeactivatedEvent;
 import com.wms.master.domain.event.LotReactivatedEvent;
 import com.wms.master.domain.event.LotUpdatedEvent;
-import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LotNotFoundException;
 import com.wms.master.domain.exception.SkuNotFoundException;
@@ -33,7 +32,6 @@ import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -134,7 +132,7 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
                 command.skuIdAttempt(),
                 command.lotNoAttempt(),
                 command.manufacturedDateAttempt());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         List<String> changedFields = collectChangedFields(loaded, command);
         loaded.applyUpdate(
@@ -143,7 +141,8 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
                 command.clearSupplierPartnerId(),
                 command.actorId());
 
-        Lot saved = saveWithOptimisticLock(loaded);
+        Lot saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
 
         if (!changedFields.isEmpty()) {
             eventPort.publish(List.of(LotUpdatedEvent.from(saved, changedFields)));
@@ -155,10 +154,11 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public LotResult deactivate(DeactivateLotCommand command) {
         Lot loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         loaded.deactivate(command.actorId());
-        Lot saved = saveWithOptimisticLock(loaded);
+        Lot saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(LotDeactivatedEvent.from(saved, command.reason())));
         return LotResult.from(saved);
     }
@@ -167,10 +167,11 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public LotResult reactivate(ReactivateLotCommand command) {
         Lot loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         loaded.reactivate(command.actorId());
-        Lot saved = saveWithOptimisticLock(loaded);
+        Lot saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(LotReactivatedEvent.from(saved)));
         return LotResult.from(saved);
     }
@@ -238,20 +239,6 @@ public class LotService implements LotCrudUseCase, LotQueryUseCase, ExpireLotsBa
     private Lot loadOrThrow(UUID id) {
         return persistencePort.findById(id)
                 .orElseThrow(() -> new LotNotFoundException(id.toString()));
-    }
-
-    private void requireVersionMatch(UUID id, long expected, long actual) {
-        if (expected != actual) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, id.toString(), expected, actual);
-        }
-    }
-
-    private Lot saveWithOptimisticLock(Lot lot) {
-        try {
-            return persistencePort.update(lot);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, lot.getId().toString());
-        }
     }
 
     private static List<String> collectChangedFields(Lot current, UpdateLotCommand cmd) {

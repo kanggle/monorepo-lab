@@ -15,7 +15,6 @@ import com.wms.master.domain.event.WarehouseCreatedEvent;
 import com.wms.master.domain.event.WarehouseDeactivatedEvent;
 import com.wms.master.domain.event.WarehouseReactivatedEvent;
 import com.wms.master.domain.event.WarehouseUpdatedEvent;
-import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.Warehouse;
@@ -23,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +59,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     @PreAuthorize("hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public WarehouseResult update(UpdateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         List<String> changedFields = collectChangedFields(loaded, command);
         loaded.applyUpdate(
@@ -70,7 +68,8 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
                 command.timezone(),
                 command.actorId());
 
-        Warehouse saved = saveWithOptimisticLock(loaded);
+        Warehouse saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
 
         if (!changedFields.isEmpty()) {
             eventPort.publish(List.of(WarehouseUpdatedEvent.from(saved, changedFields)));
@@ -82,7 +81,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public WarehouseResult deactivate(DeactivateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         // v1 reference-integrity check is local-only: refuse to orphan ACTIVE
         // child Zones. Mirrors ZoneService.deactivate's hasActiveLocationsFor
@@ -94,7 +93,8 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
         }
         loaded.deactivate(command.actorId());
 
-        Warehouse saved = saveWithOptimisticLock(loaded);
+        Warehouse saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(WarehouseDeactivatedEvent.from(saved, command.reason())));
         return WarehouseResult.from(saved);
     }
@@ -103,10 +103,11 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public WarehouseResult reactivate(ReactivateWarehouseCommand command) {
         Warehouse loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         loaded.reactivate(command.actorId());
-        Warehouse saved = saveWithOptimisticLock(loaded);
+        Warehouse saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> persistencePort.update(loaded));
         eventPort.publish(List.of(WarehouseReactivatedEvent.from(saved)));
         return WarehouseResult.from(saved);
     }
@@ -138,20 +139,6 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     private Warehouse loadOrThrow(UUID id) {
         return persistencePort.findById(id)
                 .orElseThrow(() -> new WarehouseNotFoundException(id.toString()));
-    }
-
-    private void requireVersionMatch(UUID id, long expected, long actual) {
-        if (expected != actual) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, id.toString(), expected, actual);
-        }
-    }
-
-    private Warehouse saveWithOptimisticLock(Warehouse warehouse) {
-        try {
-            return persistencePort.update(warehouse);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, warehouse.getId().toString());
-        }
     }
 
     private static List<String> collectChangedFields(Warehouse current, UpdateWarehouseCommand cmd) {
