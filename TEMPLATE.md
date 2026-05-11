@@ -252,7 +252,7 @@ networks:
 
 > `traefik.docker.network=traefik-net` is required when the gateway container is attached to multiple networks — without it Traefik may route via the wrong network and fail to reach the container. `entrypoints=web` pins the router to Traefik's HTTP (port 80) entrypoint. Both labels are present in all existing projects (fan-platform, wms, gap, ecommerce).
 
-Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `CLAUDE.md § Local Network Convention` (authoritative) and `TEMPLATE.md § Local Network Convention` (full detail) for the DB tool access pattern.
+Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `TEMPLATE.md § Local Network Convention` (master, full detail) for the DB tool access pattern. `CLAUDE.md § Local Network Convention` is a concise summary that redirects here.
 
 #### 5. Write `.env.example`
 
