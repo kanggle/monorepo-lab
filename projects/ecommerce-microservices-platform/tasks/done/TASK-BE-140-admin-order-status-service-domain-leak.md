@@ -8,7 +8,7 @@ order-service `AdminOrderController` 의 domain 모델 직접 import 제거 — 
 
 # Status
 
-ready
+done
 
 # Owner
 
