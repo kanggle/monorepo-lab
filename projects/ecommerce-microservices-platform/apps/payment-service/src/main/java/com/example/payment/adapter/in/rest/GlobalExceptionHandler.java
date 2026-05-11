@@ -4,6 +4,7 @@ import com.example.web.dto.ErrorResponse;
 import com.example.payment.application.exception.AmountMismatchException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
 import com.example.payment.application.exception.PgConfirmFailedException;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
@@ -41,6 +42,13 @@ public class GlobalExceptionHandler {
         log.warn("PG confirm failed: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ErrorResponse.of("PG_CONFIRM_FAILED", e.getMessage()));
+    }
+
+    @ExceptionHandler(PgGatewayUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePgGatewayUnavailable(PgGatewayUnavailableException e) {
+        log.warn("PG gateway unavailable: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("PG_GATEWAY_UNAVAILABLE", e.getMessage()));
     }
 
     @ExceptionHandler(AmountMismatchException.class)

@@ -4,6 +4,7 @@ import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.exception.AmountMismatchException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
 import com.example.payment.application.exception.PgConfirmFailedException;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
@@ -47,8 +48,17 @@ public class PaymentConfirmService {
         try {
             pgResult = paymentGateway.confirmPayment(paymentKey, orderId, amount);
         } catch (PgConfirmFailedException e) {
+            // PG-side definitive rejection (4xx). Lock the row to FAILED so the
+            // user must start a new order — the PG already processed and
+            // declined this confirm.
             payment.fail();
             paymentRepository.save(payment);
+            throw e;
+        } catch (PgGatewayUnavailableException e) {
+            // Transport failure (5xx exhaustion / circuit open / timeout —
+            // ADR-MONO-005 § D4 Category B). PG actual state is unknown —
+            // DO NOT transition to FAILED. Propagate so the @Transactional
+            // boundary rolls back and the user can idempotently retry.
             throw e;
         }
 

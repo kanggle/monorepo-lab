@@ -93,12 +93,12 @@ sub-second consistency.
 
 Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md).
 
-| Flow | Category | Current state | Status |
-|---|---|---|---|
-| payment confirm (Toss Payments `confirmPayment` ↔ `payments` row) | **B** (synchronous external) | `TossPaymentsAdapter.confirmPayment` direct call from `PaymentConfirmService` inside `@Transactional` — **no Resilience4j wrap, no explicit connect / read timeout declared in adapter**. On `PgConfirmFailedException` the payment row transitions to `FAILED` + caller sees the exception; on other transport failures the request thread can stall until the JVM default kicks in. | **Gap** — TASK-BE-139 READY (gates ADR-MONO-005 ACCEPTED) |
-| payment refund (Toss Payments `cancelPayment` ↔ `payments` row + downstream `payment.payment.refunded` outbox) | **B** (synchronous external) | `TossPaymentsAdapter.cancelPayment` direct call from `PaymentRefundService` — same shape as confirm. The refund event itself is at-least-once via outbox (ADR-006, Scenario A); the gap is the PG cancel call only. | **Gap** — TASK-BE-139 READY (gates ADR-MONO-005 ACCEPTED) |
+| Flow | Category | Resilience4j config | Exception classification | Status |
+|---|---|---|---|---|
+| payment confirm (Toss Payments `confirmPayment` ↔ `payments` row) | **B** (synchronous external) | `@CircuitBreaker(toss-payments)` 50 % / 10-call TIME_BASED window · `@Retry(toss-payments)` 3 attempts exp+jitter (4xx + `PgConfirmFailedException` in `ignore-exceptions`) · `@Bulkhead(toss-payments)` semaphore, 10 concurrent · connect 5 s + read 10 s timeouts | **4xx → `PgConfirmFailedException`** (PG-side definitive rejection, payment row → `FAILED`); **5xx / timeout / circuit-open / bulkhead-full → `PgGatewayUnavailableException`** (transport failure, payment row unchanged, caller may idempotently retry) | **Compliant** (TASK-BE-139, PR #__) |
+| payment refund (Toss Payments `cancelPayment` ↔ `payments` row + downstream `payment.payment.refunded` outbox) | **B** (synchronous external) | Same R4j config as confirm | Same exception classification — on `PgGatewayUnavailableException` the refund row stays `COMPLETED` and the caller's retry / DLT mechanism re-drives | **Compliant** (TASK-BE-139, PR #__) |
 
-**Acceptance target (post-TASK-BE-139):** both PG calls become Category B compliant with `@CircuitBreaker(name="toss-payments")` + `@Retry` (4xx ignored) + appropriate timeout, fallback throwing a domain `EXTERNAL_SERVICE_UNAVAILABLE` (503). The payment row's `FAILED` transition then occurs only on confirmed PG-side rejection, not on transport failure (which becomes a 503 to the caller).
+Source: `TossPaymentsAdapter` (`@CircuitBreaker(name="toss-payments", fallbackMethod="confirmFallback"/"cancelFallback")`). Fallback translates `CallNotPermittedException` / `BulkheadFullException` / retry-exhausted `HttpServerErrorException` / `ResourceAccessException` (timeout) uniformly to `PgGatewayUnavailableException`. `PaymentConfirmService` / `PaymentRefundService` distinguish the two exception kinds — only `PgConfirmFailedException` transitions the row state. Caller error codes: 502 `PG_CONFIRM_FAILED` vs 503 `PG_GATEWAY_UNAVAILABLE`.
 
 ## Change Rule
 Any architectural change to this service must be documented here first before implementation.

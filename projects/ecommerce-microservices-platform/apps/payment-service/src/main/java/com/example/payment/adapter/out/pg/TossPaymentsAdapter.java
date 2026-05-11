@@ -1,28 +1,73 @@
 package com.example.payment.adapter.out.pg;
 
 import com.example.payment.application.exception.PgConfirmFailedException;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
 import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 
+/**
+ * Toss Payments adapter — synchronous PG confirm / cancel.
+ *
+ * <h2>Resilience (ADR-MONO-005 Category B, TASK-BE-139)</h2>
+ *
+ * <p>{@code @CircuitBreaker(name="toss-payments")} +
+ * {@code @Retry(name="toss-payments")} +
+ * {@code @Bulkhead(name="toss-payments")} wrap both PG calls. Configuration
+ * lives in {@code application.yml} under {@code resilience4j.*.instances.toss-payments}.
+ *
+ * <h2>Exception classification</h2>
+ *
+ * <ul>
+ *   <li>4xx ({@link HttpClientErrorException}) — PG-side <b>definitive
+ *       rejection</b>. Translated to {@link PgConfirmFailedException} and
+ *       listed in R4j {@code ignore-exceptions} so retry / fallback do not
+ *       fire. Caller sees {@code PG_CONFIRM_FAILED} (502).</li>
+ *   <li>5xx / network / timeout — <b>transport failure</b>. Bubbles up as
+ *       {@code HttpServerErrorException} / {@code ResourceAccessException}
+ *       which R4j {@code retry-exceptions} picks up; on retry exhaustion
+ *       the fallback method runs.</li>
+ *   <li>Fallback ({@link #confirmFallback}, {@link #cancelFallback}) —
+ *       translates any cause (retry exhaustion, {@link CallNotPermittedException}
+ *       circuit open, {@link BulkheadFullException}) to
+ *       {@link PgGatewayUnavailableException}. Caller sees
+ *       {@code PG_GATEWAY_UNAVAILABLE} (503).</li>
+ * </ul>
+ *
+ * <p>Caller policy: {@code PaymentConfirmService} / {@code PaymentRefundService}
+ * MUST keep the payment row in its prior state on {@link PgGatewayUnavailableException}
+ * (PG actual state unknown, idempotent retry expected). The existing
+ * {@link PgConfirmFailedException} branch continues to transition the row
+ * to {@code FAILED} unchanged.
+ */
 @Slf4j
 @Component
 @Profile("!standalone")
 @EnableConfigurationProperties(TossPaymentsProperties.class)
 public class TossPaymentsAdapter implements PaymentGatewayPort {
+
+    static final String CIRCUIT_NAME = "toss-payments";
+    static final String CONFIRM_PATH = "/v1/payments/confirm";
+    static final String CANCEL_PATH = "/v1/payments/{paymentKey}/cancel";
 
     private final RestClient restClient;
 
@@ -32,8 +77,10 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
 
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofMillis(properties.connectTimeoutMs()))
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofMillis(properties.readTimeoutMs()));
 
         this.restClient = restClientBuilder
                 .requestFactory(requestFactory)
@@ -43,6 +90,9 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
     }
 
     @Override
+    @CircuitBreaker(name = CIRCUIT_NAME, fallbackMethod = "confirmFallback")
+    @Retry(name = CIRCUIT_NAME)
+    @Bulkhead(name = CIRCUIT_NAME)
     public PaymentGatewayConfirmResult confirmPayment(String paymentKey, String orderId, long amount) {
         log.info("Toss Payments confirm request: paymentKey={}, orderId={}, amount={}", paymentKey, orderId, amount);
 
@@ -54,7 +104,7 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
 
         try {
             JsonNode response = restClient.post()
-                    .uri("/v1/payments/confirm")
+                    .uri(CONFIRM_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -67,13 +117,42 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
 
             log.info("Toss Payments confirm success: paymentKey={}, method={}", paymentKey, paymentMethod);
             return new PaymentGatewayConfirmResult(paymentMethod, receiptUrl);
-        } catch (RestClientResponseException e) {
-            log.error("Toss Payments confirm failed: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (HttpClientErrorException e) {
+            // 4xx — PG definitively rejected our request. Permanent, no retry.
+            log.error("Toss Payments confirm 4xx: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new PgConfirmFailedException("status=" + e.getStatusCode() + ", body=" + e.getResponseBodyAsString(), e);
         }
+        // 5xx / IO / timeout propagate uncaught → R4j retry → fallback on exhaustion.
+    }
+
+    /**
+     * R4j fallback for {@link #confirmPayment}. Invoked on retry exhaustion
+     * ({@code HttpServerErrorException} / {@code ResourceAccessException}),
+     * {@link CallNotPermittedException} (circuit OPEN), or
+     * {@link BulkheadFullException} (bulkhead saturated). All causes are
+     * translated to {@link PgGatewayUnavailableException}.
+     *
+     * <p>Must be {@code public} for R4j AOP to invoke it; signature must
+     * match the annotated method plus a trailing {@link Throwable}.
+     */
+    @SuppressWarnings("unused")
+    public PaymentGatewayConfirmResult confirmFallback(String paymentKey, String orderId, long amount, Throwable cause) {
+        // PgConfirmFailedException is in R4j ignore-exceptions so it never
+        // reaches the fallback. Defensive re-throw for the contract.
+        if (cause instanceof PgConfirmFailedException pce) {
+            throw pce;
+        }
+        log.warn("Toss Payments confirm fallback: paymentKey={}, cause={}({})",
+                paymentKey, cause.getClass().getSimpleName(), cause.getMessage());
+        throw new PgGatewayUnavailableException(
+                "confirm exhausted for paymentKey=" + paymentKey
+                        + " (" + cause.getClass().getSimpleName() + ")", cause);
     }
 
     @Override
+    @CircuitBreaker(name = CIRCUIT_NAME, fallbackMethod = "cancelFallback")
+    @Retry(name = CIRCUIT_NAME)
+    @Bulkhead(name = CIRCUIT_NAME)
     public void cancelPayment(String paymentKey, String cancelReason) {
         log.info("Toss Payments cancel request: paymentKey={}, reason={}", paymentKey, cancelReason);
 
@@ -81,16 +160,34 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
 
         try {
             restClient.post()
-                    .uri("/v1/payments/{paymentKey}/cancel", paymentKey)
+                    .uri(CANCEL_PATH, paymentKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();
 
             log.info("Toss Payments cancel success: paymentKey={}", paymentKey);
-        } catch (RestClientResponseException e) {
-            log.error("Toss Payments cancel failed: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (HttpClientErrorException e) {
+            // 4xx — PG definitively rejected the cancel. Permanent, no retry.
+            log.error("Toss Payments cancel 4xx: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new PgConfirmFailedException("Cancel failed: status=" + e.getStatusCode() + ", body=" + e.getResponseBodyAsString(), e);
         }
+        // 5xx / IO / timeout propagate uncaught → R4j retry → fallback on exhaustion.
+    }
+
+    /**
+     * R4j fallback for {@link #cancelPayment}. See {@link #confirmFallback}
+     * for the classification contract.
+     */
+    @SuppressWarnings("unused")
+    public void cancelFallback(String paymentKey, String cancelReason, Throwable cause) {
+        if (cause instanceof PgConfirmFailedException pce) {
+            throw pce;
+        }
+        log.warn("Toss Payments cancel fallback: paymentKey={}, cause={}({})",
+                paymentKey, cause.getClass().getSimpleName(), cause.getMessage());
+        throw new PgGatewayUnavailableException(
+                "cancel exhausted for paymentKey=" + paymentKey
+                        + " (" + cause.getClass().getSimpleName() + ")", cause);
     }
 }

@@ -65,6 +65,44 @@ toss:
   payments:
     secret-key: ${TOSS_PAYMENTS_SECRET_KEY:test_sk_placeholder}
     base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
+    connect-timeout-ms: ${TOSS_PAYMENTS_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${TOSS_PAYMENTS_READ_TIMEOUT_MS:10000}
+
+# Resilience4j — TossPaymentsAdapter (ADR-MONO-005 Category B, TASK-BE-139)
+resilience4j:
+  circuitbreaker:
+    instances:
+      toss-payments:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 8s
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  retry:
+    instances:
+      toss-payments:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        retry-exceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+          - com.example.payment.application.exception.PgConfirmFailedException
+  bulkhead:
+    instances:
+      toss-payments:
+        max-concurrent-calls: 10
+        max-wait-duration: 100ms
 
 logging:
   level:

@@ -39,6 +39,12 @@ public class PaymentRefundService {
         }
 
         if (payment.getPaymentKey() != null) {
+            // Adapter throws PgConfirmFailedException on 4xx and
+            // PgGatewayUnavailableException on 5xx-exhaustion / circuit open
+            // (ADR-MONO-005 § D4). Both propagate uncaught — @Transactional
+            // rolls back, payment row stays in its prior state, caller's
+            // retry/DLT mechanism re-drives. No state advance on transport
+            // failure (PG actual state unknown).
             paymentGateway.cancelPayment(payment.getPaymentKey(), "Order cancelled");
         } else {
             log.info("No paymentKey for orderId={}, skipping PG cancel", orderId);
