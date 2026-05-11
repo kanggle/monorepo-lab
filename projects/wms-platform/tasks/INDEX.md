@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-141-master-service-aggregate-version-guard-extraction.md` — master-service 5 application service (`Warehouse`/`Zone`/`Location`/`Sku`/`Lot`) 가 보유한 `requireVersionMatch(UUID, long, long)` + `saveWithOptimisticLock(T)` private helper 5쌍 복붙 → `AggregateVersionGuard` 정적 utility 1개 통합. ~-40 LOC. dry-run 2026-05-11 Finding B1 cherry-pick (B2/B3/B4 는 DEFER). HTTP/event contract 변경 0.
 
 ## in-progress
 
