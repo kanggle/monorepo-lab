@@ -74,7 +74,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-BE-139 | `TossPaymentsAdapter` Resilience4j wrap — Category B compliance per ADR-MONO-005 § D6. CB / Retry / Bulkhead 적용 + `PgGatewayUnavailableException` (전송 실패) 와 `PgConfirmFailedException` (PG 본인 거절) 시맨틱 분리. `PG_GATEWAY_UNAVAILABLE` 503 코드 신설. ADR-MONO-005 ACCEPTED 게이트 2/2 (gate 1/2 = TASK-MONO-055 머지됨, PR #361). 본 task 머지 시 ADR PROPOSED → ACCEPTED. | payment-service | code, adapter, resilience4j, integration |
 
 ## in-progress
 
@@ -89,6 +88,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-139 | `TossPaymentsAdapter` Resilience4j wrap — Category B compliance per ADR-MONO-005 § D6. PR #363 (spec, f806bc00) + PR #364 (impl, d483f396). **CI 15/15 PASS** (cycle 3 — cycle 1 BulkheadFullException API + cycle 2 HttpServerErrorException subclass simple-name 2 fix). `@CircuitBreaker(toss-payments)` + `@Retry` + `@Bulkhead` on `confirmPayment` + `cancelPayment` (mirror procurement reference, bulkhead 10 concurrent). HTTP client connect 5s + read 10s timeouts. 4xx → `PgConfirmFailedException` (payment row → FAILED, 502); 5xx/timeout/CB-OPEN/bulkhead-full → fallback → `PgGatewayUnavailableException` (row unchanged, 503 `PG_GATEWAY_UNAVAILABLE`). `PaymentConfirmService` + `PaymentRefundService` distinguish two exception kinds. R4j `ignore-exceptions = [HttpClientErrorException, PgConfirmFailedException]` so 4xx bypasses retry. **ADR-MONO-005 status: PROPOSED → ACCEPTED 2026-05-11** (gate 2/2 satisfied; gate 1/2 = TASK-MONO-055 PR #361). 분석=Opus 4.7 / 구현=Opus. 2026-05-11. | payment-service | code, adapter, resilience4j, integration |
 | TASK-BE-137 | payment-service outbox housekeeping — BE-136 self-review W3 (PaymentEventPublishIntegrationTest 에 Refunded 풀 round-trip IT method 추가) + W4 (JpaConfig 가 config/ 에 있는 이유 javadoc 추가, Hexagonal layout 정당화; file move 0). CI 15/15 path-filter 적용 (5 PASS + 10 skipped). PR #354 머지 2026-05-11. | payment-service | code, test, housekeeping |
 | TASK-BE-136 | payment-service transactional outbox migration — ADR-006 Scenario A impl (PaymentCompleted/PaymentRefunded → outbox). Producer-side silent-loss 가능성 제거; at-least-once 그룹 합류. PR #345 머지 2026-05-11. | payment-service | code, event |
 | TASK-BE-135 | ecommerce at-least-once delivery consistency audit + ADR-006 (per-service decision; payment=Scenario A→TASK-BE-136, user/notification=Scenario B). PR #344 머지 2026-05-11. | 7 services | spec, adr |
