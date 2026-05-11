@@ -119,9 +119,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-062-doc-gardening-schedule.md` — 2026-05-12. OpenAI Harness gap #2 closure — `validate-rules` + `audit-memory` skill 을 `/schedule` 통해 주 1회 (Mon 09:00/09:30 KST) routine 으로 등록. drift 발견 시 draft PR (`chore(rules): weekly validate-rules audit (<date>)`) 또는 memory entry (`audit_findings_<date>.md`) 자동 생성. 출력은 4-block 포맷 (`RULE-CONSISTENCY-05+` / `MEMORY-AUDIT-NN` 새 namespace). 신규 `.claude/workflows/doc-gardening.md` (routine config 문서), `.claude/hooks/README.md` 갱신 (Scheduled routines 섹션), `platform/lint-remediation-message-standard.md § Emission contracts` 갱신 (scheduled-routine row). 실제 routine 등록은 harness UI / `/schedule` skill 통해 (repo 내 config 파일 없음). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (harness config + thin docs).
+(empty)
 
 ## done
+
+- `TASK-MONO-062-doc-gardening-schedule.md` — PR #393 머지 (2026-05-12, commit 43a3968e). OpenAI Harness gap #2 Phase 1 (in-repo artifacts) closure — `.claude/workflows/doc-gardening.md` 신규 (routine 2개의 verbatim prompt body + cron + 출력 채널 + 재등록 절차 + failure modes) + `.claude/hooks/README.md` `## Scheduled routines (gap #2)` 섹션 + rule-id namespace 표 확장 (`RULE-CONSISTENCY-01..04` synchronous hook 보전, `05+` async routine 신설, `MEMORY-AUDIT-NN` 새 namespace) + `platform/lint-remediation-message-standard.md § Emission contracts` 4번째 row (scheduled routine) 추가. **CI 15/15 PASS**. **Follow-up**: 실제 `/schedule` 등록 (`monorepo-lab-validate-rules-weekly` Mon 09:00 KST + `monorepo-lab-audit-memory-weekly` Mon 09:30 KST) = harness side 별도 operation (사용자 결정 사항). gap-A series 와 동일 D4 OVERRIDE scope. 2 commit (impl `0351d668` + lifecycle `65268cb0`). 분석=Opus 4.7 / 구현=Opus.
 
 - `TASK-MONO-061-hardstop-detect-orphan-fail-open.md` — PR #388 머지 (2026-05-12, commit b89bcfaa). `hardstop-detect.ps1` HARDSTOP-01 false-positive 수정 — TASK-MONO-060 머지 직후 (commit `73120990` post-merge) auto-memory 디렉토리 write 시 `Get-RepoRoot` null → 부당한 HARDSTOP-01 발화 발견. 1-line fix (`exit 0` fail-open) + 새 negative fixture (file 가 `$env:TEMP` 등 어떤 monorepo 도 ancestor 아닌 경우 silent allow). 15 → 16 assertion 전체 PASS. **CI 15/15 PASS**. 두 번째 dogfooding 사건 (첫 번째 = `9a81b459` contextual Status-field, PR #386 내부). 3 commit (spec `4c991010` / fix `72911abe` / lifecycle `ad62ed90`). OpenAI Harness gap A 완전 안정화. 분석=Opus 4.7 / 구현=Opus.
 

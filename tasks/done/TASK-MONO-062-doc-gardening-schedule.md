@@ -8,7 +8,7 @@ Schedule `validate-rules` + `audit-memory` as a recurring doc-gardening agent (O
 
 # Status
 
-review
+done
 
 # Owner
 
