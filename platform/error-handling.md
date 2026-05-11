@@ -75,6 +75,7 @@ Services that return additional context (trace/request ids, structured `details`
 | INVALID_REFRESH_TOKEN | 401 | Refresh token not found or expired |
 | REFRESH_TOKEN_REVOKED | 401 | Refresh token has been explicitly revoked |
 | TOKEN_REVOKED | 401 | Access token has been revoked (e.g. logout blacklist) |
+| INVALID_STATE | 400 | OAuth `state` parameter missing, malformed, or does not match the stored CSRF token (RFC 6749 §10.12). Promoted to Platform-Common in TASK-MONO-052 — emitted by both ecommerce `auth-service` and GAP `auth-service` with identical semantics |
 
 ## Authorization
 
@@ -105,6 +106,7 @@ Codes activated by the `transactional` trait declared in `PROJECT.md`. Expected 
 | CONFLICT | 409 | Optimistic lock collision on concurrent update (`version` mismatch) |
 | STATE_TRANSITION_INVALID | 422 | Requested state transition is not allowed from the current aggregate state |
 | DUPLICATE_REQUEST | 409 | Same `Idempotency-Key` replayed with a different request body/hash on the same endpoint |
+| IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header absent on a mutating endpoint that requires it (T1). Emitted by handler-side `MissingRequestHeaderException` guard, not a domain exception |
 | REFERENCE_INTEGRITY_VIOLATION | 409 | Operation blocked because active child/related records still reference this aggregate |
 
 ## Content-Heavy Trait
@@ -123,6 +125,7 @@ Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected 
 |---|---|---|
 | NOT_FOUND | 404 | Requested resource does not exist (use only where a domain-specific `*_NOT_FOUND` does not apply) |
 | INTERNAL_ERROR | 500 | Unexpected server-side error |
+| DATA_INTEGRITY_VIOLATION | 409 | Generic DB constraint violation not covered by a domain-specific code. Catch-all surfaced by Spring `DataIntegrityViolationException` when no `*Exception.java` mapping applies. Prefer a domain code when a known constraint is hit |
 | DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted |
 | CIRCUIT_OPEN | 503 | Downstream circuit breaker is OPEN; the call was rejected without reaching the dependency. Distinct from DOWNSTREAM_ERROR so dashboards can separate "we tried and it failed" from "we shed load" |
 | SERVICE_UNAVAILABLE | 503 | A required upstream service is unavailable |
@@ -258,6 +261,9 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock |
 | IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
+| MEDIA_NOT_FOUND | 404 | Media object not found in object storage by key (product-service `MediaNotFoundException`) |
+| MEDIA_VALIDATION_FAILED | 400 | Media upload payload fails format, size, or MIME-type validation (product-service `MediaValidationException`) |
+| STORAGE_UNAVAILABLE | 503 | Object storage service is unreachable or returned an error (product-service `StorageUnavailableException`) |
 
 ## Search  `[domain: ecommerce]`
 
@@ -266,6 +272,20 @@ Owned by `search-service`. See `rules/domains/ecommerce.md`.
 | Code | HTTP | Description |
 |---|---|---|
 | INVALID_SEARCH_REQUEST | 400 | Search request is invalid (missing or blank `q` parameter, invalid `size`) |
+| SEARCH_UNAVAILABLE | 503 | Search infrastructure (Elasticsearch / OpenSearch) is temporarily unavailable (search-service `SearchException`) |
+
+## Auth  `[domain: ecommerce]`
+
+Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct from GAP IdP; the ecommerce standalone repo retains its own auth flow per `project_gap_idp_promotion.md` § standalone frozen policy).
+
+| Code | HTTP | Description |
+|---|---|---|
+| EMAIL_ALREADY_EXISTS | 409 | Email already registered; concurrent registration race resolved to conflict (`EmailAlreadyExistsException`) |
+| INVALID_REFRESH_TOKEN | 401 | Refresh token missing, expired, or unknown (`InvalidRefreshTokenException`). Same string as Platform-Common Authentication entry — ecommerce-local emission |
+| REFRESH_TOKEN_REVOKED | 401 | Refresh token explicitly revoked (`RefreshTokenRevokedException`). Same string as Platform-Common Authentication entry — ecommerce-local emission |
+| OAUTH_UPSTREAM_ERROR | 502 | OAuth provider returned an error response to the token-exchange call (`OAuthUpstreamException`) |
+
+> `INVALID_CREDENTIALS` and `INVALID_STATE` are emitted by this service but are documented under Platform-Common Authentication (shared across ecommerce + GAP auth-service emissions).
 
 ## Order  `[domain: ecommerce]`
 
@@ -300,7 +320,7 @@ Owned by `user-service`.
 | ADDRESS_NOT_FOUND | 404 | Address with given ID does not exist |
 | ADDRESS_LIMIT_EXCEEDED | 422 | Maximum number of addresses reached |
 | DEFAULT_ADDRESS_CANNOT_BE_DELETED | 422 | Cannot delete the default address while other addresses exist |
-| USER_ALREADY_WITHDRAWN | 422 | User has already been withdrawn |
+| USER_ALREADY_WITHDRAWN | 422 | User has already been withdrawn (v2-planned — no current `*Exception.java` source; double-withdraw guard relies on generic codes) |
 
 ## Promotion  `[domain: ecommerce]`
 
@@ -349,7 +369,7 @@ Owned by `user-service` (wishlist feature) or a dedicated service.
 
 | Code | HTTP | Description |
 |---|---|---|
-| INVALID_WISHLIST_REQUEST | 400 | Wishlist request is invalid (missing or invalid fields) |
+| INVALID_WISHLIST_REQUEST | 400 | Wishlist request is invalid (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 | WISHLIST_ITEM_NOT_FOUND | 404 | Wishlist item with given ID does not exist |
 | ALREADY_IN_WISHLIST | 409 | Product is already in the wishlist |
 
@@ -373,11 +393,18 @@ Owned by `procurement-service`. PO state machine + supplier integration.
 |---|---|---|
 | PO_NOT_FOUND | 404 | Purchase order does not exist |
 | PO_STATE_TRANSITION_INVALID | 422 | Requested PO state transition is not allowed from current state (use `STATE_TRANSITION_INVALID` from Transactional Trait if generic) |
+| PO_ALREADY_CONFIRMED | 422 | PO is already in CONFIRMED state; idempotent re-confirm is rejected (`PoAlreadyConfirmedException`) |
+| PO_QUANTITY_EXCEEDED | 422 | ASN line quantity exceeds the remaining open PO line quantity (`PoQuantityExceededException`) |
 | SUPPLIER_NOT_FOUND | 404 | Supplier reference does not exist |
 | SUPPLIER_INACTIVE | 422 | Supplier is deactivated; cannot create new PO |
-| SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) |
+| SUPPLIER_UNAVAILABLE | 503 | Supplier integration endpoint unreachable after Resilience4j retry / circuit-breaker / bulkhead exhaustion (`SupplierUnavailableException`, S2 / ADR-MONO-005 § D4 Category B reference) |
+| CATALOG_SKU_UNKNOWN | 422 | SKU referenced in a PO line does not exist in the product catalog (`CatalogSkuUnknownException`) |
+| IDEMPOTENCY_KEY_MISMATCH | 422 | `Idempotency-Key` matches an existing request but the request body hash differs (`IdempotencyKeyMismatchException`). Cf. Platform-Common `DUPLICATE_REQUEST` (409) — scm procurement uses 422 for this specific shape |
+| SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) — **v2-planned**, no `SettlementPeriodLockedException` class yet (deferred to v2 settlement-service) |
 | ASN_OVERRECEIPT | 422 | ASN reports more units than the PO line ordered (per spec deviation policy) |
-| RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) |
+| RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) — **v2-planned**, no exception class yet (deferred to v2 settlement-service) |
+
+> `IDEMPOTENCY_KEY_REQUIRED` (400) is also emitted by procurement-service via handler guard — see Platform-Common Transactional Trait section.
 
 ## Inventory Visibility  `[domain: scm]`
 
@@ -387,7 +414,8 @@ Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventu
 |---|---|---|
 | NODE_NOT_FOUND | 404 | Inventory node does not exist |
 | SNAPSHOT_NOT_FOUND | 404 | Snapshot for the requested key does not exist |
-| STALENESS_THRESHOLD_EXCEEDED | 200 (warning header) | Read response includes `meta.staleness` warning; not an error code per se but documented for caller awareness (S5) |
+| NODE_UNREACHABLE | 503 | Inventory node is unreachable (network partition or node down) (`NodeUnreachableException`) |
+| SNAPSHOT_STALE | 200 (warning body) | Snapshot data is older than the configured staleness threshold; response includes stale data with `meta.staleness` warning and `meta.warning: "Not for procurement decisions"` (S5). Not an HTTP error — documented for caller awareness (`SnapshotStaleException`). Replaces the prior `STALENESS_THRESHOLD_EXCEEDED` catalog name |
 
 ---
 
@@ -399,11 +427,15 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 |---|---|---|
 | ACCOUNT_NOT_FOUND | 404 | Account does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | ACCOUNT_ALREADY_EXISTS | 409 | Account with the given email/identifier already exists in this tenant |
-| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded) |
+| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded). **TODO**: GAP `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
 | ACCOUNT_DELETED | 410 | Account is soft-deleted (anonymized) |
-| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required |
+| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required. **TODO**: GAP `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
 | ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
 | ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
+| EMAIL_ALREADY_VERIFIED | 409 | Email already verified; second verify attempt rejected (`EmailAlreadyVerifiedException`) |
+| RATE_LIMITED | 429 | Generic rate-limit for account operations (e.g. resend-verify-email) (`RateLimitedException`) |
+| AUTH_SERVICE_UNAVAILABLE | 503 | Upstream `auth-service` unreachable during signup; fail-closed (`AuthServicePort.AuthServiceUnavailable`) |
+| BULK_LIMIT_EXCEEDED | 400 | Bulk provisioning request exceeds the 1 000-item limit (`BulkLimitExceededException`) |
 
 ## Auth / Token  `[domain: saas]`
 
@@ -414,14 +446,24 @@ Owned by `auth-service` (Spring Authorization Server).
 | AUTH_SERVICE_UNAVAILABLE | 503 | Internal `auth-service` call failed (transient) |
 | TOKEN_EXPIRED | 401 | Bearer token expired |
 | TOKEN_EXPIRED_OR_INVALID | 401 | Bearer token malformed, signature invalid, or expired (combined fallback) |
-| TOKEN_REUSE | 401 | Refresh token reuse detected (RT rotation invariant) |
-| TOKEN_REUSE_DETECTED | 401 | Same as TOKEN_REUSE; published as audit event `auth.token.reuse.detected` |
+| TOKEN_REUSE_DETECTED | 401 | Refresh token reuse detected (RT rotation invariant); published as audit event `auth.token.reuse.detected`. Prior catalog alias `TOKEN_REUSE` removed in TASK-MONO-052 — only this canonical form is emitted |
 | TOKEN_TENANT_MISMATCH | 403 | Token `tenant_id` claim does not match the targeted resource tenant |
 | OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2) |
 | OAUTH_INVALID_CLIENT | 401 | OAuth2 client authentication failed |
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
 | LOGIN_TENANT_AMBIGUOUS | 400 | Login identifier matches accounts across multiple tenants without disambiguator |
+| CREDENTIALS_INVALID | 401 | GAP auth credentials invalid (email/password login) (`CredentialsInvalidException`). Semantic alias of ecommerce-local `INVALID_CREDENTIALS` — two strings retained intentionally pending future standardization |
+| PASSWORD_RESET_TOKEN_INVALID | 400 | Password-reset token unknown, expired, or already consumed (`PasswordResetTokenInvalidException`) |
+| CREDENTIAL_ALREADY_EXISTS | 409 | Credential row already exists for account (e.g. social re-link attempt) (`CredentialAlreadyExistsException`) |
+| SESSION_REVOKED | 401 | Active session has been administratively revoked (`SessionRevokedException`) |
+| SESSION_NOT_FOUND | 404 | Session ID not found (logout / get-session) (`SessionNotFoundException`) |
+| SESSION_OWNERSHIP_MISMATCH | 403 | Caller's token does not own the targeted session (`SessionOwnershipMismatchException`) |
+| UNSUPPORTED_PROVIDER | 400 | OAuth provider name is not in the configured allowlist (`UnsupportedProviderException`) |
+| INVALID_REDIRECT_URI | 400 | OAuth `redirect_uri` not in the registered allowlist (`InvalidOAuthRedirectUriException`) |
+| EMAIL_REQUIRED | 422 | OAuth provider did not return email; `email` scope required (`OAuthEmailRequiredException`) |
+| PROVIDER_ERROR | 502 | OAuth provider returned an error during token exchange (infra-layer, `OAuthProviderException`) |
+| PASSWORD_POLICY_VIOLATION | 400 | Password does not meet complexity policy (`PasswordPolicyViolationException`) — also emitted by admin-service for operator password changes |
 
 ## Tenant  `[domain: saas]`
 
@@ -434,6 +476,61 @@ Owned by `account-service` + `admin-service` (per multi-tenant trait M1).
 | TENANT_FORBIDDEN | 403 | Cross-tenant write or invalid `tenant_id` claim (per `multi-tenant.md` M2/M3) |
 | TENANT_SCOPE_DENIED | 403 | Token scope does not include the requested tenant context |
 | TENANT_SUSPENDED | 423 | Tenant is suspended (administrative action) |
+| TENANT_ID_RESERVED | 400 | Tenant ID is reserved and cannot be used (admin-service `TenantIdReservedException`) |
+
+## Admin  `[domain: saas]`
+
+Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-logged commands).
+
+| Code | HTTP | Description |
+|---|---|---|
+| REASON_REQUIRED | 400 | `X-Operator-Reason` header missing on an audited admin action (`ReasonRequiredException`) |
+| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by GAP community + membership services with identical semantics |
+| INVALID_BOOTSTRAP_TOKEN | 401 | Bootstrap token missing, expired, or already consumed (`InvalidBootstrapTokenException`) |
+| INVALID_2FA_CODE | 401 | TOTP code is invalid or expired (`InvalidTwoFaCodeException`) |
+| TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`) |
+| INVALID_REFRESH_TOKEN | 401 | Admin refresh token invalid (operator portal login) (`InvalidRefreshTokenException`). Same string as Platform-Common Authentication — admin-service-local emission |
+| REFRESH_TOKEN_REUSE_DETECTED | 401 | Admin refresh token reuse detected; chain invalidated (`RefreshTokenReuseDetectedException`) |
+| TOKEN_REVOKED | 401 | Operator access token has been explicitly revoked (`TokenRevokedException`). Same string as Platform-Common — admin-service-local emission |
+| INVALID_RECOVERY_CODE | 401 | 2FA recovery code is invalid (`InvalidRecoveryCodeException`) |
+| ENROLLMENT_REQUIRED | 401 | Operator must complete 2FA enrollment before login (`EnrollmentRequiredException`) |
+| TOKEN_INVALID | 401 | Operator JWT absent, malformed, or signature-invalid (`OperatorUnauthorizedException`) |
+| DOWNSTREAM_ERROR | 503 | Downstream service unavailable on an admin integration call (`DownstreamFailureException`). HTTP 503 (admin-specific) — distinct from Platform-Common General `DOWNSTREAM_ERROR` (502) |
+| CIRCUIT_OPEN | 503 | Resilience4j circuit breaker is OPEN (R4j `CallNotPermittedException`). Same string as Platform-Common General — admin-service emission |
+| AUDIT_FAILURE | 500 | Audit write failed; command aborted (fail-closed) (`AuditFailureException`) |
+| BATCH_SIZE_EXCEEDED | 422 | Admin batch operation exceeds size limit (`BatchSizeExceededException`) |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` already used by a different operation (`IdempotencyKeyConflictException`). Variant of Platform-Common `DUPLICATE_REQUEST` (409) — admin-specific naming |
+| OPERATOR_EMAIL_CONFLICT | 409 | Operator email already exists (`OperatorEmailConflictException`) |
+| OPERATOR_NOT_FOUND | 404 | Operator account not found (`OperatorNotFoundException`) |
+| ROLE_NOT_FOUND | 400 | Role identifier not recognized (`RoleNotFoundException`). Note HTTP 400 (not 404) — invalid identifier value, not missing resource |
+| SELF_SUSPEND_FORBIDDEN | 400 | Operator cannot suspend their own account (`SelfSuspendForbiddenException`) |
+| CURRENT_PASSWORD_MISMATCH | 400 | Current password does not match stored credential (`CurrentPasswordMismatchException`) |
+
+## Community  `[domain: saas]`
+
+Owned by GAP `community-service` (multi-tenant community feature distinct from `fan-platform/community-service` — same string codes, different service ownership).
+
+| Code | HTTP | Description |
+|---|---|---|
+| MEMBERSHIP_REQUIRED | 403 | Caller's membership tier is below the content's required tier (`MembershipRequiredException`) |
+| ALREADY_FOLLOWING | 409 | Already following this artist (`AlreadyFollowingException`) |
+| NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`) |
+| POST_STATUS_TRANSITION_INVALID | 422 | Post status transition is not allowed (illegal state guard) |
+
+> Cross-project: `fan-platform/community-service` emits the same 4 strings (see `Community  [domain: fan-platform]` below). The semantic is identical — two services in two different projects intentionally share code strings.
+
+## Membership  `[domain: saas]`
+
+Owned by `membership-service`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| SUBSCRIPTION_ALREADY_ACTIVE | 409 | Subscription already active; new activation rejected (`SubscriptionAlreadyActiveException`) |
+| ACCOUNT_NOT_ELIGIBLE | 409 | Account status disqualifies it from subscription (`AccountNotEligibleException`) |
+| ACCOUNT_STATUS_UNAVAILABLE | 503 | `account-service` unreachable during eligibility check (`AccountStatusUnavailableException`) |
+| SUBSCRIPTION_NOT_FOUND | 404 | Subscription record not found (`SubscriptionNotFoundException`) |
+| SUBSCRIPTION_NOT_ACTIVE | 409 | Operation requires an active subscription (`SubscriptionNotActiveException`) |
+| PLAN_NOT_FOUND | 404 | Subscription plan not found (`PlanNotFoundException`) |
 
 ## Community  `[domain: fan-platform]`
 
@@ -443,10 +540,16 @@ Owned by `community-service` (post / comment / reaction / follow).
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED) |
+| POST_STATUS_TRANSITION_INVALID | 422 | Same semantic as `POST_INVALID_STATE` — current code emits this string (`InvalidStateTransitionException`); cross-shared with GAP community-service |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
-| COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch |
-| REACTION_INVALID_TYPE | 400 | Reaction type not in the allowed enum |
-| FEED_QUERY_INVALID | 400 | Feed cursor or filter combination is invalid |
+| MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
+| COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
+| SELF_FOLLOW_FORBIDDEN | 422 | Account cannot follow itself (`SelfFollowForbiddenException`) |
+| EDIT_WINDOW_EXPIRED | 422 | PUBLISHED post is past the edit window (`EditWindowExpiredException`) |
+| ALREADY_FOLLOWING | 409 | Already following this artist (`AlreadyFollowingException`). Cross-project — see `Community  [domain: saas]` |
+| NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`). Cross-project — see `Community  [domain: saas]` |
+| REACTION_INVALID_TYPE | 400 | Reaction type not in the allowed enum (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
+| FEED_QUERY_INVALID | 400 | Feed cursor or filter combination is invalid (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 
 ## Artist  `[domain: fan-platform]`
 
@@ -456,8 +559,16 @@ Owned by `artist-service` (artist identity / fandom metadata).
 |---|---|---|
 | ARTIST_NOT_FOUND | 404 | Artist does not exist OR cross-tenant OR DRAFT/ARCHIVED (non-admin → 404 not 403, per content-heavy display rule) |
 | ARTIST_INVALID_STATE | 422 | Requested transition not allowed from current artist state (DRAFT/PUBLISHED/ARCHIVED) |
-| FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded |
-| FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation |
+| ARTIST_NOT_PUBLISHED | 422 | Artist is not in PUBLISHED state; operation rejected (`ArtistNotPublishedException`) |
+| ARTIST_ARCHIVED | 422 | Artist is ARCHIVED; operation rejected (`ArtistArchivedException`) |
+| ARTIST_GROUP_NOT_FOUND | 404 | Artist group not found (`ArtistGroupNotFoundException`) |
+| STAGE_NAME_CONFLICT | 409 | Artist stage name already taken (`StageNameConflictException`) |
+| GROUP_NAME_CONFLICT | 409 | Artist group name already taken (`GroupNameConflictException`) |
+| FANDOM_NOT_FOUND | 404 | Fandom record not found (`FandomNotFoundException`) |
+| FANDOM_ALREADY_EXISTS | 422 | Fandom already exists for this artist (`FandomAlreadyExistsException`) |
+| ALREADY_MEMBER | 422 | Account already a fandom member (`AlreadyMemberException`) |
+| FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded (v2-planned — no current exception class) |
+| FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 
 ---
 
