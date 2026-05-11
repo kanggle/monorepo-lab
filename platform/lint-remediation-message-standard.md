@@ -116,13 +116,21 @@ Rationale: the remediation options for distinct conditions are rarely compatible
 
 ---
 
-# Forward look — Phase 3 hook automation
+# Phase 3 — hook automation (DELIVERED)
 
-The standard alone delivers **format consistency** when an emitter (agent / human / skill) follows it. It does **not** yet make the formatted message *active context* on the agent's next turn — that requires a PreToolUse or Stop hook in `.claude/hooks/` that auto-detects the trigger condition and injects the standardized message into the prompt.
+The standard delivers **format consistency** when an emitter (agent / human / skill) follows it. The Phase 3 hook automation makes the formatted message *active context* on the agent's next turn — a PreToolUse hook in `.claude/hooks/hardstop-detect.ps1` auto-detects mechanically-detectable Hard Stop triggers (HARDSTOP-01 / -03 / -05 / -09 / -10) and emits the canonical 4-block stanza via the harness's `{decision: "block", reason: …}` plumbing, so the agent's next turn receives the standardised remediation message without any human or agent emitting it manually.
 
-Phase 3 is split into a separate `tasks/ready/` candidate (`TASK-MONO-060` — to be filed). Phase 1+2 ROI is **partial** until Phase 3 lands.
+Coverage:
 
-The OpenAI Harness Engineering report (the source of this pattern) explicitly describes the mechanism as "custom lint error messages = agent's next-turn context" — the value emerges when the message is *injected*, not just *available*. The standard is a prerequisite for that injection to be useful, but is not by itself sufficient.
+| Phase | Triggers | Delivery |
+|---|---|---|
+| 1+2 (format) | All 10 Hard Stop + 2 adjacent (ARCH-RULE-01, SPEC-CHECK-02 redirect) | TASK-MONO-059, PR #383 (2026-05-11) |
+| 3a (mechanical injection) | HARDSTOP-01 / -03 / -05 / -09 / -10 | TASK-MONO-060 (this file's docs were updated as part of that delivery) |
+| 3b (semantic injection) | HARDSTOP-02 / -04 / -06 / -07 / -08 | DEFERRED — would require taxonomy / AC / contract parsers not justified at current portfolio scale; future task if mechanical heuristics emerge. |
+
+Existing hooks (`spec-check.ps1`, `rule-consistency-check.ps1`) were also realigned to emit 4-block stanzas (IDs `SPEC-CHECK-NN` / `RULE-CONSISTENCY-NN`) so every rule-surface emission carries the same shape regardless of source. The diagnostic fixtures under `.claude/hooks/__tests__/run-all.ps1` verify format compliance on every hook edit.
+
+The OpenAI Harness Engineering report describes the mechanism as "custom lint error messages = agent's next-turn context" — gap A is now closed at both layers (format + injection) for the mechanical trigger set.
 
 ---
 
