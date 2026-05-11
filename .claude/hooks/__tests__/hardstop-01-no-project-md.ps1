@@ -20,7 +20,28 @@ try {
         cwd        = $tempRoot
     }
     Assert-Stanza -Output $output -ExpectedId 'HARDSTOP-01' -ExpectedDecision 'block'
-    "PASS: HARDSTOP-01 (no PROJECT.md walking up from projects/orphan/)"
+    "PASS: HARDSTOP-01 positive (no PROJECT.md walking up from projects/orphan/)"
+
+    # Negative case: file path entirely outside any monorepo (no .git/CLAUDE.md+tasks INDEX walking up).
+    # The hook should fail-open silently — the monorepo's Hard Stop rules have no jurisdiction here.
+    $outsideRoot = Join-Path $env:TEMP ("hardstop-outside-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    New-Item -Path $outsideRoot -ItemType Directory -Force | Out-Null
+    try {
+        $outsideFile = Join-Path $outsideRoot "scratch.md"
+        $outsideOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+            tool_name  = 'Write'
+            tool_input = @{
+                file_path = $outsideFile
+                content   = "some scratch content"
+            }
+            cwd = $outsideRoot
+        }
+        Assert-Allowed -Output $outsideOutput
+        "PASS: HARDSTOP-01 negative (file outside any monorepo, fail-open)"
+    }
+    finally {
+        Remove-Item -Recurse -Force $outsideRoot -ErrorAction SilentlyContinue
+    }
 }
 finally {
     Remove-Item -Recurse -Force $tempRoot -ErrorAction SilentlyContinue
