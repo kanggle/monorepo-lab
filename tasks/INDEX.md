@@ -101,7 +101,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-(empty)
+## ready
+
+- `TASK-MONO-055-d7-saga-spec-surface-bundle.md` — ADR-MONO-005 § D7 spec surface. 6 service `architecture.md` "Saga / Long-running Flow" section (compact table: category / declared values / status) + 2 rule pointer edits (`rules/traits/transactional.md`, `platform/event-driven-policy.md`). 4 Compliant (outbound A / notification C / inventory D / scm procurement B) + 2 Gap (ecommerce order A → TASK-BE-138 DEFERRED, ecommerce payment B × 2 → TASK-BE-139 READY). spec / docs only, production code 0. D4 OVERRIDE (single-line cross-reference additions). After merge, ADR-MONO-005 ACCEPTED gate 1/2 satisfied. 분석=Opus 4.7 / 구현=Opus.
 
 ## in-progress
 
