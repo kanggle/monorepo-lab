@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-138 | order-service choreographed-saga stuck-detector — `PENDING + payment_id IS NULL` 30 분 grace 경과 행을 sweep, attempt cap 5 도달 시 `STUCK_RECOVERY_FAILED` 전이 + `order.alert.saga.recovery.exhausted` 알림 발행. ADR-MONO-005 § D6 ecommerce order 행 Gap → Compliant. wms outbound `SagaSweeper` + `SagaRecoveryHandler` (TASK-BE-050) 두-빈 분리 패턴 답습. | order-service | code, event, saga, adr |
 
 ## in-progress
 
