@@ -5,6 +5,7 @@ import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -194,7 +195,8 @@ class TossPaymentsAdapterTest {
     @Test
     @DisplayName("confirmFallback 은 BulkheadFullException 도 PgGatewayUnavailableException 으로 변환한다")
     void confirmFallback_bulkheadFull_translatesToGatewayUnavailable() {
-        BulkheadFullException cause = new BulkheadFullException("toss-payments bulkhead full");
+        Bulkhead bulkhead = Bulkhead.ofDefaults("toss-payments");
+        BulkheadFullException cause = BulkheadFullException.createBulkheadFullException(bulkhead);
 
         assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
                 .isInstanceOf(PgGatewayUnavailableException.class)
