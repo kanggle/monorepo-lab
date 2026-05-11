@@ -69,6 +69,14 @@ Each lifecycle transition lands in its own PR. **Never bundle task spec authorin
 | `ready → in-progress → review` | **impl PR** — moves the task file through `in-progress/` to `review/` and lands the implementation. Lifecycle moves and impl commits should be separate commits but live in one PR. |
 | `review → done` | **chore PR** — moves merged task file(s) from `review/` to `done/` and updates the `INDEX.md` done list with one-line outcome summaries. May batch multiple merged tasks. |
 
+**Close chore must bundle all 3 steps in one commit**:
+
+1. `git mv tasks/review/TASK-XXX.md tasks/done/TASK-XXX.md` (file move).
+2. Update the `Status` field inside the moved task file: `review` → `done`.
+3. Edit `tasks/INDEX.md` — remove the entry from `## review`, append a 1-line outcome under `## done` (prefix `(impl PR #N 머지, commit hash)`).
+
+Skipping step 2 or 3 produces silent drift (e.g. PR #375 only moved the file, leaving `INDEX.md` claiming the task was still in `review/` — required follow-up PR #376 to reconcile).
+
 **Why**: bundling spec authoring with implementation hides the `ready` lifecycle stage from `main` — external observers (other developers, AI sessions, audit) read the `ready/` queue to know what's available next. If a task only ever appears in `review/` because spec + impl shipped together, the queue signal is broken.
 
 Established precedents: `chore: file follow-up tasks ... (#110)`, `chore: move merged TASK-MONO-022/023 from review/ to done/ (#114)`, `#118`, `#124`, `#133`, `#137`, `#138`. Same pattern applies to project-level lifecycle (`projects/<name>/tasks/`).

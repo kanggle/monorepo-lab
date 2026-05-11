@@ -52,6 +52,7 @@ Rules:
 
 - Branch name **must** include the task ID.
 - Branch off `main` only. Never branch off `in-progress` or `review` branches.
+- Branch names **must not contain `master` or `main` as a substring**, even when the task name itself does (`master-lot`, `master-data`, etc.). The sandbox protection layer matches branch-name substrings and false-positive blocks `git push -u origin spec/be-XXX-master-lot-...` even though it is a feature branch. Rephrase the slug (`master-lot` → `lot`, `master-data` → `masterdata` or `md`) — commit history stays intact, only the branch reference changes.
 - AI agents always operate inside a **git worktree** (`.claude/worktrees/agent-<id>/`). The main checkout remains clean. See §4 for agent dispatch.
 - Direct commits to `main` are blocked by `protect-main-branch.ps1` (see §7).
 
