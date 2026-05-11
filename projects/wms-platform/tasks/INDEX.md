@@ -68,6 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-141-master-service-aggregate-version-guard-extraction.md` — master-service 5 application service (`Warehouse`/`Zone`/`Location`/`Sku`/`Lot`) 가 보유한 `requireVersionMatch(UUID, long, long)` + `saveWithOptimisticLock(T)` private helper 5쌍 복붙 → `AggregateVersionGuard` 정적 utility 1개 통합. ~-40 LOC. dry-run 2026-05-11 Finding B1 cherry-pick (B2/B3/B4 는 DEFER). HTTP/event contract 변경 0.
+- `TASK-BE-142-master-service-partner-aggregate-spec-gap-audit.md` — master-service spec § Responsibility 6 aggregate 선언 중 **Partner production code 부재**. 의도/누락 결정 audit + 결과에 따라 Branch A (architecture.md 정정 spec-only) 또는 Branch B (backlog 신규 implementation task 발행) 분기. dry-run 2026-05-11 spec gap finding closure.
 
 ## in-progress
 
