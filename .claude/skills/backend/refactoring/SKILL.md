@@ -14,13 +14,58 @@ Prerequisite: read `platform/refactoring-policy.md` before using this skill.
 
 ## Baseline Check
 
-Before any refactoring, always run:
+Before any refactoring, run **both unit and integration tests** as the baseline. The integration command must match the test-requirement section of `specs/services/<service>/architecture.md` (per `platform/refactoring-policy.md`):
 
 ```bash
-./gradlew :apps:<service>:test
+./gradlew :projects:<project>:apps:<service>:check
+# or equivalently:
+./gradlew :projects:<project>:apps:<service>:test :projects:<project>:apps:<service>:integrationTest
 ```
 
 If tests fail, fix them first. Never refactor on a red baseline.
+
+### Why unit-only baseline is insufficient
+
+Unit tests (Mockito-driven) bypass the Spring AOP proxy. The following patterns regress at IT-level only:
+
+- **Spring AOP self-invocation**: a `@Transactional final` method that calls an abstract `dispatch()` override on the same bean — proxy does not intercept the inner call, transaction context is lost. Unit tests with mocks miss this entirely.
+- **Kafka listener / event consumer wiring**: bean registration + topic mapping changes only surface when a real broker is involved.
+- **Template-method extraction with side effects** (DB write, outbox publish, metric increment): the visible behavior depends on the wired transaction boundary.
+
+Reference incident: admin-service `AbstractProjectionService` template extraction — unit 148/148 PASS, IT 30+ Awaitility timeout, revert restored green IT. The unit/IT split was deterministic — `:integrationTest` was the load-bearing signal.
+
+### Local environment caveat
+
+On Windows + Rancher Desktop, Testcontainers cold-start works for ~1 IT class per `rdctl shutdown && rdctl start` cycle. For multi-class IT runs, prefer pushing to a feature branch and reading the CI Integration job output rather than burning local restart cycles.
+
+---
+
+## Worktree Dispatch Verification (Service Scan mode)
+
+In Service Scan mode (`/refactor-code <service>` — see `specs/services/<service>/architecture.md` for service-specific constraints), each refactoring unit dispatches to a `refactoring-engineer` agent with `isolation: "worktree"`. A known harness regression sometimes silently writes to the main checkout instead of the worktree (observed: 5-agent sweep where 4 agents wrote to main).
+
+### Required agent prompt additions
+
+Every dispatched agent prompt must include:
+
+```
+1. Run `pwd` first. Verify the path ends with `.claude/worktrees/agent-*/`.
+   If not, abort and report "worktree path-race detected" — do not modify any file.
+2. Always pass absolute worktree paths to Read/Edit/Write tools, never relative
+   `projects/...` paths (Windows shell may resolve relative paths against the
+   main checkout).
+```
+
+### After each agent returns
+
+1. Run `git worktree list` — confirm the worktree HEAD advanced to the agent's commit.
+2. If the main checkout (`git status` in the root) shows modified files, the agent leaked. Recovery:
+   - `git stash` in main → `git checkout -b refactor/<name>` → `git stash pop` → manual commit.
+3. If the agent response was truncated, grep for thin-wrapper, orphan helper, and unused import residue before declaring success.
+
+### When to dispatch a small probe
+
+Before committing to a 5-unit sweep, dispatch one low-risk unit first (e.g. dead-code removal) and verify the worktree behavior. If the probe leaks to main, fall back to direct refactoring in a single branch rather than dispatching the remaining units.
 
 ---
 
