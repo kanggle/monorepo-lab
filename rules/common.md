@@ -45,6 +45,8 @@
 | [../platform/api-gateway-policy.md](../platform/api-gateway-policy.md) | 퍼블릭 API 노출이 있는 프로젝트(gateway 사용). 대부분의 외부 대면 서비스에 해당 |
 | [../platform/deployment-policy.md](../platform/deployment-policy.md) | k8s 배포 환경 — 현재 저장소는 기본값이지만 로컬·서버리스 환경은 예외 |
 | [../platform/refactoring-policy.md](../platform/refactoring-policy.md) | 리팩토링 작업을 수행할 때만 로드 |
+| [../platform/object-storage-policy.md](../platform/object-storage-policy.md) | `content-heavy` trait 활성화 시 (미디어 / object storage 저장이 필요한 프로젝트). 참조: `rules/traits/content-heavy.md` C2 |
+| [../platform/glossary.md](../platform/glossary.md) | reference glossary — 강제 적용 규칙 아님, 에이전트가 용어 lookup이 필요할 때 on-demand 참조. 어떤 trait/domain 도 활성화 트리거가 아님 |
 
 이 매핑은 [../platform/entrypoint.md](../platform/entrypoint.md)의 Auxiliary 섹션과 [README.md](README.md)의 resolution order가 공동으로 관리한다.
 

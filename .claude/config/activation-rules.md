@@ -46,7 +46,7 @@ Activate rules for:
 - approval workflow
 - immutable change history where needed
 
-→ Detailed rules: *(file to be created when a project declares this trait)*
+→ Detailed rules: [`rules/traits/regulated.md`](../../rules/traits/regulated.md)
 
 ---
 
@@ -131,7 +131,7 @@ Activate rules for:
 - retention policy
 - queryable audit API
 
-→ Detailed rules: *(file to be created when a project declares this trait)*
+→ Detailed rules: [`rules/traits/audit-heavy.md`](../../rules/traits/audit-heavy.md)
 
 ---
 
