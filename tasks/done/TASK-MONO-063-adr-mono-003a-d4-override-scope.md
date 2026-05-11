@@ -8,7 +8,7 @@ Publish ADR-MONO-003a — canonicalize D4 OVERRIDE scope across cleanup-class se
 
 # Status
 
-ready
+done
 
 # Owner
 

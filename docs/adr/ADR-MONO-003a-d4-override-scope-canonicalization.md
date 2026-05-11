@@ -165,7 +165,8 @@ Append-only. Entries added when each PR merges. Order: oldest first.
 | 8 | #388 | 2026-05-12 | b89bcfaa | Gap A (orphan fix) | hardstop-detect.ps1 HARDSTOP-01 false-positive fail-open — TASK-MONO-061 |
 | 9 | #393 | 2026-05-12 | 43a3968e | Gap #2 | `.claude/workflows/doc-gardening.md` + 2 weekly routine registration — TASK-MONO-062 |
 | 10 | #394 | 2026-05-12 | (chore) | Gap #2 close chore | TASK-MONO-062 lifecycle ready→review→done |
-| 11 | TBD | 2026-05-12 | TBD | Meta-policy | This ADR canonicalization PR (TASK-MONO-063) — backfilled after merge |
+| 11 | #395 | 2026-05-12 | 23791ebe | Meta-policy | This ADR canonicalization PR (TASK-MONO-063 spec — ADR-MONO-003a publish + ADR-MONO-003 forward-pointer + ADR-MONO-006 § Related update + memory L28/description/MEMORY.md index canonicalize) |
+| 12 | TBD | 2026-05-12 | (close chore) | Meta-policy close chore | TASK-MONO-063 lifecycle ready→done + this row backfill |
 
 **Outstanding (OPEN — not yet landed under OVERRIDE)**:
 
