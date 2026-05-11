@@ -23,8 +23,8 @@ Every service declared under `specs/services/<service>/architecture.md` MUST dec
 
 # Selection Rules
 
-1. A service may declare exactly **one** primary `Service Type`. Hybrid responsibilities (e.g., a REST service that also consumes events) keep `rest-api` as primary and document the secondary capability under "Integration Rules".
-2. The `Service Type` is chosen at service inception and may not change without an architecture decision recorded in the service spec.
+1. A service declares **one primary** `Service Type` from the catalog. Hybrid responsibilities (e.g., a REST service that also consumes events for a CQRS read model or saga orchestration) may be expressed inline as `<primary> + <secondary>` — the **leftmost type is canonically the primary**. The primary determines which `platform/service-types/<type>.md` spec is read per `platform/entrypoint.md` (exactly one file). The secondary capability adds context for readers and SHOULD also be documented under "Integration Rules" with concrete topic / consumer-group / saga details.
+2. The `Service Type` is chosen at service inception and may not change without an architecture decision recorded in the service spec. Adding `+ <secondary>` to an existing service after launch is a clarification, not a re-classification — no ADR required, but the inline parenthetical SHOULD explain the trigger (e.g., `+ event-consumer (CQRS read model, BE-046)`).
 3. Adding a new `Service Type` to this catalog requires updating this INDEX, creating a matching `<type>.md`, and adding the matching skill under `.claude/skills/service-types/<type>-setup.md`.
 
 ---

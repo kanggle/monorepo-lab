@@ -66,7 +66,7 @@ Examples:
 - [ ] All `.claude/skills/**/SKILL.md` paths referenced in agents exist
 - [ ] `skills/INDEX.md` lists every `SKILL.md` present under `.claude/skills/`
 - [ ] No orphaned skill folders (contain `SKILL.md` but not listed in INDEX)
-- [ ] Every skill folder contains exactly one `SKILL.md`; no stray `.md` files under `.claude/skills/` except `INDEX.md` (drift = Critical)
+- [ ] Every skill folder contains exactly one `SKILL.md`; no stray `.md` files under `.claude/skills/` except `INDEX.md` and `README.md` at any directory level — `README.md` files document folder conventions (e.g., `.claude/skills/domain/README.md` explains the empty domain/ skill tree) and are not stray (drift = Critical for anything else)
 - [ ] Every `SKILL.md` begins with YAML frontmatter containing `name`, `description`, `category` (missing field = Critical)
 
 #### 2-6. Service Type and Metadata Drift
