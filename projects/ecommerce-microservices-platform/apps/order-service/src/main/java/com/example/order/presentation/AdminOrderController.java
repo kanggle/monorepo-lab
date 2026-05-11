@@ -1,18 +1,16 @@
 package com.example.order.presentation;
 
 import com.example.order.application.dto.AdminOrderDetail;
+import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.application.dto.AdminOrderSummary;
 import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
-import com.example.order.domain.model.Order;
-import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.order.presentation.dto.AdminOrderDetailResponse;
 import com.example.order.presentation.dto.AdminOrderListResponse;
 import com.example.order.presentation.dto.AdminOrderStatusChangeRequest;
 import com.example.order.presentation.dto.AdminOrderStatusChangeResponse;
-import com.example.order.presentation.exception.InvalidOrderStatusException;
 import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -59,12 +57,8 @@ public class AdminOrderController {
             @Valid @RequestBody AdminOrderStatusChangeRequest request
     ) {
         validateAdminRole(userRole);
-        OrderStatus targetStatus = OrderControllerUtils.parseStatus(request.status());
-        if (targetStatus == null) {
-            throw new InvalidOrderStatusException(request.status());
-        }
-        Order order = adminOrderStatusService.changeStatus(orderId, targetStatus);
-        return ResponseEntity.ok(new AdminOrderStatusChangeResponse(order.getOrderId(), order.getStatus().name()));
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, request.status());
+        return ResponseEntity.ok(new AdminOrderStatusChangeResponse(result.orderId(), result.status()));
     }
 
     private void validateAdminRole(String userRole) {

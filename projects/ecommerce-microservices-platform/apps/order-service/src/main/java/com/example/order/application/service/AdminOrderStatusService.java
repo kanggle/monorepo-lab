@@ -1,9 +1,11 @@
 package com.example.order.application.service;
 
+import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.presentation.exception.InvalidOrderStatusException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +22,9 @@ public class AdminOrderStatusService {
     private final Clock clock;
 
     @Transactional
-    public Order changeStatus(String orderId, OrderStatus targetStatus) {
+    public AdminOrderStatusChangeResult changeStatus(String orderId, String targetStatusRaw) {
+        OrderStatus targetStatus = parseStatus(targetStatusRaw);
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
@@ -36,6 +40,17 @@ public class AdminOrderStatusService {
 
         orderRepository.save(order);
         log.info("Admin changed order status: orderId={}, {} -> {}", orderId, previousStatus, targetStatus);
-        return order;
+        return new AdminOrderStatusChangeResult(order.getOrderId(), order.getStatus().name());
+    }
+
+    private OrderStatus parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new InvalidOrderStatusException(raw);
+        }
+        try {
+            return OrderStatus.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidOrderStatusException(raw);
+        }
     }
 }
