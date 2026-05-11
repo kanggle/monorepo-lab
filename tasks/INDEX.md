@@ -101,9 +101,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-## ready
-
-- `TASK-MONO-054-saga-timeout-escalation-dead-letter-policy.md` — ADR-MONO-005 PROPOSED. Saga timeout / attempt-cap / escalation / dead-letter policy across the monorepo. 4-category taxonomy (A multi-step saga / B synchronous external / C single-step retry+DLT / D TTL expiry sweep). Audit of 7 in-scope flows (outbound saga ref / ecommerce order+refund / scm procurement / payment confirm / notification delivery / inventory reservation TTL + fan-platform N/A v1). Per-saga Scenario A/B decision pattern reuses ADR-006. Impl PR ships ADR + `docs/adr/INDEX.md` only (production code = 0, spec surface deferred to TASK-MONO-055). 4 follow-up tasks named: TASK-BE-138 deferred order stuck-detector / TASK-BE-139 ready Toss Payments R4j wrap / TASK-BE-140 deferred reservation metric / TASK-MONO-055 ready spec surface bundle (6 service `architecture.md` + `rules/traits/transactional.md` + `platform/event-driven-policy.md` pointers). TASK-BE-139 + TASK-MONO-055 gate ADR PROPOSED → ACCEPTED. 분석=Opus 4.7 / 구현=Opus.
+(empty)
 
 ## in-progress
 
@@ -114,6 +112,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-054-saga-timeout-escalation-dead-letter-policy.md` — 2026-05-11. ADR-MONO-005 PROPOSED. PR #357 (spec, commit 040859ed) + PR #358 (impl, commit 41750dae). Saga timeout / attempt-cap / escalation / dead-letter cross-cutting policy ADR (consume-side analog of ecommerce ADR-006). **4-category taxonomy** from 7-flow audit: A 멀티스텝 saga (outbound saga ref ✅ / ecommerce order saga gap) / B 동기 외부호출 (scm procurement ref ✅ / payment confirm+refund gap) / C 단일스텝 retry+DLT (notification delivery ref ✅) / D TTL 만료 sweep (inventory reservation ref ✅) — fan-platform N/A v1. D1 taxonomy + D2 generic policy (timeout, R4j wrap, idempotent re-emission, OL) + D3-D5 per-category sub-rules (sweeper cap=5, grace ≥60×p99 floor 60s default 300s, `<service>.alert.saga.recovery.exhausted` event, metric naming) + D6 per-saga Scenario A/B + D7 spec surface (separated). **Impl PR docs/specs only, production code = 0**. CI: path-filter 정상, 14 jobs skipping + changes pass. ADR-MONO-003 D4 churn-clock NOT triggered (docs/ only, libs/ + rules/ 미접근). **ACCEPTED gates**: TASK-BE-139 (READY, Toss Payments R4j wrap) + TASK-MONO-055 (READY, D7 spec surface bundle = 6 service `architecture.md` + 2 rule pointers). 추가 follow-up: TASK-BE-138 DEFERRED (ecommerce order stuck-detector) / TASK-BE-140 DEFERRED (reservation metric). 분석=Opus 4.7 / 구현=Opus.
 
 - `TASK-MONO-053-b-refactor-closure-audit.md` — 2026-05-11. B (common-rule refactor) closure audit — memory `project_b_common_rule_refactor_pending.md` 후보 #4 + #5. **#4** (`.claude/skills/INDEX.md` 정합화): 71 SKILL.md ↔ 72 INDEX entry 10-group cross-check → drift 0, RESOLVED. **#5** (BaseEventPublisher javadoc cleanup): production javadoc 의 "account and admin publishers" 잔재 reference 이미 정리됨 (TASK-MONO-049 production-code commits 중 cleanup 추정), test fixture `"Account"` / `"account-service"` / `"admin-service"` 는 project-agnostic 명명 (metric-prefix derivation parameterized test) — RESOLVED. **잔여 B 후보**: #1 (CLAUDE.md 분리, high cost user-review 필수) / #3 (rules/ audit 재진입, PR #328 + TASK-MONO-051 partial 적용) — 사용자 의향 대기. spec-only audit, code 변경 0. D4 freeze 영향 0.
 
