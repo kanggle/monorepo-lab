@@ -119,9 +119,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-061-hardstop-detect-orphan-fail-open.md` — 2026-05-12. `hardstop-detect.ps1` HARDSTOP-01 false-positive 수정 — TASK-MONO-060 머지 직후 발견 (auto-memory 디렉토리 write 가 hook 의 jurisdiction 밖이라 fail-open 해야 하지만 HARDSTOP-01 발화). 1-line fix (`Get-RepoRoot` null → exit 0) + 새 negative fixture. 15 → 16 assertion. 두 번째 dogfooding 사건 (첫 번째 = `9a81b459` contextual Status-field). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## done
+
+- `TASK-MONO-061-hardstop-detect-orphan-fail-open.md` — PR #388 머지 (2026-05-12, commit b89bcfaa). `hardstop-detect.ps1` HARDSTOP-01 false-positive 수정 — TASK-MONO-060 머지 직후 (commit `73120990` post-merge) auto-memory 디렉토리 write 시 `Get-RepoRoot` null → 부당한 HARDSTOP-01 발화 발견. 1-line fix (`exit 0` fail-open) + 새 negative fixture (file 가 `$env:TEMP` 등 어떤 monorepo 도 ancestor 아닌 경우 silent allow). 15 → 16 assertion 전체 PASS. **CI 15/15 PASS**. 두 번째 dogfooding 사건 (첫 번째 = `9a81b459` contextual Status-field, PR #386 내부). 3 commit (spec `4c991010` / fix `72911abe` / lifecycle `ad62ed90`). OpenAI Harness gap A 완전 안정화. 분석=Opus 4.7 / 구현=Opus.
 
 - `TASK-MONO-060-hook-inject-remediation-message.md` — PR #386 머지 (2026-05-12, commit 73120990). OpenAI Harness gap A Phase 3 closure — `.claude/hooks/hardstop-detect.ps1` 신규 (PreToolUse Edit/Write, FIRST hook so block short-circuits) + 5 mechanical trigger (HARDSTOP-01 no PROJECT.md / -03 shared-lib path-token leak / -05 frozen task body edit with multi-line Status-move allowlist / -09 architecture.md missing / -10 Service Type undeclared). 기존 hook 2 개 4-block 정렬 (`SPEC-CHECK-01/02`, `RULE-CONSISTENCY-01..04`). 단일 source of truth = CLAUDE.md HARDSTOP-NN 스탠자, hook 은 path/line 만 파라미터 주입. **6 fixture 15 assertion 전체 PASS**. **CI 15/15 PASS** (full pipeline). **Dogfooding 성공 사례**: 본 PR 의 ready→review lifecycle 이동이 hook self-fire → contextual Status-field detection bug 발견 → fix commit `9a81b459` (lifecycle move detection via `<from>` → `<to>` swap simulation, single-token / contextual 양쪽 모두 통과). 3 commit: impl `09e1dc8f` / fix `9a81b459` / lifecycle chore `1122f665`. Semantic trigger 5 (HARDSTOP-02/04/06/07/08) = Phase 3b deferred (taxonomy/AC/contract parser 정당화 미달). 4 file 신규 (`hardstop-detect.ps1`, README, `__tests__/_helpers.ps1`, fixtures 6 + runner) + 5 file 수정 (settings.json, spec-check/rule-consistency/spec doc/ADR). ADR-MONO-006 § 6 outstanding #1 DELIVERED. gap-A 100% closure (Phase 1+2 + Phase 3 mechanical). D4 OVERRIDE applies. 분석=Opus 4.7 / 구현=Opus.
 
