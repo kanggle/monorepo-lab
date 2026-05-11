@@ -111,7 +111,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-060-hook-inject-remediation-message.md` — 2026-05-12. OpenAI Harness gap A Phase 3 — `.claude/hooks/hardstop-detect.ps1` 신규 (PreToolUse Edit/Write 매처) + 기존 `spec-check.ps1` / `rule-consistency-check.ps1` 4-block 포맷 정렬 + `.claude/settings.json` 등록. 5 mechanical trigger (HARDSTOP-01/03/05/09/10) detection, semantic 5 (02/04/06/07/08) = Phase 3b deferred. 단일 source of truth = CLAUDE.md HARDSTOP-NN 스탠자 (hook 은 path+line 만 파라미터 주입). 5 fixture 진단 스크립트 `.claude/hooks/__tests__/run-all.ps1` 발치 (개발자 수동 실행, CI 미통합). ADR-MONO-006 § 6 outstanding #1 closure 완료 시 gap-A 100% (Phase 1+2 ≈ 50% + Phase 3 ≈ 50%). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical PS + JSON).
+
+
 
 ## in-progress
 
