@@ -5,7 +5,7 @@
 **History:** PROPOSED 2026-05-12 (TASK-MONO-059) → ACCEPTED 2026-05-12 (same PR — meta-policy ADR with no implementation gating).
 **Decision driver:** TASK-MONO-059, sourced from memory `reference_openai_harness_engineering.md` § "monorepo-lab 갭 매핑" (gap A — "lint 에러 → 에이전트 remediation 주입") and § "강제 메커니즘 핵심 3가지" #2 (the OpenAI mechanism: "custom lint error messages = agent's next-turn context").
 **Supersedes:** none — first ADR formalising the violation-message contract across the shared rule surface.
-**Related:** [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) § 3.4 risk 2 (D4 OVERRIDE scope — extended here to cover the OpenAI Harness gap series, user-acknowledged), [CLAUDE.md § Hard Stop Rules](../../CLAUDE.md#hard-stop-rules), [platform/lint-remediation-message-standard.md](../../platform/lint-remediation-message-standard.md), [platform/architecture-decision-rule.md](../../platform/architecture-decision-rule.md), [rules/README.md § Conflict Rules](../../rules/README.md#conflict-rules).
+**Related:** [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) § 3.4 risk 2 (D4 OVERRIDE original introduction, historical), [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) (**canonical D4 OVERRIDE scope** as of 2026-05-12 — supersedes the scope discussion in this ADR's § 3.4 / § 4.2 / § 7 for authority purposes; this ADR's § 7 remains the gap-A provenance record), [CLAUDE.md § Hard Stop Rules](../../CLAUDE.md#hard-stop-rules), [platform/lint-remediation-message-standard.md](../../platform/lint-remediation-message-standard.md), [platform/architecture-decision-rule.md](../../platform/architecture-decision-rule.md), [rules/README.md § Conflict Rules](../../rules/README.md#conflict-rules).
 
 ---
 
