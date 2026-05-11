@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-139 | `TossPaymentsAdapter` Resilience4j wrap — Category B compliance per ADR-MONO-005 § D6. CB / Retry / Bulkhead 적용 + `PgGatewayUnavailableException` (전송 실패) 와 `PgConfirmFailedException` (PG 본인 거절) 시맨틱 분리. `PG_GATEWAY_UNAVAILABLE` 503 코드 신설. ADR-MONO-005 ACCEPTED 게이트 2/2 (gate 1/2 = TASK-MONO-055 머지됨, PR #361). 본 task 머지 시 ADR PROPOSED → ACCEPTED. | payment-service | code, adapter, resilience4j, integration |
 
 ## in-progress
 
