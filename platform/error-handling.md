@@ -287,7 +287,8 @@ Owned by `payment-service`. See `rules/domains/ecommerce.md` rule E2.
 | INVALID_PAYMENT_REQUEST | 400 | Payment request is invalid (missing required identity header) |
 | AMOUNT_MISMATCH | 400 | Confirm amount does not match PENDING payment amount |
 | PAYMENT_ALREADY_COMPLETED | 409 | Payment is not in PENDING status |
-| PG_CONFIRM_FAILED | 502 | Payment Gateway confirmation API returned an error |
+| PG_CONFIRM_FAILED | 502 | Payment Gateway confirmation API returned a definitive error (4xx) — PG processed the request and rejected it. Payment row transitions to `FAILED`. |
+| PG_GATEWAY_UNAVAILABLE | 503 | Payment Gateway unreachable after Resilience4j retry / circuit-breaker / bulkhead exhaustion (5xx, timeout, circuit open). Distinct from `PG_CONFIRM_FAILED` — PG actual state is unknown, so the payment row is NOT transitioned to `FAILED` and the caller may idempotently retry. ADR-MONO-005 § D4 Category B (TASK-BE-139). |
 
 ## User  `[domain: ecommerce]`
 

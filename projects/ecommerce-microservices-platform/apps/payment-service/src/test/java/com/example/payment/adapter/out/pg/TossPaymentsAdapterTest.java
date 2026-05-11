@@ -1,11 +1,20 @@
 package com.example.payment.adapter.out.pg;
 
 import com.example.payment.application.exception.PgConfirmFailedException;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.junit.jupiter.api.*;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
+
+import java.net.ConnectException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +41,7 @@ class TossPaymentsAdapterTest {
     void setUp() {
         wireMock.resetAll();
         TossPaymentsProperties properties = new TossPaymentsProperties(
-                "test_sk_secret", "http://localhost:" + wireMock.port()
+                "test_sk_secret", "http://localhost:" + wireMock.port(), 5000, 10000
         );
         adapter = new TossPaymentsAdapter(properties, RestClient.builder());
     }
@@ -102,8 +111,8 @@ class TossPaymentsAdapterTest {
     }
 
     @Test
-    @DisplayName("PG 승인 5xx 에러 시 PgConfirmFailedException이 발생한다")
-    void confirmPayment_serverError_throwsPgConfirmFailed() {
+    @DisplayName("PG 승인 5xx 에러는 adapter 에서 catch 하지 않고 HttpServerErrorException 으로 전파된다 (ADR-MONO-005 § D4 — R4j retry-exceptions 가 받는다)")
+    void confirmPayment_serverError_propagatesHttpServerErrorException() {
         wireMock.stubFor(post(urlEqualTo("/v1/payments/confirm"))
                 .willReturn(serverError()
                         .withHeader("Content-Type", "application/json")
@@ -112,7 +121,7 @@ class TossPaymentsAdapterTest {
                                 """)));
 
         assertThatThrownBy(() -> adapter.confirmPayment("pk_test_123", "order-1", 30000L))
-                .isInstanceOf(PgConfirmFailedException.class);
+                .isInstanceOf(HttpServerErrorException.class);
     }
 
     // --- cancelPayment ---
@@ -132,8 +141,8 @@ class TossPaymentsAdapterTest {
     }
 
     @Test
-    @DisplayName("PG 취소 실패 시 PgConfirmFailedException이 발생한다")
-    void cancelPayment_failure_throwsPgConfirmFailed() {
+    @DisplayName("PG 취소 4xx 실패 시 PgConfirmFailedException이 발생한다")
+    void cancelPayment_clientError_throwsPgConfirmFailed() {
         wireMock.stubFor(post(urlPathEqualTo("/v1/payments/pk_test_123/cancel"))
                 .willReturn(aResponse()
                         .withStatus(400)
@@ -144,5 +153,83 @@ class TossPaymentsAdapterTest {
 
         assertThatThrownBy(() -> adapter.cancelPayment("pk_test_123", "Order cancelled"))
                 .isInstanceOf(PgConfirmFailedException.class);
+    }
+
+    @Test
+    @DisplayName("PG 취소 5xx 는 adapter 에서 catch 하지 않고 HttpServerErrorException 으로 전파된다")
+    void cancelPayment_serverError_propagatesHttpServerErrorException() {
+        wireMock.stubFor(post(urlPathEqualTo("/v1/payments/pk_test_123/cancel"))
+                .willReturn(serverError()));
+
+        assertThatThrownBy(() -> adapter.cancelPayment("pk_test_123", "Order cancelled"))
+                .isInstanceOf(HttpServerErrorException.class);
+    }
+
+    // --- Fallback method classification (ADR-MONO-005 § D4) ---
+
+    @Test
+    @DisplayName("confirmFallback 은 HttpServerErrorException cause 를 PgGatewayUnavailableException 으로 변환한다")
+    void confirmFallback_serverError_translatesToGatewayUnavailable() {
+        HttpServerErrorException cause = HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal Server Error", null, new byte[0], null);
+
+        assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
+                .isInstanceOf(PgGatewayUnavailableException.class)
+                .hasMessageContaining("pk_test_123")
+                .hasMessageContaining("exhausted")
+                .hasCauseInstanceOf(HttpServerErrorException.class);
+    }
+
+    @Test
+    @DisplayName("confirmFallback 은 CallNotPermittedException (CB OPEN) 도 PgGatewayUnavailableException 으로 변환한다")
+    void confirmFallback_circuitOpen_translatesToGatewayUnavailable() {
+        CircuitBreaker cb = CircuitBreaker.of("toss-payments", CircuitBreakerConfig.ofDefaults());
+        CallNotPermittedException cause = CallNotPermittedException.createCallNotPermittedException(cb);
+
+        assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
+                .isInstanceOf(PgGatewayUnavailableException.class)
+                .hasCauseInstanceOf(CallNotPermittedException.class);
+    }
+
+    @Test
+    @DisplayName("confirmFallback 은 BulkheadFullException 도 PgGatewayUnavailableException 으로 변환한다")
+    void confirmFallback_bulkheadFull_translatesToGatewayUnavailable() {
+        Bulkhead bulkhead = Bulkhead.ofDefaults("toss-payments");
+        BulkheadFullException cause = BulkheadFullException.createBulkheadFullException(bulkhead);
+
+        assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
+                .isInstanceOf(PgGatewayUnavailableException.class)
+                .hasCauseInstanceOf(BulkheadFullException.class);
+    }
+
+    @Test
+    @DisplayName("confirmFallback 은 PgConfirmFailedException 을 defensive re-throw 한다 (R4j ignore-exceptions 가 보통 막지만 방어)")
+    void confirmFallback_pgConfirmFailed_isReThrownUnchanged() {
+        PgConfirmFailedException cause = new PgConfirmFailedException("4xx body");
+
+        assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
+                .isInstanceOf(PgConfirmFailedException.class)
+                .isSameAs(cause);
+    }
+
+    @Test
+    @DisplayName("cancelFallback 은 transport 실패를 PgGatewayUnavailableException 으로 변환한다")
+    void cancelFallback_transport_translatesToGatewayUnavailable() {
+        ConnectException cause = new ConnectException("connection refused");
+
+        assertThatThrownBy(() -> adapter.cancelFallback("pk_test_123", "Order cancelled", cause))
+                .isInstanceOf(PgGatewayUnavailableException.class)
+                .hasCauseInstanceOf(ConnectException.class);
+    }
+
+    @Test
+    @DisplayName("cancelFallback 은 PgConfirmFailedException 을 defensive re-throw 한다")
+    void cancelFallback_pgConfirmFailed_isReThrownUnchanged() {
+        PgConfirmFailedException cause = new PgConfirmFailedException("Cancel 4xx body");
+
+        assertThatThrownBy(() -> adapter.cancelFallback("pk_test_123", "Order cancelled", cause))
+                .isInstanceOf(PgConfirmFailedException.class)
+                .isSameAs(cause);
     }
 }

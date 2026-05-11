@@ -1,7 +1,8 @@
 # ADR-MONO-005 — Saga Timeout / Escalation / Dead-Letter Policy
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-11
+**History:** PROPOSED 2026-05-11 (TASK-MONO-054 / PR #358) → ACCEPTED 2026-05-11 (TASK-MONO-055 § D7 spec surface bundle merged via PR #361, gate 1/2; TASK-BE-139 `TossPaymentsAdapter` Resilience4j wrap merged, gate 2/2 — payment-service joined the Category B reference column).
 **Decision driver:** TASK-MONO-054. ADR-006 (ecommerce, 2026-05-11) closed the *publish-side* at-least-once gap by per-service Scenario A/B decisions. The *consume-side* still has a structural gap: each long-running flow (saga or saga-shaped retry loop) carries its own ad-hoc timeout / cap / escalation conventions. The most mature reference (outbound-service `SagaSweeper`, TASK-BE-050) co-exists with bare synchronous flows (payment-service `PaymentConfirmService` — no Resilience4j wrapping) and a choreographed flow with no stuck-detector (ecommerce `order → payment → order`). A policy ADR is overdue.
 **Supersedes:** none — first ADR establishing a saga-level operational contract across the monorepo.
 **Related:** [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) (publisher transport), [ecommerce ADR-006](../../projects/ecommerce-microservices-platform/docs/adr/ADR-006-at-least-once-delivery-policy.md) (publish-side at-least-once), [ecommerce ADR-002](../../projects/ecommerce-microservices-platform/docs/adr/ADR-002-saga-over-distributed-transaction.md) (saga over distributed TX), [rules/traits/transactional.md](../../rules/traits/transactional.md) §T2 / T6 / T8, [rules/traits/integration-heavy.md](../../rules/traits/integration-heavy.md) §I1–I3 / I5, [platform/event-driven-policy.md](../../platform/event-driven-policy.md) § Consumer Rules.
@@ -98,9 +99,9 @@ Following the ADR-006 Scenario A/B pattern. **Scenario A = already-compliant**, 
 |---|---|---|---|
 | outbound saga | **A — Compliant.** Reference impl for Category A. Metric names match the catalog; sweeper + handler split is the documented pattern. | No change. Other Category A sagas should align to this naming. | none |
 | ecommerce order saga | **B — Stuck-detector deferred.** Choreographed flow with no orchestrator row; introducing one is a non-trivial schema change to order-service. Today the operator-detectable signal is `orders` rows in `PAYMENT_PENDING` older than the saga grace period. | Acceptable for portfolio v1: ADR-006 already closed the silent-publish gap, and `PAYMENT_PENDING` rows are queryable. v2 promotion when traffic justifies the orchestrator-row cost. | **TASK-BE-138** (DEFERRED) — add an order-stuck detector cron that queries `orders WHERE status='PAYMENT_PENDING' AND placed_at < NOW() - INTERVAL 30 minutes` and emits `order.alert.saga.recovery.exhausted` |
-| ecommerce refund saga | **B — Resilience wrapping gap.** PG `cancelPayment` is synchronous unwrapped; refund event is at-least-once via outbox (post-ADR-006). | Same shape as scm procurement — Category B with a missing wrap. Wrapping is mechanical (~ 1 day). | **TASK-BE-139** — wrap `TossPaymentsAdapter.cancelPayment` with Resilience4j (CB + retry + bulkhead) matching the scm reference; surface `EXTERNAL_SERVICE_UNAVAILABLE` on exhaustion. |
+| ecommerce refund saga | **A — Compliant (post-TASK-BE-139).** PG `cancelPayment` now wrapped with `@CircuitBreaker(toss-payments)` + `@Retry` + `@Bulkhead`; fallback throws `PgGatewayUnavailableException` → 503 `PG_GATEWAY_UNAVAILABLE`. Refund event remains at-least-once via outbox (ADR-006). | No further change. | ✅ TASK-BE-139 MERGED |
 | scm procurement | **A — Compliant.** Reference impl for Category B. Fail-CLOSED is correct; PO stays `DRAFT` on `SUPPLIER_UNAVAILABLE`. | No change. | none |
-| payment confirm | **B — Resilience wrapping gap.** Same shape as refund — `TossPaymentsAdapter.confirmPayment` is unwrapped. | Same fix as refund; bundle in TASK-BE-139. | **TASK-BE-139** (covers both PG calls) |
+| payment confirm | **A — Compliant (post-TASK-BE-139).** `TossPaymentsAdapter.confirmPayment` Resilience4j-wrapped with the same shape as procurement. 4xx → `PgConfirmFailedException` (existing semantic — `payment.fail()`); 5xx / timeout / circuit-open → `PgGatewayUnavailableException` (row stays PENDING, idempotent retry). | No further change. | ✅ TASK-BE-139 MERGED |
 | notification delivery | **A — Compliant.** Reference impl for Category C. `DELIVERY_RETRY_EXHAUSTED` + outbox `outcome=FAILED_RETRY_EXHAUSTED` is the documented terminal. | No change. | none |
 | inventory reservation TTL | **A — Compliant.** Reference impl for Category D. Single-tick release with OL retry is the documented pattern. | Add `inventory.reservation.expiry.swept.total` metric (cosmetic — current job logs count but doesn't expose a Micrometer counter). | **TASK-BE-140** (DEFERRED, cosmetic) — add the metric |
 | fan-platform membership | **N/A v1.** No multi-step flow exists yet. | When v2 introduces the membership lifecycle, declare its category at that point. | none |
@@ -142,12 +143,12 @@ These spec edits land in **TASK-MONO-055** (separate PR) per the `tasks/INDEX.md
 - ADR catalog update: `docs/adr/INDEX.md` adds a row for MONO-005.
 - The audit table in § 1.1 is a *snapshot* and will rot — `architecture.md` per-service entries are the durable source-of-truth going forward.
 
-### 4.3 Verification (post-ACCEPTED)
+### 4.3 Verification (gates for ACCEPTED transition — both satisfied 2026-05-11)
 
 ADR transitions PROPOSED → ACCEPTED when **all** of the following are true:
 
-1. **TASK-BE-139** (Resilience4j wrap for `TossPaymentsAdapter`) is merged.
-2. **TASK-MONO-055** is merged — the seven affected services have the "Saga / Long-running Flow" section in their respective `architecture.md`, and `rules/traits/transactional.md` + `platform/event-driven-policy.md` carry the policy pointers (D7).
+1. ✅ **TASK-BE-139** (Resilience4j wrap for `TossPaymentsAdapter`) merged — PR #__. `TossPaymentsAdapter.confirmPayment` + `cancelPayment` carry `@CircuitBreaker(toss-payments)` + `@Retry(toss-payments)` + `@Bulkhead(toss-payments)`. Fallback methods translate 5xx-exhaustion / `CallNotPermittedException` / `BulkheadFullException` / timeouts to new `PgGatewayUnavailableException` (503 `PG_GATEWAY_UNAVAILABLE`). 4xx → existing `PgConfirmFailedException` (502, payment row → `FAILED`). `PaymentConfirmService` + `PaymentRefundService` updated to distinguish the two exception kinds — only `PgConfirmFailedException` transitions the row state.
+2. ✅ **TASK-MONO-055** merged — PR #361. The seven affected services have the "Saga / Long-running Flow" section in their respective `architecture.md`, and `rules/traits/transactional.md` + `platform/event-driven-policy.md` carry the policy pointers (D7).
 
 ### 4.4 ADR-MONO-003 D4 churn impact
 
@@ -168,9 +169,9 @@ Future work that this ADR makes simpler:
 | Follow-up | Trigger | Status |
 |---|---|---|
 | **TASK-BE-138** — order-service stuck-detector cron + `order.alert.saga.recovery.exhausted` event | Choreographed-saga stuck-detector for ecommerce order flow | DEFERRED (acceptable gap for portfolio v1) |
-| **TASK-BE-139** — Resilience4j wrap for `TossPaymentsAdapter.confirmPayment` + `cancelPayment` | Category B compliance gap | READY (gates ADR ACCEPTED) |
+| **TASK-BE-139** — Resilience4j wrap for `TossPaymentsAdapter.confirmPayment` + `cancelPayment` | Category B compliance gap | ✅ MERGED 2026-05-11 |
 | **TASK-BE-140** — `inventory.reservation.expiry.swept.total` Micrometer counter | Cosmetic metric gap (Category D) | DEFERRED |
-| **TASK-MONO-055** — Spec surface bundle: 6 service `architecture.md` "Saga / Long-running Flow" sections + 2 rule pointers (`rules/traits/transactional.md`, `platform/event-driven-policy.md`) | D7 surface — splits from this ADR's PR per `tasks/INDEX.md` PR Separation Rule | READY (gates ADR ACCEPTED with TASK-BE-139) |
+| **TASK-MONO-055** — Spec surface bundle: 6 service `architecture.md` "Saga / Long-running Flow" sections + 2 rule pointers (`rules/traits/transactional.md`, `platform/event-driven-policy.md`) | D7 surface — splits from this ADR's PR per `tasks/INDEX.md` PR Separation Rule | ✅ MERGED 2026-05-11 (PR #361) |
 
 ---
 

@@ -4,6 +4,7 @@ import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.exception.AmountMismatchException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
 import com.example.payment.application.exception.PgConfirmFailedException;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
@@ -134,6 +135,26 @@ class PaymentConfirmServiceTest {
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.FAILED);
+
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+    }
+
+    @Test
+    @DisplayName("PgGatewayUnavailableException 발생 시 결제 상태를 변경하지 않고 그대로 propagate 한다 (ADR-MONO-005 § D4 — 전송 실패는 PG 상태 불명, idempotent retry 허용)")
+    void confirm_pgGatewayUnavailable_doesNotChangeStateAndPropagates() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+                .willThrow(new PgGatewayUnavailableException("retry exhausted"));
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        // CRITICAL: row stays in PENDING. No save() called — caller (HTTP user)
+        // can idempotently retry without being locked out by FAILED status.
+        verify(paymentRepository, never()).save(any());
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 
         verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());

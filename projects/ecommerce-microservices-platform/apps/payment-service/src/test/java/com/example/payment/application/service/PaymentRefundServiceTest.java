@@ -1,6 +1,7 @@
 package com.example.payment.application.service;
 
 import com.example.payment.application.event.PaymentRefundedEvent;
+import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
@@ -123,5 +124,24 @@ class PaymentRefundServiceTest {
 
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("PG cancel 호출 시 PgGatewayUnavailableException 발생하면 결제 상태를 변경하지 않고 propagate 한다 (ADR-MONO-005 § D4 — 전송 실패는 PG 상태 불명)")
+    void refundPayment_pgGatewayUnavailable_doesNotChangeState() {
+        Payment payment = completedPaymentWithPgKey();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        doThrow(new PgGatewayUnavailableException("retry exhausted"))
+                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled");
+
+        assertThatThrownBy(() -> paymentRefundService.refundPayment("order-1"))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        // CRITICAL: row stays in COMPLETED (no refund state change). Caller's
+        // retry / DLT mechanism will re-drive when PG recovers.
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+        verify(paymentMetricRecorder, never()).incrementPaymentRefunded();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     }
 }
