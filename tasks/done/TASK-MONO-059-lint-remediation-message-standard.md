@@ -8,7 +8,7 @@ Standardize Hard Stop / rule-violation messages into agent-followable remediatio
 
 # Status
 
-review
+done
 
 # Owner
 
