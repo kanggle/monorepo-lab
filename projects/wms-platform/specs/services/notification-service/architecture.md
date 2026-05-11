@@ -254,6 +254,18 @@ idempotent at the application layer (per-delivery row).
 
 ---
 
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — **Category C reference implementation** for the monorepo.
+
+| Flow | Category | Backoff / Poll | Cap | Metrics | DLT terminal | Status |
+|---|---|---|---|---|---|---|
+| notification delivery (channel send + retry) | **C** (single-step retry+DLT, persistent `notification_delivery` row) | `wms.notification.delivery.backoff-seconds=1,5,30,120,600` ±20 % jitter · `wms.notification.delivery.retry-poll-interval-ms=5000` | 5 attempts → terminal `FAILED` + error code `DELIVERY_RETRY_EXHAUSTED` (422) | `notification.delivery.attempts{channel,status}`, `notification.delivery.duration.seconds` | `notification.delivered.v1 outcome=FAILED_RETRY_EXHAUSTED` (outbox audit event acts as DLT analog; vendor 4xx → `FAILED_PERMANENT` short-circuit) | **Compliant** (reference impl) |
+
+Source: `DeliveryDispatchPerRow` runs each delivery under `@Transactional(REQUIRES_NEW)` via a separate bean so Spring AOP self-invocation is honoured (per `feedback_refactor_code_baseline_it.md`). Slack channel adapter is Resilience4j-wrapped (Category B sub-step inside Category C).
+
+---
+
 ## Idempotency
 
 ### Inbound (Kafka)

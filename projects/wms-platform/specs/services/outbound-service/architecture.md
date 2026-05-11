@@ -606,6 +606,18 @@ is safe.
 
 ---
 
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — **Category A reference implementation** for the monorepo.
+
+| Flow | Category | Grace / Poll | Cap | Metrics | Escalation event | Status |
+|---|---|---|---|---|---|---|
+| outbound saga (`picking → packing → shipping` ↔ inventory + TMS) | **A** (orchestrated, persistent `outbound_saga` row) | grace `outbound.saga.sweeper.threshold-seconds=300`s · poll `outbound.saga.sweeper.fixed-delay-ms=60000`ms · batch `outbound.saga.sweeper.batch-size=100` | `outbound.saga.sweeper.max-attempts=5` → terminal `STUCK_RECOVERY_FAILED` | `outbound.saga.sweeper.run.count`, `outbound.saga.sweeper.recovery.fired{from_state}`, `outbound.saga.sweeper.exhausted.count{from_state}` | `outbound.alert.saga.recovery.exhausted` (outbox event — see `SagaRecoveryExhaustedEvent`) | **Compliant** (reference impl, TASK-BE-050) |
+
+Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code_baseline_it.md` AOP self-invocation guard). Adapter-level Resilience4j on `TmsClientAdapter` covers the external-call sub-step (Category B inside the Category A saga).
+
+---
+
 ## Extensibility Notes
 
 - **Returns / RMA** — new flow, distinct lifecycle. Out of v1.

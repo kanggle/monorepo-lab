@@ -68,7 +68,7 @@
 transactional trait이 활성화된 프로젝트는 다음 산출물을 **필수**로 갖춰야 한다:
 
 1. **State machine 다이어그램** — 각 핵심 aggregate (예: Order, Payment, Refund)의 상태와 전이 조건. 위치: `specs/services/<service>/state-machines/`
-2. **Saga 정의** — 여러 서비스에 걸친 프로세스. 각 단계, 보상 액션, 타임아웃. 위치: `specs/features/<feature>.md` 또는 `specs/services/<service>/sagas/`
+2. **Saga 정의** — 여러 서비스에 걸친 프로세스. 각 단계, 보상 액션, 타임아웃. 위치: `specs/features/<feature>.md` 또는 `specs/services/<service>/sagas/`. **멀티스텝 saga (Category A per [ADR-MONO-005](../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md)) 는 § D3 (sweeper + escalation event + metric naming) 을 준수해야 한다.**
 3. **Idempotency 키 전략 문서** — 키 범위, 저장소, 만료. 위치: `specs/services/<service>/idempotency.md`
 4. **Outbox 테이블 스키마** — DB migration에 포함
 5. **실패 시나리오 테스트** — 동일 명령 2회 호출, Saga 중간 실패, 이벤트 중복 소비 시나리오
