@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-059-lint-remediation-message-standard.md` — 2026-05-12. OpenAI Harness gap A 진입 — Hard Stop / 룰 위반 메시지를 `[VIOLATION]/[WHY]/[REMEDIATION]/[REFERENCE]` 4-block 표준으로 정렬. 신규 spec `platform/lint-remediation-message-standard.md` + CLAUDE.md § Hard Stop Rules 10 stanza 재작성 + `platform/architecture-decision-rule.md` L24 + `rules/README.md` L85 adjacent 정렬 + ADR-MONO-006 ACCEPTED. Phase 3 (hook 자동화) 는 TASK-MONO-060 후보로 분리. D4 OVERRIDE 확장 (ADR-MONO-003 § 3.4 risk 2 — OpenAI Harness gap series 까지 scope 확장, 사용자 acknowledged). 분석=Opus 4.7 / 구현=Opus.
 
 ## done
 
