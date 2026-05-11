@@ -417,6 +417,7 @@ Per `service-types/rest-api.md` + `service-types/event-consumer.md`:
 - **Business metrics**:
   - `inventory.mutation.count{operation,reason}` — adjustments / transfers / reserves / confirms
   - `inventory.reservation.active.count` — gauge of currently held reservations
+  - `inventory.reservation.expiry.swept.total` — counter of reservations released by the TTL expiry job per tick (ADR-MONO-005 § D5)
   - `inventory.outbox.lag.seconds` — commit-to-publish delay
   - `inventory.event.dedupe.hit.rate` — duplicates-suppressed ratio
   - `inventory.idempotency.hit.rate` — REST-side cached vs fresh
@@ -520,7 +521,7 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 
 | Flow | Category | Poll / Batch | Terminal | Metrics | Status |
 |---|---|---|---|---|---|
-| reservation TTL expiry (`RESERVED → RELEASED` after `expires_at`) | **D** (TTL expiry sweep, persistent `reservation` row) | `inventory.reservation.ttl-job.interval-ms=60000` · `inventory.reservation.ttl-job.batch-size=200` | `RELEASED` via `ReleaseReservationService.releaseExpired(...)` — each row in its own `@Transactional` boundary; one failure does not abort the batch; OL race retries next tick | (cosmetic gap) `inventory.reservation.expiry.swept.total` counter — TASK-BE-140 DEFERRED | **Compliant** (operational metric gap noted) |
+| reservation TTL expiry (`RESERVED → RELEASED` after `expires_at`) | **D** (TTL expiry sweep, persistent `reservation` row) | `inventory.reservation.ttl-job.interval-ms=60000` · `inventory.reservation.ttl-job.batch-size=200` | `RELEASED` via `ReleaseReservationService.releaseExpired(...)` — each row in its own `@Transactional` boundary; one failure does not abort the batch; OL race retries next tick | `inventory.reservation.expiry.swept.total` counter (incremented by released count per tick — ADR § D5) | **Compliant** |
 
 Reservation is also a **participant** in outbound-service's Category A saga (see "Saga Participation (v1 light)" above) — that saga's orchestration lives in outbound-service; inventory only exposes idempotent operations and emits visibility events.
 
