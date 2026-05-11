@@ -6,9 +6,11 @@
 
 ## Service Type
 
-`rest-api` — 인증 전담 서비스. 로그인/로그아웃, JWT 발급, refresh token 회전, 토큰 재사용 탐지, Redis 기반 로그인 실패 카운팅.
+`identity-platform` — Spring Authorization Server (SAS) 기반 OIDC Authorization Server. `/oauth2/authorize` · `/oauth2/token` · `/oauth2/jwks` · `/oauth2/revoke` · `/oauth2/introspect` · `/.well-known/openid-configuration` 표준 엔드포인트 발행 (ADR-001 ACCEPTED, ADR-003/004 closure 후). access/refresh token RSA 비대칭 서명 + JWKS 노출 + Authorization Code+PKCE / refresh / revoke 흐름 제공. 로그인/로그아웃 + 로그인 실패 카운팅 + refresh token 회전·재사용 탐지 모두 본 서비스 owns.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/identity-platform.md](../../../../../platform/service-types/identity-platform.md)
+
+**선언 이력**: 2026-04-30 import 시점 `rest-api` 선언 → 2026-05-02 ADR-001 ACCEPTED + SAS 도입 (TASK-BE-251) → 2026-05-09 BE-272/273/274 closure 로 OIDC AS 깊이 증명 완성 → **2026-05-11 service-type 정정** (Identity Platform 카탈로그 정의가 본 서비스의 실 책임과 정확히 일치).
 
 ## Architecture Style
 
