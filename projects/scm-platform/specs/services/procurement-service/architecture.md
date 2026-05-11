@@ -668,10 +668,14 @@ None block the spec — they are filed here for transparency and follow-up:
    the natural place to reconcile (its scope already covers
    `gateway-public-routes.md` for inventory-visibility — extend to
    procurement in the same PR or file separately).
-2. **`scm-procurement-events.md` does not exist.** The 7 published topic
+2. **`scm-procurement-events.md` does not exist.** ~~The 7 published topic
    contracts have no formal spec file. Filed as follow-up TASK-SCM-BE-009
    candidate (event contract authoring — separate from this task because
-   it requires payload-schema authoring per topic).
+   it requires payload-schema authoring per topic).~~ **Resolved** by
+   [TASK-SCM-BE-009](../../../tasks/done/TASK-SCM-BE-009-procurement-events-contract-authoring.md)
+   (PR #341, 2026-05-11). Contract authored at
+   [`scm-procurement-events.md`](../../contracts/events/scm-procurement-events.md)
+   — envelope shape + 7 per-topic payload schemas + consumer rules.
 3. **`SETTLED` / `CLOSED` are dead surface in v1.** Enum values, transition
    matrix entries, event constants, and Kafka topic mappings exist but no
    v1 use case drives them. Intentional — the `settlement-service` (v2)
