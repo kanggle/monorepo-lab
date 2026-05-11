@@ -177,8 +177,8 @@ class TossPaymentsAdapterTest {
         assertThatThrownBy(() -> adapter.confirmFallback("pk_test_123", "order-1", 30000L, cause))
                 .isInstanceOf(PgGatewayUnavailableException.class)
                 .hasMessageContaining("pk_test_123")
-                .hasMessageContaining("HttpServerErrorException")
-                .hasCause(cause);
+                .hasMessageContaining("exhausted")
+                .hasCauseInstanceOf(HttpServerErrorException.class);
     }
 
     @Test
