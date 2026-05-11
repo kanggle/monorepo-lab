@@ -76,5 +76,13 @@ Required emphasis:
 - repository integration tests
 - contract tests for published APIs/events
 
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md).
+
+| Flow | Category | Current state | Status |
+|---|---|---|---|
+| order placement saga (`OrderPlaced → PaymentCompleted → OrderConfirmed`) | **A** (choreographed multi-step; no orchestrator row) | Pure event-driven across `order-service ↔ payment-service`. Order publishes `order.order.placed` via outbox; payment-service consumes and publishes `payment.payment.completed` via outbox (post-ADR-006, Scenario A — TASK-BE-136 PR #345); order-service consumes and confirms. Both producers are at-least-once. No stuck-detector — orders frozen in `PAYMENT_PENDING` are queryable by ops (`SELECT … FROM orders WHERE status='PAYMENT_PENDING' AND placed_at < NOW() - INTERVAL …`). | **Gap — Scenario B** (acceptable for portfolio v1 per ADR § D6). Stuck-detector cron + `order.alert.saga.recovery.exhausted` event = **TASK-BE-138 DEFERRED** |
+
 ## Change Rule
 Any architectural change to this service must be documented here first before implementation.

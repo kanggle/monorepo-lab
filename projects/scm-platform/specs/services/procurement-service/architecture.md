@@ -357,6 +357,18 @@ DRAFT for retry.
 
 ---
 
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — **Category B reference implementation** for the monorepo.
+
+| Flow | Category | Resilience4j config | Fail-CLOSED terminal | Metrics | Status |
+|---|---|---|---|---|---|
+| supplier PO submission (`PurchaseOrder` ↔ supplier API) | **B** (synchronous external, no saga row) | `@CircuitBreaker(supplier)` 50 % failure rate / 10-call sliding window · `@Retry(supplier)` 3 attempts with exponential backoff + random jitter (4xx ignored) · `@Bulkhead(supplier)` semaphore, 20 concurrent | `SupplierUnavailableException` → HTTP 503 `SUPPLIER_UNAVAILABLE`; PO stays `DRAFT` (no state advance on adapter exhaustion) | Resilience4j default metrics (`resilience4j.circuitbreaker.{state,calls,failure_rate}{name="supplier"}`) + supplier call-result tags | **Compliant** (reference impl) |
+
+Source: `RestSupplierAdapter` (`@CircuitBreaker(name="supplier", fallbackMethod="submitFallback")`). Fallback translates `CallNotPermittedException` / transport errors uniformly to `SupplierUnavailableException` so the controller advice can map to 503 regardless of cause class.
+
+---
+
 ## Outbox + audit_log invariants
 
 ### Transactional outbox (T2 + T3, S1)

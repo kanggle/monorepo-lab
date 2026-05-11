@@ -514,6 +514,18 @@ Full saga document: `specs/services/inventory-service/sagas/reservation-saga.md`
 
 ---
 
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — **Category D reference implementation** for the monorepo.
+
+| Flow | Category | Poll / Batch | Terminal | Metrics | Status |
+|---|---|---|---|---|---|
+| reservation TTL expiry (`RESERVED → RELEASED` after `expires_at`) | **D** (TTL expiry sweep, persistent `reservation` row) | `inventory.reservation.ttl-job.interval-ms=60000` · `inventory.reservation.ttl-job.batch-size=200` | `RELEASED` via `ReleaseReservationService.releaseExpired(...)` — each row in its own `@Transactional` boundary; one failure does not abort the batch; OL race retries next tick | (cosmetic gap) `inventory.reservation.expiry.swept.total` counter — TASK-BE-140 DEFERRED | **Compliant** (operational metric gap noted) |
+
+Reservation is also a **participant** in outbound-service's Category A saga (see "Saga Participation (v1 light)" above) — that saga's orchestration lives in outbound-service; inventory only exposes idempotent operations and emits visibility events.
+
+---
+
 ## State Machines
 
 ### Reservation lifecycle

@@ -86,6 +86,7 @@ Serialization: JSON by default. Binary encoding (Avro, Protobuf) is allowed when
   2. `eventId` dedupe table with TTL ≥ 24h
   3. Optimistic concurrency on the target aggregate
 - **Consumer failures MUST NOT cause silent data loss** — use DLQ + alerting.
+- **Saga escalation events** (Category A multi-step saga terminal-recovery events per [ADR-MONO-005](../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) § D3) MUST use the topic name `<service>.alert.saga.recovery.exhausted`.
 
 ## Retry Policy (default)
 
