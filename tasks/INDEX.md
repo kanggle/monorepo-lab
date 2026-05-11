@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-062-doc-gardening-schedule.md` — 2026-05-12. OpenAI Harness gap #2 closure — `validate-rules` + `audit-memory` skill 을 `/schedule` 통해 주 1회 (Mon 09:00/09:30 KST) routine 으로 등록. drift 발견 시 draft PR (`chore(rules): weekly validate-rules audit (<date>)`) 또는 memory entry (`audit_findings_<date>.md`) 자동 생성. 출력은 4-block 포맷 (`RULE-CONSISTENCY-05+` / `MEMORY-AUDIT-NN` 새 namespace). 신규 `.claude/workflows/doc-gardening.md` (routine config 문서), `.claude/hooks/README.md` 갱신 (Scheduled routines 섹션), `platform/lint-remediation-message-standard.md § Emission contracts` 갱신 (scheduled-routine row). 실제 routine 등록은 harness UI / `/schedule` skill 통해 (repo 내 config 파일 없음). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (harness config + thin docs).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-062-doc-gardening-schedule.md` — 2026-05-12. OpenAI Harness gap #2 closure — `validate-rules` + `audit-memory` skill 을 `/schedule` 통해 주 1회 (Mon 09:00/09:30 KST) routine 으로 등록. drift 발견 시 draft PR (`chore(rules): weekly validate-rules audit (<date>)`) 또는 memory entry (`audit_findings_<date>.md`) 자동 생성. 출력은 4-block 포맷 (`RULE-CONSISTENCY-05+` / `MEMORY-AUDIT-NN` 새 namespace). 신규 `.claude/workflows/doc-gardening.md` (routine config 문서), `.claude/hooks/README.md` 갱신 (Scheduled routines 섹션), `platform/lint-remediation-message-standard.md § Emission contracts` 갱신 (scheduled-routine row). 실제 routine 등록은 harness UI / `/schedule` skill 통해 (repo 내 config 파일 없음). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (harness config + thin docs).
 
 ## done
 

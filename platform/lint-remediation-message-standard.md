@@ -92,13 +92,14 @@ Every violation emission MUST carry exactly these four blocks, in this order:
 
 # Emission contracts
 
-The standard applies in three emission contexts. The table below states the contract for each.
+The standard applies in four emission contexts. The table below states the contract for each.
 
 | Context | Who emits | Format requirement | Forward action |
 |---|---|---|---|
 | **Hard Stop trigger fires** | Agent / human reviewer reading `CLAUDE.md` Hard Stop Rules | MUST emit 4-block stanza. The session MUST halt implementation tool calls (Edit / Write / Bash mutation) on the affected scope until a remediation option is chosen. | Pick a remediation option (1 / 2 / …) and execute it, OR escalate per the listed escalation path. |
 | **Non-blocking rule warning** | Agent / skill noticing a soft rule mismatch (e.g. spec drift, missing test class for a new module) | SHOULD emit 4-block stanza. Implementation may continue if the warning is non-blocking, but the message MUST be surfaced to the user so the chosen remediation is auditable. | Either fix in-band before commit, or file the deferral as a `tasks/ready/` follow-up. |
 | **Skill finding (`validate-rules`, `audit-memory`, future similar)** | User-level / plugin-supplied skill | RECOMMENDED 4-block stanza per finding (advisory — skill bodies are out of scope of this monorepo's spec). | Skill-specific. See note below. |
+| **Scheduled routine finding** (`monorepo-lab-validate-rules-weekly` / `monorepo-lab-audit-memory-weekly`) | Harness `/schedule` routine invoking the named skill on a cron cadence | MUST emit 4-block stanza per finding in the routine's output channel. `validate-rules` routine uses `RULE-CONSISTENCY-05+` IDs (01–04 reserved for synchronous hook); `audit-memory` routine uses `MEMORY-AUDIT-NN` (01 stale, 02 contradiction, 03 dangling, 04 CLAUDE.md duplicate). | Output channel: `validate-rules` → draft PR `chore(rules): weekly validate-rules audit (<date>)` (never auto-merge). `audit-memory` → memory file `audit_findings_<date>.md` (type=project, advisory). Manual triage clears the artifact. See [`.claude/workflows/doc-gardening.md`](../.claude/workflows/doc-gardening.md). |
 
 ## Skill body alignment — out of scope
 
