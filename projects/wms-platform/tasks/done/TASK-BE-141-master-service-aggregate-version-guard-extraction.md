@@ -8,7 +8,7 @@ master-service `requireVersionMatch` + `saveWithOptimisticLock` 5-service 복붙
 
 # Status
 
-ready
+done
 
 # Owner
 
