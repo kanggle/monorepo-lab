@@ -16,7 +16,6 @@ import com.wms.master.domain.event.ZoneCreatedEvent;
 import com.wms.master.domain.event.ZoneDeactivatedEvent;
 import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
-import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -27,7 +26,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,12 +81,13 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
         // PATCH with a bad `zoneCode` fails with IMMUTABLE_FIELD (422) even if
         // the version is correct — tighter invariant, per contract §2.4.
         loaded.rejectImmutableChange(command.zoneCodeAttempt(), command.warehouseIdAttempt());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         List<String> changedFields = collectChangedFields(loaded, command);
         loaded.applyUpdate(command.name(), command.zoneType(), command.actorId());
 
-        Zone saved = saveWithOptimisticLock(loaded);
+        Zone saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> zonePersistencePort.update(loaded));
 
         if (!changedFields.isEmpty()) {
             eventPort.publish(List.of(ZoneUpdatedEvent.from(saved, changedFields)));
@@ -100,7 +99,7 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public ZoneResult deactivate(DeactivateZoneCommand command) {
         Zone loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         if (zonePersistencePort.hasActiveLocationsFor(loaded.getId())) {
             throw new ReferenceIntegrityViolationException(
@@ -108,7 +107,8 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
         }
         loaded.deactivate(command.actorId());
 
-        Zone saved = saveWithOptimisticLock(loaded);
+        Zone saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> zonePersistencePort.update(loaded));
         eventPort.publish(List.of(ZoneDeactivatedEvent.from(saved, command.reason())));
         return ZoneResult.from(saved);
     }
@@ -117,11 +117,12 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public ZoneResult reactivate(ReactivateZoneCommand command) {
         Zone loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
         requireActiveParentWarehouse(loaded.getWarehouseId());
 
         loaded.reactivate(command.actorId());
-        Zone saved = saveWithOptimisticLock(loaded);
+        Zone saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> zonePersistencePort.update(loaded));
         eventPort.publish(List.of(ZoneReactivatedEvent.from(saved)));
         return ZoneResult.from(saved);
     }
@@ -147,20 +148,6 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
     private Zone loadOrThrow(UUID id) {
         return zonePersistencePort.findById(id)
                 .orElseThrow(() -> new ZoneNotFoundException(id.toString()));
-    }
-
-    private void requireVersionMatch(UUID id, long expected, long actual) {
-        if (expected != actual) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, id.toString(), expected, actual);
-        }
-    }
-
-    private Zone saveWithOptimisticLock(Zone zone) {
-        try {
-            return zonePersistencePort.update(zone);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, zone.getId().toString());
-        }
     }
 
     private Warehouse requireWarehouseExists(UUID warehouseId) {

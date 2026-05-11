@@ -17,7 +17,6 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
-import com.wms.master.domain.exception.ConcurrencyConflictException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -29,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -112,7 +110,7 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
                 command.locationCodeAttempt(),
                 command.warehouseIdAttempt(),
                 command.zoneIdAttempt());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         List<String> changedFields = collectChangedFields(loaded, command);
         loaded.applyUpdate(
@@ -124,7 +122,8 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
                 command.bin(),
                 command.actorId());
 
-        Location saved = saveWithOptimisticLock(loaded);
+        Location saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> locationPersistencePort.update(loaded));
 
         if (!changedFields.isEmpty()) {
             eventPort.publish(List.of(LocationUpdatedEvent.from(saved, changedFields)));
@@ -136,14 +135,15 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public LocationResult deactivate(DeactivateLocationCommand command) {
         Location loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
 
         // v1 local-only check — cross-service inventory check deferred to v2
         // (see architecture.md Open Items). The domain state transition is the
         // only guard here.
         loaded.deactivate(command.actorId());
 
-        Location saved = saveWithOptimisticLock(loaded);
+        Location saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> locationPersistencePort.update(loaded));
         eventPort.publish(List.of(LocationDeactivatedEvent.from(saved, command.reason())));
         return LocationResult.from(saved);
     }
@@ -152,7 +152,7 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
     @PreAuthorize("hasRole('MASTER_ADMIN')")
     public LocationResult reactivate(ReactivateLocationCommand command) {
         Location loaded = loadOrThrow(command.id());
-        requireVersionMatch(command.id(), command.version(), loaded.getVersion());
+        AggregateVersionGuard.requireMatch(AGGREGATE_TYPE, command.id(), command.version(), loaded.getVersion());
         // Parent zone must still be ACTIVE at reactivate time.
         Zone parentZone = loadParentZoneMatchingWarehouse(loaded.getZoneId(), loaded.getWarehouseId());
         if (!parentZone.isActive()) {
@@ -160,7 +160,8 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
         }
 
         loaded.reactivate(command.actorId());
-        Location saved = saveWithOptimisticLock(loaded);
+        Location saved = AggregateVersionGuard.saveWithOptimisticLock(
+                AGGREGATE_TYPE, loaded.getId(), () -> locationPersistencePort.update(loaded));
         eventPort.publish(List.of(LocationReactivatedEvent.from(saved)));
         return LocationResult.from(saved);
     }
@@ -183,20 +184,6 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
     private Location loadOrThrow(UUID id) {
         return locationPersistencePort.findById(id)
                 .orElseThrow(() -> new LocationNotFoundException(id.toString()));
-    }
-
-    private void requireVersionMatch(UUID id, long expected, long actual) {
-        if (expected != actual) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, id.toString(), expected, actual);
-        }
-    }
-
-    private Location saveWithOptimisticLock(Location location) {
-        try {
-            return locationPersistencePort.update(location);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new ConcurrencyConflictException(AGGREGATE_TYPE, location.getId().toString());
-        }
     }
 
     private Warehouse requireWarehouseExists(UUID warehouseId) {
