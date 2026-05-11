@@ -112,6 +112,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-057-claude-md-split.md` — `CLAUDE.md` split per OpenAI Harness Engineering "AGENTS.md 100라인 목차" 패턴 (B common-rule refactor candidate #1 closure). 312 → 209 lines (-33%). Catalog + safety-net 패턴: Repository Layout / Identify Target Project / Hard Stop Rules / Source of Truth Priority / Recommending Tasks 는 첫 세션 essential 으로 유지, Local Network Convention 본문 → TEMPLATE.md (이미 master), 4 layer rule sections → 1 unified Layer Rules 섹션, Required Workflow 12-step list compressed. 동반: TEMPLATE.md L255 stale "CLAUDE.md authoritative" → "TEMPLATE.md master" 정정. 신규 파일 0개. 기존 spec 의 cross-ref 모두 보존.
+- `TASK-MONO-052-error-handling-catalog-wave-3.md` — `platform/error-handling.md` catalog audit Wave 3 (ecommerce + scm + saas + fan-platform). ~66 codes backfilled + 4 new sections (ecommerce Auth / saas Admin / saas Community / saas Membership) + 10 stale entries reclassified (v2-planned / rename / remove) + 8 decisions recorded (D1–D8). spec-only, no service code changes. D4 OVERRIDE applies per ADR-MONO-003 § 3.4 risk 2. Wave 2 (TASK-MONO-051 / PR #352) wms backfill pattern답습.
 
 ## done
 
