@@ -2,6 +2,7 @@ package com.example.order.infrastructure.event;
 
 import com.example.order.application.event.OrderCancelledEvent;
 import com.example.order.application.event.OrderPlacedEvent;
+import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,6 +30,13 @@ public class SpringOrderEventPublisher implements OrderEventPublisher {
     public void publishOrderCancelled(OrderCancelledEvent event) {
         String payload = serialize(event);
         outboxWriter.save("Order", event.payload().orderId(), "OrderCancelled", payload);
+    }
+
+    @Override
+    public void publishOrderSagaRecoveryExhausted(OrderSagaRecoveryExhaustedEvent event) {
+        String payload = serialize(event);
+        outboxWriter.save("Order", event.payload().orderId(),
+                "OrderSagaRecoveryExhausted", payload);
     }
 
     private String serialize(Object event) {

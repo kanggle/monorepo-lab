@@ -5,6 +5,7 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -32,4 +33,12 @@ public interface OrderRepository {
     PageResult<Order> findAllWithItems(PageQuery pageQuery);
 
     PageResult<Order> findByStatusWithItems(OrderStatus status, PageQuery pageQuery);
+
+    /**
+     * Returns orders stuck in {@code PENDING} with no payment recorded whose
+     * {@code created_at} predates {@code placedBefore}. Used by the saga
+     * stuck-detector (TASK-BE-138) to identify choreographed-saga rows that
+     * never received a {@code PaymentCompleted} event.
+     */
+    List<Order> findStuckPaymentPending(Instant placedBefore, int batchSize);
 }

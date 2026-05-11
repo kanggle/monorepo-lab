@@ -31,6 +31,8 @@ class OrderJpaMapper {
                 entity.getPaymentId(),
                 entity.getPaidAt(),
                 entity.getRefundedAt(),
+                entity.getStuckRecoveryAttemptCount(),
+                entity.getStuckRecoveryAt(),
                 entity.getVersion()
         );
     }

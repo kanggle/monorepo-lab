@@ -25,6 +25,8 @@ public class Order {
     private String paymentId;
     private Instant paidAt;
     private Instant refundedAt;
+    private int stuckRecoveryAttemptCount;
+    private Instant stuckRecoveryAt;
     private Long version;
 
     private Order() {
@@ -72,7 +74,10 @@ public class Order {
                                       ShippingAddress shippingAddress,
                                       Instant createdAt, Instant updatedAt,
                                       String paymentId, Instant paidAt,
-                                      Instant refundedAt, Long version) {
+                                      Instant refundedAt,
+                                      int stuckRecoveryAttemptCount,
+                                      Instant stuckRecoveryAt,
+                                      Long version) {
         Order order = new Order();
         order.orderId = orderId;
         order.userId = userId;
@@ -85,6 +90,8 @@ public class Order {
         order.paymentId = paymentId;
         order.paidAt = paidAt;
         order.refundedAt = refundedAt;
+        order.stuckRecoveryAttemptCount = stuckRecoveryAttemptCount;
+        order.stuckRecoveryAt = stuckRecoveryAt;
         order.version = version;
         return order;
     }
@@ -163,6 +170,26 @@ public class Order {
 
     public boolean isRefunded() {
         return this.refundedAt != null;
+    }
+
+    public void recordStuckRecoveryAttempt(Instant now) {
+        if (this.status != OrderStatus.PENDING) {
+            throw new InvalidOrderException(
+                    "Stuck recovery attempt only allowed in PENDING status: " + status);
+        }
+        this.stuckRecoveryAttemptCount += 1;
+        this.stuckRecoveryAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markStuckRecoveryFailed(Instant now) {
+        if (this.status != OrderStatus.PENDING) {
+            throw new InvalidOrderException(
+                    "Stuck recovery terminal transition only allowed in PENDING status: " + status);
+        }
+        this.status = OrderStatus.STUCK_RECOVERY_FAILED;
+        this.stuckRecoveryAt = now;
+        this.updatedAt = now;
     }
 
     public List<OrderItem> getItems() {

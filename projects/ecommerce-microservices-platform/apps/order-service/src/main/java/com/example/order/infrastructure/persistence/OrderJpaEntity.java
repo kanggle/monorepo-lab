@@ -53,6 +53,12 @@ class OrderJpaEntity {
     @Column(name = "refunded_at", columnDefinition = "TIMESTAMP")
     private Instant refundedAt;
 
+    @Column(name = "stuck_recovery_attempt_count", nullable = false)
+    private int stuckRecoveryAttemptCount;
+
+    @Column(name = "stuck_recovery_at", columnDefinition = "TIMESTAMP")
+    private Instant stuckRecoveryAt;
+
     @Version
     private Long version;
 
@@ -68,6 +74,8 @@ class OrderJpaEntity {
         entity.paymentId = order.getPaymentId();
         entity.paidAt = order.getPaidAt();
         entity.refundedAt = order.getRefundedAt();
+        entity.stuckRecoveryAttemptCount = order.getStuckRecoveryAttemptCount();
+        entity.stuckRecoveryAt = order.getStuckRecoveryAt();
         entity.version = order.getVersion();
 
         for (OrderItem item : order.getItems()) {
@@ -87,5 +95,7 @@ class OrderJpaEntity {
         this.paymentId = order.getPaymentId();
         this.paidAt = order.getPaidAt();
         this.refundedAt = order.getRefundedAt();
+        this.stuckRecoveryAttemptCount = order.getStuckRecoveryAttemptCount();
+        this.stuckRecoveryAt = order.getStuckRecoveryAt();
     }
 }

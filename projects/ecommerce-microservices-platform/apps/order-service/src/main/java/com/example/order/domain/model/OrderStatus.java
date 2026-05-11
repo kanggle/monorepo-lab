@@ -5,7 +5,8 @@ public enum OrderStatus {
     CONFIRMED,
     SHIPPED,
     DELIVERED,
-    CANCELLED;
+    CANCELLED,
+    STUCK_RECOVERY_FAILED;
 
     public boolean isCancellable() {
         return this == PENDING || this == CONFIRMED;

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -35,4 +36,12 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
             @Param("userId") String userId,
             @Param("productId") String productId,
             @Param("status") OrderStatus status);
+
+    @Query("SELECT o FROM OrderJpaEntity o " +
+           "WHERE o.status = :status AND o.paymentId IS NULL AND o.createdAt < :placedBefore " +
+           "ORDER BY o.createdAt ASC")
+    List<OrderJpaEntity> findStuckPaymentPending(
+            @Param("status") OrderStatus status,
+            @Param("placedBefore") Instant placedBefore,
+            Pageable pageable);
 }

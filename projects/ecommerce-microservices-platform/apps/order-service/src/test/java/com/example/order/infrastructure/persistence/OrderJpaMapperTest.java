@@ -31,7 +31,7 @@ class OrderJpaMapperTest {
         Instant now = Instant.parse("2025-06-01T10:00:00Z");
         Order order = Order.reconstitute("order-1", "user-1", List.of(item),
                 OrderStatus.CONFIRMED, 20000L, address, now, now,
-                "pay-1", now, null, 1L);
+                "pay-1", now, null, 0, null, 1L);
 
         OrderJpaEntity entity = mapper.toEntity(order);
 
@@ -60,7 +60,7 @@ class OrderJpaMapperTest {
         Instant now = Instant.parse("2025-06-01T10:00:00Z");
         Order original = Order.reconstitute("order-1", "user-1", List.of(item),
                 OrderStatus.PENDING, 15000L, address, now, now,
-                null, null, null, 0L);
+                null, null, null, 0, null, 0L);
 
         OrderJpaEntity entity = mapper.toEntity(original);
         Order restored = mapper.toDomain(entity);

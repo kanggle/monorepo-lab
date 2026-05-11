@@ -156,7 +156,7 @@ class AdminOrderControllerTest {
                 List.of(OrderItem.reconstitute("item-1", "p1", "v1", "노트북", null, 1, 50000L)),
                 OrderStatus.CONFIRMED, 50000L,
                 ShippingAddress.reconstitute("홍길동", "010-1234-5678", "12345", "서울시 강남구", null),
-                now, now, null, null, null, 1L
+                now, now, null, null, null, 0, null, 1L
         );
         given(adminOrderStatusService.changeStatus(eq("order-1"), eq(OrderStatus.CONFIRMED)))
                 .willReturn(order);

@@ -55,7 +55,7 @@ class AdminOrderStatusServiceTest {
                 orderId, "user-1", ITEMS,
                 status, 1_000_000L, ADDRESS,
                 FIXED_NOW, FIXED_NOW,
-                null, null, null, 1L
+                null, null, null, 0, null, 1L
         );
     }
 

@@ -13,4 +13,10 @@ public interface OrderMetricsPort {
     void recordOrderAmount(long amount);
 
     void recordEventPublishFailure(String eventType);
+
+    void recordStuckDetectorRun();
+
+    void recordStuckDetectorRecoveryFired(String fromState);
+
+    void recordStuckDetectorExhausted(String fromState);
 }
