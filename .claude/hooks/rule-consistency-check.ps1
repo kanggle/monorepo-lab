@@ -1,7 +1,7 @@
 $reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $inputJson = $reader.ReadToEnd()
 
-function Emit-Block {
+function Write-Block {
     param([string]$Stanza)
     $result = @{
         decision = "block"
@@ -68,7 +68,7 @@ try {
   3. If this is an early draft and the spec is not yet authored, file the spec first under ``<project>/specs/`` and return.
 [REFERENCE] .claude/skills/INDEX.md (authoring convention)
 "@
-        Emit-Block $stanza
+        Write-Block $stanza
     }
 
     # Check 2: Agent files must have required frontmatter fields
@@ -88,7 +88,7 @@ $gapList
   2. If this is a template / partial, mark it with ``# DRAFT — do not register`` at the top and the hook will continue to warn (acceptable for intermediate state).
 [REFERENCE] .claude/agents/<group>/README.md (agent authoring template)
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 
@@ -109,7 +109,7 @@ $gapList
   2. If this is documentation about a command (not the command itself), move the file out of ``.claude/commands/`` to a docs path.
 [REFERENCE] .claude/commands/README.md (command authoring template)
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 
@@ -133,7 +133,7 @@ $brokenList
   3. Remove the broken reference if it was an obsolete pointer to deleted content.
 [REFERENCE] .claude/skills/INDEX.md + .claude/agents/<group>/README.md
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 }

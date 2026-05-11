@@ -16,7 +16,7 @@
 $reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $inputJson = $reader.ReadToEnd()
 
-function Emit-Block {
+function Write-Block {
     param([string]$Stanza)
     $result = @{
         decision = "block"
@@ -100,7 +100,7 @@ try {
   3. If a new project is genuinely needed, file a ``tasks/ready/TASK-MONO-XXX-bootstrap-<project>.md`` and pause; do not implement before the project skeleton lands.
 [REFERENCE] CLAUDE.md § Identify the Target Project (Read First)
 "@
-        Emit-Block $stanza
+        Write-Block $stanza
     }
 
     # Compute path relative to repo root for clearer stanza messages
@@ -117,16 +117,26 @@ try {
     # ===== HARDSTOP-05: edit on task file under tasks/in-progress/ or tasks/review/ =====
     # These are frozen per tasks/INDEX.md § Move Rules + projects/<name>/tasks/INDEX.md.
     #
-    # Lifecycle Status-field moves are single-token edits (old_string "ready" -> new_string "review",
-    # etc.). Heuristic: skip if both old/new are short single-token lifecycle states. Multi-line body
-    # edits ARE the violation case this trigger catches.
+    # Lifecycle Status-field moves are allowed: simulate each `<from>` -> `<to>` lifecycle swap
+    # on old_string. If swapping the first occurrence yields exactly new_string, the edit is a
+    # lifecycle move. Catches both single-token edits and contextual edits like
+    # "# Status\n\nready" -> "# Status\n\nreview".
     $lifecycleTokens = @('ready', 'in-progress', 'review', 'done')
     $isLifecycleMove = $false
-    if ($oldString -and $newString) {
-        $oldTrim = $oldString.Trim()
-        $newTrim = $newString.Trim()
-        if (($lifecycleTokens -contains $oldTrim) -and ($lifecycleTokens -contains $newTrim)) {
-            $isLifecycleMove = $true
+    if ($oldString -and $newString -and $oldString -ne $newString) {
+        foreach ($from in $lifecycleTokens) {
+            foreach ($to in $lifecycleTokens) {
+                if ($from -eq $to) { continue }
+                $idx = $oldString.IndexOf($from)
+                if ($idx -ge 0) {
+                    $simulated = $oldString.Substring(0, $idx) + $to + $oldString.Substring($idx + $from.Length)
+                    if ($simulated -eq $newString) {
+                        $isLifecycleMove = $true
+                        break
+                    }
+                }
+            }
+            if ($isLifecycleMove) { break }
         }
     }
 
@@ -142,7 +152,7 @@ try {
   3. If unclear which lifecycle applies, consult ``tasks/INDEX.md`` § "When to Use Root vs Project Tasks" decision table.
 [REFERENCE] CLAUDE.md § Task Rules + tasks/INDEX.md § Move Rules
 "@
-        Emit-Block $stanza
+        Write-Block $stanza
     }
 
     # ===== HARDSTOP-01: no PROJECT.md walking up from a project-relative path =====
@@ -164,7 +174,7 @@ try {
   3. If a new project is genuinely needed, file a ``tasks/ready/TASK-MONO-XXX-bootstrap-<project>.md`` and pause; do not implement before the project skeleton lands.
 [REFERENCE] CLAUDE.md § Identify the Target Project (Read First)
 "@
-                Emit-Block $stanza
+                Write-Block $stanza
             }
         }
     }
@@ -226,7 +236,7 @@ try {
   3. If the content is documentation noise (example / illustration), replace it with an abstract placeholder (``<service>``, ``<entity>``) per existing precedent — or add an ``<!-- hardstop-allow: <reason> -->`` annotation on the preceding line if the reference is intentional.
 [REFERENCE] platform/shared-library-policy.md § Forbidden in Shared Libraries
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 
@@ -247,7 +257,7 @@ try {
   3. If the decision is reversible and local (single class / single endpoint), implement with an inline comment citing the choice + one-line reason and file a follow-up ``tasks/ready/`` task to backfill the architecture.md update.
 [REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 
@@ -318,7 +328,7 @@ try {
   3. If the service is genuinely typeless (e.g. a test fixture or non-service shared module), reframe — it should not be under ``specs/services/`` in the first place.
 [REFERENCE] CLAUDE.md § Required Workflow step 7 + platform/service-types/INDEX.md
 "@
-            Emit-Block $stanza
+            Write-Block $stanza
         }
     }
 

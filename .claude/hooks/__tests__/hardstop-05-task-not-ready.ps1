@@ -30,3 +30,16 @@ $negativeOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
 }
 Assert-Allowed -Output $negativeOutput
 "PASS: HARDSTOP-05 negative (Status-field lifecycle move)"
+
+# Negative case 2: multi-line contextual Status-field move (common Edit pattern with surrounding lines for uniqueness)
+$negativeMultilineOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $reviewFile
+        old_string = "# Status`n`nready"
+        new_string = "# Status`n`nreview"
+    }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $negativeMultilineOutput
+"PASS: HARDSTOP-05 negative-2 (contextual Status-field move)"
