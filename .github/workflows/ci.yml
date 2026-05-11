@@ -36,11 +36,18 @@ jobs:
   #              → activates ALL downstream jobs (cross-project impact)
   #   workflows  .github/workflows/
   #              → activates ALL downstream jobs (CI self-change safety)
-  #   wms        projects/wms-platform/**
-  #   ecommerce  projects/ecommerce-microservices-platform/**
-  #   gap        projects/global-account-platform/**
-  #   fan        projects/fan-platform/**
-  #   scm        projects/scm-platform/**
+  #   wms        projects/wms-platform/**         (excl. projects/wms-platform/tasks/**)
+  #   ecommerce  projects/ecommerce-microservices-platform/**  (excl. tasks/**)
+  #   gap        projects/global-account-platform/**  (excl. tasks/**)
+  #   fan        projects/fan-platform/**         (excl. tasks/**)
+  #   scm        projects/scm-platform/**         (excl. tasks/**)
+  #
+  # Each project flag negates `projects/<name>/tasks/**` so lifecycle-only chore
+  # PRs (review→done moves, INDEX.md outcome updates) skip the project's heavy
+  # Integration / E2E / boot-jars jobs. Mixed PRs (code + tasks/ in same change)
+  # still trigger the flag because the positive pattern wins for the code paths
+  # (dorny/paths-filter@v3 evaluates: file is "in" iff a positive pattern matches
+  # AND no negation matches; flag is true iff ≥1 file is "in"). TASK-MONO-058.
   #
   # Edge case — workflow self-change PR (.github/workflows/** modified):
   #   The `workflows` flag catches it → all jobs activate (regression safety).
@@ -52,11 +59,11 @@ jobs:
   #   PR-level filtering simply falls back to "all skip" — the author can
   #   close+reopen the PR to retry or add an empty commit to re-trigger.
   #
-  # Edge case — tasks/** or *.md only change:
+  # Edge case — root tasks/** or *.md only change:
   #   No project flag is true; libs/workflows are also false.
   #   build-and-test activates via its own fallback (it is always-on for pushes
   #   to main); all other jobs skip. Spec/chore PRs complete in ~1-2 min.
-  #   TASK-MONO-045.
+  #   TASK-MONO-045 baseline + TASK-MONO-058 extends to project-internal tasks/.
   # ---------------------------------------------------------------------------
   changes:
     runs-on: ubuntu-latest
@@ -88,14 +95,19 @@ jobs:
               - '.github/workflows/**'
             wms:
               - 'projects/wms-platform/**'
+              - '!projects/wms-platform/tasks/**'
             ecommerce:
               - 'projects/ecommerce-microservices-platform/**'
+              - '!projects/ecommerce-microservices-platform/tasks/**'
             gap:
               - 'projects/global-account-platform/**'
+              - '!projects/global-account-platform/tasks/**'
             fan:
               - 'projects/fan-platform/**'
+              - '!projects/fan-platform/tasks/**'
             scm:
               - 'projects/scm-platform/**'
+              - '!projects/scm-platform/tasks/**'
 
   build-and-test:
     name: Build & Test (JDK 21, Linux)
