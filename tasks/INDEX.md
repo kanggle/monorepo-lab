@@ -103,7 +103,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-055-d7-saga-spec-surface-bundle.md` — ADR-MONO-005 § D7 spec surface. 6 service `architecture.md` "Saga / Long-running Flow" section (compact table: category / declared values / status) + 2 rule pointer edits (`rules/traits/transactional.md`, `platform/event-driven-policy.md`). 4 Compliant (outbound A / notification C / inventory D / scm procurement B) + 2 Gap (ecommerce order A → TASK-BE-138 DEFERRED, ecommerce payment B × 2 → TASK-BE-139 READY). spec / docs only, production code 0. D4 OVERRIDE (single-line cross-reference additions). After merge, ADR-MONO-005 ACCEPTED gate 1/2 satisfied. 분석=Opus 4.7 / 구현=Opus.
+(empty)
 
 ## in-progress
 
@@ -114,6 +114,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-055-d7-saga-spec-surface-bundle.md` — 2026-05-11. ADR-MONO-005 § D7 spec surface bundle. PR #360 (spec, commit 0b1f79e9) + PR #361 (impl, commit cc68fb53). **CI 15/15 PASS** (Build & Test + 3 Integration + 3 E2E + 4 boot jars + 3 frontend + changes — rules/platform path-filter matched, full pipeline triggered). 6 service `architecture.md` 에 "Saga / Long-running Flow" compact 표 추가: wms outbound (A 참조 ✅), wms notification (C 참조 ✅), wms inventory (D 참조 ✅, TASK-BE-140 cosmetic gap), scm procurement (B 참조 ✅), ecommerce order (A choreographed gap → TASK-BE-138 DEFERRED), ecommerce payment (B × 2 gap → TASK-BE-139 READY). 2 rule pointer edit: `rules/traits/transactional.md` § Required Artifacts (Category A multi-step saga 가 § D3 준수 의무) + `platform/event-driven-policy.md` § Consumer Rules (escalation topic name `<service>.alert.saga.recovery.exhausted`). production code = 0, libs/ 미접근. **ADR-MONO-005 ACCEPTED gate 1/2 satisfied** — 잔여 gate = TASK-BE-139 (Toss Payments R4j wrap). 분석=Opus 4.7 / 구현=Opus.
 
 - `TASK-MONO-054-saga-timeout-escalation-dead-letter-policy.md` — 2026-05-11. ADR-MONO-005 PROPOSED. PR #357 (spec, commit 040859ed) + PR #358 (impl, commit 41750dae). Saga timeout / attempt-cap / escalation / dead-letter cross-cutting policy ADR (consume-side analog of ecommerce ADR-006). **4-category taxonomy** from 7-flow audit: A 멀티스텝 saga (outbound saga ref ✅ / ecommerce order saga gap) / B 동기 외부호출 (scm procurement ref ✅ / payment confirm+refund gap) / C 단일스텝 retry+DLT (notification delivery ref ✅) / D TTL 만료 sweep (inventory reservation ref ✅) — fan-platform N/A v1. D1 taxonomy + D2 generic policy (timeout, R4j wrap, idempotent re-emission, OL) + D3-D5 per-category sub-rules (sweeper cap=5, grace ≥60×p99 floor 60s default 300s, `<service>.alert.saga.recovery.exhausted` event, metric naming) + D6 per-saga Scenario A/B + D7 spec surface (separated). **Impl PR docs/specs only, production code = 0**. CI: path-filter 정상, 14 jobs skipping + changes pass. ADR-MONO-003 D4 churn-clock NOT triggered (docs/ only, libs/ + rules/ 미접근). **ACCEPTED gates**: TASK-BE-139 (READY, Toss Payments R4j wrap) + TASK-MONO-055 (READY, D7 spec surface bundle = 6 service `architecture.md` + 2 rule pointers). 추가 follow-up: TASK-BE-138 DEFERRED (ecommerce order stuck-detector) / TASK-BE-140 DEFERRED (reservation metric). 분석=Opus 4.7 / 구현=Opus.
 
