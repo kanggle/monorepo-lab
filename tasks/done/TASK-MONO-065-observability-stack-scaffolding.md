@@ -8,7 +8,7 @@ Scaffold ephemeral observability stack — Vector + VictoriaLogs + VictoriaMetri
 
 # Status
 
-ready
+done
 
 # Owner
 
