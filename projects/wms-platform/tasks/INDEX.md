@@ -63,7 +63,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-- `TASK-BE-143-master-service-partner-aggregate-bootstrap.md` — master-service Partner aggregate producer-side minimal v1 bootstrap (domain/port/service/controller/persistence/Flyway V7 + 4 domain event). TASK-BE-142 audit (Branch B = 누락 확정) closure. **현 production drift**: downstream (inbound/outbound/admin) 의 PartnerSnapshot consumer + ASN/Order 의 `findPartner` 검증은 production code 인데, master-service producer 측 전부 부재 = staging/prod 에서 PartnerSnapshot 영원히 empty = ASN/Order 처리 불가능. Lot.supplier_partner_id hard FK 활성화는 v2 (별도 task).
+(empty)
 
 ## ready
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-143-master-service-partner-aggregate-bootstrap.md` — master-service Partner aggregate v1 producer-side bootstrap. 6 layer 신규 (domain Partner+PartnerType, 4 events, 2 exception / application 2 use-case+port+service+4 cmd+query+result / adapter-in PartnerController 6 endpoint + 4 request DTO + response / adapter-out JpaPartnerRepository+entity+mapper+adapter / migration V7+V103 seed / outbox `EventEnvelopeSerializer` Partner 4 event 등록) + master-service GlobalExceptionHandler Partner exception 매핑 + `MasterOutboxPollingScheduler` 의 `master.partner.*` → `wms.master.partner.v1` 기존 매핑 활용. **field model = spec wins**: task body line 66 의 5 필드 (email/phone) 대신 spec § 5 의 7 필드 (businessNumber + contactName + contactEmail + contactPhone + address 추가) 채택 — CLAUDE.md § Source of Truth Priority layer 6 contracts > layer 10 tasks. **status = WarehouseStatus 재사용** (task line 66 명시). **AggregateVersionGuard** (BE-141 utility) 활용. Tests 신규 ~70 (domain 30 + service 15 + controller 15 + persistence Postgres+H2 10) + 4 event JSON schema + 1 HTTP response schema. master-service test clean rerun PASS. spec drift 0 (4 spec 모두 사전 정합). out of scope: Lot.supplier_partner_id hard FK = v2 / inbound·outbound dev seed 제거 = 자연 deprecated / MasterEntityStatus rename = 별도 평가 / MasterPartnerProjector downstream no touch. 분석=Opus 4.7 / 구현=Opus 4.7 (backend-engineer agent dispatch).
 
 ## done
 

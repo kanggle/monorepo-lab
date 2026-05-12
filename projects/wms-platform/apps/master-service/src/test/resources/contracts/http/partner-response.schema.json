@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wms.example.com/contracts/http/partner-response.v1.json",
+  "title": "Partner resource response",
+  "description": "Derived from specs/contracts/http/master-service-api.md §5 Partner.",
+  "type": "object",
+  "required": [
+    "id",
+    "partnerCode",
+    "name",
+    "partnerType",
+    "status",
+    "version",
+    "createdAt",
+    "createdBy",
+    "updatedAt",
+    "updatedBy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "partnerCode": { "type": "string", "minLength": 1, "maxLength": 20 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "partnerType": { "type": "string", "enum": ["SUPPLIER", "CUSTOMER", "BOTH"] },
+    "businessNumber": { "type": ["string", "null"] },
+    "contactName": { "type": ["string", "null"] },
+    "contactEmail": { "type": ["string", "null"] },
+    "contactPhone": { "type": ["string", "null"] },
+    "address": { "type": ["string", "null"] },
+    "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+    "version": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string" },
+    "createdBy": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "updatedBy": { "type": "string" }
+  }
+}

@@ -387,7 +387,9 @@ Spring profile `dev` or `standalone`.
   diagram in its own file (optional; diagram above may suffice)
 - `specs/services/master-service/idempotency.md` — idempotency key storage strategy
 - `platform/error-handling.md` — register new codes `SKU_CODE_DUPLICATE`,
-  `REFERENCE_INTEGRITY_VIOLATION`, `LOT_NO_DUPLICATE`, `LOT_EXPIRED`
+  `REFERENCE_INTEGRITY_VIOLATION`, `LOT_NO_DUPLICATE`, `LOT_EXPIRED`,
+  `PARTNER_CODE_DUPLICATE` ✅ (closed)
+- Partner aggregate producer-side implementation ✅ (closed by TASK-BE-143)
 
 ---
 

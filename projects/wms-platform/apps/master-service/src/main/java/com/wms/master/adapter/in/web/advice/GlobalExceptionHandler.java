@@ -10,6 +10,8 @@ import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.LotNoDuplicateException;
 import com.wms.master.domain.exception.LotNotFoundException;
 import com.wms.master.domain.exception.MasterDomainException;
+import com.wms.master.domain.exception.PartnerCodeDuplicateException;
+import com.wms.master.domain.exception.PartnerNotFoundException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.SkuCodeDuplicateException;
 import com.wms.master.domain.exception.SkuNotFoundException;
@@ -81,6 +83,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BarcodeDuplicateException.class)
     public ResponseEntity<ApiErrorEnvelope> handleBarcodeDuplicate(BarcodeDuplicateException ex) {
+        return build(HttpStatus.CONFLICT, ex);
+    }
+
+    @ExceptionHandler(PartnerNotFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handlePartnerNotFound(PartnerNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex);
+    }
+
+    @ExceptionHandler(PartnerCodeDuplicateException.class)
+    public ResponseEntity<ApiErrorEnvelope> handlePartnerCodeDuplicate(PartnerCodeDuplicateException ex) {
         return build(HttpStatus.CONFLICT, ex);
     }
 

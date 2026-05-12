@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.application.result.LocationResult;
 import com.wms.master.application.result.LotResult;
+import com.wms.master.application.result.PartnerResult;
 import com.wms.master.application.result.SkuResult;
 import com.wms.master.application.result.WarehouseResult;
 import com.wms.master.application.result.ZoneResult;
@@ -18,6 +19,10 @@ import com.wms.master.domain.event.LotDeactivatedEvent;
 import com.wms.master.domain.event.LotExpiredEvent;
 import com.wms.master.domain.event.LotReactivatedEvent;
 import com.wms.master.domain.event.LotUpdatedEvent;
+import com.wms.master.domain.event.PartnerCreatedEvent;
+import com.wms.master.domain.event.PartnerDeactivatedEvent;
+import com.wms.master.domain.event.PartnerReactivatedEvent;
+import com.wms.master.domain.event.PartnerUpdatedEvent;
 import com.wms.master.domain.event.SkuCreatedEvent;
 import com.wms.master.domain.event.SkuDeactivatedEvent;
 import com.wms.master.domain.event.SkuReactivatedEvent;
@@ -142,6 +147,20 @@ public class EventEnvelopeSerializer {
                 yield payload;
             }
             case SkuReactivatedEvent e -> Map.of("sku", SkuResult.from(e.snapshot()));
+            case PartnerCreatedEvent e -> Map.of("partner", PartnerResult.from(e.snapshot()));
+            case PartnerUpdatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("partner", PartnerResult.from(e.snapshot()));
+                payload.put("changedFields", e.changedFields());
+                yield payload;
+            }
+            case PartnerDeactivatedEvent e -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("partner", PartnerResult.from(e.snapshot()));
+                payload.put("reason", e.reason());
+                yield payload;
+            }
+            case PartnerReactivatedEvent e -> Map.of("partner", PartnerResult.from(e.snapshot()));
             case LotCreatedEvent e -> Map.of("lot", LotResult.from(e.snapshot()));
             case LotUpdatedEvent e -> {
                 Map<String, Object> payload = new LinkedHashMap<>();
