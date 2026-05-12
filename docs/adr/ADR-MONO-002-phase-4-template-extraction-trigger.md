@@ -151,3 +151,9 @@ scm 종결 후 결정. 추천 순서 (이번 세션 분석): **scm → erp → m
 1. **TASK-MONO-040** (새 세션 진행 중): scm 프로젝트 부트스트랩 — TEMPLATE.md Option A Greenfield Step 1~12 + GAP Integration Step 1~5 따라.
 2. (deferred) ADR-MONO-003: scm 머지 후 Template 레포 실제 추출 결정.
 3. (deferred) ADR-MONO-004 또는 task: erp / mes 부트스트랩 순서 결정.
+
+---
+
+### Forward pointer (2026-05-13) — D4 ordering progression
+
+§ D4 의 `scm → finance → erp → mes` 순서 중 scm 단계 완료 (2026-05-04~07, TASK-MONO-040 / 042 + SCM-BE-001~003 + INT-001 series). 다음 단계 **finance** 결정은 **[ADR-MONO-008 — finance-platform Bootstrap](ADR-MONO-008-finance-platform-bootstrap.md)** (PROPOSED 2026-05-13, TASK-MONO-071) 로 이관. ADR-MONO-008 ACCEPTED 전환 시 finance 부트스트랩 실행 + § D4 ordering 한 칸 진행. erp / mes 단계는 ADR-MONO-008 ACCEPTED 후 별도 ADR (ADR-MONO-009 / 010 candidate) 으로 분기.
