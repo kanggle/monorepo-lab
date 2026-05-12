@@ -3,6 +3,8 @@
 Use this index to find relevant skills for a task.
 Read only the matched skill files — do not read unrelated ones.
 
+No single spec — this file is the skill catalog itself. Each row points at the per-skill `SKILL.md`, which in turn references any project-specific `specs/...` paths or platform specs that apply.
+
 ---
 
 ## Available Skills
@@ -70,6 +72,7 @@ Read only the matched skill files — do not read unrelated ones.
 | Cache tier selection, TTL, invalidation policy | `cross-cutting/caching/SKILL.md` |
 | API/event versioning, deprecation, coexistence | `cross-cutting/api-versioning/SKILL.md` |
 | End-to-end observability setup (logs, metrics, traces, alerts) | `cross-cutting/observability-setup/SKILL.md` |
+| Query the worktree-isolated ephemeral observability stack (LogQL + PromQL; no single specs/ source) | `cross-cutting/observability-query/SKILL.md` |
 | OWASP Top 10 hardening checklist | `cross-cutting/security-hardening/SKILL.md` |
 | Performance targets, profiling, load testing | `cross-cutting/performance-tuning/SKILL.md` |
 | Set up a `rest-api` service end-to-end | `service-types/rest-api-setup/SKILL.md` |

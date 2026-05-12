@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-068-validate-rules-audit-memory-cleanup.md` — post-gap-#3 portfolio audit cleanup. Critical: `.claude/skills/INDEX.md` 의 "Available Skills" 표에 `cross-cutting/observability-query/SKILL.md` row 누락 (MONO-066 추가 시 INDEX 갱신 빠짐) — backfill. Info: 3 user-level memory 파일명 stale (`*_in_progress.md` / `*_pending.md` / `*_phase_0_partial.md`, content 는 모두 DONE/종결) → rename + MEMORY.md index link 갱신. Warning: 2 MEMORY.md description 라인 outdated (`project_046_7_11_cycle_burn.md` "0/7 추가 회복" → 실제 "9/8 회복 완성", `reference_openai_harness_engineering.md` "갭 3개...명확화" → 실제 "갭 3개 모두 DELIVERED 2026-05-12~13") → body 와 동기. Monorepo PR scope = `.claude/skills/INDEX.md` row 추가 만 (user-level memory cleanup 은 PR diff 외 in-session 처리, task body 에 기록). Out of scope: 50+ 기존 SKILL.md `specs/` ref backfill (hook 이 new edit 만 검사하므로 기존 file 차단 안 됨, simplify pass 시 별 task), CLAUDE.md promotion 후보 0건, memory body content 갱신 (filename 만 변경, body 는 이미 정확). audit 트리거 = post-OpenAI-Harness-gap-#3-closure (2026-05-13), 다음 자동 audit = 2026-05-18 (MONO-062 weekly routine). 분석=Opus 4.7 / 구현=Sonnet 4.6 (pure mechanical cleanup).
 
 ## in-progress
 
