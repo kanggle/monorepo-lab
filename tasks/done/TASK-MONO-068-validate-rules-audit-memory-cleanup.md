@@ -8,7 +8,7 @@ validate-rules + audit-memory cleanup — observability-query INDEX backfill + 3
 
 # Status
 
-ready
+done
 
 # Owner
 
