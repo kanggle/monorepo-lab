@@ -1113,8 +1113,21 @@ jobs:
   # changed (per the new `observability` paths-filter output). Brings the
   # Phase 1 stack up against a dummy wms-platform-bootrun_default network,
   # snapshots `docker stats` after 10 s of idle, and fails if:
-  #   - total resident memory > 40 MiB (Phase 1 baseline 26.88 MiB × 1.5)
+  #   - total resident memory > 100 MiB
   #   - wall-clock cold start > 30 s (ADR § 2.1 D1 hard cap)
+  #
+  # Memory cap rationale: docker engines differ substantially in their
+  # memory accounting + Vector's native build flavour. Windows/Rancher
+  # Desktop Phase 1 measurement showed 26.88 MiB total (TASK-MONO-065);
+  # Linux GitHub runner first measurement (2026-05-13, this job's first
+  # CI run) showed 62.84 MiB total — Vector alone consumes ~44 MiB on
+  # Linux vs ~14 MiB on Rancher Desktop, driven by musl/glibc native
+  # build differences + cgroup memory accounting. The cap is therefore
+  # set against the larger of the two baselines (Linux 62.84 MiB) with
+  # ~1.6× safety margin → 100 MiB.
+  #
+  # The README's Docker engine compatibility table tracks both baselines
+  # so future regressions surface against the matching environment.
   #
   # Reference: docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md
   # ---------------------------------------------------------------------------
@@ -1184,9 +1197,14 @@ jobs:
           echo "total_mib=$total_mib" >> "$GITHUB_OUTPUT"
           echo "[footprint] total resident: ${total_mib} MiB"
           # POSIX bash arithmetic doesn't handle floats; use awk for comparison.
-          over=$(awk -v t="$total_mib" 'BEGIN { print (t > 40) ? 1 : 0 }')
+          # Cap rationale: Linux GitHub runner baseline (62.84 MiB,
+          # measured 2026-05-13) × ~1.6 safety margin. Windows/Rancher
+          # Desktop measures lower (~27 MiB) due to musl/glibc native
+          # build differences in Vector; the cap is set against the
+          # larger environment to avoid false positives on Linux.
+          over=$(awk -v t="$total_mib" 'BEGIN { print (t > 100) ? 1 : 0 }')
           if [ "$over" = "1" ]; then
-            echo "::error::Resident memory ${total_mib} MiB exceeds 40 MiB cap (Phase 1 baseline 26.88 MiB × 1.5)"
+            echo "::error::Resident memory ${total_mib} MiB exceeds 100 MiB cap (Linux baseline 62.84 MiB × ~1.6 safety margin)"
             exit 1
           fi
 

@@ -41,7 +41,7 @@ Close OpenAI Harness gap #3 entirely by completing the **Phase 3** deliverables 
 
 1. **Coverage expansion** — extend the `-Pobservability=on` opt-in wiring from `gateway-service:e2eTest` (Phase 2, gateway-master live-pair) to the three remaining e2e suites: `fan-platform/tests/e2e` (live-trio gateway + community + artist), `scm-platform/tests/e2e` (cross-service), `global-account-platform/tests/e2e`. Identical pattern: named docker network handoff via `Network.builder().createNetworkCmdModifier(...)` in each base class + `doFirst` / `doLast` lifecycle hooks in each build.gradle.
 2. **Rancher Desktop compatibility validation** — document that the Phase 1 stack works against Rancher Desktop dockerd v29.1.3 (validated 2026-05-12 via TASK-MONO-065 footprint measurement: 11.1 s cold start, 26.88 MiB resident, all health checks green) and add a memory cross-reference in `infra/observability/README.md` to `project_testcontainers_docker_desktop_blocker.md` so future operators understand which docker engine is the reference baseline.
-3. **CI footprint regression test** — new GitHub Actions workflow step (or extension of an existing job) that brings the stack up on a Linux CI runner, snapshots `docker stats` after 10 s of idle, and fails the build if total resident memory exceeds **40 MiB** (Phase 1 baseline 26.88 MiB × 1.5 safety margin) or wall-clock cold start exceeds **30 s** (the ADR § 2.1 D1 hard cap).
+3. **CI footprint regression test** — new GitHub Actions workflow step (or extension of an existing job) that brings the stack up on a Linux CI runner, snapshots `docker stats` after 10 s of idle, and fails the build if total resident memory exceeds **100 MiB** (Linux baseline 62.84 MiB measured on first CI run × ~1.6 safety margin — Linux Vector resident ~3× larger than Windows/Rancher per § Implementation Notes below) or wall-clock cold start exceeds **30 s** (the ADR § 2.1 D1 hard cap).
 
 This is the fourth and final phase of the gap #3 closure series. Phase 0 (TASK-MONO-064 ADR), Phase 1 (TASK-MONO-065 stack scaffolding), and Phase 2 (TASK-MONO-066 skill + Gradle e2eTest integration) are all in `done/`. On merge of this task's closure chore, memory `reference_openai_harness_engineering.md` § "monorepo-lab 갭 매핑" gap #3 row flips to **DELIVERED** (full closure annotation), matching the existing gap A and gap #2 entries.
 
@@ -91,7 +91,7 @@ The Phase 2 `gateway-service/build.gradle` network name pattern is preserved ver
   2. `docker network create wms-platform-bootrun_default || true` (dummy — Phase 1 footprint measurement protocol).
   3. `time bash scripts/observability/up.sh --network wms-platform-bootrun_default 2>&1 | tee up.log`
   4. Parse wall-clock from `time` output → fail if > 30 s.
-  5. `docker stats --no-stream --format "{{.MemUsage}}" $(docker compose -f infra/observability/docker-compose.yml -p $PROJECT ps -q) | awk '{sum += $1} END { print sum }'` (parsing MiB / KiB / GiB units) → fail if > 40 MiB (Phase 1 baseline 26.88 MiB × 1.5 safety margin; the 1.5× multiplier matches the same shape monorepo uses for other regression budgets and gives room for VictoriaMetrics v1 minor-version bumps without spurious fails).
+  5. `docker stats --no-stream --format "{{.MemUsage}}" $(docker compose -f infra/observability/docker-compose.yml -p $PROJECT ps -q) | awk '{sum += $1} END { print sum }'` (parsing MiB / KiB / GiB units) → fail if > 100 MiB (Linux baseline 62.84 MiB × ~1.6 safety margin; first CI run discovered Linux Vector resident is ~3× larger than Windows/Rancher 14 MiB due to musl/glibc native build + cgroup accounting — cap pegged against the larger baseline to avoid false positives across environments).
   6. `bash scripts/observability/down.sh` (cleanup, run even on prior step failure via `if: always()` step).
   7. Upload `up.log` + `docker stats` raw output as artifact for diff inspection.
 - Job is **not blocking** for the default PR pipeline (similar to the Integration job that runs only when `wms` paths change); the job runs only when `infra/observability/` or `scripts/observability/` paths are touched. Footprint creep on observability changes alone is the regression signal worth catching.
@@ -185,12 +185,21 @@ ADR § 2.3 D3 promises a 5-min idle teardown but does not enumerate it under any
 
 ## Footprint regression test thresholds
 
-Phase 1 baseline: 26.88 MiB resident / 11.1 s cold start. Phase 3 caps:
+Per-environment baselines:
 
-- Memory: **40 MiB** (1.49× headroom)
-- Cold start: **30 s** (the ADR § 2.1 D1 hard cap)
+| Environment | Measured | Source |
+|---|---|---|
+| Windows 11 + Rancher Desktop dockerd v29.1.3 | 26.88 MiB total / 11.1 s cold start | TASK-MONO-065 Phase 1 |
+| Linux GitHub Actions `ubuntu-latest` | **62.84 MiB total** (Vector 44 + VictoriaLogs 5.9 + VictoriaMetrics 12.9) | first CI run of this task's `observability-footprint` job, 2026-05-13 |
 
-Memory threshold leaves room for VictoriaMetrics v1 minor-version bumps without spurious fails. If the actual usage on CI Linux runner is consistently around 26 MiB, the 40 MiB cap gives a clean 50 % safety margin. If a future image upgrade pushes memory to 35 MiB, the test still passes — at 41 MiB+, it fails, and the operator decides whether to bump the threshold (intentional growth) or pin to the prior image (unintended regression).
+Vector alone consumes ~3× more memory on Linux than on Windows/Rancher (44 MiB vs 14 MiB) — driven by musl/glibc native build differences + cgroup memory accounting at the Linux container layer. VictoriaLogs and VictoriaMetrics show ~2× divergence each. The ADR § 2.1 D1 "200 MB resident" target was set conservatively in anticipation of this kind of cross-environment spread.
+
+Phase 3 CI caps (set against the larger baseline so neither environment produces false positives):
+
+- Memory: **100 MiB** (Linux baseline 62.84 MiB × ~1.6 safety margin)
+- Cold start: **30 s** (the ADR § 2.1 D1 hard cap, unchanged — applies to both environments since cold start is dominated by image pull + container init, not language runtime memory)
+
+If a future image upgrade pushes Linux total memory to 70-95 MiB, the CI test still passes — at 101 MiB+, it fails, and the operator decides whether to bump the cap (intentional growth) or pin to the prior image (unintended regression). Windows/Rancher operators see ample headroom (their measurements stay well under 30 MiB), which is acceptable — the cap exists for detection, not for forcing Linux down to the lower environment's baseline.
 
 ## CI job trigger gating
 

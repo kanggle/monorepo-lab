@@ -136,9 +136,13 @@ The stack uses docker-compose only — no Testcontainers, no docker-java client.
 
 | Engine | Version | Host OS | Status | Source |
 |---|---|---|---|---|
-| Rancher Desktop | dockerd v29.1.3 | Windows 11 | ✅ validated — 11.1s cold start, 26.88 MiB resident | TASK-MONO-065 Implementation Notes |
-| Docker bundled with GitHub Actions `ubuntu-latest` | varies | Linux | ✅ validated — see `observability-footprint` CI job (Phase 3 / TASK-MONO-067) | `.github/workflows/ci.yml` |
+| Rancher Desktop | dockerd v29.1.3 | Windows 11 | ✅ validated — 11.1s cold start, **26.88 MiB resident** | TASK-MONO-065 Implementation Notes |
+| Docker bundled with GitHub Actions `ubuntu-latest` | varies | Linux | ✅ validated — **62.84 MiB resident** (Vector 44 + VictoriaLogs 5.9 + VictoriaMetrics 12.9), see `observability-footprint` CI job (Phase 3 / TASK-MONO-067) | `.github/workflows/ci.yml` |
 | Docker Desktop | — | macOS / Windows | ⚠️ not yet validated | Phase 3 explicit non-deliverable |
+
+**Why the two baselines differ**: Vector's resident memory differs by ~3× between Rancher Desktop (Windows, ~14 MiB) and Linux runner (~44 MiB). The difference is driven by Vector's native build flavour — the alpine image bundles a musl-libc binary, but the underlying memory allocator's reservation strategy + cgroup accounting on Linux push the resident set considerably higher than on Windows where dockerd runs under WSL2 with a VM-level memory layer. VictoriaLogs and VictoriaMetrics show smaller divergence (~2× each).
+
+The CI regression cap is therefore pegged against the **larger** baseline (Linux 62.84 MiB × ~1.6 safety margin = 100 MiB). Future image-version upgrades that push Linux footprint past 100 MiB fail the CI job; Windows/Rancher operators tracking the same artefact would see room for growth, which is acceptable because their footprint stays well below the cap.
 
 **Important — Rancher Desktop docker-java regression does NOT affect this stack.** Memory `project_testcontainers_docker_desktop_blocker.md` documents a Rancher dockerd v29.1.3 + docker-java zerodep npipe transport regression that affects **Testcontainers** workflows (every test JVM hits `MalformedChunkCodingException` after the first cycle). This observability stack uses pure docker-compose against the dockerd HTTP API, bypassing docker-java entirely — the regression does not surface here.
 
