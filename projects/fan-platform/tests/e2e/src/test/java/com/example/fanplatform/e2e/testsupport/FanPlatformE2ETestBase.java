@@ -117,7 +117,23 @@ public abstract class FanPlatformE2ETestBase {
 
     @BeforeAll
     void startInfrastructure() throws Exception {
-        network = Network.newNetwork();
+        // OpenAI Harness gap #3 Phase 3 (TASK-MONO-067) — when the
+        // `-Pobservability=on` Gradle path injects the system property
+        // `wms.e2e.observabilityNetwork`, reuse the named docker network
+        // that scripts/observability/up.sh created. Property unset → behaviour
+        // identical to the pre-Phase-3 path (anonymous Testcontainers
+        // network). See:
+        // docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md § 2.5 D5
+        // tasks/done/TASK-MONO-066-observability-query-skill.md (gateway-service precedent)
+        String observabilityNetwork = System.getProperty("wms.e2e.observabilityNetwork");
+        if (observabilityNetwork != null && !observabilityNetwork.isBlank()) {
+            String netName = observabilityNetwork;
+            network = Network.builder()
+                    .createNetworkCmdModifier(cmd -> cmd.withName(netName))
+                    .build();
+        } else {
+            network = Network.newNetwork();
+        }
 
         // ----- Postgres with multi-database init script ---------------------
         // Postgres image's docker-entrypoint runs *.sh / *.sql files in

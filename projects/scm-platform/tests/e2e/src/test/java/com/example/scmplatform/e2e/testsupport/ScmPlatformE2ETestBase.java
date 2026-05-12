@@ -127,7 +127,23 @@ public abstract class ScmPlatformE2ETestBase {
 
     @BeforeAll
     void startInfrastructure() throws Exception {
-        network = Network.newNetwork();
+        // OpenAI Harness gap #3 Phase 3 (TASK-MONO-067) — when the
+        // `-Pobservability=on` Gradle path injects the system property
+        // `wms.e2e.observabilityNetwork`, reuse the named docker network
+        // that scripts/observability/up.sh created. Property unset →
+        // behaviour identical to the pre-Phase-3 path.
+        // See: docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md § 2.5 D5
+        String observabilityNetwork = System.getProperty("wms.e2e.observabilityNetwork");
+        Network resolvedNetwork;
+        if (observabilityNetwork != null && !observabilityNetwork.isBlank()) {
+            String netName = observabilityNetwork;
+            resolvedNetwork = Network.builder()
+                    .createNetworkCmdModifier(cmd -> cmd.withName(netName))
+                    .build();
+        } else {
+            resolvedNetwork = Network.newNetwork();
+        }
+        network = resolvedNetwork;
 
         // ----- Postgres with multi-database init script ---------------------
         // Use the built-in 'postgres' admin DB so PostgreSQLContainer's automatic

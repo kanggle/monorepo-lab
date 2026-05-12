@@ -75,6 +75,7 @@ jobs:
       gap: ${{ steps.filter.outputs.gap }}
       fan: ${{ steps.filter.outputs.fan }}
       scm: ${{ steps.filter.outputs.scm }}
+      observability: ${{ steps.filter.outputs.observability }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -108,6 +109,9 @@ jobs:
             scm:
               - 'projects/scm-platform/**'
               - '!projects/scm-platform/tasks/**'
+            observability:
+              - 'infra/observability/**'
+              - 'scripts/observability/**'
 
   build-and-test:
     name: Build & Test (JDK 21, Linux)
@@ -1100,3 +1104,104 @@ jobs:
             projects/scm-platform/tests/e2e/build/reports/tests/e2eTest/
             projects/scm-platform/tests/e2e/build/test-results/e2eTest/
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # OpenAI Harness gap #3 Phase 3 (TASK-MONO-067) — observability stack
+  # footprint regression test.
+  #
+  # Triggers only when infra/observability/** or scripts/observability/**
+  # changed (per the new `observability` paths-filter output). Brings the
+  # Phase 1 stack up against a dummy wms-platform-bootrun_default network,
+  # snapshots `docker stats` after 10 s of idle, and fails if:
+  #   - total resident memory > 40 MiB (Phase 1 baseline 26.88 MiB × 1.5)
+  #   - wall-clock cold start > 30 s (ADR § 2.1 D1 hard cap)
+  #
+  # Reference: docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md
+  # ---------------------------------------------------------------------------
+  observability-footprint:
+    name: Observability stack footprint regression
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 10
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.observability == 'true' ||
+        needs.changes.outputs.workflows == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Create dummy wms-platform-bootrun network
+        # up.sh's pre-flight requires this network to exist (Phase 1
+        # protocol). The actual wms services are NOT running in this job —
+        # the footprint test measures the stack alone at idle.
+        run: docker network create wms-platform-bootrun_default
+
+      - name: Time up.sh cold start
+        id: up
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          bash scripts/observability/up.sh
+          elapsed=$(( $(date +%s) - start ))
+          echo "elapsed=$elapsed" >> "$GITHUB_OUTPUT"
+          echo "[footprint] up.sh wall-clock: ${elapsed}s"
+          if [ "$elapsed" -gt 30 ]; then
+            echo "::error::Cold start ${elapsed}s exceeds 30s cap (ADR § 2.1 D1)"
+            exit 1
+          fi
+
+      - name: Snapshot docker stats after 10 s idle
+        id: footprint
+        run: |
+          set -euo pipefail
+          sleep 10
+          source .observability/ports.env
+          mapfile -t containers < <(docker compose -f infra/observability/docker-compose.yml -p "$PROJECT" ps -q)
+          stats="$(docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' "${containers[@]}")"
+          echo "[footprint] docker stats snapshot:"
+          echo "$stats"
+          # Parse MEM USAGE (format: "<num><unit>iB / ..."), sum in MiB.
+          total_mib=$(echo "$stats" | awk '
+            {
+              v = $2
+              n = substr(v, 1, length(v)-3) + 0
+              u = substr(v, length(v)-2, 3)
+              if (u == "MiB") total += n
+              else if (u == "GiB") total += n * 1024
+              else if (u == "KiB") total += n / 1024
+              else total += n / 1024 / 1024   # bytes
+            }
+            END { print total }
+          ')
+          echo "total_mib=$total_mib" >> "$GITHUB_OUTPUT"
+          echo "[footprint] total resident: ${total_mib} MiB"
+          # POSIX bash arithmetic doesn't handle floats; use awk for comparison.
+          over=$(awk -v t="$total_mib" 'BEGIN { print (t > 40) ? 1 : 0 }')
+          if [ "$over" = "1" ]; then
+            echo "::error::Resident memory ${total_mib} MiB exceeds 40 MiB cap (Phase 1 baseline 26.88 MiB × 1.5)"
+            exit 1
+          fi
+
+      - name: Tear down
+        if: always()
+        run: |
+          bash scripts/observability/down.sh || true
+          docker network rm wms-platform-bootrun_default || true
+
+      - name: Upload footprint regression artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-footprint-${{ github.run_id }}
+          path: |
+            .observability/ports.env
+          retention-days: 7
+          if-no-files-found: ignore

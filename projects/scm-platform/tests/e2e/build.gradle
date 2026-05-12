@@ -114,6 +114,31 @@ tasks.register('e2eTest', Test) {
     // can exceed 60 s on a constrained CI runner.
     systemProperty 'junit.jupiter.execution.timeout.default', '6m'
 
+    // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
+    // TASK-MONO-067). When the project property is 'on', wrap the e2eTest
+    // task with up.sh / down.sh and inject the network name as a system
+    // property. `wms.e2e.observabilityNetwork` is the SHARED protocol name
+    // across all four monorepo e2e suites (Phase 2 TASK-MONO-066 precedent).
+    //
+    // Network prefix `scm-` differentiates from sibling e2e suites running
+    // concurrently. CI does not pass this flag.
+    if (project.hasProperty('observability') && project.property('observability') == 'on') {
+        def worktreeHash = providers.exec {
+            commandLine 'bash', '-c', 'printf \'%s\' "$(git rev-parse --show-toplevel)" | sha256sum | head -c 8'
+        }.standardOutput.asText.get().trim()
+        def networkName = "scm-observability-e2e-${worktreeHash}"
+        systemProperty 'wms.e2e.observabilityNetwork', networkName
+
+        doFirst {
+            exec { commandLine 'bash', '-c', "docker network create ${networkName} || true" }
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', networkName }
+        }
+        doLast {
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
+            exec { commandLine 'bash', '-c', "docker network rm ${networkName} || true" }
+        }
+    }
+
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
