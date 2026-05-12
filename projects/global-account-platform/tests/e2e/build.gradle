@@ -41,4 +41,28 @@ test {
     }
     // Surface compose project name so local reruns can clean up.
     environment 'COMPOSE_PROJECT_NAME', 'gap-e2e'
+
+    // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
+    // TASK-MONO-067). GAP's e2e uses docker-compose directly (not
+    // Testcontainers Network), so the observability stack attaches to GAP's
+    // existing default network `gap-e2e_default` (auto-created by the
+    // ComposeFixture). No Java-side base class change is needed — the
+    // attach + scrape happens entirely on the docker network layer.
+    //
+    // CI does not pass this flag. When absent, no doFirst/doLast hook
+    // runs and the e2e suite behaviour is byte-identical to today.
+    if (project.hasProperty('observability') && project.property('observability') == 'on') {
+        doFirst {
+            // gap-e2e_default may not exist yet when the lifecycle hook fires
+            // (ComposeFixture creates it lazily in @BeforeAll). Create it
+            // pre-emptively; docker-compose will reuse the existing network.
+            exec { commandLine 'bash', '-c', 'docker network create gap-e2e_default || true' }
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', 'gap-e2e_default' }
+        }
+        doLast {
+            // observability down first; the compose project's own teardown
+            // is handled by ComposeFixture's JVM shutdown hook.
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
+        }
+    }
 }

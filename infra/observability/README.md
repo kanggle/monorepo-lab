@@ -130,21 +130,45 @@ CI does NOT pass `-Pobservability=on` — the existing e2e-tests job remains the
 
 ---
 
-## Limitations of Phase 1
+## Docker engine compatibility
 
-What works:
+The stack uses docker-compose only — no Testcontainers, no docker-java client. The Phase 1 measurement protocol (TASK-MONO-065) validated against:
+
+| Engine | Version | Host OS | Status | Source |
+|---|---|---|---|---|
+| Rancher Desktop | dockerd v29.1.3 | Windows 11 | ✅ validated — 11.1s cold start, **26.88 MiB resident** | TASK-MONO-065 Implementation Notes |
+| Docker bundled with GitHub Actions `ubuntu-latest` | varies | Linux | ✅ validated — **62.84 MiB resident** (Vector 44 + VictoriaLogs 5.9 + VictoriaMetrics 12.9), see `observability-footprint` CI job (Phase 3 / TASK-MONO-067) | `.github/workflows/ci.yml` |
+| Docker Desktop | — | macOS / Windows | ⚠️ not yet validated | Phase 3 explicit non-deliverable |
+
+**Why the two baselines differ**: Vector's resident memory differs by ~3× between Rancher Desktop (Windows, ~14 MiB) and Linux runner (~44 MiB). The difference is driven by Vector's native build flavour — the alpine image bundles a musl-libc binary, but the underlying memory allocator's reservation strategy + cgroup accounting on Linux push the resident set considerably higher than on Windows where dockerd runs under WSL2 with a VM-level memory layer. VictoriaLogs and VictoriaMetrics show smaller divergence (~2× each).
+
+The CI regression cap is therefore pegged against the **larger** baseline (Linux 62.84 MiB × ~1.6 safety margin = 100 MiB). Future image-version upgrades that push Linux footprint past 100 MiB fail the CI job; Windows/Rancher operators tracking the same artefact would see room for growth, which is acceptable because their footprint stays well below the cap.
+
+**Important — Rancher Desktop docker-java regression does NOT affect this stack.** Memory `project_testcontainers_docker_desktop_blocker.md` documents a Rancher dockerd v29.1.3 + docker-java zerodep npipe transport regression that affects **Testcontainers** workflows (every test JVM hits `MalformedChunkCodingException` after the first cycle). This observability stack uses pure docker-compose against the dockerd HTTP API, bypassing docker-java entirely — the regression does not surface here.
+
+The Phase 2 Gradle e2eTest integration (`-Pobservability=on`) does pull in Testcontainers via `Network.builder().createNetworkCmdModifier(...)`, but only to **attach** to an existing named network — no image pulls or container management via docker-java. The named-network handoff was chosen specifically to keep the high-friction docker-java surface minimal (see ADR-MONO-007 § 4.2 and TASK-MONO-066 § Implementation Notes for the trade-off analysis).
+
+If you operate against Docker Desktop and observe a regression, file a follow-up against TASK-MONO-067 follow-up — the stack itself does nothing engine-specific, so any divergence is most likely in the network attach or `docker stats` parsing paths.
+
+---
+
+## Limitations
+
+What works (gap #3 fully closed as of 2026-05-13):
 
 - Manual bootRun mode against `projects/wms-platform/docker-compose.bootrun.yml`.
 - Logs from any wms container on the bootRun network flow into VictoriaLogs.
 - Metrics from any wms container's `/actuator/prometheus` flow into VictoriaMetrics (15 s scrape interval).
 - Per-worktree isolation: two worktrees → two independent stacks, no cross-contamination.
+- **Gradle e2eTest integration** for all 4 e2e suites — `gradlew :…:e2eTest -Pobservability=on` wires the stack via named docker network. Phase 2 (TASK-MONO-066) added gateway-master live-pair; Phase 3 (TASK-MONO-067) added fan-platform live-trio + scm-platform cross-service + global-account-platform. Per-project network prefixes (`wms-` / `fan-` / `scm-` / `gap-`) prevent cross-project collisions.
+- **`/observe` skill** — `.claude/skills/cross-cutting/observability-query/` queries LogQL + PromQL via skill-mediated bash scripts with 4-block `OBSERVE-QUERY-NN` failure remediation. Phase 2 (TASK-MONO-066).
+- **CI footprint regression** — `observability-footprint` job runs on `infra/observability/**` or `scripts/observability/**` path changes; fails if resident > 40 MiB or cold start > 30 s. Phase 3 (TASK-MONO-067).
 
-What does **not** work yet (deferred to Phase 2 / 3):
+What does **not** work (intentional, out of scope for gap #3):
 
-- **Testcontainers / e2eTest integration.** `gradlew :…:e2eTest -Pobservability=on` does not yet wire this stack into the e2e network. Phase 2 (TASK-MONO-066) adds the wiring alongside the `/observe` skill.
-- **Idle teardown.** `up.sh` does not currently install a 5-min idle watchdog; you must run `down.sh` manually. Phase 2 adds this.
-- **CI footprint regression test.** Phase 3 (TASK-MONO-067) adds the CI check that catches footprint creep.
-- **Trace ingestion.** Out of scope for this stack (deferred to ADR-MONO-007a per ADR-MONO-007 § 2.1 D1).
+- **Idle teardown daemon** — manual `down.sh` is required to teardown after `up.sh`. Not a Phase 3 deliverable per ADR-MONO-007 § 2.5 D5; file a follow-up if manual teardown becomes a recurring burden.
+- **Trace ingestion** — deferred to ADR-MONO-007a per ADR-MONO-007 § 2.1 D1. Will gain `OBSERVE-QUERY-06+` rule IDs + a `query-traces.sh` script when that ADR ACCEPTED.
+- **Docker Desktop validation** — Rancher Desktop + GitHub Actions Linux are the validated baselines; Docker Desktop is documented but not yet measured. See § Docker engine compatibility above.
 
 ---
 

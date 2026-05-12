@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-067-observability-phase-3.md` — Replicate `-Pobservability=on` Gradle wiring across 3 remaining e2e suites (fan-platform live-trio + scm-platform cross-service + global-account-platform) with per-project network prefixes (`fan-`/`scm-`/`gap-`) preserving the shared `wms.e2e.observabilityNetwork` system-property protocol. Add `observability-footprint` CI job (path-filter triggered on `infra/observability/**` or `scripts/observability/**`) enforcing 40 MiB resident cap + 30 s cold start cap. Append `infra/observability/README.md` § Docker engine compatibility (Rancher v29.1.3 + Linux CI validated, Docker Desktop deferred) + memory cross-ref to `project_testcontainers_docker_desktop_blocker.md` clarifying docker-java regression scope. Refresh § Limitations to reflect Phase 2 + Phase 3 closure. **GAP e2e uses docker-compose directly (not Testcontainers Network)** → minimal change: build.gradle attaches observability stack to existing `gap-e2e_default` network, no Java-side base class change. Closes OpenAI Harness gap #3 **Phase 3 (final)** per ADR-MONO-007 § 2.5 D5. Out of scope: idle teardown daemon (not enumerated in Phase 3 row), Docker Desktop validation (explicit non-deliverable), trace queries (ADR-MONO-007a deferred), gap #4 Chrome DevTools MCP (separate ADR). Production code = 0. D4 OVERRIDE applies per ADR-MONO-003a § D1.3 (Harness gap series, last entry). 분석=Opus 4.7 / 구현=Opus 4.7 (3 mechanical e2e replications + CI workflow extension + README polishing; direct authoring for single-PR scope).
 
 ## in-progress
 
