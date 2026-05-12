@@ -166,12 +166,14 @@ Append-only. Entries added when each PR merges. Order: oldest first.
 | 9 | #393 | 2026-05-12 | 43a3968e | Gap #2 | `.claude/workflows/doc-gardening.md` + 2 weekly routine registration — TASK-MONO-062 |
 | 10 | #394 | 2026-05-12 | (chore) | Gap #2 close chore | TASK-MONO-062 lifecycle ready→review→done |
 | 11 | #395 | 2026-05-12 | 23791ebe | Meta-policy | This ADR canonicalization PR (TASK-MONO-063 spec — ADR-MONO-003a publish + ADR-MONO-003 forward-pointer + ADR-MONO-006 § Related update + memory L28/description/MEMORY.md index canonicalize) |
-| 12 | TBD | 2026-05-12 | (close chore) | Meta-policy close chore | TASK-MONO-063 lifecycle ready→done + this row backfill |
+| 12 | #396 | 2026-05-12 | (close chore) | Meta-policy close chore | TASK-MONO-063 lifecycle ready→done + audit-trail row backfill |
+| 13 | TBD | 2026-05-13 | (PR merge SHA) | Meta-policy | ADR-MONO-003b PROPOSED publish (TASK-MONO-069 spec — Phase 5 launch criteria / procedure / sync / rollback pre-authored; PROPOSED status, no implementation gate) |
 
 **Outstanding (OPEN — not yet landed under OVERRIDE)**:
 
 - Gap A Phase 3b semantic Hard Stop (HARDSTOP-02/04/06/07/08) — DEFERRED per ADR-MONO-006 § 6, no entry-condition heuristic yet.
-- Gap #3 worktree ephemeral observability stack — DEFERRED, awaits e2e scenario accumulation.
+- Gap #3 worktree ephemeral observability stack — **CLOSED 2026-05-12/13** (ADR-MONO-007 publish + Phase 1/2/3 — TASK-MONO-064/065/066/067 + audit cleanup TASK-MONO-068).
+- Gap #4 Chrome DevTools MCP — DEFERRED, no trigger yet.
 
 When these land, append rows here. No re-authorisation needed (covered by D1.2).
 
