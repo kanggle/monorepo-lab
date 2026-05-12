@@ -8,7 +8,7 @@ master-service Partner aggregate minimal v1 bootstrap — producer-side 누락 c
 
 # Status
 
-review
+done
 
 # Owner
 
