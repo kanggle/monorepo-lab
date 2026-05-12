@@ -1,8 +1,8 @@
 # ADR-MONO-003b — Phase 5 Launch Criteria, Procedure, Sync, Rollback
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-13
-**History:** PROPOSED 2026-05-13 (TASK-MONO-069 — pre-launch criteria documentation; not the launch authorisation).
+**History:** PROPOSED 2026-05-13 (TASK-MONO-069 — pre-launch criteria documentation) → ACCEPTED 2026-05-13 (TASK-MONO-070 — Phase 5 launch execution, source SHA `68b6877c`, Template URL `https://github.com/kanggle/project-template`).
 **Decision driver:** ADR-MONO-003a § D4 (Phase 5 trigger redefinition, 2026-05-12) cites "user-explicit statement of intent + new `ADR-MONO-003b` authoring (status: PROPOSED → ACCEPTED)" as the launch gate. The gate is half-defined — user-explicit intent is the user's prerogative, but ADR-MONO-003b did not exist. A future "should we launch now?" moment would require fresh authoring under decision pressure, where criteria phrasing is most likely to be sloppy and reviewer trust lowest. This ADR lands the PROPOSED draft so the gate is fully specified ahead of the decision.
 **Supersedes:** none (PROPOSED status — does not supersede anything yet). ACCEPTED transition will SUPERSEDE-on-launch ADR-MONO-003 § D1 (Phase 5 DEFERRED) and update ADR-MONO-003a Status footer.
 **Related:** [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) (Phase 5 DEFERRED parent), [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D4 (cites this ADR by name), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) (Discovery → Distribution strategy parent), [TEMPLATE.md § Phase 5](../../TEMPLATE.md), [`scripts/extract-template.sh`](../../scripts/extract-template.sh), [`scripts/verify-template-readiness.sh`](../../scripts/verify-template-readiness.sh), [`scripts/sync-portfolio.sh`](../../scripts/sync-portfolio.sh), memory [`project_monorepo_template_strategy`](../../../memory/project_monorepo_template_strategy.md).
@@ -340,9 +340,24 @@ Append-only. Entries added when this ADR's status changes.
 
 | Date | Transition | Source SHA | Seed source | User intent quote | PR |
 |---|---|---|---|---|---|
-| 2026-05-13 | created PROPOSED | TBD (PR merge SHA) | n/a | n/a | TBD (this PR) |
+| 2026-05-13 | created PROPOSED | c29032a0 (PR #410 merge) | n/a | n/a | #410 |
+| 2026-05-13 | ACCEPTED | 68b6877c | flat single-project shell (`projects/<placeholder>/` per `extract-template.sh` default) — D1.2 option (i) | "ADR-003b ACCEPTED 전환 (= Phase 5 실 launch) — user-explicit 의향 발화 + § D1 checklist 재평가 + § D2 procedure 실행 해줘" | TBD (this PR) |
 
-(ACCEPTED row reserved — will be appended at launch moment per § D5.3 row format.)
+Launch artifact: [`https://github.com/kanggle/project-template`](https://github.com/kanggle/project-template) — public, `is_template: true`, 435 files / 2.7 MiB.
+
+D1 checklist evaluation at ACCEPTED moment:
+
+| Criterion | Result |
+|---|---|
+| D1.1 — verify-template-readiness.sh | Check 1 PASS post-fix (5 violations in `.claude/skills/cross-cutting/observability-query/SKILL.md` ×4 + `.claude/skills/messaging/outbox-pattern/SKILL.md` ×1, all anonymised). Check 2/4/5 PASS. Check 3 FAIL (diagnostic-only per ADR-003a § D4). Check 6 historical PASS (script hangs in current run, but underlying repo state matches 2026-05-08 / 2026-05-09 prior PASS evaluations per ADR-MONO-003 history). **MET.** |
+| D1.2 — Seed source | Flat single-project shell (`projects/<placeholder>/` with .example placeholders for PROJECT.md / README.md / build.gradle / docker-compose.yml / .env / tasks/INDEX.md). **MET** — D1.2 option (i). |
+| D1.3 — Target repo URL + visibility | `https://github.com/kanggle/project-template`, public. **MET.** |
+| D1.4 — Library-layer churn quiescence | Qualitative judgement: churn is winding-down (B common-rule refactor closed 5/5, gap A/#2/#3 closed). OVERRIDE-class work plateauing — fewer net shared-path changes per week vs 2026-05-11 peak. **MET (qualitative).** |
+| D1.5 — User-explicit intent | "ADR-003b ACCEPTED 전환 (= Phase 5 실 launch) — user-explicit 의향 발화 + § D1 checklist 재평가 + § D2 procedure 실행 해줘" — matches § D5.1 acceptable phrasing ("launch ADR-003b ACCEPTED" + "Phase 5 launch"). **MET.** |
+| D1.6 — Dress rehearsal | `bash scripts/extract-template.sh --dry-run /tmp/template-dryrun` exit 0, output reviewed, no project-specific content leaked. **MET.** |
+| D1.7 — Outstanding shared-library work | `tasks/ready/` empty at launch moment. **MET.** |
+
+All criteria MET. No blockers. ACCEPTED transition authorised.
 
 ---
 

@@ -75,22 +75,22 @@ Fields available on every event (set by `vector.toml` parse_logback + add_worktr
 
 | Field | Source | Example value |
 |---|---|---|
-| `service` | docker compose label | `master-service` |
+| `service` | docker compose label | `<service-name>` (per project's `<project>/specs/services/<service>/architecture.md` Service Type) |
 | `level` | Logback JSON `level` field | `INFO`, `WARN`, `ERROR` |
 | `traceId` | Logback MDC `traceId` | `a1b2c3d4-...` |
 | `spanId` | Logback MDC `spanId` | `e5f6...` |
 | `worktree` | `WORKTREE_HASH` env var | `1c184f58` |
 | `message` | Logback JSON `message` field | (free text) |
-| `logger` | Logback JSON `logger` field | `com.wms.master.application.service.PartnerService` |
+| `logger` | Logback JSON `logger` field | `<project-package>.<module>.<Class>` (e.g. `com.example.app.application.service.SomeService`) |
 | `mdc` | Logback MDC bag | (object) |
 
 Common patterns:
 
 ```
-{service="master-service"} |= "PartnerCreated"          # services emitting a phrase
+{service="<service-name>"} |= "<EventName>"             # services emitting a phrase — substitute project's service per specs/services/
 {level="ERROR"}                                          # all errors across all services
 {traceId="abc"}                                         # follow one request across services
-{service="master-service",level=~"WARN|ERROR"}          # filter by enum-like field
+{service="<service-name>",level=~"WARN|ERROR"}          # filter by enum-like field
 ```
 
 Refer to the [VictoriaLogs LogQL reference](https://docs.victoriametrics.com/victorialogs/logsql/) for the full grammar.
@@ -99,14 +99,14 @@ Refer to the [VictoriaLogs LogQL reference](https://docs.victoriametrics.com/vic
 
 ## PromQL primer (VictoriaMetrics)
 
-VictoriaMetrics is a drop-in Prometheus replacement; standard PromQL applies. Series available from wms services' `/actuator/prometheus`:
+VictoriaMetrics is a drop-in Prometheus replacement; standard PromQL applies. Series available from each project's services' `/actuator/prometheus` (substitute `<service-name>` per `<project>/specs/services/`):
 
 | Series prefix | Source | Example |
 |---|---|---|
-| `jvm_memory_used_bytes` | Spring Boot Micrometer JVM binder | `jvm_memory_used_bytes{area="heap",service="master-service"}` |
+| `jvm_memory_used_bytes` | Spring Boot Micrometer JVM binder | `jvm_memory_used_bytes{area="heap",service="<service-name>"}` |
 | `http_server_requests_seconds_count` | Spring Boot Micrometer web binder | `rate(http_server_requests_seconds_count[1m])` |
-| `system_cpu_usage` | Micrometer system binder | `system_cpu_usage{service="gateway-service"}` |
-| `outbound_tms_request_count_total` | service-specific Micrometer counter | per-service business metric |
+| `system_cpu_usage` | Micrometer system binder | `system_cpu_usage{service="<service-name>"}` |
+| `<custom>_count_total` | service-specific Micrometer counter | per-service business metric (see project's observability section) |
 | `up` | Vector prometheus_scrape source | scrape target health |
 
 Range queries: `--range 5m` selects `now - 5m` through `now`, step `15s` by default; override step with `--step 30s`.

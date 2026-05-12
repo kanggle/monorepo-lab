@@ -43,8 +43,9 @@ CREATE INDEX idx_<service>_outbox_pending
     ON <service>_outbox (created_at) WHERE published_at IS NULL;
 ```
 
-V1 schema (legacy, used by master-service and most GAP / ecommerce services
-that extend `OutboxPollingScheduler`):
+V1 schema (legacy, used by services extending `OutboxPollingScheduler` —
+see `<project>/specs/services/<service>/architecture.md` for whether a given
+service uses V1 or V2):
 
 ```sql
 CREATE TABLE outbox (

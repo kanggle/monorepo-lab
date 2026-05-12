@@ -21,6 +21,17 @@ try {
     if ($cwd -match 'portfolio-sync' -or $command -match 'portfolio-sync') {
         exit 0
     }
+    
+    # Allowlist: Template repo extraction workdirs.
+    # scripts/extract-template.sh produces an extraction tree at /tmp/project-template-*
+    # (or any name the operator passes). Per ADR-MONO-003b § D2.3, the first push of
+    # that tree to kanggle/project-template IS the Phase 5 launch artifact. The same
+    # allowlist also covers future scripts/sync-template.sh runs that force-push
+    # subsequent rebuilds. Detect via cwd OR via inline `cd /tmp/project-template-...`.
+    if ($cwd -match 'project-template' -or $command -match 'project-template') {
+        exit 0
+    }
+
 
     # Block git push to main/master, raw force push, or hard reset to origin's
     # main/master. `--force-with-lease` (the safe alternative used to update
