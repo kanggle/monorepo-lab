@@ -8,7 +8,7 @@ Publish ADR-MONO-003b (PROPOSED) — Phase 5 launch criteria, procedure, sync, r
 
 # Status
 
-review
+done
 
 # Owner
 
