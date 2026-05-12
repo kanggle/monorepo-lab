@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-066-observability-query-skill.md` — Author `.claude/skills/cross-cutting/observability-query/` (SKILL.md + 2 helper scripts query-logs.sh + query-metrics.sh, `OBSERVE-QUERY-NN` 4-block remediation 01-05) + Gradle `-Pobservability=on` profile wiring on `gateway-service:e2eTest` (named docker network `wms-observability-e2e-${worktreeHash}` via doFirst/doLast hooks + `wms.e2e.observabilityNetwork` system property injection) + `E2EBase.java` minor patch (named-network resolution via `Network.builder().createNetworkCmdModifier`, property-absent path byte-identical to today) + `infra/observability/README.md` § Phase 2 mode section. Closes OpenAI Harness gap #3 **Phase 2** per ADR-MONO-007 § 2.4 D4 (DX target) + § 2.5 D5 (Phase 2 row). Out of scope: trace queries (ADR-MONO-007a deferred), other-service e2e suites (Phase 3 MONO-067), idle teardown daemon (Phase 3), CI activation (ADR § 2.3 D3 explicit), Testcontainers ComposeContainer (named-network handoff chosen instead — lower lifecycle coupling, avoids Rancher Desktop docker-java cold-start regression). Production code = 0, no `libs/` or `apps/*/src/main/` touched — only e2eTest source set + build.gradle of gateway-service + `.claude/skills/` + `infra/`. D4 OVERRIDE applies per ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7 (skill body + Java testcontainers integration + Gradle wiring, named-network coupling novel).
 
 ## in-progress
 

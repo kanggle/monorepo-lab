@@ -84,6 +84,52 @@ If the live measurement was deferred at Phase 1 (Rancher Desktop blocker per mem
 
 ---
 
+## Phase 2: Gradle e2eTest mode
+
+Phase 2 (TASK-MONO-066) adds Gradle e2eTest integration via the `-Pobservability=on` flag. When passed, the e2eTest task creates a named docker network beforehand, runs `up.sh --network <name>`, injects the network name into the Testcontainers JVM, runs `down.sh` and removes the network in `doLast`.
+
+```sh
+./gradlew :projects:wms-platform:apps:gateway-service:e2eTest -Pobservability=on
+```
+
+What happens behind the scenes:
+
+1. `doFirst` — `docker network create wms-observability-e2e-${worktreeHash}` (idempotent — `|| true`)
+2. `doFirst` — `./scripts/observability/up.sh --network wms-observability-e2e-${worktreeHash}` (waits ≤ 30 s for stack healthy)
+3. Test JVM starts with `wms.e2e.observabilityNetwork=<name>` system property; `E2EBase` resolves the named network via `Network.builder().createNetworkCmdModifier(...)`.
+4. e2eTest scenarios run normally; service container stdout flows to VictoriaLogs, `/actuator/prometheus` scrapes flow to VictoriaMetrics.
+5. `doLast` — `./scripts/observability/down.sh` then `docker network rm wms-observability-e2e-${worktreeHash}` (both with `|| true`).
+
+Without `-Pobservability=on`, the e2eTest task is byte-identical to the pre-Phase-2 behaviour (anonymous Testcontainers `Network.newNetwork()`).
+
+### Querying during a long-running e2eTest
+
+While the e2eTest is running (or after, before `doLast` tears down — useful during failure post-mortems), open a second terminal and use the Phase 2 skill scripts:
+
+```sh
+./.claude/skills/cross-cutting/observability-query/scripts/query-logs.sh \
+    '{service="gateway-service"} |= "trace"'
+
+./.claude/skills/cross-cutting/observability-query/scripts/query-metrics.sh \
+    'rate(http_server_requests_seconds_count[1m])'
+```
+
+The scripts read `.observability/ports.env` (still populated until `down.sh` runs) and emit ndjson / JSON results, with 4-block `OBSERVE-QUERY-NN` errors on stderr.
+
+`OBSERVE-QUERY-NN` rule-ID quick-reference (full table in `.claude/skills/cross-cutting/observability-query/SKILL.md` § Failure modes):
+
+| ID | Trigger | Remediation hint |
+|---|---|---|
+| `01` | Stack not up | run `up.sh` or pass `-Pobservability=on` |
+| `02` | Stack mid-tear-down / container crashed | `down.sh` then `up.sh` |
+| `03` | Query syntax error | consult LogQL / PromQL primer |
+| `04` | No results within window | widen range or relax matcher |
+| `05` | Pagination overflow | `--limit 500` or narrow the matcher |
+
+CI does NOT pass `-Pobservability=on` — the existing e2e-tests job remains the default (Docker-free Testcontainers anonymous network) for fast feedback. Phase 3 (TASK-MONO-067) will decide whether any CI lane wants the stack active.
+
+---
+
 ## Limitations of Phase 1
 
 What works:
