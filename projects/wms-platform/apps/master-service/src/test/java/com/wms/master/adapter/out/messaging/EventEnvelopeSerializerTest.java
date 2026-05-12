@@ -13,6 +13,10 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
+import com.wms.master.domain.event.PartnerCreatedEvent;
+import com.wms.master.domain.event.PartnerDeactivatedEvent;
+import com.wms.master.domain.event.PartnerReactivatedEvent;
+import com.wms.master.domain.event.PartnerUpdatedEvent;
 import com.wms.master.domain.event.SkuCreatedEvent;
 import com.wms.master.domain.event.SkuDeactivatedEvent;
 import com.wms.master.domain.event.SkuReactivatedEvent;
@@ -24,6 +28,8 @@ import com.wms.master.domain.event.ZoneUpdatedEvent;
 import com.wms.master.domain.model.BaseUom;
 import com.wms.master.domain.model.Location;
 import com.wms.master.domain.model.LocationType;
+import com.wms.master.domain.model.Partner;
+import com.wms.master.domain.model.PartnerType;
 import com.wms.master.domain.model.Sku;
 import com.wms.master.domain.model.TrackingType;
 import com.wms.master.domain.model.Warehouse;
@@ -331,6 +337,74 @@ class EventEnvelopeSerializerTest {
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.reactivated");
         assertThat(envelope.get("payload").get("sku").get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(envelope.get("payload").has("reason")).isFalse();
+        assertThat(envelope.get("payload").has("changedFields")).isFalse();
+    }
+
+    // ---------- Partner events ----------
+
+    @Test
+    void partnerCreatedEvent_producesContractEnvelope() throws Exception {
+        Partner partner = Partner.create("SUP-001", "ACME", PartnerType.SUPPLIER,
+                "B-1", "Jane", "jane@example.com", "+82-1", "Seoul", "actor-42");
+        PartnerCreatedEvent event = PartnerCreatedEvent.from(partner);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.created");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("partner");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(partner.getId().toString());
+        assertThat(envelope.get("actorId").asText()).isEqualTo("actor-42");
+
+        JsonNode payload = envelope.get("payload").get("partner");
+        assertThat(payload.get("partnerCode").asText()).isEqualTo("SUP-001");
+        assertThat(payload.get("partnerType").asText()).isEqualTo("SUPPLIER");
+        assertThat(payload.get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(payload.get("version").asLong()).isZero();
+    }
+
+    @Test
+    void partnerUpdatedEvent_carriesChangedFields() throws Exception {
+        Partner partner = Partner.create("SUP-001", "ACME", PartnerType.SUPPLIER,
+                null, null, null, null, null, "actor");
+        PartnerUpdatedEvent event = PartnerUpdatedEvent.from(partner,
+                List.of("name", "partnerType"));
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.updated");
+        JsonNode changed = envelope.get("payload").get("changedFields");
+        assertThat(changed.isArray()).isTrue();
+        assertThat(changed.get(0).asText()).isEqualTo("name");
+        assertThat(changed.get(1).asText()).isEqualTo("partnerType");
+    }
+
+    @Test
+    void partnerDeactivatedEvent_carriesReason() throws Exception {
+        Partner partner = Partner.create("SUP-001", "ACME", PartnerType.SUPPLIER,
+                null, null, null, null, null, "actor");
+        partner.deactivate("actor");
+        PartnerDeactivatedEvent event = PartnerDeactivatedEvent.from(partner, "discontinued");
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.deactivated");
+        assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("discontinued");
+        assertThat(envelope.get("payload").get("partner").get("status").asText()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void partnerReactivatedEvent_hasSnapshotOnly() throws Exception {
+        Partner partner = Partner.create("SUP-001", "ACME", PartnerType.SUPPLIER,
+                null, null, null, null, null, "actor");
+        partner.deactivate("actor");
+        partner.reactivate("actor");
+        PartnerReactivatedEvent event = PartnerReactivatedEvent.from(partner);
+
+        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+
+        assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.reactivated");
+        assertThat(envelope.get("payload").get("partner").get("status").asText()).isEqualTo("ACTIVE");
         assertThat(envelope.get("payload").has("reason")).isFalse();
         assertThat(envelope.get("payload").has("changedFields")).isFalse();
     }
