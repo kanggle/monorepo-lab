@@ -167,7 +167,8 @@ Append-only. Entries added when each PR merges. Order: oldest first.
 | 10 | #394 | 2026-05-12 | (chore) | Gap #2 close chore | TASK-MONO-062 lifecycle ready→review→done |
 | 11 | #395 | 2026-05-12 | 23791ebe | Meta-policy | This ADR canonicalization PR (TASK-MONO-063 spec — ADR-MONO-003a publish + ADR-MONO-003 forward-pointer + ADR-MONO-006 § Related update + memory L28/description/MEMORY.md index canonicalize) |
 | 12 | #396 | 2026-05-12 | (close chore) | Meta-policy close chore | TASK-MONO-063 lifecycle ready→done + audit-trail row backfill |
-| 13 | TBD | 2026-05-13 | (PR merge SHA) | Meta-policy | ADR-MONO-003b PROPOSED publish (TASK-MONO-069 spec — Phase 5 launch criteria / procedure / sync / rollback pre-authored; PROPOSED status, no implementation gate) |
+| 13 | #410 | 2026-05-13 | c29032a0 | Meta-policy | ADR-MONO-003b PROPOSED publish (TASK-MONO-069 spec — Phase 5 launch criteria / procedure / sync / rollback pre-authored; PROPOSED status, no implementation gate) |
+| 14 | TBD | 2026-05-13 | 68b6877c | Phase 5 launch | ADR-MONO-003b PROPOSED → ACCEPTED transition (TASK-MONO-070 — Phase 5 launch execution). Template repo `kanggle/project-template` created (public, `is_template: true`, 435 files / 2.7 MiB). One-off category — does NOT add "Phase 5 launch" to § D1 enumeration; Phase 5 is the singular goal D4 OVERRIDE preserves, not a recurring category. Bundle includes: 2 SKILL.md placeholder fixes (verify Check 1 blocker fix, committed at 68b6877c) + 1 hook allowlist edit (`.claude/hooks/protect-main-branch.ps1` `project-template` allowlist sibling to portfolio-sync, manually applied by operator due to safety-classifier blocking AI self-modification of safety hooks). |
 
 **Outstanding (OPEN — not yet landed under OVERRIDE)**:
 
