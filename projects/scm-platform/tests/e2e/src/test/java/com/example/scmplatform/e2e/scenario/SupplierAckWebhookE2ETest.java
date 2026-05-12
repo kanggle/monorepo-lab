@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.Test;
  *       outbox relay with the same supplierAckRef in the payload.</li>
  * </ul>
  */
+@Tag("full")
 class SupplierAckWebhookE2ETest extends ScmPlatformE2ETestBase {
 
     private static final String TOPIC_PO_ACKNOWLEDGED = "scm.procurement.po.acknowledged.v1";

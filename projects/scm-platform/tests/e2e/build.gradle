@@ -80,24 +80,29 @@ test {
     }
 }
 
-// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`.
-// CI (nightly + scm-e2e) invokes this task explicitly after pre-building the
-// three service docker images.
-tasks.register('e2eTest', Test) {
-    description = 'Runs Testcontainers-backed cross-service E2E tests (requires Docker).'
-    group = 'verification'
-    useJUnitPlatform {
-        includeTags 'e2e'
-    }
-    shouldRunAfter tasks.named('test')
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010 — TASK-MONO-076 Phase 2):
+//
+//   - `e2eTest`       — back-compat umbrella, runs `@Tag("e2e")` (smoke + full).
+//   - `e2eSmokeTest`  — runs `@Tag("smoke")` subset only. PR-time CI.
+//   - `e2eFullTest`   — runs `@Tag("full")` subset only. Nightly + push to main.
+//
+// All three share identical configuration (sourceSet, dependsOn bootJars,
+// system properties, observability=on wrapper, testLogging). The
+// `baseE2eConfig` closure factors out the common shape so the three task
+// registrations differ only in the `includeTags` filter and the description.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
+    t.group = 'verification'
+    t.shouldRunAfter tasks.named('test')
 
     // Ensure the three service boot jars are produced before the containerized
     // tests spin up — the base test class' ImageFromDockerfile fallback COPYs
     // each bootJar from build/libs/ into the image. CI skips these
     // dependencies via `-x :...:bootJar` after restoring jars from artifact.
-    dependsOn ':projects:scm-platform:apps:gateway-service:bootJar'
-    dependsOn ':projects:scm-platform:apps:procurement-service:bootJar'
-    dependsOn ':projects:scm-platform:apps:inventory-visibility-service:bootJar'
+    t.dependsOn ':projects:scm-platform:apps:gateway-service:bootJar'
+    t.dependsOn ':projects:scm-platform:apps:procurement-service:bootJar'
+    t.dependsOn ':projects:scm-platform:apps:inventory-visibility-service:bootJar'
 
     // Forward pre-built image names when set by CI. Local dev (without these
     // properties) falls back to ImageFromDockerfile in ScmPlatformE2ETestBase.
@@ -107,18 +112,18 @@ tasks.register('e2eTest', Test) {
         'scm.e2e.inventoryVisibilityImage'
     ].each { prop ->
         def val = System.getProperty(prop)
-        if (val) systemProperty prop, val
+        if (val) t.systemProperty prop, val
     }
 
     // Generous timeout — Kafka KRaft cold start + 3 Spring Boot services
     // can exceed 60 s on a constrained CI runner.
-    systemProperty 'junit.jupiter.execution.timeout.default', '6m'
+    t.systemProperty 'junit.jupiter.execution.timeout.default', '6m'
 
     // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
-    // TASK-MONO-067). When the project property is 'on', wrap the e2eTest
-    // task with up.sh / down.sh and inject the network name as a system
-    // property. `wms.e2e.observabilityNetwork` is the SHARED protocol name
-    // across all four monorepo e2e suites (Phase 2 TASK-MONO-066 precedent).
+    // TASK-MONO-067). When the project property is 'on', wrap the task with
+    // up.sh / down.sh and inject the network name as a system property.
+    // `wms.e2e.observabilityNetwork` is the SHARED protocol name across all
+    // four monorepo e2e suites (Phase 2 TASK-MONO-066 precedent).
     //
     // Network prefix `scm-` differentiates from sibling e2e suites running
     // concurrently. CI does not pass this flag.
@@ -127,22 +132,40 @@ tasks.register('e2eTest', Test) {
             commandLine 'bash', '-c', 'printf \'%s\' "$(git rev-parse --show-toplevel)" | sha256sum | head -c 8'
         }.standardOutput.asText.get().trim()
         def networkName = "scm-observability-e2e-${worktreeHash}"
-        systemProperty 'wms.e2e.observabilityNetwork', networkName
+        t.systemProperty 'wms.e2e.observabilityNetwork', networkName
 
-        doFirst {
+        t.doFirst {
             exec { commandLine 'bash', '-c', "docker network create ${networkName} || true" }
             exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', networkName }
         }
-        doLast {
+        t.doLast {
             exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
             exec { commandLine 'bash', '-c', "docker network rm ${networkName} || true" }
         }
     }
 
-    testLogging {
+    t.testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
         showStandardStreams = true
     }
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e") (smoke + full). Not wired into `check`.'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eSmokeTest', Test) {
+    description = '@Tag("smoke") subset only — PR-time CI (ADR-MONO-010 D1/D2).'
+    useJUnitPlatform { includeTags 'smoke' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") subset only — nightly + push to main (ADR-MONO-010 D1/D2; Phase 3 wires the CI side).'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
 }
 

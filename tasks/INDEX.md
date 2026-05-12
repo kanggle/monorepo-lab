@@ -111,9 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-076-e2e-tag-taxonomy-impl.md` — ADR-MONO-010 ACCEPTED 전환 + Phase 2 impl. 4 e2e module 의 `build.gradle` 에 `e2eSmokeTest` / `e2eFullTest` task 신설 + 4 service 의 15 e2e unit (fan 3 / scm 6 / wms 1 class × 5 nested / gap 5) 에 `@Tag("smoke")` × 8 + `@Tag("full")` × 11 분류 적용 + `ci.yml` 의 3 PR-time e2e job gradle target `:e2eSmokeTest` 로 변경 + timeout 축소 (60→20 / 20→10 / 20→10) + `platform/testing-strategy.md` 4 insert (Pyramid split / 새 subsection rubric S1-S4 + F1-F6 / naming convention 2 row / Rules 1 entry). gap 은 two-step 마이그레이션 (`@Tag("e2e")` 부재 → 도입 + smoke/full 분류); wms 는 첫 method-level granularity 케이스 (mixed-bucket 클래스). production code 0, test code + build.gradle + workflow yaml + spec 만 변경. **Out of scope**: Phase 3 (nightly full e2e 4 job 신설 — 별도 ADR) / lint enforcement / gap PR-time job 신설 / class 명 rename. impl PR bundling 정책: fan+scm 단일 + wms 단일 + gap 단일 (3 PR 권장, 또는 ≤ 400 LOC 시 단일 bundled).
-
-
+(empty)
 
 ## in-progress
 
@@ -121,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-076-e2e-tag-taxonomy-impl.md` — ADR-MONO-010 ACCEPTED 전환 + Phase 2 impl **1차 (fan + scm bundle, D5 step 1+2)**. fan + scm 2 build.gradle 에 `baseE2eConfig` closure + 3 task 신설 (`e2eTest` umbrella / `e2eSmokeTest` PR-time / `e2eFullTest` nightly) + 9 e2e class `@Tag` 적용 (**fan 3 = 2 smoke + 1 full / scm 6 = 1 smoke + 5 full**) + `ci.yml` 의 fan-platform-e2e + scm-platform-e2e job gradle target `:e2eSmokeTest` 로 변경 + timeout 축소 (20→10 fan, 25→12 scm) + report path 갱신 (e2eTest → e2eSmokeTest) + 헤더 주석 § "E2E smoke vs full split" 추가 + `platform/testing-strategy.md` 4 insert (Pyramid split smoke/full / 새 subsection "E2E Smoke vs Full" rubric S1-S4 + F1-F6 + granularity rule / Naming Conventions 2 row / Rules 1 entry) + ADR-MONO-010 Status PROPOSED → ACCEPTED + transition history row 2. **wms (D5 step 3 method-level mixed-bucket 케이스) + gap (D5 step 4 `@Tag("e2e")` precedent 도입) = 별도 후속 impl PR 2개**. production code 0, test code + 2 build.gradle + workflow yaml + 2 spec 만 변경.
 
 ## done
 

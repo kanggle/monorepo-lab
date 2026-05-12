@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.Test;
  *       (DRAFT, SUBMIT, ACKNOWLEDGE, CONFIRM, RECEIVE) — Task spec § AC #3.</li>
  * </ul>
  */
+@Tag("full")
 class AsnReceiveE2ETest extends ScmPlatformE2ETestBase {
 
     private static final String TOPIC_PO_RECEIVED = "scm.procurement.po.received.v1";

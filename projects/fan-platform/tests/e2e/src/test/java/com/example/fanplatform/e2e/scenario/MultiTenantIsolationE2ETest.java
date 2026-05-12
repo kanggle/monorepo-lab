@@ -13,6 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.Test;
  * coverage in {@code GatewayBootstrapIntegrationTest} this scenario
  * verifies the deployed gateway image enforces the gate.
  */
+@Tag("smoke")
 class MultiTenantIsolationE2ETest extends FanPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

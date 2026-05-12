@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.Test;
  * MultiTenantIsolationIntegrationTest but exercises the assertion through
  * the gateway over real HTTP rather than the in-process service call.
  */
+@Tag("smoke")
 class CrossTenantIsolationE2ETest extends ScmPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
