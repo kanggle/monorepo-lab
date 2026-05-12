@@ -910,10 +910,10 @@ jobs:
   # triggered manually via workflow_dispatch. TASK-MONO-045.
 
   e2e-tests:
-    name: E2E (gateway-master live-pair, Testcontainers)
+    name: E2E (gateway-master live-pair smoke, Testcontainers)
     runs-on: ubuntu-latest
     needs: [changes, build-and-test, boot-jars]
-    timeout-minutes: 60
+    timeout-minutes: 20
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
     # Activate for wms changes, cross-project (libs/workflows), or any project's
     # contract change (cross-service consumer gate, MONO-074).
@@ -983,10 +983,15 @@ jobs:
             -f projects/wms-platform/apps/gateway-service/Dockerfile \
             projects/wms-platform/apps/gateway-service/
 
-      - name: Run gateway-master e2e suite
+      - name: Run gateway-master e2e smoke suite
+        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
+        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
+        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
+        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
+        # dev convenience.
         run: >-
           ./gradlew
-          :projects:wms-platform:apps:gateway-service:e2eTest
+          :projects:wms-platform:apps:gateway-service:e2eSmokeTest
           -x :projects:wms-platform:apps:master-service:bootJar
           -x :projects:wms-platform:apps:gateway-service:bootJar
           -Dwms.e2e.masterImage=wms-master-service:e2e
@@ -999,8 +1004,8 @@ jobs:
         with:
           name: e2e-test-reports
           path: |
-            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eTest/
-            projects/wms-platform/apps/gateway-service/build/test-results/e2eTest/
+            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eSmokeTest/
+            projects/wms-platform/apps/gateway-service/build/test-results/e2eSmokeTest/
           retention-days: 7
 
   fan-platform-e2e:

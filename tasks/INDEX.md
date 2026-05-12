@@ -111,7 +111,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-077-e2e-tag-impl-wms.md` — ADR-MONO-010 Phase 2 impl **2차 (wms 단독, D5 step 3)**. `GatewayMasterE2ETest` 의 5 nested method 에 **method-level** `@Tag` 적용 (3 smoke + 2 full — Happy×2 + Unauth=smoke, RateLimit + MasterDown=full; class-level smoke/full 미적용 — mixed bucket) + `E2EBase.java` 에 umbrella `@Tag("e2e")` 도입 + `apps/gateway-service/build.gradle` 의 기존 `e2eTest` 를 `baseE2eConfig` closure + 3-task family 로 재구성 (wms 특수: sourceSets-split → `testClassesDirs` + `classpath` 명시 필요) + `ci.yml` 의 `e2e-tests` job target `:e2eSmokeTest` + timeout 60 → 20 + job name 에 "smoke" + report path 갱신. wms 의 first method-level granularity 케이스, fan/scm class-level (PR #428) 와 패턴 다름. production code 0. 직접 선행 = TASK-MONO-076 (PR #428).
 - `TASK-MONO-078-e2e-tag-impl-gap.md` — ADR-MONO-010 Phase 2 impl **3차 (gap 단독, D5 step 4)**. gap 의 e2e 5 class 어디에도 `@Tag("e2e")` 부재 — **two-step 마이그레이션**: (a) `E2EBase.java` 에 `@Tag("e2e")` precedent 도입 (5 subclass 자동 inherit), (b) 5 class 에 class-level smoke/full 적용 (**2 smoke = Golden + Tenant / 3 full = RefreshReuse + Dlq + CrossServiceBulkLock**) + `tests/e2e/build.gradle` 의 default `test` task 를 `useJUnitPlatform { excludeTags 'full' }` 로 변경 (smoke 동등) + 신규 `e2eTest` / `e2eSmokeTest` / `e2eFullTest` 3-task family 등록 (`baseE2eConfig` closure 패턴). gap 의 default `test` 가 곧 e2e suite 라는 historical 결정 (`ComposeFixture` docker-compose 직접 사용) 유지하면서 partition 만 추가. CI workflow 미터치 (gap-integration-tests 가 default `test` 호출 유지, full 제외로 wall-clock 단축). **ADR § 6.2 outstanding (gap PR-time smoke job 신설) 은 본 task scope 밖**. 직접 선행 = TASK-MONO-076 (PR #428).
 
 ## in-progress
@@ -120,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-077-e2e-tag-impl-wms.md` — ADR-MONO-010 Phase 2 impl **2차 (wms 단독, D5 step 3)** in review. `GatewayMasterE2ETest` 의 **6 method (ADR audit 표 5 + TracePropagation 1)** 에 method-level `@Tag` 적용 = **4 smoke + 2 full** (Happy GET + Happy POST + Unauth 401 + Traceparent round-trip = smoke / RateLimit 800-burst + MasterDown container-pause = full); class-level smoke/full 미적용 (mixed bucket — ADR § D1.2). `E2EBase.java` 에 umbrella `@Tag("e2e")` + import 도입 (`disabledWithoutDocker` 옆). `apps/gateway-service/build.gradle` 의 기존 `e2eTest` 를 `baseE2eConfig` closure + 3-task family 로 재구성 (`e2eTest` umbrella / `e2eSmokeTest` PR-time / `e2eFullTest` nightly), wms 특수성 sourceSets-split → 각 task 에 `testClassesDirs = sourceSets.e2eTest.output.classesDirs` + `classpath = sourceSets.e2eTest.runtimeClasspath` 명시. `ci.yml` 의 `e2e-tests` job: target `:e2eSmokeTest`, timeout 60 → 20, job name 에 "smoke" 명시, report path 갱신. production code 0. **추가 발견**: ADR § 1.2 audit 표가 trace propagation method 누락 — 본 PR 에서 smoke 분류로 보강 (happy traceparent round-trip, deterministic). ADR audit 표 row 6 추가는 별도 follow-up 후보.
 
 ## done
 

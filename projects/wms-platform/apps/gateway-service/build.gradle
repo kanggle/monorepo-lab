@@ -106,40 +106,53 @@ test {
     useJUnitPlatform()
 }
 
-// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`
-// so the fast-feedback loop (`./gradlew check`) stays Docker-free. CI invokes
-// this task explicitly in a separate job.
-tasks.register('e2eTest', Test) {
-    description = 'Runs Testcontainers-backed end-to-end live-pair tests (requires Docker).'
-    group = 'verification'
-    testClassesDirs = sourceSets.e2eTest.output.classesDirs
-    classpath = sourceSets.e2eTest.runtimeClasspath
-    useJUnitPlatform()
-    shouldRunAfter tasks.named('test')
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010 — TASK-MONO-077 Phase 2 D5 step 3):
+//
+//   - `e2eTest`       — back-compat umbrella, runs `@Tag("e2e")` (smoke + full).
+//   - `e2eSmokeTest`  — runs `@Tag("smoke")` subset only. PR-time CI.
+//   - `e2eFullTest`   — runs `@Tag("full")` subset only. Nightly + push to main.
+//
+// All three share identical configuration (sourceSet, dependsOn bootJars,
+// system properties, observability=on wrapper, testLogging). The
+// `baseE2eConfig` closure factors out the common shape so the three task
+// registrations differ only in the `includeTags` filter and the description.
+//
+// wms-specific note: this module uses a sourceSets-split layout (e2eTest source
+// set defined in this build.gradle at the top) — unlike fan/scm/gap which use
+// a standalone `tests/e2e/` module. Each task therefore must set
+// `testClassesDirs` + `classpath` explicitly to point at the e2eTest source
+// set's compiled output.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
+    t.group = 'verification'
+    t.testClassesDirs = sourceSets.e2eTest.output.classesDirs
+    t.classpath = sourceSets.e2eTest.runtimeClasspath
+    t.shouldRunAfter tasks.named('test')
 
     // Ensure both bootJars are produced before the containerized tests spin
-    // up — Testcontainers'  ImageFromDockerfile COPYs build/libs/*.jar.
-    dependsOn ':projects:wms-platform:apps:gateway-service:bootJar'
-    dependsOn ':projects:wms-platform:apps:master-service:bootJar'
+    // up — Testcontainers' ImageFromDockerfile COPYs build/libs/*.jar.
+    t.dependsOn ':projects:wms-platform:apps:gateway-service:bootJar'
+    t.dependsOn ':projects:wms-platform:apps:master-service:bootJar'
 
     // Propagate environment where needed (e.g. DOCKER_HOST overrides for
     // WSL2 / colima setups).
-    systemProperty 'testcontainers.reuse.enable', System.getProperty('testcontainers.reuse.enable', 'false')
+    t.systemProperty 'testcontainers.reuse.enable', System.getProperty('testcontainers.reuse.enable', 'false')
 
     // Forward pre-built image names when set by CI (avoids ImageFromDockerfile
     // which hangs on Docker 28 due to BuildKit gRPC incompatibility).
     ['wms.e2e.masterImage', 'wms.e2e.gatewayImage'].each { prop ->
         def val = System.getProperty(prop)
-        if (val) systemProperty prop, val
+        if (val) t.systemProperty prop, val
     }
 
     // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 2,
-    // TASK-MONO-066). When the project property is 'on', wrap the e2eTest
-    // task with up.sh / down.sh and inject the network name as a system
-    // property so E2EBase reuses Testcontainers' createNetworkCmdModifier
-    // to attach to the named docker network. When the property is absent,
-    // none of this runs — the e2eTest task is byte-identical to today's
-    // default behaviour. CI does not pass this flag.
+    // TASK-MONO-066). When the project property is 'on', wrap the task with
+    // up.sh / down.sh and inject the network name as a system property so
+    // E2EBase reuses Testcontainers' createNetworkCmdModifier to attach to
+    // the named docker network. When the property is absent, none of this
+    // runs — task is byte-identical to today's default behaviour. CI does
+    // not pass this flag.
     //
     // The worktree hash is derived from the repository root path so two
     // worktrees produce distinct network names; same worktree's concurrent
@@ -149,15 +162,15 @@ tasks.register('e2eTest', Test) {
             commandLine 'bash', '-c', 'printf \'%s\' "$(git rev-parse --show-toplevel)" | sha256sum | head -c 8'
         }.standardOutput.asText.get().trim()
         def networkName = "wms-observability-e2e-${worktreeHash}"
-        systemProperty 'wms.e2e.observabilityNetwork', networkName
+        t.systemProperty 'wms.e2e.observabilityNetwork', networkName
 
-        doFirst {
+        t.doFirst {
             // The OR-true keeps the build idempotent against stale state from a
             // crashed prior run.
             exec { commandLine 'bash', '-c', "docker network create ${networkName} || true" }
             exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', networkName }
         }
-        doLast {
+        t.doLast {
             // down.sh is idempotent; network rm uses OR-true so it does not
             // mask a real test failure.
             exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
@@ -167,9 +180,27 @@ tasks.register('e2eTest', Test) {
 
     // A generous single-test timeout catches hung containers without masking
     // real assertion failures.
-    testLogging {
+    t.testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
         showStandardStreams = true
     }
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e") (smoke + full). Not wired into `check`.'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eSmokeTest', Test) {
+    description = '@Tag("smoke") subset only — PR-time CI (ADR-MONO-010 D1/D2/D5 step 3).'
+    useJUnitPlatform { includeTags 'smoke' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") subset only — nightly + push to main (ADR-MONO-010 D1/D2; Phase 3 wires the CI side).'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
 }

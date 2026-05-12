@@ -8,7 +8,7 @@ ADR-MONO-010 Phase 2 impl 2차 — wms `GatewayMasterE2ETest` method-level `@Tag
 
 # Status
 
-ready
+review
 
 # Owner
 
