@@ -8,7 +8,9 @@ ADRs live under `projects/<name>/docs/adr/`.
 |---|---|---|---|
 | [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md) | PORT_PREFIX 슬롯 부족과 7개+ 프로젝트 동시 운영 정책 | ACCEPTED | 2026-05-02 |
 | [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) | Phase 4 (Template 레포 추출 진입 결정 + scm catalyst) | ACCEPTED | 2026-05-04 |
-| [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) | Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED | DEFERRED | 2026-05-08 (재평가 2026-05-09) |
+| [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) | Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED → SUPERSEDED (D4 by 003a, D1 by 003b on launch) | SUPERSEDED | 2026-05-08 → 2026-05-13 |
+| [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) | D4 OVERRIDE Scope Canonicalization (meta-policy: IN/OUT scope + meta-rule) | ACCEPTED | 2026-05-12 |
+| [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) | Phase 5 Launch Criteria — Template Repo Extraction (Phase 5 LAUNCHED 2026-05-13, `kanggle/project-template`) | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) | Shared Messaging Scaffolding in `libs/java-messaging` | ACCEPTED | 2026-05-10 |
 | [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) | Saga Timeout / Escalation / Dead-Letter Policy (4-category taxonomy) | ACCEPTED | 2026-05-11 |
 | [ADR-MONO-006](ADR-MONO-006-lint-remediation-as-agent-context.md) | Lint Remediation Message as Agent Context (OpenAI Harness gap A, 4-block standard) | ACCEPTED | 2026-05-12 |

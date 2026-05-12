@@ -1,9 +1,10 @@
-# ADR-MONO-003 — Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED (D4 OVERRIDE 2026-05-11)
+# ADR-MONO-003 — Phase 5 (Template 레포 추출 발사) 결정 — SUPERSEDED (D4 by 003a 2026-05-12, D1 by 003b 2026-05-13 Phase 5 LAUNCHED)
 
-**Status:** DEFERRED — D4 churn freeze override accepted (2026-05-11 사용자 의향 변경, § 3.4 risk 2 경로). D1 (Phase 5 보류) 유지, D4 (churn freeze) 해제.
-**Date:** 2026-05-08 (PROPOSED + DEFERRED) / 2026-05-09 (재평가, BE-273 Phase 2 closure 후) / 2026-05-10 (TASK-MONO-049 reset) / **2026-05-11 (D4 override)**
+**Status:** SUPERSEDED — **D1 (Phase 5 보류)** → ADR-MONO-003b ACCEPTED 로 superseded-on-launch (2026-05-13, TASK-MONO-070 Phase 5 LAUNCHED, Template repo `kanggle/project-template` 생성). **D4 OVERRIDE scope** → ADR-MONO-003a 로 canonicalized (2026-05-12, TASK-MONO-063). **D2 (30-day wait) / D3 (verify exit-0 게이트)** → ADR-MONO-003b § D1~D5 로 대체. 본문 (Context / Decision / Update history) 은 historical record 로 보존, 현재 Phase 5 상태 질문 시 **ADR-MONO-003b § Status + § 6** 참조.
+**Date:** 2026-05-08 (PROPOSED + DEFERRED) / 2026-05-09 (재평가, BE-273 Phase 2 closure 후) / 2026-05-10 (TASK-MONO-049 reset) / 2026-05-11 (D4 override) / **2026-05-12 (D4 scope by 003a)** / **2026-05-13 (D1 SUPERSEDED-on-launch by 003b)**
 **Decision driver:** TASK-SCM-INT-001 series 종결로 ADR-MONO-002 의 D3 deferred 조건 재평가 트리거 도래. `scripts/verify-template-readiness.sh` (full mode) 실행 결과 1 blocker (Check 3: shared-library churn in last 30 days) → Phase 5 발사 보류 결정. **2026-05-09 재평가**: TASK-BE-273 Phase 2 (PR #294, ADR-004 옵션 1) 가 `libs/java-common/.../ResilienceClientFactory.java` 변경 동반 (HTTP/1.1 강제, OAuthLogin 5 IT JDK HttpClient HTTP/2 RST_STREAM race fix) — D4 § "면제" 의 critical regression fix 자연 확장 카테고리. churn 시계 1일 reset (마지막 churn 2026-05-09).
 **Supersedes:** none
+**Superseded-by:** [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) (D4 OVERRIDE scope, 2026-05-12), [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) (D1 Phase 5 launch, 2026-05-13)
 **Related:** [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md), [ADR-003](../../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) (옵션 B closure, BE-274), [ADR-004](../../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) (옵션 1 closure, BE-273), [TEMPLATE.md](../../TEMPLATE.md), [scripts/verify-template-readiness.sh](../../scripts/verify-template-readiness.sh), [scripts/extract-template.sh](../../scripts/extract-template.sh), 메모리 [`project_monorepo_template_strategy`](../../../memory/project_monorepo_template_strategy.md)
 
 **Accepted Decisions:**
