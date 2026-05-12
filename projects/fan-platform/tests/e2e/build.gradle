@@ -73,24 +73,34 @@ test {
     }
 }
 
-// Dedicated Gradle task that runs ONLY the e2e suite. Not wired into `check`.
-// CI invokes this task explicitly in the `fan-platform-e2e` job after
-// pre-building the three service docker images.
-tasks.register('e2eTest', Test) {
-    description = 'Runs Testcontainers-backed end-to-end live-trio tests (requires Docker).'
-    group = 'verification'
-    useJUnitPlatform {
-        includeTags 'e2e'
-    }
-    shouldRunAfter tasks.named('test')
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010 — TASK-MONO-076 Phase 2):
+//
+//   - `e2eTest`       — back-compat umbrella, runs `@Tag("e2e")` (smoke + full).
+//   - `e2eSmokeTest`  — runs `@Tag("smoke")` subset only. PR-time CI.
+//   - `e2eFullTest`   — runs `@Tag("full")` subset only. Nightly + push to main.
+//
+// All three tasks share identical configuration (sourceSet, dependsOn bootJars,
+// system properties, observability=on wrapper, testLogging). The `baseE2eConfig`
+// closure factors out the common shape so the three task registrations differ
+// only in the `includeTags` filter and the description.
+//
+// CI invokes `e2eSmokeTest` in the `fan-platform-e2e` PR-time job after
+// pre-building the three service docker images. The `e2eFullTest` job is
+// Phase 3 (separate ADR/task) — `e2eFullTest` exists in this PR but no CI
+// invocation lands until Phase 3.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
+    t.group = 'verification'
+    t.shouldRunAfter tasks.named('test')
 
     // Ensure the three service boot jars are produced before the containerized
     // tests spin up — the base test class' ImageFromDockerfile fallback COPYs
     // each bootJar from build/libs/ into the image. CI skips these
     // dependencies via `-x :...:bootJar` after restoring jars from artifact.
-    dependsOn ':projects:fan-platform:apps:gateway-service:bootJar'
-    dependsOn ':projects:fan-platform:apps:community-service:bootJar'
-    dependsOn ':projects:fan-platform:apps:artist-service:bootJar'
+    t.dependsOn ':projects:fan-platform:apps:gateway-service:bootJar'
+    t.dependsOn ':projects:fan-platform:apps:community-service:bootJar'
+    t.dependsOn ':projects:fan-platform:apps:artist-service:bootJar'
 
     // Forward pre-built image names when set by CI. Local dev (without these
     // properties) falls back to ImageFromDockerfile in FanPlatformE2ETestBase.
@@ -100,19 +110,19 @@ tasks.register('e2eTest', Test) {
         'fan.e2e.artistImage'
     ].each { prop ->
         def val = System.getProperty(prop)
-        if (val) systemProperty prop, val
+        if (val) t.systemProperty prop, val
     }
 
     // Generous timeout — Kafka KRaft cold start + 3 Spring Boot services
     // can exceed 60s on a constrained CI runner.
-    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+    t.systemProperty 'junit.jupiter.execution.timeout.default', '5m'
 
     // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
-    // TASK-MONO-067). When the project property is 'on', wrap the e2eTest
-    // task with up.sh / down.sh and inject the network name as a system
-    // property. The system property name `wms.e2e.observabilityNetwork` is
-    // the SHARED protocol between the build script and the base class
-    // (preserved verbatim across all four monorepo e2e suites — see Phase 2
+    // TASK-MONO-067). When the project property is 'on', wrap the task with
+    // up.sh / down.sh and inject the network name as a system property. The
+    // system property name `wms.e2e.observabilityNetwork` is the SHARED
+    // protocol between the build script and the base class (preserved
+    // verbatim across all four monorepo e2e suites — see Phase 2
     // TASK-MONO-066 for the gateway-service precedent).
     //
     // Network name prefix `fan-` differentiates from sibling e2e suites
@@ -122,21 +132,39 @@ tasks.register('e2eTest', Test) {
             commandLine 'bash', '-c', 'printf \'%s\' "$(git rev-parse --show-toplevel)" | sha256sum | head -c 8'
         }.standardOutput.asText.get().trim()
         def networkName = "fan-observability-e2e-${worktreeHash}"
-        systemProperty 'wms.e2e.observabilityNetwork', networkName
+        t.systemProperty 'wms.e2e.observabilityNetwork', networkName
 
-        doFirst {
+        t.doFirst {
             exec { commandLine 'bash', '-c', "docker network create ${networkName} || true" }
             exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', networkName }
         }
-        doLast {
+        t.doLast {
             exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
             exec { commandLine 'bash', '-c', "docker network rm ${networkName} || true" }
         }
     }
 
-    testLogging {
+    t.testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
         showStandardStreams = true
     }
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e") (smoke + full). Not wired into `check`.'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eSmokeTest', Test) {
+    description = '@Tag("smoke") subset only — PR-time CI (ADR-MONO-010 D1/D2).'
+    useJUnitPlatform { includeTags 'smoke' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") subset only — nightly + push to main (ADR-MONO-010 D1/D2; Phase 3 wires the CI side).'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
 }

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -59,6 +60,7 @@ import org.junit.jupiter.api.Test;
  *       quantity (T8 idempotency, AC #6).</li>
  * </ol>
  */
+@Tag("full")
 class WmsInventoryAdjustedConsumedE2ETest extends ScmPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

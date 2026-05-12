@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.Test;
  * (PostAccessGuard.ensureVisibilityAccessible) calls
  * {@code log.warn("PREMIUM gate bypassed ...")} on every PREMIUM access.
  */
+@Tag("full")
 class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

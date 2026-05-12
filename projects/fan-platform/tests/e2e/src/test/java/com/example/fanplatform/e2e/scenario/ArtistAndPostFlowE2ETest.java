@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -61,6 +62,7 @@ import org.junit.jupiter.api.Test;
  * § Edge Cases ("Kafka 토픽 race") and the {@code TASK-MONO-023d} pattern
  * called out in the task spec.
  */
+@Tag("smoke")
 class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
 
     private static final String TOPIC_ARTIST_REGISTERED = "artist.registered.v1";

@@ -8,7 +8,7 @@ ADR-MONO-010 ACCEPTED transition + Phase 2 impl — `@Tag("smoke")` / `@Tag("ful
 
 # Status
 
-ready
+review
 
 # Owner
 

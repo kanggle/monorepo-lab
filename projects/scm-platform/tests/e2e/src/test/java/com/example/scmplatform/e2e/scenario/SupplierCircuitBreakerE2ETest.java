@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -57,6 +58,7 @@ import org.junit.jupiter.api.Test;
  * transitions of Resilience4j is exhaustively covered by the in-process IT
  * (procurement-service IT-3 SupplierCircuitBreakerIntegrationTest).
  */
+@Tag("full")
 class SupplierCircuitBreakerE2ETest extends ScmPlatformE2ETestBase {
 
     private static final int SUBMIT_ATTEMPTS = 6;

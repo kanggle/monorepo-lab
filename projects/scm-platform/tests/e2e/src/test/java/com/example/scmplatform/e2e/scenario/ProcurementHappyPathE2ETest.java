@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.Test;
  * supplier adapter calls the host-side mock through {@code host.docker.internal},
  * the outbox relay publishes the canonical event topic.
  */
+@Tag("smoke")
 class ProcurementHappyPathE2ETest extends ScmPlatformE2ETestBase {
 
     private static final String TOPIC_PO_SUBMITTED = "scm.procurement.po.submitted.v1";
