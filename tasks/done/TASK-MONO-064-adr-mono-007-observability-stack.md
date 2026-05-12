@@ -8,7 +8,7 @@ Publish ADR-MONO-007 — worktree-isolated ephemeral observability stack (OpenAI
 
 # Status
 
-ready
+done
 
 # Owner
 
