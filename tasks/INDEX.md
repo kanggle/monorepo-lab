@@ -111,7 +111,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-076-e2e-tag-taxonomy-impl.md` — ADR-MONO-010 ACCEPTED 전환 + Phase 2 impl. 4 e2e module 의 `build.gradle` 에 `e2eSmokeTest` / `e2eFullTest` task 신설 + 4 service 의 15 e2e unit (fan 3 / scm 6 / wms 1 class × 5 nested / gap 5) 에 `@Tag("smoke")` × 8 + `@Tag("full")` × 11 분류 적용 + `ci.yml` 의 3 PR-time e2e job gradle target `:e2eSmokeTest` 로 변경 + timeout 축소 (60→20 / 20→10 / 20→10) + `platform/testing-strategy.md` 4 insert (Pyramid split / 새 subsection rubric S1-S4 + F1-F6 / naming convention 2 row / Rules 1 entry). gap 은 two-step 마이그레이션 (`@Tag("e2e")` 부재 → 도입 + smoke/full 분류); wms 는 첫 method-level granularity 케이스 (mixed-bucket 클래스). production code 0, test code + build.gradle + workflow yaml + spec 만 변경. **Out of scope**: Phase 3 (nightly full e2e 4 job 신설 — 별도 ADR) / lint enforcement / gap PR-time job 신설 / class 명 rename. impl PR bundling 정책: fan+scm 단일 + wms 단일 + gap 단일 (3 PR 권장, 또는 ≤ 400 LOC 시 단일 bundled).
+
+
 
 ## in-progress
 
