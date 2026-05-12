@@ -8,7 +8,7 @@ auth-service `credentials` + `social_identities` data-model.md backfill
 
 # Status
 
-ready
+done
 
 # Owner
 
