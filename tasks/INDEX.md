@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-075-fix-mono-074-markdown-skip-paths-filter-quirk.md` — **TASK-MONO-074 fix**: axis A (markdown skip) 가 close chore PR #423 (squash `38aeb98b`) self-CI 에서 실측 회귀. 5 project flag (wms / ecommerce / gap / fan / scm) 가 markdown-only PR 임에도 모두 `true` (16/16 job trigger). 진단: dorny/paths-filter v3 의 기본 `predicate-quantifier: 'some'` 이 negation-only pattern 도 매칭 카운트에 포함하는 quirk (issue [#184](https://github.com/dorny/paths-filter/issues/184) "exclude paths always produce a false positive"). 동시에 TASK-MONO-058 (`!tasks/**` exclusion) 의 실효성도 함께 검증/정정. Scope: `.github/workflows/ci.yml` path-filter 패턴 재설계만 (4 e2e job if 무변경, axis B contracts force-full 정상 보존). PoC 옵션 3종 enumerate — 옵션 1 `predicate-quantifier: 'every'` (filter-level), 옵션 2 코드 확장자 enumerate (narrow positive), 옵션 3 별도 `code-changed` flag + 모든 job if 의 AND. impl 단계 PoC 후 1개 채택. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-075-fix-mono-074-markdown-skip-paths-filter-quirk.md` — **TASK-MONO-074 axis A fix impl**. paths-filter v3 `predicate-quantifier: 'some'` quirk (negation pattern 이 file 을 "in" 으로 분류) 의 진단 후 **옵션 Z (outputs-layer AND composition) 채택** — 옵션 1 `'every'` 는 multi-positive `libs` filter 깨짐 (paths-filter README 인용 검증), 옵션 2 확장자 enumerate 는 5 flag verbose. 신규 `code-changed` filter (positive only, 코드 확장자 26개 enumerate: `.java`/`.ts`/`.tsx`/`.gradle`/`.yaml`/`.json`/`.sql`/...) + `outputs` 의 6 flag (libs/wms/ecommerce/gap/fan/scm) 를 `original && code-changed` GitHub Actions expression 으로 계산. `workflows` / `contracts` / `observability` 는 pure-positive 라 무변경. **13 job `if:` 조건 무변경** (변경 면적 최소화). 5 project flag 의 legacy negation 들은 그대로 (documentation 가치, AND 가 진짜 gate). 주석 블록 (filter 카탈로그 + paths-filter quirk 명시 + TASK-MONO-075 reference) 동반 갱신. 분석=Opus 4.7 / 구현=Opus 4.7 (paths-filter mechanic 분석 + outputs-layer AND 설계).
 
 ## done
 
