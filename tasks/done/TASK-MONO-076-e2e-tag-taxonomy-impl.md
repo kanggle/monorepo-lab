@@ -8,7 +8,7 @@ ADR-MONO-010 ACCEPTED transition + Phase 2 impl — `@Tag("smoke")` / `@Tag("ful
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -323,3 +323,18 @@ ADR-MONO-010 § D1.2 가 권장하는 패턴: class-level smoke/full 적용 안 
 - Phase 3 = full e2e nightly 이전 — 본 task 가 정의하는 partition 이 전제. Phase 2 DONE 후 별도 ADR + task.
 
 분석=Opus 4.7 / 구현 권장=Opus 4.7 (spec PR 부분 — ADR 설계 + classification rubric 판단 작업 위주). impl 단계는 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical annotation rollout + 잘 정의된 acceptance criteria; rubric 은 ADR 에 이미 명시).
+
+---
+
+# Post-Review Scope Narrow (close chore 2026-05-13)
+
+본 task 의 원래 AC 는 4 service (fan + scm + wms + gap) 전부 covering 으로 author 되었으나, impl 1차 PR #428 (squash `cdebdff2`) 머지 시점에 close chore 단계에서 **scope 를 fan + scm 만으로 narrow** 함. 잔여 wms (D5 step 3 method-level) + gap (D5 step 4 `@Tag("e2e")` precedent 도입) 은 별도 task 로 분리:
+
+- **TASK-MONO-077** — wms `GatewayMasterE2ETest` method-level @Tag 적용 (3 smoke + 2 full) + `E2EBase.java` 에 `@Tag("e2e")` umbrella 도입 + `e2e-tests` job target `:e2eSmokeTest` + timeout 60 → 20.
+- **TASK-MONO-078** — gap 5 e2e class 에 `@Tag("e2e")` precedent 도입 + 2 smoke + 3 full 분류 + `gap-platform/tests/e2e/build.gradle` 의 default `test` task 에 `excludeTags 'full'` 추가 + (선택 follow-up) PR-time gap-platform-e2e-smoke job 신설.
+
+**Narrow 사유**: PR Separation Rule (`tasks/INDEX.md` § Move Rules) 가 "한 번 review/done 으로 이동한 task 는 in-progress 로 복귀 불가" 를 기본 룰로 함. multi-PR 책임을 단일 task 로 유지하면 wms/gap impl PR 가 본 task 를 review → in-progress → review 로 반복 이동시키는 lifecycle 위반 발생. 분리하면 각 service 의 PR 가 독립 task 의 정상 lifecycle 을 따르고, INDEX `## review` 신호의 noise 도 회피.
+
+**Acceptance Criteria 갱신**: 위 § Acceptance Criteria § Impl PR 의 step 1+2 (fan, scm) 만 본 task 의 책임으로 충족됨 (PR #428). step 3 (wms) + step 4 (gap) 의 책임은 TASK-MONO-077 / 078 로 이관. 본 task 의 Definition of Done 은 step 1+2 + Spec PR + Close chore PR 만으로 완료된 것으로 간주.
+
+**ADR-MONO-010 영향**: ADR 의 D5 rollout 순서 (fan → scm → wms → gap) 는 task narrow 와 무관 — 4 service 전부 적용은 077 + 078 가 ACCEPTED ADR 의 D5 step 3+4 를 그대로 이행함으로써 완수. ADR 자체는 본 PR #428 에서 ACCEPTED 로 이미 전환됨.
