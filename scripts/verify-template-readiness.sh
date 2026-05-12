@@ -370,39 +370,28 @@ fi
 
 printf '\n--- Check 6: No PORT_PREFIX legacy in projects/ ---\n'
 
-# Tracked files only (skip local .env etc.)
-tracked_files=$(git ls-files projects/ 2>/dev/null || true)
+# Per TASK-MONO-073: prior implementation iterated git ls-files (6.5k files
+# under projects/) calling grep once per file in a bash loop. On Windows/Git
+# Bash that's seconds-per-file due to process spawn overhead → multi-minute
+# hang. Replaced with two git-grep passes (one for *.md prose, one for
+# everything else). git grep operates on the index in a single pass and is
+# orders of magnitude faster.
 
-port_prefix_hits=""
-while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    [ -f "$f" ] || continue
-    # Markdown files are prose documentation; ${PORT_PREFIX...} inside inline-code or
-    # blockquotes is historical reference, not live usage. Only flag standalone
-    # live assignments (a real config snippet would also be in a fenced code-block,
-    # but a top-level assignment line is a stronger signal of intent).
-    case "$f" in
-        *.md)
-            pattern='^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*='
-            ;;
-        *)
-            # Shell / yaml / properties / config files: assignment OR interpolation
-            pattern='(^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=|\$\{PORT_PREFIX|\$PORT_PREFIX[^A-Z_])'
-            ;;
-    esac
-    # Exclude lines whose first non-whitespace char is a comment marker (#, //, *)
-    matches=$(grep -nE "$pattern" "$f" 2>/dev/null \
-        | grep -vE '^[0-9]+:[[:space:]]*(#|//|\*)' \
-        || true)
-    if [ -n "$matches" ]; then
-        while IFS= read -r m; do
-            [ -z "$m" ] && continue
-            port_prefix_hits+="$f:$m"$'\n'
-        done <<< "$matches"
-    fi
-done <<< "$tracked_files"
+# Markdown files: only flag standalone live assignments (prose mentions are
+# historical reference)
+md_hits=$(git grep -nE '^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=' -- 'projects/**/*.md' 2>/dev/null \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|\*)' \
+    || true)
 
-if [ -z "$(echo "$port_prefix_hits" | tr -d '[:space:]')" ]; then
+# Non-markdown files: assignment OR interpolation
+non_md_hits=$(git grep -nE '(^[[:space:]]*[A-Z0-9_]*PORT_PREFIX[[:space:]]*=|\$\{PORT_PREFIX|\$PORT_PREFIX[^A-Z_])' \
+    -- 'projects/' ':!projects/**/*.md' 2>/dev/null \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|\*)' \
+    || true)
+
+port_prefix_hits=$(printf '%s\n%s' "$md_hits" "$non_md_hits" | grep -v '^$' || true)
+
+if [ -z "$port_prefix_hits" ]; then
     pass "No live PORT_PREFIX usage in tracked projects/ files."
 else
     fail "Live PORT_PREFIX usage found (should be replaced by Traefik hostname routing):"

@@ -672,14 +672,21 @@ fi
 
 if [ "$INIT_GIT" = "1" ] && [ "$DRY_RUN" = "0" ]; then
     log "Initialising git repository at $TARGET_DIR..."
-    git -C "$TARGET_DIR" init --quiet
+    # Use -b main so the initial branch matches GitHub's default ("main") — avoids
+    # a manual `git branch -m master main` step before pushing to a fresh GitHub
+    # repo (TASK-MONO-073). Falls back to plain `init` if the git version
+    # predates -b support (git < 2.28, unlikely on modern systems).
+    if ! git -C "$TARGET_DIR" init -b main --quiet 2>/dev/null; then
+        git -C "$TARGET_DIR" init --quiet
+        git -C "$TARGET_DIR" symbolic-ref HEAD refs/heads/main 2>/dev/null || true
+    fi
     git -C "$TARGET_DIR" add -A
     git -C "$TARGET_DIR" -c user.name="template-extract" \
         -c user.email="template-extract@monorepo-lab" \
         commit -m "initial template from monorepo-lab@$SOURCE_SHA" --quiet
-    log "Git repository initialised (1 commit)."
+    log "Git repository initialised (1 commit on main)."
 elif [ "$INIT_GIT" = "1" ] && [ "$DRY_RUN" = "1" ]; then
-    drylog "would run: git init && git add -A && git commit -m 'initial template from monorepo-lab@$SOURCE_SHA'"
+    drylog "would run: git init -b main && git add -A && git commit -m 'initial template from monorepo-lab@$SOURCE_SHA'"
 fi
 
 # ───────────────────────── Summary ─────────────────────────
