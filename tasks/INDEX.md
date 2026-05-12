@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-074-ci-e2e-skip-and-force-full-flags.md` — `.github/workflows/ci.yml` path-filter Phase 1: (A) 기존 `libs` + 5 project flag 에 `'!**/*.md'` exclusion 추가 → markdown-only PR (rules/docs/.claude/CLAUDE.md/TEMPLATE.md 단독 변경 등) 은 모든 flag false 로 e2e + build-and-test 모두 skip. (B) 신규 `contracts` flag (`projects/*/specs/contracts/**`) 도입, 4 e2e job (frontend-e2e-smoke / e2e-tests / fan-platform-e2e / scm-platform-e2e) 의 `if:` 에 `|| contracts == 'true'` 추가 → 단일 project contract 변경도 5 project + frontend e2e 강제 force-full. e2e 3단계 전략 (skip / light / full) 의 Phase 1 단독 — Phase 2 (`@Tag("smoke")` 표준화 + `e2eSmokeTest`/`e2eFullTest` gradle task) 및 Phase 3 (full e2e nightly 이전) 은 ADR-MONO-XXX-e2e-tag-taxonomy 동반 별도 task. 직접 선행 = TASK-MONO-058 (`!tasks/**` 패턴 검증) + TASK-MONO-045 (baseline 47x). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-074-ci-e2e-skip-and-force-full-flags.md` — `.github/workflows/ci.yml` path-filter Phase 1 impl. (A) 기존 `libs` + 5 project flag 에 `'!**/*.md'` exclusion 추가 → markdown-only PR (rules/docs/.claude/CLAUDE.md/TEMPLATE.md 단독 변경 등) 은 모든 flag false 로 e2e + build-and-test 모두 skip. (B) 신규 `contracts` flag (`projects/*/specs/contracts/**`) + outputs 노출 + 4 e2e job (frontend-e2e-smoke / e2e-tests / fan-platform-e2e / scm-platform-e2e) 의 `if:` 에 `|| contracts == 'true'` 추가 → 단일 project contract 변경도 5 project + frontend e2e 강제 force-full. 주석 블록 (filter 카탈로그 + edge-case + TASK-MONO-074 reference) 동반 갱신. spec PR #421 (`6c3a83f5`) 머지 후 impl PR 분기. 분석=Opus 4.7 / 구현=Sonnet 4.6.
 
 ## done
 
