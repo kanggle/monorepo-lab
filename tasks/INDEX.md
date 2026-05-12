@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-064-adr-mono-007-observability-stack.md` — Publish ADR-MONO-007 (worktree-isolated ephemeral observability stack, Vector + VictoriaLogs/Metrics) — closes OpenAI Harness gap #3 **Phase 0 (policy)**. Pins stack family (Vector + VictoriaLogs + VictoriaMetrics, traces deferred to ADR-MONO-007a), topology (docker-compose per worktree, dynamic ports, tmpfs, isolated network), lifecycle (opt-in `-Pobservability=on`, 5-min idle teardown, CI excluded), DX target (skill-mediated `/observe logs|metrics` with `OBSERVE-QUERY-NN` rule IDs in 4-block format), and phasing (D5 — Phase 1 compose + sample wiring / Phase 2 skill + slash / Phase 3 coverage expansion + Rancher validation + CI footprint regression). ADR ACCEPTED same PR (meta-policy, no impl gating; ADR-MONO-006 precedent). Phase 1/2/3 follow-ups (TASK-MONO-065/066/067) **NOT bundled** — filed individually after each prerequisite merges. Out of scope: any compose/script/skill body, trace layer, gap #4 (Chrome DevTools MCP), production observability, service-side telemetry emission changes, CI activation. D4 OVERRIDE applies per ADR-MONO-003a § D1.3 (Harness gap series). Last in the harness gap closure series after gap A (ADR-MONO-006, MONO-059/060/061) and gap #2 (MONO-062). 분석=Opus 4.7 / 구현=Opus 4.7 (ADR drafting + stack judgment).
 
 ## in-progress
 

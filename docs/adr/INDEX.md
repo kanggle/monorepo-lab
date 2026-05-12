@@ -12,6 +12,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) | Shared Messaging Scaffolding in `libs/java-messaging` | ACCEPTED | 2026-05-10 |
 | [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) | Saga Timeout / Escalation / Dead-Letter Policy (4-category taxonomy) | ACCEPTED | 2026-05-11 |
 | [ADR-MONO-006](ADR-MONO-006-lint-remediation-as-agent-context.md) | Lint Remediation Message as Agent Context (OpenAI Harness gap A, 4-block standard) | ACCEPTED | 2026-05-12 |
+| [ADR-MONO-007](ADR-MONO-007-worktree-ephemeral-observability-stack.md) | Worktree-isolated Ephemeral Observability Stack (OpenAI Harness gap #3, Vector + VictoriaLogs/Metrics) | ACCEPTED | 2026-05-12 |
 
 ---
 
