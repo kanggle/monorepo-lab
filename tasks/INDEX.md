@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-065-observability-stack-scaffolding.md` — Scaffold ephemeral observability stack under `infra/observability/` — closes OpenAI Harness gap #3 **Phase 1**. Vector + VictoriaLogs + VictoriaMetrics docker-compose template + `vector.toml` pipeline (docker_logs + prometheus_scrape sources, parse_logback + add_worktree_label VRL transforms, victorialogs HTTP JSON-stream + victoriametrics remote-write sinks) + `scripts/observability/{up,down}.sh` (POSIX bash, WORKTREE_HASH-derived compose project name, `OBSERVE-SCAFFOLD-NN` 4-block error remediation: 01 docker unreachable / 01a outside worktree / 02 wms network missing / 03 health timeout / 04 port file IO failure) + operator README + root `.gitignore` `.observability/` extension. **Phase 1 measurement target met with 87% headroom**: cold start = 11s (cap 30s), total resident memory = 26.88 MiB (cap 200 MB). 3 configuration gotchas captured in Implementation Notes (Vector env-var interpolation runs against comments → literal `${VAR}` in prose breaks load / Vector 0.45 dropped `ndjson` codec → use `json` + `framing.newline_delimited` / Vector image default config emits demo syslog without explicit `--config-toml` flag). Out of scope: Gradle e2eTest integration (Phase 2 with skill + testcontainers network coupling), the `/observe` skill (Phase 2 whole), trace layer (ADR-MONO-007a deferred), CI activation, service-side telemetry changes. D4 OVERRIDE applies per ADR-MONO-003a § D1.3 (Harness gap series). 분석=Opus 4.7 / 구현=Opus 4.7 (direct authoring, single-PR scope).
 
 ## in-progress
 

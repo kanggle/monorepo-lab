@@ -1,0 +1,90 @@
+# Worktree-isolated ephemeral observability stack.
+#
+# Spawned by `scripts/observability/up.sh`. Project name is
+# `wms-observability-${WORKTREE_HASH}` (derived from the worktree root path hash)
+# so concurrent worktrees do not collide on container names. All three services
+# bind on 127.0.0.1:0 (OS-assigned ephemeral port) so port collisions across
+# worktrees are impossible; the assigned ports are written to
+# `.observability/ports.env` after `up.sh` returns.
+#
+# See:
+# - docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md § 2.1-2.3
+# - infra/observability/README.md (operator guide)
+# - tasks/done/TASK-MONO-065-observability-stack-scaffolding.md (Phase 1 task)
+
+name: wms-observability-${WORKTREE_HASH:-default}
+
+services:
+  vector:
+    image: timberio/vector:0.45.0-alpine
+    restart: "no"  # ephemeral by design — operator decides lifecycle
+    # Explicit --config-toml: without this Vector falls back to its demo
+    # config that emits randomized fake syslog (visible as noise in logs).
+    command: ["--config-toml", "/etc/vector/vector.toml"]
+    environment:
+      WORKTREE_HASH: ${WORKTREE_HASH:-default}
+      WMS_SCRAPE_TARGETS_URLS: ${WMS_SCRAPE_TARGETS_URLS:-}
+    volumes:
+      # Read-only Docker socket access for the docker_logs source.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./vector.toml:/etc/vector/vector.toml:ro
+    ports:
+      - "127.0.0.1::8686"  # Vector admin / health
+    depends_on:
+      victorialogs:
+        condition: service_started
+      victoriametrics:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8686/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v0.40.0-victorialogs
+    restart: "no"
+    command:
+      - "--retentionPeriod=1d"  # ephemeral — 1 day is more than enough for an interactive session
+      - "--storageDataPath=/victoria-logs-data"
+    tmpfs:
+      - /victoria-logs-data
+    ports:
+      - "127.0.0.1::9428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.105.0
+    restart: "no"
+    command:
+      - "--retentionPeriod=1d"
+      - "--storageDataPath=/victoria-metrics-data"
+      - "--httpListenAddr=:8428"
+    tmpfs:
+      - /victoria-metrics-data
+    ports:
+      - "127.0.0.1::8428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+# Attach to the wms-platform bootRun network so Vector's docker_logs source can
+# observe wms services and Vector's prometheus_scrape source can reach the
+# /actuator/prometheus endpoints over the same network.
+#
+# The default name `wms-platform-bootrun_default` matches what compose creates
+# from `projects/wms-platform/docker-compose.bootrun.yml`. Override via the
+# WMS_NETWORK env var if the wms compose project is renamed in the future.
+networks:
+  default:
+    name: ${WMS_NETWORK:-wms-platform-bootrun_default}
+    external: true
