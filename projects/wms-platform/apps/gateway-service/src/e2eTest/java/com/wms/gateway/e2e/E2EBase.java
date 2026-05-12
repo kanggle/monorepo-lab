@@ -102,7 +102,28 @@ public abstract class E2EBase {
 
     @BeforeAll
     void startInfrastructure() throws Exception {
-        network = Network.newNetwork();
+        // When the system property `wms.e2e.observabilityNetwork` is set (the
+        // -Pobservability=on Gradle path), reuse the named docker network that
+        // scripts/observability/up.sh already created. Testcontainers attaches
+        // to an existing network of that name via createNetworkCmdModifier so
+        // the observability stack's Vector container (joined to the same name
+        // in infra/observability/docker-compose.yml) can observe stdout +
+        // scrape /actuator/prometheus from inside this network.
+        //
+        // When the property is absent (default CI / local Docker-free path),
+        // fall back to Testcontainers' anonymous network — byte-identical to
+        // the pre-Phase-2 behaviour. See:
+        // docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md § 2.5 D5
+        // tasks/done/TASK-MONO-066-observability-query-skill.md
+        String observabilityNetwork = System.getProperty("wms.e2e.observabilityNetwork");
+        if (observabilityNetwork != null && !observabilityNetwork.isBlank()) {
+            String netName = observabilityNetwork;
+            network = Network.builder()
+                    .createNetworkCmdModifier(cmd -> cmd.withName(netName))
+                    .build();
+        } else {
+            network = Network.newNetwork();
+        }
 
         postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE)
                 .withDatabaseName("master_db")

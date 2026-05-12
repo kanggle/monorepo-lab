@@ -133,6 +133,38 @@ tasks.register('e2eTest', Test) {
         if (val) systemProperty prop, val
     }
 
+    // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 2,
+    // TASK-MONO-066). When the project property is 'on', wrap the e2eTest
+    // task with up.sh / down.sh and inject the network name as a system
+    // property so E2EBase reuses Testcontainers' createNetworkCmdModifier
+    // to attach to the named docker network. When the property is absent,
+    // none of this runs — the e2eTest task is byte-identical to today's
+    // default behaviour. CI does not pass this flag.
+    //
+    // The worktree hash is derived from the repository root path so two
+    // worktrees produce distinct network names; same worktree's concurrent
+    // runs collide on the network name and fail fast.
+    if (project.hasProperty('observability') && project.property('observability') == 'on') {
+        def worktreeHash = providers.exec {
+            commandLine 'bash', '-c', 'printf \'%s\' "$(git rev-parse --show-toplevel)" | sha256sum | head -c 8'
+        }.standardOutput.asText.get().trim()
+        def networkName = "wms-observability-e2e-${worktreeHash}"
+        systemProperty 'wms.e2e.observabilityNetwork', networkName
+
+        doFirst {
+            // The OR-true keeps the build idempotent against stale state from a
+            // crashed prior run.
+            exec { commandLine 'bash', '-c', "docker network create ${networkName} || true" }
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', networkName }
+        }
+        doLast {
+            // down.sh is idempotent; network rm uses OR-true so it does not
+            // mask a real test failure.
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
+            exec { commandLine 'bash', '-c', "docker network rm ${networkName} || true" }
+        }
+    }
+
     // A generous single-test timeout catches hung containers without masking
     // real assertion failures.
     testLogging {
