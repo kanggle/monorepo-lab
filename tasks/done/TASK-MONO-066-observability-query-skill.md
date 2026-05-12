@@ -8,7 +8,7 @@ Observability query skill + `/observe` slash command + Gradle e2eTest integratio
 
 # Status
 
-ready
+done
 
 # Owner
 
