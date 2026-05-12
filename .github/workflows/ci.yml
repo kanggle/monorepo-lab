@@ -33,21 +33,30 @@ jobs:
   # Filter rules (path → flag):
   #   libs       libs/ platform/ rules/ .claude/ build.gradle settings.gradle
   #              package.json tsconfig.base.json tasks/templates/
+  #              (excl. **/*.md — markdown-only PRs skip)
   #              → activates ALL downstream jobs (cross-project impact)
   #   workflows  .github/workflows/
   #              → activates ALL downstream jobs (CI self-change safety)
-  #   wms        projects/wms-platform/**         (excl. projects/wms-platform/tasks/**)
-  #   ecommerce  projects/ecommerce-microservices-platform/**  (excl. tasks/**)
-  #   gap        projects/global-account-platform/**  (excl. tasks/**)
-  #   fan        projects/fan-platform/**         (excl. tasks/**)
-  #   scm        projects/scm-platform/**         (excl. tasks/**)
+  #   wms        projects/wms-platform/**         (excl. tasks/**, **/*.md)
+  #   ecommerce  projects/ecommerce-microservices-platform/**  (excl. tasks/**, **/*.md)
+  #   gap        projects/global-account-platform/**  (excl. tasks/**, **/*.md)
+  #   fan        projects/fan-platform/**         (excl. tasks/**, **/*.md)
+  #   scm        projects/scm-platform/**         (excl. tasks/**, **/*.md)
+  #   contracts  projects/*/specs/contracts/**
+  #              → force-full e2e: cross-service consumer breakage gate
+  #              (single project's contract change → 5 project + frontend smoke
+  #              e2e all activate, even if only one project's flag matched).
   #
-  # Each project flag negates `projects/<name>/tasks/**` so lifecycle-only chore
-  # PRs (review→done moves, INDEX.md outcome updates) skip the project's heavy
-  # Integration / E2E / boot-jars jobs. Mixed PRs (code + tasks/ in same change)
-  # still trigger the flag because the positive pattern wins for the code paths
-  # (dorny/paths-filter@v3 evaluates: file is "in" iff a positive pattern matches
-  # AND no negation matches; flag is true iff ≥1 file is "in"). TASK-MONO-058.
+  # Each project flag negates `projects/<name>/tasks/**` and `**/*.md` so
+  # lifecycle-only chore PRs (review→done moves, INDEX.md outcome updates) and
+  # markdown-only PRs (rules/docs/.claude markdown edits, CLAUDE.md/TEMPLATE.md
+  # tweaks, ADR or task spec authoring with no code) skip the project's heavy
+  # Integration / E2E / boot-jars jobs. Mixed PRs (code + tasks/ + markdown in
+  # same change) still trigger the flag because the positive pattern wins for
+  # the code paths (dorny/paths-filter@v3 evaluates: file is "in" iff a positive
+  # pattern matches AND no negation matches; flag is true iff ≥1 file is "in").
+  # TASK-MONO-058 (tasks/ exclusion) + TASK-MONO-074 (markdown exclusion +
+  # contracts force-full).
   #
   # Edge case — workflow self-change PR (.github/workflows/** modified):
   #   The `workflows` flag catches it → all jobs activate (regression safety).
@@ -59,11 +68,18 @@ jobs:
   #   PR-level filtering simply falls back to "all skip" — the author can
   #   close+reopen the PR to retry or add an empty commit to re-trigger.
   #
-  # Edge case — root tasks/** or *.md only change:
-  #   No project flag is true; libs/workflows are also false.
-  #   build-and-test activates via its own fallback (it is always-on for pushes
-  #   to main); all other jobs skip. Spec/chore PRs complete in ~1-2 min.
-  #   TASK-MONO-045 baseline + TASK-MONO-058 extends to project-internal tasks/.
+  # Edge case — root tasks/** or markdown-only change:
+  #   No project flag is true; libs/workflows are also false; contracts is false.
+  #   build-and-test activates via its own push-to-main fallback only (skips for
+  #   PRs); all other jobs skip. Spec/chore PRs complete in ~1-2 min.
+  #   TASK-MONO-045 baseline → TASK-MONO-058 (project tasks/) →
+  #   TASK-MONO-074 (markdown-only, contracts force-full).
+  #
+  # Edge case — contracts-only PR (single project's specs/contracts/** change):
+  #   `contracts` flag activates → all 4 e2e jobs (wms e2e-tests +
+  #   fan-platform-e2e + scm-platform-e2e + frontend-e2e-smoke) trigger
+  #   regardless of which project the contract belongs to.  Catches
+  #   cross-service consumer breakage that single-project flag would miss.
   # ---------------------------------------------------------------------------
   changes:
     runs-on: ubuntu-latest
@@ -75,6 +91,7 @@ jobs:
       gap: ${{ steps.filter.outputs.gap }}
       fan: ${{ steps.filter.outputs.fan }}
       scm: ${{ steps.filter.outputs.scm }}
+      contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
     steps:
       - uses: actions/checkout@v4
@@ -92,23 +109,31 @@ jobs:
               - 'package.json'
               - 'tsconfig.base.json'
               - 'tasks/templates/**'
+              - '!**/*.md'
             workflows:
               - '.github/workflows/**'
             wms:
               - 'projects/wms-platform/**'
               - '!projects/wms-platform/tasks/**'
+              - '!projects/wms-platform/**/*.md'
             ecommerce:
               - 'projects/ecommerce-microservices-platform/**'
               - '!projects/ecommerce-microservices-platform/tasks/**'
+              - '!projects/ecommerce-microservices-platform/**/*.md'
             gap:
               - 'projects/global-account-platform/**'
               - '!projects/global-account-platform/tasks/**'
+              - '!projects/global-account-platform/**/*.md'
             fan:
               - 'projects/fan-platform/**'
               - '!projects/fan-platform/tasks/**'
+              - '!projects/fan-platform/**/*.md'
             scm:
               - 'projects/scm-platform/**'
               - '!projects/scm-platform/tasks/**'
+              - '!projects/scm-platform/**/*.md'
+            contracts:
+              - 'projects/*/specs/contracts/**'
             observability:
               - 'infra/observability/**'
               - 'scripts/observability/**'
@@ -513,13 +538,15 @@ jobs:
     # fetch / OIDC discovery to a closed loopback host so each page exercises
     # its fallback path / middleware redirect. No backend stack needed; runs
     # in extracted portfolio repos as well as monorepo-lab.
-    # Activate for ecommerce or fan-platform frontend changes, or cross-project.
+    # Activate for ecommerce or fan-platform frontend changes, cross-project,
+    # or any project's contract change (cross-service consumer gate, MONO-074).
     if: >-
       github.event_name == 'push' ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
-      needs.changes.outputs.fan == 'true'
+      needs.changes.outputs.fan == 'true' ||
+      needs.changes.outputs.contracts == 'true'
 
     steps:
       - name: Checkout
@@ -818,14 +845,16 @@ jobs:
     needs: [changes, build-and-test, boot-jars]
     timeout-minutes: 60
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
-    # Activate for wms changes or cross-project (libs/workflows).
+    # Activate for wms changes, cross-project (libs/workflows), or any project's
+    # contract change (cross-service consumer gate, MONO-074).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
         github.event_name == 'push' ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.wms == 'true'
+        needs.changes.outputs.wms == 'true' ||
+        needs.changes.outputs.contracts == 'true'
       )
 
     steps:
@@ -916,14 +945,16 @@ jobs:
     # CLI to dodge the Docker 28 BuildKit gRPC hang in
     # `ImageFromDockerfile`, then pass the image names via -Dfan.e2e.*
     # so FanPlatformE2ETestBase uses GenericContainer directly.
-    # Activate for fan-platform changes or cross-project (libs/workflows).
+    # Activate for fan-platform changes, cross-project (libs/workflows), or any
+    # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
         github.event_name == 'push' ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.fan == 'true'
+        needs.changes.outputs.fan == 'true' ||
+        needs.changes.outputs.contracts == 'true'
       )
 
     steps:
@@ -1017,14 +1048,16 @@ jobs:
     # Docker 28 BuildKit gRPC hang in `ImageFromDockerfile`, then pass the
     # image names via -Dscm.e2e.* so ScmPlatformE2ETestBase uses
     # GenericContainer directly.
-    # Activate for scm-platform changes or cross-project (libs/workflows).
+    # Activate for scm-platform changes, cross-project (libs/workflows), or any
+    # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
         github.event_name == 'push' ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.scm == 'true'
+        needs.changes.outputs.scm == 'true' ||
+        needs.changes.outputs.contracts == 'true'
       )
 
     steps:
