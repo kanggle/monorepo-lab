@@ -8,7 +8,7 @@ Fix TASK-MONO-074 — dorny/paths-filter v3 `predicate-quantifier: 'some'` quirk
 
 # Status
 
-ready
+review
 
 # Owner
 

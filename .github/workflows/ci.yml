@@ -33,30 +33,39 @@ jobs:
   # Filter rules (path → flag):
   #   libs       libs/ platform/ rules/ .claude/ build.gradle settings.gradle
   #              package.json tsconfig.base.json tasks/templates/
-  #              (excl. **/*.md — markdown-only PRs skip)
   #              → activates ALL downstream jobs (cross-project impact)
   #   workflows  .github/workflows/
   #              → activates ALL downstream jobs (CI self-change safety)
-  #   wms        projects/wms-platform/**         (excl. tasks/**, **/*.md)
-  #   ecommerce  projects/ecommerce-microservices-platform/**  (excl. tasks/**, **/*.md)
-  #   gap        projects/global-account-platform/**  (excl. tasks/**, **/*.md)
-  #   fan        projects/fan-platform/**         (excl. tasks/**, **/*.md)
-  #   scm        projects/scm-platform/**         (excl. tasks/**, **/*.md)
+  #   wms        projects/wms-platform/**
+  #   ecommerce  projects/ecommerce-microservices-platform/**
+  #   gap        projects/global-account-platform/**
+  #   fan        projects/fan-platform/**
+  #   scm        projects/scm-platform/**
   #   contracts  projects/*/specs/contracts/**
   #              → force-full e2e: cross-service consumer breakage gate
   #              (single project's contract change → 5 project + frontend smoke
   #              e2e all activate, even if only one project's flag matched).
+  #   code-changed  pure-positive enumeration of code-bearing file extensions
+  #                 (.java, .ts, .tsx, .gradle, .yaml, .json, .sql, ...).
+  #                 markdown-only / docs-only / lifecycle-only PRs do not
+  #                 match → false. AND-combined with libs/5-project flags in
+  #                 the outputs section so those flags become `false` for
+  #                 non-code PRs even when the underlying `paths-filter`
+  #                 negation quirk would otherwise mark them true.
   #
-  # Each project flag negates `projects/<name>/tasks/**` and `**/*.md` so
-  # lifecycle-only chore PRs (review→done moves, INDEX.md outcome updates) and
-  # markdown-only PRs (rules/docs/.claude markdown edits, CLAUDE.md/TEMPLATE.md
-  # tweaks, ADR or task spec authoring with no code) skip the project's heavy
-  # Integration / E2E / boot-jars jobs. Mixed PRs (code + tasks/ + markdown in
-  # same change) still trigger the flag because the positive pattern wins for
-  # the code paths (dorny/paths-filter@v3 evaluates: file is "in" iff a positive
-  # pattern matches AND no negation matches; flag is true iff ≥1 file is "in").
-  # TASK-MONO-058 (tasks/ exclusion) + TASK-MONO-074 (markdown exclusion +
-  # contracts force-full).
+  # IMPORTANT — `paths-filter@v3` negation quirk (TASK-MONO-075):
+  #   Under the default `predicate-quantifier: 'some'`, a negation pattern
+  #   (`!...`) is treated as "file matches iff it does NOT match the inner
+  #   glob". For a markdown-only PR, file `tasks/INDEX.md` therefore satisfies
+  #   `!projects/wms-platform/**/*.md` (file is NOT under wms-platform) → the
+  #   pattern counts as matched → `wms` filter = true even though no positive
+  #   matched. This is documented behavior (README: "filters below will match
+  #   markdown files despite the exclusion syntax UNLESS you specify 'every'").
+  #   Step-level `predicate-quantifier: 'every'` would force all positives in a
+  #   filter to AND, breaking the multi-positive `libs` filter — so we instead
+  #   AND a pure-positive `code-changed` gate at the outputs layer. The legacy
+  #   negation patterns in the 5 project flags are kept as documentation; they
+  #   have no operative effect (the outputs-level AND is the real gate).
   #
   # Edge case — workflow self-change PR (.github/workflows/** modified):
   #   The `workflows` flag catches it → all jobs activate (regression safety).
@@ -84,15 +93,33 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      libs: ${{ steps.filter.outputs.libs }}
+      # TASK-MONO-075: dorny/paths-filter@v3 default `predicate-quantifier: 'some'`
+      # treats negation patterns (`!...`) as "file is matched if it satisfies the
+      # negation" — i.e. a markdown-only PR with no positive match still produces
+      # `wms = true` because the `!projects/wms-platform/**/*.md` negation is
+      # satisfied (file is NOT under that glob). See ADR-MONO-... or the README
+      # quote: "The filters below will match markdown files despite the exclusion
+      # syntax UNLESS you specify 'every' as the predicate-quantifier parameter."
+      # Step-level `predicate-quantifier: 'every'` is incompatible with our
+      # multi-positive `libs` filter (would force all positives to AND).
+      #
+      # Fix: compose each code-area flag with the `code-changed` positive flag at
+      # the outputs layer. `code-changed` is a pure-positive enumeration of code
+      # file extensions, so its `'some'` evaluation is intuitive (markdown-only
+      # PR → no positive match → flag false). AND-ing the two gates ensures that
+      # markdown-only PRs land on `false` for every code-area flag downstream.
+      # `workflows` / `contracts` / `observability` already have pure-positive
+      # filters and need no compose.
+      libs: ${{ steps.filter.outputs.libs == 'true' && steps.filter.outputs.code-changed == 'true' }}
       workflows: ${{ steps.filter.outputs.workflows }}
-      wms: ${{ steps.filter.outputs.wms }}
-      ecommerce: ${{ steps.filter.outputs.ecommerce }}
-      gap: ${{ steps.filter.outputs.gap }}
-      fan: ${{ steps.filter.outputs.fan }}
-      scm: ${{ steps.filter.outputs.scm }}
+      wms: ${{ steps.filter.outputs.wms == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      ecommerce: ${{ steps.filter.outputs.ecommerce == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      gap: ${{ steps.filter.outputs.gap == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      fan: ${{ steps.filter.outputs.fan == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      scm: ${{ steps.filter.outputs.scm == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
+      code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -137,6 +164,38 @@ jobs:
             observability:
               - 'infra/observability/**'
               - 'scripts/observability/**'
+            # TASK-MONO-075: pure-positive enumeration of code-bearing file
+            # extensions. `'some'` quantifier behaves intuitively here (no
+            # negation → no quirk). markdown-only / docs-only / lifecycle-only
+            # PRs do not match any positive → flag = false. AND-combined with
+            # each code-area flag in `outputs` above to gate downstream jobs.
+            code-changed:
+              - '**/*.java'
+              - '**/*.kt'
+              - '**/*.kts'
+              - '**/*.gradle'
+              - '**/*.gradle.kts'
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.js'
+              - '**/*.jsx'
+              - '**/*.mjs'
+              - '**/*.cjs'
+              - '**/*.yaml'
+              - '**/*.yml'
+              - '**/*.json'
+              - '**/*.xml'
+              - '**/*.sql'
+              - '**/*.sh'
+              - '**/*.ps1'
+              - '**/*.properties'
+              - '**/*.css'
+              - '**/*.scss'
+              - '**/*.pem'
+              - '**/Dockerfile'
+              - '**/Dockerfile.*'
+              - '**/.env'
+              - '**/.env.*'
 
   build-and-test:
     name: Build & Test (JDK 21, Linux)
