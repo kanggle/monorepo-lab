@@ -29,6 +29,9 @@ Desktop.ini
 # Per-developer dev overlays (TASK-MONO-022, see docs/guides/dev-tooling.md)
 **/docker-compose.dev.yml
 
+# Worktree-isolated observability stack port file (ADR-MONO-007 / TASK-MONO-065)
+.observability/
+
 # Claude Code local settings
 .claude/settings.local.json
 .claude/worktrees/

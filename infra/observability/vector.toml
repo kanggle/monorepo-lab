@@ -1,0 +1,108 @@
+# Vector pipeline config for the worktree-isolated ephemeral observability stack.
+#
+# Sources: docker_logs (wms-platform-bootrun project containers) +
+#          prometheus_scrape (driven by WMS_SCRAPE_TARGETS env var).
+# Transforms: parse_logback (VRL) + add_worktree_label.
+# Sinks: victorialogs (HTTP JSON-stream ingest) +
+#        victoriametrics (Prometheus remote-write).
+#
+# See:
+# - docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md § 2.1 D1
+# - infra/observability/docker-compose.yml (the runtime that loads this file)
+
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
+
+# Collects stdout/stderr of every container on the worktree's docker network.
+# The include_labels filter scopes to the wms-platform-bootrun project so the
+# stack does not pick up unrelated containers running on the same host.
+[sources.docker_logs]
+type = "docker_logs"
+include_labels = ["com.docker.compose.project=wms-platform-bootrun"]
+exclude_containers = ["wms-observability-"]
+
+# Scrapes Prometheus endpoints exposed by wms services. Phase 1 leaves the
+# endpoint list empty — the docker_logs source carries the bulk of the
+# verification load, and Phase 2 will replace this static list with a
+# dynamically populated one (Gradle e2eTest task contributes the URLs).
+#
+# Note: Vector's TOML env-var interpolation (dollar-brace-VAR-brace syntax) is intentionally
+# avoided in this config. The interpolation runs at config load and fails
+# fast if any referenced variable is unset; for a stack that may be brought
+# up against a wms-platform compose project with zero exposed services
+# (Phase 1 footprint measurement scenario), that fail-fast is hostile.
+# Phase 2's skill templates a worktree-local override file instead.
+[sources.prometheus_scrape]
+type = "prometheus_scrape"
+endpoints = []
+scrape_interval_secs = 15
+instance_tag = "instance"
+
+# ---------------------------------------------------------------------------
+# Transforms
+# ---------------------------------------------------------------------------
+
+# Parse Logback's JSON console line shape into typed fields. The Logback
+# encoder used across wms services emits the following shape when configured
+# with logstash-logback-encoder (already present in libs/java-observability):
+#
+#   {"@timestamp":"...","level":"INFO","logger":"...","message":"...",
+#    "traceId":"...","spanId":"...","mdc":{...}}
+#
+# When the line is not JSON (e.g., startup banner before the JSON encoder
+# kicks in), we keep the raw `message` field and skip the typed fields.
+[transforms.parse_logback]
+type = "remap"
+inputs = ["docker_logs"]
+source = '''
+  parsed, err = parse_json(.message)
+  if err == null && is_object(parsed) {
+    .level = parsed.level
+    .logger = parsed.logger
+    .traceId = parsed.traceId
+    .spanId = parsed.spanId
+    .message = parsed.message
+    .mdc = parsed.mdc
+    if parsed."@timestamp" != null { .timestamp = parsed."@timestamp" }
+  }
+  # Service name from compose label (set by docker_logs source).
+  if .label."com.docker.compose.service" != null {
+    .service = .label."com.docker.compose.service"
+  }
+'''
+
+[transforms.add_worktree_label]
+type = "remap"
+inputs = ["parse_logback", "prometheus_scrape"]
+source = '''
+  worktree_var = get_env_var("WORKTREE_HASH") ?? "default"
+  .worktree = worktree_var
+'''
+
+# ---------------------------------------------------------------------------
+# Sinks
+# ---------------------------------------------------------------------------
+
+# VictoriaLogs accepts JSON-stream (newline-delimited JSON) via /insert/jsonline.
+# Vector's `http` sink with `encoding.codec = "ndjson"` matches this shape.
+[sinks.victorialogs]
+type = "http"
+inputs = ["add_worktree_label"]
+uri = "http://victorialogs:9428/insert/jsonline?_stream_fields=service,worktree,level"
+encoding.codec = "json"
+framing.method = "newline_delimited"
+compression = "gzip"
+request.headers.AccountID = "0"
+request.headers.ProjectID = "0"
+
+# VictoriaMetrics is a drop-in Prometheus remote-write endpoint.
+[sinks.victoriametrics]
+type = "prometheus_remote_write"
+inputs = ["add_worktree_label"]
+endpoint = "http://victoriametrics:8428/api/v1/write"
+healthcheck.enabled = false
