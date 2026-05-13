@@ -75,7 +75,7 @@ Replays produce the same classification — `outcome=QUEUED` becomes `outcome=DU
 
 ## DLT
 
-Per the platform policy each subscribed topic has a sibling `<topic>.DLT` for poison records (envelope parse failures, downstream domain errors after retry exhaustion). Operator runbook: `runbooks/dlt-replay.md` (Open Items).
+Per the platform policy each subscribed topic has a sibling `<topic>.DLT` for poison records (envelope parse failures, downstream domain errors after retry exhaustion). Operator runbook: `runbooks/dlt-replay.md`.
 
 ---
 

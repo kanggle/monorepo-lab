@@ -695,8 +695,8 @@ terminal `STUCK_RECOVERY_FAILED` and the
 
 - `specs/services/outbound-service/architecture.md`
 - `specs/services/outbound-service/domain-model.md`
-- `specs/services/outbound-service/sagas/outbound-saga.md` (Open Item)
-- `specs/services/outbound-service/state-machines/saga-status.md` (Open Item)
+- `specs/services/outbound-service/sagas/outbound-saga.md`
+- `specs/services/outbound-service/state-machines/saga-status.md`
 - `specs/contracts/http/outbound-service-api.md` — REST endpoints
 - `specs/contracts/webhooks/erp-order-webhook.md` — webhook contract
 - `specs/contracts/events/inbound-events.md` — sibling event contract (pattern reference)
