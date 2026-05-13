@@ -8,7 +8,7 @@
 
 `rest-api` — 구독 플랜 관리 및 프리미엄 콘텐츠 접근 제어 서비스.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
 
 ## Architecture Style
 
@@ -16,9 +16,9 @@
 
 ## Why This Architecture
 
-- **구독 상태 전이가 핵심 비즈니스 규칙**: NONE → ACTIVE → EXPIRED / CANCELLED 전이는 결제 완료, 만료 스케줄, 사용자 해지 등 여러 트리거로 발생. 직접 UPDATE 금지; 상태 기계가 전이 유효성 검사 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T4).
+- **구독 상태 전이가 핵심 비즈니스 규칙**: NONE → ACTIVE → EXPIRED / CANCELLED 전이는 결제 완료, 만료 스케줄, 사용자 해지 등 여러 트리거로 발생. 직접 UPDATE 금지; 상태 기계가 전이 유효성 검사 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T4).
 - **접근 제어 단일 소유**: 어떤 플랜이 어떤 콘텐츠를 볼 수 있는지는 이 서비스만 알고 있음. community-service는 내부 HTTP로 위임 — 구독 데이터를 분산 복사하지 않음.
-- **감사 추적**: 구독 활성화·만료·해지는 `subscription_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1·A3).
+- **감사 추적**: 구독 활성화·만료·해지는 `subscription_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1·A3).
 - **이벤트 발행**: `membership.subscription.activated`, `membership.subscription.expired`를 outbox 패턴으로 발행 — 향후 notification-service 연결 기반.
 
 ## Internal Structure Rule

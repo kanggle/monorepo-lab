@@ -4,7 +4,7 @@
 
 운영자 전용 **웹 콘솔**. admin-service HTTP API를 소비하여 계정 관리·세션 관리·감사 조회·관측성 대시보드를 단일 SPA에서 제공한다. 내부 SRE/CS/운영자가 접속하는 사내 전용 도구이며, 일반 사용자는 이 앱의 존재조차 알 필요가 없다.
 
-[platform/service-types/frontend-app.md](../../../platform/service-types/frontend-app.md)에 따른 Next.js App Router 기반 frontend-app. 인증·감사 흐름은 admin-service의 계약을 1:1로 미러링하고, 도메인 로직은 가지지 않는다 — **얇은 UI 레이어**.
+[platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md)에 따른 Next.js App Router 기반 frontend-app. 인증·감사 흐름은 admin-service의 계약을 1:1로 미러링하고, 도메인 로직은 가지지 않는다 — **얇은 UI 레이어**.
 
 ## Users
 

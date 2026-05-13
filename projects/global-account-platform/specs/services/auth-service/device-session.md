@@ -21,7 +21,7 @@ auth-service가 계정별로 **활성 refresh token 세션**을 디바이스 단
 
 **이유**:
 - fingerprint를 그대로 식별자로 쓰면 악의적 클라이언트가 임의 fingerprint를 전송해 타인의 세션 row를 오염시킬 수 있음
-- fingerprint는 재조합·스푸핑·re-install로 바뀔 수 있는 **관측값**. 식별자는 서버가 소유해야 함 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R1 — 식별자와 관측 데이터의 분리)
+- fingerprint는 재조합·스푸핑·re-install로 바뀔 수 있는 **관측값**. 식별자는 서버가 소유해야 함 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1 — 식별자와 관측 데이터의 분리)
 - `device_id`를 서버 생성 opaque ID로 만들면 PII 유출 risk 없이 DELETE 엔드포인트의 path variable로 사용 가능
 
 ### D2. 동일 fingerprint + 다른 account = 다른 device_session
@@ -51,7 +51,7 @@ fingerprint가 null·빈 문자열·resolve 실패인 경우:
    - 각 evicted 세션마다 `auth.session.revoked` outbox 이벤트 발행 (`reason = "EVICTED_BY_LIMIT"`)
 3. 신규 `device_session` insert + 신규 `refresh_tokens` insert + `auth.session.created` outbox 발행
 
-**원자성**: 1~3의 전체 흐름은 단일 DB 트랜잭션. 중간에 실패하면 **신규 device_session 생성도 롤백**되고 로그인은 `500 INTERNAL` 또는 재시도 유도. 부분 eviction 상태는 허용하지 않는다 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T3).
+**원자성**: 1~3의 전체 흐름은 단일 DB 트랜잭션. 중간에 실패하면 **신규 device_session 생성도 롤백**되고 로그인은 `500 INTERNAL` 또는 재시도 유도. 부분 eviction 상태는 허용하지 않는다 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T3).
 
 ### D5. refresh_tokens ↔ device_sessions 매핑
 
@@ -88,7 +88,7 @@ fingerprint가 null·빈 문자열·resolve 실패인 경우:
 - `idx_device_sessions_last_seen` (`account_id`, `last_seen_at`) — eviction 쿼리 지원
 - `uk_device_sessions_account_fp_first_seen` UNIQUE (`account_id`, `device_fingerprint`, `issued_at`) — D2의 불변 보장
 
-**데이터 분류**: [rules/traits/regulated.md](../../../rules/traits/regulated.md) R1에 따라 `device_fingerprint`, `ip_last`는 **confidential**. 감사 로그 조회 외 read API 응답에서는 마스킹된 형태로만 노출.
+**데이터 분류**: [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1에 따라 `device_fingerprint`, `ip_last`는 **confidential**. 감사 로그 조회 외 read API 응답에서는 마스킹된 형태로만 노출.
 
 ### IP Masking Format
 

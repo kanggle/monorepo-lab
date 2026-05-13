@@ -146,7 +146,7 @@ Tokens carry `tenant_id=fan-platform`.
      `publishedAt`.
    - Each envelope is asserted on `eventType`, `source=fan-platform-artist-service`,
      `partitionKey`, and `eventId` parseability (UUID v7 per
-     [TASK-MONO-025](../../../tasks/done/TASK-MONO-025-base-event-publisher-uuidv7.md)
+     [TASK-MONO-025](../../../../tasks/done/TASK-MONO-025-base-event-publisher-uuidv7.md)
      머지 완료).
 4. **Fan follows the artist** — `POST /api/v1/community/follows` with
    `{ "artistAccountId": "<random UUID>" }`. The contract treats
@@ -168,7 +168,7 @@ Each scenario uses unique-per-class fixture markers
 (`uniqueStageName(prefix)`, `uniquePostBody(prefix)`) so the Awaitility
 filter on Kafka events cannot accidentally match a record produced by a
 parallel scenario class. Mirrors the
-[TASK-MONO-023d](../../../tasks/done/TASK-MONO-023d-outbox-related-failures.md) pattern.
+[TASK-MONO-023d](../../../../tasks/done/TASK-MONO-023d-outbox-related-failures.md) pattern.
 
 ---
 
@@ -272,7 +272,7 @@ GitHub Actions job `fan-platform-e2e` (added by TASK-FAN-INT-001 to
    community-service, artist-service jars) and restores them under the
    canonical `apps/<svc>/build/libs/<svc>.jar` paths.
 3. Builds three docker images via `docker build` CLI (per
-   [TASK-MONO-015](../../../tasks/done/) — Testcontainers'
+   [TASK-MONO-015](../../../../tasks/done/) — Testcontainers'
    `ImageFromDockerfile` hangs on Docker 28 BuildKit gRPC; pre-building
    sidesteps the issue).
 4. Runs `./gradlew :projects:fan-platform:tests:e2e:e2eTest

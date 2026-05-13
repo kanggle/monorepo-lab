@@ -8,7 +8,7 @@
 | `account-service` | 계정 lock / unlock / delete | `POST /internal/accounts/{id}/lock`, `POST .../unlock`, `POST .../delete` | [../../contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) |
 | `security-service` (read-only) | 로그인 이력·의심 이벤트 조회 | `GET /internal/security/login-history`, `GET /internal/security/suspicious-events` | security-service의 query 엔드포인트 |
 
-**모든 호출에 반드시 `Idempotency-Key` 헤더 = admin command request ID** ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T1). 타임아웃 3s 연결 / 10s 읽기, 재시도 2회, circuit breaker 적용.
+**모든 호출에 반드시 `Idempotency-Key` 헤더 = admin command request ID** ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1). 타임아웃 3s 연결 / 10s 읽기, 재시도 2회, circuit breaker 적용.
 
 ## Internal HTTP (incoming)
 
@@ -20,7 +20,7 @@
 
 | 테이블 | 용도 | 특이사항 |
 |---|---|---|
-| `admin_actions` | `id`, `action_code`, `actor_id`, `actor_role`, `target_type`, `target_id`, `reason`, `ticket_id`, `outcome`, `downstream_detail` (JSON), `started_at`, `completed_at` | **append-only 감사 원장**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3). `outcome`은 SUCCESS/FAILURE/IN_PROGRESS |
+| `admin_actions` | `id`, `action_code`, `actor_id`, `actor_role`, `target_type`, `target_id`, `reason`, `ticket_id`, `outcome`, `downstream_detail` (JSON), `started_at`, `completed_at` | **append-only 감사 원장**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3). `outcome`은 SUCCESS/FAILURE/IN_PROGRESS |
 | `outbox_events` | `admin.action.performed` 이벤트 스테이징 | libs/java-messaging |
 
 **도메인 상태 없음**. 계정/세션/credential은 downstream 소유. admin-service는 자체 감사 원장만 소유.
@@ -40,7 +40,7 @@
 |---|---|---|
 | `admin.action.performed` | 모든 운영자 행위 (lock, unlock, delete, force-logout, audit query) | `target_id` 또는 `actor_id` |
 
-발행 정책: **모든 명령이 outbox를 경유**. admin command와 이벤트 발행이 **같은 DB 트랜잭션 내에서 커밋** ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A7, fail-closed). 이벤트는 외부 SIEM·모니터링·컴플라이언스 리포팅용.
+발행 정책: **모든 명령이 outbox를 경유**. admin command와 이벤트 발행이 **같은 DB 트랜잭션 내에서 커밋** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A7, fail-closed). 이벤트는 외부 SIEM·모니터링·컴플라이언스 리포팅용.
 
 계약: [../../contracts/events/admin-events.md](../../contracts/events/).
 
@@ -63,7 +63,7 @@
 
 | Provider | 용도 | 활성화 여부 |
 |---|---|---|
-| 외부 IdP (Okta / Auth0 등) | 운영자 SSO (선택) | 초기 미적용, 필요 시 [rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I7 adapter pattern으로 추가 |
+| 외부 IdP (Okta / Auth0 등) | 운영자 SSO (선택) | 초기 미적용, 필요 시 [rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I7 adapter pattern으로 추가 |
 | SIEM (Splunk / Datadog / ELK) | `admin.action.performed` 이벤트 소비 | Kafka consumer가 외부에서 구독 (admin-service는 발행만 담당) |
 
 초기 스코프에서는 operator JWT를 auth-service가 발급하되 `scope: admin` claim으로 구분.

@@ -1,6 +1,6 @@
 # admin-service — Observability
 
-기준: [platform/observability.md](../../../platform/observability.md)
+기준: [platform/observability.md](../../../../../platform/observability.md)
 
 ---
 

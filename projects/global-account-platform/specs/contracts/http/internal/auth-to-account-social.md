@@ -3,7 +3,7 @@
 auth-service가 OAuth 소셜 로그인 처리 중 account-service를 호출하여 소셜 계정을 생성하거나 기존 계정을 조회한다.
 
 **호출 방향**: auth-service (client) → account-service (server)
-**노출 경로**: `/internal/accounts/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../rules/domains/saas.md) S2)
+**노출 경로**: `/internal/accounts/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
 **인증**: mTLS 또는 내부 서비스 토큰 (기존 내부 API와 동일)
 
 ---

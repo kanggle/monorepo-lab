@@ -2,13 +2,13 @@
 
 ## Design Decision
 
-security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 `regulated` + `audit-heavy` 서비스다 ([rules/traits/regulated.md](../../../rules/traits/regulated.md), [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md)). 모든 보안 이력은 **append-only** 로 기록하며, GDPR/PIPA 삭제 요청에 대해서는 row 자체를 삭제하지 않고 PII 컬럼만 마스킹한다 ([specs/contracts/events/account-events.md § Consumer Obligations](../../contracts/events/account-events.md#consumer-obligations-task-be-258)).
+security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 `regulated` + `audit-heavy` 서비스다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md), [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md)). 모든 보안 이력은 **append-only** 로 기록하며, GDPR/PIPA 삭제 요청에 대해서는 row 자체를 삭제하지 않고 PII 컬럼만 마스킹한다 ([specs/contracts/events/account-events.md § Consumer Obligations](../../contracts/events/account-events.md#consumer-obligations-task-be-258)).
 
 **소유 vs 비소유 데이터**:
 - 소유: 로그인 이력, 의심 이벤트, 자동 잠금 이력, PII 마스킹 audit log.
 - 비소유 (참조만): `accounts.id`, `tenants.id` (account-service 가 SSoT).
 
-**Cross-tenant isolation**: 모든 테이블은 `tenant_id` 컬럼을 보유하며 모든 쿼리 (read/update/delete) 가 `(tenant_id, account_id)` 또는 `(tenant_id, ...)` 로 scope 된다 ([rules/traits/multi-tenant.md](../../../rules/traits/multi-tenant.md)).
+**Cross-tenant isolation**: 모든 테이블은 `tenant_id` 컬럼을 보유하며 모든 쿼리 (read/update/delete) 가 `(tenant_id, account_id)` 또는 `(tenant_id, ...)` 로 scope 된다 ([rules/traits/multi-tenant.md](../../../../../rules/traits/multi-tenant.md)).
 
 ---
 

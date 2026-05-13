@@ -1,6 +1,6 @@
 # Gateway Public Routes — ecommerce-microservices-platform
 
-This document declares the concrete public route list and rate-limit tiers for this project's gateway. See [`platform/api-gateway-policy.md`](../../../../../../platform/api-gateway-policy.md) for the generic gateway responsibilities and rules.
+This document declares the concrete public route list and rate-limit tiers for this project's gateway. See [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md) for the generic gateway responsibilities and rules.
 
 Default posture: every route requires a valid JWT. Only the routes listed below are public (no authentication). All other routes are rejected by the gateway with `401 UNAUTHORIZED` if the JWT is missing or invalid.
 

@@ -8,7 +8,7 @@
 | `security-service` | 자동 잠금 명령 (비정상 로그인 탐지 결과) | [../../contracts/http/internal/security-to-account.md](../../contracts/http/internal/) |
 | `admin-service` | 운영자 lock/unlock/delete, 상태 조회 | [../../contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) |
 
-내부 엔드포인트 prefix는 `/internal/accounts/*`. 게이트웨이는 `/internal/*` 경로를 **퍼블릭 라우팅하지 않음** ([rules/domains/saas.md](../../../rules/domains/saas.md) S2).
+내부 엔드포인트 prefix는 `/internal/accounts/*`. 게이트웨이는 `/internal/*` 경로를 **퍼블릭 라우팅하지 않음** ([rules/domains/saas.md](../../../../../rules/domains/saas.md) S2).
 
 ## Internal HTTP (outgoing)
 
@@ -21,8 +21,8 @@
 | 테이블 | 용도 | 특이사항 |
 |---|---|---|
 | `accounts` | `id`, `email` (unique index), `created_at`, `version` | Aggregate root, 낙관적 락 |
-| `profiles` | `account_id`, `display_name`, `phone_number`, `birth_date`, `locale`, `timezone`, `preferences` (JSON) | PII 분류 등급 `confidential` ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R1). `password_hash` 절대 없음 (S1) |
-| `account_status_history` | `id`, `account_id`, `from_status`, `to_status`, `reason_code`, `actor_type`, `actor_id`, `occurred_at`, `details` (JSON) | **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3) |
+| `profiles` | `account_id`, `display_name`, `phone_number`, `birth_date`, `locale`, `timezone`, `preferences` (JSON) | PII 분류 등급 `confidential` ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1). `password_hash` 절대 없음 (S1) |
+| `account_status_history` | `id`, `account_id`, `from_status`, `to_status`, `reason_code`, `actor_type`, `actor_id`, `occurred_at`, `details` (JSON) | **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3) |
 | `outbox_events` | 이벤트 발행 스테이징 | [libs/java-messaging](../../../libs/java-messaging) |
 | `processed_events` | 해당 없음 | — |
 
@@ -72,7 +72,7 @@
 | 이메일 provider (SendGrid / SES 등) | 가입 검증 이메일 | 초기 스코프 미정, mock/stub 사용 |
 | SMS provider | 전화 번호 검증 (선택) | 미정 |
 
-실제 발송은 [rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) 규칙에 따라 adapter layer로 격리. 초기 구현은 console log 또는 in-memory queue로 대체.
+실제 발송은 [rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) 규칙에 따라 adapter layer로 격리. 초기 구현은 console log 또는 in-memory queue로 대체.
 
 ## Runtime Dependencies
 

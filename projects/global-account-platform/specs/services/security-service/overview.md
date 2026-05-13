@@ -4,7 +4,7 @@
 
 비동기 **보안 분석 서비스**. auth-service가 발행한 로그인·토큰 이벤트를 Kafka로 소비하여 (1) 불변 로그인 이력을 적재하고 (2) 비정상 로그인을 탐지하며 (3) 심각한 탐지 결과에 대해 account-service에 자동 잠금 명령을 발행한다. 부수적으로 admin-service의 감사 조회를 위한 **좁은 read-only HTTP 표면**을 제공한다.
 
-[rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1·A3의 **불변 감사 로그** 소유자 — `login_history`는 이 서비스 외에는 아무도 쓰지 못한다.
+[rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1·A3의 **불변 감사 로그** 소유자 — `login_history`는 이 서비스 외에는 아무도 쓰지 못한다.
 
 핵심 설계 원칙: **동기 로그인 플로우(auth-service)에서 분리**. security-service의 장애·지연은 로그인 응답 시간에 영향을 주지 않는다.
 
@@ -51,7 +51,7 @@
 1. **새 탐지 규칙 추가** — 새로운 `SuspiciousActivityRule` 전략 구현 (예: 알려진 VPN/Tor exit node 탐지)
 2. **규칙 임계치 튜닝** — velocity 한도, geo 거리 임계, 디바이스 변경 민감도
 3. **새 보안 이벤트 토픽 구독** — auth-service가 추가로 발행하는 이벤트 소비
-4. **감사 보존 기간 변경** — `login_history` 보존·아카이브 전략 조정 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A4)
+4. **감사 보존 기간 변경** — `login_history` 보존·아카이브 전략 조정 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A4)
 5. **자동 대응 정책 변화** — 자동 잠금 vs 알림 vs 수동 검토 경계 조정
 6. **새 감사 조회 요구** — admin-service로부터의 새 조회 파라미터 (단, 여전히 read-only 원칙 유지)
 

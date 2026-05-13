@@ -7,7 +7,7 @@
 | `account-service` | Credential lookup (이메일 → account_id + credential_hash) | `GET /internal/accounts/credentials?email=...` | [../../contracts/http/internal/auth-to-account.md](../../contracts/http/internal/) |
 | `account-service` | 계정 상태 조회 (로그인 허용 여부 판단) | `GET /internal/accounts/{id}/status` | 같은 파일 |
 
-**타임아웃·재시도**: 연결 3s, 읽기 5s, 재시도 2회(지수 백오프 + jitter), circuit breaker 임계 50% 실패율 / 10초 반개방. 4xx는 재시도 금지 ([rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I3).
+**타임아웃·재시도**: 연결 3s, 읽기 5s, 재시도 2회(지수 백오프 + jitter), circuit breaker 임계 50% 실패율 / 10초 반개방. 4xx는 재시도 금지 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I3).
 
 ## Persistence
 

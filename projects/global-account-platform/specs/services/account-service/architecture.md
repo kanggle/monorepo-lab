@@ -8,7 +8,7 @@
 
 `rest-api` — 계정·프로필 전담 서비스. 회원가입, 프로필 CRUD, 계정 상태(active / locked / dormant / deleted) 상태 기계.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
 
 ## Architecture Style
 
@@ -17,8 +17,8 @@
 ## Why This Architecture
 
 - **상태 전이가 핵심 비즈니스 규칙**: 계정 상태는 여러 축(사용자 요청, 운영자 명령, 자동 탐지, 휴면 처리, GDPR 삭제 유예)에서 변경될 수 있고, 모든 전이에는 명시적 허용/불허 규칙이 있음. 이를 직접 `UPDATE`로 처리하면 `rules/traits/transactional.md` T4 위반.
-- **credentials와의 물리적 분리**: [rules/domains/saas.md](../../../rules/domains/saas.md) S1에 따라 Profile(여기)과 Credentials(auth-service)는 물리 분리. 같은 프로세스에 두는 것은 금지.
-- **감사 로그 결합**: 모든 상태 변경이 `account_status_history` 불변 테이블과 이벤트로 영속화 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1·A3·A7 교차).
+- **credentials와의 물리적 분리**: [rules/domains/saas.md](../../../../../rules/domains/saas.md) S1에 따라 Profile(여기)과 Credentials(auth-service)는 물리 분리. 같은 프로세스에 두는 것은 금지.
+- **감사 로그 결합**: 모든 상태 변경이 `account_status_history` 불변 테이블과 이벤트로 영속화 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1·A3·A7 교차).
 - **다운스트림 통합의 허브**: 상태 변경은 `account.status.changed` 이벤트로 발행되어 auth-service의 세션 무효화, security-service의 이력 갱신 등 다운스트림 흐름의 source of truth가 됨.
 - **테넌트 메타의 소유자**: account-service는 계정 소유 서비스이므로 [specs/features/multi-tenancy.md](../../features/multi-tenancy.md)에 정의된 `Tenant` 엔터티(테넌트 등록·상태)도 본 서비스가 소유한다. 모든 도메인 테이블은 `tenant_id` NOT NULL 컬럼을 보유하며 unique key는 `(tenant_id, email)` 등 복합 형태로 구성. cross-tenant leak 방지가 격리 회귀 테스트의 필수 항목.
 
@@ -103,8 +103,8 @@ presentation → application → domain
 
 - ❌ `presentation/` 공개 컨트롤러가 `internal/` 엔드포인트 로직을 노출 — 공개 API와 내부 API는 별개의 URL prefix (`/api/accounts/*` vs `/internal/accounts/*`)
 - ❌ 계정 상태를 `UPDATE accounts SET status = ?`로 직접 변경 — 반드시 `AccountStatusMachine.transition()` 경유
-- ❌ `Profile` 테이블에 `password_hash`·`2fa_secret`·`oauth_refresh_token` 저장 ([rules/domains/saas.md](../../../rules/domains/saas.md) S1)
-- ❌ 삭제를 `DELETE FROM accounts WHERE id = ?`로 즉시 실행 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R7) — 유예 + 익명화 경로만
+- ❌ `Profile` 테이블에 `password_hash`·`2fa_secret`·`oauth_refresh_token` 저장 ([rules/domains/saas.md](../../../../../rules/domains/saas.md) S1)
+- ❌ 삭제를 `DELETE FROM accounts WHERE id = ?`로 즉시 실행 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R7) — 유예 + 익명화 경로만
 - ❌ 외부 요청이 `internal/` 경로에 도달 — gateway는 `/internal/*`을 공개 라우트로 열지 않음
 - ❌ `tenant_id` 없이 `AccountRepository.findByEmail(email)` 같은 조회를 수행 — 모든 도메인 쿼리는 `tenant_id` 파라미터 필수 (cross-tenant leak 방지)
 - ❌ `Account`/`Profile`/`AccountStatusHistory` 등 `tenant_id` NULL row 생성 — Flyway 마이그레이션에서 NOT NULL + 기본값 백필이 완료된 후 컬럼에 의존
@@ -115,7 +115,7 @@ presentation → application → domain
 - 공개: `/api/accounts/signup`, `/api/accounts/me`, `/api/accounts/me/profile`, `/api/accounts/me/status`
 - 내부(`presentation/internal/`): 다른 서비스 전용. 별도 인증 경계(mTLS 또는 내부 토큰). 게이트웨이 경유 금지
 - 내부 provisioning: `/internal/tenants/{tenantId}/accounts` (POST/GET), `/internal/tenants/{tenantId}/accounts/{accountId}/roles|status|password-reset` — WMS 등 enterprise 소비자가 사용. path `{tenantId}`와 호출 주체의 tenant scope 불일치 시 403 `TENANT_SCOPE_DENIED`. 상세는 [specs/features/multi-tenancy.md](../../features/multi-tenancy.md)
-- 응답에서 `password_hash`·`deleted_at` 같은 민감 필드 **절대 제외** ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4)
+- 응답에서 `password_hash`·`deleted_at` 같은 민감 필드 **절대 제외** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4)
 
 ### application/
 - `SignupUseCase`: 이메일 중복 검사 → Account + Profile 생성 → `account.created` 이벤트 (outbox)
@@ -165,7 +165,7 @@ presentation → application → domain
 ## Change Rule
 
 1. 상태 전이 규칙 추가·변경은 [specs/features/account-lifecycle.md](../../features/) 업데이트 선행
-2. 프로필 필드 추가는 [specs/services/account-service/data-model.md](./data-model.md) + 데이터 분류 등급 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R1) 재검토
+2. 프로필 필드 추가는 [specs/services/account-service/data-model.md](./data-model.md) + 데이터 분류 등급 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1) 재검토
 3. PII 익명화 대상·보존 기간 변경은 [specs/services/account-service/retention.md](./retention.md) 업데이트 (신규 파일)
 4. 내부/외부 API 경계 변경은 gateway의 라우트와 내부 컨트랙트 파일을 같은 PR에서 갱신
 5. 테넌트 모델·격리 수준·provisioning API 변경은 [specs/features/multi-tenancy.md](../../features/multi-tenancy.md) 업데이트 선행. 격리 수준 승격(row→schema/DB)은 ADR 필수

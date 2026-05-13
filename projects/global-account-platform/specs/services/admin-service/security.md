@@ -3,8 +3,8 @@
 본 문서는 admin-service의 **보안 정책 중 architecture.md·rbac.md에 담기 어려운 항목**(암호화 키 관리, 비밀 컬럼 인코딩, rotation 절차)을 선언한다. JWT 발급 경계와 RBAC 모델 자체는 각각 [architecture.md](./architecture.md)의 "Admin IdP Boundary" 섹션과 [rbac.md](./rbac.md)가 담당한다.
 
 관련 규칙:
-- [rules/traits/regulated.md](../../../rules/traits/regulated.md) R2 (encryption at rest), R9 (secrets & rotation)
-- [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A2 (audit field standards)
+- [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R2 (encryption at rest), R9 (secrets & rotation)
+- [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A2 (audit field standards)
 
 ---
 
