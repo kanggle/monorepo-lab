@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-280-auth-service-identity-platform-project-md-frontmatter-sync.md` — `/refactor-spec all --dry-run` (2026-05-13) GAP audit Top 3 critical (HARDSTOP-02/10 risk). `auth-service/architecture.md:9` 가 Service Type `identity-platform` 선언 (2026-05-11 revision), 그러나 `PROJECT.md:5` frontmatter `service_types: [rest-api, event-consumer, frontend-app]` 에 `identity-platform` 미포함. catalog (`platform/service-types/identity-platform.md`) 는 존재. fix = PROJECT.md frontmatter 1-line 추가. admin-service self-IdP 검토 (rest-api vs identity-platform promote)는 별도 follow-up. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -82,7 +82,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-280-auth-service-identity-platform-project-md-frontmatter-sync.md` — `/refactor-spec all --dry-run` (2026-05-13) GAP audit Top 3 critical (HARDSTOP-02/10 risk) closure. `PROJECT.md:5` frontmatter `service_types` array 에 `identity-platform` 추가 + Service Map table line 63 의 auth-service row 갱신 (rest-api → identity-platform, OIDC AS 책임 명시). 2026-05-11 service-type 정정 (architecture.md history line 13: ADR-001 ACCEPTED + SAS 도입 + BE-272/273/274 closure 후) 의 PROJECT.md 동기. 1 file / +2 / -2. production code 0. admin-service self-IdP service type promote 후보는 follow-up audit task 분리.
 
 ## done
 
