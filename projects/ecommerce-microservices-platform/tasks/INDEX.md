@@ -74,7 +74,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-BE-141 | `gateway-service` + `web-store` + `admin-dashboard` overview.md enhancement — refactor-spec all 2026-05-14 ecommerce HIGH-B (3 frontend-edge overview.md depth 부족 finding). TASK-FAN-BE-006 sibling-equivalent depth (Service identity table + Key invariants + Out of scope (v1)) 답습. 나머지 10 service overview.md = sibling consistency, deferred polish. | gateway-service / web-store / admin-dashboard | spec, overview, be, fe |
 
 ## in-progress
 
@@ -84,6 +83,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-141 | `gateway-service` + `web-store` + `admin-dashboard` overview.md enhancement — refactor-spec all 2026-05-14 ecommerce HIGH-B (3 frontend-edge overview.md depth 부족 finding). TASK-FAN-BE-006 sibling-equivalent depth (Service identity table + Key invariants + Out of scope (v1)) 답습. 나머지 10 service overview.md = sibling consistency, deferred polish. impl PR pending review. | gateway-service / web-store / admin-dashboard | spec, overview, be, fe |
 
 ## done
 
