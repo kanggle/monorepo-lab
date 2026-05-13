@@ -16,7 +16,17 @@ ADMIN_DB_PASSWORD="${ADMIN_DB_PASSWORD:-admin_pass}"
 COMMUNITY_DB_PASSWORD="${COMMUNITY_DB_PASSWORD:-community_pass}"
 MEMBERSHIP_DB_PASSWORD="${MEMBERSHIP_DB_PASSWORD:-membership_pass}"
 
-SERVICE_PRIVILEGES="SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, TRIGGER, CREATE ROUTINE, ALTER ROUTINE, EXECUTE"
+# TASK-BE-278 (cycle 6 of nightly gap-e2e-full): `CREATE TEMPORARY TABLES`
+# is a separate MySQL 8.0 privilege from the plain `CREATE`. account-service
+# V0013 (rebuild account roles composite pk) uses `CREATE TEMPORARY TABLE
+# account_roles_backup AS SELECT ...` to preserve V0012-era data across the
+# DROP/CREATE rebuild — without this grant the per-service user gets
+# `Access denied; you need (at least one of) the CREATE TEMPORARY TABLES
+# privilege(s)` mid-migration, Flyway marks V0013 failed, and every
+# subsequent boot validates against that failed record and refuses to
+# start. PR-time integration tests use Testcontainers' default (root-
+# equivalent) user, so this privilege was implicit there.
+SERVICE_PRIVILEGES="SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, TRIGGER, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE TEMPORARY TABLES"
 
 mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<-EOSQL
 -- ---------------------------------------------------------------------------
