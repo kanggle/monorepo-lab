@@ -152,8 +152,7 @@ in prod, distinct values in stg/dr/dev. Loaded from configuration and
 overridable per-environment.
 
 Full wire-level contract:
-`specs/contracts/http/tms-shipment-api.md`
-(Open Item — vendor-controlled).
+[`specs/contracts/http/tms-shipment-api.md`](../../contracts/http/tms-shipment-api.md).
 
 ### 2.2 Authentication (per `platform/security-rules.md`)
 
@@ -748,8 +747,9 @@ These are operational documents, not specs. Linked here for completeness.
   Integration, Webhook Reception
 - `specs/contracts/webhooks/erp-order-webhook.md` — wire-level webhook
   contract (Open Item)
-- `specs/contracts/http/tms-shipment-api.md` — vendor-controlled TMS
-  contract (Open Item)
+- [`specs/contracts/http/tms-shipment-api.md`](../../contracts/http/tms-shipment-api.md)
+  — vendor-controlled TMS wire contract (request/response, idempotency,
+  4xx/5xx classification, schema versioning)
 - `specs/services/outbound-service/idempotency.md` — REST + webhook +
   Kafka + saga dedupe strategies
 - `specs/services/outbound-service/sagas/outbound-saga.md` — saga state

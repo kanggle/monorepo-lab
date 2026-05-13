@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-147-tms-shipment-api-vendor-wire-spec.md` — outbound-service TMS vendor wire-level HTTP contract authoring (`specs/contracts/http/tms-shipment-api.md` 신규 ~350 line + `external-integrations.md` §2.1 / § References 의 "(Open Item — vendor-controlled)" marker 제거). production code 변경 0 — BE-049 (PR #315) 의 머지된 `TmsClientAdapter` / `TmsShipmentRequest` / `TmsShipmentResponse` / `TmsShipmentMapper` wire 를 retrospective 로 spec 화. 12 section 표준 (Endpoint / Authentication / Request Headers / Request Body / Response 2xx + status enum classification / Response 4xx table (409 vendor-honoured Idempotency-Key success-equivalent) / Response 5xx + transport / Idempotency Semantics (vendor-side + `tms_request_dedupe` V13 client fallback) / Vendor Schema Versioning / Out of Scope (v1) / References). cross-ref 검증 — 6 production code path + 5 sibling spec link 의 dead-reference 0 (sibling spec 의 § Vendor Idempotency / § notify failure path 명칭 부재 finding 발견 → spec References 정정 후 closure). lifecycle = ready → review 직접 (in-progress 우회, same-day single-PR closure 8번째 entry 후보 — BE-141/142/FAN-BE-006/MONO-084/BE-281/BE-145/BE-146 precedent). 분석=Opus 4.7 / 구현=Opus 4.7 (vendor wire byte-identical 검증 + sibling spec cross-ref audit 동시 진행).
 
 ## done
 
