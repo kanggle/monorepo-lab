@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-145-notification-service-idempotency-spec-and-dlt-replay-runbook.md` — `/refactor-spec all --dry-run` (2026-05-13~14) WMS audit critical #1+2 finding. notification-service architecture.md § Open Items (L451-468) #4 (`idempotency.md`) + #5 (`runbooks/dlt-replay.md`) 가 미존재 file 가리킴. 2 file 신규 authoring (idempotency = consumer-pattern dedupe + delivery key + retry budget / dlt-replay = operator playbook for DLT drain + manual retry) + architecture.md Open Items ✅ marker 정정. content source = architecture.md 의 § Idempotency / Concurrency / Persistence / Kafka Consumption / Observability 영역 + ADR-MONO-005 Category C reference. sibling skeleton = master-service idempotency.md (file structure 답습, 다른 영역). production code = 0 (BE-043 merged production 의 spec backfill). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (spec authoring + runbook judgment).
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-145-notification-service-idempotency-spec-and-dlt-replay-runbook.md` — `/refactor-spec all --dry-run` (2026-05-13~14) WMS audit critical #1+2 finding. notification-service architecture.md § Open Items (L451-468) #4 (`idempotency.md`) + #5 (`runbooks/dlt-replay.md`) 가 미존재 file 가리킴. 2 file 신규 authoring (idempotency = consumer-pattern dedupe + delivery key + retry budget / dlt-replay = operator playbook for DLT drain + manual retry) + architecture.md Open Items ✅ marker 정정. content source = architecture.md 의 § Idempotency / Concurrency / Persistence / Kafka Consumption / Observability 영역 + ADR-MONO-005 Category C reference. sibling skeleton = master-service idempotency.md (file structure 답습, 다른 영역). production code = 0 (BE-043 merged production 의 spec backfill). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (spec authoring + runbook judgment).
 
 ## done
 
