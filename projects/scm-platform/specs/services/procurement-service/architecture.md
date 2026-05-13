@@ -1,4 +1,7 @@
-# procurement-service — Architecture
+﻿# procurement-service — Architecture
+
+## Service Type
+`rest-api`
 
 This document declares the internal architecture of `scm-platform/apps/procurement-service`.
 All implementation tasks targeting this service must follow this declaration,
@@ -608,7 +611,7 @@ is bootstrapped.
 | # | Situation | Behavior |
 |---|---|---|
 | 1 | Missing `Idempotency-Key` on mutating REST | 400 `IDEMPOTENCY_KEY_REQUIRED` |
-| 2 | Same `Idempotency-Key` with different payload | 409 `IDEMPOTENCY_KEY_MISMATCH` (`IdempotencyKeyMismatchException`) |
+| 2 | Same `Idempotency-Key` with different payload | 422 `IDEMPOTENCY_KEY_MISMATCH` (`IdempotencyKeyMismatchException`) |
 | 3 | Cross-tenant JWT (tenant_id ∉ {scm, *}) | 403 `TENANT_FORBIDDEN` (validator chain or filter) |
 | 4 | Redis offline during idempotency check | fail-CLOSED → fall back to `idempotency_keys` table; if both unavailable, 503 `IDEMPOTENCY_STORE_UNAVAILABLE` |
 | 5 | Supplier circuit OPEN | 503 `SUPPLIER_UNAVAILABLE` (translated by fallback method); PO stays in pre-call status |

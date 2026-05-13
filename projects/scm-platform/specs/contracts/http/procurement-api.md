@@ -155,8 +155,8 @@ Edge Case #7 in architecture.md) — the PO stays `DRAFT` for retry.
 **Response 200:** `{ "data": <PurchaseOrderResponse(status=SUBMITTED)>, "meta": { ... } }`
 
 **Errors:** `PO_NOT_FOUND` (404), `PO_STATUS_TRANSITION_INVALID` (422),
-`SUPPLIER_UNAVAILABLE` (503), `IDEMPOTENCY_KEY_REQUIRED` (400), `CONFLICT`
-(409, optimistic lock), `UNAUTHORIZED` (401), `TENANT_FORBIDDEN` (403).
+`SUPPLIER_UNAVAILABLE` (503), `IDEMPOTENCY_KEY_REQUIRED` (400),
+`CONCURRENT_MODIFICATION` (409, optimistic lock), `UNAUTHORIZED` (401), `TENANT_FORBIDDEN` (403).
 
 ---
 
@@ -320,7 +320,8 @@ returns the previously-stored ASN with the original receivedAt.
 | `PERMISSION_DENIED` | 403 | Authenticated but lacks required scope/role |
 | `PO_NOT_FOUND` | 404 | PO does not exist (or belongs to another tenant) |
 | `SUPPLIER_NOT_FOUND` | 404 | Supplier id unknown |
-| `CONFLICT` | 409 | Optimistic-lock conflict or DB integrity violation |
+| `CONCURRENT_MODIFICATION` | 409 | Optimistic-lock conflict (concurrent modification of the same aggregate — consumer may retry) |
+| `CONFLICT` | 409 | DB integrity violation (FK / unique constraint — consumer should NOT retry without state change) |
 | `PO_STATUS_TRANSITION_INVALID` | 422 | Requested transition forbidden by `PoStatusMachine` (response includes `details: { from, to, actor }`) |
 | `PO_ALREADY_CONFIRMED` | 422 | Mutation attempted on a PO past CONFIRMED that requires DRAFT semantics (e.g., line addition) |
 | `PO_QUANTITY_EXCEEDED` | 422 | Supplier ack quantity exceeds ordered |
