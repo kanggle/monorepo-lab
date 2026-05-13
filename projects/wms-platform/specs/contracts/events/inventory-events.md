@@ -522,8 +522,8 @@ Every downstream consumer MUST:
 - `specs/services/inventory-service/domain-model.md`
 - `specs/contracts/http/inventory-service-api.md`
 - `specs/contracts/events/master-events.md` (consumed: master.*)
-- `specs/contracts/events/inbound-events.md` (consumed: inbound.putaway.completed — Open Item)
-- `specs/contracts/events/outbound-events.md` (consumed: outbound.picking.* — Open Item)
+- `specs/contracts/events/inbound-events.md` (consumed: inbound.putaway.completed)
+- `specs/contracts/events/outbound-events.md` (consumed: outbound.picking.*)
 - `platform/event-driven-policy.md`
 - `messaging/outbox-pattern/SKILL.md`
 - `messaging/idempotent-consumer/SKILL.md`

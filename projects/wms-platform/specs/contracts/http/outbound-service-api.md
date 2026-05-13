@@ -851,10 +851,10 @@ events are fired by the **background processor**, not by the webhook controller.
 
 - `specs/services/outbound-service/architecture.md`
 - `specs/services/outbound-service/domain-model.md`
-- `specs/services/outbound-service/state-machines/order-status.md` (Open Item)
-- `specs/services/outbound-service/state-machines/saga-status.md` (Open Item)
-- `specs/services/outbound-service/sagas/outbound-saga.md` (Open Item)
-- `specs/services/outbound-service/idempotency.md` (Open Item)
+- `specs/services/outbound-service/state-machines/order-status.md`
+- `specs/services/outbound-service/state-machines/saga-status.md`
+- `specs/services/outbound-service/sagas/outbound-saga.md`
+- `specs/services/outbound-service/idempotency.md`
 - `specs/contracts/events/outbound-events.md`
 - `specs/contracts/webhooks/erp-order-webhook.md`
 - `platform/error-handling.md`

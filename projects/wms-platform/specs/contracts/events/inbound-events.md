@@ -435,8 +435,8 @@ Every downstream consumer MUST:
 - `specs/services/inbound-service/architecture.md`
 - `specs/services/inbound-service/domain-model.md`
 - `specs/services/inbound-service/state-machines/asn-status.md`
-- `specs/contracts/http/inbound-service-api.md` — REST endpoints (Open Item)
-- `specs/contracts/webhooks/erp-asn-webhook.md` — webhook contract (Open Item)
+- `specs/contracts/http/inbound-service-api.md` — REST endpoints
+- `specs/contracts/webhooks/erp-asn-webhook.md` — webhook contract
 - `specs/contracts/events/master-events.md` (consumed)
 - `specs/contracts/events/inventory-events.md` § C1 — counterpart consumer
 - `platform/event-driven-policy.md`

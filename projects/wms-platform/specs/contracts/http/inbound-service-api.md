@@ -851,7 +851,7 @@ writes to `erp_webhook_inbox` (synchronous ack).
 - `specs/services/inbound-service/architecture.md`
 - `specs/services/inbound-service/domain-model.md`
 - `specs/services/inbound-service/state-machines/asn-status.md`
-- `specs/services/inbound-service/idempotency.md` (Open Item)
+- `specs/services/inbound-service/idempotency.md`
 - `specs/contracts/events/inbound-events.md`
 - `specs/contracts/webhooks/erp-asn-webhook.md`
 - `platform/error-handling.md`

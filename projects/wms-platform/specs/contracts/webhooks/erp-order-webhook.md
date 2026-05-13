@@ -10,9 +10,8 @@ the exact wire format ERP integrators must produce.
 
 Implementation notes for `outbound-service` are in
 [`specs/services/outbound-service/external-integrations.md`](../../services/outbound-service/external-integrations.md)
-(Open Item) and
-[`specs/services/outbound-service/idempotency.md`](../../services/outbound-service/idempotency.md)
-(Open Item).
+and
+[`specs/services/outbound-service/idempotency.md`](../../services/outbound-service/idempotency.md).
 
 ---
 
@@ -439,8 +438,8 @@ Logs (structured JSON, INFO level, exclude raw body and signature value):
 ## References
 
 - `specs/services/outbound-service/architecture.md` § Webhook Reception
-- `specs/services/outbound-service/external-integrations.md` (Open Item)
-- `specs/services/outbound-service/idempotency.md` (Open Item)
+- `specs/services/outbound-service/external-integrations.md`
+- `specs/services/outbound-service/idempotency.md`
 - `specs/services/gateway-service/architecture.md` — webhook route declaration
 - `specs/contracts/webhooks/erp-asn-webhook.md` — sibling webhook (identical pattern)
 - `rules/traits/integration-heavy.md` — I6 (webhook reception pattern)
