@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-087-platform-error-handling-lot-inactive-registration.md` — `platform/error-handling.md` Master Data [domain: wms] 섹션에 `LOT_INACTIVE` (422) 1-line backfill. TASK-BE-152 audit § "#9 error codes ⚠️ 5/6 등록 (LOT_INACTIVE 미등록)" finding closure. `MasterRefInactiveException.lotInactive(...)` emit 함에도 registry 미등록 → § Change Rule 위반 retrospective backfill. mechanical 1-line single-PR closure (MONO-084/085/086 precedent 답습). D4 OVERRIDE: ADR-MONO-003a § D1.1. 분석=Opus 4.7 / 구현=Sonnet 4.6.
 
 ## in-progress
 
