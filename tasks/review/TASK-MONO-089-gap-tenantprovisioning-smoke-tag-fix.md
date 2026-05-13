@@ -8,7 +8,7 @@ TASK-MONO-089
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -83,10 +83,10 @@ push to main 후 자체 trigger 의 `gap-platform-e2e-smoke` job 이 GREEN (or w
 
 ### Impl PR
 
-- [ ] [`TenantProvisioningE2ETest.java`](../../projects/global-account-platform/tests/e2e/src/test/java/com/example/e2e/TenantProvisioningE2ETest.java) L51 의 `@Tag("smoke")` → `@Tag("full")`.
-- [ ] 1-line edit, 다른 file 변경 0.
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical 1-line single-PR closure 패턴 — MONO-084/085/086/087/088 precedent).
-- [ ] [`tasks/INDEX.md`](../INDEX.md) 동기.
+- [x] [`TenantProvisioningE2ETest.java`](../../projects/global-account-platform/tests/e2e/src/test/java/com/example/e2e/TenantProvisioningE2ETest.java) L51 의 `@Tag("smoke")` → `@Tag("full")`.
+- [x] 1-line edit, 다른 file 변경 0.
+- [x] task lifecycle ready → review (in-progress 우회, mechanical 1-line single-PR closure 패턴 — MONO-084/085/086/087/088 precedent).
+- [x] [`tasks/INDEX.md`](../INDEX.md) 동기.
 
 ### CI verification
 

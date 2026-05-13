@@ -48,7 +48,7 @@ import static org.awaitility.Awaitility.await;
  * <p>If Docker is not available this test is skipped (same as all other E2E tests).
  * If the multi-tenant features are absent, the test fails to surface implementation gaps.
  */
-@Tag("smoke")
+@Tag("full")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantProvisioningE2ETest extends E2EBase {
 

@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-089-gap-tenantprovisioning-smoke-tag-fix.md` — `TenantProvisioningE2ETest` class-level `@Tag("smoke")` → `@Tag("full")` 1-line 재분류. TASK-MONO-088 PR-time first-call validation 첫 trigger (run `25829462751`) FAIL finding closure — production endpoint `POST /internal/tenants/wms/accounts` (TASK-BE-228 미구현) 의존 → ADR-MONO-010 D1 smoke rubric S1 위배. full 로 demotion (BE-228 closure 시 smoke promotion 가능). distribution: gap smoke 2/full 3 → 1/4. ADR-MONO-010 § 1.2 option C-1 audit-trail. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-089-gap-tenantprovisioning-smoke-tag-fix.md` — `TenantProvisioningE2ETest.java` L51 `@Tag("smoke")` → `@Tag("full")` 1-line 재분류. TASK-MONO-088 PR-time first-call validation 첫 trigger (run `25829462751`) FAIL finding closure — production endpoint `POST /internal/tenants/wms/accounts` (TASK-BE-228 미구현) 의존 → ADR-MONO-010 D1 smoke rubric S1 위배. distribution: gap smoke 2/full 3 → 1/4. ADR-MONO-010 § 1.2 option C-1 audit-trail. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
