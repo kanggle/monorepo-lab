@@ -573,6 +573,6 @@ All previously-listed Open Items are resolved:
   Lot identity; this service caches snapshots only
 - `specs/services/inventory-service/architecture.md` — consumer of
   `inbound.putaway.completed` event; cross-service contract
-- `specs/contracts/http/inbound-service-api.md` — REST endpoint shapes (Open Item)
-- `specs/contracts/events/inbound-events.md` — published event payloads (Open Item)
-- `specs/contracts/webhooks/erp-asn-webhook.md` — ERP webhook contract (Open Item)
+- `specs/contracts/http/inbound-service-api.md` — REST endpoint shapes
+- `specs/contracts/events/inbound-events.md` — published event payloads
+- `specs/contracts/webhooks/erp-asn-webhook.md` — ERP webhook contract

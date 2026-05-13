@@ -704,6 +704,6 @@ profile `dev` or `standalone`.
 - `specs/services/master-service/domain-model.md` — Location / SKU / Lot
   identity owned upstream; this service caches snapshots only
 - `specs/contracts/http/inventory-service-api.md` — REST endpoint shapes
-  (Open Item; cross-link)
+  (cross-link)
 - `specs/contracts/events/inventory-events.md` — published event payloads
-  (Open Item; cross-link)
+  (cross-link)

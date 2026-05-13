@@ -487,7 +487,7 @@ This document covers idempotency. Related concerns are covered elsewhere:
   documented in
   [`architecture.md`](architecture.md) § Key Domain Invariants
 - **External integration timeouts/retries** (ERP, webhook outbound):
-  [`external-integrations.md`](external-integrations.md) (Open Item)
+  [`external-integrations.md`](external-integrations.md)
 
 ---
 

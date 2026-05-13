@@ -674,11 +674,11 @@ Per [`../external-integrations.md`](../external-integrations.md) §2.12:
 
 ### 8.9 Contract Tests
 
-- All published event schemas in `outbound-events.md` (Open Item)
+- All published event schemas in `outbound-events.md`
 - All consumed event schemas (`inventory.*`) match inventory-service's
   outbox per `inventory-events.md`
-- TMS request/response per `tms-shipment-api.md` (Open Item)
-- Webhook contract per `erp-order-webhook.md` (Open Item)
+- TMS request/response per `tms-shipment-api.md`
+- Webhook contract per `erp-order-webhook.md`
 
 ---
 
@@ -717,11 +717,10 @@ specs:
   `outbound.picking.cancelled` / `outbound.shipping.confirmed`; emitter
   of `inventory.reserved` / `.released` / `.confirmed` / `.adjusted`
 - `specs/contracts/events/outbound-events.md` — outbox event schemas
-  (Open Item)
 - `specs/contracts/events/inventory-events.md` — consumed event
   schemas
 - `specs/contracts/http/outbound-service-api.md` — REST endpoint
-  shapes (Open Item)
+  shapes
 - `rules/traits/transactional.md` — T2 (no dist TX), T3 (outbox), T4
   (no direct status), T5 (optimistic lock), T6 (compensation), T7 (saga),
   T8 (eventId dedupe)

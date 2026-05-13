@@ -245,7 +245,7 @@ markdown_template, version)` for operator-editable templates.
 
 ## Domain Errors
 
-Error codes registered in `platform/error-handling.md` (Open Items):
+Error codes registered in `platform/error-handling.md`:
 
 | Code | Trigger |
 |---|---|
@@ -273,9 +273,8 @@ Error codes registered in `platform/error-handling.md` (Open Items):
 
 - `architecture.md` — service-level decisions
 - `specs/contracts/events/notification-subscriptions.md` — subscribed event
-  payload mapping (Open Items)
+  payload mapping
 - `specs/contracts/events/notification-events.md` — published event schema
-  (Open Items)
 - `rules/traits/integration-heavy.md` — I1, I2, I3, I4, I5
 - `rules/traits/transactional.md` — T1, T3, T4, T8
 - `projects/scm-platform/apps/inventory-visibility-service/...` — sibling

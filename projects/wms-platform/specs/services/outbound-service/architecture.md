@@ -202,7 +202,7 @@ All outbound state changes publish events via the **transactional outbox pattern
 | `outbound.packing.completed` | `wms.outbound.packing.completed.v1` | Packing units finalised |
 | `outbound.shipping.confirmed` | `wms.outbound.shipping.confirmed.v1` | **Saga step 4**: triggers `inventory-service` consume; TMS notified |
 
-Full schemas: `specs/contracts/events/outbound-events.md` (Open Items).
+Full schemas: `specs/contracts/events/outbound-events.md`.
 
 > **Cross-service contracts** (jointly owned):
 > - `wms.outbound.picking.requested.v1` is consumed by `inventory-service` to
@@ -322,11 +322,10 @@ as the **state-keeping orchestrator**.
                       ──[notify_tms_failed (after retries)]──> SHIPPED_NOT_NOTIFIED (alert)
 ```
 
-Diagram in: `specs/services/outbound-service/state-machines/saga-status.md`
-(Open Items).
+Diagram in: `specs/services/outbound-service/state-machines/saga-status.md`.
 
 Full saga document: `specs/services/outbound-service/sagas/outbound-saga.md`
-(Open Items, per trait `transactional` Required Artifact 2).
+(per trait `transactional` Required Artifact 2).
 
 ### Saga Persistence
 
@@ -361,7 +360,7 @@ Saga events are persisted to outbox in the **same TX** as the state transition.
   state. Re-delivered `inventory.reserved` for an already-`RESERVED` saga is a
   no-op (state machine rejects the transition silently as already-applied).
 
-Full strategy: `specs/services/outbound-service/idempotency.md` (Open Items).
+Full strategy: `specs/services/outbound-service/idempotency.md`.
 
 ---
 
@@ -418,7 +417,7 @@ Enforced at the domain layer; surfaced via codes from `rules/domains/wms.md` § 
 ## Outbound Workflow (compressed)
 
 Full document at `specs/services/outbound-service/workflows/outbound-flow.md`
-(Open Items, per `rules/domains/wms.md` Required Artifact 4).
+(per `rules/domains/wms.md` Required Artifact 4).
 
 ```
 1. Order Received          → outbox: outbound.order.received
@@ -462,8 +461,7 @@ Outbound HTTP call to TMS via `ShipmentNotificationPort`:
   and emits an alert. Stock is already consumed — re-notify is via a manual
   ops endpoint (`POST /shipments/{id}/retry-tms-notify`).
 
-Full vendor catalog: `specs/services/outbound-service/external-integrations.md`
-(Open Items).
+Full vendor catalog: `specs/services/outbound-service/external-integrations.md`.
 
 ---
 
@@ -478,7 +476,7 @@ Identical pattern to `inbound-service` ASN webhook:
 - `WEBHOOK_SIGNATURE_INVALID` / `WEBHOOK_REPLAY_DETECTED` /
   `WEBHOOK_TIMESTAMP_INVALID` errors as appropriate
 
-Full contract: `specs/contracts/webhooks/erp-order-webhook.md` (Open Items).
+Full contract: `specs/contracts/webhooks/erp-order-webhook.md`.
 
 ---
 
@@ -493,8 +491,7 @@ Full contract: `specs/contracts/webhooks/erp-order-webhook.md` (Open Items).
 - Saga state: `outbound_saga`
 - TMS request dedupe: `tms_request_dedupe(request_id PK, sent_at, response_snapshot)`
 
-High-level table layout in `specs/services/outbound-service/domain-model.md`
-(Open Items).
+High-level table layout in `specs/services/outbound-service/domain-model.md`.
 
 ---
 

@@ -689,11 +689,9 @@ Outbound-service contributes ~5s of compute / IO; the rest is human time
 - [`../idempotency.md`](../idempotency.md) — REST + webhook + Kafka +
   saga-level dedupe strategies
 - `specs/contracts/http/outbound-service-api.md` — REST endpoint shapes
-  (Open Item)
 - `specs/contracts/webhooks/erp-order-webhook.md` — webhook payload +
-  headers (Open Item)
+  headers
 - `specs/contracts/events/outbound-events.md` — outbox event schemas
-  (Open Item)
 - `specs/services/inventory-service/architecture.md` — counterpart
   consumer for picking.requested / .cancelled / shipping.confirmed
 - `specs/services/inbound-service/workflows/inbound-flow.md` — sibling
