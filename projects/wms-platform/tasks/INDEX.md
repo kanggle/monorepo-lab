@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-150-inbound-architecture-hook-fix-and-marker-cleanup.md` — `inbound-service/architecture.md` 의 Service Type cell formatting fix + hook navigation 통한 5 stale `(Open Item)` marker cleanup. **BE-149 audit 단계에서 HARDSTOP-10 hook trigger 로 cleanup 불가했던 file**. Root cause: hook 의 `$existing.Contains($oldString)` 가 file CRLF vs Edit tool 의 oldString LF mismatch 로 false → simContent = unchanged existing → hook 가 existing file 에 `### Service Type` header / `**Service Type**:` bold 부재 detect → fail. Fix 절차: (1) PowerShell `[System.IO.File]::WriteAllText` 으로 file line ending CRLF → LF normalize. (2) `### Service Type Composition` sub-section 신규 (10 line, `rest-api` primary + `event-consumer` consumer path). (3) line 14 cell 정정 — `(primary). Webhook receiver also rides on the REST surface` → `(primary; see Service Type Composition below)` (inventory-service 패턴 답습). (4) 5 marker cleanup — 188 (Full schemas) / 268 (Full strategy) / 307 (State diagram multi-line) / 340 (Inbound Workflow `(per ...)` 변환) / 379 (Persistence multi-line) — BE-149 Pattern 답습. post-edit verify — wms specs `(Open Item)` 잔존 = 3 (모두 inventory-service intentional placeholder). semantic 변경 0. lifecycle = ready → review 직접, same-day single-PR closure 11번째 entry. branch = `task/be-150-inbound-architecture-hook-fix-and-cleanup`, base = main (e06ed540, no stack). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

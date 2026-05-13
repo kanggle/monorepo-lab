@@ -11,7 +11,7 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `inbound-service` |
-| Service Type | `rest-api` (primary). Webhook receiver also rides on the REST surface |
+| Service Type | `rest-api` (primary; see Service Type Composition below) |
 | Architecture Style | **Hexagonal (Ports & Adapters)** |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Inbound** (per `rules/domains/wms.md`) |
@@ -19,6 +19,18 @@ and `platform/architecture-decision-rule.md`.
 | Data store | PostgreSQL (owned, not shared) |
 | Event publication | Kafka via outbox (per trait `transactional`, rule T3) |
 | Event consumption | Kafka with eventId-based dedupe (master snapshots only) |
+
+### Service Type Composition
+
+`inbound-service` is primarily `rest-api` — ASN entry / inspection / putaway
+operator endpoints plus the ERP ASN push **webhook** (a POST endpoint on the
+same REST surface with HMAC-based auth instead of JWT). It also runs an
+internal `event-consumer` path for master-data read-model snapshots
+(`master.{warehouse,zone,location,sku,partner,lot}.*`) used at validation
+time; this is internal maintenance, not a primary integration surface.
+
+Read `platform/service-types/rest-api.md` (primary) and
+`platform/service-types/event-consumer.md` (consumer path).
 
 ---
 
@@ -185,7 +197,7 @@ All inbound state changes publish events via the **transactional outbox pattern*
 | `inbound.putaway.completed` | `wms.inbound.putaway.completed.v1` | **Critical**: drives `inventory-service` stock receipt |
 | `inbound.asn.closed` | `wms.inbound.asn.closed.v1` | ASN finalised; no further mutation |
 
-Full schemas: `specs/contracts/events/inbound-events.md` (Open Items).
+Full schemas: `specs/contracts/events/inbound-events.md`.
 
 > **Cross-service contract**: `inventory-service` consumes
 > `wms.inbound.putaway.completed.v1` and credits `available` stock at the
@@ -265,7 +277,7 @@ holding the ERP HTTP connection for the full domain TX.
 
 - `inbound_event_dedupe(event_id PK, ...)` as above.
 
-Full strategy: `specs/services/inbound-service/idempotency.md` (Open Items).
+Full strategy: `specs/services/inbound-service/idempotency.md`.
 
 ---
 
@@ -303,8 +315,7 @@ ASN lifecycle:
 - `STATE_TRANSITION_INVALID` returned for disallowed transitions.
 - `CANCELLED` allowed only before any putaway happens.
 
-State diagram in: `specs/services/inbound-service/state-machines/asn-status.md`
-(Open Items).
+State diagram in: `specs/services/inbound-service/state-machines/asn-status.md`.
 
 ### Inspection Discrepancy Locking
 
@@ -337,7 +348,7 @@ Enforced at the domain layer; surfaced via codes from `rules/domains/wms.md` § 
 ## Inbound Workflow
 
 Captured here at a glance; full document at
-`specs/services/inbound-service/workflows/inbound-flow.md` (Open Items, per
+`specs/services/inbound-service/workflows/inbound-flow.md` (per
 `rules/domains/wms.md` Required Artifact 3).
 
 ```
@@ -375,8 +386,7 @@ boundaries.
 - Webhook inbox: `erp_webhook_inbox(event_id, raw_payload, signature, received_at, status, processed_at)`
 - Webhook dedupe: `erp_webhook_dedupe(event_id PK, received_at)`
 
-High-level table layout in `specs/services/inbound-service/domain-model.md`
-(Open Items).
+High-level table layout in `specs/services/inbound-service/domain-model.md`.
 
 ---
 
