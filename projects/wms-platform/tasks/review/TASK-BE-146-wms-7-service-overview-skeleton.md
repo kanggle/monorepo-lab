@@ -8,7 +8,7 @@ WMS 7 service `overview.md` skeleton authoring (refactor-spec all 2026-05-14 por
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -98,18 +98,18 @@ provenance: post-`/refactor-spec` portfolio-wide structural finding (TASK-BE-142
 
 ### Impl PR
 
-- [ ] `master-service/overview.md` 신규 (~70 line, Service identity + REST + Kafka publish + 5 Key invariants — W3 + W6 + T3).
-- [ ] `inventory-service/overview.md` 신규 (~80 line, Service identity + REST + Kafka consume + Kafka publish + 6 Key invariants — W1 + W2 + W4 + T3 + T8).
-- [ ] `inbound-service/overview.md` 신규 (~75 line, Service identity + REST + webhook + Kafka publish + 5 Key invariants — T3 + T4 + I6).
-- [ ] `outbound-service/overview.md` 신규 (~80 line, Service identity + REST + webhook + Kafka consume + Kafka publish + 6 Key invariants — saga T3/T4/T8, ADR-MONO-005 § D6 reference).
-- [ ] `notification-service/overview.md` 신규 (~70 line, Service identity + Kafka consume (6 topics) + 5 Key invariants — T8 + idempotency.md cross-link).
-- [ ] `admin-service/overview.md` 신규 (~75 line, Service identity + REST + Kafka consume + Kafka publish + 5 Key invariants — projection idempotency, Layered exception 정당화).
-- [ ] `gateway-service/overview.md` 신규 (~70 line, Service identity + Routes + 6 Key invariants — JWT validation, fail-open rate limit, no business logic, sibling-equivalent with fan-platform/ecommerce gateway).
-- [ ] cross-ref 검증 — 7 file 이 `architecture.md` 와 정상 연결.
-- [ ] HARDSTOP-03 PASS.
+- [x] `master-service/overview.md` 신규 (~70 line, Service identity + REST + Kafka publish + 5 Key invariants — W3 + W6 + T3).
+- [x] `inventory-service/overview.md` 신규 (~80 line, Service identity + REST + Kafka consume + Kafka publish + 6 Key invariants — W1 + W2 + W4 + T3 + T8).
+- [x] `inbound-service/overview.md` 신규 (~75 line, Service identity + REST + webhook + Kafka publish + 5 Key invariants — T3 + T4 + I6).
+- [x] `outbound-service/overview.md` 신규 (~80 line, Service identity + REST + webhook + Kafka consume + Kafka publish + 6 Key invariants — saga T3/T4/T8, ADR-MONO-005 § D6 reference).
+- [x] `notification-service/overview.md` 신규 (~70 line, Service identity + Kafka consume (6 topics) + 5 Key invariants — T8 + idempotency.md cross-link).
+- [x] `admin-service/overview.md` 신규 (~75 line, Service identity + REST + Kafka consume + Kafka publish + 5 Key invariants — projection idempotency, Layered exception 정당화).
+- [x] `gateway-service/overview.md` 신규 (~70 line, Service identity + Routes + 6 Key invariants — JWT validation, fail-open rate limit, no business logic, sibling-equivalent with fan-platform/ecommerce gateway).
+- [x] cross-ref 검증 — 7 file 이 `architecture.md` 와 정상 연결.
+- [x] HARDSTOP-03 PASS.
 - [ ] CI self-CI PASS (path-filter wms markdown-only — 15 SKIP + 1 changes PASS 예상).
-- [ ] task lifecycle ready → review (in-progress 우회, BE-141 / BE-142 / FAN-BE-006 / MONO-084 precedent).
-- [ ] wms tasks/INDEX.md 동기.
+- [x] task lifecycle ready → review (in-progress 우회, BE-141 / BE-142 / FAN-BE-006 / MONO-084 precedent).
+- [x] wms tasks/INDEX.md 동기.
 
 ### Close chore PR
 
@@ -259,7 +259,7 @@ mechanical batch (fan-platform / ecommerce sibling pattern 답습) → ready →
 ### Impl PR
 
 - [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 

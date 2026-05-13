@@ -67,13 +67,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- TASK-BE-146 — WMS 7 service overview.md skeleton authoring (master / inventory / inbound / outbound / notification / admin / gateway). portfolio-wide structural finding 후속 — WMS 7/7 overview.md missing (post-/refactor-spec audit, 2026-05-14). fan-platform TASK-FAN-BE-006 / ecommerce TASK-BE-141 sibling pattern 답습. 신규 file ~510 line addition.
+(empty)
 
 ## in-progress
 
 (empty)
 
 ## review
+
+- TASK-BE-146 — WMS 7 service overview.md skeleton authoring (master / inventory / inbound / outbound / notification / admin / gateway). portfolio-wide structural finding 후속 — WMS 7/7 overview.md missing (post-/refactor-spec audit, 2026-05-14). fan-platform TASK-FAN-BE-006 / ecommerce TASK-BE-141 sibling pattern 답습. 신규 file ~510 line addition. impl PR pending review.
 
 (empty)
 
