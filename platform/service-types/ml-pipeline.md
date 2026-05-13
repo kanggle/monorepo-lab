@@ -139,3 +139,9 @@ Drift detection is mandatory before a model reaches production traffic.
 - [ ] Inference SLO declared
 - [ ] Drift detection in place
 - [ ] PII handling reviewed
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `ml-pipeline` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).

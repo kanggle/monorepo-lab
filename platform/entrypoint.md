@@ -114,3 +114,9 @@ If any document conflicts with a higher-priority spec:
 - follow the higher-priority spec
 - stop implementation if the conflict blocks the task
 - report the conflicting documents explicitly
+
+---
+
+# Change Rule
+
+Changes to the spec-reading layer composition (Core / Service-Type-Specific / Auxiliary), the conditional-load rules, or the resolution order must be documented in this file and in [`../rules/README.md`](../rules/README.md) in the same PR. New conditional-load triggers (new tag, new trait dispatch) require updating both this file and [`../.claude/config/activation-rules.md`](../.claude/config/activation-rules.md).

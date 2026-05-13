@@ -99,3 +99,9 @@ When implementing a `rest-api` service or feature:
 - [ ] Pagination on all list endpoints
 - [ ] Metrics, logs, traces emitted
 - [ ] Contract tests pass
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `rest-api` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).

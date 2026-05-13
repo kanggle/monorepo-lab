@@ -192,3 +192,9 @@ These will be tracked as separate platform changes when first needed by a projec
 - [`error-handling.md`](error-handling.md) — authoritative registry for
   `STORAGE_UNAVAILABLE`, `MEDIA_NOT_FOUND`, `MEDIA_VALIDATION_FAILED`.
 - [`security-rules.md`](security-rules.md) — credential handling.
+
+---
+
+# Change Rule
+
+Changes to the storage abstraction (`StoragePort`), lifecycle/retention defaults, or the catalog of supported backends must be documented in this file before applying to any consuming service. New backend adoption (e.g. additional cloud provider) requires updating both this file and the consuming service's `specs/services/<service>/architecture.md` in the same PR per [`error-handling.md`](error-handling.md) error-code mapping.

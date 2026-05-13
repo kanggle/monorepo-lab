@@ -8,7 +8,7 @@ TASK-MONO-084
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -91,14 +91,14 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13~14 platform audit high-1+2
 
 ### Impl PR
 
-- [ ] service-types 8 file 모두 `# Change Rule` section 추가 + boilerplate body.
-- [ ] root policy 6 file 모두 `# Change Rule` section 추가 + file-scope wording.
-- [ ] post-edit grep `^# Change Rule` platform 결과 = **31 file** (기존 17 + 신규 14).
-- [ ] platform/ 다른 cross-ref 영향 0 (본문 무변경).
-- [ ] HARDSTOP-03 hook PASS.
+- [x] service-types 8 file 모두 `# Change Rule` section 추가 + common boilerplate body (변수 = `<type>` substitute).
+- [x] root policy 6 file 모두 `# Change Rule` section 추가 + file-scope wording (각 file scope customize).
+- [x] post-edit grep `^# Change Rule` platform = **31 file** (기존 17 + 신규 14) 검증 완료.
+- [x] platform/ 다른 cross-ref 영향 0 (본문 무변경, section append only).
+- [x] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
 - [ ] CI self-CI PASS (path-filter platform 활성화 — workflows flag full pipeline 회귀 가드).
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical batch).
-- [ ] tasks/INDEX.md (root) 동기.
+- [x] task lifecycle ready → review (in-progress 우회, mechanical batch, spec-only single-PR closure 패턴).
+- [x] tasks/INDEX.md (root) 동기.
 
 ### Close chore PR
 

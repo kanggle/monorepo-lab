@@ -104,3 +104,9 @@ Otherwise, use `rest-api`.
 - [ ] mTLS verified between caller and service
 - [ ] Deadlines honored and tested
 - [ ] OTel traces visible end-to-end
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `grpc-service` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).

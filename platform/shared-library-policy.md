@@ -114,3 +114,9 @@ Domain ownership is more important than reuse convenience.
 # Review Rule
 
 Any new shared library or major shared-library expansion must be reviewed against this policy before implementation.
+
+---
+
+# Change Rule
+
+Changes to the forbidden/allowed scope (what may or may not be promoted to `libs/`), the shared-library catalog entry list, or the promotion procedure must be documented in this file **before** any `libs/` touch. New shared-library introduction or breaking expansion requires an ADR (`docs/adr/` for monorepo-wide impact) per [`architecture-decision-rule.md`](architecture-decision-rule.md) — see also `# Review Rule` above for the review handoff.

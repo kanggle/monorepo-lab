@@ -106,3 +106,9 @@ The catalog of service types lives in `service-types/INDEX.md`.
 # Conflict Resolution
 
 If a project-level spec (in `PROJECT.md` or `specs/services/`) conflicts with a rule in this document, the generic rule in this document wins unless the project explicitly declares an override in its `PROJECT.md` under the `## Overrides` section with documented reason, scope, and expiry. See `rules/README.md` for the override protocol.
+
+---
+
+# Change Rule
+
+Changes to service responsibilities, cross-service call patterns, or ownership shifts must be documented in this file before service-level adoption. Boundary changes affecting two or more services require updating the affected `specs/services/<service>/architecture.md` files (and any cross-service `specs/contracts/` entries) in the same PR per [`ownership-rule.md`](ownership-rule.md).

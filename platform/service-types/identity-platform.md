@@ -309,3 +309,9 @@ When implementing or extending an `identity-platform` service:
 - [ ] Audit events emitted via outbox for every required event
 - [ ] Brute-force / enumeration defenses in place and tested
 - [ ] At least one relying party (gateway) validates tokens against JWKS end-to-end
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `identity-platform` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).

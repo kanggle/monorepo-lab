@@ -95,3 +95,9 @@ Typical candidates include a generic batch worker, data warehouse ingestion jobs
 - [ ] Restart-safety test passes
 - [ ] Last-success-timestamp alert configured
 - [ ] Resource limits set
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `batch-job` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).
