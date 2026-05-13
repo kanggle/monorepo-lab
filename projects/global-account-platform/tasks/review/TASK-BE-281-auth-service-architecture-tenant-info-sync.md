@@ -8,7 +8,7 @@ TASK-BE-281
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -84,16 +84,16 @@ stale 표현:
 
 ### Impl PR
 
-- [ ] `auth-service/architecture.md` L157 의 `AccountServiceClient.lookupCredential(email)` → `AccountServiceClient.lookupTenantInfo(email, tenantId?)` (또는 동등 명명) 표기 정정.
-- [ ] L157 의 "(상세는 ... 갱신 시 확정)" 표현 제거 + contract 의 array response 분기 (0/1/N) + LOGIN_TENANT_AMBIGUOUS 변환 timing 명시 (presentation layer).
-- [ ] L157 의 "(1) lookup ... (2) password 검증 통과 시 ... (3) 이벤트 ..." 단계 표기 정정 — credential 자체는 auth-service local (TASK-BE-063), 외부 호출은 tenant-info lookup 만.
-- [ ] L168 § infrastructure/ 의 "credential lookup 응답" → "tenant-info lookup 응답" 명명 통일.
-- [ ] L174 § Integration Rules 의 "credential lookup(응답에 ...)" → "tenant-info lookup" 명명 통일.
-- [ ] cross-ref 정확성 검증 (auth-to-account.md L11 TASK-BE-229 note 와 architecture.md 표현 일관).
-- [ ] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
-- [ ] CI self-CI PASS (path-filter gap project — Integration (GAP) 자연 trigger 가능, spec-only 라 path-filter 영향에 따라 SKIP 가능).
-- [ ] task lifecycle ready → in-progress → review.
-- [ ] gap tasks/INDEX.md 동기 (root INDEX 무영향).
+- [x] `auth-service/architecture.md` L157 의 `AccountServiceClient.lookupCredential(email)` → `lookupTenantInfo(email, tenantId?)` 표기 정정 (+ TASK-BE-229 cite).
+- [x] L157 의 "(상세는 ... 갱신 시 확정)" 표현 제거 + contract 의 array response 분기 (0/1/N) + LOGIN_TENANT_AMBIGUOUS 변환 timing (presentation layer) 명시.
+- [x] L157 의 단계 표기 정정 — (1) auth-service local CredentialRepository (TASK-BE-063), (2) account-service tenant-info lookup, (3) 토큰 발급, (4) 이벤트 발행.
+- [x] L168 § infrastructure/ 의 "credential lookup 응답" → "tenant-info lookup 응답 (array shape)" 명명 통일.
+- [x] L174 § Integration Rules 의 "credential lookup(응답에 ...)" → "tenant-info lookup (응답 array shape)" 명명 통일.
+- [x] cross-ref 정확성 검증 (auth-to-account.md L11 TASK-BE-229 note 와 일관 — TASK-BE-229 endpoint + array shape 결정 사항 양쪽 일치).
+- [x] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
+- [ ] CI self-CI PASS (path-filter gap project — markdown spec-only, 15 SKIP + 1 changes PASS 예상).
+- [x] task lifecycle ready → review (in-progress 단계 우회, spec-only single-PR closure).
+- [x] gap tasks/INDEX.md 동기 (root INDEX 무영향).
 
 ### Close chore PR
 
