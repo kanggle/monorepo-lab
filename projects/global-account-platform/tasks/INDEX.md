@@ -76,13 +76,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-BE-279-cross-service-bulk-lock-e2e-tenant-id-seed.md` — TASK-BE-278 (PR #444, cycle 6 fix) 머지 후 여섯 번째 nightly run `25778172254` (push `6d2bb874`, 2026-05-13 04:24 UTC) 의 gap-e2e-full 3m 8s fail. **중대한 진척**: 이전 cycle 3/5/6 의 16-17min ComposeFixture HEALTH_TIMEOUT 패턴 사라짐 (V0013 PASS + 5 service healthy 정상). 3 e2e test 실행 → 2 PASS (DlqHandling + RefreshReuseDetection) + 1 FAIL (CrossServiceBulkLock). cycle 7 root cause = `CrossServiceBulkLockE2ETest.seedAccount` (line 90) 의 direct-SQL INSERT 가 `tenant_id` column 명시 안 함 → V0011 의 NOT NULL default 제거 후 strict mode 에서 `Field 'tenant_id' doesn't have a default value` throw. test code 영역 (production 무관), 1-line fix. fan-platform tenant (V0009 seed + V0010-era historical default) hardcode. ADR-MONO-011 § D5 audit-trail 누적 5차 (option C-1). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 closed 2026-05-13** (Phase 3 nightly full e2e 4 cycle 누적, gap-e2e-full cycle 7 잔존이 본 TASK-BE-279 의 scope).
 
 ## review
 
-(empty)
+- `TASK-BE-279-cross-service-bulk-lock-e2e-tenant-id-seed.md` — TASK-BE-278 cycle 7 spawn. **결정적 root cause** = `CrossServiceBulkLockE2ETest.seedAccount` (line 90) 의 direct-SQL INSERT 가 `tenant_id` column 명시 안 함. V0011 의 NOT NULL default 제거 후 MySQL strict mode 에서 `Field 'tenant_id' doesn't have a default value` throw. test code 영역 (production code 무관), 1-line fix. **Fix**: INSERT 에 `tenant_id` column + 'fan-platform' value 추가 (V0009 seed + V0010-era historical default). PR-time IT 영향 0 (@Tag("full") nightly-only). ADR-MONO-011 § D5 audit-trail 누적 5차 closure (option C-1).
 
 ## done
 
