@@ -8,7 +8,7 @@ wms `specs/contracts/` 디렉토리 의 stale `(Open Item)` marker batch cleanup
 
 # Status
 
-review
+done
 
 # Owner
 
