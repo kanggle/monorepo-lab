@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-281-auth-service-architecture-tenant-info-sync.md` — `/refactor-spec all --dry-run` (2026-05-13~14) GAP audit critical #4 finding. `auth-service/architecture.md` § application (L157) + § infrastructure (L168) + § Integration Rules (L174) 의 `AccountServiceClient.lookupCredential(email)` + "(갱신 시 확정)" 표현이 stale — TASK-BE-063 (credential ownership) closure 후 credential 자체는 auth-service local, 외부 호출은 TASK-BE-229 의 `GET /internal/accounts/tenant-info` 만. contract auth-to-account.md (array response 0/1/N + presentation LOGIN_TENANT_AMBIGUOUS) 와 byte-level align. 직접 답습 패턴 = TASK-BE-280 (PROJECT.md service_types sync). production code = 0, spec-only. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
