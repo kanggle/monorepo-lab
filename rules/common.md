@@ -52,6 +52,16 @@
 
 ---
 
+## Platform Contracts
+
+[`../platform/contracts/`](../platform/contracts/) 하위의 cross-cutting 계약 파일들. 14-file canonical Index 와 직교(orthogonal)하지만 모든 프로젝트에 공통 적용되며, 해당 contract 가 다루는 표면(JWT, 등)을 구현·검증하는 프로젝트는 이를 source-of-truth로 사용한다.
+
+| 파일 | 적용 시점 |
+|---|---|
+| [../platform/contracts/jwt-standard-claims.md](../platform/contracts/jwt-standard-claims.md) | identity-platform 서비스가 토큰을 발급하거나 게이트웨이가 JWT를 검증하는 모든 프로젝트 |
+
+---
+
 ## Change Protocol
 
 - 새 common 규칙 파일을 [../platform/](../platform/) 아래 추가하면, 이 인덱스에 **같은 PR에서** 행을 추가한다.

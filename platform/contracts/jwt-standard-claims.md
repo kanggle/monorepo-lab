@@ -1,15 +1,6 @@
 # JWT Standard Claims Contract
 
-**Status:** Established  
-**Audience:** All platform projects (ecommerce, wms, fan-platform, scm, erp, mes)  
-**Authority:** Global Account Platform  
-**Effective Date:** 2026-04-30
-
----
-
-## Purpose
-
-This contract defines the standard JWT structure, claims, and validation rules that all platform gateways and services must follow when processing tokens issued by the Global Account Platform. It enables:
+This contract defines the standard JWT structure, claims, and validation rules that all platform gateways and services must follow when processing tokens issued by the identity-platform service. It enables:
 
 - Unified authentication across multiple platforms and account types
 - Consistent role-based authorization within each platform
@@ -18,7 +9,7 @@ This contract defines the standard JWT structure, claims, and validation rules t
 
 ---
 
-## Account Types
+# Account Types
 
 Two distinct account types exist within the same identity service:
 
@@ -31,11 +22,11 @@ Two distinct account types exist within the same identity service:
 
 ---
 
-## JWT Signing Strategy
+# JWT Signing Strategy
 
 - **Algorithm:** RSA asymmetric (public/private key pair)
 - **Key Management:**
-  - Global Account Platform holds the private key (signing)
+  - The identity-platform service holds the private key (signing)
   - All platform gateways fetch the public key via JWKS endpoint (verification)
   - Keys may be rotated; gateways must implement key versioning via `kid` (key ID)
 - **Token Lifetime:**
@@ -45,9 +36,9 @@ Two distinct account types exist within the same identity service:
 
 ---
 
-## Standard Claims
+# Standard Claims
 
-All access tokens issued by the Global Account Platform MUST include the following claims:
+All access tokens issued by the identity-platform service MUST include the following claims:
 
 | Claim | Type | Required | Description | Example |
 |---|---|---|---|---|
@@ -56,7 +47,7 @@ All access tokens issued by the Global Account Platform MUST include the followi
 | `aud` | string | Yes | Target platform audience — must match gateway's own platform | `ecommerce`, `fan`, `wms`, `erp`, `mes`, `scm` |
 | `roles` | string[] | Yes | Platform-scoped roles for the `aud` platform (may be empty, minimum `[]`) | `["CUSTOMER"]` or `["WMS_OPERATOR", "OUTBOUND_MANAGER"]` |
 | `email` | string | Yes | Account email address | `user@example.com` |
-| `iss` | string | Yes | Issuer URI of the Global Account Platform | `https://account.example.com` |
+| `iss` | string | Yes | Issuer URI of the identity-platform service | `https://account.example.com` |
 | `iat` | number | Yes | Issued at (Unix epoch seconds) | `1746000000` |
 | `exp` | number | Yes | Expiry time (Unix epoch seconds) — gateways must reject expired tokens | `1746003600` |
 | `jti` | string | Recommended | JWT ID (unique token identifier for revocation and audit) | UUID |
@@ -66,11 +57,11 @@ Additional custom claims MAY be added by the identity service but MUST NOT confl
 
 ---
 
-## Role Strategy
+# Role Strategy
 
 Roles are platform-scoped and define authorization within the target `aud` platform.
 
-### CONSUMER Roles
+## CONSUMER Roles
 
 - **ecommerce:** `CUSTOMER` (single, immutable)
 - **fan-platform:** `FAN` (base role); may also include `PREMIUM_MEMBER` when an active membership subscription exists
@@ -78,7 +69,7 @@ Roles are platform-scoped and define authorization within the target `aud` platf
 
 CONSUMER accounts have only one active role per platform. Multi-role support is not required for CONSUMER platforms.
 
-### OPERATOR Roles
+## OPERATOR Roles
 
 - Operators may hold multiple roles on a single platform
 - A single operator account may have roles on multiple platforms (e.g., `wms` + `scm`)
@@ -91,7 +82,7 @@ CONSUMER accounts have only one active role per platform. Multi-role support is 
 
 ---
 
-## Single Sign-On (SSO) Scope
+# Single Sign-On (SSO) Scope
 
 SSO is scoped by account type, not globally:
 
@@ -101,18 +92,18 @@ SSO is scoped by account type, not globally:
 
 ---
 
-## Gateway Enforcement Rules
+# Gateway Enforcement Rules
 
 Every platform gateway MUST implement the following validation and injection logic:
 
-### Pre-Validation Cleanup
+## Pre-Validation Cleanup
 
 1. **Strip all identity-related headers** from the incoming HTTP request before JWT validation:
    - `Authorization`, `X-User-Id`, `X-User-Role`, `X-User-Email`, `X-Account-Type`
    - Any custom headers the identity service may inject
    - This prevents client-side spoofing
 
-### JWT Validation
+## JWT Validation
 
 2. **Fetch and verify the signature** using the public key from the identity service's JWKS endpoint:
    - Construct the JWKS URL from the `iss` claim: `${iss}/.well-known/jwks.json`
@@ -132,7 +123,7 @@ Every platform gateway MUST implement the following validation and injection log
      - All other paths: reject if `account_type != CONSUMER`
    - wms, erp, mes, scm gateways: reject if `account_type != OPERATOR`
 
-### Post-Validation Injection
+## Post-Validation Injection
 
 7. **Inject standard headers** into the request context for downstream services:
    - `X-User-Id` ← `sub`
@@ -140,7 +131,7 @@ Every platform gateway MUST implement the following validation and injection log
    - `X-User-Email` ← `email`
    - `X-Account-Type` ← `account_type`
 
-### Error Handling
+## Error Handling
 
 - Invalid or missing JWT: respond with HTTP 401 Unauthorized
 - Expired token: respond with HTTP 401 Unauthorized
@@ -150,7 +141,7 @@ Every platform gateway MUST implement the following validation and injection log
 
 ---
 
-## JWKS Endpoint Convention
+# JWKS Endpoint Convention
 
 The identity service MUST expose public keys in OIDC-compliant JWKS format:
 
@@ -176,9 +167,9 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 ---
 
-## Token Examples
+# Token Examples
 
-### Example 1: ecommerce CONSUMER
+## Example 1: ecommerce CONSUMER
 
 ```json
 {
@@ -199,7 +190,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Validate signature, expiry, issuer, `aud = "ecommerce"`, `account_type = CONSUMER` ✓
 - Inject: `X-User-Id: 550e8400-e29b-41d4-a716-446655440000`, `X-User-Role: CUSTOMER`, `X-User-Email: shopper@example.com`, `X-Account-Type: CONSUMER`
 
-### Example 2: fan-platform CONSUMER with Premium Membership
+## Example 2: fan-platform CONSUMER with Premium Membership
 
 ```json
 {
@@ -221,7 +212,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Inject: `X-User-Id: 550e8400-e29b-41d4-a716-446655440000`, `X-User-Role: FAN,PREMIUM_MEMBER`, `X-User-Email: shopper@example.com`, `X-Account-Type: CONSUMER`
 - Authorization: services may check `X-User-Role` for `PREMIUM_MEMBER` to enable premium features
 
-### Example 3: WMS OPERATOR with Multiple Roles
+## Example 3: WMS OPERATOR with Multiple Roles
 
 ```json
 {
@@ -243,7 +234,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Inject: `X-User-Id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8`, `X-User-Role: WMS_OPERATOR,OUTBOUND_MANAGER`, `X-User-Email: warehouse-lead@company.com`, `X-Account-Type: OPERATOR`
 - Authorization: services may check `X-User-Role` for `OUTBOUND_MANAGER` to enable outbound-specific operations
 
-### Example 4: Invalid Token (Wrong Audience)
+## Example 4: Invalid Token (Wrong Audience)
 
 ```json
 {
@@ -263,7 +254,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Validate `aud = "wms"` against expected `"ecommerce"` ✗
 - Respond: HTTP 403 Forbidden — token is for a different platform
 
-### Example 5: Invalid Token (Wrong Account Type — non-admin path)
+## Example 5: Invalid Token (Wrong Account Type — non-admin path)
 
 ```json
 {
@@ -283,7 +274,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Path is not `/api/admin/**` → validate `account_type = CONSUMER` (got `OPERATOR`) ✗
 - Respond: HTTP 403 Forbidden — operator accounts cannot access consumer paths
 
-### Example 6: ecommerce OPERATOR (Admin)
+## Example 6: ecommerce OPERATOR (Admin)
 
 ```json
 {
@@ -305,7 +296,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 - Path `/api/admin/**` → validate `account_type = OPERATOR` (got `OPERATOR`) ✓
 - Inject: `X-User-Id: 7f3d2c1b-0000-4abc-8def-111122223333`, `X-User-Role: ADMIN`, `X-User-Email: admin@company.com`, `X-Account-Type: OPERATOR`
 
-### Example 7: Invalid Token (CONSUMER accessing admin path)
+## Example 7: Invalid Token (CONSUMER accessing admin path)
 
 ```json
 {
@@ -329,7 +320,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 ---
 
-## Implementation Notes
+# Implementation Notes
 
 - **Graceful Key Rotation:** When a new key version is deployed, the old key remains valid for 24 hours to allow tokens signed with the old key to complete in-flight requests.
 - **Clock Skew:** Gateways SHOULD allow up to 60 seconds of clock skew when validating `iat` and `exp` to tolerate minor time synchronization issues.
@@ -338,7 +329,13 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 ---
 
-## References
+# Change Rule
+
+Any change to the JWT structure, standard claims, signing strategy, or gateway enforcement rules defined in this contract — new claim, claim type change, signature algorithm change, validation rule, header injection — must be documented in this file **before** any project's identity-platform service emits the change or any project's gateway enforces it. Breaking changes (claim rename, claim removal, validation tightening) require a coordinated rollout across all consuming projects (each project's gateway + downstream services), and the contract update MUST precede the implementation PR.
+
+---
+
+# References
 
 - IETF RFC 7519: JSON Web Token (JWT)
 - IETF RFC 7517: JSON Web Key (JWK)
