@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-153-gateway-service-routes-backfill.md` — `gateway-service` 의 `application.yml` + `application-standalone.yml` 에 5 service routes 등록 (inbound/inventory/outbound/notification/admin). TASK-BE-152 audit § "#10 gateway route" portfolio-wide gap finding closure. 정찰 결과 (commit `6fe554e5`, 2026-05-14): wms-only gap (다른 3 project ecommerce/fan/gap 모두 정상 routes 등록). hostname routing (TASK-MONO-024 wms.local) 과 책임 분담 = 두 layer 모두 작동 의도. master-service route pattern 답습 (id/uri/predicates/filters). 본 task 본 세션 = **spec author only** (ready/ 진입), fix impl 다음 세션. D4 OVERRIDE: ADR-MONO-003a § D1.1 인접. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
