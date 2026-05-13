@@ -72,13 +72,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-278-account-service-v0013-flyway-migration-fail-on-fresh-db.md` — TASK-MONO-082 (PR #442, cycle 3 auth-service JWT keys fix) 머지 후 다섯 번째 nightly run `25776967635` (push `bdc00b40`, 2026-05-13 03:45 UTC) 의 gap-e2e-full 16m 54s fail 의 cycle 6 root cause. account-service 첫 boot 에서 V0013 ("rebuild account roles composite pk") Flyway migration 가 mid-execution fail → flyway_schema_history 에 failed record → 두 번째 boot 부터는 `FlywayValidateException: Detected failed migration to version 0013` validation fail. ComposeFixture HEALTH_TIMEOUT 5min × 3 class = 16m 54s. cycle 5 docker compose ps: auth/security/admin/gateway `Up (healthy)` (cycle 3 fix 검증 완료) + account `Exited (1)`. 진단 plan: 첫 boot 시점의 actual SQL error 식별 (Phase 0 강화 또는 local 재현 권장) → 가설 B1 (TEMPORARY TABLE implicit-commit) > B2 (composite FK) > B3 (V0012 잔재) > B4 (docker-compose mysql config) 별 minimal fix. V0013 의 TEMPORARY TABLE 패턴은 fresh DB 에서 0 row 보존 무의미 → 단순화 후보. PR-time IT (Testcontainers) 와 동시 호환 필요. ADR-MONO-011 § D5 audit-trail 누적 4차 (option C-1, TASK-080/081/082 패턴 답습). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
-
-Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 closed 2026-05-13** (Phase 3 nightly full e2e 4 cycle 누적, gap-e2e-full cycle 6 잔존이 본 TASK-BE-278 의 scope).
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-BE-278-account-service-v0013-flyway-migration-fail-on-fresh-db.md` — TASK-MONO-082 (PR #442, cycle 3 auth-service JWT keys fix) 머지 후 다섯 번째 nightly run `25776967635` (push `bdc00b40`, 2026-05-13 03:45 UTC) 의 gap-e2e-full 16m 54s fail 의 cycle 6 root cause. account-service 첫 boot 에서 V0013 ("rebuild account roles composite pk") Flyway migration 가 mid-execution fail → flyway_schema_history 에 failed record → 두 번째 boot 부터는 `FlywayValidateException: Detected failed migration to version 0013` validation fail. ComposeFixture HEALTH_TIMEOUT 5min × 3 class = 16m 54s. cycle 5 docker compose ps: auth/security/admin/gateway `Up (healthy)` (cycle 3 fix 검증 완료) + account `Exited (1)`. 진단 plan: 첫 boot 시점의 actual SQL error 식별 (Phase 0 강화 또는 local 재현 권장) → 가설 B1 (TEMPORARY TABLE implicit-commit) > B2 (composite FK) > B3 (V0012 잔재) > B4 (docker-compose mysql config) 별 minimal fix. V0013 의 TEMPORARY TABLE 패턴은 fresh DB 에서 0 row 보존 무의미 → 단순화 후보. PR-time IT (Testcontainers) 와 동시 호환 필요. ADR-MONO-011 § D5 audit-trail 누적 4차 (option C-1, TASK-080/081/082 패턴 답습). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 closed 2026-05-13** (Phase 3 nightly full e2e 4 cycle 누적, gap-e2e-full cycle 6 잔존이 본 TASK-BE-278 의 scope).
 
 ## review
 
