@@ -80,13 +80,18 @@ class CrossServiceBulkLockE2ETest extends E2EBase {
                 "jdbc:mysql://127.0.0.1:13306/account_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
                 "account_user", "account_pass")) {
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO accounts(id,email,status,created_at,updated_at,version) " +
-                    "VALUES(?,?,?,?,?,0)")) {
+                    "INSERT INTO accounts(id,tenant_id,email,status,created_at,updated_at,version) " +
+                    "VALUES(?,?,?,?,?,?,0)")) {
                 ps.setString(1, accountId);
-                ps.setString(2, email);
-                ps.setString(3, "ACTIVE");
-                ps.setTimestamp(4, java.sql.Timestamp.from(now));
+                // TASK-BE-278: V0011 removed the DEFAULT 'fan-platform' that V0010 added,
+                // so direct-SQL seeders must supply tenant_id explicitly. 'fan-platform'
+                // is seeded in V0009 and was the V0010-era default, so it is safe to
+                // use here — the bulk-lock flow is tenant-agnostic.
+                ps.setString(2, "fan-platform");
+                ps.setString(3, email);
+                ps.setString(4, "ACTIVE");
                 ps.setTimestamp(5, java.sql.Timestamp.from(now));
+                ps.setTimestamp(6, java.sql.Timestamp.from(now));
                 ps.executeUpdate();
             }
         }
