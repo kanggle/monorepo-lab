@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-142 | ecommerce 10 backend service overview.md sibling-consistency batch enhancement — BE-141 deferred polish 직접 후속. order / payment / product / promotion / review / search / shipping / user / notification / batch-worker overview.md 를 fan-platform sibling-equivalent depth (BE-141 hybrid pattern) 로 일괄 enhancement. auth-service-deprecated 제외 (deprecation 상태). ecommerce 13 service overview.md 전체 일관성 완성. | 10 services | spec, overview, be |
 
 ## in-progress
 
