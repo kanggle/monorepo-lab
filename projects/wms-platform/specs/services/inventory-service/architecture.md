@@ -509,8 +509,8 @@ Reservation TTL: every reservation carries an `expires_at`. A scheduled job
 auto-releases reservations past TTL and emits `inventory.released` with
 reason `EXPIRED`. Default TTL: 24 hours (configurable per warehouse).
 
-Full saga document: `specs/services/inventory-service/sagas/reservation-saga.md`
-(Open Items).
+Full saga document:
+[`sagas/reservation-saga.md`](sagas/reservation-saga.md).
 
 ---
 
@@ -551,8 +551,8 @@ The `Inventory` row itself has no enum status — its quantity buckets are the s
 A row is "alive" while any bucket > 0. Empty rows are kept (not deleted) for ~30
 days to keep movement history joinable by row identity, then archived.
 
-Diagram in: `specs/services/inventory-service/state-machines/reservation-status.md`
-(Open Items).
+Diagram in:
+[`state-machines/reservation-status.md`](state-machines/reservation-status.md).
 
 ---
 
@@ -588,10 +588,10 @@ moved to `tasks/ready/`:
    inventory subscribes to (cross-link in inventory's spec, schema authored in
    the publishing service's spec)
 5. `specs/services/inventory-service/idempotency.md` — REST + event-dedupe strategy
-6. `specs/services/inventory-service/sagas/reservation-saga.md` — reservation
-   lifecycle and compensation
-7. `specs/services/inventory-service/state-machines/reservation-status.md` —
-   reservation state machine diagram
+6. ✅ [`sagas/reservation-saga.md`](sagas/reservation-saga.md) — reservation
+   lifecycle and compensation (authored in TASK-BE-151, 2026-05-14)
+7. ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
+   — reservation state machine diagram (authored in TASK-BE-151, 2026-05-14)
 8. `specs/services/inventory-service/external-integrations.md` —
    per `integration-heavy` Required Artifact 1 (v1 lists "no external vendors yet"
    but file is required to declare zero state)

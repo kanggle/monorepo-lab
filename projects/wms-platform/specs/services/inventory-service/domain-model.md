@@ -618,8 +618,7 @@ optionally Outbox.
 
 - **Reservation lifecycle**: declared in `architecture.md` § State Machines and
   re-stated in §3 above. The standalone diagram lives at
-  `specs/services/inventory-service/state-machines/reservation-status.md`
-  (Open Item from `architecture.md`).
+  [`state-machines/reservation-status.md`](state-machines/reservation-status.md).
 - **Inventory row**: no enum status. Its state is its quantity buckets; an
   empty row is idle, archived after ~30 days.
 - **Movement / Adjustment / Transfer**: terminal-on-create. No state machine.
@@ -678,10 +677,10 @@ profile `dev` or `standalone`.
 - `specs/services/inventory-service/database-design.md` — physical schema
   (tables, indexes, partial-unique on `(location_id, sku_id, lot_id)` with
   NULL-aware key, role grants enforcing W2 append-only)
-- `specs/services/inventory-service/state-machines/reservation-status.md` —
-  diagram in its own file (referenced in `architecture.md` Open Items)
-- `specs/services/inventory-service/sagas/reservation-saga.md` — saga
-  participation detail (referenced in `architecture.md`)
+- ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
+  — diagram in its own file (authored in TASK-BE-151, 2026-05-14)
+- ✅ [`sagas/reservation-saga.md`](sagas/reservation-saga.md) — saga
+  participation detail (authored in TASK-BE-151, 2026-05-14)
 - `specs/services/inventory-service/idempotency.md` — REST + event dedupe
   strategy (referenced in `architecture.md`)
 - `platform/error-handling.md` — register codes referenced here that are not
