@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-010-procurement-http-error-code-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) SCM audit Top 1+2 critical findings (contract vs architecture HTTP code drift). (1) `IDEMPOTENCY_KEY_MISMATCH`: architecture.md:611 = 409 vs procurement-api.md:95/315 = 422. contracts canonical (CLAUDE.md SoT layer 6) → architecture 정정. (2) optimistic-lock: api.md:323 = `CONFLICT` 409 vs architecture.md:625 = `CONCURRENT_MODIFICATION` 409. 통일 권장 = `CONCURRENT_MODIFICATION` (의미 명시). + procurement-service `@ControllerAdvice` emission 검증. 9 file / 31 finding 중 Top 1+2 (contract integrity). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
