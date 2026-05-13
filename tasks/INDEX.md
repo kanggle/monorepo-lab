@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-078-e2e-tag-impl-gap.md` — ADR-MONO-010 Phase 2 impl **3차 (gap 단독, D5 step 4)**. gap 의 e2e 5 class 어디에도 `@Tag("e2e")` 부재 — **two-step 마이그레이션**: (a) `E2EBase.java` 에 `@Tag("e2e")` precedent 도입 (5 subclass 자동 inherit), (b) 5 class 에 class-level smoke/full 적용 (**2 smoke = Golden + Tenant / 3 full = RefreshReuse + Dlq + CrossServiceBulkLock**) + `tests/e2e/build.gradle` 의 default `test` task 를 `useJUnitPlatform { excludeTags 'full' }` 로 변경 (smoke 동등) + 신규 `e2eTest` / `e2eSmokeTest` / `e2eFullTest` 3-task family 등록 (`baseE2eConfig` closure 패턴). gap 의 default `test` 가 곧 e2e suite 라는 historical 결정 (`ComposeFixture` docker-compose 직접 사용) 유지하면서 partition 만 추가. CI workflow 미터치 (gap-integration-tests 가 default `test` 호출 유지, full 제외로 wall-clock 단축). **ADR § 6.2 outstanding (gap PR-time smoke job 신설) 은 본 task scope 밖**. 직접 선행 = TASK-MONO-076 (PR #428).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-078-e2e-tag-impl-gap.md` — ADR-MONO-010 Phase 2 impl **3차 (gap 단독, D5 step 4)** in review. **two-step 마이그레이션** 완료: (a) `tests/e2e/src/test/java/com/example/e2e/E2EBase.java` 에 `@Tag("e2e")` precedent 도입 + import (5 subclass 자동 inherit), (b) 5 class 에 class-level smoke/full 적용 = **2 smoke (GoldenPathE2ETest + TenantProvisioningE2ETest) + 3 full (RefreshReuseDetectionE2ETest + DlqHandlingE2ETest + CrossServiceBulkLockE2ETest)**. `tests/e2e/build.gradle` 의 default `test` 를 `useJUnitPlatform { excludeTags 'full' }` 로 변경 (gap 의 historical: default `test` 가 곧 e2e suite, `ComposeFixture` docker-compose 직접 사용 패턴 유지하면서 full edge case 3 class 제외) + 신규 3-task family (`e2eTest` umbrella `includeTags 'e2e'` / `e2eSmokeTest` `includeTags 'smoke'` / `e2eFullTest` `includeTags 'full'`) 등록, 기존 default `test` 의 모든 설정 (`junit.jupiter.execution.timeout.default = 5m`, `COMPOSE_PROJECT_NAME = gap-e2e`, `-Pobservability=on` wrapper, testLogging) 을 `baseE2eConfig` closure 로 이관 + 4 task 가 공유. **CI workflow 미터치** — gap-integration-tests job 이 default `test` 호출 유지, full 제외로 wall-clock 단축 효과만 받음. **ADR § 6.2 outstanding (gap PR-time smoke job 신설) 은 본 task scope 밖** — 별도 follow-up. production code 0.
 
 ## done
 

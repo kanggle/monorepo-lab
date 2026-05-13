@@ -5,13 +5,21 @@ import io.restassured.RestAssured;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Base class for every E2E scenario. Brings up the shared compose fixture and
  * wires RestAssured to the admin-service base URL by default (individual tests
  * switch baseURI when they call account-/security-service endpoints directly).
+ *
+ * <p>Carries the {@code @Tag("e2e")} umbrella tag (ADR-MONO-010 D5 step 4) so
+ * concrete subclasses are picked up by Gradle's {@code includeTags 'e2e'}
+ * filter. Subclasses add a class-level {@code @Tag("smoke")} or
+ * {@code @Tag("full")} on top to partition into the PR-time vs nightly
+ * suites — see ADR-MONO-010 § D1 + § 1.2 audit table.
  */
+@Tag("e2e")
 @ExtendWith(ComposeFixture.class)
 public abstract class E2EBase {
 

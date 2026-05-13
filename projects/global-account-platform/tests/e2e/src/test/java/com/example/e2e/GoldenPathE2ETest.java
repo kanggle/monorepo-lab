@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -28,6 +29,7 @@ import java.time.Duration;
  *   8. logout → 204
  *   9. revoked access token on protected endpoint → 401 TOKEN_REVOKED
  */
+@Tag("smoke")
 class GoldenPathE2ETest extends E2EBase {
 
     @BeforeAll

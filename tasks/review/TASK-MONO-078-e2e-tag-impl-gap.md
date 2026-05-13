@@ -8,7 +8,7 @@ ADR-MONO-010 Phase 2 impl 3차 — gap `@Tag("e2e")` precedent 도입 + 5 e2e cl
 
 # Status
 
-ready
+review
 
 # Owner
 
