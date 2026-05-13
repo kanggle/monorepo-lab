@@ -8,7 +8,7 @@ inventory-service ยง Open Items audit + retrospective backfill list correction โ
 
 # Status
 
-review
+done
 
 # Owner
 
