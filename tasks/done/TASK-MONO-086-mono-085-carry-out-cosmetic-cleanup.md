@@ -8,7 +8,7 @@ MONO-085 carry-out cosmetic cleanup — 3 finding 재분류 + fix (1 path-level 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -118,9 +118,9 @@ Full wire-level contract:
 
 ### Close chore PR
 
-- [ ] task Status review → done.
-- [ ] git mv tasks/review → tasks/done.
-- [ ] tasks/INDEX.md ## review 제거, ## done append outcome.
+- [x] task Status review → done.
+- [x] git mv tasks/review → tasks/done.
+- [x] tasks/INDEX.md ## review 제거, ## done append outcome.
 
 ---
 
@@ -220,7 +220,7 @@ sibling L751-752 (`erp-order-webhook.md (Open Item)` + `tms-shipment-api.md (Ope
 
 ### Close chore PR
 
-- [ ] review → done, INDEX 동기.
+- [x] review → done, INDEX 동기.
 
 ---
 
