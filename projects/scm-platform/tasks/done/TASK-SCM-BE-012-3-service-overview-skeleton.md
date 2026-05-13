@@ -8,7 +8,7 @@ SCM 3 service `overview.md` skeleton authoring (portfolio-wide structural findin
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -103,15 +103,15 @@ provenance: post-/refactor-spec portfolio-wide structural finding closure 의 �
 - [x] `inventory-visibility-service/overview.md` 신규 (~80 line, Service identity + REST + Kafka consume + scheduler + 6 Key invariants — S5 warning + event dedupe + ShedLock + fail-open cache).
 - [x] cross-ref 검증 — 3 file 이 `architecture.md` 와 정상 연결.
 - [x] HARDSTOP-03 PASS.
-- [ ] CI self-CI PASS (path-filter scm markdown-only — 15 SKIP + 1 changes PASS 예상).
+- [x] CI self-CI PASS (path-filter scm markdown-only — 15 SKIP + 1 changes PASS 예상).
 - [x] task lifecycle ready → review (in-progress 우회, BE-146 / BE-141 / BE-142 / FAN-BE-006 precedent).
 - [x] scm tasks/INDEX.md 동기.
 
 ### Close chore PR
 
-- [ ] task Status review → done.
-- [ ] git mv tasks/review → tasks/done.
-- [ ] scm tasks/INDEX.md ## review 제거, ## done append outcome.
+- [x] task Status review → done.
+- [x] git mv tasks/review → tasks/done.
+- [x] scm tasks/INDEX.md ## review 제거, ## done append outcome.
 
 ---
 
@@ -249,12 +249,12 @@ mechanical batch (TASK-BE-146 직접 답습) → ready → review 직접 (in-pro
 
 ### Impl PR
 
-- [ ] AC 완료.
+- [x] AC 완료.
 - [x] task lifecycle ready → review.
 
 ### Close chore PR
 
-- [ ] review → done, INDEX 동기.
+- [x] review → done, INDEX 동기.
 
 ---
 
