@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-079-nightly-full-e2e-impl.md` — ADR-MONO-011 ACCEPTED 전환 + Phase 3 impl. `.github/workflows/nightly-e2e.yml` 에 4 backend full e2e job 신설 (`wms-platform-e2e-full` / `fan-platform-e2e-full` / `scm-platform-e2e-full` / `gap-e2e-full`). 각각 ADR § D3 따라 `:e2eFullTest` Gradle task 호출, boot-jars in-job build (cross-workflow artifact reuse 불가), Docker CLI BuildKit image build (Docker 28 hang 회피), 60min timeout, `if: github.repository == 'kanggle/monorepo-lab'` repo gate. gap 은 docker-compose 기반이라 boot-jars + image build step 생략 (`ComposeFixture` 자체 처리). Trigger = 기존 `nightly-e2e.yml` 의 cron `0 18 * * *` (UTC = KST 03:00) + `push: branches: [main]` + `workflow_dispatch` 그대로 재사용. 4 backend job + 기존 ecommerce 2 job 이 parallel 실행 (의존성 없음). 총 10 full unit (fan 1 + scm 4 + wms 2 + gap 3) 가 처음으로 CI 에서 실행. **Out of scope (모두 ADR § 6 outstanding)**: auto-issue/Slack on failure / reusable workflow consolidation / matrix strategy / cost-budget telemetry / gap PR-time smoke job (ADR-MONO-010 § 6.2 잔존) / observability on nightly / retry-on-flake. production code 0, workflow yaml 만 변경. 직접 선행 = TASK-MONO-076~078 (Phase 2). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-079-nightly-full-e2e-impl.md` — ADR-MONO-011 ACCEPTED 전환 + Phase 3 impl in review. `.github/workflows/nightly-e2e.yml` 에 4 backend full e2e job 신설: `wms-platform-e2e-full` (`:e2eFullTest`, master+gateway boot jars + Docker CLI image build) / `fan-platform-e2e-full` (gateway+community+artist 3 service) / `scm-platform-e2e-full` (gateway+procurement+inventory-visibility 3 service) / `gap-e2e-full` (ComposeFixture docker-compose 기반, boot-jars + image build step 생략). 모두 60min timeout + repo gate (`if: github.repository == 'kanggle/monorepo-lab'`) + 의존성 없이 parallel 실행. Trigger = 기존 cron `0 18 * * *` + push main + workflow_dispatch 재사용. Header comment 갱신 (4 backend full suite description + ADR-MONO-011/TASK-079 reference). ADR-MONO-011 Status PROPOSED → ACCEPTED + transition history row 2. **CI workflow only, production code 0** (`projects/*/apps/*/src/main/**` + `libs/**/src/main/**` 무변경). 총 10 full unit (fan 1 + scm 4 + wms 2 method-level + gap 3) 의 첫 CI cadence 시작점. **Out of scope (ADR § 6 outstanding)**: auto-issue/Slack / reusable workflow / matrix / cost telemetry / gap PR-time smoke / observability on nightly / retry-on-flake. 직접 선행 = TASK-MONO-076~078 (Phase 2) + TASK-MONO-014 (ecommerce nightly reference).
 
 ## done
 
