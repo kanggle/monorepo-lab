@@ -115,11 +115,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-082-gap-e2e-nightly-health-timeout.md` — TASK-MONO-081 (PR #439) cycle 2 fix 머지 후 push-to-main trigger 자동 발동된 세 번째 nightly run `25774889748` (push `849e9649`, 2026-05-13 02:40 UTC) 에서 **gap-e2e-full 16m 48s fail (cycle 3, ComposeFixture HTTP health-probe timeout)**. cycle 2 의 boot-jars / docker-compose build context 는 작동 검증 완료 (5 service `Started` 까지 진행). 새 fail mode: 3 full class 가 각 `IllegalStateException: Services did not become healthy within PT5M` 에서 fail — 4 GAP service (auth/account/security/admin) 의 host-port `/actuator/health` HTTP GET 이 5min 안에 200 못 반환. 각 test class 가 새로 ComposeFixture 호출 → 3 × 5min = 16m 48s 총 wall-clock. **결정적 데이터**: 인프라 (kafka/mysql/redis) 는 ~15s 안에 Healthy, 5 GAP service 는 `Started` 만 보이고 application-level ready 부재. **메타 발견**: TASK-080 cycle 1 + 081 cycle 2 + 082 cycle 3 = 모두 ComposeFixture self-managed mode 가 CI 에서 첫 정직 호출 시 표면화한 historical 누락 (gap e2e suite 가 PR-time CI 의 어떤 job 도 호출 안 했음, dev local 검증 의존). 가설 우선순위: B (CI cold-start 5min 초과, HEALTH_TIMEOUT 상향) > C (service boot fail) > D (port mapping). Phase 0 진단 (service-log capture step) 후 root cause 별 minimal fix. ADR-MONO-011 § D5 audit-trail 누적 (option C-1, TASK-080 + 081 패턴 답습). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (Phase 0 진단 + 가설별 fix).
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-082-gap-e2e-nightly-health-timeout.md` — TASK-MONO-081 (PR #439) cycle 2 fix 머지 후 push-to-main trigger 자동 발동된 세 번째 nightly run `25774889748` (push `849e9649`, 2026-05-13 02:40 UTC) 에서 **gap-e2e-full 16m 48s fail (cycle 3, ComposeFixture HTTP health-probe timeout)**. cycle 2 의 boot-jars / docker-compose build context 는 작동 검증 완료 (5 service `Started` 까지 진행). 새 fail mode: 3 full class 가 각 `IllegalStateException: Services did not become healthy within PT5M` 에서 fail — 4 GAP service (auth/account/security/admin) 의 host-port `/actuator/health` HTTP GET 이 5min 안에 200 못 반환. 각 test class 가 새로 ComposeFixture 호출 → 3 × 5min = 16m 48s 총 wall-clock. **결정적 데이터**: 인프라 (kafka/mysql/redis) 는 ~15s 안에 Healthy, 5 GAP service 는 `Started` 만 보이고 application-level ready 부재. **메타 발견**: TASK-080 cycle 1 + 081 cycle 2 + 082 cycle 3 = 모두 ComposeFixture self-managed mode 가 CI 에서 첫 정직 호출 시 표면화한 historical 누락 (gap e2e suite 가 PR-time CI 의 어떤 job 도 호출 안 했음, dev local 검증 의존). 가설 우선순위: B (CI cold-start 5min 초과, HEALTH_TIMEOUT 상향) > C (service boot fail) > D (port mapping). Phase 0 진단 (service-log capture step) 후 root cause 별 minimal fix. ADR-MONO-011 § D5 audit-trail 누적 (option C-1, TASK-080 + 081 패턴 답습). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (Phase 0 진단 + 가설별 fix).
 
 ## done
 
