@@ -3,7 +3,7 @@
 TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 auth-service 에 자격증명(credential)을 생성하도록 요청한다.
 
 **호출 방향**: account-service (client) → auth-service (server)
-**노출 경로**: `/internal/auth/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../rules/domains/saas.md) S2). 내부 네트워크 외부로 나가선 안 된다.
+**노출 경로**: `/internal/auth/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2). 내부 네트워크 외부로 나가선 안 된다.
 **인증**: 내부 네트워크 경계 전제. 향후 X-Internal-Token 또는 mTLS 추가 예정 — 현 시점의 auth-service `SecurityConfig` 는 `/internal/**` 를 `permitAll()` 로 두고 있다 (TASK 별도).
 
 ---
@@ -79,7 +79,7 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 - `credential_hash` 는 argon2id (m=65536, t=3, p=1)
 - `email` 은 lower-case 정규화 후 유니크 제약 `credentials.email` 에 저장 (V0006 마이그레이션)
 - `account_id` 컬럼도 유니크. 둘 중 어느 쪽이든 충돌하면 409
-- 로그·감사에 `password`, `credential_hash` 기록 금지 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4). 분류 등급 **restricted**
+- 로그·감사에 `password`, `credential_hash` 기록 금지 ([rules/traits/regulated.md](../../../../../../rules/traits/regulated.md) R4). 분류 등급 **restricted**
 
 ---
 

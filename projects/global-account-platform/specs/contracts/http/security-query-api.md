@@ -47,7 +47,7 @@ base path: `/internal/security`
 }
 ```
 
-**PII 마스킹 규칙** ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4):
+**PII 마스킹 규칙** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4):
 - `ipMasked`: 마지막 두 옥텟을 `*`로 마스킹 (canonical: [auth-service device-session.md "IP Masking Format"](../../services/auth-service/device-session.md))
 - `deviceFingerprint`: SHA256 해시의 앞 12자만
 - 이메일: 응답에 포함하지 않음
@@ -114,7 +114,7 @@ base path: `/internal/security`
 
 ## Meta-Audit
 
-이 엔드포인트의 모든 호출은 **조회 자체가 감사 기록됨** ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A5). 호출자(admin-service의 operator_id), 조회 대상(accountId), 시간이 security-service 내부에 `admin_query_audit` 로그로 기록.
+이 엔드포인트의 모든 호출은 **조회 자체가 감사 기록됨** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). 호출자(admin-service의 operator_id), 조회 대상(accountId), 시간이 security-service 내부에 `admin_query_audit` 로그로 기록.
 
 ---
 

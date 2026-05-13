@@ -8,9 +8,9 @@
 
 `event-consumer` **(+ 좁은 read-only HTTP 표면)**
 
-Primary role은 Kafka 보안 이벤트 소비. 부차적으로 admin-service와 내부 조회를 위한 **매우 제한된 read-only HTTP 엔드포인트**를 제공한다. [platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md)가 허용하는 "small set of admin or query endpoints" 범주 내에 머무른다.
+Primary role은 Kafka 보안 이벤트 소비. 부차적으로 admin-service와 내부 조회를 위한 **매우 제한된 read-only HTTP 엔드포인트**를 제공한다. [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)가 허용하는 "small set of admin or query endpoints" 범주 내에 머무른다.
 
-적용되는 규칙: [platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md)
+적용되는 규칙: [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)
 
 ## Architecture Style
 
@@ -18,10 +18,10 @@ Primary role은 Kafka 보안 이벤트 소비. 부차적으로 admin-service와 
 
 ## Why This Architecture
 
-- **Primary inbound = Kafka**: 동기 HTTP 게이트웨이 뒤에 숨지 않음. [platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md)의 규칙(구독·멱등성·재시도·DLQ·파티션 키·트레이스 전파)을 모두 준수.
+- **Primary inbound = Kafka**: 동기 HTTP 게이트웨이 뒤에 숨지 않음. [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)의 규칙(구독·멱등성·재시도·DLQ·파티션 키·트레이스 전파)을 모두 준수.
 - **보안 판단은 동기 로그인 플로우에서 분리**: auth-service가 로그인 시도를 발행하면 security-service가 **비동기**로 이력 적재와 이상 탐지를 수행. 로그인 경로의 p99에 영향을 주지 않음.
 - **HTTP는 부수적이고 읽기 전용**: admin-service가 감사 조회를 요청할 때만 사용. 상태 변경 경로는 HTTP로 노출하지 **않음** (변경은 모두 이벤트 또는 내부 명령 호출).
-- **Hybrid 재분류 회피**: HTTP 표면이 커지면 [platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md)의 허용 범위를 넘어섬. 그 경우 별도 `security-query-service`로 분할하는 것이 올바른 방향이지 서비스 타입을 바꾸는 것이 아님.
+- **Hybrid 재분류 회피**: HTTP 표면이 커지면 [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)의 허용 범위를 넘어섬. 그 경우 별도 `security-query-service`로 분할하는 것이 올바른 방향이지 서비스 타입을 바꾸는 것이 아님.
 
 ## Internal Structure Rule
 
@@ -94,7 +94,7 @@ consumer → application → domain
 query → domain (via SecurityQueryService, read-only JPA 경로)
 ```
 
-- `consumer/` 레이어는 [platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md)의 구독·ack·재시도·DLQ 규칙을 엄수
+- `consumer/` 레이어는 [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)의 구독·ack·재시도·DLQ 규칙을 엄수
 - `query/`는 `application`과 **독립**. 조회 쿼리는 `SecurityQueryService`가 직접 `infrastructure/persistence`의 read-only 메서드를 사용
 - `application` → `infrastructure/client/AccountServiceClient` (자동 잠금 명령)
 
@@ -103,22 +103,22 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 - ❌ `consumer/`가 HTTP 엔드포인트 노출 — 소비는 Kafka만
 - ❌ `query/`가 상태 변경 (POST/PUT/DELETE HTTP) 제공 — **읽기 전용**
 - ❌ `query/`가 `application` use-case 호출 — 조회 응답에 side effect 없음
-- ❌ `LoginHistoryJpaEntity`의 UPDATE/DELETE ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3 불변성)
+- ❌ `LoginHistoryJpaEntity`의 UPDATE/DELETE ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3 불변성)
 - ❌ 로그인 시도 이벤트 소비를 동기 로그인 플로우에 노출 (security-service 장애가 auth-service를 블로킹하면 안 됨)
 
 ## Boundary Rules
 
 ### consumer/
 - 각 consumer는 단일 topic 구독: `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`, `account.locked` (TASK-BE-041b — `account_lock_history` 적재), `account.deleted` (TASK-BE-258 — `anonymized=true` 필터링 후 PII 마스킹)
-- **멱등 처리 필수**: Redis `EventDedupService`로 eventId 기반 dedupe. 미지원 시 `processed_events` 테이블 upsert ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T8)
+- **멱등 처리 필수**: Redis `EventDedupService`로 eventId 기반 dedupe. 미지원 시 `processed_events` 테이블 upsert ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T8)
 - 실패 시 지수 백오프 3회 재시도 후 `<topic>.dlq`로 이관
-- 소비 트레이스(`traceparent`)를 Kafka 헤더에서 MDC로 복원 ([platform/service-types/event-consumer.md](../../../platform/service-types/event-consumer.md))
+- 소비 트레이스(`traceparent`)를 Kafka 헤더에서 MDC로 복원 ([platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md))
 - 파티션 키: `account_id` (같은 계정의 이벤트 순서 보장)
 
 ### application/
 - `RecordLoginHistoryUseCase`: 소비된 이벤트를 `login_history`에 append-only 기록. 트랜잭션 내에서 outbox 이벤트(`suspicious.detected`, `auto.lock.triggered`, `auto.lock.pending`) 같이 기록
 - `DetectSuspiciousActivityUseCase`: 전략 패턴으로 여러 `SuspiciousActivityRule`을 순회 평가. 임계치 초과 시 `suspicious_events` 저장 + 이벤트 발행
-- `IssueAutoLockCommandUseCase`: 심각도가 높은 suspicious에 대해 account-service로 내부 HTTP `POST /internal/accounts/{id}/lock` 호출 ([rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I4 idempotent side effect, 멱등 키 `suspicious_event_id` 사용)
+- `IssueAutoLockCommandUseCase`: 심각도가 높은 suspicious에 대해 account-service로 내부 HTTP `POST /internal/accounts/{id}/lock` 호출 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I4 idempotent side effect, 멱등 키 `suspicious_event_id` 사용)
 
 ### domain/detection/
 - `SuspiciousActivityRule`은 순수 함수적 규칙. 각 rule 구현은 stateless
@@ -129,8 +129,8 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
   - `GET /internal/security/login-history?accountId=&from=&to=`
   - `GET /internal/security/suspicious-events?accountId=&from=&to=`
 - **금지**: 상태 변경 메서드, 외부 노출 경로, 배치 대량 export
-- 응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4) — IP 일부만 노출, 이메일 마스킹
-- 조회 액션 자체가 감사됨 — meta-audit ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A5)
+- 응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4) — IP 일부만 노출, 이메일 마스킹
+- 조회 액션 자체가 감사됨 — meta-audit ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5)
 
 ## Integration Rules
 
@@ -159,4 +159,4 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 1. 새로운 `SuspiciousActivityRule` 추가는 [specs/features/abnormal-login-detection.md](../../features/) 업데이트 선행
 2. 토픽 구독 추가·변경은 [specs/contracts/events/auth-events.md](../../contracts/events/) 또는 새 컨트랙트 파일 + 이 architecture.md 재확인
 3. 조회 엔드포인트 추가는 본 아키텍처의 "좁은 read-only" 원칙을 유지. 상태 변경 메서드를 추가해야 한다면 서비스 분할을 검토
-4. 감사 로그 스키마 변경은 [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A2 준수 확인 + Flyway migration
+4. 감사 로그 스키마 변경은 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A2 준수 확인 + Flyway migration

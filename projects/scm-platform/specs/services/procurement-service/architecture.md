@@ -1,4 +1,4 @@
-﻿# procurement-service — Architecture
+# procurement-service — Architecture
 
 ## Service Type
 `rest-api`

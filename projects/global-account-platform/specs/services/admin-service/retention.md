@@ -2,7 +2,7 @@
 
 ## Purpose
 
-admin-service가 저장하는 데이터의 **보존 기간**과 **파기/익명화 경로**를 선언한다. [rules/traits/regulated.md](../../../rules/traits/regulated.md) R6 (보존 기간 명시)과 R8 (데이터 이식성), [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3 (감사 불변성) · A4 (감사 장기 보존) 준수를 위한 canonical 문서. 테이블 DDL은 [data-model.md](./data-model.md), 행동 규칙은 [rbac.md](./rbac.md) 참조.
+admin-service가 저장하는 데이터의 **보존 기간**과 **파기/익명화 경로**를 선언한다. [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R6 (보존 기간 명시)과 R8 (데이터 이식성), [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3 (감사 불변성) · A4 (감사 장기 보존) 준수를 위한 canonical 문서. 테이블 DDL은 [data-model.md](./data-model.md), 행동 규칙은 [rbac.md](./rbac.md) 참조.
 
 구현(스케줄러·파기 잡)은 본 태스크 범위 외이며 TASK-BE-028 이후 스프린트에서 수행한다. 본 문서는 **정책 선언**만 담는다.
 

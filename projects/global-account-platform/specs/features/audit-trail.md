@@ -36,7 +36,7 @@
 
 ## Audit Event Schema (A2)
 
-모든 감사 이벤트는 다음 최소 필드를 가진다 ([audit-heavy.md](../../rules/traits/audit-heavy.md) A2):
+모든 감사 이벤트는 다음 최소 필드를 가진다 ([audit-heavy.md](../../../../rules/traits/audit-heavy.md) A2):
 
 ```json
 {

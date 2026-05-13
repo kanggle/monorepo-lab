@@ -8,7 +8,7 @@
 
 `rest-api` — 아티스트 포스트·팬 커뮤니티 서비스. 포스트 발행, 댓글, 반응, 팬 피드 제공.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
 
 ## Architecture Style
 
@@ -16,9 +16,9 @@
 
 ## Why This Architecture
 
-- **포스트 상태 전이가 비즈니스 규칙**: 아티스트 포스트는 DRAFT → PUBLISHED → HIDDEN/DELETED 순으로 전이하며, 임의 UPDATE 금지. 팬 포스트는 PUBLISHED 즉시 공개이나 신고·운영자 처리로 HIDDEN 전이 가능. 상태 기계가 이를 명시적으로 관리 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T4).
+- **포스트 상태 전이가 비즈니스 규칙**: 아티스트 포스트는 DRAFT → PUBLISHED → HIDDEN/DELETED 순으로 전이하며, 임의 UPDATE 금지. 팬 포스트는 PUBLISHED 즉시 공개이나 신고·운영자 처리로 HIDDEN 전이 가능. 상태 기계가 이를 명시적으로 관리 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T4).
 - **멤버십 접근 제어 위임**: 프리미엄 콘텐츠 접근 여부는 membership-service에 동기 HTTP로 위임. community-service는 구독 데이터를 직접 보유하지 않음 — 단일 책임 원칙.
-- **감사 추적**: 포스트 상태 변경은 `post_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1·A3).
+- **감사 추적**: 포스트 상태 변경은 `post_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1·A3).
 - **이벤트 발행**: 포스트 발행·댓글 생성·반응 추가는 outbox 패턴으로 Kafka 이벤트 발행 — 향후 notification-service·search-service 연결 기반.
 
 ## Internal Structure Rule

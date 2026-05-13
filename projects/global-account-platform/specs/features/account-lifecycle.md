@@ -37,7 +37,7 @@
 - `ADMIN_DELETE`: 운영자 강제 삭제
 - `REGULATED_DELETION`: 규제 요구 삭제 (GDPR 등)
 
-유예 기간: **30일**. 이내에 admin-only 복구 가능 (DELETED → ACTIVE). 유예 만료 후 PII 익명화 실행 ([regulated.md](../../rules/traits/regulated.md) R7).
+유예 기간: **30일**. 이내에 admin-only 복구 가능 (DELETED → ACTIVE). 유예 만료 후 PII 익명화 실행 ([regulated.md](../../../../rules/traits/regulated.md) R7).
 
 ## State Machine
 
@@ -73,7 +73,7 @@
 
 ## Audit
 
-모든 전이는 `account_status_history` 테이블에 **append-only**로 기록 ([audit-heavy.md](../../rules/traits/audit-heavy.md) A3):
+모든 전이는 `account_status_history` 테이블에 **append-only**로 기록 ([audit-heavy.md](../../../../rules/traits/audit-heavy.md) A3):
 - `from_status`, `to_status`, `reason_code`, `actor_type`, `actor_id`, `occurred_at`, `details`
 
 ## Related Contracts

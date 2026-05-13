@@ -7,7 +7,7 @@
 1. **휴면 전환 스케줄러** (`AccountDormantScheduler`) — ACTIVE 계정의 365일 미접속 시 DORMANT 자동 전환
 2. **PII 익명화 스케줄러** (`AccountAnonymizationScheduler`) — DELETED 계정의 30일 유예 만료 후 PII 자동 익명화
 
-규제 근거: [rules/traits/regulated.md](../../../rules/traits/regulated.md) R6 (Retention), R7 (Right to Erasure).
+규제 근거: [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R6 (Retention), R7 (Right to Erasure).
 관련 상태 기계: [specs/features/account-lifecycle.md](../../features/account-lifecycle.md).
 관련 데이터 모델: [data-model.md](./data-model.md).
 
@@ -70,7 +70,7 @@ List<AccountJpaEntity> findActiveDormantCandidates(Instant threshold);
 
 ### 1.5 전이 절차
 
-각 후보 계정에 대해 동일 트랜잭션 내에서 다음을 수행한다 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T3):
+각 후보 계정에 대해 동일 트랜잭션 내에서 다음을 수행한다 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T3):
 
 1. `AccountStatusMachine.transition(ACTIVE, DORMANT, DORMANT_365D)` 호출
 2. `accounts.status = 'DORMANT'`, `updated_at = now()` 저장 (낙관적 락 `version` 증분)
@@ -111,7 +111,7 @@ List<AccountJpaEntity> findActiveDormantCandidates(Instant threshold);
 
 ### 2.1 정책
 
-DELETED 상태로 전이된 계정은 **30일 유예 기간**이 지나면 PII를 복구 불가능하게 익명화한다 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R7). 유예 기간 중에는 운영자가 admin-only 경로로 ACTIVE로 복구할 수 있다.
+DELETED 상태로 전이된 계정은 **30일 유예 기간**이 지나면 PII를 복구 불가능하게 익명화한다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R7). 유예 기간 중에는 운영자가 admin-only 경로로 ACTIVE로 복구할 수 있다.
 
 | 항목 | 값 |
 |---|---|
@@ -170,7 +170,7 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 | `profiles` | `profile_image_url` | `NULL` | confidential → 제거 |
 | `profiles` | `preferences` | `NULL` | internal → 제거 (식별 가능 설정 제거) |
 | `accounts` | 그 외 (`status`, `created_at`, `deleted_at`, `version`) | **보존** | 감사 추적 유지 |
-| `account_status_history` | 모든 row | **보존** (append-only, [audit-heavy.md](../../../rules/traits/audit-heavy.md) A3) | — |
+| `account_status_history` | 모든 row | **보존** (append-only, [audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3) | — |
 
 > **`profiles.profile_image_url` 컬럼 도입 노트**: 본 컬럼은 [data-model.md](./data-model.md)의 `profiles` 테이블에 아직 정의되지 않았다. 프로필 이미지 기능을 도입하는 PR에서 `data-model.md`의 `profiles` 표에 `profile_image_url VARCHAR(500) NULL, confidential` 행을 추가하고, 본 표의 `profile_image_url → NULL` 처리 정책을 그대로 활성화한다. 본 retention 정책은 향후 컬럼 추가 시 누락을 방지하기 위해 마스킹 대상에 선제적으로 명시한다 (TASK-BE-091 AC `profile_image_url → anonymized 형태` 요건 충족). 다른 추가 PII 필드를 도입할 때도 본 표와 [data-model.md](./data-model.md)를 같은 PR에서 동시에 갱신해야 한다.
 
@@ -251,7 +251,7 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 
 ## 3. 보존 기간 테이블 (Retention Schedule)
 
-[rules/traits/regulated.md](../../../rules/traits/regulated.md) R6 요구: 모든 PII·민감 데이터는 보존 기간을 명시한다.
+[rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R6 요구: 모든 PII·민감 데이터는 보존 기간을 명시한다.
 
 | 데이터 | 분류 등급 | 보존 기간 | 종료 시 처리 | 규제 근거 |
 |---|---|---|---|---|
@@ -262,7 +262,7 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 | `profiles.birth_date` | confidential | 계정 활성 기간 + 유예 30일 | NULL | GDPR Art.17, PIPA §21 |
 | `profiles.profile_image_url` *(향후 컬럼 도입 시 적용)* | confidential | 계정 활성 기간 + 유예 30일 | NULL (익명화) | GDPR Art.17, PIPA §21 |
 | `profiles.preferences` | internal | 계정 활성 기간 + 유예 30일 | NULL | regulated R6 (불필요 데이터 미보유) |
-| `account_status_history` | internal | **5년** (감사 보존) | 보존 — append-only, PII 미포함 (`actor_id`는 운영자 ID 또는 system) | [audit-heavy.md](../../../rules/traits/audit-heavy.md) A3, PIPA §21② |
+| `account_status_history` | internal | **5년** (감사 보존) | 보존 — append-only, PII 미포함 (`actor_id`는 운영자 ID 또는 system) | [audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3, PIPA §21② |
 | `outbox_events` | internal | 발행 후 7일 (publishedAt 기준) | 별도 정리 배치(범위 외) | regulated R6 |
 | `accounts` row 자체 | internal | **무기한** (감사 추적) | 보존 — PII 마스킹 후 row는 유지 | [data-rights.md](../../features/data-rights.md) Data Retention Policy |
 
@@ -274,9 +274,9 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 
 ### 3.2 무기한 보존 항목 정당화
 
-- `email_hash`: 동일 이메일의 재가입 검증과 중복 방지용. 일방향 해시이므로 [regulated.md](../../../rules/traits/regulated.md) R7의 "복구 불가능 익명화" 요건을 충족한다. PII 환원 불가.
+- `email_hash`: 동일 이메일의 재가입 검증과 중복 방지용. 일방향 해시이므로 [regulated.md](../../../../../rules/traits/regulated.md) R7의 "복구 불가능 익명화" 요건을 충족한다. PII 환원 불가.
 - `accounts` row (status, created_at, deleted_at): 감사 추적과 서비스 분쟁 대응에 필수. PII는 모두 마스킹된 상태로만 유지.
-- `account_status_history`: [audit-heavy.md](../../../rules/traits/audit-heavy.md) A3의 append-only 요구. 5년 후 압축/외부 저장으로 이전하는 정책은 본 문서 범위 외 (별도 archival 정책 필요).
+- `account_status_history`: [audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3의 append-only 요구. 5년 후 압축/외부 저장으로 이전하는 정책은 본 문서 범위 외 (별도 archival 정책 필요).
 
 ---
 
@@ -298,8 +298,8 @@ List<AccountJpaEntity> findAnonymizationCandidates(Instant threshold);
 - [specs/services/account-service/architecture.md](./architecture.md) — `infrastructure/anonymizer/`, `infrastructure/scheduler/` 레이어
 - [specs/services/account-service/data-model.md](./data-model.md) — 컬럼·분류 등급·anonymization 표
 - [specs/contracts/events/account-events.md](../../contracts/events/account-events.md) — `account.status.changed`, `account.deleted` 스키마
-- [rules/traits/regulated.md](../../../rules/traits/regulated.md) — R6/R7
-- [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) — A3 (history 불변성)
+- [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) — R6/R7
+- [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) — A3 (history 불변성)
 
 ## Change Rule
 

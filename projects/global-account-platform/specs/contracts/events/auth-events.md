@@ -2,7 +2,7 @@
 
 auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary consumer.
 
-**발행 방식**: Outbox 패턴 — DB 트랜잭션 커밋 후 relay가 Kafka에 발행 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T3)
+**발행 방식**: Outbox 패턴 — DB 트랜잭션 커밋 후 relay가 Kafka에 발행 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T3)
 **파티션 키**: `account_id` (같은 계정의 이벤트 순서 보장)
 **IP 마스킹**: 모든 payload의 `ipMasked` 필드는 [specs/services/auth-service/device-session.md](../../services/auth-service/device-session.md#ip-masking-format) "IP Masking Format" 절의 표준을 따른다 (IPv4 `192.168.*.*`, IPv6 `2001:db8:85a3::*`).
 
@@ -275,5 +275,5 @@ device session이 revoke될 때 발행. 사용자 명시 revoke, concurrent-sess
 - **멱등 처리 필수**: `eventId`(UUID v7) 기반 dedupe. Redis + MySQL 이중 방어 (T8)
 - **순서 보장**: 같은 `account_id`의 이벤트는 같은 파티션에 도착. 교차 계정 순서 보장은 하지 않음
 - **schema tolerance**: 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion`이 지원 범위 밖이면 DLQ로 이관
-- **DLQ**: `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관 ([rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I5)
+- **DLQ**: `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5)
 - **trace propagation**: envelope 또는 Kafka 헤더의 `traceparent`를 MDC로 복원

@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `account-service` | 자동 잠금 명령 (심각한 suspicious 탐지 시) | `POST /internal/accounts/{id}/lock` | [../../contracts/http/internal/security-to-account.md](../../contracts/http/internal/) |
 
-호출 시 반드시 `Idempotency-Key` 헤더 = `suspicious_event_id` ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T1). 실패 시 3회 재시도 + 최종 실패 시 outbox에 `auto.lock.pending` 이벤트 기록하여 수동 개입 경로로 이관.
+호출 시 반드시 `Idempotency-Key` 헤더 = `suspicious_event_id` ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1). 실패 시 3회 재시도 + 최종 실패 시 outbox에 `auto.lock.pending` 이벤트 기록하여 수동 개입 경로로 이관.
 
 ## Internal HTTP (incoming, read-only)
 
@@ -15,7 +15,7 @@
 | `admin-service` | 로그인 이력 조회 (감사) | `GET /internal/security/login-history?accountId=&from=&to=` |
 | `admin-service` | 의심 이벤트 조회 (감사) | `GET /internal/security/suspicious-events?accountId=&from=&to=` |
 
-응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4): IP 일부만, 이메일 마스킹. 상태 변경 메서드는 **절대 없음** (원칙 유지 — [architecture.md](architecture.md) 참조).
+응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4): IP 일부만, 이메일 마스킹. 상태 변경 메서드는 **절대 없음** (원칙 유지 — [architecture.md](architecture.md) 참조).
 
 ## Persistence
 
@@ -23,7 +23,7 @@
 
 | 테이블 | 용도 | 특이사항 |
 |---|---|---|
-| `login_history` | `event_id`, `account_id`, `outcome`, `ip_masked`, `user_agent_family`, `device_fingerprint`, `geo_country`, `occurred_at` | **append-only**. DB 트리거 또는 권한으로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3). 보존 기간 최소 1년 (A4) |
+| `login_history` | `event_id`, `account_id`, `outcome`, `ip_masked`, `user_agent_family`, `device_fingerprint`, `geo_country`, `occurred_at` | **append-only**. DB 트리거 또는 권한으로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3). 보존 기간 최소 1년 (A4) |
 | `suspicious_events` | `id`, `account_id`, `rule_code`, `risk_score`, `evidence` (JSON), `action_taken`, `detected_at` | `action_taken`: AUTO_LOCK / ALERT / NONE |
 | `processed_events` | 이벤트 멱등 소비 기록 (`event_id`, `topic`, `processed_at`) | TTL 배치 정리 (6개월) |
 | `outbox_events` | `suspicious.detected`, `auto.lock.triggered` 발행 스테이징 | libs/java-messaging |
@@ -53,7 +53,7 @@
 
 **consumer group**: `security-service`. 파티션 키는 `account_id`로 auth-service가 설정하므로 동일 계정의 이벤트는 순서 보장.
 
-**재시도/DLQ**: 지수 백오프 3회 → `<topic>.dlq` 이관. DLQ 깊이 메트릭·알림 필수 ([rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I5).
+**재시도/DLQ**: 지수 백오프 3회 → `<topic>.dlq` 이관. DLQ 깊이 메트릭·알림 필수 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5).
 
 ### Kafka Producer
 
@@ -82,7 +82,7 @@
 |---|---|---|
 | IP 평판 API (MaxMind GeoIP / AbuseIPDB 등) | GeoAnomalyRule 보강, IP 위험도 | 선택적, 미래 스코프 |
 
-초기 구현은 MaxMind GeoLite2 로컬 DB 사용 (오프라인). 외부 API 통합은 [rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I7 adapter pattern을 따라 추가.
+초기 구현은 MaxMind GeoLite2 로컬 DB 사용 (오프라인). 외부 API 통합은 [rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I7 adapter pattern을 따라 추가.
 
 ## Runtime Dependencies
 

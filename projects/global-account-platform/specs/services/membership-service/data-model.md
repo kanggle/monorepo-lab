@@ -2,7 +2,7 @@
 
 ## Design Decision
 
-구독 상태는 `UPDATE subscriptions SET status = ?` 금지. 모든 전이는 `SubscriptionStatusMachine`을 통해 `subscription_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3).
+구독 상태는 `UPDATE subscriptions SET status = ?` 금지. 모든 전이는 `SubscriptionStatusMachine`을 통해 `subscription_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
 
 계정당 플랜당 ACTIVE 구독은 1개만 허용 — `SubscriptionRepository.findByAccountIdAndPlanLevelAndStatus(ACTIVE)` 중복 체크.
 

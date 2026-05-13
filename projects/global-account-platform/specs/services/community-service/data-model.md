@@ -2,7 +2,7 @@
 
 ## Design Decision
 
-포스트 상태는 `UPDATE posts SET status = ?` 금지. 모든 전이는 `PostStatusMachine`을 통해 `post_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3).
+포스트 상태는 `UPDATE posts SET status = ?` 금지. 모든 전이는 `PostStatusMachine`을 통해 `post_status_history`에 append-only 기록 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
 
 `reactions`는 계정당 포스트당 1개 제한 — upsert (`INSERT ... ON DUPLICATE KEY UPDATE`) 사용.
 

@@ -9,7 +9,7 @@
 | `account-service` | `/api/accounts/*` 요청 포워딩 | Spring Cloud Gateway route | [../../contracts/http/gateway-api.md](../../contracts/http/) |
 | `admin-service` | `/api/admin/*` 요청 포워딩 (별도 필터 체인) | Spring Cloud Gateway route | [../../contracts/http/gateway-api.md](../../contracts/http/) |
 
-**타임아웃·재시도·circuit breaker**: [rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I1-I3 적용. JWKS 페치는 10분 주기 + 실패 시 이전 캐시 유지 + kid miss 시 즉시 refetch.
+**타임아웃·재시도·circuit breaker**: [rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I1-I3 적용. JWKS 페치는 10분 주기 + 실패 시 이전 캐시 유지 + kid miss 시 즉시 refetch.
 
 ## Persistence
 

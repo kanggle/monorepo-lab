@@ -19,7 +19,7 @@
 | **쓰기** | 로그인 실패 시 `INCR` + `EXPIRE 900`. 로그인 성공 시 `DEL` |
 | **읽기** | 로그인 시도 전 GET → 임계치(기본 5회) 이상이면 즉시 429 (`LOGIN_RATE_LIMITED`) |
 
-**email_hash를 쓰는 이유**: PII인 이메일을 Redis 키에 평문으로 노출하지 않기 위함 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4). SHA256(email)의 prefix 10자 사용.
+**email_hash를 쓰는 이유**: PII인 이메일을 Redis 키에 평문으로 노출하지 않기 위함 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4). SHA256(email)의 prefix 10자 사용.
 
 ### Refresh Token Blacklist
 

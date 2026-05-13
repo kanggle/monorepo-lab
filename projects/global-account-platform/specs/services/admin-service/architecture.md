@@ -8,7 +8,7 @@
 
 `rest-api` — 운영자 전용 관리 서비스. lock/unlock, 강제 로그아웃, 감사 조회 프록시. **일반 사용자 트래픽과 완전히 분리된 인증 경계** 뒤에 배치.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
 
 ## Architecture Style
 
@@ -22,9 +22,9 @@
 ## Why This Architecture
 
 - **도메인 상태가 없음**: 운영자 작업의 "대상"은 모두 다운스트림(auth의 세션, account의 계정 상태, security의 감사 로그). admin-service 자체에 aggregate가 없으므로 `domain/` 레이어가 불필요.
-- **격리가 핵심 속성**: [rules/domains/saas.md](../../../rules/domains/saas.md) S5는 admin 경로가 별도 인증 경계 + 감사 로그 필수. 아키텍처적으로 thin하게 유지해서 attack surface 최소화.
+- **격리가 핵심 속성**: [rules/domains/saas.md](../../../../../rules/domains/saas.md) S5는 admin 경로가 별도 인증 경계 + 감사 로그 필수. 아키텍처적으로 thin하게 유지해서 attack surface 최소화.
 - **변경 사유 = 새 운영 명령 추가**: admin-service가 바뀌는 패턴은 "새 운영 기능" 또는 "새 감사 조회 요구"가 대부분. command-oriented 구조가 이 변경 축과 잘 정렬됨.
-- **감사가 first-class**: 모든 admin command는 [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1·A5의 auditable action이며, 본 서비스가 감사 기록의 **issuer**이자 **gateway**.
+- **감사가 first-class**: 모든 admin command는 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1·A5의 auditable action이며, 본 서비스가 감사 기록의 **issuer**이자 **gateway**.
 
 ## Internal Structure Rule
 
@@ -88,9 +88,9 @@ presentation → application → infrastructure/client
 
 - ❌ 다른 서비스의 DB에 직접 접근 — 반드시 내부 HTTP 경유
 - ❌ 공개 게이트웨이와 **같은 인증 경계** 사용 — admin 전용 operator 토큰은 별도 발급 경로 (별도 IdP, 또는 auth-service의 admin-scope 토큰)
-- ❌ `AdminActionJpaEntity`의 UPDATE/DELETE 경로 존재 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3)
+- ❌ `AdminActionJpaEntity`의 UPDATE/DELETE 경로 존재 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3)
 - ❌ 도메인 로직 이식 (예: 계정 상태 기계를 admin-service 안에 복제) — 상태 기계는 account-service 단일 소유
-- ❌ 감사 기록 없이 명령 실행 — fail-closed ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A10)
+- ❌ 감사 기록 없이 명령 실행 — fail-closed ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A10)
 
 ## Boundary Rules
 
@@ -110,8 +110,8 @@ presentation → application → infrastructure/client
 - `QueryAuditCommand`: 읽기 전용이지만 **조회 액션 자체도 감사 기록** (meta-audit)
 
 ### infrastructure/client/
-- 내부 HTTP 호출에 반드시 `Idempotency-Key` 헤더 전달 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T1)
-- 타임아웃·재시도·circuit breaker는 [rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I1-I3 준수
+- 내부 HTTP 호출에 반드시 `Idempotency-Key` 헤더 전달 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1)
+- 타임아웃·재시도·circuit breaker는 [rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I1-I3 준수
 - 응답은 내부 도메인 모델로 번역 (I8) — 다운스트림 DTO를 그대로 presentation에 노출 금지
 
 ### infrastructure/security/
@@ -204,7 +204,7 @@ operator session 수명은 다음 두 토큰으로 구성된다:
 
 1. 새 운영 명령 추가는 [specs/features/admin-operations.md](../../features/) + 해당 내부 컨트랙트 ([specs/contracts/http/internal/](../../contracts/http/internal/)) 업데이트 선행
 2. 권한 모델(role) 추가·변경은 [specs/features/admin-operations.md](../../features/)의 role matrix 갱신
-3. 감사 스키마 변경은 [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A2 표준 필드 준수 확인 + Flyway migration
+3. 감사 스키마 변경은 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A2 표준 필드 준수 확인 + Flyway migration
 4. 이 서비스는 **도메인 로직을 수용하지 않는다**. 운영 명령이 복잡해지면 해당 도메인 소유 서비스(auth / account / security)로 로직을 이동하고 admin-service는 호출만 유지
 
 ## Tenant Scope Enforcement (TASK-BE-249)
@@ -255,7 +255,7 @@ isTenantAllowed(operator, targetTenantId):
 | SUPER_ADMIN | 특정 테넌트 | `searchCrossTenant(targetTenantId, ...)` |
 | 일반 운영자 | 다른 테넌트 | → `TenantScopeDeniedException` |
 
-ADR: [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)
+ADR: [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)
 
 ---
 

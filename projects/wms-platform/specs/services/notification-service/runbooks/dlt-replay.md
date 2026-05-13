@@ -36,7 +36,7 @@ Operator MUST have:
 - Access to the Kafka cluster's `kafka-consumer-groups.sh` /
   `kafka-console-consumer.sh` / `kafka-topics.sh` (or equivalent UI —
   e.g. `kafka-ui` running at `http://kafka.wms.local/` per
-  [`../../../../../CLAUDE.md`](../../../../../CLAUDE.md) § Local Network Convention).
+  [`../../../../../../CLAUDE.md`](../../../../../../CLAUDE.md) § Local Network Convention).
 - Read + UPDATE access to the `notification_delivery` Postgres table
   (DBeaver / `psql`). Connection details: per `docker-compose.bootrun.yml`
   overlay (`postgres.wms.local:5432`).
@@ -253,6 +253,6 @@ If replay does not resolve the backlog within 30 minutes, escalate to:
 - [`../architecture.md`](../architecture.md) § Kafka Consumption + § Failure Modes
 - [`../idempotency.md`](../idempotency.md) § Inbound + § Retry budget
 - [`../../contracts/events/notification-subscriptions.md`](../../../contracts/events/notification-subscriptions.md) — 6 source topic catalog
-- [`../../../../../platform/event-driven-policy.md`](../../../../../platform/event-driven-policy.md) § Consumer Rules
-- [`../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) § D5 Category C — retry + DLT pattern reference
-- [`../../../../../platform/error-handling.md`](../../../../../platform/error-handling.md) — `DELIVERY_RETRY_EXHAUSTED`, `IDEMPOTENCY_KEY_DUPLICATE` error codes
+- [`../../../../../../platform/event-driven-policy.md`](../../../../../../platform/event-driven-policy.md) § Consumer Rules
+- [`../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) § D5 Category C — retry + DLT pattern reference
+- [`../../../../../../platform/error-handling.md`](../../../../../../platform/error-handling.md) — `DELIVERY_RETRY_EXHAUSTED`, `IDEMPOTENCY_KEY_DUPLICATE` error codes

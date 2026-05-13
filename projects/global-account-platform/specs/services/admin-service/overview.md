@@ -9,7 +9,7 @@
 3. **downstream 내부 HTTP 호출**
 4. **모든 행위의 불변 감사 기록** (`admin_actions` append-only 테이블 + `admin.action.performed` 이벤트)
 
-[rules/domains/saas.md](../../../rules/domains/saas.md) S5와 [rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A1의 교차 지점 — 운영자 작업은 모두 감사 대상이며, admin-service가 그 감사의 **issuer**이자 **gateway**.
+[rules/domains/saas.md](../../../../../rules/domains/saas.md) S5와 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1의 교차 지점 — 운영자 작업은 모두 감사 대상이며, admin-service가 그 감사의 **issuer**이자 **gateway**.
 
 ## Callers
 
@@ -27,7 +27,7 @@
 | MySQL (`admin_db`) | `admin_actions` append-only 감사 원장 + `outbox_events` | 직접 JPA |
 | Kafka | outbox relay → `admin.action.performed` | producer |
 
-downstream 호출 시 **반드시 Idempotency-Key 전달** ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T1) + circuit breaker + 재시도 ([rules/traits/integration-heavy.md](../../../rules/traits/integration-heavy.md) I1-I3).
+downstream 호출 시 **반드시 Idempotency-Key 전달** ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1) + circuit breaker + 재시도 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I1-I3).
 
 ## Owned State
 

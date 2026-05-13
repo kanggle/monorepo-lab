@@ -4,7 +4,7 @@
 
 계정 생명주기 및 프로필 데이터 전담 서비스. 회원가입, 프로필 CRUD, 그리고 계정 상태(`ACTIVE` / `LOCKED` / `DORMANT` / `DELETED`)의 **상태 기계 소유자**. Global Account Platform에서 "이 사용자가 현재 어떤 상태인가?"에 대한 유일한 진실 소스.
 
-[rules/domains/saas.md](../../../rules/domains/saas.md) S1에 따라 credentials(auth-service)과 물리적으로 분리된다. profile 데이터에는 비밀·토큰·해시가 포함되지 않는다.
+[rules/domains/saas.md](../../../../../rules/domains/saas.md) S1에 따라 credentials(auth-service)과 물리적으로 분리된다. profile 데이터에는 비밀·토큰·해시가 포함되지 않는다.
 
 ## Callers
 
@@ -30,7 +30,7 @@
 
 ### MySQL
 - `accounts` — `id`, `email` (unique), `created_at`, `version`, 도메인 식별자만 포함
-- `profiles` — `account_id`, `display_name`, `phone_number`, `birth_date`, `locale`, `timezone`, `preferences` (JSON). PII 마스킹 대상 필드를 명시적으로 라벨링 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R1·R4)
+- `profiles` — `account_id`, `display_name`, `phone_number`, `birth_date`, `locale`, `timezone`, `preferences` (JSON). PII 마스킹 대상 필드를 명시적으로 라벨링 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1·R4)
 - `account_status_history` — **append-only**. `account_id`, `from_status`, `to_status`, `reason_code`, `actor_type`, `actor_id`, `occurred_at`, `details`
 - `outbox_events` — `account.*` 이벤트 스테이징
 

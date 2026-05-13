@@ -368,7 +368,7 @@ base path: `/api/admin`
 
 **Side Effects** (TASK-BE-262): `403 TENANT_SCOPE_DENIED` 응답 시 `admin_actions` 테이블에 `outcome=DENIED`, `tenant_id=operator's`, `target_tenant_id=operator's`, `downstream_detail`에 시도한 대상 테넌트 기록 — best-effort 쓰기. 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
 
-**Note**: 이 조회 자체가 **meta-audit**로 기록됨 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A5). PII는 마스킹됨 (IP 일부, 이메일 미포함).
+**Note**: 이 조회 자체가 **meta-audit**로 기록됨 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). PII는 마스킹됨 (IP 일부, 이메일 미포함).
 
 ---
 

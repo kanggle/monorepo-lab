@@ -78,7 +78,7 @@
 | 401 | `TOKEN_INVALID` | access token 만료/변조 |
 | 404 | `ACCOUNT_NOT_FOUND` | 삭제된 계정 (유예 중이어도 자기 자신 조회는 가능) |
 
-**Note**: `phoneNumber`는 응답에서 **마스킹** ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4). 전문은 반환하지 않음.
+**Note**: `phoneNumber`는 응답에서 **마스킹** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4). 전문은 반환하지 않음.
 
 ---
 

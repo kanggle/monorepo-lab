@@ -8,7 +8,7 @@
 
 `rest-api` — 엣지 API 게이트웨이. 퍼블릭 HTTP 트래픽의 단일 진입점.
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../platform/service-types/rest-api.md)
+적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
 
 ## Architecture Style
 
@@ -72,7 +72,7 @@ apps/gateway-service/src/main/java/com/example/gateway/
 ### filter/
 - Spring Cloud Gateway의 `GlobalFilter` 또는 `GatewayFilter` 구현
 - 요청 개당 수행되는 작업만 포함 — 공유 상태 변경 금지(Redis 경유 카운터 제외)
-- 응답 필터에서 원래 에러를 재포장할 때는 [platform/error-handling.md](../../../platform/error-handling.md)의 `{ code, message, timestamp, traceId }` 포맷 유지
+- 응답 필터에서 원래 에러를 재포장할 때는 [platform/error-handling.md](../../../../../platform/error-handling.md)의 `{ code, message, timestamp, traceId }` 포맷 유지
 
 ### route/
 - 업스트림 경로 정의와 ID 부여만 수행 — 라우트가 어떤 다운스트림에 매핑되는지는 여기서만 결정됨

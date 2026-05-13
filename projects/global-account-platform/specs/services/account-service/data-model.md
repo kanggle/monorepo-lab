@@ -2,9 +2,9 @@
 
 ## Design Decision
 
-profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비스·DB**에 저장한다 ([rules/domains/saas.md](../../../rules/domains/saas.md) S1). account-service는 accounts + profiles + 상태 이력을 전담하고, credentials는 auth-service가 소유.
+profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비스·DB**에 저장한다 ([rules/domains/saas.md](../../../../../rules/domains/saas.md) S1). account-service는 accounts + profiles + 상태 이력을 전담하고, credentials는 auth-service가 소유.
 
-**상태 기계**: 계정 상태는 `AccountStatusMachine`에 의해 관리된다. 직접 `UPDATE accounts SET status = ?` 금지 ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T4). 모든 전이는 `account_status_history`에 append-only로 기록.
+**상태 기계**: 계정 상태는 `AccountStatusMachine`에 의해 관리된다. 직접 `UPDATE accounts SET status = ?` 금지 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T4). 모든 전이는 `account_status_history`에 append-only로 기록.
 
 ---
 
@@ -56,7 +56,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | `details` | JSON | NULL | internal | 추가 컨텍스트 |
 | `occurred_at` | DATETIME(6) | NOT NULL | internal | UTC |
 
-**불변성**: **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../rules/traits/audit-heavy.md) A3).
+**불변성**: **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
 
 **인덱스**: `idx_ash_account_id_occurred_at` (복합)
 
@@ -121,7 +121,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
       ACTIVE (복구)
 ```
 
-유예 기간 내 `DELETED → ACTIVE` 복구는 admin-only. 유예 만료 후 PII 익명화 실행 ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R7). 익명화 후 복구 불가.
+유예 기간 내 `DELETED → ACTIVE` 복구는 admin-only. 유예 만료 후 PII 익명화 실행 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R7). 익명화 후 복구 불가.
 
 ---
 
@@ -162,4 +162,4 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | **public** | 없음 |
 | **restricted** | 없음 (credentials는 auth-service 소유) |
 
-[rules/traits/regulated.md](../../../rules/traits/regulated.md) R1 준수. `confidential` 이상 컬럼의 조회는 감사 대상 (audit-heavy R5 교차).
+[rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1 준수. `confidential` 이상 컬럼의 조회는 감사 대상 (audit-heavy R5 교차).

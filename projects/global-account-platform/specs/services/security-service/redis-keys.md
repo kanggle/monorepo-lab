@@ -18,7 +18,7 @@
 | **TTL** | 86400초 (24시간) |
 | **쓰기** | 이벤트 처리 완료 직후 SET |
 | **읽기** | 이벤트 소비 시작 시 `EXISTS` 검사. 존재하면 skip (dedup hit) |
-| **이중 방어** | Redis miss 시 MySQL `processed_events` 테이블로 fallback ([rules/traits/transactional.md](../../../rules/traits/transactional.md) T8) |
+| **이중 방어** | Redis miss 시 MySQL `processed_events` 테이블로 fallback ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T8) |
 
 ### Velocity Counter (VelocityRule)
 

@@ -1,6 +1,6 @@
 # auth-service — Observability
 
-기준: [platform/observability.md](../../../platform/observability.md)
+기준: [platform/observability.md](../../../../../platform/observability.md)
 
 ---
 
@@ -43,7 +43,7 @@
 
 ### 로깅 규칙
 
-- ❌ 이메일 / 전화 / 패스워드 평문 / 토큰 값 / credential hash → **절대 로그 금지** ([rules/traits/regulated.md](../../../rules/traits/regulated.md) R4)
+- ❌ 이메일 / 전화 / 패스워드 평문 / 토큰 값 / credential hash → **절대 로그 금지** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4)
 - ✅ `accountId`, `action`, `result`, `duration_ms`, `client_ip_masked` 만 INFO 레벨에 기록
 - ✅ Credential 검증 실패 시 `WARN` 레벨 + `client_ip_masked` + `fail_count` (이메일은 해시만)
 
