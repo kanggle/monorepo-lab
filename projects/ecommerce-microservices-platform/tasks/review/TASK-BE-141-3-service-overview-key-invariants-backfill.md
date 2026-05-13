@@ -8,7 +8,7 @@ TASK-BE-141
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -99,14 +99,14 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13~14 ecommerce HIGH-B (3 fro
 
 ### Impl PR
 
-- [ ] `gateway-service/overview.md` enhancement (~70 line, Service identity table + Key invariants + Out of scope).
-- [ ] `web-store/overview.md` enhancement (~80 line, Service identity table + Public surface (pages) + Key invariants + Out of scope).
-- [ ] `admin-dashboard/overview.md` enhancement (~70 line, Service identity table + Public surface (pages) + Key invariants + Out of scope).
-- [ ] cross-ref 검증 — 3 file 이 `architecture.md` 와 정상 연결 (relative link).
-- [ ] HARDSTOP-03 PASS — 본 file 들은 ecommerce project-specific spec.
+- [x] `gateway-service/overview.md` enhancement (~70 line, Service identity table + Key invariants + Out of scope).
+- [x] `web-store/overview.md` enhancement (~80 line, Service identity table + Public surface (pages) + Key invariants + Out of scope).
+- [x] `admin-dashboard/overview.md` enhancement (~70 line, Service identity table + Public surface (pages) + Key invariants + Out of scope).
+- [x] cross-ref 검증 — 3 file 이 `architecture.md` 와 정상 연결 (relative link).
+- [x] HARDSTOP-03 PASS — 본 file 들은 ecommerce project-specific spec.
 - [ ] CI self-CI PASS (path-filter ecommerce markdown-only — 15 SKIP + 1 changes PASS 예상).
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical batch single-PR closure 패턴, TASK-FAN-BE-006 precedent).
-- [ ] ecommerce tasks/INDEX.md 동기.
+- [x] task lifecycle ready → review (in-progress 우회, mechanical batch single-PR closure 패턴, TASK-FAN-BE-006 precedent).
+- [x] ecommerce tasks/INDEX.md 동기.
 
 ### Close chore PR
 
