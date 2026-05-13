@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-088-gap-pr-time-smoke-job.md` — `.github/workflows/ci.yml` 에 `gap-platform-e2e-smoke` PR-time job 신설. ADR-MONO-011 § 6.2 (inherited ADR-MONO-010 § 6.2) outstanding closure — Phase 3 의 7-cycle archaeological inspection root cause prevention. ComposeFixture self-managed mode 의 PR-time first-call validation 의무화. nightly `gap-e2e-full` (L525-599) + ci.yml `fan-platform-e2e` (L1014-1119) hybrid 답습. target = `:e2eSmokeTest`, path-filter gate (push/libs/workflows/gap/contracts), timeout 20min. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-088-gap-pr-time-smoke-job.md` — `.github/workflows/ci.yml` 에 `gap-platform-e2e-smoke` PR-time job 신설 (gap-integration-tests L800 직후, ~95 line). target = `:e2eSmokeTest`, timeout 20min, path-filter gate (push/libs/workflows/gap/contracts), 5-service bootJar build + Verify Docker + e2eSmokeTest + failure diagnostic + test reports upload. ci.yml header comment "E2E smoke vs full split" section 갱신 (Phase 3 wired 반영 + gap-platform-e2e-smoke 등재 + first-call validation 의도 명시). ADR-MONO-011 § 6.2 (inherited ADR-MONO-010 § 6.2) outstanding closure — Phase 3 의 7-cycle archaeological inspection root cause prevention. ComposeFixture self-managed mode 의 PR-time first-call validation 의무화. nightly `gap-e2e-full` (nightly-e2e.yml L525-599) + ci.yml `fan-platform-e2e` (L1014-1119) hybrid 답습. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

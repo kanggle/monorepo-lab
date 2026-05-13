@@ -8,7 +8,7 @@ TASK-MONO-088
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -106,15 +106,15 @@ ADR 본문 직접 수정 안 함 (acceptance 후 변경 = 신뢰성 손상, memo
 
 ### Impl PR
 
-- [ ] `.github/workflows/ci.yml` 에 `gap-platform-e2e-smoke` job 신설 (nightly gap-e2e-full L525-599 + ci.yml fan-platform-e2e L1014-1119 hybrid 답습).
-- [ ] job target = `:projects:global-account-platform:tests:e2e:e2eSmokeTest`.
-- [ ] path-filter gate (push / libs / workflows / gap / contracts).
-- [ ] timeout-minutes 20.
-- [ ] failure-time diagnostic step 포함 (Dump gap service logs).
-- [ ] failure-time test reports upload 포함.
-- [ ] ci.yml header comment 의 job 목록에 `gap-platform-e2e-smoke` 추가 (fan/scm/wms 와 동위 표기).
-- [ ] task lifecycle ready → review (in-progress 우회, substantial 이지만 single-PR closure 패턴 — MONO-084/085/086/087 precedent).
-- [ ] [`tasks/INDEX.md`](../INDEX.md) 동기.
+- [x] `.github/workflows/ci.yml` 에 `gap-platform-e2e-smoke` job 신설 (nightly gap-e2e-full L525-599 + ci.yml fan-platform-e2e L1014-1119 hybrid 답습).
+- [x] job target = `:projects:global-account-platform:tests:e2e:e2eSmokeTest`.
+- [x] path-filter gate (push / libs / workflows / gap / contracts).
+- [x] timeout-minutes 20.
+- [x] failure-time diagnostic step 포함 (Dump gap service logs).
+- [x] failure-time test reports upload 포함.
+- [x] ci.yml header comment 의 "E2E smoke vs full split" section 갱신 (Phase 3 wired 반영 + gap-platform-e2e-smoke 등재 + first-call validation 의도 명시).
+- [x] task lifecycle ready → review (in-progress 우회, substantial 이지만 single-PR closure 패턴 — MONO-084/085/086/087 precedent).
+- [x] [`tasks/INDEX.md`](../INDEX.md) 동기.
 
 ### CI verification (push to main self-CI 자연 trigger)
 
