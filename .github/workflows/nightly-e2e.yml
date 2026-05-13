@@ -322,8 +322,12 @@ jobs:
   #   - No path-filter `if:` — cron + push-to-main triggers are
   #     unconditional. The repo-gate `if: github.repository == 'kanggle/
   #     monorepo-lab'` keeps extracted standalone repos out.
-  #   - gap-e2e-full omits boot-jars + Docker CLI image build steps — its
-  #     ComposeFixture handles docker-compose build in @BeforeAll.
+  #   - gap-e2e-full builds boot jars in-job too (TASK-MONO-081 cycle 2 fix;
+  #     the ADR-MONO-011 § D5 claim that ComposeFixture self-builds was
+  #     wrong — `docker compose up --build` still needs the boot jars on
+  #     disk because the Dockerfile COPYs `apps/<svc>/build/libs/`). The
+  #     job omits the Docker CLI image build step — that piece is still
+  #     covered by ComposeFixture's `--build` invocation.
   #
   # All 4 jobs run in parallel with `frontend-e2e-fullstack` and
   # `ecommerce-boot-jars-nightly`. No `needs:` between them.
@@ -525,9 +529,13 @@ jobs:
     if: github.repository == 'kanggle/monorepo-lab'
 
     # gap uses docker-compose directly via ComposeFixture (not Testcontainers
-    # Network), so no boot-jars build + no Docker CLI image build steps —
-    # ComposeFixture handles `docker-compose build` in @BeforeAll. The job
-    # just runs :e2eFullTest after JDK/Gradle setup.
+    # Network). ComposeFixture calls `docker compose up -d --build` in
+    # @BeforeAll, but each service Dockerfile uses
+    # `COPY apps/<service>/build/libs/ ./libs/` — so the boot jars must exist
+    # on disk before ComposeFixture runs. TASK-MONO-081 added the boot-jars
+    # build step below; the ADR-MONO-011 § D5 statement ("omits boot-jars
+    # step") was incorrect (cycle 2 of TASK-MONO-080 audit; option C-1
+    # audit-only correction — see TASK-MONO-081 Implementation Notes).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -540,6 +548,20 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Build gap boot jars
+        # 5 services = docker-compose.e2e.yml `build:` directive service set
+        # (auth / account / security / admin / gateway). community/membership
+        # are not booted in the e2e environment. TASK-MONO-081 +
+        # ADR-MONO-011 § D5 audit (option C-1).
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:apps:auth-service:bootJar
+          :projects:global-account-platform:apps:account-service:bootJar
+          :projects:global-account-platform:apps:security-service:bootJar
+          :projects:global-account-platform:apps:admin-service:bootJar
+          :projects:global-account-platform:apps:gateway-service:bootJar
+          --no-daemon --stacktrace
 
       - name: Verify Docker (ComposeFixture prerequisite)
         run: docker info
