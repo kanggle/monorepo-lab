@@ -115,11 +115,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-081-gap-e2e-nightly-boot-jars.md` — TASK-MONO-080 (PR #437) cycle 1 fix 머지 후 push-to-main trigger 자동 발동된 두 번째 nightly run `25773183881` (push `e8e53eb6`, 2026-05-13 01:48 UTC) 에서 **gap-e2e-full 여전히 fail (54s, cycle 2)**. cycle 1 의 task-not-found 해소 후 cycle 2 decisive cause = ComposeFixture 의 `docker compose up -d --build` 가 service Dockerfile 의 `COPY apps/<service>/build/libs/ ./libs/` 패턴 의존 → boot jars 사전 build 부재로 `failed to compute cache key: ... "/apps/admin-service/build/libs": not found`. TASK-080 ready 시점 가설 A (boot jars 누락) 가 cycle 2 에서 적중. **ADR-MONO-011 § D5 결정 오류 발견**: "gap-e2e-full omits boot-jars build steps — ComposeFixture handles docker-compose build" 는 사실 아님 (ComposeFixture 가 `--build` 호출하지만 build context 의 `build/libs/` 는 사전 생성 필수). fix: gap-e2e-full job 에 boot jars build step 추가 (docker-compose.e2e.yml 의 5 build service = auth/account/security/admin/gateway). ADR-MONO-011 § D5 audit-only 정정 (옵션 C-1, TASK-080 의 ADR-MONO-010 D5 정정 패턴 답습). production code 0. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-081-gap-e2e-nightly-boot-jars.md` — TASK-MONO-080 (PR #437) cycle 1 fix 머지 후 push-to-main trigger 자동 발동된 두 번째 nightly run `25773183881` (push `e8e53eb6`, 2026-05-13 01:48 UTC) 에서 **gap-e2e-full 여전히 fail (54s, cycle 2)**. cycle 1 의 task-not-found 해소 후 cycle 2 decisive cause = ComposeFixture 의 `docker compose up -d --build` 가 service Dockerfile 의 `COPY apps/<service>/build/libs/ ./libs/` 패턴 의존 → boot jars 사전 build 부재로 `failed to compute cache key: ... "/apps/admin-service/build/libs": not found`. TASK-080 ready 시점 가설 A (boot jars 누락) 가 cycle 2 에서 적중. **ADR-MONO-011 § D5 결정 오류 발견**: "gap-e2e-full omits boot-jars build steps — ComposeFixture handles docker-compose build" 는 사실 아님 (ComposeFixture 가 `--build` 호출하지만 build context 의 `build/libs/` 는 사전 생성 필수). fix: gap-e2e-full job 에 boot jars build step 추가 (docker-compose.e2e.yml 의 5 build service = auth/account/security/admin/gateway). ADR-MONO-011 § D5 audit-only 정정 (옵션 C-1, TASK-080 의 ADR-MONO-010 D5 정정 패턴 답습). production code 0. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## done
 
