@@ -8,7 +8,7 @@ account-service `V0016__seed_wms_tenant.sql` — TASK-MONO-088 PR-time first-cal
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -123,11 +123,11 @@ VALUES ('wms', 'Warehouse Management Platform', 'B2B_ENTERPRISE', 'ACTIVE', NOW(
 
 ### Impl PR
 
-- [ ] `V0016__seed_wms_tenant.sql` 파일 생성.
-- [ ] INSERT IGNORE INTO tenants (tenant_id='wms', display_name='Warehouse Management Platform', tenant_type='B2B_ENTERPRISE', status='ACTIVE').
-- [ ] V0014 + V0015 comment pattern 답습 (TASK reference, design intent reverse 명시, INSERT IGNORE idempotent 설명).
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical 1-line single-PR closure 패턴 — TASK-MONO-084/085/086/087/088/089 precedent).
-- [ ] [`gap tasks/INDEX.md`](../INDEX.md) 동기.
+- [x] `V0016__seed_wms_tenant.sql` 파일 생성.
+- [x] INSERT IGNORE INTO tenants (tenant_id='wms', display_name='Warehouse Management Platform', tenant_type='B2B_ENTERPRISE', status='ACTIVE').
+- [x] V0014 + V0015 comment pattern 답습 (TASK reference, design intent reverse 명시, INSERT IGNORE idempotent 설명).
+- [x] task lifecycle ready → review (in-progress 우회, mechanical 1-line single-PR closure 패턴 — TASK-MONO-084/085/086/087/088/089 precedent).
+- [x] [`gap tasks/INDEX.md`](../INDEX.md) 동기.
 
 ### CI verification
 

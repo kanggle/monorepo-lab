@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-282-account-wms-tenant-seed.md` — `V0016__seed_wms_tenant.sql` 추가 (`INSERT IGNORE INTO tenants ('wms', 'Warehouse Management Platform', 'B2B_ENTERPRISE', 'ACTIVE', ...)`, V0015 scm pattern 답습). **TASK-MONO-088 PR-time first-call validation cycle 8 root cause closure** — `TenantProvisioningE2ETest` 의 wms tenant FK 위배 root cause. v1 "wms = service-to-service only" 가정 reverse (2026-05-14 design decision). Cycle 8 가 nightly 8 days 대신 PR-time ~30분 cycle 1 회 surface — 7-cycle archaeology PR-time 가속 패턴 답습. mechanical 1-line single-PR closure. 분석=Opus 4.7 / 구현=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -82,7 +82,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-282-account-wms-tenant-seed.md` — `V0016__seed_wms_tenant.sql` 추가 (`INSERT IGNORE INTO tenants ('wms', 'Warehouse Management Platform', 'B2B_ENTERPRISE', 'ACTIVE', ...)`, V0015 scm pattern 답습). **TASK-MONO-088 PR-time first-call validation cycle 8 root cause closure** — `TenantProvisioningE2ETest` 의 wms tenant FK 위배 root cause. v1 "wms = service-to-service only" 가정 reverse (2026-05-14 design decision). Cycle 8 가 nightly 8 days 대신 PR-time ~30분 cycle 1 회 surface — 7-cycle archaeology PR-time 가속 패턴 답습. mechanical 1-line single-PR closure. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

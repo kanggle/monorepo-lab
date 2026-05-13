@@ -1,0 +1,21 @@
+-- TASK-BE-282: register the 'wms' tenant for wms-platform.
+-- v1 (TASK-MONO-027 era, V0014 comment) intentionally seeded only ecommerce +
+-- scm and excluded wms — V0014's statement read "wms uses GAP only for OAuth
+-- client_credentials service-to-service flows in v1; consumer-style
+-- provisioning that hits accounts.tenant_id is ecommerce / fan-platform
+-- only." That assumption is now reversed (2026-05-14 design decision,
+-- TASK-MONO-088 PR-time first-call validation cycle 8 finding): wms supports
+-- consumer-style account provisioning to enable GAP IdP multi-tenant
+-- lifecycle demonstration (TenantProvisioningE2ETest BE-228~231 e2e flow).
+-- V0014's comment is preserved as historical statement; this V0016 is the
+-- evolution.
+--
+-- TenantType: B2B_ENTERPRISE — warehouse management platform is enterprise-
+-- facing (operators, supervisors, admins), not consumer-facing. Mirrors scm
+-- (V0015) B2B_ENTERPRISE; differs from ecommerce (V0014) / fan-platform
+-- (V0009) B2C_CONSUMER seeding.
+--
+-- INSERT IGNORE keeps the migration idempotent so re-running on environments
+-- that may have hand-seeded the row stays safe.
+INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
+VALUES ('wms', 'Warehouse Management Platform', 'B2B_ENTERPRISE', 'ACTIVE', NOW(6), NOW(6));
