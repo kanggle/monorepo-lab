@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-144-notification-events-eventversion-int-string-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) WMS audit Top 1 critical finding (cross-service consumer wire-format incompatibility). 5 sibling event contracts (master/inventory/inbound/outbound/admin) 가 `"eventVersion": 1` integer 사용, **`notification-events.md` 만 `"v1"` string**. fix = spec 정정 (integer 통일) + notification-service producer code emission 검증. shared envelope schema 추출 (6 contract byte-identical envelope) 은 follow-up 후보. 43 file / 43 finding 중 highest-impact (wire-format consumer breakage prevention). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-144-notification-events-eventversion-int-string-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) WMS audit Top 1 critical finding closure. 5 sibling event contracts (master/inventory/inbound/outbound/admin) 가 `"eventVersion": 1` integer 사용, notification-events.md 만 `"v1"` string + `OutboxWriterAdapter.java:35` `EVENT_VERSION = "v1"` String 도 동일 drift. **Fix**: spec 2 site (envelope JSON + schema versioning prose) → int 1, `OutboxWriterAdapter.java` `EVENT_VERSION` int 도입 + DB row storage 는 `EVENT_VERSION_DB = String.valueOf(EVENT_VERSION)` 로 string repr 유지 (DB column VARCHAR(10) migration 회피, minimal scope). production code 영역: OutboxWriterAdapter.java 만 (JpaEntity + V1__init.sql 무변경). 2 file / +11 / -5. CI 16/16 PASS 예상.
 
 ## done
 
