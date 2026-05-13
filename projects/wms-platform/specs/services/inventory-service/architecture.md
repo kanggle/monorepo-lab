@@ -314,7 +314,7 @@ EventId dedupe table `inventory_event_dedupe`:
 Retention: 30 days (cron purge). Long enough to absorb broker re-delivery windows
 and operator-initiated DLQ replays.
 
-Full strategy: `specs/services/inventory-service/idempotency.md` (Open Items).
+Full strategy: `specs/services/inventory-service/idempotency.md`.
 
 ---
 
@@ -400,8 +400,7 @@ Enforced at the domain layer, surfaced via dedicated error codes from
   (only `INSERT`/`SELECT`). Documented and enforced via Flyway role grants.
 - Event dedupe table: `inventory_event_dedupe(event_id PK, event_type, processed_at, outcome)`
 
-High-level table layout in `specs/services/inventory-service/domain-model.md`
-(Open Items).
+High-level table layout in `specs/services/inventory-service/domain-model.md`.
 
 ---
 

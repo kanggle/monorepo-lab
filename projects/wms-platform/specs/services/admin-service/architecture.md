@@ -201,7 +201,7 @@ Per trait `transactional` rule T3 — outbox pattern same as siblings. Other
 services may consume `admin.settings.changed` to react to runtime config (e.g.,
 `inventory-service` reading the new reservation TTL).
 
-Full schemas: `specs/contracts/events/admin-events.md` (Open Items).
+Full schemas: `specs/contracts/events/admin-events.md`.
 
 ---
 

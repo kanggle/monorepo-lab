@@ -51,8 +51,7 @@ POST {gateway-base}/webhooks/erp/order
 Routed via `gateway-service` to `outbound-service:8084/webhooks/erp/order`.
 
 Full wire-level contract:
-[`specs/contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md)
-(Open Item).
+[`specs/contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md).
 
 ### 1.2 Authentication
 
@@ -86,7 +85,7 @@ Full wire-level contract:
 
 Tests covering each: see
 [`specs/contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md)
-§ "Failure-mode Test Cases" (Open Item).
+§ "Failure-mode Test Cases".
 
 ### 1.5 Backpressure
 
@@ -611,7 +610,7 @@ Outbound (read). Used for:
 - Rotation procedure: two-secret window — `current` and `previous` both
   acceptable during cut-over. Documented in
   [`specs/contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md)
-  § Security Notes (Open Item).
+  § Security Notes.
 
 ### 6.3 Failure Modes
 
@@ -746,7 +745,7 @@ These are operational documents, not specs. Linked here for completeness.
 - `specs/services/outbound-service/architecture.md` — Dependencies, TMS
   Integration, Webhook Reception
 - `specs/contracts/webhooks/erp-order-webhook.md` — wire-level webhook
-  contract (Open Item)
+  contract
 - [`specs/contracts/http/tms-shipment-api.md`](../../contracts/http/tms-shipment-api.md)
   — vendor-controlled TMS wire contract (request/response, idempotency,
   4xx/5xx classification, schema versioning)
@@ -755,7 +754,6 @@ These are operational documents, not specs. Linked here for completeness.
 - `specs/services/outbound-service/sagas/outbound-saga.md` — saga state
   transitions; failure paths
 - `specs/contracts/events/outbound-events.md` — outbound Kafka schemas
-  (Open Item)
 - `specs/services/inbound-service/external-integrations.md` — sibling
   reference (no TMS, but same ERP webhook + Kafka + Postgres + Redis +
   Secret Manager structure)

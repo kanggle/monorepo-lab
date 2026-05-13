@@ -732,9 +732,7 @@ This document covers idempotency. Related concerns are covered elsewhere:
 - `specs/services/outbound-service/domain-model.md` §6 OutboundSaga, §8
   EventDedupe, §9 ErpOrderWebhookInbox/Dedupe, §10 TmsRequestDedupe
 - `specs/contracts/http/outbound-service-api.md` § Idempotency Semantics
-  (Open Item)
-- `specs/contracts/webhooks/erp-order-webhook.md` § Replay Dedupe (Open
-  Item)
+- `specs/contracts/webhooks/erp-order-webhook.md` § Replay Dedupe
 - `specs/services/inbound-service/idempotency.md` — sibling reference
   (REST + webhook + Kafka)
 - `specs/services/inventory-service/idempotency.md` — sibling reference

@@ -367,11 +367,11 @@ Inbound-service contributes ~5 min of compute / IO; the rest is human time.
 - `architecture.md` § Inbound Workflow + § Webhook Reception
 - `domain-model.md` — entity field details
 - `state-machines/asn-status.md` — formal transition table
-- `external-integrations.md` — ERP-side timeouts, circuit breakers (Open Item)
-- `idempotency.md` — REST + webhook idempotency strategy (Open Item)
-- `specs/contracts/http/inbound-service-api.md` — REST endpoint shapes (Open Item)
-- `specs/contracts/webhooks/erp-asn-webhook.md` — webhook payload + headers (Open Item)
-- `specs/contracts/events/inbound-events.md` — outbox event schemas (Open Item)
+- `external-integrations.md` — ERP-side timeouts, circuit breakers
+- `idempotency.md` — REST + webhook idempotency strategy
+- `specs/contracts/http/inbound-service-api.md` — REST endpoint shapes
+- `specs/contracts/webhooks/erp-asn-webhook.md` — webhook payload + headers
+- `specs/contracts/events/inbound-events.md` — outbox event schemas
 - `specs/services/inventory-service/architecture.md` — counterpart consumer
 - `rules/domains/wms.md` — Inbound bounded context, W1, W2, W6
 - `rules/traits/transactional.md` — T1, T3, T4, T5, T8

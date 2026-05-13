@@ -615,6 +615,6 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`.
 - `specs/services/inventory-service/architecture.md` — saga counterpart;
   consumer of `outbound.picking.requested` / `.cancelled` / `shipping.confirmed`
 - `specs/services/inbound-service/architecture.md` — webhook pattern reference
-- `specs/contracts/http/outbound-service-api.md` — REST endpoint shapes (Open Item)
-- `specs/contracts/events/outbound-events.md` — published event payloads (Open Item)
-- `specs/contracts/webhooks/erp-order-webhook.md` — ERP webhook contract (Open Item)
+- `specs/contracts/http/outbound-service-api.md` — REST endpoint shapes
+- `specs/contracts/events/outbound-events.md` — published event payloads
+- `specs/contracts/webhooks/erp-order-webhook.md` — ERP webhook contract

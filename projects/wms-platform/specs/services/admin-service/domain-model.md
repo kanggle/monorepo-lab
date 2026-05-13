@@ -655,4 +655,4 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`:
   InspectionSummary projections
 - `specs/services/outbound-service/domain-model.md` — source of OrderSummary /
   ShipmentSummary projections
-- `specs/contracts/events/admin-events.md` — published event payloads (Open Item)
+- `specs/contracts/events/admin-events.md` — published event payloads

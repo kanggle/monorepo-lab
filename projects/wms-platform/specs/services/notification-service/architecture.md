@@ -174,7 +174,7 @@ External vendor footprint is intentionally tiny in v1.
 | `outbound.shipping.confirmed` | `wms.outbound.shipping.confirmed.v1` | Slack `#wms-shipping` always (severity=INFO) |
 
 Detailed payload mapping → channel template lives in
-`specs/contracts/events/notification-subscriptions.md` (Open Items).
+`specs/contracts/events/notification-subscriptions.md`.
 
 ### Consumer Rules
 
@@ -186,7 +186,7 @@ Detailed payload mapping → channel template lives in
   (e.g., `\|delta\| < 100`) — recorded in dedupe with `outcome=FILTERED` so
   replay is idempotent and observability shows filter rate.
 - **DLT**: `<source-topic>.DLT` per Spring Kafka convention. Operator drains
-  via the runbook in `runbooks/dlt-replay.md` (Open Items).
+  via the runbook in `runbooks/dlt-replay.md`.
 
 ---
 
@@ -202,7 +202,7 @@ This is an **audit trail event**, consumed downstream by `admin-service`'s
 read-model for dashboards (delivery rate, latency, channel health).
 Publication uses the standard outbox pattern (trait `transactional` T3).
 
-Schema: defined in `specs/contracts/events/notification-events.md` (Open Items).
+Schema: defined in `specs/contracts/events/notification-events.md`.
 
 ---
 

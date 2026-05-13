@@ -271,4 +271,4 @@ Per [`../architecture.md`](../architecture.md) § Testing Requirements:
 - `rules/domains/wms.md` § Standard Error Codes (Outbound)
 - `platform/error-handling.md` — registry of error codes
 - `specs/contracts/events/outbound-events.md` — outbox events fired per
-  transition (Open Item)
+  transition
