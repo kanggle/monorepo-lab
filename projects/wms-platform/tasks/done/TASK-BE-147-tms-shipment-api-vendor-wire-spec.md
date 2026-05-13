@@ -8,7 +8,7 @@ outbound-service TMS shipment API vendor wire-level spec authoring — `specs/co
 
 # Status
 
-review
+done
 
 # Owner
 
