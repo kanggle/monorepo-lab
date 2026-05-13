@@ -8,7 +8,7 @@ TASK-FAN-BE-006
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -92,13 +92,13 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13~14 fan-platform audit crit
 
 ### Impl PR
 
-- [ ] `gateway-service/overview.md` 신규 file 7 section skeleton authoring (~50 line, sibling 답습).
-- [ ] `fan-platform-web/overview.md` 신규 file 7 section skeleton authoring (~50 line, sibling 답습 + frontend 특성 반영).
-- [ ] cross-ref 검증 — 본 2 file 이 architecture.md 와 정상 연결.
-- [ ] HARDSTOP-03 hook PASS (project-specific content = fan-platform 자기 자신, 다른 project name leak 0).
-- [ ] CI self-CI PASS (path-filter fan-platform 활성화 가능 — markdown-only 라 SKIP 가능).
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical batch single-PR closure 패턴).
-- [ ] fan-platform tasks/INDEX.md 동기.
+- [x] `gateway-service/overview.md` 신규 file 7 section skeleton authoring (~60 line, sibling 답습 + edge gateway 특성).
+- [x] `fan-platform-web/overview.md` 신규 file 7 section skeleton authoring (~80 line, sibling 답습 + frontend 특성 — pages table, HttpOnly cookie auth 등).
+- [x] cross-ref 검증 — 본 2 file 이 architecture.md 와 정상 연결 (in-file relative link).
+- [x] HARDSTOP-03 hook PASS (project-specific content = fan-platform 자기 자신, 다른 project name leak 0).
+- [ ] CI self-CI PASS (path-filter fan-platform markdown-only — 15 SKIP + 1 changes PASS 예상).
+- [x] task lifecycle ready → review (in-progress 우회, mechanical batch single-PR closure 패턴, TASK-BE-281 / TASK-MONO-084 precedent).
+- [x] fan-platform tasks/INDEX.md 동기.
 
 ### Close chore PR
 

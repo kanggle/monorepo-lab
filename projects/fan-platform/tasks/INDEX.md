@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-006-gateway-and-web-overview-skeleton.md` — `/refactor-spec all --dry-run` (2026-05-13~14) fan-platform audit critical #1+2 finding. 4 service 중 sibling 2 (artist-service + community-service) 는 `overview.md` 보유, gateway-service + fan-platform-web 미존재. sibling 7-section skeleton (Identity / Responsibilities / Public API surface / Key invariants / Out of scope) 답습으로 2 file 신규 authoring. content source = 각 service architecture.md 의 Identity + Role + Architecture Style Rationale 발췌. mechanical skeleton fill — single-PR closure 패턴 (TASK-BE-281 / TASK-MONO-084 precedent). production code = 0. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty — fan-platform v1 backend + frontend bootstrap 완성)
 
 ## in-progress
 
@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-006-gateway-and-web-overview-skeleton.md` — `/refactor-spec all --dry-run` (2026-05-13~14) fan-platform audit critical #1+2 finding. 4 service 중 sibling 2 (artist-service + community-service) 는 `overview.md` 보유, gateway-service + fan-platform-web 미존재. sibling 7-section skeleton (Identity / Responsibilities / Public API surface / Key invariants / Out of scope) 답습으로 2 file 신규 authoring. content source = 각 service architecture.md 의 Identity + Role + Architecture Style Rationale 발췌. mechanical skeleton fill — single-PR closure 패턴 (TASK-BE-281 / TASK-MONO-084 precedent). production code = 0. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## done
 
