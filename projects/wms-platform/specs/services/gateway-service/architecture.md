@@ -11,7 +11,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Field | Value |
 |---|---|
 | Service name | `gateway-service` |
-| Service Type | `rest-api` (edge gateway role) |
+| Service Type | `rest-api` (edge gateway role; see Service Type Composition below) |
 | Architecture Style | **Layered** (no domain aggregates — see Rationale) |
 | Primary language / stack | Java 21, Spring Boot 3.x, **Spring Cloud Gateway (reactive)** |
 | Bounded Context | n/a — this service contains no domain logic |
@@ -19,6 +19,16 @@ All implementation tasks targeting this service must follow this declaration,
 | Data store | none (stateless) |
 | Event publication | none |
 | Shared state | Redis — rate-limit counters only (ephemeral) |
+
+### Service Type Composition
+
+`gateway-service` is `rest-api` (primary) — all traffic is HTTP request/
+response proxying for the wms portfolio. There is no `event-consumer` path:
+the gateway emits no domain events and consumes none. Redis is used solely
+as an ephemeral counter store for `RedisRateLimiter`, not as a message bus.
+
+Read `platform/service-types/rest-api.md` (primary) when implementing —
+no secondary service-type spec applies.
 
 ---
 
@@ -87,8 +97,10 @@ com.wms.gateway/
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
-All other paths return `404 NOT_FOUND`. Routes for outbound and
-notification-service arrive in subsequent `TASK-INT-*` tickets.
+All other paths return `404 NOT_FOUND`. `notification-service` is an
+event-consumer (no REST surface) and therefore does not appear in this table —
+its Kafka-only ingress is documented in
+[`specs/services/notification-service/architecture.md`](../notification-service/architecture.md).
 
 ### Admin Service Route
 
