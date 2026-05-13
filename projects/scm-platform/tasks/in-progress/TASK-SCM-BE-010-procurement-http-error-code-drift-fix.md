@@ -8,7 +8,7 @@ TASK-SCM-BE-010
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
