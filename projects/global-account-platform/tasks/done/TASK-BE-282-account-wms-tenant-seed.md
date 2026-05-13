@@ -8,7 +8,7 @@ account-service `V0016__seed_wms_tenant.sql` — TASK-MONO-088 PR-time first-cal
 
 # Status
 
-review
+done
 
 # Owner
 
