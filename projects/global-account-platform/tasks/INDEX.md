@@ -72,19 +72,21 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-279-cross-service-bulk-lock-e2e-tenant-id-seed.md` — TASK-BE-278 (PR #444, cycle 6 fix) 머지 후 여섯 번째 nightly run `25778172254` (push `6d2bb874`, 2026-05-13 04:24 UTC) 의 gap-e2e-full 3m 8s fail. **중대한 진척**: 이전 cycle 3/5/6 의 16-17min ComposeFixture HEALTH_TIMEOUT 패턴 사라짐 (V0013 PASS + 5 service healthy 정상). 3 e2e test 실행 → 2 PASS (DlqHandling + RefreshReuseDetection) + 1 FAIL (CrossServiceBulkLock). cycle 7 root cause = `CrossServiceBulkLockE2ETest.seedAccount` (line 90) 의 direct-SQL INSERT 가 `tenant_id` column 명시 안 함 → V0011 의 NOT NULL default 제거 후 strict mode 에서 `Field 'tenant_id' doesn't have a default value` throw. test code 영역 (production 무관), 1-line fix. fan-platform tenant (V0009 seed + V0010-era historical default) hardcode. ADR-MONO-011 § D5 audit-trail 누적 5차 (option C-1). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
 (empty)
 
-Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 closed 2026-05-13** (Phase 3 nightly full e2e 4 cycle 누적, gap-e2e-full cycle 6 잔존이 본 TASK-BE-278 의 scope).
+Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 closed 2026-05-13** (Phase 3 nightly full e2e 4 cycle 누적, gap-e2e-full cycle 7 잔존이 본 TASK-BE-279 의 scope).
 
 ## review
 
-- `TASK-BE-278-account-service-v0013-flyway-migration-fail-on-fresh-db.md` — TASK-MONO-082 cycle 6 spawn. **결정적 root cause = MySQL 8.0 `CREATE TEMPORARY TABLES` privilege 분리** (가설 B1 변형 — TEMPORARY TABLE 자체는 OK 였으나 user privilege 부재). V0013 step 2 `CREATE TEMPORARY TABLE account_roles_backup AS SELECT FROM account_roles` 가 account_user 권한 부족으로 access denied → Flyway "failed" record → 다음 boot validate fail. PR-time IT (Testcontainers default root-equivalent) 와의 결정적 차이. **Fix**: `projects/global-account-platform/docker/mysql/init.sh` 의 `SERVICE_PRIVILEGES` 에 `CREATE TEMPORARY TABLES` 추가 (1 line, 6 service user 모두 적용). production code 0. ADR-MONO-011 § D5 audit-trail 누적 4차 closure (option C-1).
+(empty)
 
 ## done
+
+- `TASK-BE-278-account-service-v0013-flyway-migration-fail-on-fresh-db.md` — impl PR #444 머지 (2026-05-13, squash commit `6d2bb874`). **Partial close** — cycle 6 (MySQL 8.0 `CREATE TEMPORARY TABLES` privilege 부재) 해소 + cycle 7 (CrossServiceBulkLockE2ETest.seedAccount missing tenant_id, test code 영역) 잔존 발견 → TASK-BE-279 분리. **결정적 root cause** = V0013 step 2 `CREATE TEMPORARY TABLE account_roles_backup AS SELECT FROM account_roles` 가 account_user 권한 부족으로 access denied → Flyway "failed" record → 다음 boot validate fail. PR-time IT (Testcontainers default root-equivalent) 와의 결정적 차이. **Fix**: `docker/mysql/init.sh` 의 `SERVICE_PRIVILEGES` 에 `CREATE TEMPORARY TABLES` 추가 (1 line, 6 service user 모두 적용). 1 file / +11 / -1. production code 0. **CI 15 PASS + 1 SKIP** (Observability path-filter skip 정상). **재검증 (push-to-main trigger 여섯 번째 nightly run `25778172254`)**: gap-e2e-full **3m 8s fail (cycle 7)** — 이전 16-17min 패턴이 사라져 cycle 6 fix 검증 완료, **ComposeFixture + V0013 + 5 service healthy 모두 정상** (auth/account/security/admin/gateway 5/5 healthy, V0013 PASS). 3 e2e test 실행 → 2 PASS (DlqHandling + RefreshReuseDetection) + 1 FAIL (CrossServiceBulkLock, `tenant_id` direct-SQL seed 누락). 다른 backend full job + frontend-e2e-fullstack + ecommerce-boot-jars-nightly 모두 SUCCESS (Phase 3 4/5 유지). cycle 7 fix = TASK-BE-279. **ADR-MONO-011 § D5 audit-trail 누적 4차 closure** (option C-1, TASK-080/081/082 패턴 답습). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 - `TASK-BE-277-auth-credentials-social-identities-data-model-backfill.md` — PR #342 머지 (2026-05-11). auth-service `credentials` + `social_identities` 두 table 의 data-model.md 백필. 컬럼 / NOT NULL / PK / FK / 인덱스 / 보안 노트 (bcrypt cost, AES-GCM column 명시). spec-only.
 
