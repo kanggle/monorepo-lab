@@ -8,7 +8,7 @@ ecommerce 10 backend service `overview.md` sibling-consistency batch enhancement
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -102,21 +102,21 @@ provenance: `/refactor-spec all --dry-run` (2026-05-13~14) ecommerce HIGH-B find
 
 ### Impl PR
 
-- [ ] `order-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants).
-- [ ] `payment-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants — outbox atomic, refund precondition).
-- [ ] `product-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka publish) + 5 Key invariants — stock non-negative, search coupling event-only).
-- [ ] `promotion-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + sync HTTP + Kafka consume) + 5 Key invariants).
-- [ ] `review-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka publish + sync HTTP) + 5 Key invariants — one-review-per-user, soft-delete only).
-- [ ] `search-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants — derived index, product-service is SoT).
-- [ ] `shipping-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume + Kafka publish) + 5 Key invariants — unidirectional transition, idempotent creation).
-- [ ] `user-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume + Kafka publish) + 5 Key invariants — no credential ownership).
-- [ ] `notification-service/overview.md` enhancement (~75 line, Service identity + Public surface (Kafka consume from 4 services + REST admin) + 5 Key invariants — event_id idempotency, channel opt-out).
-- [ ] `batch-worker/overview.md` enhancement (~70 line, Service identity + Public surface (Spring Scheduler jobs + Kafka publish, no HTTP) + 5 Key invariants — idempotent jobs, no cross-DB access).
-- [ ] cross-ref 검증 — 10 file 이 `architecture.md` 와 정상 연결.
-- [ ] HARDSTOP-03 PASS.
+- [x] `order-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants).
+- [x] `payment-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants — outbox atomic, refund precondition).
+- [x] `product-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka publish) + 5 Key invariants — stock non-negative, search coupling event-only).
+- [x] `promotion-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + sync HTTP + Kafka consume) + 5 Key invariants).
+- [x] `review-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka publish + sync HTTP) + 5 Key invariants — one-review-per-user, soft-delete only).
+- [x] `search-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume) + 5 Key invariants — derived index, product-service is SoT).
+- [x] `shipping-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume + Kafka publish) + 5 Key invariants — unidirectional transition, idempotent creation).
+- [x] `user-service/overview.md` enhancement (~70 line, Service identity + Public surface (REST + Kafka consume + Kafka publish) + 5 Key invariants — no credential ownership).
+- [x] `notification-service/overview.md` enhancement (~75 line, Service identity + Public surface (Kafka consume from 4 services + REST admin) + 5 Key invariants — event_id idempotency, channel opt-out).
+- [x] `batch-worker/overview.md` enhancement (~70 line, Service identity + Public surface (Spring Scheduler jobs + Kafka publish, no HTTP) + 5 Key invariants — idempotent jobs, no cross-DB access).
+- [x] cross-ref 검증 — 10 file 이 `architecture.md` 와 정상 연결.
+- [x] HARDSTOP-03 PASS.
 - [ ] CI self-CI PASS (path-filter ecommerce markdown-only — 15 SKIP + 1 changes PASS 예상).
-- [ ] task lifecycle ready → review (in-progress 우회, BE-141 / FAN-BE-006 / MONO-084 precedent — mechanical batch single-PR closure).
-- [ ] ecommerce tasks/INDEX.md 동기.
+- [x] task lifecycle ready → review (in-progress 우회, BE-141 / FAN-BE-006 / MONO-084 precedent — mechanical batch single-PR closure).
+- [x] ecommerce tasks/INDEX.md 동기.
 
 ### Close chore PR
 
@@ -263,7 +263,7 @@ mechanical batch (BE-141 패턴 직접 답습) → ready → review 직접 (in-p
 ### Impl PR
 
 - [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 

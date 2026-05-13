@@ -1,35 +1,75 @@
-# Service Overview
+# user-service — Overview
 
-## Service
-`user-service`
+> 1-pager: responsibilities, public surface, key invariants.
 
-## Responsibility
-Owns user profile data and shipping address management for authenticated users.
+## Service identity
 
-## In Scope
-- user profile creation upon UserSignedUp event consumption
-- user profile query and update
-- shipping address CRUD (add, update, delete, list)
-- default address designation
-- user withdrawal (profile status transition to WITHDRAWN)
-- user profile and withdrawal domain event publishing
-- admin user list and detail query
+| Field | Value |
+|---|---|
+| Service name | `user-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` |
+| Architecture Style | **Layered** — see [architecture.md § Architecture Style](architecture.md) |
+| Stack | Java 21, Spring Boot 3.4, PostgreSQL, Kafka (direct publish, no outbox in v1) |
+| Deployable unit | `apps/user-service/` |
+| Bounded Context | `User Profile` |
+| Persistent stores | PostgreSQL (user profile + shipping addresses) |
+| Event publication | `user.user.profile-updated` (UserProfileUpdated), `user.user.withdrawn` (UserWithdrawn) |
 
-## Out of Scope
-- authentication and credential management (owned by auth-service)
-- order processing (owned by order-service)
-- payment processing (owned by payment-service)
-- product catalog management (owned by product-service)
+## Responsibilities
+
+- Create user profile on `UserSignedUp` event consumption (from `auth-service` — deprecated → GAP transition).
+- Manage user profile query and update (`email`, `name`, `nickname`, `phone`, `profileImageUrl`).
+- Own shipping address CRUD — add / update / delete / list + default address designation.
+- Handle user withdrawal — status → `WITHDRAWN` + publish `UserWithdrawn` event.
+- Admin user list + detail query (read-only v1).
+
+## Public surface
+
+| Channel | Endpoint / Topic | Auth | Purpose |
+|---|---|---|---|
+| REST | `GET /api/users/me` | JWT (self) | own profile |
+| REST | `PUT /api/users/me` | JWT (self) | update own profile |
+| REST | `GET /api/users/me/addresses` | JWT (self) | list addresses |
+| REST | `POST /api/users/me/addresses` | JWT (self) | add address |
+| REST | `PUT /api/users/me/addresses/{id}` | JWT (self) | update address (+ default toggle) |
+| REST | `DELETE /api/users/me/addresses/{id}` | JWT (self) | delete address |
+| REST | `POST /api/users/me/withdraw` | JWT (self) | user withdrawal |
+| REST | `GET /api/admin/users` | JWT + ROLE_ADMIN | admin user list |
+| Kafka consume | `auth.user.signed-up` | — | profile bootstrap |
+| Kafka publish | `user.user.profile-updated`, `user.user.withdrawn` | — | downstream consumers (order / notification) |
+
+자세한 spec 은 [`../../contracts/http/user-api.md`](../../contracts/http/user-api.md) + [`../../contracts/events/user-events.md`](../../contracts/events/user-events.md) 참조.
+
+## Key invariants
+
+1. **No credential ownership** — user-service 는 password / hash / JWT token 직접 보관 / 검증 금지; `auth-service` (또는 GAP) 가 owner.
+2. **`userId` is external identifier** — auth-service 가 발급한 ID 를 그대로 사용, 자체 sequence 생성 안 함.
+3. **No token cache** — JWT / refresh token 을 user-service 가 cache 하지 않음.
+4. **Profile data exposed via published contracts only** — DB 직접 조회 금지; HTTP / event 만 통과.
+5. **Presentation ↛ persistence** — controller 가 repository 직접 호출 금지 (architecture.md § Layered Rules).
 
 ## Owned Data
-- user profile (userId, email, name, nickname, phone, profileImageUrl, status)
-- shipping addresses (label, recipientName, phone, zipCode, address1, address2, isDefault)
+
+- user profile (`userId`, `email`, `name`, `nickname`, `phone`, `profileImageUrl`, `status`)
+- shipping addresses (`label`, `recipientName`, `phone`, `zipCode`, `address1`, `address2`, `isDefault`)
 
 ## Published Interfaces
-- user HTTP APIs defined in `specs/contracts/http/user-api.md`
-- user domain events: UserProfileUpdated, UserWithdrawn (defined in `specs/contracts/events/user-events.md`)
+
+- [`../../contracts/http/user-api.md`](../../contracts/http/user-api.md) (HTTP)
+- [`../../contracts/events/user-events.md`](../../contracts/events/user-events.md) — `UserProfileUpdated`, `UserWithdrawn`
 
 ## Dependent Systems
-- auth-service (consumes UserSignedUp event to create initial profile)
-- messaging infrastructure (event consumption and publication)
-- persistence (relational database)
+
+- PostgreSQL — user profile persistence
+- Kafka — event consumption + publication
+- `auth-service` / GAP (event source: `UserSignedUp`)
+
+## Out of scope (v1)
+
+- Authentication / credential management — `auth-service` (deprecated) → GAP.
+- Order processing — `order-service`.
+- Payment processing — `payment-service`.
+- Product catalog — `product-service`.
+- Loyalty / membership tier — v2 (`membership-service` 도입 시).
+- Outbox pattern — v1 은 단순 direct publish (소비자가 idempotent 처리); 신뢰성 강화 시 v2 에서 outbox 적용.
