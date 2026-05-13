@@ -161,6 +161,20 @@ services:
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
       ACCOUNT_SERVICE_URL: http://account-service:8082
+      # TASK-MONO-082 cycle 3 fix — production application.yml defaults to
+      # `classpath:keys/private.pem` / `classpath:keys/public.pem` (only the
+      # `.example` files are checked in; real keys are gitignored). The
+      # bootJar packages only `src/main/resources`, so the production image
+      # has no keys on classpath and JWT bean creation fails at boot.
+      # PR-time integration tests work because Spring Boot test slices
+      # auto-include `src/test/resources` (where the dev keys live).
+      # For nightly docker-compose e2e we mount the dev keys from
+      # `src/test/resources/keys` and point JWT_*_KEY_PATH at the mount.
+      # production code 0; nightly + dev-machine docker-compose only.
+      JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
+    volumes:
+      - ./apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
