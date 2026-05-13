@@ -50,18 +50,18 @@ continues on v1 during the grace period. Separate follow-up task migrates to v2.
 
 Published by `KafkaAlertPublisherAdapter`. Best-effort (no outbox).
 
-**Partition key**: `nodeId`
+**Partition key**: `nodeId` (matches Kafka record key for per-node ordering).
 
-**Envelope:**
+**Envelope** (aligned with sibling `scm-procurement-events.md` § Common Envelope — `BaseEventPublisher.writeEvent` standard shape):
+
 ```json
 {
   "eventId": "uuid",
   "eventType": "inventory.alert.snapshot_stale",
-  "eventVersion": 1,
+  "source": "scm-platform-inventory-visibility-service",
   "occurredAt": "2026-05-01T10:05:00Z",
-  "producer": "inventory-visibility-service",
-  "aggregateType": "inventory_node",
-  "aggregateId": "node-uuid",
+  "schemaVersion": 1,
+  "partitionKey": "node-uuid",
   "payload": {
     "nodeId": "node-uuid",
     "tenantId": "scm",
@@ -71,6 +71,18 @@ Published by `KafkaAlertPublisherAdapter`. Best-effort (no outbox).
   }
 }
 ```
+
+| Envelope field | Type | Notes |
+|---|---|---|
+| `eventId` | string (UUID) | Generated per envelope at publish time. |
+| `eventType` | string | `"inventory.alert.<type>"` (예: `"inventory.alert.snapshot_stale"` / `"inventory.alert.node_unreachable"`). |
+| `source` | string | Always `"scm-platform-inventory-visibility-service"`. |
+| `occurredAt` | string (ISO 8601 UTC instant) | Detection timestamp (= `payload.detectedAt`). |
+| `schemaVersion` | integer | `1` for v1 envelope. |
+| `partitionKey` | string | `nodeId` — Kafka record key for per-node ordering. |
+| `payload` | object | Per-event shape (alertType, stalenessStatus, etc.). |
+
+The Kafka record key MUST equal `partitionKey` so consumers can rely on per-node ordering within a partition.
 
 **Alert types:**
 - `SNAPSHOT_STALE` — node last_event_at exceeded threshold

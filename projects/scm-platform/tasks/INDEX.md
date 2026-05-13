@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-011-inventory-visibility-alert-envelope-align.md` — `/refactor-spec all --dry-run` (2026-05-13) SCM audit critical #1 finding. `inventory-visibility-subscriptions.md` 의 `scm.inventory.alert.v1` publish envelope 5 필드가 sibling `scm-procurement-events.md` standard envelope shape 와 불일치 (eventVersion / producer / aggregateType / aggregateId 4 deviant + missing partitionKey) → cross-service envelope uniformity 회복 + sibling field 표 답습. 직접 답습 패턴 = TASK-BE-144 (WMS notification eventVersion int 1) + TASK-SCM-BE-010 (SCM HTTP error code). production code = 0 expected (publisher 가 standard envelope 사용 시), 불일치 시 minimal field rename. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-011-inventory-visibility-alert-envelope-align.md` — `/refactor-spec all --dry-run` (2026-05-13) SCM audit critical #1 finding. `inventory-visibility-subscriptions.md` 의 `scm.inventory.alert.v1` publish envelope 5 필드가 sibling `scm-procurement-events.md` standard envelope shape 와 불일치 (eventVersion / producer / aggregateType / aggregateId 4 deviant + missing partitionKey) → cross-service envelope uniformity 회복 + sibling field 표 답습. 직접 답습 패턴 = TASK-BE-144 (WMS notification eventVersion int 1) + TASK-SCM-BE-010 (SCM HTTP error code). production code = 0 expected (publisher 가 standard envelope 사용 시), 불일치 시 minimal field rename. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## done
 

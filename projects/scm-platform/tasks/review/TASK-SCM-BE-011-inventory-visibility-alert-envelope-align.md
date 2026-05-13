@@ -8,7 +8,7 @@ TASK-SCM-BE-011
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -76,14 +76,14 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13 SCM audit Top-1 (envelope 
 
 ### Impl PR
 
-- [ ] `inventory-visibility-subscriptions.md` L55-72 envelope JSON 5 field align (eventVersion → schemaVersion / producer → source / aggregateType drop / aggregateId → partitionKey).
-- [ ] envelope field 표 (sibling procurement-events.md L58-66 패턴) 추가 — 7 필드 description.
-- [ ] partition key 표기 정합 — 본문 L53 `**Partition key**: nodeId` 와 envelope `partitionKey` 가 동일 value 가정 명시.
-- [ ] `KafkaAlertPublisherAdapter` 실제 emit field verify — spec 과 일치하면 production 무변경, 불일치하면 production code align (별 commit).
-- [ ] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
-- [ ] CI self-CI PASS (path-filter scm-platform — Integration + E2E + boot jars 자연 trigger 가능).
-- [ ] task lifecycle ready → in-progress → review.
-- [ ] tasks/INDEX.md 동기 (scm project + 영향 시 root INDEX).
+- [x] `inventory-visibility-subscriptions.md` L55-72 envelope JSON 5 field align (eventVersion → schemaVersion / producer → source / aggregateType drop / aggregateId → partitionKey).
+- [x] envelope field 표 (sibling procurement-events.md L58-66 패턴) 추가 — 7 필드 description.
+- [x] partition key 표기 정합 — 본문 `**Partition key**: nodeId` 와 envelope `partitionKey` value 동일 명시.
+- [x] `KafkaAlertPublisherAdapter` 실제 emit field verify — production code 4 field rename + 1 drop 적용 (publisher 가 spec deviant 와 동일 emit 이었음, 4 line align).
+- [x] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
+- [ ] CI self-CI PASS (path-filter scm-platform — Integration + boot jars + E2E 자연 trigger).
+- [x] task lifecycle ready → in-progress → review.
+- [x] tasks/INDEX.md 동기 (scm project, root INDEX 무영향).
 
 ### Close chore PR
 
