@@ -30,17 +30,36 @@ dependencies {
     testImplementation 'org.slf4j:slf4j-simple:2.0.13'
 }
 
-test {
-    useJUnitPlatform()
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010 — TASK-MONO-078 Phase 2 D5 step 4):
+//
+//   - default `test` — runs `@Tag("e2e") && !@Tag("full")` (smoke + un-tagged
+//                       inside e2e umbrella). gap's historical pattern: the
+//                       default `test` task is the e2e entry point itself —
+//                       `ComposeFixture` boots docker-compose in @BeforeAll.
+//                       gap-integration-tests CI job calls this task. After
+//                       Phase 2 it skips @Tag("full") so PR-time wall-clock
+//                       shrinks (3 full class skip).
+//   - `e2eTest`      — explicit umbrella, runs `@Tag("e2e")` (smoke + full).
+//                       Phase 2 alignment with fan/scm/wms task families.
+//   - `e2eSmokeTest` — runs `@Tag("smoke")` only.
+//   - `e2eFullTest`  — runs `@Tag("full")` only. Nightly + push to main.
+//
+// All four share configuration via `baseE2eConfig` closure (timeout,
+// COMPOSE_PROJECT_NAME, observability=on wrapper, testLogging). The default
+// `test` task additionally carries `excludeTags 'full'` so it stays
+// PR-time-friendly without exercising long-running edge cases.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
     // Long-running E2E; give each test ample time.
-    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
-    testLogging {
+    t.systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+    t.testLogging {
         events 'passed', 'failed', 'skipped', 'standardOut', 'standardError'
         exceptionFormat 'full'
         showStandardStreams = true
     }
     // Surface compose project name so local reruns can clean up.
-    environment 'COMPOSE_PROJECT_NAME', 'gap-e2e'
+    t.environment 'COMPOSE_PROJECT_NAME', 'gap-e2e'
 
     // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
     // TASK-MONO-067). GAP's e2e uses docker-compose directly (not
@@ -50,19 +69,50 @@ test {
     // attach + scrape happens entirely on the docker network layer.
     //
     // CI does not pass this flag. When absent, no doFirst/doLast hook
-    // runs and the e2e suite behaviour is byte-identical to today.
+    // runs and the task behaviour is byte-identical to today.
     if (project.hasProperty('observability') && project.property('observability') == 'on') {
-        doFirst {
+        t.doFirst {
             // gap-e2e_default may not exist yet when the lifecycle hook fires
             // (ComposeFixture creates it lazily in @BeforeAll). Create it
             // pre-emptively; docker-compose will reuse the existing network.
             exec { commandLine 'bash', '-c', 'docker network create gap-e2e_default || true' }
             exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', 'gap-e2e_default' }
         }
-        doLast {
+        t.doLast {
             // observability down first; the compose project's own teardown
             // is handled by ComposeFixture's JVM shutdown hook.
             exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
         }
     }
+}
+
+test {
+    // gap's default `test` task IS the e2e suite (historical: ComposeFixture
+    // is wired into @BeforeAll of the base class). gap-integration-tests CI
+    // job calls this task. ADR-MONO-010 Phase 2: skip @Tag("full") so the
+    // long-running 3 full class (RefreshReuse + Dlq + CrossServiceBulkLock)
+    // do not run at PR time; they run nightly via :e2eFullTest only.
+    useJUnitPlatform { excludeTags 'full' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e") (smoke + full). Phase 2 alignment with fan/scm/wms.'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eSmokeTest', Test) {
+    description = '@Tag("smoke") subset only — equivalent to default `test` in gap (ADR-MONO-010 D1/D2/D5 step 4).'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'smoke' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") subset only — nightly + push to main (ADR-MONO-010 D1/D2; Phase 3 wires the CI side).'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
 }

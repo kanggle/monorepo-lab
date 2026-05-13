@@ -3,6 +3,7 @@ package com.example.e2e;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   3. reuse refreshToken_0 → 401 REFRESH_TOKEN_REUSE_DETECTED
  *   4. subsequent refreshToken_1 → 401 (chain invalidated)
  */
+@Tag("full")
 class RefreshReuseDetectionE2ETest extends E2EBase {
 
     @Test

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
@@ -47,6 +48,7 @@ import static org.awaitility.Awaitility.await;
  * <p>If Docker is not available this test is skipped (same as all other E2E tests).
  * If the multi-tenant features are absent, the test fails to surface implementation gaps.
  */
+@Tag("smoke")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantProvisioningE2ETest extends E2EBase {
 

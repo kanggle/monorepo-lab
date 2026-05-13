@@ -12,6 +12,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -30,6 +31,7 @@ import static org.awaitility.Awaitility.await;
  *   3. security-service /actuator/metrics/kafka.consumer.lag → 200 + value >= 0
  *   4. admin-service /actuator/health/circuitbreakers → 200
  */
+@Tag("full")
 class DlqHandlingE2ETest extends E2EBase {
 
     private static final String SOURCE_TOPIC = "auth.login.succeeded";

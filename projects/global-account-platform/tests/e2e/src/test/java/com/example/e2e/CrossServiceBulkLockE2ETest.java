@@ -3,6 +3,7 @@ package com.example.e2e;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -28,6 +29,7 @@ import static org.awaitility.Awaitility.await;
  *  4. Assert accounts.status=LOCKED in account_db
  *  5. Awaitility poll → security_db.account_lock_history 2 rows
  */
+@Tag("full")
 class CrossServiceBulkLockE2ETest extends E2EBase {
 
     @Test
