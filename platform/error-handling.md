@@ -155,6 +155,7 @@ Owned by `master-service`. See `specs/services/master-service/`.
 | PARTNER_CODE_DUPLICATE | 409 | `partnerCode` is already taken |
 | LOT_NOT_FOUND | 404 | Lot with given id does not exist |
 | LOT_NO_DUPLICATE | 409 | `lotNo` is already taken within the parent SKU |
+| LOT_INACTIVE | 422 | Requested operation is not allowed on a Lot whose `status = INACTIVE`. Emitted by inventory-service mutation guards via `MasterRefInactiveException.lotInactive(...)` (cross-service: master-service surface inactivation, inventory-service consumer enforcement) |
 | LOT_EXPIRED | 422 | Requested operation is not allowed on a Lot whose `status = EXPIRED` |
 | IMMUTABLE_FIELD | 422 | Attempted to change a field that is immutable after creation (e.g. `warehouseCode`, `skuCode`, `baseUom`, `trackingType`) |
 

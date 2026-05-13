@@ -8,7 +8,7 @@ TASK-MONO-087
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -73,13 +73,13 @@ Wording 패턴 (sibling `LOT_EXPIRED` 답습 + cross-service emitter 표기 `SKU
 
 ### Impl PR
 
-- [ ] `platform/error-handling.md` 의 Master Data `[domain: wms]` 섹션에 `LOT_INACTIVE` 1-line 추가 (LOT_NO_DUPLICATE 다음, LOT_EXPIRED 직전).
-- [ ] Description wording = sibling `LOT_EXPIRED` 패턴 + cross-service emitter (`MasterRefInactiveException.lotInactive`) 명시.
-- [ ] post-edit grep `^\| LOT_INACTIVE` [`platform/error-handling.md`](../../platform/error-handling.md) = 1 hit.
-- [ ] platform/*.md cross-ref 영향 0 (1-line append, body 무변경).
-- [ ] HARDSTOP-03 hook PASS.
-- [ ] task lifecycle ready → review (in-progress 우회 — mechanical 1-line, single-PR closure 패턴: TASK-MONO-084/085/086 precedent).
-- [ ] [`tasks/INDEX.md`](../INDEX.md) 동기.
+- [x] `platform/error-handling.md` 의 Master Data `[domain: wms]` 섹션에 `LOT_INACTIVE` 1-line 추가 (LOT_NO_DUPLICATE 다음, LOT_EXPIRED 직전).
+- [x] Description wording = sibling `LOT_EXPIRED` 패턴 + cross-service emitter (`MasterRefInactiveException.lotInactive`) 명시.
+- [x] post-edit grep `^\| LOT_INACTIVE` [`platform/error-handling.md`](../../platform/error-handling.md) = 1 hit (line 158).
+- [x] platform/*.md cross-ref 영향 0 (1-line append, body 무변경).
+- [x] HARDSTOP-03 hook PASS.
+- [x] task lifecycle ready → review (in-progress 우회 — mechanical 1-line, single-PR closure 패턴: TASK-MONO-084/085/086 precedent).
+- [x] [`tasks/INDEX.md`](../INDEX.md) 동기.
 
 ### Close chore PR
 
@@ -182,8 +182,8 @@ javadoc 명시: "Maps to one of: LOCATION_INACTIVE, SKU_INACTIVE, LOT_INACTIVE, 
 
 ### Impl PR
 
-- [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] AC 완료.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 
