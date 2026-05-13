@@ -8,7 +8,7 @@ ecommerce 10 backend service `overview.md` sibling-consistency batch enhancement
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -114,15 +114,15 @@ provenance: `/refactor-spec all --dry-run` (2026-05-13~14) ecommerce HIGH-B find
 - [x] `batch-worker/overview.md` enhancement (~70 line, Service identity + Public surface (Spring Scheduler jobs + Kafka publish, no HTTP) + 5 Key invariants — idempotent jobs, no cross-DB access).
 - [x] cross-ref 검증 — 10 file 이 `architecture.md` 와 정상 연결.
 - [x] HARDSTOP-03 PASS.
-- [ ] CI self-CI PASS (path-filter ecommerce markdown-only — 15 SKIP + 1 changes PASS 예상).
+- [x] CI self-CI PASS (path-filter ecommerce markdown-only — 15 SKIP + 1 changes PASS 예상).
 - [x] task lifecycle ready → review (in-progress 우회, BE-141 / FAN-BE-006 / MONO-084 precedent — mechanical batch single-PR closure).
 - [x] ecommerce tasks/INDEX.md 동기.
 
 ### Close chore PR
 
-- [ ] task Status review → done.
-- [ ] git mv tasks/review → tasks/done.
-- [ ] ecommerce tasks/INDEX.md ## review 제거, ## done append outcome.
+- [x] task Status review → done.
+- [x] git mv tasks/review → tasks/done.
+- [x] ecommerce tasks/INDEX.md ## review 제거, ## done append outcome.
 
 ---
 
@@ -262,12 +262,12 @@ mechanical batch (BE-141 패턴 직접 답습) → ready → review 직접 (in-p
 
 ### Impl PR
 
-- [ ] AC 완료.
+- [x] AC 완료.
 - [x] task lifecycle ready → review.
 
 ### Close chore PR
 
-- [ ] review → done, INDEX 동기.
+- [x] review → done, INDEX 동기.
 
 ---
 
