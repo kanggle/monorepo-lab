@@ -63,6 +63,57 @@ spring:
                 redis-rate-limiter.burstCapacity: 200
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@clientIpKeyResolver}"
+        # TASK-BE-153: backfill 4 service routes (inbound/inventory/outbound/admin).
+        # notification-service is event-consumer (no REST surface) — route omitted.
+        # Per specs/services/gateway-service/architecture.md § Routes: standard tier
+        # (100 rpm / 200 burst) for inbound/inventory/outbound; admin tier (60/120).
+        # Rate-limit bucket is keyed (clientIp, routeId) — admin gets an isolated
+        # bucket by virtue of its distinct route id, no separate KeyResolver bean
+        # required. See RateLimitConfig#clientIpKeyResolver.
+        - id: inbound-service
+          uri: ${INBOUND_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/inbound/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+        - id: inventory-service
+          uri: ${INVENTORY_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/inventory/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+        - id: outbound-service
+          uri: ${OUTBOUND_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/outbound/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+        - id: admin-service
+          uri: ${ADMIN_SERVICE_URI:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/admin/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 60
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
 
 server:
   port: ${SERVER_PORT:8080}

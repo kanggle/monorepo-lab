@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-153-gateway-service-routes-backfill.md` — `gateway-service` 의 `application.yml` + `application-standalone.yml` 에 5 service routes 등록 (inbound/inventory/outbound/notification/admin). TASK-BE-152 audit § "#10 gateway route" portfolio-wide gap finding closure. 정찰 결과 (commit `6fe554e5`, 2026-05-14): wms-only gap (다른 3 project ecommerce/fan/gap 모두 정상 routes 등록). hostname routing (TASK-MONO-024 wms.local) 과 책임 분담 = 두 layer 모두 작동 의도. master-service route pattern 답습 (id/uri/predicates/filters). 본 task 본 세션 = **spec author only** (ready/ 진입), fix impl 다음 세션. D4 OVERRIDE: ADR-MONO-003a § D1.1 인접. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-153-gateway-service-routes-backfill.md` — impl branch `task/be-153-impl-gateway-routes-backfill` (2026-05-14). `gateway-service/application.yml` + `application-standalone.yml` 에 **4 service routes** 등록 (inbound/inventory/outbound/admin). **notification-service 는 event-consumer (REST contract 부재) → route 제외**: task body 5 service 표현은 PROJECT.md Service Map 의 `notification-service | event-consumer | Kafka 이벤트 소비, 알림 발송` 답습 시 자연 4 service 로 좁힘 (`specs/contracts/http/notification-service-api.md` 미존재 = base path source 자체 부재). master-service route pattern 답습 = id/uri/predicates/filters. rate-limit: inbound/inventory/outbound = standard 100/200 (master 답습), admin = **60/120** (`specs/services/gateway-service/architecture.md § Routes` table 의 "admin tier (60 rpm/IP, separate key resolver)" spec 답습 — bucket 은 `clientIpKeyResolver` 의 `(clientIp, routeId)` 키로 자연 isolated, 별 KeyResolver bean 불필요). 4개 URI env var 추가 (`INBOUND_SERVICE_URI` / `INVENTORY_SERVICE_URI` / `OUTBOUND_SERVICE_URI` / `ADMIN_SERVICE_URI`) — default 는 spec 답습 port (8082/8083/8084/8086). spec align: `specs/services/gateway-service/architecture.md` § Routes table 에 outbound 행 backfill ✓. closing paragraph "Routes for outbound and notification-service arrive in subsequent TASK-INT-* tickets." 정정은 **HARDSTOP-10 hook block** (gateway-service architecture.md 의 line 14 Service Type cell 이 inventory-service `### Service Type Composition` standard header pattern 미준수 — BE-150 inbound 사례와 동일) → 별 follow-up TASK-BE-154 후보 (gateway-service architecture.md Service Type Composition header backfill + closing paragraph 정정). production code = 0 (yml + markdown only). 검증: gateway-service compile + unit test PASS (`gradlew :projects:wms-platform:apps:gateway-service:compileJava :test` BUILD SUCCESSFUL 26s — application context startup 정상 = 4 routes yml parse + KeyResolver bean lookup valid). e2e test (Docker required) = CI Linux Integration job 위임 (Rancher blocker memory). known spec drift 2건 (impl 측면 무관, 별 follow-up): inventory-service application.yml SERVER_PORT default `8082` (spec 답습 `8083` 과 mismatch, inbound 8082 와도 collision); admin-service SERVER_PORT default `8087` (spec 답습 `8086` 과 mismatch). 본 PR 의 gateway URI default 는 **spec 답습** (CLAUDE.md § Source of Truth Priority layer 7 services > 14 existing code). lifecycle = ready → in-progress → review. D4 OVERRIDE: ADR-MONO-003a § D1.1 (project-internal infrastructure). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
