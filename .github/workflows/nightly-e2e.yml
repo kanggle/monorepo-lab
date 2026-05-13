@@ -1,15 +1,37 @@
-name: Nightly E2E (full-stack web-store)
+name: Nightly E2E (full-stack web-store + 4 backend full suites)
 
-# Runs the full-stack Playwright suite (4 specs: golden-flow, cart-management,
-# auth-redirect, wishlist) against main HEAD every night.
+# Runs against main HEAD every night:
 #
-# Moved here from ci.yml (TASK-MONO-045) to remove the ~15-min bottleneck from
-# regular PR CI. This suite is the most expensive job (docker compose spin-up
-# of 12 Spring Boot backends + Postgres ×10 + Kafka + Redis + Elasticsearch +
-# MinIO, then Playwright browser execution). Running it nightly keeps main-HEAD
-# regression coverage without blocking every PR.
+#   1. ecommerce frontend-e2e-fullstack (TASK-MONO-014) — Playwright 4 specs
+#      against docker-compose 12 backends + Postgres ×10 + Kafka + Redis +
+#      Elasticsearch + MinIO + web-store Next.js.
+#   2. wms-platform-e2e-full        — wms gateway-master @Tag("full") method-
+#                                      level subset (2 method: RateLimit 800-
+#                                      burst + MasterOutage container-pause).
+#   3. fan-platform-e2e-full        — fan @Tag("full") class subset
+#                                      (1 class: VisibilityTier).
+#   4. scm-platform-e2e-full        — scm @Tag("full") class subset
+#                                      (4 class: AsnReceive + SupplierAck +
+#                                      SupplierCircuitBreaker + WmsInventory).
+#   5. gap-e2e-full                 — gap @Tag("full") class subset
+#                                      (3 class: RefreshReuse + DlqHandling +
+#                                      CrossServiceBulkLock).
 #
-# Trigger policy:
+# Total 10 backend full unit + ecommerce frontend-e2e-fullstack. All 5 jobs
+# run in parallel — backend jobs do NOT depend on ecommerce-boot-jars-nightly.
+#
+# Backend full jobs were introduced by ADR-MONO-011 (PROPOSED 2026-05-13,
+# PR #434 → ACCEPTED via TASK-MONO-079 impl PR) — Phase 3 of the e2e 3단계
+# 전략 (skip / light / full). Phase 1 = path-filter (TASK-MONO-074/075).
+# Phase 2 = @Tag("smoke")/("full") taxonomy + Gradle task family + PR-time
+# CI smoke (ADR-MONO-010, TASK-MONO-076~078). Phase 3 wires the nightly +
+# push-to-main cadence for the full subset.
+#
+# ecommerce frontend-e2e-fullstack moved here from ci.yml by TASK-MONO-045
+# to remove the ~15-min bottleneck from regular PR CI. Same rationale
+# applied to backend full subsets in Phase 3.
+#
+# Trigger policy (unchanged from TASK-MONO-014):
 #   schedule  — 0 18 * * * (UTC 18:00 = KST 03:00, low-traffic window)
 #   push      — only main branch (post-merge verification)
 #   dispatch  — workflow_dispatch for manual one-shot runs
@@ -17,7 +39,8 @@ name: Nightly E2E (full-stack web-store)
 #
 # Failure handling (v1 scope — portfolio):
 #   - Failure turns the main branch badge red; visible in GitHub Actions UI.
-#   - v2 would add issue auto-create or Slack webhook (out of scope).
+#   - v2 would add issue auto-create or Slack webhook (out of scope; ADR-
+#     MONO-011 § 6.1 outstanding).
 
 on:
   schedule:
@@ -280,4 +303,259 @@ jobs:
           path: |
             projects/ecommerce-microservices-platform/apps/web-store/playwright-report/
             projects/ecommerce-microservices-platform/apps/web-store/test-results/
+          retention-days: 7
+
+  # ===========================================================================
+  # Backend full e2e jobs (ADR-MONO-011 / TASK-MONO-079, Phase 3).
+  #
+  # The 4 jobs below run @Tag("full") subsets of the 4 backend e2e suites
+  # against main HEAD nightly + on every push to main. They mirror the
+  # corresponding PR-time smoke jobs in ci.yml (e2e-tests / fan-platform-e2e
+  # / scm-platform-e2e / gap-integration-tests) with these diffs:
+  #
+  #   - Task target: :e2eSmokeTest → :e2eFullTest.
+  #   - Timeout: shorter PR-time budgets (10/12/20 min) → 60 min (generous
+  #     for cold-start + flake-prone categories: 800-request burst,
+  #     container-pause, supplier circuit-breaker).
+  #   - Boot-jars built in-job (no cross-workflow artifact reuse; GitHub
+  #     Actions does not support that without workflow chaining).
+  #   - No path-filter `if:` — cron + push-to-main triggers are
+  #     unconditional. The repo-gate `if: github.repository == 'kanggle/
+  #     monorepo-lab'` keeps extracted standalone repos out.
+  #   - gap-e2e-full omits boot-jars + Docker CLI image build steps — its
+  #     ComposeFixture handles docker-compose build in @BeforeAll.
+  #
+  # All 4 jobs run in parallel with `frontend-e2e-fullstack` and
+  # `ecommerce-boot-jars-nightly`. No `needs:` between them.
+  # ===========================================================================
+
+  wms-platform-e2e-full:
+    name: E2E full (wms gateway-master, Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build wms boot jars
+        run: >-
+          ./gradlew
+          :projects:wms-platform:apps:master-service:bootJar
+          :projects:wms-platform:apps:gateway-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build wms service images for full e2e
+        # Docker CLI build (BuildKit) — Docker 28 + Testcontainers
+        # ImageFromDockerfile hang workaround (incident
+        # 2026-05-05-ci-regression.md § Root Cause #2, TASK-MONO-044).
+        run: |
+          docker build -t wms-master-service:e2e \
+            -f projects/wms-platform/apps/master-service/Dockerfile \
+            projects/wms-platform/apps/master-service/
+          docker build -t wms-gateway-service:e2e \
+            -f projects/wms-platform/apps/gateway-service/Dockerfile \
+            projects/wms-platform/apps/gateway-service/
+
+      - name: Run gateway-master e2e full suite
+        run: >-
+          ./gradlew
+          :projects:wms-platform:apps:gateway-service:e2eFullTest
+          -x :projects:wms-platform:apps:master-service:bootJar
+          -x :projects:wms-platform:apps:gateway-service:bootJar
+          -Dwms.e2e.masterImage=wms-master-service:e2e
+          -Dwms.e2e.gatewayImage=wms-gateway-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload wms e2e full test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-e2e-full-test-reports-nightly
+          path: |
+            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eFullTest/
+            projects/wms-platform/apps/gateway-service/build/test-results/e2eFullTest/
+          retention-days: 7
+
+  fan-platform-e2e-full:
+    name: E2E full (fan-platform v1 live-trio, Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build fan-platform boot jars
+        run: >-
+          ./gradlew
+          :projects:fan-platform:apps:gateway-service:bootJar
+          :projects:fan-platform:apps:community-service:bootJar
+          :projects:fan-platform:apps:artist-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build fan-platform service images for full e2e
+        run: |
+          docker build -t fan-platform-gateway-service:e2e \
+            -f projects/fan-platform/apps/gateway-service/Dockerfile \
+            projects/fan-platform/apps/gateway-service/
+          docker build -t fan-platform-community-service:e2e \
+            -f projects/fan-platform/apps/community-service/Dockerfile \
+            projects/fan-platform/apps/community-service/
+          docker build -t fan-platform-artist-service:e2e \
+            -f projects/fan-platform/apps/artist-service/Dockerfile \
+            projects/fan-platform/apps/artist-service/
+
+      - name: Run fan-platform live-trio e2e full suite
+        run: >-
+          ./gradlew
+          :projects:fan-platform:tests:e2e:e2eFullTest
+          -x :projects:fan-platform:apps:gateway-service:bootJar
+          -x :projects:fan-platform:apps:community-service:bootJar
+          -x :projects:fan-platform:apps:artist-service:bootJar
+          -Dfan.e2e.gatewayImage=fan-platform-gateway-service:e2e
+          -Dfan.e2e.communityImage=fan-platform-community-service:e2e
+          -Dfan.e2e.artistImage=fan-platform-artist-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload fan-platform e2e full test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-platform-e2e-full-test-reports-nightly
+          path: |
+            projects/fan-platform/tests/e2e/build/reports/tests/e2eFullTest/
+            projects/fan-platform/tests/e2e/build/test-results/e2eFullTest/
+          retention-days: 7
+
+  scm-platform-e2e-full:
+    name: E2E full (scm-platform v1 cross-service, Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build scm-platform boot jars
+        run: >-
+          ./gradlew
+          :projects:scm-platform:apps:gateway-service:bootJar
+          :projects:scm-platform:apps:procurement-service:bootJar
+          :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build scm-platform service images for full e2e
+        run: |
+          docker build -t scm-platform-gateway-service:e2e \
+            -f projects/scm-platform/apps/gateway-service/Dockerfile \
+            projects/scm-platform/apps/gateway-service/
+          docker build -t scm-platform-procurement-service:e2e \
+            -f projects/scm-platform/apps/procurement-service/Dockerfile \
+            projects/scm-platform/apps/procurement-service/
+          docker build -t scm-platform-inventory-visibility-service:e2e \
+            -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
+            projects/scm-platform/apps/inventory-visibility-service/
+
+      - name: Run scm-platform cross-service e2e full suite
+        run: >-
+          ./gradlew
+          :projects:scm-platform:tests:e2e:e2eFullTest
+          -x :projects:scm-platform:apps:gateway-service:bootJar
+          -x :projects:scm-platform:apps:procurement-service:bootJar
+          -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
+          -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
+          -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload scm-platform e2e full test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scm-platform-e2e-full-test-reports-nightly
+          path: |
+            projects/scm-platform/tests/e2e/build/reports/tests/e2eFullTest/
+            projects/scm-platform/tests/e2e/build/test-results/e2eFullTest/
+          retention-days: 7
+
+  gap-e2e-full:
+    name: E2E full (gap docker-compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    # gap uses docker-compose directly via ComposeFixture (not Testcontainers
+    # Network), so no boot-jars build + no Docker CLI image build steps —
+    # ComposeFixture handles `docker-compose build` in @BeforeAll. The job
+    # just runs :e2eFullTest after JDK/Gradle setup.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (ComposeFixture prerequisite)
+        run: docker info
+
+      - name: Run gap docker-compose e2e full suite
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:tests:e2e:e2eFullTest
+          --no-daemon --stacktrace
+
+      - name: Upload gap e2e full test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gap-e2e-full-test-reports-nightly
+          path: |
+            projects/global-account-platform/tests/e2e/build/reports/tests/e2eFullTest/
+            projects/global-account-platform/tests/e2e/build/test-results/e2eFullTest/
           retention-days: 7

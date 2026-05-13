@@ -8,7 +8,7 @@ ADR-MONO-011 ACCEPTED transition + Phase 3 impl — `nightly-e2e.yml` 에 4 back
 
 # Status
 
-ready
+review
 
 # Owner
 
