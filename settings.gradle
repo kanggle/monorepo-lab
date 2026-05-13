@@ -48,7 +48,12 @@ include(
     'projects:global-account-platform:apps:community-service',
     'projects:global-account-platform:apps:gateway-service',
     'projects:global-account-platform:apps:membership-service',
-    'projects:global-account-platform:apps:security-service'
+    'projects:global-account-platform:apps:security-service',
+    // TASK-MONO-080: gap tests/e2e module historical 등록 누락 정정. PR #432
+    // (TASK-MONO-078) 가 본 모듈의 build.gradle 을 갱신했으나 settings.gradle
+    // include 가 없어 gradle 이 인식 못 했고 nightly gap-e2e-full job 의 첫
+    // 호출에서 fail 했음. fan/scm 패턴 답습.
+    'projects:global-account-platform:tests:e2e'
 )
 
 // Project: fan-platform

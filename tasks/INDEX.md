@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-080-gap-e2e-nightly-fix.md` — TASK-MONO-079 첫 nightly run (`25771710919`, push `8768c730`, 2026-05-13 01:05 UTC) 의 **gap-e2e-full 10초 fail 진단 + fix**. ADR-MONO-011 § D4 "triage within 1 business day → file fix task" 정책 그대로 이행. **Phase 3 의 4 backend full job 중 3 success (wms 2m3s / fan 1m55s / scm 4m37s), gap 만 fail** — `:e2eFullTest` gradle task 10초 만에 fail. 진단 가설 3건 (A boot jars 누락 / B working dir / C docker-compose image directive). **추가 발견**: ADR-MONO-010 D5 step 4 의 가정 ("gap-integration-tests CI job 이 default `test` 호출") 이 사실과 다름 — gap 의 tests/e2e module 이 PR-time CI 의 어떤 job 도 호출 안 함, Phase 2 의 gap partition 이 CI 측면에서 dead code 였음. 본 task scope = nightly gap-e2e-full GREEN 만들기 + ADR audit-trail 정정 (옵션 C-1, ADR 본문 직접 수정 안 함). production code 0. impl 1차 진단 + fix → 재검증 push trigger. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-080-gap-e2e-nightly-fix.md` — gap-e2e-full nightly fail 진단 + fix in review. **Phase 0 진단 결정적 결과**: gradle task error `Cannot locate tasks that match ':projects:global-account-platform:tests:e2e:e2eFullTest' as project 'tests' not found in project ':projects:global-account-platform'.` → **가설 D (새로 발견) 확정**: gap 의 `tests/e2e/` 모듈이 `settings.gradle` include 블록에 historical 등록 누락. 기존 가설 A/B/C (boot jars / workingDir / docker-compose image directive) 모두 빗나감. **부수 발견**: ci.yml 의 `Build and check GAP backend (Docker-free)` step 도 7 service `:check` 만 호출 — `:tests:e2e:check` 미호출 (fan/scm 는 둘 다 호출, gap 만 누락). 등록 + ci.yml 호출 누락 = double dead code 였음. **3-prong fix**: (1) `settings.gradle` 에 `'projects:global-account-platform:tests:e2e'` include 추가 (inline comment 로 회귀 원인 기록), (2) `ci.yml` `Build and check GAP backend` step 에 `:projects:global-account-platform:tests:e2e:check` 추가 (fan/scm 패턴 답습), (3) `tests/e2e/build.gradle` 의 default `test` 의 `useJUnitPlatform { excludeTags 'full' }` → `excludeTags 'e2e'` (fan/scm 일관, 5 class 모두 `@Tag("e2e")` 상속 → 0 test → Docker-free `:check` 보존). smoke/full 의 partition 은 dedicated task family (`e2eSmokeTest`/`e2eFullTest`) 만 책임. **ADR-MONO-010 D5 step 4 audit-only 정정** (옵션 C-1): D5 step 4 본문의 두 가지 가정 모두 잘못 — (a) "gap-integration-tests 가 default test 호출" + (b) "tests/e2e 모듈 등록됨" — task body 의 audit-trail 만 (ADR 본문 직접 수정 안 함). 4 file 변경 (settings.gradle + ci.yml + build.gradle + task lifecycle), production code 0. self-CI = `workflows` + `libs` flag 활성 full pipeline + 새 `:tests:e2e:check` 호출 검증.
 
 ## done
 

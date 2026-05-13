@@ -87,12 +87,21 @@ def baseE2eConfig = { Test t ->
 }
 
 test {
-    // gap's default `test` task IS the e2e suite (historical: ComposeFixture
-    // is wired into @BeforeAll of the base class). gap-integration-tests CI
-    // job calls this task. ADR-MONO-010 Phase 2: skip @Tag("full") so the
-    // long-running 3 full class (RefreshReuse + Dlq + CrossServiceBulkLock)
-    // do not run at PR time; they run nightly via :e2eFullTest only.
-    useJUnitPlatform { excludeTags 'full' }
+    // gap's default `test` task stays Docker-free per the fan/scm tests/e2e
+    // pattern: all 5 e2e classes carry the `@Tag("e2e")` umbrella (via
+    // E2EBase, TASK-MONO-078), so `excludeTags 'e2e'` produces an empty test
+    // run for `./gradlew check` invocations. The actual e2e suites are run
+    // via `e2eSmokeTest` / `e2eFullTest` / `e2eTest` below.
+    //
+    // History: PR #432 (TASK-MONO-078) initially set `excludeTags 'full'`
+    // under the assumption that this `test` task was called by the
+    // gap-integration-tests CI job — that assumption proved wrong (the CI
+    // job calls each service's `:integrationTest`, not this module's `test`),
+    // and the tests/e2e module was never registered in settings.gradle
+    // anyway. TASK-MONO-080 registers the module + aligns this filter with
+    // fan/scm, restoring Docker-free `:check` semantics. Smoke / full
+    // partition is now exclusively managed by the dedicated task family.
+    useJUnitPlatform { excludeTags 'e2e' }
     baseE2eConfig.call(it)
 }
 
