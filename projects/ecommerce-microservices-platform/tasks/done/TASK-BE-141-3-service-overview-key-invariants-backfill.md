@@ -8,7 +8,7 @@ TASK-BE-141
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -110,9 +110,9 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13~14 ecommerce HIGH-B (3 fro
 
 ### Close chore PR
 
-- [ ] task Status review → done.
-- [ ] git mv tasks/review → tasks/done.
-- [ ] ecommerce tasks/INDEX.md ## review 제거, ## done append 1-line outcome.
+- [x] task Status review → done.
+- [x] git mv tasks/review → tasks/done.
+- [x] ecommerce tasks/INDEX.md ## review 제거, ## done append 1-line outcome.
 
 ---
 
@@ -227,7 +227,7 @@ mechanical enhancement (fan-platform sibling 답습) → ready → review 직접
 
 ### Close chore PR
 
-- [ ] review → done, INDEX 동기.
+- [x] review → done, INDEX 동기.
 
 ---
 
