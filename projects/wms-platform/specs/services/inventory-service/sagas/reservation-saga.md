@@ -294,12 +294,12 @@ traces.
 - [`../../../contracts/events/outbound-events.md`](../../../contracts/events/outbound-events.md)
   — `outbound.picking.requested` / `.cancelled` / `outbound.shipping.confirmed`
   consumer-side schemas.
-- [`../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md)
+- [`../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md)
   — § D6 (inventory TTL Category D reference implementation), § D5
   (counter contract).
-- [`../../../../../rules/traits/transactional.md`](../../../../../rules/traits/transactional.md)
+- [`../../../../../../rules/traits/transactional.md`](../../../../../../rules/traits/transactional.md)
   — Required Artifact 2 (saga compensation spec), T4 (no direct status
   UPDATE), T5 (optimistic lock), T7 (saga atomicity), T8 (event dedupe).
-- [`../../../../../rules/domains/wms.md`](../../../../../rules/domains/wms.md)
+- [`../../../../../../rules/domains/wms.md`](../../../../../../rules/domains/wms.md)
   — W4 (reserve→confirm), W5 (no decrement until shipped), Required
   Artifact 5.

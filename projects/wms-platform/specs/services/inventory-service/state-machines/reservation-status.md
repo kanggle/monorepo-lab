@@ -153,11 +153,11 @@ stateDiagram-v2
 - [`../../../contracts/events/inventory-events.md`](../../../contracts/events/inventory-events.md)
   — § 4 `inventory.reserved`, § 5 `inventory.released`, § 6
   `inventory.confirmed` payload schemas emitted on each transition.
-- [`../../../../../rules/traits/transactional.md`](../../../../../rules/traits/transactional.md)
+- [`../../../../../../rules/traits/transactional.md`](../../../../../../rules/traits/transactional.md)
   — T4 (no direct status UPDATE), T7 (saga atomicity), T5 (optimistic
   lock).
-- [`../../../../../rules/domains/wms.md`](../../../../../rules/domains/wms.md)
+- [`../../../../../../rules/domains/wms.md`](../../../../../../rules/domains/wms.md)
   — W4 (reserve→confirm), W5 (no decrement until shipped).
-- [`../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md)
+- [`../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md)
   — § D6 (TTL Category D reference implementation), § D5 (counter
   contract).
