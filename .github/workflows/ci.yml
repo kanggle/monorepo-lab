@@ -286,7 +286,9 @@ jobs:
         # via AbstractIntegrationTest base) and are excluded from `:test` /
         # `:check` by `projects/global-account-platform/build.gradle`. They
         # run in the dedicated `gap-integration-tests` job below. This step
-        # therefore stays Docker-free.
+        # therefore stays Docker-free. The tests/e2e module's default `test`
+        # carries `excludeTags 'e2e'` (fan/scm pattern, TASK-MONO-080) so its
+        # `:check` invocation is also Docker-free.
         run: >-
           ./gradlew
           :projects:global-account-platform:apps:auth-service:check
@@ -296,6 +298,7 @@ jobs:
           :projects:global-account-platform:apps:gateway-service:check
           :projects:global-account-platform:apps:membership-service:check
           :projects:global-account-platform:apps:security-service:check
+          :projects:global-account-platform:tests:e2e:check
           --no-daemon --stacktrace
 
       - name: Build and check fan-platform backend (Docker-free)
