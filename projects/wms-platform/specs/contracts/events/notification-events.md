@@ -20,7 +20,7 @@ All `notification-service` published events use the standard WMS envelope:
 {
   "eventId": "<uuidv7 string>",
   "eventType": "notification.delivered",
-  "eventVersion": "v1",
+  "eventVersion": 1,
   "aggregateId": "<delivery_id uuid string>",
   "occurredAt": "<RFC 3339 instant>",
   "payload": { ... }
@@ -61,8 +61,8 @@ ordering.
 
 ### Schema versioning
 
-- `eventVersion` is reserved for the on-the-wire payload shape. v1 covers single-channel terminal deliveries.
-- Future evolutions (multi-channel fanout in v2, retry-budget metadata) increment `eventVersion` to `v2` and remain backward-compatible by additive payload fields only.
+- `eventVersion` is an **integer** matching the 5 sibling WMS event contracts (master/inventory/inbound/outbound/admin); v1 schema = `1`, future v2 = `2`. (Pre-2026-05-13 the wire format was string `"v1"` — TASK-BE-144 aligned this with siblings on refactor-spec audit finding.)
+- v1 covers single-channel terminal deliveries. Future evolutions (multi-channel fanout in v2, retry-budget metadata) increment `eventVersion` to `2` and remain backward-compatible by additive payload fields only.
 
 ---
 

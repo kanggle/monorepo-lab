@@ -32,7 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxWriterAdapter implements OutboxPort {
 
     private static final String AGGREGATE_TYPE = "notification.delivery";
-    private static final String EVENT_VERSION = "v1";
+    // TASK-BE-144 (refactor-spec audit): wire envelope `eventVersion` is an int
+    // (`1`), matching the 5 sibling WMS event contracts (master/inventory/inbound/
+    // outbound/admin). DB column `notification_outbox.event_version` is still
+    // VARCHAR(10); we store the string repr ("1") to avoid a schema migration —
+    // the column is local-only and not queried/filtered on its value.
+    private static final int EVENT_VERSION = 1;
+    private static final String EVENT_VERSION_DB = String.valueOf(EVENT_VERSION);
     private static final String EVENT_DELIVERY_SCHEDULED = "notification.delivery.scheduled";
     private static final String EVENT_DELIVERED = "notification.delivered";
 
@@ -69,7 +75,7 @@ public class OutboxWriterAdapter implements OutboxPort {
                     AGGREGATE_TYPE,
                     delivery.id().toString(),
                     eventType,
-                    EVENT_VERSION,
+                    EVENT_VERSION_DB,
                     payloadJson,
                     delivery.eventId().toString(),
                     clock.instant());
