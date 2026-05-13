@@ -459,10 +459,10 @@ moves from `tasks/ready/` to `tasks/in-progress/`:
    routing rule defaults + payload-to-template mapping
 3. `specs/contracts/events/notification-events.md` — published
    `notification.delivered.v1` schema
-4. `specs/services/notification-service/idempotency.md` — dedupe + delivery
-   key + retry budget tabulated
-5. `specs/services/notification-service/runbooks/dlt-replay.md` — DLT drain
-   + manual delivery retry procedure
+4. ✅ [`specs/services/notification-service/idempotency.md`](idempotency.md) — dedupe + delivery
+   key + retry budget tabulated (TASK-BE-145)
+5. ✅ [`specs/services/notification-service/runbooks/dlt-replay.md`](runbooks/dlt-replay.md) — DLT drain
+   + manual delivery retry procedure (TASK-BE-145)
 6. Register error codes in `platform/error-handling.md`:
    `DELIVERY_RETRY_EXHAUSTED`, `DELIVERY_STATE_TRANSITION_INVALID`,
    `IDEMPOTENCY_KEY_DUPLICATE`, `ROUTING_AMBIGUOUS`, `ROUTING_RULE_NOT_FOUND`

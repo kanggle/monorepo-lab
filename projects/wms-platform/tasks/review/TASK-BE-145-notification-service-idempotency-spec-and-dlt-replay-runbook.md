@@ -8,7 +8,7 @@ TASK-BE-145
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -102,14 +102,14 @@ architecture.md L451-468 Open Items 영역:
 
 ### Impl PR
 
-- [ ] `notification-service/idempotency.md` 신규 file authoring (~100-150 line, 9 section).
-- [ ] `notification-service/runbooks/dlt-replay.md` 신규 file authoring (~60-80 line, 8 section, runbooks/ directory 신설).
-- [ ] architecture.md § Open Items #4 + #5 → ✅ 표기 (admin/inbound sibling 패턴 답습).
-- [ ] cross-ref 검증 — 본 2 file 이 architecture.md / rules / platform error-handling 등 정상 cite.
-- [ ] HARDSTOP-03 hook PASS (project-specific content 잔존 0 — 본 file 은 wms-platform 자기 자신 service 영역).
+- [x] `notification-service/idempotency.md` 신규 file authoring (~200 line, 10 section: Scope / Inbound (Kafka) / Outbound (channel) / Retry budget / Concurrency / Failure modes / Observability / Testing / Not in v1 / References).
+- [x] `notification-service/runbooks/dlt-replay.md` 신규 file authoring (~150 line, 8 section: Purpose / Prerequisites / Identify / Diagnostic classification / Step 3a-c (DLT drain / manual retry / message removal) / Verification / Rollback / Escalation / References) + runbooks/ directory 신설.
+- [x] architecture.md § Open Items #4 + #5 → ✅ marker + cross-link to 신규 file.
+- [x] cross-ref 검증 — 본 2 file 이 architecture.md / rules / platform / ADR-MONO-005 정상 cite.
+- [x] HARDSTOP-03 hook PASS (project-specific content 잔존 0).
 - [ ] CI self-CI PASS (path-filter wms-platform markdown-only — 15 SKIP + 1 changes PASS 예상).
-- [ ] task lifecycle ready → review (in-progress 우회, spec-only single-PR closure 패턴).
-- [ ] wms tasks/INDEX.md 동기 (root INDEX 무영향).
+- [x] task lifecycle ready → review (in-progress 우회, spec-only single-PR closure 패턴, TASK-BE-281 / TASK-MONO-084 / TASK-FAN-BE-006 precedent).
+- [x] wms tasks/INDEX.md 동기 (root INDEX 무영향).
 
 ### Close chore PR
 
