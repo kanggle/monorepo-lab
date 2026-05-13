@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-280-auth-service-identity-platform-project-md-frontmatter-sync.md` — `/refactor-spec all --dry-run` (2026-05-13) GAP audit Top 3 critical (HARDSTOP-02/10 risk). `auth-service/architecture.md:9` 가 Service Type `identity-platform` 선언 (2026-05-11 revision), 그러나 `PROJECT.md:5` frontmatter `service_types: [rest-api, event-consumer, frontend-app]` 에 `identity-platform` 미포함. catalog (`platform/service-types/identity-platform.md`) 는 존재. fix = PROJECT.md frontmatter 1-line 추가. admin-service self-IdP 검토 (rest-api vs identity-platform promote)는 별도 follow-up. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 

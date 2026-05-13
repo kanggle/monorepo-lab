@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-144-notification-events-eventversion-int-string-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) WMS audit Top 1 critical finding (cross-service consumer wire-format incompatibility). 5 sibling event contracts (master/inventory/inbound/outbound/admin) 가 `"eventVersion": 1` integer 사용, **`notification-events.md` 만 `"v1"` string**. fix = spec 정정 (integer 통일) + notification-service producer code emission 검증. shared envelope schema 추출 (6 contract byte-identical envelope) 은 follow-up 후보. 43 file / 43 finding 중 highest-impact (wire-format consumer breakage prevention). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
