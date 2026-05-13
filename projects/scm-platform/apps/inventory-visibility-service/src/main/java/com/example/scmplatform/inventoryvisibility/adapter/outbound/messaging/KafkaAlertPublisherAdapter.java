@@ -41,11 +41,10 @@ public class KafkaAlertPublisherAdapter implements AlertPublisherPort {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("eventType", "inventory.alert." + alertType.toLowerCase());
-        envelope.put("eventVersion", 1);
+        envelope.put("source", "scm-platform-inventory-visibility-service");
         envelope.put("occurredAt", detectedAt.toString());
-        envelope.put("producer", "inventory-visibility-service");
-        envelope.put("aggregateType", "inventory_node");
-        envelope.put("aggregateId", nodeId.toString());
+        envelope.put("schemaVersion", 1);
+        envelope.put("partitionKey", nodeId.toString());
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("nodeId", nodeId.toString());
