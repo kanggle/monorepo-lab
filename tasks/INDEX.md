@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-086-mono-085-carry-out-cosmetic-cleanup.md` — TASK-MONO-085 closure (PR #486) 직후 post-merge 재검증 결과. **"잔존 = file 부재 3건" 분류 부정확 carry-out**: (1) platform/architecture.md L189 `PROJECT.md` link 제거 (generic placeholder, repo root PROJECT.md 부재) + (2) GAP account-events.md L172 path fix (1-up → 2-up, `consumer-integration-guide.md` 실재 — MONO-085 batch scope 였으나 false-negative 로 file 부재 분류) + (3) WMS outbound external-integrations.md L155 link 형식 정리 (`tms-shipment-api.md` Open Item placeholder, sibling L751-752 패턴 답습 backtick code only). 3 file × 1 line trivial cleanup. **Verification**: `bash /tmp/check_links2.sh` 재실행 → broken = 0 (잔존 0 확정). 옵션 C 봉합 sequence cosmetic 마무리. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
