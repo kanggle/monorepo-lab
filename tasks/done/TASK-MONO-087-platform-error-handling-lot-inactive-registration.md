@@ -8,7 +8,7 @@ TASK-MONO-087
 
 # Status
 
-review
+done
 
 # Owner
 
