@@ -574,31 +574,54 @@ Known evolution paths (not part of v1 — documented to guide v2 decisions):
 
 ---
 
-## Open Items (Before First Implementation Task)
+## Open Items (Retrospective Backfill Audit)
 
-These must be completed before any `TASK-BE-*` targeting `inventory-service` is
-moved to `tasks/ready/`:
+> Originally framed as "Before First Implementation Task" prerequisites.
+> `inventory-service` has been in production since the BE-030 series (Reserve /
+> Release / Confirm domain + outbound saga consumers). This list is now a
+> **retrospective backfill audit** — each item has a ✅ done / ⚠️ partial /
+> ❌ outstanding status. Outstanding items are candidates for separate
+> `TASK-BE-*` (project-internal) or `TASK-MONO-*` (shared paths). Audit
+> conducted in TASK-BE-152 (2026-05-14).
 
-1. `specs/services/inventory-service/domain-model.md` — entities, fields,
-   relationships, invariants, state per entity (especially `Inventory`,
-   `InventoryMovement`, `Reservation`, `StockAdjustment`, `StockTransfer`)
-2. `specs/contracts/http/inventory-service-api.md` — REST endpoints
-3. `specs/contracts/events/inventory-events.md` — published event schemas
-4. Consumer-side schema references for `inbound.*` and `outbound.*` events that
-   inventory subscribes to (cross-link in inventory's spec, schema authored in
-   the publishing service's spec)
-5. `specs/services/inventory-service/idempotency.md` — REST + event-dedupe strategy
+1. ✅ [`domain-model.md`](domain-model.md) — entities, fields, relationships,
+   invariants, state per entity (`Inventory`, `InventoryMovement`,
+   `Reservation`, `StockAdjustment`, `StockTransfer`, infrastructure-supporting
+   records). Authored in BE-030 era.
+2. ✅ [`../../contracts/http/inventory-service-api.md`](../../contracts/http/inventory-service-api.md)
+   — REST endpoints. Authored in BE-030 era.
+3. ✅ [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md)
+   — published event schemas (`inventory.reserved` / `.released` / `.confirmed`
+   + adjustments / transfers / movements). Authored in BE-030 era.
+4. ✅ Consumer-side schema references for `inbound.*` and `outbound.*` events —
+   cross-linked from `inventory-events.md` § Consumer References + the
+   publishing services' contract files.
+5. ✅ [`idempotency.md`](idempotency.md) — REST + event-dedupe strategy.
+   Authored in BE-030 era.
 6. ✅ [`sagas/reservation-saga.md`](sagas/reservation-saga.md) — reservation
-   lifecycle and compensation (authored in TASK-BE-151, 2026-05-14)
+   lifecycle and compensation (authored in TASK-BE-151, 2026-05-14).
 7. ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
-   — reservation state machine diagram (authored in TASK-BE-151, 2026-05-14)
-8. `specs/services/inventory-service/external-integrations.md` —
-   per `integration-heavy` Required Artifact 1 (v1 lists "no external vendors yet"
-   but file is required to declare zero state)
-9. Register new error codes in `platform/error-handling.md`:
-   `RESERVATION_NOT_FOUND`, `RESERVATION_QUANTITY_MISMATCH`, `LOCATION_INACTIVE`,
-   `SKU_INACTIVE`, `LOT_INACTIVE`, `LOT_EXPIRED`
-10. Add a gateway route for `inventory-service` in `gateway-service`
+   — reservation state machine diagram (authored in TASK-BE-151, 2026-05-14).
+8. ❌ `external-integrations.md` — per `integration-heavy` Required Artifact 1
+   (v1 zero-state declaration: no external vendors). **Outstanding** —
+   candidate for separate `TASK-BE-*` (project-internal, sibling pattern =
+   `outbound-service/external-integrations.md` reverse — declare zero vendor
+   surface).
+9. ⚠️ Error codes in `platform/error-handling.md` — **5 of 6 registered**:
+   `RESERVATION_NOT_FOUND` (404), `RESERVATION_QUANTITY_MISMATCH` (422),
+   `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_EXPIRED` (422).
+   **`LOT_INACTIVE` outstanding** — candidate for separate `TASK-MONO-*`
+   (shared path `platform/error-handling.md`, 1-line addition mirroring
+   `SKU_INACTIVE` / `LOCATION_INACTIVE` row pattern).
+10. ❌ Gateway route for `inventory-service` in `gateway-service`. **Outstanding
+    — and a portfolio-wide gap, not inventory-specific**: as of 2026-05-14,
+    `gateway-service/src/main/resources/application.yml` only routes
+    `master-service` (`/api/v1/master/**`). Inbound / Outbound / Inventory /
+    Notification / Admin services are not exposed via the Spring Cloud Gateway.
+    Whether this is intentional (services accessed directly via Traefik
+    hostname routing per TASK-MONO-024, bypassing Spring Cloud Gateway) or a
+    routing-config gap should be resolved in a separate audit
+    (`TASK-MONO-*` candidate) before adding individual routes here.
 
 ---
 

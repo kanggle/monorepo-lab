@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-152-inventory-service-open-items-audit-and-list-correction.md` — inventory-service `architecture.md § Open Items` (L577-602) + `domain-model.md § Open Items` (L675-689) audit + list 정정. BE-151 후 stale 상태였던 list 본문을 retrospective backfill audit framing 으로 재구성 (section 머리말 "Before First Implementation Task" → "Retrospective Backfill Audit" + BE-152 attribution). 각 항목 status icon 부여 — architecture.md: ✅×7 (#1-7 done, BE-030 era for #1-5 + BE-151 for #6-7) + ❌ #8 (external-integrations.md) + ⚠️ #9 (5/6 error codes registered, LOT_INACTIVE 미등록) + ❌ #10 (gateway route portfolio-wide gap fact 인용); domain-model.md: ❌ database-design.md (Flyway migration de-facto schema) + ✅×3 + ⚠️ error codes + TRANSFER_CROSS_WAREHOUSE 의도된 VALIDATION_ERROR fold 보존 명시. **4 outstanding items 는 별 task 후보로 list 본문 inline 명시만 (file authoring 0)**: TASK-BE-N external-integrations.md zero-state + TASK-BE-N+1 database-design.md retrospective + TASK-MONO-N LOT_INACTIVE 등록 + TASK-MONO-N+1 portfolio-wide gateway routes audit. 검증 `grep -rn "(Open Item" projects/wms-platform/specs/` = 0 (BE-151 outcome 유지). cross-ref 검증 — 신규 활성화 link 모두 dead-reference 0. HARDSTOP-03 PASS. production code 변경 0 — list correction only. lifecycle = ready → review 직접 (in-progress 우회, same-day single-PR closure 13번째 entry — BE-141/142/FAN-BE-006/MONO-084/BE-281/BE-145/146/147/148/149/150/151 precedent). 분석=Opus 4.7 / 구현=Opus 4.7 (audit + list correction inline).
 
 ## done
 

@@ -672,21 +672,32 @@ profile `dev` or `standalone`.
 
 ---
 
-## Open Items
+## Open Items (Retrospective Backfill Audit)
 
-- `specs/services/inventory-service/database-design.md` — physical schema
-  (tables, indexes, partial-unique on `(location_id, sku_id, lot_id)` with
-  NULL-aware key, role grants enforcing W2 append-only)
+> Audit conducted in TASK-BE-152 (2026-05-14). See
+> [`architecture.md § Open Items`](architecture.md) for the full retrospective
+> framing.
+
+- ❌ `database-design.md` — physical schema (tables, indexes, partial-unique
+  on `(location_id, sku_id, lot_id)` with NULL-aware key, role grants enforcing
+  W2 append-only). **Outstanding** — Flyway migrations under
+  `apps/inventory-service/src/main/resources/db/migration/` are the de-facto
+  schema; this file would consolidate them into a single spec doc. Candidate
+  for separate `TASK-BE-*`.
 - ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
   — diagram in its own file (authored in TASK-BE-151, 2026-05-14)
 - ✅ [`sagas/reservation-saga.md`](sagas/reservation-saga.md) — saga
   participation detail (authored in TASK-BE-151, 2026-05-14)
-- `specs/services/inventory-service/idempotency.md` — REST + event dedupe
-  strategy (referenced in `architecture.md`)
-- `platform/error-handling.md` — register codes referenced here that are not
-  yet in the catalog: `RESERVATION_NOT_FOUND`, `RESERVATION_QUANTITY_MISMATCH`,
-  `LOCATION_INACTIVE`, `SKU_INACTIVE`, `LOT_INACTIVE`, `LOT_EXPIRED`,
-  `TRANSFER_CROSS_WAREHOUSE` (or fold into `VALIDATION_ERROR`)
+- ✅ [`idempotency.md`](idempotency.md) — REST + event dedupe strategy
+  (authored in BE-030 era)
+- ⚠️ `platform/error-handling.md` — **5 of 6 referenced codes registered**:
+  `RESERVATION_NOT_FOUND` (404), `RESERVATION_QUANTITY_MISMATCH` (422),
+  `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_EXPIRED` (422).
+  **`LOT_INACTIVE` outstanding** — separate `TASK-MONO-*` candidate (shared
+  path, 1-line addition mirroring `SKU_INACTIVE` / `LOCATION_INACTIVE` row).
+  `TRANSFER_CROSS_WAREHOUSE` intentionally not registered — folded into
+  generic `VALIDATION_ERROR` per the original deferral note; v1 simplification
+  per § 5 StockTransfer invariants.
 
 ---
 
