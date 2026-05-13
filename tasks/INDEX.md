@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-083-platform-jwt-standard-claims-hardstop03-cleanup.md` — `/refactor-spec all --dry-run` (2026-05-13) Platform audit Top 1 finding. `platform/contracts/jwt-standard-claims.md` 가 (a) HARDSTOP-03 risk = project name "Global Account Platform" 5 site in shared, (b) heading `## H2` 11 site (다른 platform/*.md 는 `# H1`), (c) double-orphan (platform/README.md + rules/common.md 미명시), (d) missing `# Change Rule`. fix: generic terminology + heading 변환 + README/common.md cross-ref + Change Rule section. 33 file / 43 finding 중 highest-impact (HARDSTOP-03 enforcement). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-083-platform-jwt-standard-claims-hardstop03-cleanup.md` — `/refactor-spec all --dry-run` (2026-05-13) Platform audit Top 1 finding. `platform/contracts/jwt-standard-claims.md` 가 (a) HARDSTOP-03 risk = project name "Global Account Platform" 5 site in shared, (b) heading `## H2` 11 site (다른 platform/*.md 는 `# H1`), (c) double-orphan (platform/README.md + rules/common.md 미명시), (d) missing `# Change Rule`. fix: generic terminology + heading 변환 + README/common.md cross-ref + Change Rule section. 33 file / 43 finding 중 highest-impact (HARDSTOP-03 enforcement). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## done
 

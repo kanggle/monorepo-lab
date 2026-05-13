@@ -8,7 +8,7 @@ TASK-MONO-083
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -78,16 +78,16 @@ provenance: `/refactor-spec all --dry-run` 2026-05-13 Platform audit Top 1 findi
 
 ### Impl PR
 
-- [ ] `platform/contracts/jwt-standard-claims.md` 의 5 "Global Account Platform" → generic 명명.
-- [ ] heading hierarchy `## H2` 11 site → `# H1`.
-- [ ] missing `# Change Rule` section 추가.
-- [ ] metadata header 형식 검토 + 통일 또는 제거.
-- [ ] `platform/README.md` 에 본 파일 entry 추가.
-- [ ] `rules/common.md` 에 cross-reference 추가.
-- [ ] HARDSTOP-03 hook PASS (project name 제거 후).
+- [x] `platform/contracts/jwt-standard-claims.md` 의 5 "Global Account Platform" → generic 명명 ("the identity-platform service" / "the identity service").
+- [x] heading hierarchy `## H2` 11 site → `# H1` (top H1 1개 + 변환된 11 H1 = 12 H1 / H3 13 → H2 13 동반 shift 로 outline depth 정렬).
+- [x] missing `# Change Rule` section 추가 (References 직전).
+- [x] metadata header (`**Status:** Established` / `**Audience:**` / `**Authority:**` / `**Effective Date:**`) 제거 — sibling 16 root policies 가 모두 metadata header 미사용 → 통일.
+- [x] `platform/README.md` 에 본 파일 entry 추가 + `contracts/` directory 자체 row 동반.
+- [x] `rules/common.md` 에 § "Platform Contracts" 신설 + cross-reference 추가.
+- [x] HARDSTOP-03 hook PASS — `platform/` 전체 "Global Account Platform" grep 0 hit.
 - [ ] CI self-CI 16/16 PASS (workflows flag full pipeline 회귀 가드).
-- [ ] task lifecycle ready → in-progress → review.
-- [ ] root INDEX 동기.
+- [x] task lifecycle ready → in-progress → review.
+- [x] root INDEX 동기.
 
 ### Close chore PR
 
