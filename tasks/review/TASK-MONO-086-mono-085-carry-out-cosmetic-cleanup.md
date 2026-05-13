@@ -8,7 +8,7 @@ MONO-085 carry-out cosmetic cleanup — 3 finding 재분류 + fix (1 path-level 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -108,13 +108,13 @@ Full wire-level contract:
 
 ### Impl PR
 
-- [ ] **A**: platform/architecture.md L189 의 `[\`PROJECT.md\`](../PROJECT.md)` → `\`PROJECT.md\`` (link 제거).
-- [ ] **B**: projects/global-account-platform/specs/contracts/events/account-events.md L172 의 `../features/` → `../../features/` (path fix).
-- [ ] **C**: projects/wms-platform/specs/services/outbound-service/external-integrations.md L155 의 `[\`...\`](../../contracts/http/tms-shipment-api.md)` → `\`specs/contracts/http/tms-shipment-api.md\`` (link 제거, sibling L751-752 답습).
-- [ ] **Verification**: `bash /tmp/check_links2.sh` 재실행 → **broken = 0** (잔존 0 확정).
-- [ ] task lifecycle ready → review (mechanical batch single-PR closure, MONO-085 precedent 답습).
-- [ ] tasks/INDEX.md (root) 동기.
-- [ ] CI self-CI PASS (path-filter markdown-only batch).
+- [x] **A**: platform/architecture.md L189 의 `[\`PROJECT.md\`](../PROJECT.md)` → `\`PROJECT.md\`` (link 제거).
+- [x] **B**: projects/global-account-platform/specs/contracts/events/account-events.md L172 의 `../features/` → `../../features/` (path fix).
+- [x] **C**: projects/wms-platform/specs/services/outbound-service/external-integrations.md L155 의 `[\`...\`](../../contracts/http/tms-shipment-api.md)` → `\`specs/contracts/http/tms-shipment-api.md\`` (link 제거, sibling L751-752 답습).
+- [x] **Verification**: `bash /tmp/check_links2.sh` 재실행 → **broken = 0** (잔존 0 확정).
+- [x] task lifecycle ready → review (mechanical batch single-PR closure, MONO-085 precedent 답습).
+- [x] tasks/INDEX.md (root) 동기.
+- [x] CI self-CI PASS (path-filter markdown-only batch).
 
 ### Close chore PR
 
@@ -215,8 +215,8 @@ sibling L751-752 (`erp-order-webhook.md (Open Item)` + `tms-shipment-api.md (Ope
 
 ### Impl PR
 
-- [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] AC 완료.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 

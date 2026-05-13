@@ -152,7 +152,7 @@ in prod, distinct values in stg/dr/dev. Loaded from configuration and
 overridable per-environment.
 
 Full wire-level contract:
-[`specs/contracts/http/tms-shipment-api.md`](../../contracts/http/tms-shipment-api.md)
+`specs/contracts/http/tms-shipment-api.md`
 (Open Item — vendor-controlled).
 
 ### 2.2 Authentication (per `platform/security-rules.md`)
