@@ -8,7 +8,7 @@ inventory-service `sagas/reservation-saga.md` + `state-machines/reservation-stat
 
 # Status
 
-review
+done
 
 # Owner
 
