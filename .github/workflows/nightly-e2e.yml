@@ -572,24 +572,6 @@ jobs:
           :projects:global-account-platform:tests:e2e:e2eFullTest
           --no-daemon --stacktrace
 
-      - name: Dump gap service logs on failure (TASK-MONO-082 Phase 0 diagnostic)
-        # cycle 3 진단 (TASK-MONO-082): 5 GAP service /actuator/health 가
-        # ComposeFixture HEALTH_TIMEOUT (PT5M) 안에 200 못 반환. 가설 B (CI
-        # cold-start 5min 초과) vs C (service boot fail) vs D (port mapping)
-        # 확정 위해 fail 시 5 service log 의 마지막 200 line dump. compose
-        # project name 은 ComposeFixture.java:86 의 `-p gap-e2e` 와 일치.
-        # 진단 확정 후 본 step 은 제거 또는 verbose 줄임 (cleanup PR).
-        if: failure()
-        working-directory: projects/global-account-platform
-        run: |
-          echo "=== docker compose ps (gap-e2e project) ==="
-          docker compose -f docker-compose.e2e.yml -p gap-e2e ps -a || true
-          for svc in auth-service account-service security-service admin-service gateway-service; do
-            echo ""
-            echo "=== docker compose logs ${svc} (last 200 lines) ==="
-            docker compose -f docker-compose.e2e.yml -p gap-e2e logs --tail=200 "${svc}" || true
-          done
-
       - name: Upload gap e2e full test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

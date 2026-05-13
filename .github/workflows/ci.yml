@@ -874,22 +874,6 @@ jobs:
           :projects:global-account-platform:tests:e2e:e2eSmokeTest
           --no-daemon --stacktrace
 
-      - name: Dump gap service logs on failure
-        # TASK-MONO-082 Phase 0 diagnostic 답습 — fail 시 5 GAP service
-        # log 마지막 200 line + docker compose ps dump. PR-time 정상 시
-        # 무비용 (if: failure() 조건). nightly gap-e2e-full L575-591 와
-        # 동일 step. compose project name 은 ComposeFixture 의 `-p gap-e2e`.
-        if: failure()
-        working-directory: projects/global-account-platform
-        run: |
-          echo "=== docker compose ps (gap-e2e project) ==="
-          docker compose -f docker-compose.e2e.yml -p gap-e2e ps -a || true
-          for svc in auth-service account-service security-service admin-service gateway-service; do
-            echo ""
-            echo "=== docker compose logs ${svc} (last 200 lines) ==="
-            docker compose -f docker-compose.e2e.yml -p gap-e2e logs --tail=200 "${svc}" || true
-          done
-
       - name: Upload gap e2e smoke test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

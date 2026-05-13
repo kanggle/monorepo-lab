@@ -8,7 +8,7 @@ TASK-MONO-090
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -70,12 +70,12 @@ TASK-MONO-082 Phase 0 diagnostic step 의 cleanup PR 명시 의도 종결.
 
 ### Impl PR
 
-- [ ] `.github/workflows/nightly-e2e.yml` 의 L575-591 step block 제거.
-- [ ] `.github/workflows/ci.yml` 의 L877-891 step block 제거.
-- [ ] 두 file 의 직전/직후 step 무변경 (`Run ... e2e ... suite` + `Upload ... test reports on failure` 그대로).
-- [ ] yaml syntax valid (push 후 workflow validation 자연 검증).
-- [ ] task lifecycle ready → review (in-progress 우회, mechanical cleanup single-PR closure 패턴 — TASK-MONO-084/085/086/087/088/089/BE-282 precedent).
-- [ ] [`tasks/INDEX.md`](../INDEX.md) 동기.
+- [x] `.github/workflows/nightly-e2e.yml` 의 L575-591 step block 제거.
+- [x] `.github/workflows/ci.yml` 의 L877-891 step block 제거.
+- [x] 두 file 의 직전/직후 step 무변경 (`Run ... e2e ... suite` + `Upload ... test reports on failure` 그대로).
+- [x] 두 file 의 `Dump gap service logs` string 검증 = 0 hit each (post-edit grep).
+- [x] task lifecycle ready → review (in-progress 우회, mechanical cleanup single-PR closure 패턴 — TASK-MONO-084/085/086/087/088/089/BE-282 precedent).
+- [x] [`tasks/INDEX.md`](../INDEX.md) 동기.
 
 ### CI verification
 

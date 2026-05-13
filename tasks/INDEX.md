@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-090-diagnostic-step-cleanup.md` — `.github/workflows/nightly-e2e.yml` L575-591 + `.github/workflows/ci.yml` L877-891 의 `Dump gap service logs on failure` diagnostic step 제거 (~32 line). TASK-MONO-082 Phase 0 잔재 (nightly L581 "cleanup PR" 명시) + TASK-MONO-088 cycle 8 PR-time first-call validation 시 ComposeFixture cleanup conflict 로 useless 확정. trade-off: cycle 9+ 진단 도구 부재 (test report artifact 의존). Option A1 (제거), A2 (redesign) 는 별 task. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-090-diagnostic-step-cleanup.md` — `.github/workflows/nightly-e2e.yml` (gap-e2e-full L575-591, 17 line) + `.github/workflows/ci.yml` (gap-platform-e2e-smoke L877-891, 15 line) 의 `Dump gap service logs on failure` diagnostic step 두 곳 제거. 두 file 의 `Dump gap service logs` string 검증 = 0 hit each. TASK-MONO-082 Phase 0 잔재 (nightly L581 "cleanup PR" 명시) + TASK-MONO-088 cycle 8 PR-time first-call validation 시 ComposeFixture JVM shutdown hook 의 자동 compose down cleanup 으로 useless 확정 (logs empty). trade-off: cycle 9+ 진단 도구 부재 (test report artifact + Gradle testLogging stdout 의존). Option A1 (제거), A2 (redesign) 는 별 task 후보. D4 OVERRIDE: ADR-MONO-003a § D1.3. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
