@@ -186,4 +186,4 @@ Deployment rules: `deployment-policy.md`
 
 # Change Rule
 
-Changes to the platform-wide architecture baseline — adding or removing a service tier, altering the canonical HTTP/Events interaction pattern, redefining the boundary between gateway and downstream services — must be documented in this file before service-level adoption. Project-level architecture deviations are governed by each project's [`PROJECT.md`](../PROJECT.md) `## Overrides` section per [`architecture-decision-rule.md`](architecture-decision-rule.md).
+Changes to the platform-wide architecture baseline — adding or removing a service tier, altering the canonical HTTP/Events interaction pattern, redefining the boundary between gateway and downstream services — must be documented in this file before service-level adoption. Project-level architecture deviations are governed by each project's `PROJECT.md` `## Overrides` section per [`architecture-decision-rule.md`](architecture-decision-rule.md).

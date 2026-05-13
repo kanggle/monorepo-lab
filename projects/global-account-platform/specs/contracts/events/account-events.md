@@ -169,7 +169,7 @@ WMS, ERP, SCM, MES 등 외부 소비자는 자체 시스템에서 `account.delet
 - SLA: 수신 후 **24시간 이내** 마스킹 완료.
 - 컴플라이언스 정기 리뷰에서 이행 여부를 증명할 수 있도록 audit trail 보관.
 
-세부 통합 패턴 및 코드 예시: [specs/features/consumer-integration-guide.md § Phase 5 GDPR downstream](../features/consumer-integration-guide.md#gdpr-downstream-처리-accountdeleted).
+세부 통합 패턴 및 코드 예시: [specs/features/consumer-integration-guide.md § Phase 5 GDPR downstream](../../features/consumer-integration-guide.md#gdpr-downstream-처리-accountdeleted).
 보안 이벤트 audit trail 스펙: [specs/contracts/events/security-events.md § security.pii.masked](security-events.md#securitypiimasked-task-be-258).
 
 ---
