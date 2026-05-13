@@ -113,8 +113,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
     public ResponseEntity<ApiErrorBody> handleOptimisticLock(Exception e) {
+        // TASK-SCM-BE-010 (refactor-spec audit): distinct code from
+        // DataIntegrityViolation's "CONFLICT" — consumers can choose retry
+        // strategy (CONCURRENT_MODIFICATION = retry OK, CONFLICT = must
+        // change state first). Aligns with architecture.md Failure Mode #16.
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONFLICT", "Concurrent modification detected. Please retry."));
+                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION", "Concurrent modification detected. Please retry."));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

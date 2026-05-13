@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-010-procurement-http-error-code-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) SCM audit Top 1+2 critical findings (contract vs architecture HTTP code drift). (1) `IDEMPOTENCY_KEY_MISMATCH`: architecture.md:611 = 409 vs procurement-api.md:95/315 = 422. contracts canonical (CLAUDE.md SoT layer 6) → architecture 정정. (2) optimistic-lock: api.md:323 = `CONFLICT` 409 vs architecture.md:625 = `CONCURRENT_MODIFICATION` 409. 통일 권장 = `CONCURRENT_MODIFICATION` (의미 명시). + procurement-service `@ControllerAdvice` emission 검증. 9 file / 31 finding 중 Top 1+2 (contract integrity). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-010-procurement-http-error-code-drift-fix.md` — `/refactor-spec all --dry-run` (2026-05-13) SCM audit Top 1+2 critical findings closure. **Fix**: architecture.md Failure Mode #2 `409 IDEMPOTENCY_KEY_MISMATCH` → `422` (contracts canonical) + canonical `## Service Type` standalone header 추가 (HARDSTOP-10 PASS sibling alignment) + api.md Errors 목록 + Error Codes table 의 single `CONFLICT (409)` row 를 distinct 2 row 로 split (`CONCURRENT_MODIFICATION` optimistic-lock retry-OK + `CONFLICT` DB integrity must-change-state) + `GlobalExceptionHandler.java:117` emission `"CONFLICT"` → `"CONCURRENT_MODIFICATION"` (OptimisticLock handler only; DataIntegrityViolation handler 의 `"CONFLICT"` 유지) + `GlobalExceptionHandlerTest.java` 2 method assertion + DisplayName 갱신. 4 file / +18 / -10. API consumer breaking change (외부 consumer 거의 없는 SCM v1 portfolio scope, 의미 명시 + distinct retry strategy 가 portfolio depth 측면에서 더 유리).
 
 ## done
 

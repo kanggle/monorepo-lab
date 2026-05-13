@@ -152,19 +152,19 @@ class GlobalExceptionHandlerTest {
     // ---------------- 409: CONFLICT family ----------------
 
     @Test
-    @DisplayName("OptimisticLockException → 409 CONFLICT")
+    @DisplayName("OptimisticLockException → 409 CONCURRENT_MODIFICATION")
     void optimisticLock() {
         ResponseEntity<ApiErrorBody> r = handler.handleOptimisticLock(
                 new OptimisticLockException("version stale"));
-        assertStatus(r, HttpStatus.CONFLICT, "CONFLICT");
+        assertStatus(r, HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
     }
 
     @Test
-    @DisplayName("ObjectOptimisticLockingFailureException → 409 CONFLICT")
+    @DisplayName("ObjectOptimisticLockingFailureException → 409 CONCURRENT_MODIFICATION")
     void springOptimisticLock() {
         ResponseEntity<ApiErrorBody> r = handler.handleOptimisticLock(
                 new ObjectOptimisticLockingFailureException("entity", "id"));
-        assertStatus(r, HttpStatus.CONFLICT, "CONFLICT");
+        assertStatus(r, HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
     }
 
     @Test
