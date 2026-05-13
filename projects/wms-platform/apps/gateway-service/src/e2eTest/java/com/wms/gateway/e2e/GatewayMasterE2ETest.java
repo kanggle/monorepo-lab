@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,7 @@ class GatewayMasterE2ETest extends E2EBase {
     class HappyPath {
 
         @Test
+        @Tag("smoke")
         @DisplayName("GET /api/v1/master/warehouses with MASTER_READ → 200")
         void getWarehousesListWithValidJwt() throws Exception {
             String token = jwt.signMasterReadToken("e2e-user-" + UUID.randomUUID());
@@ -85,6 +87,7 @@ class GatewayMasterE2ETest extends E2EBase {
         }
 
         @Test
+        @Tag("smoke")
         @DisplayName("POST /api/v1/master/warehouses with MASTER_WRITE → 201 + outbox→Kafka event")
         void createWarehouseThroughGateway() throws Exception {
             String token = jwt.signMasterWriteToken("e2e-writer-" + UUID.randomUUID());
@@ -207,6 +210,7 @@ class GatewayMasterE2ETest extends E2EBase {
     class Unauthorized {
 
         @Test
+        @Tag("smoke")
         void noAuthHeaderReturns401AndDoesNotReachMaster() throws Exception {
             int masterHitsBefore = masterRequestCount();
 
@@ -255,6 +259,7 @@ class GatewayMasterE2ETest extends E2EBase {
     class RateLimit {
 
         @Test
+        @Tag("full")
         void burstFrom800RequestsTripsRateLimiter() throws Exception {
             String token = jwt.signMasterReadToken("e2e-burst");
             // Unique IP per test run so concurrent suites don't collide in
@@ -329,6 +334,7 @@ class GatewayMasterE2ETest extends E2EBase {
     class MasterOutage {
 
         @Test
+        @Tag("full")
         void pausedMasterReturns503AndRecoversAfterUnpause() throws Exception {
             String token = jwt.signMasterReadToken("e2e-resilience");
             URI url = gatewayBaseUri().resolve("/api/v1/master/warehouses");
@@ -398,6 +404,7 @@ class GatewayMasterE2ETest extends E2EBase {
     class TracePropagation {
 
         @Test
+        @Tag("smoke")
         void gatewayAcceptsAndForwardsTraceparent() throws Exception {
             String token = jwt.signMasterReadToken("e2e-trace");
             // W3C traceparent with a known traceId we can grep for on the

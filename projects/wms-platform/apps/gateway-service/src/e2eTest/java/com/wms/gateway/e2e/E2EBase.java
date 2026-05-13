@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInstance;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -49,6 +50,7 @@ import org.testcontainers.utility.DockerImageName;
  * local Windows runs without a working Docker daemon skip gracefully rather
  * than hang.
  */
+@Tag("e2e")
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class E2EBase {
