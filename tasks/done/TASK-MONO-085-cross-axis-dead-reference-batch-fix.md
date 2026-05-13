@@ -8,7 +8,7 @@ TASK-MONO-085
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -134,22 +134,22 @@ L1 byte order mark (U+FEFF) prefix → no-BOM UTF-8. sibling architecture.md (�
 
 ### Impl PR
 
-- [ ] **A. GAP 131 path-level link 정정** — `projects/global-account-platform/specs/` 의 service/contract/feature spec 들에서 `../../../rules/`/`../../../platform/`/`../../rules/` 패턴을 file depth 별 올바른 level 로 sed-class batch 정정.
-- [ ] **B. WMS dlt-replay.md 4 link 정정** — 5 `..` → 6 `..` (root CLAUDE.md / platform/event-driven-policy.md / docs/adr/ADR-MONO-005 / platform/error-handling.md).
-- [ ] **C. fan-platform v1-e2e-scenarios.md 2 link 정정** — 3 `..` → 5 `..` (TASK-MONO-025 + TASK-MONO-023d task refs).
-- [ ] **D. ecommerce gateway-service/public-routes.md 1 link 정정** — 6 `..` → 5 `..`.
-- [ ] **E. SCM procurement-service/architecture.md BOM 제거** — UTF-8 no-BOM 으로 재저장. 첫 line `# procurement-service — Architecture` 가 BOM prefix 없이 시작.
-- [ ] **Verification**: `bash /tmp/check_links2.sh` (또는 동등) 재실행 = **0 broken** (out-of-scope 3건 제외) — 추가 broken introduction 0.
-- [ ] BOM grep: `grep -l $'\xef\xbb\xbf' projects/*/specs -r` = 0 hit.
-- [ ] task lifecycle ready → review (mechanical batch single-PR closure 패턴, TASK-MONO-084 precedent 답습).
-- [ ] tasks/INDEX.md (root) 동기.
-- [ ] CI self-CI PASS (path-filter projects/*/specs 활성화, markdown-only → 15 SKIP + 1 PASS 패턴 답습).
+- [x] **A. GAP 131 path-level link 정정** — `projects/global-account-platform/specs/` 의 service/contract/feature spec 들에서 `../../../rules/`/`../../../platform/`/`../../rules/` 패턴을 file depth 별 올바른 level 로 sed-class batch 정정.
+- [x] **B. WMS dlt-replay.md 4 link 정정** — 5 `..` → 6 `..` (root CLAUDE.md / platform/event-driven-policy.md / docs/adr/ADR-MONO-005 / platform/error-handling.md).
+- [x] **C. fan-platform v1-e2e-scenarios.md 2 link 정정** — 3 `..` → 5 `..` (TASK-MONO-025 + TASK-MONO-023d task refs).
+- [x] **D. ecommerce gateway-service/public-routes.md 1 link 정정** — 6 `..` → 5 `..`.
+- [x] **E. SCM procurement-service/architecture.md BOM 제거** — UTF-8 no-BOM 으로 재저장. 첫 line `# procurement-service — Architecture` 가 BOM prefix 없이 시작.
+- [x] **Verification**: `bash /tmp/check_links2.sh` (또는 동등) 재실행 = **0 broken** (out-of-scope 3건 제외) — 추가 broken introduction 0.
+- [x] BOM grep: `grep -l $'\xef\xbb\xbf' projects/*/specs -r` = 0 hit.
+- [x] task lifecycle ready → review (mechanical batch single-PR closure 패턴, TASK-MONO-084 precedent 답습).
+- [x] tasks/INDEX.md (root) 동기.
+- [x] CI self-CI PASS (path-filter projects/*/specs 활성화, markdown-only → 15 SKIP + 1 PASS 패턴 답습).
 
 ### Close chore PR
 
-- [ ] task Status review → done.
-- [ ] git mv tasks/review → tasks/done.
-- [ ] tasks/INDEX.md ## review 제거, ## done append outcome (3 out-of-scope finding 포함 명시).
+- [x] task Status review → done.
+- [x] git mv tasks/review → tasks/done.
+- [x] tasks/INDEX.md ## review 제거, ## done append outcome (3 out-of-scope finding 포함 명시).
 
 ---
 
@@ -253,12 +253,12 @@ $content = Get-Content -Raw -Path "projects/scm-platform/specs/services/procurem
 
 ### Impl PR
 
-- [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] AC 완료.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 
-- [ ] review → done, INDEX 동기 + 3 out-of-scope finding 명시.
+- [x] review → done, INDEX 동기 + 3 out-of-scope finding 명시.
 
 ---
 
