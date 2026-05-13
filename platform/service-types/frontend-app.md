@@ -106,3 +106,9 @@ When implementing a `frontend-app` feature:
 - [ ] a11y check enabled in CI
 - [ ] web-vitals reporting wired
 - [ ] At least one E2E test for the critical user journey
+
+---
+
+# Change Rule
+
+Changes to the mandatory requirements, allowed/forbidden patterns, or testing expectations for `frontend-app` services must be documented in this file before applying to existing services. New constraints affecting deployed services require an ADR (`docs/adr/` for monorepo-wide impact or `projects/<project>/docs/adr/` for project-scoped impact) per [`architecture-decision-rule.md`](../architecture-decision-rule.md).

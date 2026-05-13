@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-084-platform-change-rule-batch-backfill.md` — `/refactor-spec all --dry-run` (2026-05-13~14) platform audit high-1+2 finding. `platform/` 23 file 중 17 이 `# Change Rule` section 보유, 14 누락 (8 service-types: batch-job/event-consumer/frontend-app/graphql-service/grpc-service/identity-platform/ml-pipeline/rest-api + 6 root policy: architecture/entrypoint/lint-remediation-message-standard/object-storage-policy/service-boundaries/shared-library-policy). TASK-MONO-083 (jwt-standard-claims `# Change Rule` 추가, PR #455) 의 batch 확장 — 14 file 일괄 backfill. ADR-MONO-003a § D1.1 D4 OVERRIDE 적용 (B common rule cleanup 연장선). production code = 0, spec-only batch. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical batch, 14 file × ~3 line).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-084-platform-change-rule-batch-backfill.md` — `/refactor-spec all --dry-run` (2026-05-13~14) platform audit high-1+2 finding. `platform/` 23 file 중 17 이 `# Change Rule` section 보유, 14 누락 (8 service-types: batch-job/event-consumer/frontend-app/graphql-service/grpc-service/identity-platform/ml-pipeline/rest-api + 6 root policy: architecture/entrypoint/lint-remediation-message-standard/object-storage-policy/service-boundaries/shared-library-policy). TASK-MONO-083 (jwt-standard-claims `# Change Rule` 추가, PR #455) 의 batch 확장 — 14 file 일괄 backfill. ADR-MONO-003a § D1.1 D4 OVERRIDE 적용 (B common rule cleanup 연장선). production code = 0, spec-only batch. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical batch, 14 file × ~3 line).
 
 ## done
 

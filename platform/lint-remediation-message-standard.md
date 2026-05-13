@@ -140,3 +140,9 @@ The OpenAI Harness Engineering report describes the mechanism as "custom lint er
 - Adding a new Hard Stop trigger to `CLAUDE.md` MUST also add a new `HARDSTOP-NN` stanza in this format (NN extends the existing 1–10 sequence).
 - Renaming or restructuring sections referenced by `[REFERENCE]` blocks MUST grep this file for affected anchors and update them in the same PR.
 - Promoting a non-blocking warning to a Hard Stop: update both this file (template change `<source-shortname>-NN` → `HARDSTOP-NN`) and the originating rule file in the same PR.
+
+---
+
+# Change Rule
+
+Changes to the canonical 4-block template structure, the emission contract, or the `<source-shortname>-NN` rule-id namespace conventions must be documented in this file before applying to any new rule. Each new Hard Stop or rule promotion that adds a `HARDSTOP-NN` (or analogous) stanza must also update the originating rule file (e.g. [`../CLAUDE.md`](../CLAUDE.md) § Hard Stop Rules, hook scripts under [`../.claude/hooks/`](../.claude/hooks/)) in the same PR per the rules above.
