@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- TASK-SCM-BE-012 — SCM 3 service overview.md skeleton authoring (gateway / procurement / inventory-visibility). post-/refactor-spec portfolio-wide structural finding 마지막 piece — SCM 3/3 overview.md missing. TASK-BE-146 (WMS 7 service) 직접 답습. 본 task 완료 시 portfolio 5/5 overview.md 일관성 100% 완성. 신규 file ~210 line addition.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- TASK-SCM-BE-012 — SCM 3 service overview.md skeleton authoring (gateway / procurement / inventory-visibility). post-/refactor-spec portfolio-wide structural finding 마지막 piece — SCM 3/3 overview.md missing. TASK-BE-146 (WMS 7 service) 직접 답습. 본 task 완료 시 portfolio 5/5 overview.md 일관성 100% 완성. 신규 file ~210 line addition. impl PR pending review.
 
 ## done
 

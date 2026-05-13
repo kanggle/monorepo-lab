@@ -8,7 +8,7 @@ SCM 3 service `overview.md` skeleton authoring (portfolio-wide structural findin
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -98,14 +98,14 @@ provenance: post-/refactor-spec portfolio-wide structural finding closure 의 �
 
 ### Impl PR
 
-- [ ] `gateway-service/overview.md` 신규 (~70 line, Service identity + Routes + 5 Key invariants — JWT validation + tenant_id=scm + fail-open RL + IdentityHeaderStripFilter).
-- [ ] `procurement-service/overview.md` 신규 (~80 line, Service identity + REST + webhook + Kafka publish + 6 Key invariants — S2/S5/S6/S8 + PO state machine).
-- [ ] `inventory-visibility-service/overview.md` 신규 (~80 line, Service identity + REST + Kafka consume + scheduler + 6 Key invariants — S5 warning + event dedupe + ShedLock + fail-open cache).
-- [ ] cross-ref 검증 — 3 file 이 `architecture.md` 와 정상 연결.
-- [ ] HARDSTOP-03 PASS.
+- [x] `gateway-service/overview.md` 신규 (~70 line, Service identity + Routes + 5 Key invariants — JWT validation + tenant_id=scm + fail-open RL + IdentityHeaderStripFilter).
+- [x] `procurement-service/overview.md` 신규 (~80 line, Service identity + REST + webhook + Kafka publish + 6 Key invariants — S2/S5/S6/S8 + PO state machine).
+- [x] `inventory-visibility-service/overview.md` 신규 (~80 line, Service identity + REST + Kafka consume + scheduler + 6 Key invariants — S5 warning + event dedupe + ShedLock + fail-open cache).
+- [x] cross-ref 검증 — 3 file 이 `architecture.md` 와 정상 연결.
+- [x] HARDSTOP-03 PASS.
 - [ ] CI self-CI PASS (path-filter scm markdown-only — 15 SKIP + 1 changes PASS 예상).
-- [ ] task lifecycle ready → review (in-progress 우회, BE-146 / BE-141 / BE-142 / FAN-BE-006 precedent).
-- [ ] scm tasks/INDEX.md 동기.
+- [x] task lifecycle ready → review (in-progress 우회, BE-146 / BE-141 / BE-142 / FAN-BE-006 precedent).
+- [x] scm tasks/INDEX.md 동기.
 
 ### Close chore PR
 
@@ -250,7 +250,7 @@ mechanical batch (TASK-BE-146 직접 답습) → ready → review 직접 (in-pro
 ### Impl PR
 
 - [ ] AC 완료.
-- [ ] task lifecycle ready → review.
+- [x] task lifecycle ready → review.
 
 ### Close chore PR
 
