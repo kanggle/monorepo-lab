@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-085-cross-axis-dead-reference-batch-fix.md` — `/refactor-spec all --dry-run` (2026-05-14, TASK-MONO-084 직후) audit Tier 2 finding closure. **140 broken md link + 1 BOM (UTF-8 prefix) 중 mechanical fix 139건 batch**: GAP 131건 (service/contract/feature spec 의 `..` level systemic mistake — `../../../rules/` 3-up → `../../../../../rules/` 5-up; depth 별 정정 5 file group) + WMS notification/runbooks/dlt-replay.md 4건 (5-up → 6-up, 어제 BE-145 머지 시 도입) + fan-platform v1-e2e-scenarios.md 2건 (3-up → 5-up, root tasks/done refs) + ecommerce gateway public-routes.md 1건 (6-up → 5-up extra) + SCM procurement-service/architecture.md BOM 제거 1건. Out-of-scope finding 3건 (file 자체 부재 — TMS shipment-api / root PROJECT.md / consumer-integration-guide) = 별 후속 task 후보. mechanical batch single-PR closure 패턴 (TASK-MONO-084 precedent). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
