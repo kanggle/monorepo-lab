@@ -8,7 +8,7 @@ ADR-MONO-012 PROPOSED → ACCEPTED transition (cross-project architecture.md can
 
 # Status
 
-review
+done
 
 # Owner
 
