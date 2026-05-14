@@ -84,6 +84,173 @@ stateDiagram-v2
 
 ---
 
+## Transition Rules
+
+Each row in the table below corresponds to one domain method call inside one
+`@Transactional` boundary. Pre-conditions listed here are **transition-level
+preconditions** — structural checks that the domain method performs before
+mutating state. Post-conditions are side-effects that commit atomically with
+the status change.
+
+| From | To | Domain method | Pre-condition | Post-conditions (atomic) | Outbox event |
+|---|---|---|---|---|---|
+| (none) | `RESERVED` | `Reservation.reserve(pickingRequestId, warehouseId, lines, ttl)` factory | `available_qty >= qty` for every line (`INSUFFICIENT_STOCK` otherwise); all `sku_id`s / `lot_id`s / `location_id`s ACTIVE per MasterReadModel; at least one line; all lines share same `warehouse_id` | Insert `Reservation` + N `ReservationLine`s; per-line `Inventory.reserve(qty, reservationId)` writes 2 `InventoryMovement` rows (`AVAILABLE delta=-N` + `RESERVED delta=+N`, `reason_code=PICKING`); `expires_at = now + warehouse.reservation_ttl`; bump `Inventory.version` per line | `inventory.reserved` |
+| `RESERVED` | `CONFIRMED` | `Reservation.confirm()` | `status == RESERVED`; shipped-qty per line equals reserved-qty per line (W4 / W5 — `RESERVATION_QUANTITY_MISMATCH` otherwise); `RESERVATION_ALREADY_RELEASED` if `status == RELEASED` | Per-line `Inventory.confirm(qty, reservationId)` writes 1 `InventoryMovement` row (`RESERVED delta=-N`, `reason_code=SHIPPING_CONFIRMED`); set `confirmed_at=now`; bump `version` | `inventory.confirmed` |
+| `RESERVED` | `RELEASED` (`CANCELLED`) | `Reservation.release(CANCELLED)` | `status == RESERVED` (no-op if already `RELEASED` — idempotent) | Per-line `Inventory.release(qty, reservationId, CANCELLED)` writes 2 `InventoryMovement` rows (`RESERVED delta=-N` + `AVAILABLE delta=+N`, `reason_code=PICKING_CANCELLED`); set `released_reason=CANCELLED`, `released_at=now`; bump `version` | `inventory.released` (reason=`CANCELLED`) |
+| `RESERVED` | `RELEASED` (`EXPIRED`) | `Reservation.release(EXPIRED)` | `status == RESERVED` AND `expires_at < NOW()` (selected by sweeper query) | Per-line `Inventory.release(qty, reservationId, EXPIRED)` writes 2 `InventoryMovement` rows (`RESERVED delta=-N` + `AVAILABLE delta=+N`, `reason_code=PICKING_EXPIRED`); set `released_reason=EXPIRED`, `released_at=now`; bump `version`; emit metric `inventory.reservation.expiry.swept.total` | `inventory.released` (reason=`EXPIRED`) |
+| `RESERVED` | `RELEASED` (`MANUAL`) | `Reservation.release(MANUAL)` | `status == RESERVED` (no-op if already `RELEASED` — idempotent via `Idempotency-Key`); `actorId` has role `INVENTORY_ADMIN` | Per-line `Inventory.release(qty, reservationId, MANUAL)` writes 2 `InventoryMovement` rows (`RESERVED delta=-N` + `AVAILABLE delta=+N`, `reason_code=ADJUSTMENT_RECLASSIFY`); set `released_reason=MANUAL`, `released_at=now`; bump `version` | `inventory.released` (reason=`MANUAL`) |
+
+Any invocation that does not match a row above throws
+`StateTransitionInvalidException` → HTTP 422 `STATE_TRANSITION_INVALID`.
+
+---
+
+## Guard Conditions
+
+These pre-conditions are checked **inside** the domain method before the
+state transition. Failing a guard throws a typed domain exception — NOT the
+generic `STATE_TRANSITION_INVALID`. Guards are a sub-set of the
+Transition Rules pre-conditions; they are listed here separately for
+implementation clarity.
+
+| Transition | Guard | Failure code |
+|---|---|---|
+| `(none) → RESERVED` | `available_qty >= qty` for every `ReservationLine` | `INSUFFICIENT_STOCK` (triggers `inventory.adjusted` outbox, not `inventory.reserved`) |
+| `(none) → RESERVED` | All `sku_id`s ACTIVE per MasterReadModel | `SKU_INACTIVE` (same treatment as `INSUFFICIENT_STOCK` — rolled back, emits `inventory.adjusted{reason=SKU_INACTIVE}`) |
+| `(none) → RESERVED` | All `lot_id`s non-EXPIRED and ACTIVE per MasterReadModel (LOT-tracked SKUs) | `LOT_INACTIVE` / `LOT_EXPIRED` |
+| `(none) → RESERVED` | `location_id` for each line ACTIVE per MasterReadModel | `LOCATION_INACTIVE` |
+| `(none) → RESERVED` | At least one `ReservationLine` | `VALIDATION_ERROR` (422) — invariant from upstream picking plan |
+| `(none) → RESERVED` | All lines share same `warehouse_id` | `WAREHOUSE_MISMATCH` (422) — cross-warehouse allocation forbidden in v1 |
+| `RESERVED → CONFIRMED` | Shipped-qty per line equals reserved-qty per line | `RESERVATION_QUANTITY_MISMATCH` → DLT (v1 no partial shipments; see `domain-model.md § 3 § Quantity-mismatch Handling`) |
+| `RESERVED → CONFIRMED` | `status != RELEASED` | `RESERVATION_ALREADY_RELEASED` → DLT (state divergence; ops investigation required) |
+| `RESERVED → RELEASED (*)` | `actorId` has role `INVENTORY_ADMIN` (MANUAL path only) | `FORBIDDEN` (403) — checked at application layer |
+
+Any `confirm()` / `release()` called on an already-terminal row (`CONFIRMED`
+or `RELEASED`) is a **no-op** (idempotent replay per Invariants § Terminal-once).
+The exception is `confirm()` on a `RELEASED` row — that is a state divergence,
+not a replay, and throws `RESERVATION_ALREADY_RELEASED`.
+
+---
+
+## Concurrency
+
+- **Aggregate optimistic lock**: `Reservation.version` (T5). Each domain
+  method bumps `version`; a concurrent transition on the same row raises
+  `OptimisticLockingFailureException` → HTTP 409 `CONFLICT` for REST callers;
+  Kafka consumers retry on the next Kafka retry tick.
+- **Bucket optimistic lock**: `Inventory.version` (T5). Reserve / Release /
+  Confirm each issue a version-check UPDATE on the `inventory` row. A
+  concurrent bucket mutation (e.g., manual adjustment racing a TTL release)
+  raises `OptimisticLockingFailureException`; the transaction rolls back and
+  retries on the next sweep tick (TTL path) or next Kafka retry (consumer
+  path).
+- **TTL sweep vs manual release race**: both attempt `Reservation.release()`.
+  Whichever commits first wins; the loser sees an OL conflict, rolls back,
+  and on retry finds `status = RELEASED` → no-op. Net result: exactly one
+  `inventory.released` event is emitted, with whichever `released_reason`
+  committed first.
+- **Cross-service idempotency-key**: the consumer and REST MANUAL paths use
+  `Idempotency-Key` + `event_dedupe` as described in
+  [`../sagas/reservation-saga.md`](../sagas/reservation-saga.md) § 5
+  Concurrency / Idempotency Guarantees. This document does not duplicate
+  that content; refer to § 5 there for the full cross-service idempotency
+  mechanics.
+- Application MUST NOT auto-retry state transitions on `CONFLICT` — the
+  caller must refetch the aggregate and re-evaluate whether the action is
+  still valid in the new state.
+
+---
+
+## Reverse / Compensation Flows (v1: forbidden)
+
+All terminal states (`CONFIRMED`, `RELEASED`) are **forward-only**. There is
+no reverse transition from either terminal state.
+
+- ❌ **`CONFIRMED → any`**: Terminal-once (W5). Confirmed stock is consumed.
+  Post-ship reversal is an RMA inbound flow in v2, not a state regression on
+  this row.
+- ❌ **`RELEASED → any`**: Terminal-once. A cancelled-then-recreated picking
+  request must use a new `picking_request_id` upstream. Reusing the same
+  `picking_request_id` would violate the UNIQUE constraint (idempotency
+  enforcement).
+- ❌ **`RESERVED → RESERVED` (self-loop)**: TTL extension is not supported
+  in v1. `expires_at` is immutable after creation.
+- ❌ **Partial release / partial confirm**: line-level status mutation is
+  absent in v1. The aggregate moves whole — either all lines are confirmed /
+  released or the transaction rolls back.
+
+The only compensation primitive in this saga is `Reservation.release(reason)`
+— see [`../sagas/reservation-saga.md`](../sagas/reservation-saga.md) § 4
+Compensation for the full compensation decision table.
+
+---
+
+## Error-Code Mapping
+
+| Domain exception | HTTP | Error code | Source transition |
+|---|---|---|---|
+| `ReservationNotFoundException` | 404 | `RESERVATION_NOT_FOUND` | Any lookup by `id` or `picking_request_id` that returns no row |
+| `ReservationAlreadyReleasedException` | 422 | `RESERVATION_ALREADY_RELEASED` | `confirm()` called on a `RELEASED` row — state divergence, not replay |
+| `ReservationExpiredException` | 422 | `RESERVATION_EXPIRED` | `confirm()` or external action attempted on a row where `expires_at < now` AND `status = RELEASED` (TTL sweep already ran) |
+| `ReservationQuantityMismatchException` | 422 | `RESERVATION_QUANTITY_MISMATCH` | `confirm()` with shipped-qty ≠ reserved-qty |
+| `OptimisticLockingFailureException` | 409 | `CONCURRENT_MODIFICATION` | Concurrent state transition on `Reservation.version` or `Inventory.version` |
+| `StateTransitionInvalidException` | 422 | `STATE_TRANSITION_INVALID` | Any domain method called with a source state not listed in the Transition Rules table |
+| `InsufficientStockException` | 422 | `INSUFFICIENT_STOCK` | `reserve()` when `available_qty < qty`; triggers `inventory.adjusted` outbox |
+| `WarehouseMismatchException` | 422 | `WAREHOUSE_MISMATCH` | `reserve()` with mixed-warehouse lines |
+
+Full registry: `platform/error-handling.md` § Inventory `[domain: wms]`.
+
+---
+
+## Test Requirements
+
+Per [`../architecture.md`](../architecture.md) § Testing Requirements. The
+integration-level saga test scenarios (consumer round-trips, TTL expiry,
+idempotency) are catalogued in
+[`../sagas/reservation-saga.md`](../sagas/reservation-saga.md) § 8 Test
+Matrix; this section covers the **state-machine unit and slice tests only**.
+
+**Unit (Domain)**:
+
+- Every legal transition listed in the Transition Rules table above
+  (factory + four transition methods).
+- Every illegal transition (cross-product minus legal arrows) →
+  `STATE_TRANSITION_INVALID`.
+- Each guard condition has its own failing test:
+  - `reserve()` with `available_qty < qty` → `INSUFFICIENT_STOCK`
+  - `reserve()` with inactive SKU/LOT/location → corresponding code
+  - `reserve()` with mixed `warehouse_id`s → `WAREHOUSE_MISMATCH`
+  - `confirm()` on `RELEASED` row → `RESERVATION_ALREADY_RELEASED`
+  - `confirm()` with mismatched qty → `RESERVATION_QUANTITY_MISMATCH`
+- Terminal-once: second `confirm()` on `CONFIRMED` row → no-op (version
+  unchanged); second `release()` on `RELEASED` row → no-op; `confirm()` on
+  `RELEASED` → `RESERVATION_ALREADY_RELEASED`.
+- `version` increments on every successful transition.
+- `released_reason` and `released_at` non-null after any `RELEASED`
+  transition; null on `RESERVED`; `confirmed_at` non-null after `CONFIRMED`.
+
+**Application Service (port fakes)**:
+
+- `reserve()` success: writes `Reservation` + N `ReservationLine`s + 2N
+  `InventoryMovement` rows + one outbox row in the same `@Transactional`.
+- `release(CANCELLED)` success: 2N movement rows + one outbox row in same TX.
+- `confirm()` success: N movement rows + one outbox row in same TX.
+- `INSUFFICIENT_STOCK` failure: zero `Reservation` rows, zero movement rows,
+  zero outbox rows; `inventory.adjusted{reason=INSUFFICIENT_STOCK}` emitted in
+  `REQUIRES_NEW` TX.
+- Optimistic-lock conflict on `Reservation.version` → TX rolls back, no
+  outbox row written.
+
+**Persistence Adapter (Testcontainers Postgres)**:
+
+- Optimistic-lock conflict on `Reservation.version`: parallel release
+  attempts → exactly one succeeds.
+- TTL sweep selection query: `RESERVED` rows with `expires_at < NOW()` are
+  selected; `CONFIRMED` and `RELEASED` rows are excluded.
+- `picking_request_id` UNIQUE constraint enforced at DB level.
+
+---
+
 ## Invariants
 
 - **Terminal-once**: both `CONFIRMED` and `RELEASED` are terminal. No

@@ -8,7 +8,7 @@ inventory-service reservation-saga.md + reservation-status.md sibling shape back
 
 # Status
 
-ready
+review
 
 # Owner
 
