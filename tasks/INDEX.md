@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-094-adr-mono-012-accepted-transition.md` — ADR-MONO-012 PROPOSED → ACCEPTED transition (cross-project architecture.md canonical form, WMS Identity-table form). user-explicit nod via "/audit-memory → Option B" sequence. § Status flip + § History row + ADR INDEX row. 4 file / +108 / -4 (ADR + INDEX + task spec + tasks/INDEX row). governance authoring only. lifecycle = ready → review 직접 (in-progress 우회, single-PR closure 패턴 10번째 적용). D4 OVERRIDE per ADR-MONO-003a § D1.1. branch = `task/mono-094-adr-mono-012-accepted-transition`. 후속 migration cycle = MONO-095 SCM / MONO-096 hook / MONO-097 GAP / MONO-098 ecommerce. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
