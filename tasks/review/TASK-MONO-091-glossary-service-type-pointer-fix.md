@@ -8,7 +8,7 @@ platform/glossary.md Service Type row → INDEX.md pointer (governance drift 차
 
 # Status
 
-ready
+review
 
 # Owner
 

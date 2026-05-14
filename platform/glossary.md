@@ -27,7 +27,7 @@ Defines **platform-wide** terms used across specs, tasks, and documentation. Thi
 | Term | Definition |
 |---|---|
 | **Service** | An independently deployable unit with its own database and domain. Declared in `PROJECT.md` with a `Service Type` |
-| **Service Type** | One of `rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`, `ml-pipeline`, `frontend-app`. See `service-types/INDEX.md` |
+| **Service Type** | A category from the canonical catalog. See `service-types/INDEX.md` for the authoritative list and selection rules |
 | **Gateway** | The single entry point for all external traffic. Handles authentication, routing, rate limiting, header enrichment |
 | **Contract** | A published interface definition (HTTP or event) that producers and consumers must follow. Lives in `specs/contracts/` |
 | **Spec** | A specification document defining rules, policies, or behavior. Source of truth |
