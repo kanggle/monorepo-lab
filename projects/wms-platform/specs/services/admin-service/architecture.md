@@ -324,9 +324,11 @@ Mostly trivial here; this service has small domain logic:
 - Outbox: `admin_outbox`
 - Event dedupe: `admin_event_dedupe`
 - Read-model tables: `*_ref`, `*_summary`, `*_snapshot`, `throughput_*`,
-  `alert_log` (full layout in `domain-model.md` — Open Items)
+  `alert_log` (full schema in [`database-design.md`](database-design.md))
 - User/role tables: `admin_user`, `admin_role`, `admin_user_role_assignment`
 - Settings: `admin_setting(key PK, scope, value_json, version, updated_at)`
+
+Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 
 ---
 
