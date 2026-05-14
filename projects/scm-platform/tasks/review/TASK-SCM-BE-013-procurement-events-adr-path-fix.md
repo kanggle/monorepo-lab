@@ -8,7 +8,7 @@ SCM scm-procurement-events.md ADR-MONO-004 path fix (refactor-spec Tier 3 #2 clo
 
 # Status
 
-ready
+review
 
 # Owner
 
