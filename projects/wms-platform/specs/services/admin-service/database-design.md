@@ -293,6 +293,14 @@ CREATE INDEX idx_admin_outbox_aggregate
 column) accommodates non-UUID aggregate ids (e.g., a setting `key`).
 This is the only divergence from sibling outbox shapes.
 
+**Shape vs `master-service`**: this wms-specific shape (UUID PK +
+JSONB payload + `partition_key`) diverges from `master-service`'s
+legacy `libs/java-messaging` shared schema (BIGSERIAL PK + TEXT
+payload + `status` enum) — see [`master-service/database-design.md`](../master-service/database-design.md)
+§ 2 for the full rationale. master's migration to this modern shape
+is deferred per ADR-MONO-003 D2 cadence (≥ 2026-06-10), tracked as
+TASK-MONO-049 § 6 follow-up #1.
+
 **No append-only trigger**: admin chose PK-natural-dedupe for audit
 tables (§ 12 below) instead of the trigger pattern. The outbox itself
 is mutable on the `published_at` column by the publisher (same as other

@@ -146,7 +146,8 @@ enum**). The divergence is intentional:
 
 When master grows event volume (e.g., bulk ERP sync — v2), a migration
 that swaps the outbox shape is on the table; until then the library
-shape stays.
+shape stays. **Tracked as TASK-MONO-049 § 6 follow-up #1**, deferred
+per ADR-MONO-003 D2 cadence (≥ 2026-06-10).
 
 `processed_events` is a **stub** in master — never written to in v1.
 

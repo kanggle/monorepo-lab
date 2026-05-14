@@ -8,7 +8,7 @@ WMS outbox shape divergence cross-reference + MONO-049 deferred pointer (refacto
 
 # Status
 
-ready
+review
 
 # Owner
 
