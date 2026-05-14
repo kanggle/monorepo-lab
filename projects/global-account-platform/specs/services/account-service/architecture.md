@@ -96,7 +96,7 @@ presentation → application → domain
 ```
 
 - `presentation/internal/` 엔드포인트도 동일한 application use-case를 호출 — 별도 백도어 금지
-- `application` → [libs/java-messaging](../../../libs/java-messaging) (outbox)
+- `application` → [libs/java-messaging](../../../../../libs/java-messaging) (outbox)
 - `infrastructure/anonymizer` → `domain/profile` (PII 필드 식별)
 
 ## Forbidden Dependencies

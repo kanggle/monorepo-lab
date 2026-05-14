@@ -84,7 +84,7 @@ presentation → application → domain
 ```
 
 - `domain/account/AccountStatusChecker` — 인터페이스 (port). `infrastructure/client/AccountStatusClient`가 구현
-- `application` → [libs/java-messaging](../../../libs/java-messaging) (outbox)
+- `application` → [libs/java-messaging](../../../../../libs/java-messaging) (outbox)
 - `infrastructure/scheduler/` → `application/ExpireSubscriptionUseCase` (스케줄러가 use-case 호출)
 
 ## Forbidden Dependencies

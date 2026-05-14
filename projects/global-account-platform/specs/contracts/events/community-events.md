@@ -1,6 +1,6 @@
 # Event Contract: community-service
 
-발행 방식: Outbox 패턴 ([libs/java-messaging](../../../libs/java-messaging))
+발행 방식: Outbox 패턴 ([libs/java-messaging](../../../../../libs/java-messaging))
 파티션 키: `post_id` (포스트 관련 이벤트), `account_id` (구독 관련 이벤트)
 
 ---

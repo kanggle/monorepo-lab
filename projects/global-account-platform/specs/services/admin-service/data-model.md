@@ -118,7 +118,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 
 ### `outbox`
 
-[libs/java-messaging](../../../libs/java-messaging) 표준 스키마. `admin.action.performed` 발행 버퍼.
+[libs/java-messaging](../../../../../libs/java-messaging) 표준 스키마. `admin.action.performed` 발행 버퍼.
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
@@ -131,11 +131,11 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `published_at` | TIMESTAMP | NULL이면 미발행 |
 | `status` | VARCHAR(20) | `PENDING` / `PUBLISHED` |
 
-보존·cleanup 정책은 [retention.md](./retention.md)에서 [libs/java-messaging](../../../libs/java-messaging) 공통 정책에 위임됨을 명시.
+보존·cleanup 정책은 [retention.md](./retention.md)에서 [libs/java-messaging](../../../../../libs/java-messaging) 공통 정책에 위임됨을 명시.
 
 #### `admin.action.performed` Event Envelope
 
-`outbox.payload`는 [libs/java-messaging](../../../libs/java-messaging) 표준 envelope([../../contracts/events/auth-events.md](../../contracts/events/auth-events.md) Event Envelope 절 참조)의 `payload` 필드에 다음 구조를 싣는다. `eventType = "admin.action.performed"`, `source = "admin-service"`, `partitionKey = actor.id` (동일 operator 액션의 순서 보장).
+`outbox.payload`는 [libs/java-messaging](../../../../../libs/java-messaging) 표준 envelope([../../contracts/events/auth-events.md](../../contracts/events/auth-events.md) Event Envelope 절 참조)의 `payload` 필드에 다음 구조를 싣는다. `eventType = "admin.action.performed"`, `source = "admin-service"`, `partitionKey = actor.id` (동일 operator 액션의 순서 보장).
 
 이 envelope은 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A2 표준 스키마(actor/action/target/outcome)를 준수한다. `specs/contracts/events/admin-events.md` 파일은 현재 존재하지 않으므로(`2026-04-13 확인`) 본 문서가 canonical source이다. 해당 contract 파일이 신설되는 시점에 본 절은 링크로 축약하고 정의를 이관한다.
 

@@ -17,7 +17,7 @@
 |---|---|---|
 | `credentials` | `account_id`, `credential_hash` (argon2id), `algorithm`, `updated_at`, `version` | 낙관적 락(version), credential rotation 시 update |
 | `refresh_tokens` | `jti`, `account_id`, `issued_at`, `expires_at`, `rotated_from`, `revoked`, `device_fingerprint` | `rotated_from` 체인으로 재사용 탐지 |
-| `outbox_events` | `event_id`, `aggregate_id`, `type`, `payload`, `occurred_at`, `published_at` | [libs/java-messaging/outbox](../../../libs/java-messaging) 사용 |
+| `outbox_events` | `event_id`, `aggregate_id`, `type`, `payload`, `occurred_at`, `published_at` | [libs/java-messaging/outbox](../../../../../libs/java-messaging) 사용 |
 | `processed_events` | 해당 없음 (auth-service는 현재 이벤트 소비 없음) | — |
 
 스키마 변경은 Flyway migration. 상세는 [data-model.md](data-model.md).
@@ -55,12 +55,12 @@
 
 | Lib | 용도 |
 |---|---|
-| [libs/java-common](../../../libs/java-common) | 공통 DTO 베이스, `Page<T>`, 에러 코드 enum |
-| [libs/java-web](../../../libs/java-web) | Spring Web 설정, 요청 DTO validation, 표준 에러 응답 |
-| [libs/java-messaging](../../../libs/java-messaging) | Outbox 패턴 구현, Kafka producer wrapper, event envelope |
-| [libs/java-security](../../../libs/java-security) | JWT 서명·검증, 패스워드 해시(argon2id wrapper), RS256 키 로딩 |
-| [libs/java-observability](../../../libs/java-observability) | MDC, Prometheus 메트릭, OTel 트레이스 propagation |
-| [libs/java-test-support](../../../libs/java-test-support) | Testcontainers (MySQL + Kafka + Redis), WireMock 헬퍼, 테스트 데이터 픽스처 |
+| [libs/java-common](../../../../../libs/java-common) | 공통 DTO 베이스, `Page<T>`, 에러 코드 enum |
+| [libs/java-web](../../../../../libs/java-web) | Spring Web 설정, 요청 DTO validation, 표준 에러 응답 |
+| [libs/java-messaging](../../../../../libs/java-messaging) | Outbox 패턴 구현, Kafka producer wrapper, event envelope |
+| [libs/java-security](../../../../../libs/java-security) | JWT 서명·검증, 패스워드 해시(argon2id wrapper), RS256 키 로딩 |
+| [libs/java-observability](../../../../../libs/java-observability) | MDC, Prometheus 메트릭, OTel 트레이스 propagation |
+| [libs/java-test-support](../../../../../libs/java-test-support) | Testcontainers (MySQL + Kafka + Redis), WireMock 헬퍼, 테스트 데이터 픽스처 |
 
 ## External SaaS / 3rd-Party
 

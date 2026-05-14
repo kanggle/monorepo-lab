@@ -53,8 +53,8 @@ apps/gateway-service/src/main/java/com/example/gateway/
 ## Allowed Dependencies
 
 - `filter/` → `security/`, `ratelimit/` (필터 체인이 인증·제한 로직을 호출)
-- `filter/` → [libs/java-security](../../../libs/java-security) (JWT 검증 헬퍼), [libs/java-observability](../../../libs/java-observability) (MDC, metrics)
-- `route/` → [libs/java-web](../../../libs/java-web) (공통 에러 포맷)
+- `filter/` → [libs/java-security](../../../../../libs/java-security) (JWT 검증 헬퍼), [libs/java-observability](../../../../../libs/java-observability) (MDC, metrics)
+- `route/` → [libs/java-web](../../../../../libs/java-web) (공통 에러 포맷)
 - `security/` → Redis (JWKS 캐시), WebClient (auth-service JWKS 엔드포인트 호출)
 - `ratelimit/` → Redis (토큰 버킷)
 - 모든 패키지 → `config/` (Spring Bean 주입 방향만)

@@ -89,7 +89,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 
 ### `outbox_events`
 
-[libs/java-messaging](../../../libs/java-messaging) 표준 스키마 — auth-service와 동일 구조.
+[libs/java-messaging](../../../../../libs/java-messaging) 표준 스키마 — auth-service와 동일 구조.
 
 ---
 

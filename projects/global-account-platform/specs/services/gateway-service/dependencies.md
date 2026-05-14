@@ -27,10 +27,10 @@
 
 | Lib | 용도 |
 |---|---|
-| [libs/java-web](../../../libs/java-web) | 공통 에러 포맷, DTO 베이스, Spring Web 설정 헬퍼 |
-| [libs/java-security](../../../libs/java-security) | JWT 검증 유틸리티, kid 매칭 로직 |
-| [libs/java-observability](../../../libs/java-observability) | Request ID 필터, MDC, Prometheus 메트릭, OTel 트레이싱 |
-| [libs/java-test-support](../../../libs/java-test-support) | Testcontainers 베이스, WireMock 헬퍼 |
+| [libs/java-web](../../../../../libs/java-web) | 공통 에러 포맷, DTO 베이스, Spring Web 설정 헬퍼 |
+| [libs/java-security](../../../../../libs/java-security) | JWT 검증 유틸리티, kid 매칭 로직 |
+| [libs/java-observability](../../../../../libs/java-observability) | Request ID 필터, MDC, Prometheus 메트릭, OTel 트레이싱 |
+| [libs/java-test-support](../../../../../libs/java-test-support) | Testcontainers 베이스, WireMock 헬퍼 |
 
 `libs/java-common`, `libs/java-messaging`은 **사용하지 않음** (도메인 모델·DB·이벤트 없음).
 
