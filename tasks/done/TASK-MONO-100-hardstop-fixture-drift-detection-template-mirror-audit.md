@@ -8,7 +8,7 @@ HARDSTOP fixture body byte-compare 강화 (drift detection 자동화) + TEMPLATE
 
 # Status
 
-review
+done
 
 # Owner
 
