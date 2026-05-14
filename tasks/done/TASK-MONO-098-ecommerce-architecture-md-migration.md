@@ -8,7 +8,7 @@ ecommerce 14 architecture.md migration to WMS Identity-table canonical form (ADR
 
 # Status
 
-review
+done
 
 # Owner
 
