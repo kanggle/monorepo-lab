@@ -192,7 +192,7 @@ the same `master_db`. Cross-aggregate referential checks at the
 application layer (e.g., "cannot delete warehouse with active zones")
 still fire — the SQL FK is a structural backstop.
 
-**zone_type enum**: 6 values mirroring [`ZoneType.java`](../../../apps/master-service/src/main/java/com/wms/master/domain/zone/ZoneType.java). Promoting a new
+**zone_type enum**: 6 values mirroring [`ZoneType.java`](../../../apps/master-service/src/main/java/com/wms/master/domain/model/ZoneType.java). Promoting a new
 value requires a Flyway migration that adds the enum literal here +
 domain enum + REST schema update (3-leg coordination).
 

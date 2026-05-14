@@ -387,10 +387,10 @@ decision and should be recorded in
 
 ### Rule References
 
-- [`rules/traits/integration-heavy.md`](../../../../rules/traits/integration-heavy.md)
+- [`rules/traits/integration-heavy.md`](../../../../../rules/traits/integration-heavy.md)
   — I1 (timeout), I2 (circuit breaker), I3 (retry), I4 (idempotency),
   I7 (vendor adapter), I8 (internal model translation), I9 (bulkhead).
-- [`platform/security-rules.md`](../../../../platform/security-rules.md)
+- [`platform/security-rules.md`](../../../../../platform/security-rules.md)
   — Secret Manager + API-key rotation policy.
 
 ### Production Code Anchors (Wire Source-of-Truth)

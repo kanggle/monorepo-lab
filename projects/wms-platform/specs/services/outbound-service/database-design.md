@@ -790,7 +790,7 @@ TASK-BE-157).
 - [`idempotency.md`](idempotency.md) — REST + outbox + webhook + tms dedupe strategies
 - [`external-integrations.md`](external-integrations.md) — TMS marquee (I4 idempotency reference for § 8)
 - [`sagas/outbound-saga.md`](sagas/outbound-saga.md) — saga state machine + sweeper recovery
-- [`state-machines/outbound-saga-status.md`](state-machines/outbound-saga-status.md) — saga state transitions (if present)
+- [`state-machines/saga-status.md`](state-machines/saga-status.md) — saga state transitions
 - [`../inventory-service/database-design.md`](../inventory-service/database-design.md) — sibling primary template (BE-157)
 - [`../notification-service/database-design.md`](../notification-service/database-design.md) — sibling (BE-160)
 - [`../master-service/database-design.md`](../master-service/database-design.md) — sibling (BE-161)
