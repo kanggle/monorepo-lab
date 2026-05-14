@@ -8,7 +8,7 @@ platform/glossary.md Service Type row → INDEX.md pointer (governance drift 차
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -48,10 +48,10 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] `platform/glossary.md:30` Service Type row enumeration 제거, `service-types/INDEX.md` 단일 pointer.
-- [ ] Service Type 추가 시 glossary 갱신 필요 없는 구조 검증 (future drift class 차단).
-- [ ] Production code / spec contract / requirement 0 변경 (glossary description polish only).
-- [ ] 다른 glossary entry 의 표현 일관성 유지 (pointer style 가 다른 entry 와 충돌 안 함).
+- [x] `platform/glossary.md:30` Service Type row enumeration 제거, `service-types/INDEX.md` 단일 pointer (검증: `grep 'rest-api.*event-consumer' platform/glossary.md` = 0 hit).
+- [x] Service Type 추가 시 glossary 갱신 필요 없는 구조 검증 — pointer 단일화로 future drift class 차단.
+- [x] Production code / spec contract / requirement 0 변경 (glossary description polish only).
+- [x] 다른 glossary entry 의 표현 일관성 유지 (pointer style 가 다른 entry 와 충돌 안 함).
 
 # Related Specs
 
@@ -90,4 +90,24 @@ monorepo
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #520 squash `114c4144`).
+
+1-line fix + governance drift class 차단 — refactor-spec Tier 2 F-08 closure.
+
+`platform/glossary.md:30`:
+- Before: `One of \`rest-api\`, \`event-consumer\`, \`batch-job\`, \`grpc-service\`, \`graphql-service\`, \`ml-pipeline\`, \`frontend-app\`. See \`service-types/INDEX.md\`` (7 types enumerated, missing `identity-platform`)
+- After: `A category from the canonical catalog. See \`service-types/INDEX.md\` for the authoritative list and selection rules`
+
+**Verification**: `grep 'rest-api.*event-consumer' platform/glossary.md` = 0 hit (enumeration removed). INDEX.md 가 8 types 의 single source of truth, future Service Type 추가 시 glossary 자동 sync.
+
+**CI**: 1 SUCCESS (`changes`) / 16 SKIPPED / 0 fail. platform/ shared 영역 변경이지만 `code-changed` filter false (markdown only) → libs/downstream flag AND composition false → 모든 build/test jobs SKIP. mergeStateStatus CLEAN.
+
+**refactor-spec cycle progression**:
+
+| # | Task | Scope | Category | Fix |
+|---|---|---|---|---|
+| 1-4 | BE-165/283/SCM-BE-013/BE-284 | deadref Tier 1+2+3 | mech+judg | 54 |
+| 5 | BE-285 | WMS non-deadref Tier 1 | mech | 6 |
+| 6 | **MONO-091 (this)** | platform Tier 2 governance | mech | 1 |
+
+**Tier 2 backlog 잔여 (별 task)**: F-01+F-02 reservation shape (sibling emulation, ~300+ LOC additive) / F-06+F-07 outbox/processed_events schema authority (HIGH risk, libs/java-messaging cross-check, ADR-level).
