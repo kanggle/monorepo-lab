@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-098-ecommerce-architecture-md-migration.md` — ADR-MONO-012 D3 **final batch** (ecommerce 14 architecture.md migration). 14 service (admin-dashboard / auth-service-deprecated / batch-worker / gateway-service / notification-service / order-service / payment-service / product-service / promotion-service / review-service / search-service / shipping-service / user-service / web-store). H1 rename + Identity table + Composition H3 + 본문 narrative 보존. ADR § 1.1 wording "ecommerce 13" 부정확 (실제 14, option C-1 audit-trail). 14 file / ~200-350 line. D4 OVERRIDE per ADR-MONO-003a § D1.1. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 

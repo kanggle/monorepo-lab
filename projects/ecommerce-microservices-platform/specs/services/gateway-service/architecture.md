@@ -1,13 +1,36 @@
-# Service Architecture
+# gateway-service — Architecture
 
-## Service
-`gateway-service`
+This document declares the internal architecture of `gateway-service`.
+All implementation tasks targeting this service must follow this declaration,
+`platform/api-gateway-policy.md`, and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`Layered Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `gateway-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture** (WebFlux-based edge gateway) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot, **Spring WebFlux (reactive)** |
+| Bounded Context | n/a — edge gateway, no domain logic |
+| Deployable unit | `apps/gateway-service/` |
+| Data store | none (stateless) |
+| Event publication | none |
+| Shared state | Redis (rate-limit counters, ephemeral) |
+
+### Service Type Composition
+
+`gateway-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. WebFlux-based API gateway — 퍼블릭 HTTP
+트래픽 진입점. JWT validation + routing + rate limiting + header normalization.
+적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 This service is a WebFlux-based API gateway.

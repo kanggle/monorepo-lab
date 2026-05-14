@@ -1,13 +1,35 @@
-# Service Architecture
+# batch-worker — Architecture
 
-## Service
-`batch-worker`
+This document declares the internal architecture of `batch-worker`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`batch-job`
+---
 
-## Architecture Style
-`Layered Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `batch-worker` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `batch-job` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture** |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot, Spring Batch |
+| Bounded Context | Scheduled / batch processing (periodic cleanup, aggregation, maintenance) |
+| Deployable unit | `apps/batch-worker/` |
+| Data store | PostgreSQL (shared with other ecommerce services for batch read/write) |
+| Event publication | Kafka (batch completion events) |
+| Event consumption | none (scheduled trigger) |
+
+### Service Type Composition
+
+`batch-worker` is a single-type `batch-job` service per
+`platform/service-types/INDEX.md`. Periodic / batch processing tasks —
+cleanup, aggregation, maintenance. 적용되는 규칙:
+[platform/service-types/batch-job.md](../../../../../platform/service-types/batch-job.md).
+
+---
 
 ## Why This Architecture
 This service handles scheduled and batch processing tasks — periodic cleanup, data aggregation, and maintenance jobs.

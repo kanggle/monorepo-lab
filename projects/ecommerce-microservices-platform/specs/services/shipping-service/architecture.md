@@ -1,13 +1,36 @@
-# Service Architecture
+# shipping-service — Architecture
 
-## Service
-`shipping-service`
+This document declares the internal architecture of `shipping-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`DDD-style Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `shipping-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Shipping (shipping aggregates / status transitions / event-driven lifecycle) |
+| Deployable unit | `apps/shipping-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (shipping.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`shipping-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Shipping 도메인 — shipping aggregates,
+status transitions with strict ordering rules, event-driven lifecycle. 적용되는
+규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 Shipping management involves meaningful domain concepts: shipping aggregates, status transitions with strict ordering rules, and event-driven lifecycle.
