@@ -8,7 +8,7 @@ GAP specs dead-reference mechanical batch — 46 `libs/*` depth fix + 1 V0008 SQ
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -73,10 +73,10 @@ global-account-platform
 
 # Acceptance Criteria
 
-- [ ] 47 dead-references PASS (`bash /tmp/check_gap_links.sh` exit 1 remaining = PiiMaskingUtils Tier 2 만).
-- [ ] 13 modified file 각각의 nearby ref 회귀 0건.
-- [ ] Production code / spec contract / event payload / API schema 0 변경 (markdown link string only).
-- [ ] PiiMaskingUtils Tier 2 finding 명시적 skip + Out of Scope 섹션 기록.
+- [x] 47 dead-references PASS (`bash /tmp/check_gap_links.sh` 결과 1 remaining = PiiMaskingUtils Tier 2 skip 외 broken 0).
+- [x] 13 modified file (실제 19 file, 일부 file 에 multiple ref) 각각의 nearby ref 회귀 0건.
+- [x] Production code / spec contract / event payload / API schema 0 변경 (markdown link string only).
+- [x] PiiMaskingUtils Tier 2 finding 명시적 skip + Out of Scope 섹션 기록 (별 task BE-284 후보 / SCM 1 dead-ref 별 task scm-platform 후보).
 
 # Related Specs
 
@@ -117,4 +117,22 @@ global-account-platform
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (2026-05-14, PR #511 squash `43470bd3`).
+
+47 mechanical fixes / 19 spec files (3 contracts/events + 16 services/*) / 50 line edit / 0 production code change:
+
+- **46 libs/* depth +2 ups** (sed batch on `](../../../libs/java-` → `](../../../../../libs/java-`): GAP specs at 4-level deep (`projects/global-account-platform/specs/{services/<svc>,contracts/events}/X.md`) needed 5 `../` to reach repo-root `libs/`. Pre-import era artifact — GAP 2026-04-30 standalone repo import 시 spec author 가 depth realign 안 함.
+- **1 V0008 SQL depth -1 up** (auth-service/data-model.md L191 Edit): `../../../../apps/auth-service/.../V0008__create_oauth_tables.sql` → `../../../apps/...` (was over by 1, landing at `projects/apps/`).
+
+**Skipped (1, Tier 2 finding —별 task)**:
+- `admin-service/data-model.md` L170 PiiMaskingUtils.java — production code 에 같은 명/path 의 file 부재. 가장 가까운 production = `application/pii/PiiMaskingService.java` (다른 class + 다른 package). Requires judgment: (a) rename ref to actual class, (b) drop sample link. → **TASK-BE-284 후보**.
+
+**CI**: 2 pass (`changes` 6s + `Frontend E2E smoke` 4m19s, contracts/events 변경으로 트리거됐지만 markdown only 라 통과) / 15 SKIPPED (path-filter 의도) / 0 fail. mergeStateStatus CLEAN.
+
+**Verification**: `bash /tmp/check_gap_links.sh` post-fix = 1 remaining (PiiMaskingUtils, 예상치). Final dead-ref count = 48 → 1 (-47, 47/48 = 97.9% closure).
+
+**Provenance**: `/refactor-spec all --dry-run` (2026-05-14, BE-153~164 portfolio gap 완전 종결 + BE-165 wms-side Tier 1 closure 후) Tier 3 #1 closure. TASK-MONO-085/086 + TASK-BE-165 sibling precedent (mechanical batch + post-merge re-verification + Tier 2 skip 명시).
+
+**잔존 Tier 3 후보** (별 task / 별 author origin):
+- BE-284 (GAP) — PiiMaskingUtils Tier 2 judgment (rename or drop).
+- scm-platform `scm-procurement-events.md:44` ADR-MONO-004 path — 별 SCM task 후보.
