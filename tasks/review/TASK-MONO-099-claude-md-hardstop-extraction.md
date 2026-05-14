@@ -8,7 +8,7 @@ CLAUDE.md refactor — Hard Stop Rules 4-block body 를 `platform/hardstop-rules
 
 # Status
 
-ready
+review
 
 # Owner
 

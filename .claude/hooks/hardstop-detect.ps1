@@ -5,10 +5,14 @@
 # {decision: "block", reason: <4-block stanza>} so the agent's next turn
 # receives the standardised remediation message.
 #
-# Stanza body source = CLAUDE.md § Hard Stop Rules (single source of truth).
+# Stanza body source = platform/hardstop-rules.md (single source of truth,
+# mirrored as a catalog in CLAUDE.md § Hard Stop Rules — see TASK-MONO-099).
 # Hook injects only the file path / line number into the parameterised template.
-# Drift between hook output and the canonical CLAUDE.md stanza fails the
-# diagnostic fixtures under .claude/hooks/__tests__/.
+# Drift between hook output and the canonical platform/hardstop-rules.md stanza
+# is currently a manual-sync responsibility; the fixtures under
+# .claude/hooks/__tests__/ guard the stanza ID and 4-block shape but do not
+# byte-compare body content (see TASK-MONO-099 § Out of Scope for the
+# drift-detection follow-up).
 #
 # Reference: platform/lint-remediation-message-standard.md
 # Provenance: TASK-MONO-060 (Phase 3 of OpenAI Harness gap A).
