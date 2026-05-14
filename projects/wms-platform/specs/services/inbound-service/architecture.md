@@ -386,7 +386,7 @@ boundaries.
 - Webhook inbox: `erp_webhook_inbox(event_id, raw_payload, signature, received_at, status, processed_at)`
 - Webhook dedupe: `erp_webhook_dedupe(event_id PK, received_at)`
 
-High-level table layout in `specs/services/inbound-service/domain-model.md`.
+Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 
 ---
 
