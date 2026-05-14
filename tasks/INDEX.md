@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-094-adr-mono-012-accepted-transition.md` — ADR-MONO-012 PROPOSED → ACCEPTED transition (cross-project architecture.md canonical form, WMS Identity-table form). user-explicit nod via "/audit-memory → Option B" sequence. § Status flip + § History row + INDEX row. 2 file / ~3 line edit. governance authoring only — 실제 24 architecture.md migration + HARDSTOP-10 hook propagation 은 별 follow-up tasks (MONO-095 SCM 3 file / MONO-096 hook / MONO-097 GAP 8 file / MONO-098 ecommerce 13 file). D4 OVERRIDE per ADR-MONO-003a § D1.1 (governance authoring, MONO-092 sibling, ADR-009 ACCEPTED precedent). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-094-adr-mono-012-accepted-transition.md` — ADR-MONO-012 PROPOSED → ACCEPTED transition (cross-project architecture.md canonical form, WMS Identity-table form). user-explicit nod via "/audit-memory → Option B" sequence. § Status flip + § History row + ADR INDEX row. 4 file / +108 / -4 (ADR + INDEX + task spec + tasks/INDEX row). governance authoring only. lifecycle = ready → review 직접 (in-progress 우회, single-PR closure 패턴 10번째 적용). D4 OVERRIDE per ADR-MONO-003a § D1.1. branch = `task/mono-094-adr-mono-012-accepted-transition`. 후속 migration cycle = MONO-095 SCM / MONO-096 hook / MONO-097 GAP / MONO-098 ecommerce. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
