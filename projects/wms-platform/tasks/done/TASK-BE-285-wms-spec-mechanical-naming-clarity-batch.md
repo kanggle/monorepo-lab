@@ -8,7 +8,7 @@ WMS specs mechanical naming + clarity batch — Service Type Composition + Archi
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -66,12 +66,12 @@ wms-platform
 
 # Acceptance Criteria
 
-- [ ] F-04 notification `### Service Type — single` → `### Service Type Composition` 정확 align (7 WMS service 모두 동일 H3).
-- [ ] F-05 3 file `## Architecture Style: X` 또는 `Rationale` 접미사 모두 drop → canonical `## Architecture Style` (7 WMS service 모두 동일).
-- [ ] F-09 `(reused; specific code TBD)` → `(reused)` — `; specific code TBD` hedge 제거, `reused` 의미 보존.
-- [ ] F-10 `event shape if needed without re-parsing` → `event shape without re-parsing` — `if needed` hedge 제거.
-- [ ] F-03 SKIP rationale (zero-state vs active-integration intentional divergence) 명시 — § Out of Scope 에 기록.
-- [ ] Production code / spec contract / event payload / API schema / business logic 0 변경 (markdown heading + word edits only).
+- [x] F-04 notification `### Service Type — single` → `### Service Type Composition` 정확 align (7 WMS service 모두 동일 H3 검증).
+- [x] F-05 3 file `## Architecture Style: X` 또는 `Rationale` 접미사 모두 drop → canonical `## Architecture Style` (7 WMS service 모두 동일 검증).
+- [x] F-09 `(reused; specific code TBD)` → `(reused)` — hedge 제거, `reused` 의미 보존.
+- [x] F-10 `event shape if needed without re-parsing` → `event shape without re-parsing` — `if needed` hedge 제거.
+- [x] F-03 SKIP rationale (zero-state vs active-integration intentional divergence) 명시 — § Out of Scope 에 기록됨.
+- [x] Production code / spec contract / event payload / API schema / business logic 0 변경 (markdown heading + word edits only).
 
 # Related Specs
 
@@ -114,4 +114,31 @@ wms-platform
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #518 squash `eb82d7be`).
+
+6 mechanical fixes / 5 file / 7 line edit / 0 production code change — non-deadref Tier 1 batch closure (4th refactor-spec mechanical batch cycle).
+
+**Fix detail**:
+- F-04: notification/architecture.md L23 `### Service Type — single` → `### Service Type Composition`
+- F-05a/b/c: admin/gateway/notification architecture.md `## Architecture Style: X` / `Rationale` suffix drop → canonical `## Architecture Style`
+- F-09: admin/domain-model.md L138 drop `; specific code TBD` hedge (preserve `(reused)`)
+- F-10: inventory/database-design.md L235-236 drop `if needed` hedge
+- F-03: SKIP — zero-state vs active-integration intentional structural divergence (numbered vendor catalog vs narrative), not author drift
+
+**CI**: 1 pass (`changes`) / 16 SKIPPED / 0 fail (admin/inventory/notification/gateway specs 변경 — contracts 안 건드림 → Frontend E2E SKIP). mergeStateStatus CLEAN.
+
+**Verification**: 7/7 WMS architecture.md `### Service Type Composition` + `## Architecture Style` canonical aligned. `grep "specific code TBD"` + `grep "shape if needed"` = 0 hit.
+
+**Provenance**: refactor-spec non-deadref audit Tier 1. **Tier 2 backlog (별 task)**: F-01+F-02 reservation shape / F-06+F-07 outbox schema authority (HIGH risk) / F-08 glossary Service Type pointer. Tier 3 (out-of-scope): 3 pre-existing cross-project divergence.
+
+**refactor-spec cycle progression**:
+
+| # | Task | Scope | Category | Fix | PRs |
+|---|---|---|---|---|---|
+| 1 | BE-165 | WMS Tier 1 (deadref) | mechanical | 5 | #509+#510 |
+| 2 | BE-283 | GAP Tier 3 #1 (deadref) | mechanical | 47 | #511+#512 |
+| 3 | SCM-BE-013 | SCM Tier 3 #2 (deadref) | mechanical | 1 | #513+#514 |
+| 4 | BE-284 | GAP Tier 2 (deadref) | judgment | 1 | #515+#516 |
+| 5 | **BE-285 (this)** | WMS Tier 1 (non-deadref naming/clarity) | mechanical | 6 | #518+(close) |
+
+Total: **5 task / 10 PR / 60 fix / portfolio dead-ref + non-deadref Tier 1 모두 closure**.
