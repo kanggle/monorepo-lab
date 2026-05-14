@@ -64,7 +64,7 @@ spring:
       enabled: true
 
 server:
-  port: ${SERVER_PORT:8082}
+  port: ${SERVER_PORT:8083}
   forward-headers-strategy: framework
   error:
     include-message: always

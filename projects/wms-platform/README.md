@@ -67,7 +67,7 @@ flowchart LR
 
     subgraph App["Application"]
         MS["master-service<br/>:8081<br/><br/>• Hexagonal<br/>• Idempotency filter<br/>• Lot expiry sched"]
-        IS["inventory-service<br/>:8082<br/><br/>• Hexagonal<br/>• 4 outbound-saga<br/>  consumers<br/>• Reservation TTL job<br/>• Low-stock detector"]
+        IS["inventory-service<br/>:8083<br/><br/>• Hexagonal<br/>• 4 outbound-saga<br/>  consumers<br/>• Reservation TTL job<br/>• Low-stock detector"]
     end
 
     subgraph Infra["Infrastructure"]
@@ -335,7 +335,7 @@ pnpm wms:up                   # gateway/services 컨테이너 + http://wms.local
 ### 서비스 실행
 
 ```bash
-# 기본 포트: gateway :8080, master :8081, inventory :8082 (host JVM bootRun)
+# 기본 포트: gateway :8080, master :8081, inventory :8083 (host JVM bootRun)
 ./gradlew :apps:gateway-service:bootRun
 ./gradlew :apps:master-service:bootRun
 ./gradlew :apps:inventory-service:bootRun
@@ -365,7 +365,7 @@ pnpm wms:up                   # gateway/services 컨테이너 + http://wms.local
 docker compose up -d                          # postgres, kafka, redis
 ./gradlew :apps:gateway-service:bootRun &     # :8080
 ./gradlew :apps:master-service:bootRun &      # :8081
-./gradlew :apps:inventory-service:bootRun &   # :8082
+./gradlew :apps:inventory-service:bootRun &   # :8083
 
 # JWT 취득 (IdP 설정 또는 infra/seed-token.txt 사용)
 TOKEN=$(cat infra/seed-token.txt)
