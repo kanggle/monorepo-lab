@@ -678,12 +678,12 @@ profile `dev` or `standalone`.
 > [`architecture.md § Open Items`](architecture.md) for the full retrospective
 > framing.
 
-- ❌ `database-design.md` — physical schema (tables, indexes, partial-unique
-  on `(location_id, sku_id, lot_id)` with NULL-aware key, role grants enforcing
-  W2 append-only). **Outstanding** — Flyway migrations under
-  `apps/inventory-service/src/main/resources/db/migration/` are the de-facto
-  schema; this file would consolidate them into a single spec doc. Candidate
-  for separate `TASK-BE-*`.
+- ✅ [`database-design.md`](database-design.md) — physical schema (tables,
+  indexes, partial-unique on `(location_id, sku_id, lot_id)` with NULL-aware
+  key, role grants enforcing W2 append-only). Authored in TASK-BE-157
+  (2026-05-14), retrospective reflection of Flyway V1-V5 (398 line, 11 table
+  + 2 trigger + 1 function); future `V6+` migrations must update this file
+  in the same commit.
 - ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
   — diagram in its own file (authored in TASK-BE-151, 2026-05-14)
 - ✅ [`sagas/reservation-saga.md`](sagas/reservation-saga.md) — saga
