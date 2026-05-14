@@ -8,7 +8,7 @@ inventory-service reservation-saga.md + reservation-status.md sibling shape back
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -84,12 +84,12 @@ wms-platform
 
 # Acceptance Criteria
 
-- [ ] reservation-status.md 에 6 신규 sections 추가 (Transition Rules / Guard Conditions / Concurrency / Reverse Flows / Error-Code Mapping / Test Requirements).
-- [ ] reservation-saga.md 에 2 신규 sections 추가 (§ 8 Test Matrix / § 9 Open Questions) + References § 8 → § 10 renumber.
-- [ ] 모든 신규 sections 가 sibling shape 답습 + reservation-specific content (TTL Expiry, Category D, idempotency-key).
-- [ ] reservation-saga.md ↔ reservation-status.md cross-reference 명시 (state-machine 의 test/concurrency 가 saga 로 위임 시).
-- [ ] Production code / Reservation aggregate / Flyway / business logic 0 변경 (spec authoring only).
-- [ ] `grep -n "^## " projects/wms-platform/specs/services/inventory-service/state-machines/reservation-status.md` = ≥ 10 H2 sections (sibling asn-status 9, order-status 9, saga-status 10 평균).
+- [x] reservation-status.md 에 6 신규 sections 추가 (Transition Rules / Guard Conditions / Concurrency / Reverse Flows / Error-Code Mapping / Test Requirements) — 검증 11 H2 (sibling 평균 9.3 보다 많음, Invariants + Forbidden Patterns reservation-specific 보존).
+- [x] reservation-saga.md 에 2 신규 sections 추가 (§ 8 Test Matrix 7 sub-section / § 9 Open Questions) + References § 8 → § 10 renumber — 검증 10 H2 (sibling outbound-saga 10 match).
+- [x] 모든 신규 sections 가 sibling shape 답습 + reservation-specific content (TTL Expiry Category D / idempotency-key MANUAL release / OL retry / version-based concurrency).
+- [x] reservation-saga.md ↔ reservation-status.md cross-reference 명시 — state-machine 의 unit-level Test Requirements vs saga 의 integration-level Test Matrix 분담.
+- [x] Production code / Reservation aggregate / Flyway / business logic 0 변경 (spec authoring only).
+- [x] `grep -cn "^## " projects/wms-platform/specs/services/inventory-service/state-machines/reservation-status.md` = 11 (target ≥ 10 PASS).
 
 # Related Specs
 
@@ -139,4 +139,39 @@ inventory-service (saga + state-machine spec authoring).
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #522 squash `78b65d6b`).
+
+Sibling-emulated additive backfill — refactor-spec Tier 2 F-01+F-02 paired closure. 0 production code change.
+
+## File changes
+
+| File | H2 sections | Lines | Change |
+|---|---|---|---|
+| `state-machines/reservation-status.md` | 5 → **11** (+6) | +166 | Add 6 sibling-canonical sections (Transition Rules / Guard Conditions / Concurrency / Reverse Flows v1: forbidden / Error-Code Mapping / Test Requirements). Existing Invariants + Forbidden Patterns + References untouched. |
+| `sagas/reservation-saga.md` | 8 → **10** (+2) | +138 | Add § 8 Test Matrix (7 sub-sections) + § 9 Open Questions. Renumber § 8 References → § 10. Renames preserved (Operations per-event / Compensation / Concurrency Guarantees / Failure Modes — architectural reality of event-driven choreography). |
+
+## Sibling emulation adjustments (architectural reality preserved)
+
+- outbound-saga § 8 has 9 sub-sections (incl. sweeper / TMS / contract-test). Reservation has no sweeper (Category D TTL replaces), no TMS adapter — sub-sections folded into TTL § 8.4. Added `§ 8.6 REST Idempotency` for MANUAL release path (no sibling counterpart).
+- § 9 Open Questions = "no open questions for v1" + 4 explicit v2 candidates (TTL extension / partial confirm / cross-warehouse / RMA).
+
+## Verification
+
+- `grep -cn "^## "` reservation-status.md = **11** (target ≥ 10 ✓, sibling 평균 9.3 보다 많음)
+- `grep -cn "^## "` reservation-saga.md = **10** (target 10 ✓, sibling outbound-saga 10 match)
+- `git diff --stat` = 2 file / 307 insertions / 1 deletion / 0 production code
+
+## CI
+
+1 SUCCESS (`changes`) / 16 SKIPPED / 0 fail — markdown-only path-filter. mergeStateStatus CLEAN.
+
+## refactor-spec cycle progression (7th task)
+
+| # | Task | Scope | Category | Fix |
+|---|---|---|---|---|
+| 1-4 | BE-165/283/SCM-BE-013/BE-284 | deadref Tier 1+2+3 | mech+judg | 54 |
+| 5 | BE-285 | WMS non-deadref Tier 1 | mech | 6 |
+| 6 | MONO-091 | platform Tier 2 governance | mech | 1 |
+| 7 | **BE-286 (this)** | inventory Tier 2 sibling emulation | judgment+additive | 8 sections |
+
+**Tier 2 backlog 잔여 (마지막)**: F-06+F-07 outbox/processed_events schema authority (**HIGH risk**, libs/java-messaging cross-check + ADR-level decision).
