@@ -8,7 +8,7 @@ WMS specs dead-reference mechanical batch — 4 path corrections + 1 hedge clean
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -54,11 +54,11 @@ wms-platform
 
 # Acceptance Criteria
 
-- [ ] 4 dead-references PASS (target file 실재 + path resolve to existing file).
-- [ ] 1 hedge phrasing "(if present)" 제거 (L793 outbound DB design).
-- [ ] `bash` link checker re-run (sample TASK-MONO-085 script pattern) over 3 modified files = 0 broken.
-- [ ] Production code / spec contract / event payload / API schema 0 변경 (markdown only).
-- [ ] sibling spec (outbound-saga.md, BE-157 inventory database-design.md) 와 link style 일관성 유지.
+- [x] 4 dead-references PASS (target file 실재 + path resolve to existing file).
+- [x] 1 hedge phrasing "(if present)" 제거 (L793 outbound DB design).
+- [x] `bash` link checker re-run (sample TASK-MONO-085 script pattern) over 3 modified files = 0 broken.
+- [x] Production code / spec contract / event payload / API schema 0 변경 (markdown only).
+- [x] sibling spec (outbound-saga.md, BE-157 inventory database-design.md) 와 link style 일관성 유지.
 
 # Related Specs
 
@@ -110,4 +110,16 @@ wms-platform
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (2026-05-14, PR #509 squash `fe09fa86`).
+
+5 mechanical fixes / 3 spec files / 5 line edit / 0 production code change:
+
+- `tms-shipment-api.md` L390 + L393: `rules/traits/integration-heavy.md` + `platform/security-rules.md` depth `../../../../` → `../../../../../` (5-level deep at `projects/wms-platform/specs/contracts/http/`).
+- `master-service/database-design.md` L195: `ZoneType.java` package `domain/zone/` → `domain/model/` (production code 의 실제 package, `find` 검증).
+- `outbound-service/database-design.md` L793: state-machine basename `outbound-saga-status.md` → `saga-status.md` + "(if present)" hedge 제거.
+
+**CI**: 2 pass (`changes` 6s + `Frontend E2E smoke` 2m54s) / 15 SKIPPED (path-filter 의도) / 0 fail. mergeStateStatus CLEAN.
+
+**Verification**: 3 modified file 의 dead-ref checker = 0 broken (TASK-MONO-085 pattern).
+
+**Provenance**: `/refactor-spec all --dry-run` (2026-05-14, BE-153~164 portfolio gap 완전 종결 직후 audit) Tier 1 mechanical batch closure. TASK-MONO-085/086 sibling precedent 답습. Tier 3 잔존 (GAP 53 `libs/*` pre-existing depth bug + SCM 1 `scm-procurement-events.md` ADR path) 는 별 task 후보로 보류 (out-of-scope: pre-import era artifact + 별 author origin).
