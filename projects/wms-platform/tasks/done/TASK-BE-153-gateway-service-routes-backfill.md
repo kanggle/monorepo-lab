@@ -8,7 +8,7 @@ TASK-BE-153
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -14,3 +14,21 @@ spring:
           predicates:
             - Path=/api/v1/master/**
           # No RequestRateLimiter filter under standalone (Redis is not available).
+        # TASK-BE-153: backfill 4 service routes — same shape as application.yml
+        # minus the Redis-backed RequestRateLimiter (standalone runs without Redis).
+        - id: inbound-service
+          uri: ${INBOUND_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/inbound/**
+        - id: inventory-service
+          uri: ${INVENTORY_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/inventory/**
+        - id: outbound-service
+          uri: ${OUTBOUND_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/outbound/**
+        - id: admin-service
+          uri: ${ADMIN_SERVICE_URI:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/admin/**
