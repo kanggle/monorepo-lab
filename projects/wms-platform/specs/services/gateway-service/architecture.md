@@ -48,7 +48,7 @@ It MUST NOT own aggregates, persist domain state, or contain business logic.
 
 ---
 
-## Architecture Style Rationale
+## Architecture Style
 
 Gateway services have no aggregates, repositories, or domain events. Hexagonal's
 port/adapter separation adds ceremony without payoff here. Layered gives:

@@ -135,7 +135,7 @@ Named permission bundle. Assigned to users per warehouse scope
 
 - `role_code` globally unique; immutable after creation; `ROLE_CODE_DUPLICATE`.
 - `permissions_json` must be a valid JSON array of known permission strings.
-  Unknown strings → `SETTING_VALIDATION_ERROR` (reused; specific code TBD).
+  Unknown strings → `SETTING_VALIDATION_ERROR` (reused).
 - Deactivation blocked if any `ACTIVE` `UserRoleAssignment` references this role
   (`ROLE_IN_USE`). `WMS_SUPERADMIN` with `force` flag cascades revocations.
 - The four built-in roles (`WMS_VIEWER`, `WMS_OPERATOR`, `WMS_ADMIN`,

@@ -69,7 +69,7 @@ display.
 
 ---
 
-## Architecture Style: Layered (Deliberate Exception)
+## Architecture Style
 
 ### Rationale
 

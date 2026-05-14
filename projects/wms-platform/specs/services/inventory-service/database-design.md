@@ -233,7 +233,7 @@ index only stores unpublished rows, which empties to near-zero in steady
 state.
 
 `payload` is `JSONB` (not `JSON`) so the publisher can introspect event
-shape if needed without re-parsing. `partition_key` is set per-event
+shape without re-parsing. `partition_key` is set per-event
 (typically `inventory_id` or `reservation_id`) to guarantee per-aggregate
 in-order delivery downstream.
 
