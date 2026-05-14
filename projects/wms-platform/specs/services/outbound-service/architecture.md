@@ -491,7 +491,7 @@ Full contract: `specs/contracts/webhooks/erp-order-webhook.md`.
 - Saga state: `outbound_saga`
 - TMS request dedupe: `tms_request_dedupe(request_id PK, sent_at, response_snapshot)`
 
-High-level table layout in `specs/services/outbound-service/domain-model.md`.
+Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 
 ---
 
