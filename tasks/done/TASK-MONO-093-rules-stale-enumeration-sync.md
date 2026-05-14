@@ -8,7 +8,7 @@ Service Type catalog enumeration drift sync (architecture.md + coordinator.md) +
 
 # Status
 
-review
+done
 
 # Owner
 
