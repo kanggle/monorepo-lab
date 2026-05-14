@@ -41,7 +41,7 @@ Canonical Kafka topic names. Topic naming convention =
 
 Every event in this contract uses the standard `BaseEventPublisher.writeEvent`
 envelope (libs/java-messaging — see
-[`ADR-MONO-004`](../../../docs/adr/) for the v1 vs v2 envelope distinction):
+[`ADR-MONO-004`](../../../../../docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md) for the v1 vs v2 envelope distinction):
 
 ```json
 {
