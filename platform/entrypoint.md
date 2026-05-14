@@ -16,7 +16,7 @@ AI agents and developers must begin platform-spec reading from this file.
 
 Before reading anything else under `platform/`, resolve the project's classification:
 
-1. Read `PROJECT.md` at repository root. Extract `domain` and `traits` from its frontmatter.
+1. Read the active project's `PROJECT.md` — walk up from the working location to the nearest ancestor with a `PROJECT.md` (typically `projects/<name>/PROJECT.md` in monorepo mode, repository root in single-project mode). Extract `domain` and `traits` from its frontmatter.
 2. Consult `.claude/config/activation-rules.md` for the short dispatch summary — which rule categories and skill bundles each declared trait/domain activates. Confirm membership against `.claude/config/domains.md` and `.claude/config/traits.md`.
 3. Verify both values exist in `rules/taxonomy.md` (authoritative narrative definitions). Unknown values → Hard Stop.
 4. Read detailed rule layers in this order (absent files mean "no additional constraints"):
