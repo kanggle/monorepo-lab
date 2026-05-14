@@ -8,7 +8,7 @@ WMS specs mechanical naming + clarity batch — Service Type Composition + Archi
 
 # Status
 
-ready
+review
 
 # Owner
 

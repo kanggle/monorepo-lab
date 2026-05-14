@@ -20,7 +20,7 @@ and `platform/architecture-decision-rule.md`.
 | Event publication | Kafka via outbox — `notification.delivered.v1` only (audit trail) |
 | Event consumption | Kafka with eventId-based dedupe across all alert-worthy WMS topics |
 
-### Service Type — single
+### Service Type Composition
 
 `notification-service` is a pure event consumer in v1. No REST surface, no
 admin UI. Routing rules are configured via Flyway-seeded rows + environment
@@ -72,7 +72,7 @@ idempotent delivery and audit. Quality bar matches sibling services.
 
 ---
 
-## Architecture Style: Hexagonal
+## Architecture Style
 
 ### Rationale
 
