@@ -14,12 +14,12 @@ COPY --chown=app:app build/libs/admin-service.jar /app/app.jar
 
 USER app
 
-EXPOSE 8087
+EXPOSE 8086
 
 ENV JAVA_OPTS=""
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost:8087/actuator/health || exit 1
+    CMD curl -fsS http://localhost:8086/actuator/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]

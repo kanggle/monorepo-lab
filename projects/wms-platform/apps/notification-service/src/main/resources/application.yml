@@ -51,7 +51,7 @@ spring:
       enabled: true
 
 server:
-  port: ${SERVER_PORT:8086}
+  port: ${SERVER_PORT:8085}
   forward-headers-strategy: framework
 
 management:
