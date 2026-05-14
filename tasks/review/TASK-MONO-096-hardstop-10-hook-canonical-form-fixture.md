@@ -8,7 +8,7 @@ HARDSTOP-10 hook canonical form fixture coverage + ADR-MONO-012 § 1.4/D1 wordin
 
 # Status
 
-ready
+review
 
 # Owner
 
