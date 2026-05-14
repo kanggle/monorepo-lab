@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-097-gap-architecture-md-migration.md` — ADR-MONO-012 D3 second batch (GAP 8 architecture.md migration to WMS Identity-table canonical form). 7 standard GAP form (account/admin/auth/community/gateway/membership/security) + 1 partial-migrated (admin-web). H1 rename + intro + Identity table + Composition H3 + Service/Service Type/Architecture Style H2 restructure. 8 file / ~120-240 line. D4 OVERRIDE per ADR-MONO-003a § D1.1. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (narrative-preserving transform).
 
 ## in-progress
 

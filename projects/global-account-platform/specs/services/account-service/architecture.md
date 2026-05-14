@@ -1,14 +1,35 @@
-# Service Architecture — account-service
+# account-service — Architecture
 
-## Service
+This document declares the internal architecture of `account-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-`account-service`
+---
 
-## Service Type
+## Identity
 
-`rest-api` — 계정·프로필 전담 서비스. 회원가입, 프로필 CRUD, 계정 상태(active / locked / dormant / deleted) 상태 기계.
+| Field | Value |
+|---|---|
+| Service name | `account-service` |
+| Project | `global-account-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture + 명시적 상태 기계** |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Account / Profile + Tenant lifecycle (per `rules/domains/saas.md`) |
+| Deployable unit | `apps/account-service/` |
+| Data store | PostgreSQL (owned, not shared) |
+| Event publication | Kafka via outbox (`account.status.changed` 등 계정 lifecycle events) |
+| Event consumption | none (single-type rest-api) |
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+### Service Type Composition
+
+`account-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. 계정·프로필 전담 서비스 — 회원가입, 프로필
+CRUD, 계정 상태(active / locked / dormant / deleted) 상태 기계. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Architecture Style
 

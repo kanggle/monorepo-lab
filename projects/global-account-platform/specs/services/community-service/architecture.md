@@ -1,14 +1,35 @@
-# Service Architecture — community-service
+# community-service — Architecture
 
-## Service
+This document declares the internal architecture of `community-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-`community-service`
+---
 
-## Service Type
+## Identity
 
-`rest-api` — 아티스트 포스트·팬 커뮤니티 서비스. 포스트 발행, 댓글, 반응, 팬 피드 제공.
+| Field | Value |
+|---|---|
+| Service name | `community-service` |
+| Project | `global-account-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture + 명시적 상태 기계** |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Community (아티스트 포스트 + 댓글 + 반응 + 팬 피드) |
+| Deployable unit | `apps/community-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (community.post.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+### Service Type Composition
+
+`community-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. 아티스트 포스트·팬 커뮤니티 서비스 —
+포스트 발행, 댓글, 반응, 팬 피드 제공. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Architecture Style
 
