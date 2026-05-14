@@ -11,13 +11,19 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `master-service` |
-| Service Type | `rest-api` |
+| Service Type | `rest-api` (single; see Service Type Composition below) |
 | Architecture Style | **Hexagonal (Ports & Adapters)** |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Master Data** (per `rules/domains/wms.md`) |
 | Deployable unit | `apps/master-service/` |
 | Data store | PostgreSQL (owned, not shared) |
 | Event publication | Kafka via outbox (per trait `transactional`, rule T3) |
+
+### Service Type Composition
+
+| Path | Service Type | Notes |
+|---|---|---|
+| `/api/v1/master/**` | `rest-api` | Single REST surface — operator CRUD for the 6 master aggregates. No event-consumer path in v1 (master is upstream anchor; consumes no external events). |
 
 ---
 
@@ -225,10 +231,9 @@ needed (out of v1 scope; v1 does a local-only check).
 
 - Database: PostgreSQL (one logical DB per service; no cross-service reads)
 - Migrations: Flyway, `apps/master-service/src/main/resources/db/migration/`
-- Outbox table: `master_outbox` with columns `id, aggregate_type, aggregate_id, event_type, payload, created_at, published_at`
+- Outbox table: `outbox` (libs/java-messaging shared schema — BIGSERIAL PK, status enum). `processed_events` stub is also created (master = producer-only in v1; the library's EntityScan validate requires both tables).
 
-Full schema lives in migration scripts. High-level tables per entity are defined in
-`specs/services/master-service/domain-model.md`.
+Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 
 ---
 
