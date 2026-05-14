@@ -1,13 +1,31 @@
-# Service Architecture
+# admin-dashboard — Architecture
 
-## Application
-`admin-dashboard`
+This document declares the internal architecture of `admin-dashboard`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`frontend-app`
+---
 
-## Architecture Style
-`Layered by Feature`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `admin-dashboard` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `frontend-app` (single — see Service Type Composition below) |
+| Architecture Style | **Layered by Feature** |
+| Domain | ecommerce |
+| Primary language / stack | TypeScript strict, Next.js (App Router) |
+| Bounded Context | ecommerce operator console (admin UI for orders / products / users / reports) |
+| Deployable unit | `apps/admin-dashboard/` |
+
+### Service Type Composition
+
+`admin-dashboard` is a single-type `frontend-app` service per
+`platform/service-types/INDEX.md`. ecommerce operator-facing UI. 적용되는 규칙:
+[platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md).
+
+---
 
 ## Why This Architecture
 This is an internal operations dashboard where most features follow a similar CRUD pattern: list, detail, create, edit.

@@ -1,13 +1,37 @@
-# Service Architecture
+# product-service — Architecture
 
-## Service
-`product-service`
+This document declares the internal architecture of `product-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`DDD-style Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `product-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Product catalog (aggregates / variants / inventory / pricing / lifecycle) |
+| Deployable unit | `apps/product-service/` |
+| Data store | PostgreSQL (owned) + S3 (product image storage via ProductImageBucketResolver port, TASK-BE-143) |
+| Event publication | Kafka via outbox (product.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`product-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Product catalog 도메인 — aggregates,
+variants, inventory, pricing rules, lifecycle. S3 image storage 는
+ProductImageBucketResolver domain port 경유 (TASK-BE-143 cherry-pick). 적용되는
+규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 Product management involves meaningful domain concepts: product aggregates, variants, inventory, pricing rules, and lifecycle states.

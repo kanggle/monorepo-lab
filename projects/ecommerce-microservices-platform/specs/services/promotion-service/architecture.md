@@ -1,13 +1,35 @@
-# Service Architecture
+# promotion-service — Architecture
 
-## Service
-`promotion-service`
+This document declares the internal architecture of `promotion-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`DDD-style Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `promotion-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Promotion / coupon (aggregates / lifecycle / discount rules / usage constraints) |
+| Deployable unit | `apps/promotion-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (promotion.* / coupon.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`promotion-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Promotion / coupon 도메인 — aggregates,
+coupon lifecycle, discount rules, usage constraints. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 Promotion and coupon management involves meaningful domain concepts: promotion aggregates, coupon lifecycle, discount rules, and usage constraints.

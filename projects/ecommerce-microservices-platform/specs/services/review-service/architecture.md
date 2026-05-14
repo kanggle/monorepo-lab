@@ -1,13 +1,35 @@
-# Service Architecture
+# review-service — Architecture
 
-## Service
-`review-service`
+This document declares the internal architecture of `review-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`DDD-style Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `review-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Product review (aggregates / rating calculations / purchase verification) |
+| Deployable unit | `apps/review-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (review.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`review-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Product review 도메인 — review aggregates,
+rating calculations, purchase verification constraints. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 Review and rating management involves meaningful domain concepts: review aggregates, rating calculations, and purchase verification constraints.

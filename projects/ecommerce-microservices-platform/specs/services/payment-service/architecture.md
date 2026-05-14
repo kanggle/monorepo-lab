@@ -1,13 +1,37 @@
-# Service Architecture
+# payment-service — Architecture
 
-## Service
-`payment-service`
+This document declares the internal architecture of `payment-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`Hexagonal Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `payment-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Payment authorize / confirm / refund (PG vendor integration) |
+| Deployable unit | `apps/payment-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (payment.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`payment-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Payment lifecycle 도메인 — authorize /
+confirm / refund. PG vendor integration via TossPaymentsAdapter (Resilience4j
+CB + Retry + Bulkhead, ADR-MONO-005 Category B, TASK-BE-139). Hexagonal 으로
+vendor adapter 격리. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 This service depends heavily on external systems and integration boundaries.

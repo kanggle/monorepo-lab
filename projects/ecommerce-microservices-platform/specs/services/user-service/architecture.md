@@ -1,13 +1,35 @@
-# Service Architecture
+# user-service — Architecture
 
-## Service
-`user-service`
+This document declares the internal architecture of `user-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`rest-api`
+---
 
-## Architecture Style
-`Layered Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `user-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture** |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | User profile (CRUD-oriented user data management) |
+| Deployable unit | `apps/user-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (user.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
+
+### Service Type Composition
+
+`user-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. User profile 도메인 — CRUD-oriented user
+data management. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Why This Architecture
 This service is primarily CRUD-oriented, managing user profile data.

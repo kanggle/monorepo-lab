@@ -1,13 +1,34 @@
-# Service Architecture
+# web-store — Architecture
 
-## Application
-`web-store`
+This document declares the internal architecture of `web-store`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`frontend-app`
+---
 
-## Architecture Style
-`Feature-Sliced Design`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `web-store` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `frontend-app` (single — see Service Type Composition below) |
+| Architecture Style | **Feature-Sliced Design (FSD)** |
+| Domain | ecommerce |
+| Primary language / stack | TypeScript strict, Next.js (App Router) |
+| Bounded Context | Customer-facing storefront (browsing / search / cart / checkout / payment / user account) |
+| Deployable unit | `apps/web-store/` |
+
+### Service Type Composition
+
+`web-store` is a single-type `frontend-app` service per
+`platform/service-types/INDEX.md`. Customer-facing storefront — diverse,
+complex features (product browsing, search, cart, checkout, payment, user
+account). FSD 5-layer (app / pages / widgets / features / entities / shared)
+로 feature 격리. 적용되는 규칙:
+[platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md).
+
+---
 
 ## Why This Architecture
 This is a customer-facing storefront with diverse, complex features: product browsing, search, cart, checkout, payment, and user account.

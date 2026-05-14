@@ -1,13 +1,36 @@
-# Service Architecture
+# notification-service — Architecture
 
-## Service
-`notification-service`
+This document declares the internal architecture of `notification-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-## Service Type
-`event-consumer`
+---
 
-## Architecture Style
-`Hexagonal Architecture`
+## Identity
+
+| Field | Value |
+|---|---|
+| Service name | `notification-service` |
+| Project | `ecommerce-microservices-platform` |
+| Service Type | `event-consumer` (single — see Service Type Composition below) |
+| Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
+| Domain | ecommerce |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Notification delivery (email / SMS / push 외부 채널 통합) |
+| Deployable unit | `apps/notification-service/` |
+| Data store | PostgreSQL (delivery state + dedupe) |
+| Event publication | Kafka (delivery outcome events) |
+| Event consumption | Kafka (order/payment/shipping lifecycle source topics) |
+
+### Service Type Composition
+
+`notification-service` is a single-type `event-consumer` service per
+`platform/service-types/INDEX.md`. ecommerce 의 lifecycle 이벤트 소비 후 외부
+채널 (email / SMS / push) 로 발송. Hexagonal 으로 외부 vendor adapter 격리.
+적용되는 규칙:
+[platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md).
+
+---
 
 ## Why This Architecture
 Notification service integrates with multiple external channels (email, SMS, push) that may change independently.

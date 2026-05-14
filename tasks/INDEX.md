@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-098-ecommerce-architecture-md-migration.md` — ADR-MONO-012 D3 **final batch** (ecommerce 14 architecture.md migration to WMS Identity-table canonical form). 14 service 모두 canonical: H1 rename + Identity table (10+ row) + Service Type Composition H3 + 본문 narrative 보존. ADR § 1.1 "ecommerce 13" wording 부정확 (실제 14 — auth-service-deprecated 포함) option C-1 audit-trail. 14 file / +442 / -125 impl + task spec (총 16 file / +573 / -126). lifecycle = ready → review 직접 (single-PR closure 패턴 14번째). D4 OVERRIDE per ADR-MONO-003a § D1.1. branch = `task/mono-098-ecommerce-architecture-md-migration`. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
