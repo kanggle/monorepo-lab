@@ -311,7 +311,7 @@ Source: `DeliveryDispatchPerRow` runs each delivery under `@Transactional(REQUIR
 
 - Database: PostgreSQL (one logical DB per service)
 - Migrations: Flyway, `apps/notification-service/src/main/resources/db/migration/`
-- Tables (full layout in `domain-model.md` — Open Items):
+- Tables (full layout in [`database-design.md`](database-design.md)):
   - `notification_routing_rule(id PK, event_type, matcher_json, channel_target_json,
     severity, enabled, created_at, updated_at)` — seeded with v1 defaults
   - `notification_delivery(id PK, event_id, source_topic, channel_id,
