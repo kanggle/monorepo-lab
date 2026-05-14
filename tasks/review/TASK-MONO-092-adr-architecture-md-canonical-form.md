@@ -8,7 +8,7 @@ ADR-MONO-012 PROPOSED — cross-project architecture.md canonical form decision 
 
 # Status
 
-ready
+review
 
 # Owner
 
