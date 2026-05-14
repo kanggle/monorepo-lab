@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-100-hardstop-fixture-drift-detection-template-mirror-audit.md` — TASK-MONO-099 follow-up bundle: (1) HARDSTOP fixture body byte-compare 강화 (new fixture `hardstop-body-canonical-sync.ps1` + `_helpers.ps1` 3 helper 추가 — `Get-CanonicalStanza` / `Get-StaticStanzaBlocks` / `Assert-StanzaBodyMatchesCanonical` — 가 platform/hardstop-rules.md 의 canonical body 와 hook hardcoded body 의 `[WHY]` + `[REFERENCE]` 2 block 만 verbatim 일치 가드, 5 mechanical detector × 1 invocation = 5 PASS, `[VIOLATION]` + `[REMEDIATION]` 은 design 상 dynamic inject 라 byte-compare 제외) + (2) TEMPLATE.md mirror audit (결과 = mirror 없음, L204/810/831 generic pointer 만, verify-only sync 불필요). PowerShell `-cne` case-sensitive 비교 사용 (impl 시 발견 `-ne` default case-insensitive trap). drift detection 검증 = 의도적 case-only drift inject → fixture FAIL with diff 메시지 → revert → PASS 재확인. CLAUDE.md / production code / hook runtime behavior / platform/hardstop-rules.md 미터치. D4 OVERRIDE per ADR-MONO-003a § D1.1. lifecycle = ready → review 직접 (single-PR closure 16번째 적용).
 
 ## done
 

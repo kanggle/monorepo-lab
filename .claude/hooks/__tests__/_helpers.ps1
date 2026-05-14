@@ -73,3 +73,84 @@ function Assert-Allowed {
     }
     # Empty output or non-block decision = allowed
 }
+
+# ===== Canonical stanza drift detection (TASK-MONO-100) =====
+#
+# Helpers below let a fixture verify that the hook's hardcoded stanza body has
+# not drifted from the canonical body in `platform/hardstop-rules.md`.
+#
+# Scope: only [WHY] and [REFERENCE] blocks are byte-compared. [VIOLATION] and
+# [REMEDIATION] contain design-intent dynamic injection (relFromRoot / lineNo /
+# taskId / project / service / catalog enumeration) that legitimately differs
+# from the canonical placeholder body (`<cwd>`, `<path>`, `<project>`,
+# `<service>`, etc.). The static-block compare is sufficient because the [WHY]
+# invariant and the [REFERENCE] pointer are the core sync contract — changes to
+# them in either source should always land in both.
+
+function Get-CanonicalStanza {
+    param(
+        [Parameter(Mandatory)][string]$RuleId,
+        [Parameter()][string]$RulesPath
+    )
+    if (-not $RulesPath) {
+        $repoRoot = Resolve-Path (Join-Path $script:HooksDir '..\..\') | Select-Object -ExpandProperty Path
+        $RulesPath = Join-Path $repoRoot 'platform\hardstop-rules.md'
+    }
+    if (-not (Test-Path $RulesPath -PathType Leaf)) {
+        throw "Canonical rules file not found: $RulesPath"
+    }
+    $content = (Get-Content -Path $RulesPath -Raw) -replace "`r`n", "`n"
+    $idEsc = [regex]::Escape($RuleId)
+    # Match: heading "## HARDSTOP-NN — ..." then anything up to ```...``` code block; capture inner body.
+    $pattern = "(?ms)^## $idEsc — [^\n]+\n.*?\n``````\n(.+?)\n``````"
+    if ($content -match $pattern) {
+        return $Matches[1].Trim()
+    }
+    throw "Canonical stanza for '$RuleId' not found in $RulesPath"
+}
+
+function Get-StaticStanzaBlocks {
+    param([Parameter(Mandatory)][string]$Stanza)
+    # Return [WHY] block content and [REFERENCE] block content (both as trimmed strings).
+    # Skips [VIOLATION] and [REMEDIATION] (design-intent dynamic injection — see TASK-MONO-100 spec).
+    $norm  = ($Stanza -replace "`r`n", "`n").TrimEnd()
+    $lines = $norm -split "`n"
+    $whyLines = @()
+    $refLines = @()
+    $state = 'none'
+    foreach ($line in $lines) {
+        if     ($line -match '^\[VIOLATION\]')   { $state = 'violation' }
+        elseif ($line -match '^\[WHY\]')         { $state = 'why' }
+        elseif ($line -match '^\[REMEDIATION\]') { $state = 'remediation' }
+        elseif ($line -match '^\[REFERENCE\]')   { $state = 'reference' }
+        if ($state -eq 'why')        { $whyLines += $line }
+        elseif ($state -eq 'reference') { $refLines += $line }
+    }
+    return @{
+        why       = ($whyLines -join "`n").TrimEnd()
+        reference = ($refLines -join "`n").TrimEnd()
+    }
+}
+
+function Assert-StanzaBodyMatchesCanonical {
+    param(
+        [Parameter(Mandatory)][string]$HookOutput,
+        [Parameter(Mandatory)][string]$RuleId
+    )
+    $parsed = ConvertFrom-HookOutput -Output $HookOutput
+    if (-not $parsed) {
+        throw "Hook output is not valid JSON: $HookOutput"
+    }
+    if (-not $parsed.reason) {
+        throw "Hook output has no 'reason' field for $RuleId"
+    }
+    $hookBlocks  = Get-StaticStanzaBlocks -Stanza $parsed.reason
+    $canonStanza = Get-CanonicalStanza -RuleId $RuleId
+    $canonBlocks = Get-StaticStanzaBlocks -Stanza $canonStanza
+    if ($hookBlocks.why -cne $canonBlocks.why) {
+        throw ("[$RuleId] [WHY] block drift between hook and platform/hardstop-rules.md:`n  hook  : $($hookBlocks.why)`n  canon : $($canonBlocks.why)")
+    }
+    if ($hookBlocks.reference -cne $canonBlocks.reference) {
+        throw ("[$RuleId] [REFERENCE] block drift between hook and platform/hardstop-rules.md:`n  hook  : $($hookBlocks.reference)`n  canon : $($canonBlocks.reference)")
+    }
+}
