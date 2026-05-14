@@ -8,7 +8,7 @@ WMS outbox shape divergence cross-reference + MONO-049 deferred pointer (refacto
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -64,11 +64,11 @@ Current state:
 
 # Acceptance Criteria
 
-- [ ] master-service/database-design.md § 2 paragraph 끝에 "Tracked as TASK-MONO-049 § 6 follow-up #1, deferred per ADR-MONO-003 D2 cadence (≥ 2026-06-10)" 명시.
-- [ ] 5 sibling database-design.md 의 outbox CREATE TABLE block 뒤에 reverse cross-reference (master § 2 link + MONO-049 § 6 deferred) 명시 — 동일 phrasing 으로 sibling 일관성.
-- [ ] Production code / Flyway / libs/java-messaging 0 변경.
-- [ ] 6 file 모두 dead-ref 0 (MONO-049 path, ADR-MONO-003 path, master § 2 cross-ref 모두 resolve).
-- [ ] 신규 paragraph 가 sibling 의 기존 outbox section 본문 일관성 유지 (formatting, tone).
+- [x] master-service/database-design.md § 2 paragraph 끝에 "Tracked as TASK-MONO-049 § 6 follow-up #1, deferred per ADR-MONO-003 D2 cadence (≥ 2026-06-10)" 명시.
+- [x] 5 sibling database-design.md (admin/inbound/inventory/notification/outbound) 의 outbox section 에 reverse cross-reference (master § 2 link + MONO-049 § 6 deferred) 명시.
+- [x] Production code / Flyway / libs/java-messaging 0 변경.
+- [x] 6 file 모두 `grep "MONO-049"` + `grep "ADR-MONO-003"` 양쪽 hit (6/6 verified).
+- [x] 신규 paragraph 가 sibling 의 기존 outbox section 본문 일관성 유지 (각 sibling 의 existing master/libs reference 와 augment 패턴, 형식 align).
 
 # Related Specs
 
@@ -112,4 +112,38 @@ Current state:
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #524 squash `6bfe2afa`).
+
+Spec-only documentation cross-reference — refactor-spec Tier 2 F-06+F-07 closure. **0 production code change**.
+
+## File changes (6 file / +35 / -2)
+
+| File | Edit type |
+|---|---|
+| `master-service/database-design.md` § 2 | existing divergence paragraph augmented with MONO-049 § 6 + ADR-MONO-003 D2 cadence pointer (1 line) |
+| `admin-service/database-design.md` § 5 | reverse cross-ref paragraph added (master § 2 link + deferred decision pointer) |
+| `inbound-service/database-design.md` § 5 | existing master-link paragraph augmented with deferred sentence |
+| `inventory-service/database-design.md` § 3 | reverse cross-ref paragraph added |
+| `notification-service/database-design.md` outbox section | existing master-divergence paragraph augmented |
+| `outbound-service/database-design.md` § 6 | reverse cross-ref paragraph added (incl. outbound's unique `status`+`retry_count` publisher columns context) |
+
+## Verification
+
+- 6/6 file `grep "MONO-049"` hit + 6/6 file `grep "ADR-MONO-003"` hit
+- 0 production code / Flyway / libs/java-messaging touch
+
+## CI
+
+1 SUCCESS (`changes`) / 16 SKIPPED / 0 fail — markdown-only path-filter. mergeStateStatus CLEAN.
+
+## refactor-spec cycle — all Tier 2 종결
+
+| # | Task | Scope | Category | Fix |
+|---|---|---|---|---|
+| 1-4 | BE-165/283/SCM-BE-013/BE-284 | deadref Tier 1+2+3 | mech+judg | 54 |
+| 5 | BE-285 | WMS non-deadref Tier 1 | mech | 6 |
+| 6 | MONO-091 | platform Tier 2 (F-08) | mech | 1 |
+| 7 | BE-286 | inventory Tier 2 (F-01+F-02) | judgment+additive | 8 sections |
+| 8 | **BE-287 (this)** | wms Tier 2 (F-06+F-07) | governance pointer | 6 file cross-ref |
+
+**non-deadref Tier 2 backlog = 0**. **모든 audit finding 종결** (F-01/02/04/05/06/07/08/09/10 + F-03 SKIP). **Implementation migration** (master outbox shape sync to wms-specific UUID+JSONB+partition_key) 은 TASK-MONO-049 § 6 follow-up #1 으로 ADR-MONO-003 D2 cadence (≥ 2026-06-10) 이후 별 cycle.
