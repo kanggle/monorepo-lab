@@ -97,7 +97,7 @@ presentation → application → domain
 ```
 
 - `domain/access/ContentAccessChecker` — 인터페이스 (port). `infrastructure/client/MembershipAccessClient`가 구현
-- `application` → [libs/java-messaging](../../../libs/java-messaging) (outbox)
+- `application` → [libs/java-messaging](../../../../../libs/java-messaging) (outbox)
 
 ## Forbidden Dependencies
 

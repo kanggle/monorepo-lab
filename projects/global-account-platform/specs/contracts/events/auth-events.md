@@ -10,7 +10,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 ## Event Envelope (공통)
 
-모든 이벤트는 [libs/java-messaging](../../../libs/java-messaging)의 표준 envelope을 따른다:
+모든 이벤트는 [libs/java-messaging](../../../../../libs/java-messaging)의 표준 envelope을 따른다:
 
 ```json
 {

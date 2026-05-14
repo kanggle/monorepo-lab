@@ -52,12 +52,12 @@
 
 | Lib | 용도 |
 |---|---|
-| [libs/java-common](../../../libs/java-common) | DTO, `Page<T>`, enum |
-| [libs/java-web](../../../libs/java-web) | Spring Web, DTO validation, 에러 응답 |
-| [libs/java-messaging](../../../libs/java-messaging) | Outbox, Kafka producer |
-| [libs/java-security](../../../libs/java-security) | Operator JWT 검증 (별도 scope), role 기반 권한, 2FA helper (선택) |
-| [libs/java-observability](../../../libs/java-observability) | MDC (operator_id 자동 태깅), 메트릭, 트레이스 |
-| [libs/java-test-support](../../../libs/java-test-support) | Testcontainers (MySQL + Kafka), WireMock (downstream 서비스 mocking), Spring Security 테스트 헬퍼 |
+| [libs/java-common](../../../../../libs/java-common) | DTO, `Page<T>`, enum |
+| [libs/java-web](../../../../../libs/java-web) | Spring Web, DTO validation, 에러 응답 |
+| [libs/java-messaging](../../../../../libs/java-messaging) | Outbox, Kafka producer |
+| [libs/java-security](../../../../../libs/java-security) | Operator JWT 검증 (별도 scope), role 기반 권한, 2FA helper (선택) |
+| [libs/java-observability](../../../../../libs/java-observability) | MDC (operator_id 자동 태깅), 메트릭, 트레이스 |
+| [libs/java-test-support](../../../../../libs/java-test-support) | Testcontainers (MySQL + Kafka), WireMock (downstream 서비스 mocking), Spring Security 테스트 헬퍼 |
 
 ## External SaaS / 3rd-Party
 

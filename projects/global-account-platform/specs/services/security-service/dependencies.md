@@ -68,11 +68,11 @@
 
 | Lib | 용도 |
 |---|---|
-| [libs/java-common](../../../libs/java-common) | DTO, enum, `Page<T>` |
-| [libs/java-web](../../../libs/java-web) | query 컨트롤러용 Spring Web 설정, validation |
-| [libs/java-messaging](../../../libs/java-messaging) | Kafka consumer wrapper, outbox producer, envelope 처리 |
-| [libs/java-observability](../../../libs/java-observability) | Consumer lag 메트릭, trace propagation (Kafka header ↔ OTel) |
-| [libs/java-test-support](../../../libs/java-test-support) | Testcontainers (Kafka + MySQL + Redis), WireMock (account-service) |
+| [libs/java-common](../../../../../libs/java-common) | DTO, enum, `Page<T>` |
+| [libs/java-web](../../../../../libs/java-web) | query 컨트롤러용 Spring Web 설정, validation |
+| [libs/java-messaging](../../../../../libs/java-messaging) | Kafka consumer wrapper, outbox producer, envelope 처리 |
+| [libs/java-observability](../../../../../libs/java-observability) | Consumer lag 메트릭, trace propagation (Kafka header ↔ OTel) |
+| [libs/java-test-support](../../../../../libs/java-test-support) | Testcontainers (Kafka + MySQL + Redis), WireMock (account-service) |
 
 `libs/java-security`는 query 엔드포인트에서 operator 인증이 필요하면 사용 (admin-service의 호출을 검증).
 

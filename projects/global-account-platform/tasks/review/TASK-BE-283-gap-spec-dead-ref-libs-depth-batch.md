@@ -8,7 +8,7 @@ GAP specs dead-reference mechanical batch — 46 `libs/*` depth fix + 1 V0008 SQ
 
 # Status
 
-ready
+review
 
 # Owner
 

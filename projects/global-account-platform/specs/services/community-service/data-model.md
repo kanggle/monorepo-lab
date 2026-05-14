@@ -80,7 +80,7 @@
 
 ### outbox_events
 
-표준 outbox 스키마 ([libs/java-messaging](../../../libs/java-messaging) `OutboxJpaEntity` 참조).
+표준 outbox 스키마 ([libs/java-messaging](../../../../../libs/java-messaging) `OutboxJpaEntity` 참조).
 
 ## Migration Strategy
 

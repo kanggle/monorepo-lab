@@ -23,7 +23,7 @@
 | `accounts` | `id`, `email` (unique index), `created_at`, `version` | Aggregate root, 낙관적 락 |
 | `profiles` | `account_id`, `display_name`, `phone_number`, `birth_date`, `locale`, `timezone`, `preferences` (JSON) | PII 분류 등급 `confidential` ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1). `password_hash` 절대 없음 (S1) |
 | `account_status_history` | `id`, `account_id`, `from_status`, `to_status`, `reason_code`, `actor_type`, `actor_id`, `occurred_at`, `details` (JSON) | **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3) |
-| `outbox_events` | 이벤트 발행 스테이징 | [libs/java-messaging](../../../libs/java-messaging) |
+| `outbox_events` | 이벤트 발행 스테이징 | [libs/java-messaging](../../../../../libs/java-messaging) |
 | `processed_events` | 해당 없음 | — |
 
 상세 스키마는 [data-model.md](data-model.md).
@@ -57,11 +57,11 @@
 
 | Lib | 용도 |
 |---|---|
-| [libs/java-common](../../../libs/java-common) | DTO 베이스, `Page<T>`, enum |
-| [libs/java-web](../../../libs/java-web) | Spring Web, validation, 에러 응답 |
-| [libs/java-messaging](../../../libs/java-messaging) | Outbox, Kafka producer wrapper |
-| [libs/java-observability](../../../libs/java-observability) | 메트릭, 트레이스, MDC |
-| [libs/java-test-support](../../../libs/java-test-support) | Testcontainers (MySQL + Kafka) |
+| [libs/java-common](../../../../../libs/java-common) | DTO 베이스, `Page<T>`, enum |
+| [libs/java-web](../../../../../libs/java-web) | Spring Web, validation, 에러 응답 |
+| [libs/java-messaging](../../../../../libs/java-messaging) | Outbox, Kafka producer wrapper |
+| [libs/java-observability](../../../../../libs/java-observability) | 메트릭, 트레이스, MDC |
+| [libs/java-test-support](../../../../../libs/java-test-support) | Testcontainers (MySQL + Kafka) |
 
 `libs/java-security` **사용 안 함** — 인증은 gateway + auth-service가 처리하고, account-service는 이미 인증된 요청만 받는다 (내부 HTTP는 별도 인증 경계).
 

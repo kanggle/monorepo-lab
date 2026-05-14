@@ -1,6 +1,6 @@
 # Event Contract: membership-service
 
-발행 방식: Outbox 패턴 ([libs/java-messaging](../../../libs/java-messaging))
+발행 방식: Outbox 패턴 ([libs/java-messaging](../../../../../libs/java-messaging))
 파티션 키: `account_id`
 
 ---

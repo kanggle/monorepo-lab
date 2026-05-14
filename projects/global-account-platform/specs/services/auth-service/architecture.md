@@ -125,11 +125,11 @@ presentation → application → domain
 ```
 
 - `presentation` → `application` (use-case 호출)
-- `presentation` → [libs/java-web](../../../libs/java-web) (에러 핸들러, DTO 베이스)
+- `presentation` → [libs/java-web](../../../../../libs/java-web) (에러 핸들러, DTO 베이스)
 - `application` → `domain` (엔터티, 포트 인터페이스)
-- `application` → [libs/java-messaging](../../../libs/java-messaging) (outbox writer)
+- `application` → [libs/java-messaging](../../../../../libs/java-messaging) (outbox writer)
 - `infrastructure` → `domain` (포트 구현 방향)
-- `infrastructure` → [libs/java-common](../../../libs/java-common), [libs/java-security](../../../libs/java-security), [libs/java-observability](../../../libs/java-observability)
+- `infrastructure` → [libs/java-common](../../../../../libs/java-common), [libs/java-security](../../../../../libs/java-security), [libs/java-observability](../../../../../libs/java-observability)
 
 ## Forbidden Dependencies
 
