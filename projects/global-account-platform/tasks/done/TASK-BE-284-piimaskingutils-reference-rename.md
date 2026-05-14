@@ -8,7 +8,7 @@ admin-service data-model.md PiiMaskingUtils reference rename → PiiMaskingServi
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -52,10 +52,10 @@ global-account-platform
 
 # Acceptance Criteria
 
-- [ ] L170 link target file 실재 (`apps/security-service/src/main/java/com/example/security/application/pii/PiiMaskingService.java` exists).
-- [ ] `bash /tmp/check_gap_links.sh` 결과 dead-ref 0 (BE-283 시점 잔존 1건 = PiiMaskingUtils, 본 task 후 0).
-- [ ] Production code / spec contract / requirement 0 변경 (참조 구현 reference 만 rename, 본문 의미 동일).
-- [ ] 같은 sentence 의 "TASK-BE-028" reference + admin-service `AdminPiiMaskingUtils` 예정 명시 보존.
+- [x] L170 link target file 실재 (`apps/security-service/src/main/java/com/example/security/application/pii/PiiMaskingService.java` exists, `[ -e ... ]` RESOLVED).
+- [x] `bash /tmp/check_gap_links.sh` 결과 dead-ref **0** (BE-283 시점 1 → 본 task 후 0, **GAP scope dead-ref 완전 종결**).
+- [x] Production code / spec contract / requirement 0 변경 (참조 구현 reference 만 rename, 본문 의미 동일).
+- [x] 같은 sentence 의 "TASK-BE-028" reference + admin-service `AdminPiiMaskingUtils` 예정 명시 보존.
 
 # Related Specs
 
@@ -96,4 +96,29 @@ global-account-platform
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #515 squash `926cee9f`).
+
+1-line rename — refactor-spec Tier 2 closure (last Tier 2 in cycle).
+
+`projects/global-account-platform/specs/services/admin-service/data-model.md:170`:
+- Before: `apps/security-service/.../domain/util/PiiMaskingUtils.java` (non-existent)
+- After: `apps/security-service/.../application/pii/PiiMaskingService.java` (production actual)
+
+Production rename (package `domain/util/` → `application/pii/` + class `PiiMaskingUtils` → `PiiMaskingService`) 이 spec sample link 까지 sync 안 됐던 잔재.
+
+**Judgment**: Option A (3-option weighed in spec body) — rename to actual class, preserves author intent ("참조 구현" navigation) + syncs production.
+
+**CI**: 1 pass (`changes` SUCCESS) / 16 SKIPPED / 0 fail (admin-service spec 만 변경, contracts/events 안 건드려서 Frontend E2E 도 SKIP — BE-283 보다 더 깨끗). mergeStateStatus CLEAN.
+
+**Verification**: GAP scope `bash /tmp/check_gap_links.sh` 결과 broken count = **0** (BE-283 시점 1 → 본 task 후 0). **GAP scope dead-ref 완전 종결**.
+
+## refactor-spec cycle 종결
+
+| # | Task | Scope | PR | Fix count |
+|---|---|---|---|---|
+| 1 | BE-165 | WMS Tier 1 | #509 + close #510 | 5 |
+| 2 | BE-283 | GAP Tier 3 #1 | #511 + close #512 | 47 |
+| 3 | SCM-BE-013 | SCM Tier 3 #2 | #513 + close #514 | 1 |
+| 4 | **BE-284 (this)** | GAP Tier 2 | #515 + close (pending) | 1 |
+
+**Portfolio dead-ref 잔존 = 0** — single-cycle 종결 (2026-05-14 dry-run → 2026-05-15 4 task closure).
