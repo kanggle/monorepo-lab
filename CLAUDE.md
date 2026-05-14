@@ -284,6 +284,8 @@ Conventional Commit scopes (used by reviewers + release-please):
 
 Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](docs/guides/monorepo-workflow.md).
 
+**Branch name constraint** — never include the substring `master` in branch names (e.g. `task/be-161-master-service-...`). The sandbox `--force` regex protection word-boundary matches `master` as a substring and blocks `git push` even on feature branches. Use the service/scope abbreviation (`ms-`, `mst-`) or rename around the noun (`task/be-161-database-design-...`). Encountered repeatedly across BE-052, BE-161, and similar PRs; workaround is `git push -u origin HEAD` but renaming the branch is cleaner.
+
 ---
 
 # Local Network Convention
