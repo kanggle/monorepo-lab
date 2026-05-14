@@ -284,6 +284,8 @@ Conventional Commit scopes (used by reviewers + release-please):
 
 Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](docs/guides/monorepo-workflow.md).
 
+**Branch name constraint** — never include the substring `master` in branch names (e.g. `task/be-161-master-service-...`). The sandbox `--force` regex protection word-boundary matches `master` as a substring and blocks `git push` even on feature branches. Use the service/scope abbreviation (`ms-`, `mst-`) or rename around the noun (`task/be-161-database-design-...`). Encountered repeatedly across BE-052, BE-161, and similar PRs; workaround is `git push -u origin HEAD` but renaming the branch is cleaner.
+
 ---
 
 # Local Network Convention
@@ -313,4 +315,4 @@ Agent(subagent_type="backend-engineer", model="sonnet", ...) # routine fix
 
 This rule persists across session compaction and new sessions; the model annotation must precede every implementation recommendation.
 
-Before recommending the next task, scan **both** the `ready/` queue (new candidates) **and** the `review/` queue (open impl PRs awaiting review fix, or merged PRs awaiting `review/ → done/` chore). Surface review-side work that should be cleared first to avoid open-PR pile-up. Apply to both root `tasks/` and each affected `projects/<name>/tasks/`.
+Before recommending the next task, **first run `git fetch origin main`** and check for divergence (`git log HEAD..origin/main --oneline`) — origin may carry recently-merged closures the local tree hasn't picked up, and recommending against stale local state can duplicate already-closed work. Then scan **both** the `ready/` queue (new candidates) **and** the `review/` queue (open impl PRs awaiting review fix, or merged PRs awaiting `review/ → done/` chore). Surface review-side work that should be cleared first to avoid open-PR pile-up. Apply to both root `tasks/` and each affected `projects/<name>/tasks/`.
