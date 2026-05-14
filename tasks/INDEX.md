@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-099-claude-md-hardstop-extraction.md` — CLAUDE.md refactor: Hard Stop Rules 4-block body (123 lines, 38.6%) 를 `platform/hardstop-rules.md` 로 외부 분리, CLAUDE.md § Hard Stop Rules 는 1-line catalog 로 축약 (TASK-MONO-057 OpenAI Harness 패턴 second instance). 319 → ~221 lines 회복. hook docstring + lint-remediation-message-standard cross-ref 갱신. production code / fixture / hook runtime behavior 미터치. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## in-progress
 
