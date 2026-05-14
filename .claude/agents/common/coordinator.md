@@ -18,7 +18,7 @@ Analyze complex tasks, delegate work to specialized agents, and track overall pr
 ## Behavior Rules
 
 1. **Task analysis**: Read the task from `tasks/ready/` and identify required work units. Extract two pieces of metadata:
-   - The target service's `Service Type` from `specs/services/<service>/architecture.md` (one of `rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`, `ml-pipeline`, `frontend-app`)
+   - The target service's `Service Type` from `specs/services/<service>/architecture.md` (one of `rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`, `ml-pipeline`, `frontend-app`, `identity-platform`)
    - The task's domain(s) — usually the service name itself or an abstract role (e.g. `backend`, `frontend`, `<service-name>`)
 2. **Agent selection (frontmatter scoring)**: Read every agent's YAML frontmatter under `.claude/agents/*.md`. For each candidate work unit, score each agent and pick the highest:
    - +3 if the agent's `service_types` contains the task's Service Type (or `[all]`)

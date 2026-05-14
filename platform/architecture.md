@@ -37,7 +37,7 @@ Allowed internal architecture styles for a service:
 
 The style is declared explicitly in `specs/services/<service>/architecture.md`. Do not assume all services in a project share the same internal structure.
 
-See `service-types/INDEX.md` for the service-type catalog (`rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`, `ml-pipeline`, `frontend-app`).
+See `service-types/INDEX.md` for the service-type catalog (`rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`, `ml-pipeline`, `frontend-app`, `identity-platform`).
 
 ---
 
