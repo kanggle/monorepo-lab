@@ -8,7 +8,7 @@ HARDSTOP fixture body byte-compare 강화 (drift detection 자동화) + TEMPLATE
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -32,11 +32,13 @@ TASK-MONO-099 § Out of Scope 의 2 follow-up 묶음 closure:
 
 2. **TEMPLATE.md mirror audit**: TEMPLATE.md 가 CLAUDE.md 의 catalog / stanza body 를 inline mirror 하는지 확인. **Audit 결과 = mirror 없음** (L204/810/831 = generic pointer references only, 별 sync 불필요). 본 task body 에 audit 결과 기록 = 재검토 cost 0.
 
-**design 결정 — `[VIOLATION]` block 은 byte-compare 제외**:
+**design 결정 — `[VIOLATION]` + `[REMEDIATION]` 은 byte-compare 제외, `[WHY]` + `[REFERENCE]` 2 block 만 verbatim 비교**:
 - hook 의 `[VIOLATION]` line 은 dynamic inject (relFromRoot / lineNo / taskId 등 실제 값 치환) + 더 구체적 wording
-- platform/hardstop-rules.md 의 `[VIOLATION]` 은 generic placeholder body (`<cwd>`, `<path>`, `<file>:<line>` 등)
-- 두 형식은 design 상 의도된 차이 — `[VIOLATION]` 만 stanza ID 검증 (existing `Assert-Stanza`) + 나머지 3 block 만 verbatim 비교 (신규 logic)
-- 결과: `[WHY]` + `[REMEDIATION]` + `[REFERENCE]` 3 block 의 drift 가 자동 검출됨 — 본질 invariant 가드는 충족
+- hook 의 `[REMEDIATION]` 도 HARDSTOP-03 (`$tok`), HARDSTOP-09 (`$proj`/`$svc`), HARDSTOP-10 (`$relFromRoot` + catalog enumeration `$(($stCatalog -join ...))`) 에서 dynamic inject — design 의도
+- platform/hardstop-rules.md 의 `[VIOLATION]` + `[REMEDIATION]` 은 generic placeholder body (`<cwd>`, `<path>`, `<project>`, `<service>` 등)
+- 두 형식은 design 상 의도된 차이 — stanza ID 일치는 existing `Assert-Stanza` 가 가드, **`[WHY]` + `[REFERENCE]` 2 block 만 verbatim 비교** (신규 logic)
+- 결과: 본질 invariant ([WHY] 의 reason) 와 cross-reference pointer ([REFERENCE]) 의 drift 가 자동 검출 — 두 source 의 sync 핵심 가드는 충족
+- **case-sensitivity 주의**: PowerShell `-eq`/`-ne` 는 case-INsensitive default → byte-compare 는 `-cne` (case-sensitive) 사용 필수. (TASK-MONO-100 impl 시 발견된 trap.)
 
 # Scope
 
@@ -54,10 +56,15 @@ TASK-MONO-099 § Out of Scope 의 2 follow-up 묶음 closure:
   - stanza body 에서 `[WHY]` 라인부터 끝까지 반환 (= `[WHY]` + `[REMEDIATION]` + `[REFERENCE]` 3 block)
   - line ending normalize (CRLF → LF) + trailing whitespace trim
 
+- `Get-StaticStanzaBlocks -Stanza "..."`:
+  - stanza body 를 line state machine 으로 parse → `[WHY]` block + `[REFERENCE]` block 을 hashtable `@{ why = ...; reference = ... }` 로 반환
+  - line ending normalize (`Replace("` `r` `n", "` `n")`) + trailing whitespace trim
+  - (Get-StanzaTail 안 쓰고 block-by-block 구조화 — `[REMEDIATION]` 도 dynamic 이라 tail 전체 비교 불가)
+
 - `Assert-StanzaBodyMatchesCanonical -HookOutput $output -RuleId "HARDSTOP-NN"`:
-  - hook output 의 reason 필드를 parse → `Get-StanzaTail` 추출
-  - canonical stanza 의 `Get-StanzaTail` 추출
-  - byte-compare (verbatim). mismatch 시 first-N-line diff 메시지로 throw
+  - hook output 의 reason 필드 → `Get-StaticStanzaBlocks` → hook's why / reference
+  - `Get-CanonicalStanza` → `Get-StaticStanzaBlocks` → canonical's why / reference
+  - case-sensitive byte-compare (`-cne`). mismatch 시 hook vs canon snippet diff 메시지로 throw
 
 ### 2. 새 fixture `.claude/hooks/__tests__/hardstop-body-canonical-sync.ps1`
 
