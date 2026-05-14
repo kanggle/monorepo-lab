@@ -271,7 +271,146 @@ traces.
 
 ---
 
-## 8. References
+## 8. Test Matrix
+
+Per [`../architecture.md`](../architecture.md) § Testing Requirements. The
+state-machine unit tests and guard-condition tests live in
+[`../state-machines/reservation-status.md`](../state-machines/reservation-status.md)
+§ Test Requirements; this section covers **saga-level integration test
+surfaces** — consumer round-trips, TTL expiry, idempotency, and failure modes.
+
+The sibling outbound-saga test matrix is
+[`../../outbound-service/sagas/outbound-saga.md`](../../outbound-service/sagas/outbound-saga.md)
+§ 8; this document follows the same sub-section shape.
+
+### 8.1 Unit (Domain) — `Reservation` aggregate
+
+Covered by `reservation-status.md` § Test Requirements. Cross-reference
+only; do not duplicate test cases here.
+
+### 8.2 Application Service (port fakes)
+
+- **Happy path — Reserve**: `OutboundPickingRequestedConsumer` receives
+  `outbound.picking.requested` → `Reservation` created (`RESERVED`), N
+  `ReservationLine`s, 2N `InventoryMovement` rows, one `inventory.reserved`
+  outbox row — all in the same `@Transactional`.
+- **Happy path — Release (CANCELLED)**: `OutboundPickingCancelledConsumer`
+  receives `outbound.picking.cancelled` → `RESERVED → RELEASED`; 2N movement
+  rows + one `inventory.released` (reason=`CANCELLED`) outbox row.
+- **Happy path — Confirm**: `OutboundShippingConfirmedConsumer` receives
+  `outbound.shipping.confirmed` → `RESERVED → CONFIRMED`; N movement rows +
+  one `inventory.confirmed` outbox row.
+- **Reserve rejected — `INSUFFICIENT_STOCK`**: `Inventory.reserve()` throws;
+  TX rolls back; zero `Reservation` row, zero movement rows, zero outbox rows;
+  `inventory.adjusted{reason=INSUFFICIENT_STOCK}` emitted in separate
+  `REQUIRES_NEW` TX.
+- **Reserve rejected — stale MasterReadModel** (`SKU_INACTIVE` / `LOT_INACTIVE`
+  / `LOT_EXPIRED` / `LOCATION_INACTIVE`): same treatment as
+  `INSUFFICIENT_STOCK` — rolls back + `inventory.adjusted{reason=<code>}`.
+- **Confirm on RELEASED row**: `RESERVATION_ALREADY_RELEASED` → consumer
+  throws → routed to DLT; no outbox row; `Reservation` row unchanged.
+- **Quantity mismatch on Confirm**: `RESERVATION_QUANTITY_MISMATCH` → DLT;
+  same no-side-effect guarantee.
+- Each transition verifies outbox row is absent when the transaction rolls back
+  (Kafka publish must not occur on TX rollback, per T7).
+
+### 8.3 Consumer Idempotency (Testcontainers Kafka + Postgres)
+
+- **`outbound.picking.requested` redelivery (same `event_id`)**: first delivery
+  inserts `event_dedupe` row (outcome=`APPLIED`) + `Reservation`; second
+  delivery collides on `event_dedupe` PK → rollback → consumer ACKs; exactly
+  one `Reservation` row, exactly one outbox row.
+- **`outbound.picking.requested` redelivery (same `picking_request_id`, fresh
+  `event_id`)**: collides on `Reservation.picking_request_id` UNIQUE → rollback
+  → consumer ACKs; same single-row guarantee.
+- **`outbound.picking.cancelled` redelivery**: second delivery loads
+  `Reservation` in `RELEASED` (terminal-once) → no-op; consumer ACKs; zero
+  additional movement rows, zero additional outbox rows.
+- **`outbound.shipping.confirmed` redelivery**: already `CONFIRMED` → no-op;
+  consumer ACKs.
+- **Out-of-order: `picking.cancelled` before `picking.requested`**:
+  `Reservation` lookup fails → DLT; `picking.requested` arrives later,
+  succeeds → operator must manually release via `INVENTORY_ADMIN` REST or wait
+  for TTL.
+
+### 8.4 TTL Expiry (Testcontainers Postgres + `@Scheduled`)
+
+- **Normal TTL expiry**: insert `Reservation` with `expires_at = now - 1s`;
+  trigger `ReleaseReservationService.releaseExpired()`; verify
+  `status = RELEASED`, `released_reason = EXPIRED`, 2N movement rows,
+  `inventory.released` (reason=`EXPIRED`) outbox row.
+- **Batch isolation**: 3 rows with `expires_at < NOW()` + 1 row with
+  `expires_at > NOW()`; after sweep, exactly 3 released and 1 still
+  `RESERVED`.
+- **OL race — TTL vs manual**: parallel TTL sweep and manual release on the
+  same row; one TX commits, the other gets OL conflict → rolls back → retries →
+  finds `RELEASED` → no-op; exactly one `inventory.released` emitted.
+- **`CONFIRMED` rows skipped**: a `CONFIRMED` row with a past `expires_at`
+  (stale TTL) must NOT be touched by the sweeper (`status` filter excludes it).
+- **Metric emission**: `inventory.reservation.expiry.swept.total` counter
+  increments by released-count per sweep tick (ADR-MONO-005 § D5).
+
+### 8.5 Concurrency (Testcontainers Postgres)
+
+- **OL conflict on `Reservation.version`**: two threads each load the same
+  `RESERVED` row (version=0) and attempt `release(CANCELLED)` concurrently;
+  exactly one succeeds at version=1; the other raises
+  `OptimisticLockingFailureException` → consumer retry → finds `RELEASED` →
+  no-op; exactly one `inventory.released` outbox row.
+- **OL conflict on `Inventory.version`**: two concurrent reserves for the same
+  `inventory` row; exactly one succeeds; the other rolls back; no partial
+  movement rows.
+- **REST manual release + TTL sweep race**: covered under § 8.4 OL race above.
+
+### 8.6 REST Idempotency — MANUAL Release (`@WebMvcTest`)
+
+- `POST /api/v1/inventory/reservations/{id}:release` with the same
+  `Idempotency-Key` twice → second call returns cached response from Redis; no
+  second domain mutation; no second outbox row.
+- Missing `Idempotency-Key` header → 400 `MISSING_IDEMPOTENCY_KEY`.
+- Release on non-existent `id` → 404 `RESERVATION_NOT_FOUND`.
+- Release on `CONFIRMED` row → 422 `STATE_TRANSITION_INVALID`.
+- Release on `RELEASED` row → 200 no-op (idempotent).
+- Caller without `INVENTORY_ADMIN` role → 403 `FORBIDDEN`.
+
+### 8.7 Failure-Mode Suite (per trait `transactional` Required Artifact 5)
+
+- Same `Idempotency-Key` POST twice → single release, single outbox row.
+- Same `event_id` delivered twice → single `Reservation`, single outbox row
+  (event-dedupe table blocks replay).
+- `INSUFFICIENT_STOCK` → no `Reservation` row, no movement rows; outbound
+  saga receives `inventory.adjusted{reason=INSUFFICIENT_STOCK}` and moves to
+  `RESERVE_FAILED`.
+- `RESERVATION_ALREADY_RELEASED` on confirm → DLT; no side-effect in
+  inventory; outbound saga ops alert.
+- TTL sweep restart after a pod crash mid-batch: partially-swept rows
+  remain `RESERVED`; next sweep cycle picks them up; no double-release.
+
+---
+
+## 9. Open Questions
+
+No open questions for v1. All mechanics (TTL, OL retry, idempotency,
+compensation) are fully specified. Potential v2 candidates:
+
+1. **TTL extension** — `expires_at` is immutable in v1 (single-shot allocation
+   lifetime). A v2 `EXTEND_TTL` operation would require a new `reserved_ttl_extended`
+   event, an additional outbox contract, and a state-machine guard preventing
+   extension after CONFIRMED/RELEASED.
+2. **Partial confirm / partial release** — v1 is aggregate-whole only. v2 may
+   introduce line-level status tracking (`ReservationLine.status`), which would
+   require a new intermediate state (e.g., `PARTIALLY_CONFIRMED`).
+3. **Cross-warehouse allocation** — v1 forbids mixed `warehouse_id` lines. A
+   v2 multi-warehouse reservation would need a split-saga pattern (one
+   child-reservation per warehouse, one parent coordinator).
+4. **RMA inbound compensation** — post-ship reversal is out of scope for v1
+   (`reservation-saga.md § 4 Compensation` documents the `CONFIRMED → irreversible`
+   rule). v2 path: new inbound RMA saga that fires `inventory.received`
+   compensations.
+
+---
+
+## 10. References
 
 - [`../architecture.md`](../architecture.md) — § Saga Participation
   (v1 light) (canonical declaration of inventory's role), § Saga /
