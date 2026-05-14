@@ -8,7 +8,7 @@ SCM scm-procurement-events.md ADR-MONO-004 path fix (refactor-spec Tier 3 #2 clo
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -51,8 +51,8 @@ scm-platform
 
 # Acceptance Criteria
 
-- [ ] 1 dead-reference PASS — link target file 실재 + navigation 정상.
-- [ ] Production code / spec contract / event payload / API schema 0 변경 (markdown link only).
+- [x] 1 dead-reference PASS — link target file 실재 + navigation 정상 (`[ -e ... ]` RESOLVED).
+- [x] Production code / spec contract / event payload / API schema 0 변경 (markdown link only).
 
 # Related Specs
 
@@ -89,4 +89,16 @@ scm-platform
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (2026-05-14, PR #513 squash `ff8d0b3a`).
+
+1-line mechanical fix — refactor-spec Tier 3 #2 closure.
+
+`projects/scm-platform/specs/contracts/events/scm-procurement-events.md:44`:
+- Before: `[ADR-MONO-004](../../../docs/adr/)` (3 `../` lands at project root, no `docs/adr/`)
+- After: `[ADR-MONO-004](../../../../../docs/adr/ADR-MONO-004-shared-messaging-scaffolding.md)` (5 `../` reaches repo root + filename for deep-link nav per BE-283 pattern)
+
+**CI**: 2 pass (`changes` 6s + `Frontend E2E smoke` 2m57s — contracts/events 트리거됐지만 markdown only 라 통과) / 15 SKIPPED / 0 fail.
+
+**Provenance**: TASK-SCM-BE-009 (2026-05-11) authoring 시점의 depth miscount. refactor-spec Tier 3 #1 (BE-283) + Tier 3 #2 (본 task) 시리즈로 portfolio dead-ref 잔존 = PiiMaskingUtils 1건 (BE-284 Tier 2 judgment 만 remaining).
+
+**Sibling cycle**: 5 (BE-165 wms) → 47 (BE-283 gap) → 1 (본) — refactor-spec dry-run finding diminishing 패턴.
