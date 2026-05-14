@@ -242,7 +242,12 @@ CREATE INDEX idx_notification_outbox_aggregate
 schema): v1 mandates JSONB payload + `partition_key` per event, mirroring
 the inventory-service outbox shape (see
 [`../inventory-service/database-design.md`](../inventory-service/database-design.md)
-§ 3 InventoryOutbox).
+§ 3 InventoryOutbox). The wms-specific shape diverges from
+`master-service`'s legacy libs shared schema (BIGSERIAL + TEXT + status
+enum, see [`../master-service/database-design.md`](../master-service/database-design.md)
+§ 2). master's migration to this modern shape is deferred per
+ADR-MONO-003 D2 cadence (≥ 2026-06-10), tracked as TASK-MONO-049 § 6
+follow-up #1.
 
 **Pending-publisher index** (`WHERE published_at IS NULL`) keeps the
 publisher's FIFO scan cheap — only unpublished rows are indexed, and the

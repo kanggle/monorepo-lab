@@ -532,6 +532,15 @@ outbound — sibling outboxes use `WHERE published_at IS NULL`. Both
 patterns work; the choice mirrors the V6/V9 evolution where `status`
 arrived before `published_at` semantics were fully specified.
 
+**Shape vs `master-service`**: this wms-specific shape (UUID PK + JSONB
+payload + `partition_key`, plus outbound's `status` + `retry_count`
+publisher columns) diverges from `master-service`'s legacy
+`libs/java-messaging` shared schema (BIGSERIAL PK + TEXT payload +
+single `status` enum) — see [`../master-service/database-design.md`](../master-service/database-design.md)
+§ 2 for the full rationale. master's migration to the modern shape is
+deferred per ADR-MONO-003 D2 cadence (≥ 2026-06-10), tracked as
+TASK-MONO-049 § 6 follow-up #1.
+
 ---
 
 ## 7. ERP Order Webhook (V7)

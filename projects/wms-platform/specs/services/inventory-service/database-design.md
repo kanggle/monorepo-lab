@@ -237,6 +237,14 @@ shape without re-parsing. `partition_key` is set per-event
 (typically `inventory_id` or `reservation_id`) to guarantee per-aggregate
 in-order delivery downstream.
 
+**Shape vs `master-service`**: this wms-specific shape (UUID PK + JSONB
+payload + `partition_key`) diverges from `master-service`'s legacy
+`libs/java-messaging` shared schema (BIGSERIAL PK + TEXT payload +
+`status` enum) — see [`../master-service/database-design.md`](../master-service/database-design.md)
+§ 2 for the full rationale. master's migration to this modern shape is
+deferred per ADR-MONO-003 D2 cadence (≥ 2026-06-10), tracked as
+TASK-MONO-049 § 6 follow-up #1.
+
 ---
 
 ## 4. EventDedupe (V1, transactional T8)

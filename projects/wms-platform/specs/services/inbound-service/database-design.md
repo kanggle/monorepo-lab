@@ -448,6 +448,8 @@ TEXT + status enum, see
 § 2). The wms-specific shape was adopted to support per-event partition
 routing (downstream consumer cross-correlation) and JSONB queryability —
 features the libs base did not provide at the time inbound was written.
+master's migration to this modern shape is deferred per ADR-MONO-003 D2
+cadence (≥ 2026-06-10), tracked as TASK-MONO-049 § 6 follow-up #1.
 
 **`partition_key`**: set per-event (typically `asn_id` for ASN events,
 `inspection_id` for inspection events). Guarantees per-aggregate
