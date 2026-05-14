@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-096-hardstop-10-hook-canonical-form-fixture.md` — ADR-MONO-012 D4 follow-up. (1) hook fixture canonical form (Identity table + Composition H3) negative case 추가 — 회귀 가드 for next migration batches (MONO-097/098). (2) ADR-MONO-012 § 1.4 + D1 wording correction audit-trail (option C-1, 본문 미터치). hook source 미터치 (canonical form 호환 이미 SCM migration 시 확인). 1 file / ~20 line. D4 OVERRIDE per ADR-MONO-003a § D1.1. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
