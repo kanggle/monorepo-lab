@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-100-hardstop-fixture-drift-detection-template-mirror-audit.md` — TASK-MONO-099 follow-up bundle: (1) HARDSTOP fixture body byte-compare 강화 (new fixture `hardstop-body-canonical-sync.ps1` 가 platform/hardstop-rules.md 의 canonical body 와 hook hardcoded body 의 `[WHY]`/`[REMEDIATION]`/`[REFERENCE]` 3 block verbatim 일치 가드, 5 mechanical detector × 1 invocation = 5 PASS) + (2) TEMPLATE.md mirror audit (결과 = mirror 없음, generic pointer 만, verify-only). `_helpers.ps1` 3 helper 추가 / `[VIOLATION]` 은 design 상 dynamic inject 라 byte-compare 제외. CLAUDE.md / production code / hook runtime behavior / platform/hardstop-rules.md 미터치. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## in-progress
 
