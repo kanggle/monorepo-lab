@@ -8,7 +8,7 @@ WMS specs dead-reference mechanical batch — 4 path corrections + 1 hedge clean
 
 # Status
 
-ready
+review
 
 # Owner
 
