@@ -8,7 +8,7 @@ ADR-MONO-012 PROPOSED — cross-project architecture.md canonical form decision 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -63,15 +63,15 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] `docs/adr/ADR-MONO-012-cross-project-architecture-md-canonical-form.md` 작성, Status: PROPOSED.
-- [ ] § Context 에 5 project × 5 format divergence catalog 명시.
-- [ ] § Decision 에 PROPOSED canonical form 선택 (D1) + rationale.
-- [ ] § Alternatives Considered 에 Path A/B/C 비교 (WMS canonical / ecommerce canonical / per-project intentional).
-- [ ] § Consequences 에 migration cost (~24 file) + HARDSTOP-10 propagation impact.
-- [ ] § Migration Plan 에 multi-task post-ACCEPTED cycle outline (ecommerce → GAP → SCM order or parallel).
-- [ ] `docs/adr/INDEX.md` 에 ADR-MONO-012 entry 추가 (PROPOSED row).
-- [ ] ADR 본문 dead-ref 0 (sibling ADR-MONO-009/011 path resolution PASS).
-- [ ] Production code / spec migration 0 변경 (ADR authoring only).
+- [x] `docs/adr/ADR-MONO-012-cross-project-architecture-md-canonical-form.md` 작성, Status: PROPOSED.
+- [x] § Context 에 5 project × 5 format divergence catalog 명시 (§ 1.1) + 3-axis decomposition (§ 1.2) + author origin trace (§ 1.3) + HARDSTOP-10 hook implication (§ 1.4).
+- [x] § Decision 에 PROPOSED canonical form 선택 (D1 WMS Identity-table + Service Type Composition) + rationale + D2-D5 (trigger / migration order / hook propagation / indefinite-PROPOSED tolerated).
+- [x] § Alternatives Considered 에 Path A/B/C 비교 (WMS canonical / ecommerce flat canonical / per-project intentional).
+- [x] § Consequences 에 migration cost (~24 file) + HARDSTOP-10 propagation impact + D4 OVERRIDE ADR-MONO-003a § D1.1 적용 명시.
+- [x] § Outstanding follow-ups 에 multi-task post-ACCEPTED cycle outline (F-T3-A migration order SCM→GAP→ecommerce + F-T3-B hook propagation + fan partial-align + 6th project bootstrap trigger).
+- [x] `docs/adr/INDEX.md` 에 ADR-MONO-012 entry 추가 (PROPOSED row, 2026-05-15).
+- [x] ADR 본문 dead-ref 0 (sibling ADR-MONO-003a/009/HARDSTOP-10/refactor-spec.md/INDEX.md + 5 sample architecture.md path resolution PASS).
+- [x] Production code / spec migration 0 변경 (ADR authoring only).
 
 # Related Specs
 
@@ -120,4 +120,36 @@ monorepo
 
 # Outcome
 
-(완료 후 갱신)
+**Status: DONE** (PR #526 squash `ad0ed510`, draft → ready → squash-merge).
+
+ADR-MONO-012 PROPOSED publication — refactor-spec Tier 3 governance escalation. 0 production code / 0 spec migration (post-ACCEPTED 별 task).
+
+## ADR-MONO-012 본문 (3 file / +354 / -0)
+
+- **Body** (~230 line): § 1 Context (5 project × 5 format catalog + 3-axis decomposition + author origin trace + HARDSTOP-10 hook implication + refactor-spec scope rationale + pre-author rationale) + § 2 Decision (D1 WMS Identity-table canonical PROPOSED, D2 user-explicit ACCEPTED trigger, D3 migration order SCM→GAP→ecommerce, D4 hook propagation, D5 indefinite-PROPOSED tolerated) + § 3 Path A/B/C weighing + § 4 Consequences per outcome + § 5 Verification (PROPOSED + post-ACCEPTED) + § 6 Outstanding follow-ups (F-T3-A migration / F-T3-B hook / fan partial-align catch-up / 6th project bootstrap trigger) + § 7 References (sibling ADRs + 5 sample architecture.md).
+- **INDEX.md**: ADR-MONO-012 row added (PROPOSED status, 2026-05-15).
+- **Task lifecycle**: ready → review → done.
+
+## Status decision summary
+
+- **D1 PROPOSED canonical** = WMS Identity-table + `### Service Type Composition` H3 sub-section.
+- **D2 ACCEPTED trigger** = user-explicit (migration scope ~24 file = substantial cycle budget commitment).
+- **D5 indefinite-PROPOSED tolerated** = legitimate outcome per ADR-MONO-009 pre-author pattern.
+
+## CI
+
+1 SUCCESS (`changes`) / 16 SKIPPED / 0 fail — markdown-only path-filter (docs/adr/ + tasks/ 영역 모두 `code-changed` filter false). mergeStateStatus CLEAN.
+
+## Verification
+
+- Dead-ref checker on ADR body + INDEX = 0 broken (3 sibling ADRs + HARDSTOP-10 + refactor-spec.md + 5 sample architecture.md paths 모두 resolve).
+- 9th refactor-spec cycle task (BE-165/283/SCM-BE-013/BE-284/BE-285/MONO-091/BE-286/BE-287 + 본 MONO-092 = 9 task / 76 fix + 1 ADR).
+
+## Next cycle outlook
+
+ADR-MONO-012 ACCEPTED 시점:
+- F-T3-A migration cycle: SCM (3 file) → GAP (8 file) → ecommerce (13 file) = ~3 task / ~24 file migration.
+- F-T3-B HARDSTOP-10 hook propagation: hook source update + cross-project enforce surface 검증.
+- fan-platform partial-align catch-up (D1 interpretation 따라 결정).
+
+D5 outcome 시: PROPOSED 영구 유지, next architecture.md author decision reference 가치 만 유지. ADR-MONO-009 precedent.
