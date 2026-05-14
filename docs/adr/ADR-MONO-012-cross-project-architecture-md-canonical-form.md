@@ -1,8 +1,8 @@
 # ADR-MONO-012 — Cross-Project `architecture.md` Canonical Form
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-15
-**History:** PROPOSED 2026-05-15 (TASK-MONO-092 — refactor-spec Tier 3 reconsider; cross-project format divergence surface).
+**History:** PROPOSED 2026-05-15 (TASK-MONO-092 — refactor-spec Tier 3 reconsider; cross-project format divergence surface). ACCEPTED 2026-05-15 (TASK-MONO-094 — user-explicit nod via "/audit-memory → 다음 작업 추천 → Option B" sequence; D1 WMS Identity-table canonical 확정, D3 migration order SCM → GAP → ecommerce 동시 발효, D4 HARDSTOP-10 hook propagation 별 task 분리).
 **Decision driver:** `/refactor-spec all --dry-run` (8-task cycle 2026-05-14 → 2026-05-15) Tier 3 backlog 의 cross-project structural divergence — 5 projects use 5 distinct `architecture.md` formats. ADR-level decision needed because canonical form selection introduces a new structural convention (out of refactor-spec mechanical scope per § Constraints "no new rules or decisions").
 **Supersedes:** none.
 **Related:** [ADR-MONO-009](ADR-MONO-009-chrome-devtools-mcp-visual-regression.md) (PROPOSED ADR template pattern — pre-author with indefinite-PROPOSED tolerated outcome), [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D1.1 (project-internal spec polish IN-scope of D4 OVERRIDE), CLAUDE.md § Hard Stop Rules HARDSTOP-10 (Service Type declaration enforce — current hook validates WMS form), `.claude/commands/refactor-spec.md` § Operational Patterns Tier 3 audit-only path (out-of-mechanical-scope reconsider channel).

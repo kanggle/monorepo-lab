@@ -19,7 +19,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-009](ADR-MONO-009-chrome-devtools-mcp-visual-regression.md) | Chrome DevTools MCP Visual Regression Loop (OpenAI Harness gap #4, triple-snapshot LOOP UNTIL CLEAN) | PROPOSED | 2026-05-13 |
 | [ADR-MONO-010](ADR-MONO-010-e2e-tag-taxonomy.md) | E2E Test Tag Taxonomy (`smoke` / `full`) and Gradle / CI Job Split — Phase 2 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-011](ADR-MONO-011-nightly-full-e2e-cadence.md) | Nightly + Push-to-main Cadence for `@Tag("full")` E2E Suites — Phase 3 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
-| [ADR-MONO-012](ADR-MONO-012-cross-project-architecture-md-canonical-form.md) | Cross-Project `architecture.md` Canonical Form — Identity-table + Service Type Composition (refactor-spec Tier 3 reconsider) | PROPOSED | 2026-05-15 |
+| [ADR-MONO-012](ADR-MONO-012-cross-project-architecture-md-canonical-form.md) | Cross-Project `architecture.md` Canonical Form — Identity-table + Service Type Composition (refactor-spec Tier 3 reconsider) | ACCEPTED | 2026-05-15 |
 
 ---
 
