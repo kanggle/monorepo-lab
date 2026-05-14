@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-093-rules-stale-enumeration-sync.md` — `/validate-rules` (2026-05-15) Warning 3건 closure: (1) `platform/architecture.md:40` service-type enumeration 7→8 (add `identity-platform`), (2) `.claude/agents/common/coordinator.md:21` 동일 enumeration 7→8, (3) `platform/entrypoint.md:19` Step 0 문구 monorepo-aware 표현 보정 ("at repository root" → "active project root, typically `projects/<name>/PROJECT.md`"). 3 file / < 5 line. D4 OVERRIDE per ADR-MONO-003a § D1.1 (B common rule cleanup 연장선, MONO-091 sibling). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
