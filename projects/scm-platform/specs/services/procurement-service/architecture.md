@@ -1,8 +1,5 @@
 # procurement-service — Architecture
 
-## Service Type
-`rest-api`
-
 This document declares the internal architecture of `scm-platform/apps/procurement-service`.
 All implementation tasks targeting this service must follow this declaration,
 `platform/architecture-decision-rule.md`, and the rule files indexed by
@@ -16,13 +13,13 @@ All implementation tasks targeting this service must follow this declaration,
 
 ---
 
-## Service Identity
+## Identity
 
 | Field | Value |
 |---|---|
 | Service Name | `procurement-service` |
 | Project | `scm-platform` |
-| Service Type | `rest-api` (primary) |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
 | Architecture Style | **Hexagonal** (Ports & Adapters) |
 | Domain | scm |
 | Traits | transactional, integration-heavy, batch-heavy |
@@ -32,6 +29,15 @@ All implementation tasks targeting this service must follow this declaration,
 | Data store | PostgreSQL `scm_procurement` schema (Flyway) + Redis (idempotency / cache) |
 | Event publication | Kafka via transactional outbox |
 | Outbound integration | Supplier mock REST adapter (v1); EDI / SFTP siblings deferred to v2 |
+
+### Service Type Composition
+
+`procurement-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. No secondary service-type composition —
+all responsibilities (PO lifecycle, supplier outbound calls, webhook ingress)
+exposed through synchronous HTTP request/response surface. Kafka publication
+is a side effect of REST mutations (transactional outbox) and does not promote
+the service to `event-consumer`.
 
 ---
 

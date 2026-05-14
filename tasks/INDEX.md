@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-095-scm-architecture-md-migration.md` — ADR-MONO-012 D3 first batch (SCM 3 architecture.md migration to WMS Identity-table canonical form). procurement (light, standalone Service Type H2 제거 + Identity rename) + inventory-visibility (medium, Identity rename + 6 row backfill + Service Type Composition H3) + gateway (light, Identity rename). 3 file / ~15 line. D4 OVERRIDE per ADR-MONO-003a § D1.1. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical).
 
 ## in-progress
 
