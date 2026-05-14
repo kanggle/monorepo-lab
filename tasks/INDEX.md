@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-095-scm-architecture-md-migration.md` — ADR-MONO-012 D3 first batch (SCM 3 architecture.md migration to WMS Identity-table canonical form). procurement + inventory-visibility + gateway 모두 canonical Identity table + Service Type Composition H3 정렬. 3 file / +46 / -7 impl + task spec (총 5 file / +161 / -8). lifecycle = ready → review 직접 (in-progress 우회, single-PR closure 패턴 11번째 적용). D4 OVERRIDE per ADR-MONO-003a § D1.1. branch = `task/mono-095-scm-architecture-md-migration`. **메타 학습**: HARDSTOP-10 hook 의 CRLF/LF simulation mismatch (Edit tool 의 oldString contains check 실패 → simulated content 가 pre-edit existing 으로 fallback → hook detect 못 함) → `awk` single-pass migration 우회. MONO-083/093 학습 답습. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

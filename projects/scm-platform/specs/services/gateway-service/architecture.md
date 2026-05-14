@@ -6,7 +6,7 @@ All implementation tasks targeting this service must follow this declaration,
 
 ---
 
-## Service Identity
+## Identity
 
 | Field | Value |
 |---|---|
@@ -20,6 +20,16 @@ All implementation tasks targeting this service must follow this declaration,
 | Data store | none (stateless) |
 | Event publication | none |
 | Shared state | Redis — rate-limit counters only (ephemeral) |
+
+### Service Type Composition
+
+`gateway-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. The role is **edge gateway only**:
+synchronous HTTP routing + JWT validation + tenant enforcement +
+rate limiting + header normalization. No domain aggregates, no event
+publication, no Kafka consumption. The Spring Cloud Gateway (reactive)
+stack is a single-type rest-api specialization despite the absence of
+REST controllers — the gateway IS the REST surface for the project.
 
 ---
 

@@ -1,6 +1,6 @@
 # inventory-visibility-service — Architecture
 
-## Service Identity
+## Identity
 
 | Field | Value |
 |---|---|
@@ -9,6 +9,29 @@
 | Architecture Style | **Hexagonal** |
 | Domain | scm |
 | Traits | transactional, integration-heavy, batch-heavy |
+| Primary language / stack | Java 21, Spring Boot 3.4 (Servlet stack) |
+| Bounded Context | Inventory Visibility (cross-node read-model for SCM portfolio) |
+| Deployable unit | `apps/inventory-visibility-service/` |
+| Data store | PostgreSQL `scm_inventory_visibility` schema (Flyway) + Redis aggregation cache |
+| Event publication | Kafka `scm.inventory.alert.v1` (best-effort, no outbox per ADR-MONO-005 Cat C) |
+| Event consumption | Kafka 3 topics: `wms.inventory.received.v1` / `wms.inventory.adjusted.v1` / `wms.inventory.transferred.v1` (cross-project, EventDedupe idempotency) |
+
+### Service Type Composition
+
+`inventory-visibility-service` combines two service types in one deployable unit:
+
+- `rest-api` for synchronous **read-only** queries (cross-node inventory snapshot, staleness metadata).
+  4 read endpoints, no mutating REST (S5 — "Not for procurement decisions").
+- `event-consumer` for asynchronous **inbound** event subscription:
+  - `wms.inventory.received.v1` → upsert quantity snapshot
+  - `wms.inventory.adjusted.v1` → delta apply on snapshot
+  - `wms.inventory.transferred.v1` → dual-row update (source + destination nodes)
+
+Both surfaces share the same domain model (`InventoryNode` + `InventorySnapshot` +
+`NodeStaleness`) and persistence. Read both
+`platform/service-types/rest-api.md` and `platform/service-types/event-consumer.md`
+when implementing — documented exception to the "read exactly one service-type
+file" rule, justified by the CQRS read-model role.
 
 ## Responsibilities
 
