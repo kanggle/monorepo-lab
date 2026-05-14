@@ -50,7 +50,7 @@ All rule-violation emissions across `hardstop-detect.ps1` / `spec-check.ps1` / `
 
 Rule IDs in use:
 
-- `HARDSTOP-NN` (NN = 01–10) — sourced from [`../../CLAUDE.md § Hard Stop Rules`](../../CLAUDE.md#hard-stop-rules). The hook injects only file path / line number; the `[WHY]` / `[REMEDIATION]` / `[REFERENCE]` blocks match the canonical CLAUDE.md stanza verbatim (single source of truth).
+- `HARDSTOP-NN` (NN = 01–10) — canonical 4-block body lives in [`../../platform/hardstop-rules.md`](../../platform/hardstop-rules.md); [`../../CLAUDE.md § Hard Stop Rules`](../../CLAUDE.md#hard-stop-rules) carries the catalog with click-through links. The hook injects only file path / line number; the `[WHY]` / `[REMEDIATION]` / `[REFERENCE]` blocks match the canonical platform stanza verbatim (single source of truth).
 - `SPEC-CHECK-NN` — emitted by `spec-check.ps1` (currently 01 contract-edit, 02 platform-edit).
 - `RULE-CONSISTENCY-NN` — synchronous PreToolUse hook reserves 01–04 (skill-missing-spec, agent-missing-fields, command-missing-frontmatter, broken-spec-ref). Asynchronous scheduled routine (`monorepo-lab-validate-rules-weekly`) emits 05+ for structural multi-file drift the hook can't detect synchronously.
 - `MEMORY-AUDIT-NN` — emitted by `monorepo-lab-audit-memory-weekly` scheduled routine (01 stale, 02 contradiction, 03 dangling ref, 04 CLAUDE.md duplicate).
@@ -63,7 +63,7 @@ Rule IDs in use:
 
 1. Add the detection logic to the appropriate hook script (`hardstop-detect.ps1` for new HARDSTOP triggers; `rule-consistency-check.ps1` for new soft warnings; new hook file for orthogonal concerns).
 2. Choose a rule ID — `HARDSTOP-NN` (extends the CLAUDE.md sequence) or `<source-shortname>-NN`.
-3. Author the stanza body — `[WHY]` / `[REMEDIATION]` / `[REFERENCE]` blocks. For HARDSTOP triggers, the body MUST match the corresponding `CLAUDE.md § Hard Stop Rules` stanza verbatim.
+3. Author the stanza body — `[WHY]` / `[REMEDIATION]` / `[REFERENCE]` blocks. For HARDSTOP triggers, the body MUST match the corresponding `platform/hardstop-rules.md` stanza verbatim (and the catalog entry in `CLAUDE.md § Hard Stop Rules` must be added/updated in the same PR).
 4. Add a fixture under [`__tests__/`](__tests__/) — one PASS case per emission, plus negative cases for false-positive prevention where applicable.
 5. Update this `README.md` inventory + `../../platform/lint-remediation-message-standard.md` § Change protocol (if the change affects the format).
 6. If a new hook script, register it under the appropriate matcher in `../settings.json`.

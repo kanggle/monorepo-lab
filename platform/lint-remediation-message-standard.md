@@ -31,7 +31,7 @@ Every violation emission MUST carry exactly these four blocks, in this order:
 ### `[VIOLATION]`
 
 - `<rule_id>` is required and uses one of two forms:
-  - **`HARDSTOP-NN`** (NN = 01–10) — for the 10 Hard Stop triggers numbered in [`CLAUDE.md § Hard Stop Rules`](../CLAUDE.md#hard-stop-rules).
+  - **`HARDSTOP-NN`** (NN = 01–10) — for the 10 Hard Stop triggers. Canonical 4-block bodies live in [`platform/hardstop-rules.md`](hardstop-rules.md); [`CLAUDE.md § Hard Stop Rules`](../CLAUDE.md#hard-stop-rules) carries the catalog with click-through links.
   - **`<source-shortname>-NN`** — for non-blocking warnings, where `<source-shortname>` matches the short name of the originating rule file (e.g. `SHARED-LIB`, `ARCH-RULE`, `EVENT-DRIVEN`, `NAMING`, `TESTING`).
 - `<file>:<line | section-anchor>` MUST be unambiguous — either a real file path with a line number, or a file path with a section anchor (`platform/foo.md#bar`).
 - One-line condition is imperative or declarative present tense, never future ("would fail").
@@ -145,4 +145,4 @@ The OpenAI Harness Engineering report describes the mechanism as "custom lint er
 
 # Change Rule
 
-Changes to the canonical 4-block template structure, the emission contract, or the `<source-shortname>-NN` rule-id namespace conventions must be documented in this file before applying to any new rule. Each new Hard Stop or rule promotion that adds a `HARDSTOP-NN` (or analogous) stanza must also update the originating rule file (e.g. [`../CLAUDE.md`](../CLAUDE.md) § Hard Stop Rules, hook scripts under [`../.claude/hooks/`](../.claude/hooks/)) in the same PR per the rules above.
+Changes to the canonical 4-block template structure, the emission contract, or the `<source-shortname>-NN` rule-id namespace conventions must be documented in this file before applying to any new rule. Each new Hard Stop or rule promotion that adds a `HARDSTOP-NN` (or analogous) stanza must also update the canonical body in [`hardstop-rules.md`](hardstop-rules.md), the catalog entry in [`../CLAUDE.md`](../CLAUDE.md) § Hard Stop Rules, and the matching hook script under [`../.claude/hooks/`](../.claude/hooks/) in the same PR per the rules above.
