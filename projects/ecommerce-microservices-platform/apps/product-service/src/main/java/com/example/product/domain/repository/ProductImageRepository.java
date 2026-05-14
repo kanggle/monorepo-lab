@@ -17,6 +17,4 @@ public interface ProductImageRepository {
     int countByProductId(UUID productId);
 
     void delete(ProductImage image);
-
-    void saveAll(List<ProductImage> images);
 }

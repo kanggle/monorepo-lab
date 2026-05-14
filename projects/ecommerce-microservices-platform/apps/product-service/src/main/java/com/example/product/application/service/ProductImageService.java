@@ -11,10 +11,10 @@ import com.example.product.domain.model.Product;
 import com.example.product.domain.model.ProductImage;
 import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.domain.port.PresignedUploadResult;
+import com.example.product.domain.port.ProductImageBucketResolver;
 import com.example.product.domain.port.StorageClient;
 import com.example.product.domain.repository.ProductImageRepository;
 import com.example.product.domain.repository.ProductRepository;
-import com.example.product.infrastructure.storage.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -41,7 +41,7 @@ public class ProductImageService {
     private final ProductImageRepository productImageRepository;
     private final StorageClient storageClient;
     private final MediaUrlResolver mediaUrlResolver;
-    private final StorageProperties storageProperties;
+    private final ProductImageBucketResolver bucketResolver;
     private final EventPublishingHelper eventPublishingHelper;
 
     public PresignedUploadResult generateUploadUrl(UUID productId, String contentType, long contentLength) {
@@ -49,7 +49,7 @@ public class ProductImageService {
         validateContentType(contentType);
         validateContentLength(contentLength);
 
-        String bucket = storageProperties.getBuckets().getProductImages();
+        String bucket = bucketResolver.resolveBucket();
         String ext = extensionFromContentType(contentType);
         String objectKey = String.format("products/%s/0-%s.%s", productId, UUID.randomUUID(), ext);
 
@@ -77,7 +77,7 @@ public class ProductImageService {
         }
 
         // Verify object exists in storage (HEAD check)
-        String bucket = storageProperties.getBuckets().getProductImages();
+        String bucket = bucketResolver.resolveBucket();
         if (!storageClient.headObject(bucket, objectKey)) {
             throw new MediaNotFoundException(objectKey);
         }
@@ -154,7 +154,7 @@ public class ProductImageService {
         productImageRepository.delete(image);
 
         // Delete from storage (best-effort)
-        String bucket = storageProperties.getBuckets().getProductImages();
+        String bucket = bucketResolver.resolveBucket();
         try {
             storageClient.deleteObject(bucket, image.getObjectKey());
         } catch (Exception e) {

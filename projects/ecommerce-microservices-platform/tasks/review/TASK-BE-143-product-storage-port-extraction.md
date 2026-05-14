@@ -8,7 +8,7 @@ product-service `ProductImageService` 의 `infrastructure.storage.StoragePropert
 
 # Status
 
-ready
+review
 
 # Owner
 
