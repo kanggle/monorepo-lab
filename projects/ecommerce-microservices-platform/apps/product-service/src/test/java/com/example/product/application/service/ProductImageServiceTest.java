@@ -15,10 +15,10 @@ import com.example.product.domain.model.ProductVariant;
 import com.example.product.domain.model.StockQuantity;
 import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.domain.port.PresignedUploadResult;
+import com.example.product.domain.port.ProductImageBucketResolver;
 import com.example.product.domain.port.StorageClient;
 import com.example.product.domain.repository.ProductImageRepository;
 import com.example.product.domain.repository.ProductRepository;
-import com.example.product.infrastructure.storage.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,7 +60,9 @@ class ProductImageServiceTest {
     @Mock
     private ProductEventPublisher productEventPublisher;
 
-    private StorageProperties storageProperties;
+    @Mock
+    private ProductImageBucketResolver bucketResolver;
+
     private EventPublishingHelper eventPublishingHelper;
     private ProductImageService productImageService;
 
@@ -68,11 +71,11 @@ class ProductImageServiceTest {
 
     @BeforeEach
     void setUp() {
-        storageProperties = new StorageProperties();
         eventPublishingHelper = new EventPublishingHelper(productEventPublisher);
         productImageService = new ProductImageService(
                 productRepository, productImageRepository, storageClient,
-                mediaUrlResolver, storageProperties, eventPublishingHelper);
+                mediaUrlResolver, bucketResolver, eventPublishingHelper);
+        lenient().when(bucketResolver.resolveBucket()).thenReturn("product-images");
 
         productId = UUID.randomUUID();
         product = Product.create("테스트 상품", "설명", new Price(10000),

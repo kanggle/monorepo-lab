@@ -53,11 +53,4 @@ class ProductImageRepositoryAdapter implements ProductImageRepository {
     public void delete(ProductImage image) {
         jpaRepository.deleteById(image.getId());
     }
-
-    @Override
-    public void saveAll(List<ProductImage> images) {
-        for (ProductImage image : images) {
-            save(image);
-        }
-    }
 }
