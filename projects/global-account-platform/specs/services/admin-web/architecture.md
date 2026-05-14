@@ -1,22 +1,34 @@
 # admin-web — Architecture
 
-## Service
+This document declares the internal architecture of `admin-web`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
+
+---
+
+## Identity
 
 | Field | Value |
 |---|---|
 | Service name | `admin-web` |
 | Project | `global-account-platform` |
-| Service Type | `frontend-app` |
+| Service Type | `frontend-app` (single — see Service Type Composition below) |
 | Architecture Style | **Layered by Feature** |
+| Domain | saas |
+| Primary language / stack | TypeScript strict, Next.js 15 (App Router) |
 | Bounded Context | GAP operator console (account ops, audit, security, sessions, operators management) |
 | Deployable unit | `apps/admin-web/` |
 | Backend dependencies | `auth-service` (login / refresh / logout); `account-service` (account search/lock + audit + suspicious + login history); GAP `gateway-service` 라우팅 경계 통과 |
 
-## Service Type
+### Service Type Composition
 
-`frontend-app` — 선언된 서비스 타입. [platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md) 요구사항을 전부 상속한다.
+`admin-web` is a single-type `frontend-app` service per
+`platform/service-types/INDEX.md`. 선언된 서비스 타입의
+[platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md)
+요구사항을 전부 상속한다 — HttpOnly 쿠키 인증, 타입 API 클라이언트,
+server-component 우선, 성능/접근성/web-vitals 예산.
 
-적용되는 규칙: HttpOnly 쿠키 인증, 타입 API 클라이언트, server-component 우선, 성능/접근성/web-vitals 예산.
+---
 
 ## Architecture Style
 

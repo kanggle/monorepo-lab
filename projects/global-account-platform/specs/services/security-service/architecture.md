@@ -1,16 +1,41 @@
-# Service Architecture — security-service
+# security-service — Architecture
 
-## Service
+This document declares the internal architecture of `security-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-`security-service`
+---
 
-## Service Type
+## Identity
 
-`event-consumer` **(+ 좁은 read-only HTTP 표면)**
+| Field | Value |
+|---|---|
+| Service name | `security-service` |
+| Project | `global-account-platform` |
+| Service Type | `event-consumer` + `rest-api` (dual; see Service Type Composition below) |
+| Architecture Style | **Layered (Consumer-Driven)** |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Security analytics (suspicious activity detection + login attempt history) |
+| Deployable unit | `apps/security-service/` |
+| Data store | PostgreSQL (security history + detection state) |
+| Event publication | Kafka via outbox (auth.reuse.detected 등 detection alerts) |
+| Event consumption | Kafka (auth.login.attempt + account.status.changed 등 보안 source topics) |
 
-Primary role은 Kafka 보안 이벤트 소비. 부차적으로 admin-service와 내부 조회를 위한 **매우 제한된 read-only HTTP 엔드포인트**를 제공한다. [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)가 허용하는 "small set of admin or query endpoints" 범주 내에 머무른다.
+### Service Type Composition
 
-적용되는 규칙: [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)
+`security-service` combines two service types in one deployable unit:
+
+- **Primary** `event-consumer` — Kafka 보안 이벤트 소비 (login attempt + status change + suspicious activity detection rules). 이 surface 가 service 의 주 책임.
+- **Secondary** `rest-api` (좁은 read-only HTTP 표면) — admin-service 와 내부 조회를 위한 **매우 제한된 read-only HTTP 엔드포인트**.
+  [platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)
+  가 허용하는 "small set of admin or query endpoints" 범주 내에 머무른다.
+
+두 surface 는 동일 domain model (security history + detection state) 와
+persistence 를 공유한다. 적용되는 규칙: 양 service-type spec 모두 읽되 primary
+는 event-consumer.
+
+---
 
 ## Architecture Style
 

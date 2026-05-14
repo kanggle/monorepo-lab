@@ -1,14 +1,36 @@
-# Service Architecture — gateway-service
+# gateway-service — Architecture
 
-## Service
+This document declares the internal architecture of `gateway-service`.
+All implementation tasks targeting this service must follow this declaration,
+`platform/api-gateway-policy.md`, and `platform/architecture-decision-rule.md`.
 
-`gateway-service`
+---
 
-## Service Type
+## Identity
 
-`rest-api` — 엣지 API 게이트웨이. 퍼블릭 HTTP 트래픽의 단일 진입점.
+| Field | Value |
+|---|---|
+| Service name | `gateway-service` |
+| Project | `global-account-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Thin Layered** (edge filter pipeline) |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot, **Spring Cloud Gateway (reactive)** |
+| Bounded Context | n/a — edge gateway, no domain logic |
+| Deployable unit | `apps/gateway-service/` |
+| Data store | none (stateless) |
+| Event publication | none |
+| Shared state | Redis (rate-limit counters, ephemeral) |
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+### Service Type Composition
+
+`gateway-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. 엣지 API 게이트웨이 — 퍼블릭 HTTP
+트래픽의 단일 진입점. JWT validation + tenant isolation + rate limiting +
+header normalization. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Architecture Style
 

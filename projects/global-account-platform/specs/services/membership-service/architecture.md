@@ -1,14 +1,35 @@
-# Service Architecture — membership-service
+# membership-service — Architecture
 
-## Service
+This document declares the internal architecture of `membership-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-`membership-service`
+---
 
-## Service Type
+## Identity
 
-`rest-api` — 구독 플랜 관리 및 프리미엄 콘텐츠 접근 제어 서비스.
+| Field | Value |
+|---|---|
+| Service name | `membership-service` |
+| Project | `global-account-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Layered Architecture + 명시적 상태 기계** |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Membership (구독 플랜 + 프리미엄 콘텐츠 접근 제어) |
+| Deployable unit | `apps/membership-service/` |
+| Data store | PostgreSQL (owned) |
+| Event publication | Kafka via outbox (subscription.* lifecycle events) |
+| Event consumption | none (single-type rest-api) |
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+### Service Type Composition
+
+`membership-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. 구독 플랜 관리 및 프리미엄 콘텐츠 접근
+제어 서비스. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Architecture Style
 

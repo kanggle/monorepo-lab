@@ -1,14 +1,36 @@
-# Service Architecture — admin-service
+# admin-service — Architecture
 
-## Service
+This document declares the internal architecture of `admin-service`.
+All implementation tasks targeting this service must follow this declaration
+and `platform/architecture-decision-rule.md`.
 
-`admin-service`
+---
 
-## Service Type
+## Identity
 
-`rest-api` — 운영자 전용 관리 서비스. lock/unlock, 강제 로그아웃, 감사 조회 프록시. **일반 사용자 트래픽과 완전히 분리된 인증 경계** 뒤에 배치.
+| Field | Value |
+|---|---|
+| Service name | `admin-service` |
+| Project | `global-account-platform` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Architecture Style | **Thin Layered (Command Gateway)** |
+| Domain | saas |
+| Primary language / stack | Java 21, Spring Boot |
+| Bounded Context | Operator administration (계정 lock/unlock + 강제 로그아웃 + 감사 조회 프록시) |
+| Deployable unit | `apps/admin-service/` |
+| Data store | PostgreSQL (감사 로그만, downstream 도메인 상태 미보유) |
+| Event publication | Kafka via outbox (`admin.action.performed` 이벤트) |
+| Event consumption | none (single-type rest-api) |
 
-적용되는 규칙: [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+### Service Type Composition
+
+`admin-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. 운영자 전용 관리 서비스 — lock/unlock,
+강제 로그아웃, 감사 조회 프록시. **일반 사용자 트래픽과 완전히 분리된 인증
+경계** 뒤에 배치. 적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+
+---
 
 ## Architecture Style
 
