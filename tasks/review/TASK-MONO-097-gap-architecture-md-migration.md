@@ -8,7 +8,7 @@ GAP 8 architecture.md migration to WMS Identity-table canonical form (ADR-MONO-0
 
 # Status
 
-ready
+review
 
 # Owner
 
