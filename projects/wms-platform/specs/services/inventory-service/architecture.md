@@ -602,26 +602,26 @@ Known evolution paths (not part of v1 — documented to guide v2 decisions):
    lifecycle and compensation (authored in TASK-BE-151, 2026-05-14).
 7. ✅ [`state-machines/reservation-status.md`](state-machines/reservation-status.md)
    — reservation state machine diagram (authored in TASK-BE-151, 2026-05-14).
-8. ❌ `external-integrations.md` — per `integration-heavy` Required Artifact 1
-   (v1 zero-state declaration: no external vendors). **Outstanding** —
-   candidate for separate `TASK-BE-*` (project-internal, sibling pattern =
-   `outbound-service/external-integrations.md` reverse — declare zero vendor
-   surface).
-9. ⚠️ Error codes in `platform/error-handling.md` — **5 of 6 registered**:
+8. ✅ [`external-integrations.md`](external-integrations.md) — per
+   `integration-heavy` Required Artifact 1. v1 zero-state declaration (no
+   direct external vendors; sibling services absorb all external traffic).
+   Authored in TASK-BE-156 (2026-05-14), sibling reference pattern =
+   `outbound-service/external-integrations.md` reverse.
+9. ✅ Error codes in `platform/error-handling.md` — **6 of 6 registered**:
    `RESERVATION_NOT_FOUND` (404), `RESERVATION_QUANTITY_MISMATCH` (422),
-   `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_EXPIRED` (422).
-   **`LOT_INACTIVE` outstanding** — candidate for separate `TASK-MONO-*`
-   (shared path `platform/error-handling.md`, 1-line addition mirroring
-   `SKU_INACTIVE` / `LOCATION_INACTIVE` row pattern).
-10. ❌ Gateway route for `inventory-service` in `gateway-service`. **Outstanding
-    — and a portfolio-wide gap, not inventory-specific**: as of 2026-05-14,
-    `gateway-service/src/main/resources/application.yml` only routes
-    `master-service` (`/api/v1/master/**`). Inbound / Outbound / Inventory /
-    Notification / Admin services are not exposed via the Spring Cloud Gateway.
-    Whether this is intentional (services accessed directly via Traefik
-    hostname routing per TASK-MONO-024, bypassing Spring Cloud Gateway) or a
-    routing-config gap should be resolved in a separate audit
-    (`TASK-MONO-*` candidate) before adding individual routes here.
+   `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_INACTIVE` (422),
+   `LOT_EXPIRED` (422). `LOT_INACTIVE` backfilled in TASK-MONO-087 (commit
+   `58a344d3`, 2026-05-14), mirroring `SKU_INACTIVE` / `LOCATION_INACTIVE`
+   row pattern at `platform/error-handling.md` line 158.
+10. ✅ Gateway route for `inventory-service` in `gateway-service` —
+    backfilled in TASK-BE-153 (commit `7e14a218`, 2026-05-14, PR #496).
+    `gateway-service/application.yml` now routes inbound / inventory /
+    outbound / admin (`notification-service` is event-consumer with no
+    REST surface — intentional exclusion per `PROJECT.md` Service Map).
+    Historical fact: before BE-153, the gateway only routed
+    `master-service` (`/api/v1/master/**`) — a portfolio-wide gap that
+    BE-152 audit surfaced and BE-153 closed (wms-only; ecommerce / fan /
+    gap were already routing all services correctly).
 
 ---
 

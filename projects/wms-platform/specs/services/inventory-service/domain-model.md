@@ -690,11 +690,11 @@ profile `dev` or `standalone`.
   participation detail (authored in TASK-BE-151, 2026-05-14)
 - ✅ [`idempotency.md`](idempotency.md) — REST + event dedupe strategy
   (authored in BE-030 era)
-- ⚠️ `platform/error-handling.md` — **5 of 6 referenced codes registered**:
+- ✅ `platform/error-handling.md` — **6 of 6 referenced codes registered**:
   `RESERVATION_NOT_FOUND` (404), `RESERVATION_QUANTITY_MISMATCH` (422),
-  `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_EXPIRED` (422).
-  **`LOT_INACTIVE` outstanding** — separate `TASK-MONO-*` candidate (shared
-  path, 1-line addition mirroring `SKU_INACTIVE` / `LOCATION_INACTIVE` row).
+  `LOCATION_INACTIVE` (422), `SKU_INACTIVE` (422), `LOT_INACTIVE` (422),
+  `LOT_EXPIRED` (422). `LOT_INACTIVE` backfilled in TASK-MONO-087 (commit
+  `58a344d3`, 2026-05-14) at `platform/error-handling.md` line 158.
   `TRANSFER_CROSS_WAREHOUSE` intentionally not registered — folded into
   generic `VALIDATION_ERROR` per the original deferral note; v1 simplification
   per § 5 StockTransfer invariants.
