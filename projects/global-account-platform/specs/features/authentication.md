@@ -37,7 +37,7 @@
 ### 로그아웃
 
 1. 사용자가 `POST /api/auth/logout` 에 refresh token 전송 (access token으로 인증)
-2. auth-service가 해당 refresh token을 블랙리스트에 등록 (`refresh:blacklist:{jti}`)
+2. auth-service가 해당 refresh token을 블랙리스트에 등록 (`refresh:blacklist:{tenant_id}:{jti}`)
 3. `session.revoked` 이벤트 발행
 
 ## Business Rules

@@ -34,7 +34,7 @@ IP / 서브넷 기반. 모든 공개 엔드포인트에 적용.
 
 이메일별 연속 실패 추적. Layer 1이 IP 기반이라 우회 가능한 distributed attack에 대한 보완.
 
-| Key | `login:fail:{email_hash}` |
+| Key | `login:fail:{tenant_id}:{email_hash}` |
 |---|---|
 | Window | 15분 (TTL) |
 | Limit | 5회 연속 실패 |
