@@ -51,7 +51,7 @@ class PermissionEvaluatorImplUnitTest {
     }
 
     private AdminOperatorRoleJpaEntity roleBinding(Long op, Long role) {
-        return AdminOperatorRoleJpaEntity.create(op, role, Instant.now(), null);
+        return AdminOperatorRoleJpaEntity.create(op, role, Instant.now(), null, "fan-platform");
     }
 
     @Test

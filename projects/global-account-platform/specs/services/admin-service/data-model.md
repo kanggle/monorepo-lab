@@ -78,6 +78,9 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `role_id` | BIGINT | NOT NULL, FK → `admin_roles.id` ON DELETE RESTRICT | internal | role 삭제는 해당 role의 운영자 바인딩이 모두 제거된 뒤에만 허용 |
 | `granted_at` | DATETIME(6) | NOT NULL | internal | 역할 부여 시각 |
 | `granted_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 부여자 operator. seed 투입 시 NULL |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | **TASK-BE-249 (Flyway V0025)** — 역할 바인딩의 테넌트 스코프. **canonical 규칙: 바인딩된 operator(`operator_id` → `admin_operators.id`)의 `tenant_id` 값을 그대로 미러링한다.** SUPER_ADMIN(플랫폼 스코프) operator 의 바인딩은 sentinel `'*'`. 멀티테넌트 행 레벨 격리 + 감사 라우팅의 근거. 전체 테넌트 스코프 모델·sentinel·backfill 정책은 [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)가 canonical (`admin_operators.tenant_id` / `admin_actions.tenant_id`·`target_tenant_id` 포함) |
+
+> **Per-tenant 바인딩 불변식 (TASK-BE-289 WI-2)**: 모든 `admin_operator_roles` 행 생성 경로(`CreateOperatorUseCase`, `PatchOperatorRoleUseCase`)는 `tenant_id`를 대상 operator 의 `tenant_id`와 **반드시 일치**시켜야 한다. 하드코딩 기본값(`"fan-platform"`) 금지 — `PatchOperatorRoleUseCase`가 V0025 이전 레거시 4-arg 팩토리로 인해 이 불변식을 위반했던 회귀(TASK-BE-288 review Finding 1)가 V0026 backfill + 격리 회귀 테스트로 종결됨.
 
 **Primary Key**: (`operator_id`, `role_id`) 복합 PK
 **인덱스**:
