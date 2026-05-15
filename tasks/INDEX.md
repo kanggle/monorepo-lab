@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-103-adr-012a-corrections-claude-md-cleanup.md` — Tier B 묶음 (small ROI polish): (1) ADR-MONO-012a forward ADR 신설 (92 line) — ADR-MONO-012 본문 미터치 (option C-1 원칙), 3 corrections 별 ADR 으로 closure: § 1.1 "ecommerce 13" → 14 + § 1.4 "WMS-only" → cross-project + § D1 "required when dual" → always present. **option C-1 → forward-ADR promotion 첫 instance**. (2) CLAUDE.md cosmetic cleanup — Cross-Project Changes § Branch name constraint (L184) 1-paragraph → 4-bullet list + Recommending Tasks § 마지막 단락 (L215) 1-paragraph → 4-step numbered list. 의미 100% 보존, readability 만 개선. CLAUDE.md 215 → 225 lines (+10, bullet 확장). HARDSTOP catalog 11 hit 보존, fixture 23/23 PASS. production code / hook runtime / canonical sync / Hard Stop body = 0 변경. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## done
 

@@ -20,6 +20,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-010](ADR-MONO-010-e2e-tag-taxonomy.md) | E2E Test Tag Taxonomy (`smoke` / `full`) and Gradle / CI Job Split — Phase 2 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-011](ADR-MONO-011-nightly-full-e2e-cadence.md) | Nightly + Push-to-main Cadence for `@Tag("full")` E2E Suites — Phase 3 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-012](ADR-MONO-012-cross-project-architecture-md-canonical-form.md) | Cross-Project `architecture.md` Canonical Form — Identity-table + Service Type Composition (refactor-spec Tier 3 reconsider) | ACCEPTED | 2026-05-15 |
+| [ADR-MONO-012a](ADR-MONO-012a-cross-project-architecture-md-canonical-form-corrections.md) | ADR-MONO-012 forward correction — ecommerce 14 (not 13), hook cross-project (not WMS-only), Composition H3 always present (not dual-only). Option-C-1 → forward-ADR promotion (TASK-MONO-103). | ACCEPTED | 2026-05-15 |
 
 ---
 
