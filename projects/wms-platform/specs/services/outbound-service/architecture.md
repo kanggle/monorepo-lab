@@ -628,34 +628,42 @@ Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code
 
 ---
 
-## Open Items (Before First Implementation Task)
+## Open Items (Retrospective Backfill Audit)
 
-These must be completed before any `TASK-BE-*` targeting `outbound-service` is
-moved to `tasks/ready/`:
+> Originally framed as "Before First Implementation Task" prerequisites.
+> `outbound-service` has been in production since the BE-163 (database design)
+> and outbound-saga series. This list is now a **retrospective backfill
+> audit** — each item has a ✅ done / ⚠️ partial / ❌ outstanding status.
+> Outstanding items are candidates for a separate `TASK-BE-*`
+> (project-internal) or `TASK-MONO-*` (shared paths). Audit conducted in
+> TASK-BE-293 (2026-05-16).
 
-1. `specs/services/outbound-service/domain-model.md` — entities, fields,
-   relationships, invariants, state per entity (Order, OrderLine, PickingRequest,
-   PickingConfirmation, PackingUnit, Shipment, OutboundSaga)
-2. `specs/contracts/http/outbound-service-api.md` — REST endpoints
-3. `specs/contracts/webhooks/erp-order-webhook.md` — webhook contract
-4. `specs/contracts/events/outbound-events.md` — published event schemas
-5. `specs/services/outbound-service/idempotency.md` — REST + webhook + event
-   + saga-level
-6. `specs/services/outbound-service/external-integrations.md` — TMS + ERP
-   catalog (timeouts, circuit, retry, secrets)
-7. `specs/services/outbound-service/workflows/outbound-flow.md` — per
-   `rules/domains/wms.md` Required Artifact 4
-8. `specs/services/outbound-service/state-machines/order-status.md`
-9. `specs/services/outbound-service/state-machines/saga-status.md`
-10. `specs/services/outbound-service/sagas/outbound-saga.md` — saga document
-    per trait `transactional` Required Artifact 2
-11. Register new error codes in `platform/error-handling.md`:
-    `STATE_TRANSITION_INVALID` (already global), `WAREHOUSE_MISMATCH` (shared
-    with inbound), `PARTNER_INVALID_TYPE` (shared), `LOT_REQUIRED` (shared),
-    `EXTERNAL_SERVICE_UNAVAILABLE` (already global per integration-heavy),
-    `EXTERNAL_TIMEOUT` (already global)
-12. Add a gateway route for `outbound-service` (REST) and a separate HMAC-only
-    route for `/webhooks/erp/order` in `gateway-service`
+1. ✅ [`domain-model.md`](domain-model.md) — entities, fields, relationships,
+   invariants, state per entity (Order, OrderLine, PickingRequest,
+   PickingConfirmation, PackingUnit, Shipment, OutboundSaga).
+2. ✅ [`outbound-service-api.md`](../../contracts/http/outbound-service-api.md) — REST endpoints.
+3. ✅ [`erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md) — webhook contract.
+4. ✅ [`outbound-events.md`](../../contracts/events/outbound-events.md) — published event schemas.
+5. ✅ [`idempotency.md`](idempotency.md) — REST + webhook + event + saga-level.
+6. ✅ [`external-integrations.md`](external-integrations.md) — TMS + ERP
+   catalog (timeouts, circuit, retry, secrets).
+7. ✅ [`workflows/outbound-flow.md`](workflows/outbound-flow.md) — per
+   `rules/domains/wms.md` Required Artifact 4.
+8. ✅ [`state-machines/order-status.md`](state-machines/order-status.md).
+9. ✅ [`state-machines/saga-status.md`](state-machines/saga-status.md).
+10. ✅ [`sagas/outbound-saga.md`](sagas/outbound-saga.md) — saga document
+    per trait `transactional` Required Artifact 2.
+11. ⚠️ Error codes in [`platform/error-handling.md`](../../../../../platform/error-handling.md):
+    `STATE_TRANSITION_INVALID`, `WAREHOUSE_MISMATCH`, `PARTNER_INVALID_TYPE`,
+    `LOT_REQUIRED`, `EXTERNAL_SERVICE_UNAVAILABLE` are registered ✅, but
+    **`EXTERNAL_TIMEOUT` is NOT present** — the original "(already global)"
+    claim is stale. Outstanding: register `EXTERNAL_TIMEOUT` (shared
+    `platform/error-handling.md`) or confirm it is unused and drop the
+    reference — candidate for a separate `TASK-MONO-*` (shared path).
+12. ✅ Gateway route for `outbound-service` (`/api/v1/outbound/**`) + HMAC-only
+    `/webhooks/erp/order` present in
+    [`gateway-service/architecture.md`](../gateway-service/architecture.md)
+    route table (reconciled by TASK-BE-293 WI-1, same PR as this audit).
 
 ---
 

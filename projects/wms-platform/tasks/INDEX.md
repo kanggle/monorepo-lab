@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-293-wms-spec-drift-gateway-routes-openitems-idempotency.md` — 2026-05-15 audit reconcile 의 WMS genuine 3건: W9 (`gateway-service/architecture.md` route table 가 outbound + `/webhooks/erp/order` 누락, `overview.md` 와 내부 불일치; notification no-REST 는 정상) + W18 (master/outbound `architecture.md` "Open Items (Before First Impl)" 가 완료 파일을 미작성 prerequisite 로 서술 → `inventory-service` retrospective ✅/⚠️/❌ format 답습; inventory 는 STALE = reference) + W15 (master/inventory/inbound/outbound/admin Idempotency Redis key shape+cap drift, normalize vs document 결정; portfolio-wide 면 ADR; notification Postgres 는 scope 외). W2 (eventVersion) / W8 (9 dead-refs) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (W15 decision-bearing/ADR).
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-293-wms-spec-drift-gateway-routes-openitems-idempotency.md` — impl `task/spec-drift-cohort-2026-05-16` (spec-only, no `apps/`). **WI-1 (W9)**: `gateway-service/architecture.md` route 표에 `/api/v1/outbound/** → outbound-service` + HMAC-only `/webhooks/erp/order` 추가 (overview.md canonical 정합; outbound = `outbound-service-api.md` base `/api/v1/outbound` + `erp-order-webhook.md` 실재 → gateway-exposed 확정; `/webhooks/erp/asn` + notification no-REST note 보존). 비차단 관찰: 표의 per-service host port(8081-8086) vs overview.md `:8080` 선존 drift 는 W9 scope 외 (신규 row 는 overview.md canonical `:8080`). **WI-2 (W18)**: master(6 item, 전부 ✅) + outbound(12 item) `architecture.md` Open Items → `inventory-service` retrospective ✅/⚠️/❌ format 답습; "must be completed before" framing 제거; master:186 "to be authored" stale line 정정. **정직 마킹**: outbound #11 = ⚠️ (`EXTERNAL_TIMEOUT` platform/error-handling.md 미등록 — "already global" claim stale → 별도 TASK-MONO-* 후보), #12 = ✅ (WI-1 본 PR 해소). Glob 전수 검증, canonical Identity/H3 무손상(append/reframe only). **WI-3 (W15) 결정 = (B) document divergence (NOT normalize)**: master idempotency.md 에 단일 authoritative `## Cross-Service Idempotency Key Conventions` 섹션(5-svc shape/cap 비교표 + per-service rationale: master hashed-flat-64 = key-length safety, inventory/inbound/admin raw-128 = debuggability, outbound raw-255 = saga-flow accommodation) + inventory/inbound/admin/outbound idempotency.md 4 pointer. notification(Postgres event-dedupe) = out-of-set 명시. **ADR 불요** — (B) 는 새 convention 미설정·기존 의도적 상태 기록 (normalize 면 5-svc code change + portfolio convention → 미래 TASK-MONO-*+ADR, README/섹션에 deferred 명시). dead-ref 8-file 0, apps/ 0. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

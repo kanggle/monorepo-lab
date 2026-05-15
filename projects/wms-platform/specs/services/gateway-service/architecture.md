@@ -92,8 +92,10 @@ com.wms.gateway/
 | `/api/v1/master/**` | `master-service:8081` | required (any authenticated role) | standard (100 rpm/IP) |
 | `/api/v1/inventory/**` | `inventory-service:8083` | required (any authenticated role) | standard (100 rpm/IP) |
 | `/api/v1/inbound/**` | `inbound-service:8082` | required (any authenticated role) | standard (100 rpm/IP) |
+| `/api/v1/outbound/**` | `outbound-service:8080` | required (any authenticated role) | standard (100 rpm/IP) |
 | `/api/v1/admin/**` | `admin-service:8086` | required (`WMS_VIEWER` minimum for read paths; finer authz at downstream) | admin tier (60 rpm/IP, separate key resolver) |
 | `/webhooks/erp/asn` | `inbound-service:8082` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
+| `/webhooks/erp/order` | `outbound-service:8080` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 

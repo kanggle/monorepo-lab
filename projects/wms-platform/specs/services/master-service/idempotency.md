@@ -106,6 +106,41 @@ T1. No renewal on read — original TTL stands.
 
 ---
 
+## Cross-Service Idempotency Key Conventions (Intentional Divergence)
+
+> **This section is the single authoritative reference for the WMS
+> request-idempotency key shape / cap divergence.** Reconciled by
+> TASK-BE-293 WI-3, decision **(B) document the divergence as intentional**
+> (NOT normalize). The other request-idempotency services point here.
+
+WMS request-idempotency (mutating REST endpoints) uses **two deliberate key
+families**, plus one out-of-set mechanism:
+
+| Service | Redis key shape | Raw-key cap | Family / rationale |
+|---|---|---|---|
+| `master-service` | `master:idem:{SHA-256(idempotencyKey ‖ ":" ‖ method ‖ ":" ‖ path)}` | 64 chars | **Hashed-flat.** The SHA-256 hex (64 chars) bounds the Redis key length deterministically regardless of input, obscures the raw `Idempotency-Key` from `KEYS` access, and flattens key shape (see § Storage). 64-char cap == hash width. |
+| `inventory-service` | `inventory:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | **Raw-appended.** Keeps the raw key visible in Redis for operability/debuggability; `path_hash` (SHA-256 prefix) keeps the prefix bounded. 128 = opaque-string bound. |
+| `inbound-service` | `inbound:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | Raw-appended (same family as inventory). |
+| `admin-service` | `admin:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | Raw-appended (same family as inventory). |
+| `outbound-service` | `outbound:idempotency:{method}:{path_hash}:{idempotency_key}` | **255 chars** | Raw-appended family, but a **larger cap** to accommodate longer composite keys originating from the saga / TMS-handover flow (outbound carries a saga-level idempotency layer on top of eventId dedupe — see `outbound-service/idempotency.md`). |
+| `notification-service` | _(out of set)_ Postgres `delivery_idempotency_key = sha256(eventId+channelId+recipient)` | — | **Not request idempotency.** It is event-consumer delivery dedupe (Postgres column, not a Redis request key). A fundamentally different mechanism and concern — explicitly **excluded** from this convention set. |
+
+**Why (B) document rather than (A) normalize.** The divergence is
+rationale-able, not accidental: the hashed-flat form (master) and the
+raw-appended forms (inventory/inbound/admin/outbound) are each a deliberate
+operability ↔ key-length-safety trade-off, and outbound's wider cap is a
+conscious saga-flow accommodation. Normalizing would force a behavioural
+change across five services' implementation code (out of this spec task's
+scope by mandate) and would set a WMS-/portfolio-wide idempotency-key
+convention — that is **ADR governance territory**, not a unilateral
+per-task decision. No ADR is raised here because (B) sets **no new
+convention**; it records the existing intentional state. If the portfolio
+later wants one canonical idempotency-key shape, that is a future
+`TASK-MONO-*` + ADR (with a paired downstream code-conformance task), not
+this spec reconciliation.
+
+---
+
 ## Request Hashing
 
 - **Canonicalize** the JSON body before hashing: sort keys alphabetically at every
