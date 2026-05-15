@@ -204,7 +204,7 @@ presentation → application → domain
 - **HTTP 컨트랙트 (내부)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
 - **퍼시스턴스**: MySQL — `credentials`, `refresh_tokens`, `social_identities`, `outbox_events`, `processed_events` (idempotency). 모두 `tenant_id` NOT NULL. `credentials.email`은 `(tenant_id, email)` unique
-- **Redis**: `login:fail:{tenant_id}:{email}` 카운터 (`rules/traits/transactional.md` T1), `refresh:blacklist:{tenant_id}:{jti}`, `jwks:cache` (서명 키는 테넌트 공통)
+- **Redis**: `login:fail:{tenant_id}:{email_hash}` 카운터 (`rules/traits/transactional.md` T1; `rules/traits/multi-tenant.md` M1 테넌트 prefix; `rules/traits/regulated.md` R4 — email 은 평문이 아닌 SHA256 해시. 정규 키 스키마는 [redis-keys.md](./redis-keys.md)), `refresh:blacklist:{tenant_id}:{jti}`, `jwks:cache` (서명 키는 테넌트 공통)
 
 ## Testing Expectations
 

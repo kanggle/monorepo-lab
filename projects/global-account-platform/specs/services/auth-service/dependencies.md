@@ -26,7 +26,7 @@
 
 상세 키 스키마는 [redis-keys.md](redis-keys.md).
 
-- `login:fail:{email_hash}` — 실패 카운터, TTL 15분
+- `login:fail:{tenant_id}:{email_hash}` — 실패 카운터, TTL 15분
 - `refresh:blacklist:{jti}` — 즉시 revoke된 토큰의 블랙리스트
 
 ## Messaging

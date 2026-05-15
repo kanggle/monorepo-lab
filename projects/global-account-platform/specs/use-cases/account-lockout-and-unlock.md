@@ -14,7 +14,7 @@
 ### Main Flow
 1. 사용자가 5번째 로그인 시도를 한다
 2. auth-service가 패스워드 검증에 실패한다
-3. Redis `login:fail:{email_hash}` 카운터가 5로 증가한다
+3. Redis `login:fail:{tenant_id}:{email_hash}` 카운터가 5로 증가한다
 4. auth-service가 임계치(5회) 초과를 감지한다
 5. 응답 429: `LOGIN_RATE_LIMITED` + `Retry-After: 900` (15분 TTL 잔여)
 6. `auth.login.failed` 이벤트 발행 (failCount=5)

@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-290-gap-spec-drift-redis-key-and-admin-web-sections.md` — 2026-05-15 audit reconcile 의 GAP genuine 2건: G7 (`auth-service/architecture.md:207` `login:fail:{tenant_id}:{email}` plaintext-email outlier → 4-spec consensus `login:fail:{email_hash}`, regulated/PII; `redis-keys.md` registry = spec SoT) + G19 (`admin-web/architecture.md` 누락 `## Integration Rules`+`## Change Rule` authoring, TASK-BE-275 partial 완성, ADR-MONO-012 canonical form 보존). G1 (service_types frontmatter) / G5 (architecture.md 3-up links — grep substring 오탐) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (spec drift; G7 registry-decision gate minor).
+(empty)
 
 ## in-progress
 
@@ -82,7 +82,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-290-gap-spec-drift-redis-key-and-admin-web-sections.md` — impl `task/be-290-gap-spec-drift` (spec-only, no `apps/`). **WI-1 (G7)**: decision gate 결과 = `rules/traits/multi-tenant.md` M1(강제, SoT layer 4 > service spec layer 7; Redis key `<tenant_id>:...` prefix) + live BE-229 code(`RedisLoginAttemptCounter.buildKey` = `login:fail:{tenant_id}:{email_hash}`, 해시) 가 4-spec 무-tenant `{email_hash}`(stale, pre-BE-229) 보다 우선 → canonical = `login:fail:{tenant_id}:{email_hash}`. registry(`redis-keys.md`) 먼저 갱신(패턴+예시+rationale+naming, 센티넬 `'*'` 비적용 명시) 후 `architecture.md`(평문 `{email}` outlier 제거)·`rate-limiting`·`overview`·`dependencies`·`use-cases` 전파. `grep login:fail specs/` 단일 shape·평문 `{email}` 0. **code-state gate: 코드가 이미 해시 형태 emit → live 평문-PII 노출 없음, spec-only closure 유효, code follow-up 불요**. **WI-2 (G19)**: admin-web/architecture.md 에 `## Integration Rules`+`## Change Rule` 추가 (admin-service sibling 구조 정합, frontend-app 정확 — DB/outbox/event "owns none" 명시, Change Rule = UI/contract-compat/bundle scope, DB 불변식 미단언). canonical ADR-MONO-012 form(`### Service Type Composition` H3 + Identity 표 + `## References` tail) 보존. dead-ref 7-file scan 0. **비차단 관찰**: (a) task Related Skills 가 `.claude/skills/{refactor-spec,validate-rules}/SKILL.md` 로 표기됐으나 실제는 `.claude/commands/*.md` (task #559 author drift, advisory); (b) `refresh:blacklist` 키 동일 multi-tenant drift (`architecture.md` `{tenant_id}:{jti}` vs `redis-keys.md` `{jti}`) — BE-290 scope(login:fail/G7) 외, 향후 task 후보. lifecycle = ready → in-progress → review. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

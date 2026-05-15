@@ -176,6 +176,15 @@ Access token 은 **절대 JavaScript 에서 접근 불가** (HttpOnly). 이는 `
 - `(console)/error.tsx` — 인증/권한 실패는 `/login` 으로 redirect
 - 401 → refresh 시도; 403 → "권한 없음" 페이지; 5xx → 재시도 가능한 에러 화면
 
+## Integration Rules
+
+`admin-web` 은 `frontend-app` 으로서 **백엔드 컨트랙트의 소비자**이며 자체 컨트랙트·영속 상태를 소유하지 않는다. 모든 백엔드 호출은 GAP `gateway-service` 라우팅 경계를 통과한다 (호스트네임 라우팅 + JWT `tenant_id` claim 검증은 gateway 가 1차 책임).
+
+- **HTTP 컨트랙트 (소비, 외부)**: [specs/contracts/http/admin-api.md](../../contracts/http/) — `account-service` 의 계정 검색/lock/unlock·감사 조회·로그인 이력·suspicious 조회 엔드포인트. `shared/api/admin-api.ts` 의 생성 타입 + zod 파서가 이 컨트랙트와 정합해야 하며 (`shared/api/admin-api.test.ts` contract test), admin-web 은 envelope 를 **소유하지 않는다** — 스키마는 소유 서비스 spec 선행 변경 후 admin-web 이 follow.
+- **HTTP 호출 (out-going, Next.js route handlers)**: `app/api/auth/{login,logout,refresh}/route.ts` BFF 핸들러가 `auth-service` 의 `/api/auth/{login,refresh,logout}` 를 호출하고 operator scope 를 검증한다 (admin-to-auth 프록시 경계; access/refresh token 은 HttpOnly 쿠키로만 왕복, JS 접근 불가).
+- **인증/세션**: GAP `auth-service` (OIDC Authorization Server, ADR-001) 에 의존. 401 수신 시 client → `/api/auth/refresh` 로 쿠키 회전 후 원 요청 재시도. role 은 서버에서 확정 (`layout.tsx`), 클라이언트 `RoleGuard` 는 UX 게이트일 뿐 보안 경계가 아님 (§ Boundary Rules).
+- **퍼시스턴스 / 이벤트 발행**: **없음** — `admin-web` 은 DB·outbox·도메인 이벤트를 소유하지 않는다. 모든 영속 상태와 감사 원장은 백엔드(`account-service` / `admin-service` / `security-service`)가 소유하며, admin-web 은 표현 계층에 한정된다.
+
 ## Testing Strategy
 
 - **Unit/Component**: Vitest + Testing Library — 모든 `features/<F>/components/*.tsx` 와 `hooks/*.ts`
@@ -190,6 +199,16 @@ Access token 은 **절대 JavaScript 에서 접근 불가** (HttpOnly). 이는 `
 - **구조화 로그**: 서버 컴포넌트 / route handler 는 `requestId` + `operatorId` 컨텍스트 포함 JSON 로그
 
 상세: [observability.md](observability.md)
+
+## Change Rule
+
+`admin-web` 은 컨트랙트·도메인 로직·영속 상태를 소유하지 않으므로, 본 Change Rule 은 DB/outbox 불변식이 아니라 **UI·소비 컨트랙트 호환성·번들 예산**을 규정한다.
+
+1. 소비하는 백엔드 컨트랙트([admin-api.md](../../contracts/http/) / [auth-api.md](../../contracts/http/)) 스키마 변경은 **소유 서비스 spec 선행** — admin-web 은 그 후 `shared/api/*.ts` 타입 + zod 파서 + contract test 를 동시 갱신하여 follow (admin-web 단독으로 컨트랙트를 바꾸지 않는다).
+2. 라우트·페이지·기능 폴더 구조 변경은 § Internal Structure Rule + § Allowed Dependencies (`app/ → features/ → shared/`, cross-feature 직접 참조 금지) 와 정합을 유지해야 한다 (Layered by Feature 위반 시 차단).
+3. 인증 흐름(HttpOnly 쿠키, refresh route, role 확정 위치) 변경은 [platform/service-types/frontend-app.md](../../../../../platform/service-types/frontend-app.md) 필수 요구 + `auth-service` 와의 호환성 확인 선행. access token 의 JS 접근 불가 불변식은 깨지 않는다.
+4. § Performance Budget 회귀를 동반하는 변경은 차단 — 번들 예산은 계약이며 CI (`next-bundle-analyzer`) 가 강제한다.
+5. 이 서비스는 **도메인 로직·영속 상태를 수용하지 않는다**. 백엔드 동작 변경이 필요하면 소유 서비스(`auth` / `account` / `security`) task 로 분리하고 admin-web 은 호출·표현만 유지한다 ([`admin-service/architecture.md`](../admin-service/architecture.md) § Change Rule 4 의 frontend 대응).
 
 ## References
 
