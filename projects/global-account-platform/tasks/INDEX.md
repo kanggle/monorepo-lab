@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-290-gap-spec-drift-redis-key-and-admin-web-sections.md` — 2026-05-15 audit reconcile 의 GAP genuine 2건: G7 (`auth-service/architecture.md:207` `login:fail:{tenant_id}:{email}` plaintext-email outlier → 4-spec consensus `login:fail:{email_hash}`, regulated/PII; `redis-keys.md` registry = spec SoT) + G19 (`admin-web/architecture.md` 누락 `## Integration Rules`+`## Change Rule` authoring, TASK-BE-275 partial 완성, ADR-MONO-012 canonical form 보존). G1 (service_types frontmatter) / G5 (architecture.md 3-up links — grep substring 오탐) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (spec drift; G7 registry-decision gate minor).
 
 ## in-progress
 

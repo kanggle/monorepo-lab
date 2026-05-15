@@ -75,6 +75,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-143 | product-service `ProductImageService` 의 `infrastructure.storage.StorageProperties` 직접 import 제거 — `domain/port/ProductImageBucketResolver` 추출 + `ProductImageRepository.saveAll` dead code 제거 (trivial bundling). 2026-05-15 dry-run finding A1 single-PR closure (B/C/D polish 는 DEFER). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — small refactor. | product-service | code, test, refactor |
+| TASK-BE-291 | 2026-05-15 audit reconcile — deprecated 인-트리 auth-service 잔재 flow cleanup (G6/E6). `features/user-management.md`·`authentication.md`·`use-cases/signup-and-login.md`·`user-profile-and-address.md` 가 retired auth-service 를 live actor 로 서술 (banner 있으나 body 미guard) → GAP delegation rewrite 또는 in-repo deprecation guard 패턴 재사용. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — spec prose alignment. | features/use-cases | adr |
+| TASK-BE-292 | 2026-05-15 audit reconcile — contracts hygiene (decision-bearing). E11 `contracts/schemas/` empty-promise vs 19 inline envelope dup (11 HTTP + 8 event) → hoist vs accept+remove-promise (portfolio-wide convention 이면 ADR escalate) + E22 unanchored wishlist (`wishlist-api.md` 만 존재) → anchor feature/use-case vs retire. semantically inert, spec-only. 분석=Opus 4.7 / 구현 권장=Opus 4.7 — decision + 잠재 ADR. | contracts/schemas, wishlist | api, event, adr |
 
 ## in-progress
 

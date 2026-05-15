@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — fan-platform v1 backend + frontend bootstrap 완성)
+- `TASK-FAN-BE-007-e2e-path-and-oauth-client-name-drift.md` — 2026-05-15 audit reconcile 의 fan genuine 2건: F16 (`specs/integration/v1-e2e-scenarios.md` `/api/v1/artist/artists` off-by-one extra segment → `artist-api.md`+`gateway-service/architecture.md` canonical `/api/v1/artists`; grep all `/api/v1/artist/`) + F21 (`fan-platform-web/architecture.md:150` `fan-platform-realm-internal-services-client` → GAP V0011 seed canonical `fan-platform-internal-services-client`). spec-only, GAP V0011 read-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical string/path fix).
 
 ## in-progress
 
