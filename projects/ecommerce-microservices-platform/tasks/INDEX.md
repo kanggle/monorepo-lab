@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-143 | product-service `ProductImageService` 의 `infrastructure.storage.StorageProperties` 직접 import 제거 — `domain/port/ProductImageBucketResolver` 추출 + `ProductImageRepository.saveAll` dead code 제거 (trivial bundling). 2026-05-15 dry-run finding A1 single-PR closure (B/C/D polish 는 DEFER). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — small refactor. | product-service | code, test, refactor |
-| TASK-BE-291 | 2026-05-15 audit reconcile — deprecated 인-트리 auth-service 잔재 flow cleanup (G6/E6). `features/user-management.md`·`authentication.md`·`use-cases/signup-and-login.md`·`user-profile-and-address.md` 가 retired auth-service 를 live actor 로 서술 (banner 있으나 body 미guard) → GAP delegation rewrite 또는 in-repo deprecation guard 패턴 재사용. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — spec prose alignment. | features/use-cases | adr |
 | TASK-BE-292 | 2026-05-15 audit reconcile — contracts hygiene (decision-bearing). E11 `contracts/schemas/` empty-promise vs 19 inline envelope dup (11 HTTP + 8 event) → hoist vs accept+remove-promise (portfolio-wide convention 이면 ADR escalate) + E22 unanchored wishlist (`wishlist-api.md` 만 존재) → anchor feature/use-case vs retire. semantically inert, spec-only. 분석=Opus 4.7 / 구현 권장=Opus 4.7 — decision + 잠재 ADR. | contracts/schemas, wishlist | api, event, adr |
 
 ## in-progress
@@ -86,6 +85,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-291 | impl `task/spec-drift-cohort-2026-05-16` (spec-only, no `apps/`). G6/E6 deprecated in-tree auth-service 잔재 reconcile. **rewrite-to-GAP** (live feature): `features/user-management.md` Profile-Creation/Withdrawal flow + Business Rule + Related Events 표 → GAP `AccountSignedUp` 발행/credential-invalidation GAP-internal (L12 guard 와 정합) · `use-cases/user-profile-and-address.md:200` → GAP 세션 무효화 · `services/user-service/overview.md:46-47` → GAP owner. **guard** (historical): `features/authentication.md` body steps + Related Events 표 strikethrough (자체 L6-18 배너와 정합, Failure Scenario 표 미guard 회피) · `use-cases/signup-and-login.md` Korean deprecation 배너(authentication.md 미러) + actor 토큰 strike · `services/batch-worker/overview.md:21` REMOVED guard · `user-service/overview.md:66` 동파일 L21/70 형식 정합 guard(내부 일관성). AC grep(features/use-cases/overview) unguarded current-actor=0, dead-ref 6-file 0, apps/ 0. Edge Case(consumer behavior 보존·언어 유지) 준수. 분석=Opus 4.7 / 구현=Opus 4.7. | features/use-cases | adr |
 
 ## done
 
