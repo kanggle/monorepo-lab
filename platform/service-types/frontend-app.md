@@ -18,7 +18,7 @@ Typical frontend surfaces include a customer-facing storefront/portal and an int
 
 ## Architecture Pattern
 - Every `frontend-app` MUST declare its architecture style (`Feature-Sliced Design` or `Layered by Feature`) in `architecture.md`
-- Implementation MUST follow the matching skill (`frontend/architecture/feature-sliced-design.md` or `frontend/architecture/layered-by-feature.md`)
+- Implementation MUST follow the matching skill ([`feature-sliced-design`](../../.claude/skills/frontend/architecture/feature-sliced-design/SKILL.md) or [`layered-by-feature`](../../.claude/skills/frontend/architecture/layered-by-feature/SKILL.md))
 
 ## API Consumption
 - All backend calls go through a typed API client under `shared/api/`

@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-105-platform-doc-consistency-bundle.md` — 2026-05-15 portfolio spec-drift audit reconcile 의 monorepo-level genuine 잔존 3건: P13 (`platform/service-types/frontend-app.md` 2 broken skill links → `/SKILL.md`) + P14 (`api-gateway-policy.md` ↔ `error-handling.md` 6 error-code 중복 dedup, error-handling.md = SoT) + P23 (`jwt-standard-claims.md` `entrypoint.md` 미인덱스 + heading style; "double-orphan" 은 false 라 scope 외). spec-only, HARDSTOP-03 guard. 9 stale finding (BE-144/151/156·SCM-BE-010·ADR-001·ADR-MONO-012 D3 closure) reconcile 제외. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical shared-doc consistency).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-105-platform-doc-consistency-bundle.md` — impl `task/spec-drift-cohort-2026-05-16` (shared `platform/` docs-only, no `projects/` impact). **WI-1 (P13)**: `platform/service-types/frontend-app.md:21` 의 bare `frontend/architecture/{feature-sliced-design,layered-by-feature}.md` → 실재 `../../.claude/skills/frontend/architecture/<skill>/SKILL.md` markdown 링크 (both resolve, bare form 0). **WI-2 (P14)**: `api-gateway-policy.md` 6-code 중복 표 제거 → `error-handling.md`(canonical SoT, TASK-MONO-051/052) 포인터 + gateway-specific nuance(CIRCUIT_OPEN 503 shed vs DOWNSTREAM_ERROR 502 tried-and-failed) prose 보존; 6 code 정의 site = error-handling.md 단일. **WI-3 (P23)**: `entrypoint.md` Auxiliary `api` row 에 `contracts/jwt-standard-claims.md` 인덱스 추가. heading style: `platform/contracts/` 에 sibling 파일 부재 → 비교 대상 없음, **no-change 기록**(Edge Case; 임의 restyle = new decision 회피). dead-ref 3-file 0, HARDSTOP-03 clean(project-specific token 0), `projects/` diff 0. **shared 영역 변경 — push 후 draft PR 여부 사용자 확인 필요(feedback_pr_on_request)**. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

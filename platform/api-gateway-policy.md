@@ -125,16 +125,20 @@ Gateway-level errors (before reaching a service) follow the platform error respo
 }
 ```
 
-Common gateway-level errors:
+Common gateway-level errors: the gateway emits `UNAUTHORIZED`, `FORBIDDEN`,
+`RATE_LIMIT_EXCEEDED`, `SERVICE_UNAVAILABLE`, `CIRCUIT_OPEN`, and
+`DOWNSTREAM_ERROR`. **Code value, HTTP status, and canonical semantics are
+defined once in [`error-handling.md`](error-handling.md)** (§ Authentication /
+Authorization / Rate Limiting / General — the single platform error-code
+catalog, per TASK-MONO-051/052); they are intentionally not re-tabulated here
+to prevent definition drift.
 
-| Code | HTTP | When |
-|---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid JWT |
-| `FORBIDDEN` | 403 | Valid JWT but lacks required role for route |
-| `RATE_LIMIT_EXCEEDED` | 429 | Rate limit hit |
-| `SERVICE_UNAVAILABLE` | 503 | Downstream service unreachable |
-| `CIRCUIT_OPEN` | 503 | Circuit breaker open on downstream |
-| `DOWNSTREAM_ERROR` | 502 | Downstream returned 5xx / timed out after retries |
+Gateway-specific behavioral nuance (not a code redefinition): `CIRCUIT_OPEN`
+(503) is emitted when the downstream Resilience4j breaker is OPEN — the call
+is shed without reaching the dependency — and is deliberately distinct from
+`DOWNSTREAM_ERROR` (502), where the gateway did reach the downstream and it
+returned 5xx / timed out after retries. Dashboards rely on this split to
+separate "we shed load" from "we tried and it failed".
 
 ---
 

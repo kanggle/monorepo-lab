@@ -68,7 +68,7 @@ Reading more than one service-type spec for a single task is forbidden — pick 
 
 | Tag | Specs to Read |
 |---|---|
-| `api` | `api-gateway-policy.md`, `versioning-policy.md`, `error-handling.md` |
+| `api` | `api-gateway-policy.md`, `versioning-policy.md`, `error-handling.md`, `contracts/jwt-standard-claims.md` |
 | `event` | `event-driven-policy.md` |
 | `deploy` | `deployment-policy.md`, `observability.md` |
 | `code` | `naming-conventions.md`, `coding-rules.md`, `testing-strategy.md` |

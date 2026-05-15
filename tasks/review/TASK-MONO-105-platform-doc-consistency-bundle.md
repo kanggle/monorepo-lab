@@ -8,7 +8,7 @@ Platform doc consistency bundle — service-type broken skill links (P13) + api-
 
 # Status
 
-ready
+review
 
 # Task Tags
 
