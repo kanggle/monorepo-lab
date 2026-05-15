@@ -20,7 +20,6 @@ import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.domain.token.TokenReuseDetector;
-import com.example.auth.infrastructure.redis.RedisTokenBlacklist;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -92,7 +91,7 @@ public class RefreshTokenUseCase {
         }
 
         // Check blacklist (tenant-aware key, fail-closed: if Redis is down, deny refresh)
-        if (isBlacklisted(dbTenantId, jti)) {
+        if (tokenBlacklist.isBlacklisted(dbTenantId, jti)) {
             throw new SessionRevokedException();
         }
 
@@ -133,7 +132,7 @@ public class RefreshTokenUseCase {
         }
 
         // Build tenant context from the DB row (authoritative)
-        String tenantType = resolveTenantType(dbTenantId);
+        String tenantType = TenantContext.resolveTenantType(dbTenantId);
         TenantContext tenantContext = new TenantContext(dbTenantId, tenantType);
 
         TokenPair newTokenPair = tokenGeneratorPort.generateTokenPair(accountId, "user", deviceId,
@@ -155,7 +154,7 @@ public class RefreshTokenUseCase {
         // Blacklist the old refresh token (tenant-aware key)
         long remainingTtl = existingToken.getExpiresAt().getEpochSecond() - now.getEpochSecond();
         if (remainingTtl > 0) {
-            blacklist(dbTenantId, jti, remainingTtl);
+            tokenBlacklist.blacklist(dbTenantId, jti, remainingTtl);
         }
 
         // Publish event with tenantId
@@ -166,38 +165,6 @@ public class RefreshTokenUseCase {
                 newTokenPair.refreshToken(),
                 newTokenPair.expiresIn()
         );
-    }
-
-    /**
-     * Resolves the tenant type for a given tenantId.
-     */
-    private String resolveTenantType(String tenantId) {
-        if ("fan-platform".equals(tenantId)) {
-            return "B2C_CONSUMER";
-        }
-        return "B2B_ENTERPRISE";
-    }
-
-    /**
-     * Tenant-aware blacklist check. Falls through to legacy key when BlacklistAdapter
-     * supports the extended interface.
-     */
-    private boolean isBlacklisted(String tenantId, String jti) {
-        if (tokenBlacklist instanceof RedisTokenBlacklist tenantAware) {
-            return tenantAware.isBlacklisted(tenantId, jti);
-        }
-        return tokenBlacklist.isBlacklisted(jti);
-    }
-
-    /**
-     * Tenant-aware blacklist write.
-     */
-    private void blacklist(String tenantId, String jti, long ttlSeconds) {
-        if (tokenBlacklist instanceof RedisTokenBlacklist tenantAware) {
-            tenantAware.blacklist(tenantId, jti, ttlSeconds);
-        } else {
-            tokenBlacklist.blacklist(jti, ttlSeconds);
-        }
     }
 
     /**

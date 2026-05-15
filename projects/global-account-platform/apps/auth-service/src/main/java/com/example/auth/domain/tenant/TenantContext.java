@@ -33,4 +33,20 @@ public record TenantContext(String tenantId, String tenantType) {
     public static TenantContext defaultContext() {
         return new TenantContext(DEFAULT_TENANT_ID, DEFAULT_TENANT_TYPE);
     }
+
+    /**
+     * Resolves the tenant type string for a given tenantId.
+     * Currently a simple default mapping; in production this would be fetched
+     * from tenant metadata in account-service.
+     *
+     * <p>TODO: fetch from account-service tenant metadata when available
+     * (TASK-BE-231 provisioning). For now: "fan-platform" is B2C_CONSUMER,
+     * everything else defaults to B2B_ENTERPRISE.
+     */
+    public static String resolveTenantType(String tenantId) {
+        if (DEFAULT_TENANT_ID.equals(tenantId)) {
+            return DEFAULT_TENANT_TYPE;
+        }
+        return "B2B_ENTERPRISE";
+    }
 }

@@ -20,7 +20,6 @@ import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
-import com.example.auth.infrastructure.redis.RedisLoginAttemptCounter;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +63,7 @@ public class LoginUseCase {
                 : TenantContext.DEFAULT_TENANT_ID;
 
         // Check rate limit using tenant-aware key (TASK-BE-229).
-        int failCount = getFailureCount(tenantIdForRateLimit, emailHash);
+        int failCount = loginAttemptCounter.getFailureCount(tenantIdForRateLimit, emailHash);
         if (failCount >= maxFailureCount) {
             authEventPublisher.publishLoginAttempted(null, emailHash, tenantIdForRateLimit, ctx);
             authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
@@ -136,7 +135,7 @@ public class LoginUseCase {
         // Build tenant context for token issuance — tenantType is embedded in the credential.
         // Currently credentials don't carry tenantType so we use the default mapping.
         // TODO: when account-service exposes tenantType in credential lookup, use that value.
-        String tenantType = resolveTenantType(resolvedTenantId);
+        String tenantType = TenantContext.resolveTenantType(resolvedTenantId);
         TenantContext tenantContext = new TenantContext(resolvedTenantId, tenantType);
 
         // Login success — register/touch the device_session BEFORE issuing tokens so the
@@ -162,7 +161,7 @@ public class LoginUseCase {
         refreshTokenRepository.save(refreshTokenEntity);
 
         // Reset failure counter (tenant-aware key)
-        resetFailureCount(resolvedTenantId, emailHash);
+        loginAttemptCounter.resetFailureCount(resolvedTenantId, emailHash);
 
         // Publish success events
         authEventPublisher.publishLoginSucceeded(accountId, refreshJti, resolvedTenantId,
@@ -179,52 +178,6 @@ public class LoginUseCase {
         }
 
         return LoginResult.of(tokenPair.accessToken(), tokenPair.refreshToken(), tokenPair.expiresIn());
-    }
-
-    /**
-     * Resolves the tenant type string for a given tenantId.
-     * Currently uses a simple default mapping; in production this would be fetched
-     * from tenant metadata in account-service.
-     */
-    private String resolveTenantType(String tenantId) {
-        // TODO: fetch from account-service tenant metadata when available (TASK-BE-231 provisioning)
-        // For now: "fan-platform" is B2C_CONSUMER, everything else defaults to B2B_ENTERPRISE
-        if ("fan-platform".equals(tenantId)) {
-            return "B2C_CONSUMER";
-        }
-        return "B2B_ENTERPRISE";
-    }
-
-    /**
-     * Gets the failure count using the tenant-aware counter if available, otherwise falls back.
-     */
-    private int getFailureCount(String tenantId, String emailHash) {
-        if (loginAttemptCounter instanceof RedisLoginAttemptCounter tenantAwareCounter) {
-            return tenantAwareCounter.getFailureCount(tenantId, emailHash);
-        }
-        return loginAttemptCounter.getFailureCount(emailHash);
-    }
-
-    /**
-     * Resets the failure count using the tenant-aware counter if available, otherwise falls back.
-     */
-    private void resetFailureCount(String tenantId, String emailHash) {
-        if (loginAttemptCounter instanceof RedisLoginAttemptCounter tenantAwareCounter) {
-            tenantAwareCounter.resetFailureCount(tenantId, emailHash);
-        } else {
-            loginAttemptCounter.resetFailureCount(emailHash);
-        }
-    }
-
-    /**
-     * Increments failure count using tenant-aware counter if available.
-     */
-    private void incrementFailureCount(String tenantId, String emailHash) {
-        if (loginAttemptCounter instanceof RedisLoginAttemptCounter tenantAwareCounter) {
-            tenantAwareCounter.incrementFailureCount(tenantId, emailHash);
-        } else {
-            loginAttemptCounter.incrementFailureCount(emailHash);
-        }
     }
 
     /**
@@ -249,8 +202,8 @@ public class LoginUseCase {
      */
     private void recordCredentialFailureAndThrow(String accountId, String emailHash,
                                                    String tenantId, SessionContext ctx) {
-        incrementFailureCount(tenantId, emailHash);
-        int newCount = getFailureCount(tenantId, emailHash);
+        loginAttemptCounter.incrementFailureCount(tenantId, emailHash);
+        int newCount = loginAttemptCounter.getFailureCount(tenantId, emailHash);
         authEventPublisher.publishLoginFailed(accountId, emailHash, tenantId,
                 "CREDENTIALS_INVALID", newCount, ctx);
         throw new CredentialsInvalidException();

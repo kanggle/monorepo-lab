@@ -11,7 +11,6 @@ import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
-import com.example.auth.infrastructure.redis.RedisTokenBlacklist;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,7 +59,7 @@ public class LogoutUseCase {
 
         long remainingTtl = token.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond();
         if (remainingTtl > 0) {
-            blacklist(tenantId, jti, remainingTtl);
+            tokenBlacklist.blacklist(tenantId, jti, remainingTtl);
         }
         token.revoke();
         refreshTokenRepository.save(token);
@@ -105,13 +104,5 @@ public class LogoutUseCase {
                 ACTOR_TYPE_USER,
                 accountId
         );
-    }
-
-    private void blacklist(String tenantId, String jti, long ttlSeconds) {
-        if (tokenBlacklist instanceof RedisTokenBlacklist tenantAware) {
-            tenantAware.blacklist(tenantId, jti, ttlSeconds);
-        } else {
-            tokenBlacklist.blacklist(jti, ttlSeconds);
-        }
     }
 }
