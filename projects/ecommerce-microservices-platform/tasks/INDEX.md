@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-143 | product-service `ProductImageService` 의 `infrastructure.storage.StorageProperties` 직접 import 제거 — `domain/port/ProductImageBucketResolver` 추출 + `ProductImageRepository.saveAll` dead code 제거 (trivial bundling). 2026-05-15 dry-run finding A1 single-PR closure (B/C/D polish 는 DEFER). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — small refactor. | product-service | code, test, refactor |
-| TASK-BE-292 | 2026-05-15 audit reconcile — contracts hygiene (decision-bearing). E11 `contracts/schemas/` empty-promise vs 19 inline envelope dup (11 HTTP + 8 event) → hoist vs accept+remove-promise (portfolio-wide convention 이면 ADR escalate) + E22 unanchored wishlist (`wishlist-api.md` 만 존재) → anchor feature/use-case vs retire. semantically inert, spec-only. 분석=Opus 4.7 / 구현 권장=Opus 4.7 — decision + 잠재 ADR. | contracts/schemas, wishlist | api, event, adr |
 
 ## in-progress
 
@@ -85,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-292 | impl `task/spec-drift-cohort-2026-05-16` (spec-only, no `apps/`, decision-bearing). **WI-1 (E11) 결정 = (B) accept-inline + remove false promise**: 근거 = 5개 portfolio 프로젝트 0/5 가 shared-schema 미이행 (GAP `.gitkeep` placeholder, wms/scm/fan `schemas/` 부재) → de-facto 관행 = inline-per-contract. `schemas/README.md` 를 "intentionally unused / inline-by-choice" 로 rewrite (19 inline copy 무변경, envelope field diff 0 = semantically inert). **ADR 불요** — (B) 는 새 portfolio convention 미설정·기존 현실 비준 (shared-schema model 채택 시에만 ADR 필요 → README 에 명시 deferred). **WI-2 (E22) 결정 = (A) Anchor**: wishlist 실재 (`user-service/architecture.md` Domain Scope + `dependencies.md` `wishlist_items` 테이블 + product-service enrich + 4-endpoint 완전 계약) → Edge Case "real but lacks feature/use-case → (A)". `specs/features/wishlist-management.md` (English, user-management.md 구조) + `specs/use-cases/wishlist.md` (Korean, user-profile-and-address.md 구조 4 UC) authoring + `wishlist-api.md` Overview 에 upstream traceability (envelope 무변경). (B) retire 면 user-service live 모델과 모순 (Failure Scenario). dead-ref 4-file 0, apps/ 0. 분석=Opus 4.7 / 구현=Opus 4.7. | contracts/schemas, wishlist | api, event, adr |
 
 ## done
 

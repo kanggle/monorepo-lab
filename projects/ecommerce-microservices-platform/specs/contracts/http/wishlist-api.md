@@ -4,6 +4,11 @@
 Published HTTP API for wishlist management within user-service.
 All endpoints require authentication via `X-User-Id` header (set by gateway-service after token validation).
 
+**Upstream requirement traceability**: feature
+[`specs/features/wishlist-management.md`](../../features/wishlist-management.md)
+· use-case [`specs/use-cases/wishlist.md`](../../use-cases/wishlist.md)
+(anchored by TASK-BE-292, E22 WI-2 option A).
+
 ---
 
 ## Base Path
