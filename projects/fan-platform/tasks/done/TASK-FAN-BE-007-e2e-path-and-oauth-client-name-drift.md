@@ -8,7 +8,7 @@ Fan-platform spec drift bundle — v1-e2e-scenarios.md artist path off-by-one (F
 
 # Status
 
-review
+done
 
 # Owner
 

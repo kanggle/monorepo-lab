@@ -8,7 +8,7 @@ SCM inventory-visibility-service architecture.md missing standard sections (S20)
 
 # Status
 
-review
+done
 
 # Owner
 

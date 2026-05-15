@@ -8,7 +8,7 @@ Ecommerce deprecated in-tree auth-service residual flow cleanup (G6 / E6) — fe
 
 # Status
 
-review
+done
 
 # Owner
 
