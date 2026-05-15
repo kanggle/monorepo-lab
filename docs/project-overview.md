@@ -15,7 +15,7 @@
 
 ---
 
-## 2. 5 프로젝트 카탈로그
+## 2. 프로젝트 카탈로그 (5 도메인 + platform-console)
 
 각 프로젝트는 [`projects/<name>/PROJECT.md`](../projects/) 에 `domain` + `traits` 를 선언하고, 그에 따라 [`rules/domains/`](../rules/domains/) + [`rules/traits/`](../rules/traits/) 의 규칙 layer 가 자동으로 활성화된다.
 
@@ -114,7 +114,20 @@
 
 - **v2 deferred**: `membership-service` (PG 통합), `notification-service` (FCM/APNs), `admin-service` (모더레이션)
 
-### 2.6 향후 도메인 (계획)
+### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 부트스트랩 🚧, 도메인 축 아님)
+
+- **domain**: `saas` · **traits**: `multi-tenant`, `integration-heavy`, `audit-heavy` · **service_types**: `frontend-app`
+- **포지션**: 포트폴리오 엔터프라이즈 스위트(gap·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
+- **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔이 GAP 운영자 parity 검증 후 Phase 3 폐기 → GAP 백엔드-only IdP 회귀.
+- **상태**: Phase 1 부트스트랩 (TASK-MONO-108) — `console-web` 부트 가능 skeleton + PROJECT.md/specs/contract/first task. SSO·data-driven 카탈로그·도메인 화면은 TASK-PC-FE-001 (Phase 2). GAP 측 선행 = TASK-BE-296.
+- **service map**:
+
+| Service | Type | 책임 |
+|---|---|---|
+| `console-web` | frontend-app | 단일 콘솔 UI (GAP OIDC public client · data-driven 카탈로그 · 테넌트 스위처 · 도메인 운영 화면) |
+| `console-bff` | rest-api | 교차 도메인 집약 API (ADR-MONO-013 Phase 7, deferred) |
+
+### 2.7 향후 도메인 (계획)
 
 | Project | Domain | 상태 |
 |---|---|---|
