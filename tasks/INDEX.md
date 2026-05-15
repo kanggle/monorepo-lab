@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-102-hardstop-detect-crlf-lf-simulation-fix.md` — `hardstop-detect.ps1` Edit simulation 분기 (L271 `$existing.Contains($oldString)`) 에 CRLF/LF normalize fallback 추가 — 4-instance trigger (MONO-083 + MONO-093 + MONO-095 + MONO-101) closure. 기존 raw `Contains` 1단 → 2단 nested (raw → normalize retry). 정상 case behavior 0 변경, mismatch case 만 회복. 신규 fixture `hardstop-10-crlf-lf-simulation.ps1` 회귀 가드 (synth CRLF architecture.md + LF Edit + Service Type Composition H3 add → hook allow). run-all 7 → 8 fixture / 22 → 23 PASS. Round-trip 검증: stash hook fix → 새 fixture FAIL (HARDSTOP-10 false-positive 재현) → stash pop → PASS 복구. Production code / stanza body / canonical sync / 기존 fixture assertion shape = 0 변경. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## done
 
