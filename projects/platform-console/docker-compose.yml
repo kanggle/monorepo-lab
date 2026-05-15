@@ -1,0 +1,65 @@
+# =============================================================================
+# platform-console — Local Development Infrastructure
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C):
+#   console-web is reached via http://console.local/ — Traefik routes on Host
+#   header. No PORT_PREFIX, no host-port slot allocation.
+#
+# platform-console has NO backing services of its own (no DB / Redis / Kafka).
+# It is Model B (ADR-MONO-013 D1): a single Next.js UI that calls GAP OIDC +
+# the GAP product/tenant registry + per-domain gateway/admin APIs over the
+# shared traefik-net network. Those domains run from their own compose files.
+#
+# Prerequisites:
+#   1. Start the shared Traefik stack:  pnpm traefik:up
+#   2. Add `127.0.0.1 console.local` to your hosts file (one-time)
+#   3. The domains the console federates (gap/wms/scm) run from their own
+#      compose files; the console only needs them reachable for live screens.
+#
+# Usage:
+#   pnpm console:up     — start console-web
+#   pnpm console:down   — stop
+#   pnpm console:logs   — tail logs
+# =============================================================================
+
+services:
+  console-web:
+    image: platform-console/console-web:local
+    container_name: platform-console-web
+    build:
+      context: ./apps/console-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      # Next.js standalone server
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: ${NODE_ENV:-production}
+      # GAP OIDC public client (Auth Code + PKCE) — registered by TASK-BE-296.
+      # Phase-1 skeleton declares these; the real flow lands in TASK-PC-FE-001.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-platform-console-web}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://console.local/api/auth/callback}
+      # GAP product/tenant registry surface — console catalog source (TASK-BE-296)
+      CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://gap.local/internal/console/registry}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.platform-console.rule=Host(`console.local`)"
+      - "traefik.http.routers.platform-console.entrypoints=web"
+      - "traefik.http.services.platform-console.loadbalancer.server.port=3000"
+    networks:
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  traefik-net:
+    external: true
+    name: traefik-net

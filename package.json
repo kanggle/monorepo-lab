@@ -62,6 +62,15 @@
     "scm:down": "docker compose --project-directory projects/scm-platform down",
     "scm:ps": "docker compose --project-directory projects/scm-platform ps",
     "scm:logs": "docker compose --project-directory projects/scm-platform logs -f",
-    "scm:docker": "docker compose --project-directory projects/scm-platform"
+    "scm:docker": "docker compose --project-directory projects/scm-platform",
+    "console:install": "pnpm --dir projects/platform-console/apps/console-web install",
+    "console:dev": "pnpm --dir projects/platform-console/apps/console-web dev",
+    "console:build": "pnpm --dir projects/platform-console/apps/console-web build",
+    "console:lint": "pnpm --dir projects/platform-console/apps/console-web lint",
+    "console:up": "docker compose --project-directory projects/platform-console up -d",
+    "console:down": "docker compose --project-directory projects/platform-console down",
+    "console:ps": "docker compose --project-directory projects/platform-console ps",
+    "console:logs": "docker compose --project-directory projects/platform-console logs -f",
+    "console:docker": "docker compose --project-directory projects/platform-console"
   }
 }
