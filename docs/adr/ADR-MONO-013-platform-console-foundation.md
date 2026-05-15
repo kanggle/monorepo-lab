@@ -1,8 +1,8 @@
 # ADR-MONO-013 — platform-console Foundation: Single-UI Console Model, New-Project Placement, admin-web Parity-Gated Retirement, Cross-Project Integration Contract
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-16
-**History:** PROPOSED 2026-05-16 (TASK-MONO-107 — foundation criteria pre-authored from a converged design dialogue; this is the criteria/decision document, not the bootstrap authorisation).
+**History:** PROPOSED 2026-05-16 (TASK-MONO-107 — foundation criteria pre-authored from a converged design dialogue; PR #565). ACCEPTED 2026-05-16 (TASK-MONO-108 — user-explicit intent "ADR-013 ACCEPTED"; D7.1–D7.6 evaluated PASS; Phase 1 bootstrap authorised).
 **Decision driver:** A unified AWS/GCP-console-style operations surface over the portfolio's enterprise suite (gap · scm · wms + future erp · finance) was requested. The design dialogue converged on a single model (B — console *is* the UI), a placement (new `projects/platform-console/`), and a retirement path (GAP `admin-web` parity-gated removal). Per ADR-MONO-003a § D2.1, adding any new project under `projects/<name>/` resets the shared-library churn clock and shifts portfolio narrative scope — both decision points that require a fresh ADR. This is that fresh ADR for `platform-console`.
 **Supersedes:** none.
 **Related:** [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D2.1 (new project bootstrap requires fresh ADR — this ADR satisfies that for `platform-console`), [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) § 1.4 + § D3 (Template ↔ monorepo sync; new-project churn-clock context), [ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) (finance bootstrap — governs this ADR's Phase 5, NOT re-decided here), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) § D4 (project ordering parent), [global-account-platform PROJECT.md](../../projects/global-account-platform/PROJECT.md) (GAP service map — `admin-web` retirement is a GAP spec change), [docs/project-overview.md](../project-overview.md) § 2.6 (finance/erp 미생성 roadmap), [TEMPLATE.md](../../TEMPLATE.md) § Local Network Convention (`console.local` hostname), [`rules/taxonomy.md`](../../rules/taxonomy.md) (D3 domain/trait choices), memory [`project_portfolio_7axis_architecture`](../../../memory/project_portfolio_7axis_architecture.md), memory [`project_gap_idp_promotion`](../../../memory/project_gap_idp_promotion.md) (GAP = standard OIDC AS, the SSO backbone this console depends on).
@@ -67,15 +67,15 @@ Subsequent phases (D6) deliver the operator-parity MVP, the `admin-web` retireme
 
 **Decision: new project `projects/platform-console/`.** Consequence: GAP's PROJECT.md service map loses `admin-web` (D4); GAP becomes backend-only (IdP + service APIs).
 
-### D3 — Project classification (recommended; finalised at ACCEPTED)
+### D3 — Project classification (FINALISED at ACCEPTED 2026-05-16)
 
-Per `rules/taxonomy.md`:
+Per `rules/taxonomy.md` (verified: `saas` L179, `integration-heavy` L303, `multi-tenant` L313, `audit-heavy` L318; `frontend-app` service-type proven in production by GAP `admin-web`):
 
-- **Domain (recommended):** `saas` — horizontal, non-industry internal platform surface (same rationale GAP used for `saas`: an internal product-family shared layer, not an industry vertical).
-- **Trait stack (proposed):** `multi-tenant` (tenant/context switcher is core), `integration-heavy` (fans out to N gateway APIs with CB/retry/timeout), `audit-heavy` (operator actions — lock/unlock/force-logout — must be traceable; inherited from absorbing GAP's operator surface). `internal-system` evaluated at ACCEPTED (the console is operator-facing, not end-user).
-- **service_types:** `frontend-app` (the console UI) minimum; `rest-api` added when the console-bff (Phase 7) lands.
+- **Domain:** `saas` — horizontal, non-industry internal platform surface (same rationale GAP used for `saas`: an internal product-family shared layer, not an industry vertical).
+- **Traits:** `multi-tenant` (tenant/context switcher is core), `integration-heavy` (fans out to N gateway/admin APIs with CB/retry/timeout per `platform/` baselines), `audit-heavy` (absorbed GAP operator actions — lock/unlock/force-logout — must be traceable). `internal-system` considered but **NOT declared**: the console is operator-facing, but its hard constraints are fully captured by the three above; declaring it adds no distinct rule layer (`rules/README.md` on-demand minimalism).
+- **service_types:** `frontend-app` (the console UI) at v1; `rest-api` added when the console-bff (Phase 7) lands.
 
-Finalised at the ACCEPTED transition (D7.2), same pattern as ADR-MONO-008 § D2.
+`PROJECT.md` frontmatter at bootstrap (PR-B): `domain: saas` / `traits: [multi-tenant, integration-heavy, audit-heavy]` / `service_types: [frontend-app]`.
 
 ### D4 — GAP `admin-web` parity-gated retirement
 
@@ -188,9 +188,10 @@ Append-only.
 
 | Date | Transition | Classification | Phase reached | User intent quote | PR(s) |
 |---|---|---|---|---|---|
-| 2026-05-16 | created PROPOSED | TBD (D3) | Phase 0 (criteria pre-author) | n/a (design dialogue convergence, not bootstrap intent) | TBD (this PR) |
+| 2026-05-16 | created PROPOSED | n/a (D3 deferred) | Phase 0 (criteria pre-author) | n/a (design dialogue convergence) | #565 |
+| 2026-05-16 | PROPOSED → ACCEPTED | `saas` + [`multi-tenant`,`integration-heavy`,`audit-heavy`] + [`frontend-app`] | Phase 0 → Phase 1 (bootstrap authorised) | "ADR-013 ACCEPTED" | PR-A (this) / PR-B (bootstrap artifact) |
 
-(ACCEPTED row reserved — appended at bootstrap moment per § D8.3.)
+D7.1–D7.6 at ACCEPTED: D7.1 Model B + new-project re-confirmed · D7.2 D3 finalised vs `rules/taxonomy.md` (enums verified) · D7.3 BFF integration-contract spec scoped as PR-B first artifact (TASK-MONO-108 § Scope) · D7.4 GAP `admin-web` operator surface enumerated (accounts lock/unlock/bulk-lock/revoke-session/gdpr-delete/export · audit · dashboards · operators create/roles/status/password · security login-history/suspicious) → Phase 2 parity checklist · D7.5 intent "ADR-013 ACCEPTED" · D7.6 churn-clock reset acknowledged (ADR-MONO-003a § D2.1; reset occurs at PR-B `settings.gradle` change, not this doc PR).
 
 ## 7. Provenance
 
