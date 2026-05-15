@@ -105,7 +105,7 @@ public interface AdminOperatorPort {
     /**
      * Resolve the internal BIGINT id of an actor performing an action — used as
      * {@code granted_by} for new operator-role bindings. Equivalent to the
-     * legacy {@code OperatorRoleResolver.resolveActorInternalId}.
+     * legacy TASK-BE-121 {@code resolveActorInternalId} helper.
      *
      * @return internal id, or {@code null} when the operator UUID is null/blank
      *         or no admin_operators row matches.

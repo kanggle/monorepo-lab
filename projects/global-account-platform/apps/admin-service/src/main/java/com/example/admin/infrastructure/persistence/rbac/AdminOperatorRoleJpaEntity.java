@@ -40,15 +40,15 @@ public class AdminOperatorRoleJpaEntity {
     @Column(name = "tenant_id", length = 32, nullable = false)
     private String tenantId;
 
-    public static AdminOperatorRoleJpaEntity create(Long operatorId, Long roleId,
-                                                    Instant grantedAt, Long grantedBy) {
-        // Legacy call sites that predate TASK-BE-249 — tenantId resolved to 'fan-platform'.
-        return create(operatorId, roleId, grantedAt, grantedBy, "fan-platform");
-    }
-
     /**
-     * Preferred factory (TASK-BE-249). {@code tenantId} must match the operator's
-     * {@code tenant_id} row.
+     * Sole factory. {@code tenantId} MUST equal the bound operator's
+     * {@code admin_operators.tenant_id} (per-tenant binding invariant —
+     * data-model.md §admin_operator_roles; ADR-002).
+     *
+     * <p>TASK-BE-289 WI-2 removed the legacy 4-arg overload that silently
+     * defaulted {@code tenant_id} to {@code "fan-platform"} — that hidden
+     * default caused the TASK-BE-288 review Finding 1 regression. Callers must
+     * now pass the operator's tenant explicitly so the foot-gun cannot recur.
      */
     public static AdminOperatorRoleJpaEntity create(Long operatorId, Long roleId,
                                                     Instant grantedAt, Long grantedBy,

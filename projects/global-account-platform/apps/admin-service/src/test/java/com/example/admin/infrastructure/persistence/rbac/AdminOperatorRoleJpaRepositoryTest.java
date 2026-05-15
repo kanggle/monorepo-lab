@@ -71,8 +71,8 @@ class AdminOperatorRoleJpaRepositoryTest {
         Long roleA = insertRole("TEST_ROLE_A");
         Long roleB = insertRole("TEST_ROLE_B");
 
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleA, Instant.now(), null));
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleB, Instant.now(), null));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleA, Instant.now(), null, "fan-platform"));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleB, Instant.now(), null, "fan-platform"));
 
         List<AdminOperatorRoleJpaEntity> result = repo.findByOperatorId(opId);
 
@@ -101,8 +101,8 @@ class AdminOperatorRoleJpaRepositoryTest {
         Long opB = saveOperator("opB@example.com");
         Long role = insertRole("TEST_ROLE_C");
 
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null));
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null, "fan-platform"));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null, "fan-platform"));
 
         List<AdminOperatorRoleJpaEntity> result = repo.findByOperatorIdIn(List.of(opA, opB));
 
@@ -119,8 +119,8 @@ class AdminOperatorRoleJpaRepositoryTest {
         Long opB = saveOperator("opY@example.com");
         Long role = insertRole("TEST_ROLE_D");
 
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null));
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null, "fan-platform"));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null, "fan-platform"));
 
         List<AdminOperatorRoleJpaEntity> result = repo.findByOperatorIdIn(List.of(opA));
 
@@ -137,8 +137,8 @@ class AdminOperatorRoleJpaRepositoryTest {
         Long roleE = insertRole("TEST_ROLE_E");
         Long roleF = insertRole("TEST_ROLE_F");
 
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleE, Instant.now(), null));
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleF, Instant.now(), null));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleE, Instant.now(), null, "fan-platform"));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opId, roleF, Instant.now(), null, "fan-platform"));
 
         int deleted = repo.deleteByOperatorId(opId);
 
@@ -152,8 +152,8 @@ class AdminOperatorRoleJpaRepositoryTest {
         Long opB = saveOperator("opRemove@example.com");
         Long role = insertRole("TEST_ROLE_G");
 
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null));
-        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opA, role, Instant.now(), null, "fan-platform"));
+        repo.saveAndFlush(AdminOperatorRoleJpaEntity.create(opB, role, Instant.now(), null, "fan-platform"));
 
         int deleted = repo.deleteByOperatorId(opB);
 

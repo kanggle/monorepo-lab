@@ -242,6 +242,68 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                 .isTrue();
     }
 
+    /**
+     * TASK-BE-289 WI-2 — tenant-isolation regression (PROJECT.md mandate).
+     *
+     * <p>Before WI-2, {@code PatchOperatorRoleUseCase} bound roles via the legacy
+     * 4-arg factory which hardcoded {@code tenant_id='fan-platform'}. For a
+     * non-fan-platform operator that silently mis-scoped the binding (TASK-BE-288
+     * review Finding 1). This asserts the patched bindings now carry the target
+     * operator's own {@code tenant_id}, consistent with {@code CreateOperatorUseCase}.
+     */
+    @Test
+    @DisplayName("TASK-BE-289 WI-2: patch-roles on a non-fan-platform operator stamps the operator's tenant_id (not legacy 'fan-platform')")
+    void patchRoles_nonFanPlatformOperator_bindingTenantMatchesOperatorTenant() throws Exception {
+        // SUPER_ADMIN (platform scope) provisions an operator into "tenant-x".
+        String email = "tenantx-" + System.currentTimeMillis() + "@example.com";
+        String createBody = """
+                {
+                  "email": "%s",
+                  "displayName": "Tenant X Op",
+                  "password": "StrongPass1!",
+                  "roles": ["SUPPORT_LOCK"],
+                  "tenantId": "tenant-x"
+                }
+                """.formatted(email);
+
+        String response = mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "idemp-tenantx-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String operatorUuid = extract(response, "\"operatorId\":\"", "\"");
+        assertThat(operatorUuid).isNotBlank();
+
+        String operatorTenant = jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM admin_operators WHERE operator_id = ?",
+                String.class, operatorUuid);
+        assertThat(operatorTenant).isEqualTo("tenant-x");
+
+        // The regression-prone path: replace the role set.
+        mockMvc.perform(patch("/api/admin/operators/" + operatorUuid + "/roles")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "rotation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles": ["SUPPORT_READONLY", "SECURITY_ANALYST"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(2));
+
+        // Every persisted binding must mirror the operator's real tenant_id.
+        List<String> bindingTenants = jdbcTemplate.queryForList("""
+                SELECT b.tenant_id FROM admin_operator_roles b
+                JOIN admin_operators o ON o.id = b.operator_id
+                WHERE o.operator_id = ?
+                """, String.class, operatorUuid);
+        assertThat(bindingTenants)
+                .isNotEmpty()
+                .allMatch("tenant-x"::equals);
+    }
+
     @Test
     @DisplayName("POST /operators rejects duplicate email with 409 OPERATOR_EMAIL_CONFLICT")
     void duplicateEmail_returns_409() throws Exception {
