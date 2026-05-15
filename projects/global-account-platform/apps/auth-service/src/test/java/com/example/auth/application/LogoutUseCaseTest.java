@@ -46,6 +46,9 @@ class LogoutUseCaseTest {
     private static final String ACCOUNT_ID = "acc-123";
     private static final String JTI = "jti-456";
     private static final String DEVICE_ID = "dev-1";
+    /** activeToken() uses the deprecated RefreshToken ctor which defaults tenantId to "fan-platform"
+     *  (RefreshToken §deprecated 9-arg) — this is the tenant the production path resolves and blacklists under. */
+    private static final String TENANT_ID = "fan-platform";
 
     private RefreshToken activeToken(String deviceId) {
         return new RefreshToken(1L, JTI, ACCOUNT_ID,
@@ -72,7 +75,7 @@ class LogoutUseCaseTest {
 
         logoutUseCase.execute(new LogoutCommand(refreshTokenStr, DEVICE_ID));
 
-        verify(tokenBlacklist).blacklist(eq(JTI), anyLong());
+        verify(tokenBlacklist).blacklist(eq(TENANT_ID), eq(JTI), anyLong());
         verify(refreshTokenRepository).save(any(RefreshToken.class));
 
         ArgumentCaptor<DeviceSession> savedSession = ArgumentCaptor.forClass(DeviceSession.class);
@@ -122,7 +125,7 @@ class LogoutUseCaseTest {
 
         logoutUseCase.execute(new LogoutCommand(refreshTokenStr));
 
-        verify(tokenBlacklist).blacklist(eq(JTI), anyLong());
+        verify(tokenBlacklist).blacklist(eq(TENANT_ID), eq(JTI), anyLong());
         verify(refreshTokenRepository).save(any(RefreshToken.class));
         verify(deviceSessionRepository, never()).save(any(DeviceSession.class));
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
@@ -139,7 +142,7 @@ class LogoutUseCaseTest {
 
         logoutUseCase.execute(new LogoutCommand(refreshTokenStr, DEVICE_ID));
 
-        verify(tokenBlacklist, never()).blacklist(anyString(), anyLong());
+        verify(tokenBlacklist, never()).blacklist(anyString(), anyString(), anyLong());
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
                 anyString(), anyString(), anyString(), anyString(), anyList(), any(), anyString(), any());
     }

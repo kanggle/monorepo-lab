@@ -51,6 +51,7 @@ public class RedisTokenBlacklist implements TokenBlacklist {
      * @param jti      the JTI to blacklist
      * @param ttlSeconds TTL in seconds
      */
+    @Override
     public void blacklist(String tenantId, String jti, long ttlSeconds) {
         try {
             redisTemplate.opsForValue().set(buildKey(tenantId, jti), "1",
@@ -73,6 +74,7 @@ public class RedisTokenBlacklist implements TokenBlacklist {
      * @param tenantId the tenant_id from the refresh token
      * @param jti      the JTI to check
      */
+    @Override
     public boolean isBlacklisted(String tenantId, String jti) {
         try {
             boolean newKey = Boolean.TRUE.equals(redisTemplate.hasKey(buildKey(tenantId, jti)));

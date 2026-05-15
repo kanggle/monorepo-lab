@@ -83,7 +83,7 @@ class LoginUseCaseTest {
     @DisplayName("Login succeeds with valid credentials (tenant-aware)")
     void loginSuccess() {
         // given
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred));
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
@@ -107,14 +107,14 @@ class LoginUseCaseTest {
         assertThat(result.expiresIn()).isEqualTo(1800);
         assertThat(result.tokenType()).isEqualTo("Bearer");
 
-        verify(loginAttemptCounter).resetFailureCount(anyString());
+        verify(loginAttemptCounter).resetFailureCount(eq(TENANT_ID), anyString());
     }
 
     @Test
     @DisplayName("Login succeeds when tenantId is explicitly specified")
     void loginSuccessWithExplicitTenant() {
         // given
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
         when(credentialRepository.findByTenantIdAndEmail(TENANT_ID, EMAIL))
                 .thenReturn(Optional.of(cred));
@@ -144,7 +144,7 @@ class LoginUseCaseTest {
     @DisplayName("Login fails with LOGIN_TENANT_AMBIGUOUS when same email in two tenants and no tenantId given")
     void loginFailsWithTenantAmbiguous() {
         // given
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred1 = credential(ACCOUNT_ID, "fan-platform", EMAIL, HASH);
         Credential cred2 = credential("acc-456", "wms", EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred1, cred2));
@@ -162,7 +162,7 @@ class LoginUseCaseTest {
     @DisplayName("TASK-BE-260: LOGIN_TENANT_AMBIGUOUS path publishes auth.login.failed with non-null tenantId (uses rate-limit fallback)")
     void ambiguousEmail_publishesFailedEventWithNonNullTenantId() {
         // given: command with no explicit tenantId; two credentials match the same email
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred1 = credential(ACCOUNT_ID, "fan-platform", EMAIL, HASH);
         Credential cred2 = credential("acc-456", "wms", EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred1, cred2));
@@ -183,7 +183,7 @@ class LoginUseCaseTest {
     @Test
     @DisplayName("Login fails with invalid password")
     void loginFailsInvalidPassword() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred));
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
@@ -193,26 +193,26 @@ class LoginUseCaseTest {
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
                 .isInstanceOf(CredentialsInvalidException.class);
 
-        verify(loginAttemptCounter).incrementFailureCount(anyString());
+        verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
     }
 
     @Test
     @DisplayName("Login fails when credential row is missing → CredentialsInvalid")
     void loginFailsCredentialMissing() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of());
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
                 .isInstanceOf(CredentialsInvalidException.class);
 
-        verify(loginAttemptCounter).incrementFailureCount(anyString());
+        verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
     }
 
     @Test
     @DisplayName("Login fails when account-service can no longer find the account (stale credential)")
     void loginFailsAccountGoneForCredential() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred));
         when(accountServicePort.getAccountStatus(ACCOUNT_ID)).thenReturn(Optional.empty());
@@ -220,13 +220,13 @@ class LoginUseCaseTest {
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
                 .isInstanceOf(CredentialsInvalidException.class);
 
-        verify(loginAttemptCounter).incrementFailureCount(anyString());
+        verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
     }
 
     @Test
     @DisplayName("Login fails when rate limited")
     void loginFailsRateLimited() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(5);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(5);
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
                 .isInstanceOf(LoginRateLimitedException.class);
@@ -238,7 +238,7 @@ class LoginUseCaseTest {
     @Test
     @DisplayName("Login fails when account is locked")
     void loginFailsAccountLocked() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred));
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
@@ -251,7 +251,7 @@ class LoginUseCaseTest {
     @Test
     @DisplayName("Login with specific unknown tenant → CREDENTIALS_INVALID (not AMBIGUOUS)")
     void loginWithSpecificTenantNotFound() {
-        when(loginAttemptCounter.getFailureCount(anyString())).thenReturn(0);
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         when(credentialRepository.findByTenantIdAndEmail("wms", EMAIL)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, "wms", CTX)))

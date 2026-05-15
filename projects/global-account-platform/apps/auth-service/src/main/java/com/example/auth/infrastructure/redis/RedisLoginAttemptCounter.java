@@ -47,6 +47,7 @@ public class RedisLoginAttemptCounter implements LoginAttemptCounter {
     /**
      * Returns the failure count for the given tenant and email hash.
      */
+    @Override
     public int getFailureCount(String tenantId, String emailHash) {
         try {
             String value = redisTemplate.opsForValue().get(buildKey(tenantId, emailHash));
@@ -67,6 +68,7 @@ public class RedisLoginAttemptCounter implements LoginAttemptCounter {
     /**
      * Increments the failure counter for the given tenant and email hash.
      */
+    @Override
     public void incrementFailureCount(String tenantId, String emailHash) {
         try {
             String key = buildKey(tenantId, emailHash);
@@ -86,6 +88,7 @@ public class RedisLoginAttemptCounter implements LoginAttemptCounter {
     /**
      * Resets the failure counter for the given tenant and email hash.
      */
+    @Override
     public void resetFailureCount(String tenantId, String emailHash) {
         try {
             redisTemplate.delete(buildKey(tenantId, emailHash));

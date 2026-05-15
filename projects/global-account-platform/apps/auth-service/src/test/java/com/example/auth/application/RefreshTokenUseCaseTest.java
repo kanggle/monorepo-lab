@@ -79,7 +79,7 @@ class RefreshTokenUseCaseTest {
         when(tokenGeneratorPort.extractJti(refreshTokenStr)).thenReturn(OLD_JTI);
         when(tokenGeneratorPort.extractAccountId(refreshTokenStr)).thenReturn(ACCOUNT_ID);
         when(tokenGeneratorPort.extractTenantId(refreshTokenStr)).thenReturn(TENANT_ID);
-        when(tokenBlacklist.isBlacklisted(OLD_JTI)).thenReturn(false);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
         when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
@@ -99,7 +99,7 @@ class RefreshTokenUseCaseTest {
         // then
         assertThat(result.accessToken()).isEqualTo("new-access");
         assertThat(result.refreshToken()).isEqualTo("new-refresh");
-        verify(tokenBlacklist).blacklist(eq(OLD_JTI), anyLong());
+        verify(tokenBlacklist).blacklist(eq(TENANT_ID), eq(OLD_JTI), anyLong());
         verify(authEventPublisher).publishTokenRefreshed(ACCOUNT_ID, TENANT_ID, OLD_JTI, NEW_JTI, CTX);
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
     }
@@ -140,7 +140,7 @@ class RefreshTokenUseCaseTest {
         RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
         when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
         when(tokenReuseDetector.isReuse(existingToken)).thenReturn(false);
-        when(tokenBlacklist.isBlacklisted(OLD_JTI)).thenReturn(true);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(true);
 
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
@@ -168,7 +168,7 @@ class RefreshTokenUseCaseTest {
         when(tokenGeneratorPort.extractJti(refreshTokenStr)).thenReturn(OLD_JTI);
         when(tokenGeneratorPort.extractAccountId(refreshTokenStr)).thenReturn(ACCOUNT_ID);
         when(tokenGeneratorPort.extractTenantId(refreshTokenStr)).thenReturn(TENANT_ID);
-        when(tokenBlacklist.isBlacklisted(OLD_JTI)).thenReturn(false);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
         when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         RefreshToken revokedToken = new RefreshToken(1L, OLD_JTI, ACCOUNT_ID, TENANT_ID,
@@ -251,7 +251,7 @@ class RefreshTokenUseCaseTest {
                 tokenIat, tokenIat.plusSeconds(600000), null, false, "fp-123", null);
         when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
         when(tokenReuseDetector.isReuse(existingToken)).thenReturn(false);
-        when(tokenBlacklist.isBlacklisted(OLD_JTI)).thenReturn(false);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
         when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.of(markerAt));
         when(tokenGeneratorPort.extractIssuedAt(refreshTokenStr)).thenReturn(tokenIat);
 
@@ -284,7 +284,7 @@ class RefreshTokenUseCaseTest {
         RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
         when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
         when(tokenReuseDetector.isReuse(existingToken)).thenReturn(false);
-        when(tokenBlacklist.isBlacklisted(OLD_JTI)).thenReturn(false);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
         when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.of(markerAt));
         when(tokenGeneratorPort.extractIssuedAt(refreshTokenStr))
                 .thenThrow(new TokenParseException("iat parse error"));
