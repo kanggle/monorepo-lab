@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-104-gap-sweep-cherry-pick-bundle.md` — GAP services sweep dry-run (7 service 분석 결과 5 day-one cohort + 2 retrofit-era 잠재) 의 cherry-pick bundle closure. 3 trivial polish: (1) `security-service/AbstractAuthEventConsumer.nowIfNull` dead method 제거 (~-7 LOC + unused `Instant` import 제거) + (2) `gateway-service/JwtAuthenticationFilter` `writeErrorResponse(exchange, status, code, message, fallback)` 공통 helper 추출 — `writeUnauthorized`/`writeForbidden` body 단순화 (~-15 LOC, 7 caller signature 보존) + (3) `admin-service/AdminLoginService` `buildEnrollmentRequired(operatorUuid)` 공통 helper 추출 — 2 site (enrollment-required + enrolled-but-never-verified) → 각 `throw buildEnrollmentRequired(operatorUuid)` 1 line (~-10 LOC). 총 ~-32 LOC. production behavior / public API / spec contract = 0 변경. **admin / auth MID GO sweep (port 추가 + instanceof cast 제거)** 은 contract change → 별 sweep cycle (본 task scope 외, 메모리에 후보 기록). hook fixture 23/23 PASS. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## done
 

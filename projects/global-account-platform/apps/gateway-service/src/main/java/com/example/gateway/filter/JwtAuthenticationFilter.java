@@ -252,40 +252,34 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 .increment();
     }
 
-    private Mono<Void> writeUnauthorized(ServerWebExchange exchange, String message) {
+    private Mono<Void> writeErrorResponse(ServerWebExchange exchange,
+                                          HttpStatus status,
+                                          String code,
+                                          String message,
+                                          String fallbackJsonBody) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.setStatusCode(status);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
-        ErrorResponse errorResponse = ErrorResponse.of("TOKEN_INVALID", message);
+        ErrorResponse errorResponse = ErrorResponse.of(code, message);
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(errorResponse);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
             return response.writeWith(Mono.just(
-                    response.bufferFactory().wrap(
-                            "{\"code\":\"TOKEN_INVALID\",\"message\":\"Access token is missing, expired, or has an invalid signature\"}"
-                                    .getBytes(StandardCharsets.UTF_8))));
+                    response.bufferFactory().wrap(fallbackJsonBody.getBytes(StandardCharsets.UTF_8))));
         }
     }
 
-    private Mono<Void> writeForbidden(ServerWebExchange exchange, String message) {
-        ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.FORBIDDEN);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+    private Mono<Void> writeUnauthorized(ServerWebExchange exchange, String message) {
+        return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", message,
+                "{\"code\":\"TOKEN_INVALID\",\"message\":\"Access token is missing, expired, or has an invalid signature\"}");
+    }
 
-        ErrorResponse errorResponse = ErrorResponse.of("TENANT_SCOPE_DENIED", message);
-        try {
-            byte[] bytes = objectMapper.writeValueAsBytes(errorResponse);
-            DataBuffer buffer = response.bufferFactory().wrap(bytes);
-            return response.writeWith(Mono.just(buffer));
-        } catch (JsonProcessingException e) {
-            return response.writeWith(Mono.just(
-                    response.bufferFactory().wrap(
-                            "{\"code\":\"TENANT_SCOPE_DENIED\",\"message\":\"Tenant scope mismatch\"}"
-                                    .getBytes(StandardCharsets.UTF_8))));
-        }
+    private Mono<Void> writeForbidden(ServerWebExchange exchange, String message) {
+        return writeErrorResponse(exchange, HttpStatus.FORBIDDEN, "TENANT_SCOPE_DENIED", message,
+                "{\"code\":\"TENANT_SCOPE_DENIED\",\"message\":\"Tenant scope mismatch\"}");
     }
 
     @Override

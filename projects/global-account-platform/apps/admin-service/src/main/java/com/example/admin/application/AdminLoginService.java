@@ -103,21 +103,11 @@ public class AdminLoginService {
         if (require2fa) {
             AdminOperatorTotpJpaEntity totpRow = totpRepository.findById(operator.getId()).orElse(null);
             if (totpRow == null) {
-                BootstrapTokenService.Issued issued = bootstrapTokenService.issue(
-                        operatorUuid,
-                        java.util.Set.of(BootstrapTokenService.SCOPE_ENROLL, BootstrapTokenService.SCOPE_VERIFY));
-                long ttl = java.time.Duration.between(Instant.now(), issued.expiresAt()).getSeconds();
-                if (ttl < 0) ttl = 0;
-                throw new EnrollmentRequiredException(issued.token(), ttl);
+                throw buildEnrollmentRequired(operatorUuid);
             }
             if (totpRow.getLastUsedAt() == null) {
                 // Enrolled but never verified — allow re-enrollment or verify
-                BootstrapTokenService.Issued issued = bootstrapTokenService.issue(
-                        operatorUuid,
-                        java.util.Set.of(BootstrapTokenService.SCOPE_ENROLL, BootstrapTokenService.SCOPE_VERIFY));
-                long ttl = java.time.Duration.between(Instant.now(), issued.expiresAt()).getSeconds();
-                if (ttl < 0) ttl = 0;
-                throw new EnrollmentRequiredException(issued.token(), ttl);
+                throw buildEnrollmentRequired(operatorUuid);
             }
             boolean hasTotp = totpCode != null && !totpCode.isBlank();
             boolean hasRecovery = recoveryCode != null && !recoveryCode.isBlank();
@@ -245,6 +235,15 @@ public class AdminLoginService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String newIdempotencyKey() {
         return "login:" + UuidV7.randomString();
+    }
+
+    private EnrollmentRequiredException buildEnrollmentRequired(String operatorUuid) {
+        BootstrapTokenService.Issued issued = bootstrapTokenService.issue(
+                operatorUuid,
+                java.util.Set.of(BootstrapTokenService.SCOPE_ENROLL, BootstrapTokenService.SCOPE_VERIFY));
+        long ttl = java.time.Duration.between(Instant.now(), issued.expiresAt()).getSeconds();
+        if (ttl < 0) ttl = 0;
+        return new EnrollmentRequiredException(issued.token(), ttl);
     }
 
     /** Return shape of a successful login. */

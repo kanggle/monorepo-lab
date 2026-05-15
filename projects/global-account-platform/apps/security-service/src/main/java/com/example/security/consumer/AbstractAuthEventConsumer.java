@@ -12,8 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.time.Instant;
-
 /**
  * Base class for auth event consumers. Handles dedup, mapping, delegation to
  * {@link RecordLoginHistoryUseCase}, and finally dispatches to
@@ -125,14 +123,5 @@ public abstract class AbstractAuthEventConsumer {
 
     private static boolean isNonBlank(String value) {
         return value != null && !value.isBlank();
-    }
-
-    /**
-     * Convenience helper — kept for compatibility with callers that do not need
-     * the detection use-case (not used internally).
-     */
-    @SuppressWarnings("unused")
-    private static Instant nowIfNull(Instant t) {
-        return t == null ? Instant.now() : t;
     }
 }
