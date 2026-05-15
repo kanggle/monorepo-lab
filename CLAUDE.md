@@ -188,6 +188,16 @@ Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](doc
 - Workaround if you hit it: `git push -u origin HEAD` (renaming the branch is cleaner).
 - Encountered repeatedly across BE-052, BE-161.
 
+**Post-merge branch hygiene** — the repo squash-merges PRs; feature/chore refs are not auto-pruned and accumulate.
+
+- After a PR squash-merges, delete its feature + close-chore refs immediately. Stacked work uses a single tip-only PR (the tip contains its base; the base ref becomes squash-residue → delete it too).
+- A ref is squash-merge-stale (safe to delete) when its task is in `origin/main`'s `tasks/done/` (or its squash commit is in `git log origin/main`).
+- The auto-mode classifier blocks mass `git push origin --delete` even with a matching permission-allowlist entry (it is a higher safety layer) — mass remote-ref deletion must be run in the user's own shell; `gh pr create` / `gh pr merge --squash` pass; local `git branch -D` is fine for the agent. On a classifier block: STOP and hand the user the exact command — do not reformulate to bypass.
+
+**CI path-filter constraint** — when editing `.github/workflows/` `dorny/paths-filter` configuration: never use negation patterns (the `predicate-quantifier: 'some'` negation misclassifies a file as "in"); use a pure-positive `code-changed` filter composed with the original via an outputs-layer AND; backfill new code extensions into the positive filter; add an entry per new project.
+
+Worked examples + procedure: project memories `project_branch_hygiene_policy` (branch hygiene) and `project_ci_path_filter_074_075_quirk` (CI path-filter).
+
 ---
 
 # Local Network Convention
