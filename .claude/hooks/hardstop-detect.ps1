@@ -268,8 +268,24 @@ try {
             $simContent = $newString
         } elseif (Test-Path $absFile -PathType Leaf) {
             $existing = Get-Content -Raw -Path $absFile -ErrorAction SilentlyContinue
-            if ($existing -and $oldString -and $newString -and $existing.Contains($oldString)) {
-                $simContent = $existing.Replace($oldString, $newString)
+            if ($existing -and $oldString -and $newString) {
+                if ($existing.Contains($oldString)) {
+                    $simContent = $existing.Replace($oldString, $newString)
+                } else {
+                    # CRLF/LF normalize fallback — Edit tool delivers LF-normalized oldString
+                    # while the on-disk file may be CRLF. Raw .Contains() then misses and
+                    # simContent silently falls back to $existing, hiding newly-added Service
+                    # Type headers from HARDSTOP-10 detection (4-instance trigger closure
+                    # MONO-083 + MONO-093 + MONO-095 + MONO-101 → TASK-MONO-102).
+                    $existingNorm = $existing -replace "`r`n", "`n"
+                    $oldNorm      = $oldString -replace "`r`n", "`n"
+                    $newNorm      = $newString -replace "`r`n", "`n"
+                    if ($existingNorm.Contains($oldNorm)) {
+                        $simContent = $existingNorm.Replace($oldNorm, $newNorm)
+                    } else {
+                        $simContent = $existing
+                    }
+                }
             } elseif ($existing) {
                 $simContent = $existing
             } else {
