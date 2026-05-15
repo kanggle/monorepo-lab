@@ -31,6 +31,7 @@
 | `POST /api/admin/accounts/{id}/unlock` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `POST /api/admin/sessions/{id}/revoke` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `GET /api/admin/audit` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
+| `GET /api/admin/console/registry` | admin-service | Yes (operator token, downstream) | platform-console product/tenant registry (TASK-BE-296). 아래 §Admin Routes 참조. contract: [console-registry-api.md](console-registry-api.md) |
 | `GET /actuator/health` | gateway 자체 | No | 헬스체크 |
 | `/internal/tenants/{tenantId}/**` | account-service | Yes (JWT) | path `{tenantId}` ↔ JWT `tenant_id` 검사. 불일치 시 403 `TENANT_SCOPE_DENIED`. 외부 노출 금지 |
 

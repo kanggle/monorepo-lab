@@ -130,6 +130,10 @@ gateway:
     - POST:/api/admin/accounts/*/unlock
     - POST:/api/admin/sessions/*/revoke
     - GET:/api/admin/audit
+    # TASK-BE-296: platform-console product/tenant registry. operator JWT is
+    # verified by admin-service OperatorAuthenticationFilter (single point) —
+    # gateway skips its account-JWT check, same model as GET /api/admin/audit.
+    - GET:/api/admin/console/registry
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

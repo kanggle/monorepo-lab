@@ -1,0 +1,240 @@
+package com.example.admin.integration;
+
+import com.example.admin.support.OperatorJwtTestFixture;
+import com.example.testsupport.integration.AbstractIntegrationTest;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.io.IOException;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * TASK-BE-296: end-to-end integration test for
+ * {@code GET /api/admin/console/registry}.
+ *
+ * <p>Boots admin-service against real MySQL + Kafka (Testcontainers) + Redis,
+ * with a WireMock stub replacing account-service's internal tenant endpoints.
+ * Verifies:
+ * <ul>
+ *   <li>response matches console-integration-contract § 2.2 item shape exactly
+ *       (productKey / displayName / available / tenants / baseRoute);</li>
+ *   <li>erp / finance representable as {@code available:false};</li>
+ *   <li>operator-scoped + tenant-aware: SUPER_ADMIN sees all tenants;</li>
+ *   <li><b>multi-tenant isolation regression</b>: a single-tenant operator
+ *       never receives another tenant's slug ({@code rules/traits/multi-tenant.md}
+ *       M6 / task Failure Scenario "Registry leaks cross-tenant products");</li>
+ *   <li>missing operator JWT → 401.</li>
+ * </ul>
+ *
+ * <p>Skipped automatically when Docker is unavailable
+ * ({@code AbstractIntegrationTest} DockerAvailableCondition).
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@Testcontainers
+@ActiveProfiles("test")
+class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
+
+    @Container
+    @SuppressWarnings("resource")
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+            .withExposedPorts(6379);
+
+    static WireMockServer wireMock;
+    static OperatorJwtTestFixture jwt;
+    static String signingKeyPem;
+
+    private static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-000000000010";
+    private static final String WMS_OP_UUID      = "00000000-0000-7000-8000-000000000011";
+
+    @BeforeAll
+    static void setupShared() throws IOException {
+        jwt = new OperatorJwtTestFixture();
+
+        java.security.PrivateKey pk = extractPrivateKey(jwt);
+        signingKeyPem = "-----BEGIN PRIVATE KEY-----\n"
+                + java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                        .encodeToString(pk.getEncoded())
+                + "\n-----END PRIVATE KEY-----\n";
+
+        wireMock = new WireMockServer(WireMockConfiguration.options().dynamicPort());
+        wireMock.start();
+        WireMock.configureFor("localhost", wireMock.port());
+    }
+
+    @AfterAll
+    static void tearDownShared() {
+        if (wireMock != null) wireMock.stop();
+    }
+
+    private static java.security.PrivateKey extractPrivateKey(OperatorJwtTestFixture fixture) {
+        try {
+            var field = OperatorJwtTestFixture.class.getDeclaredField("keyPair");
+            field.setAccessible(true);
+            java.security.KeyPair kp = (java.security.KeyPair) field.get(fixture);
+            return kp.getPrivate();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("admin.jwt.active-signing-kid", () -> "test-key-001");
+        registry.add("admin.jwt.signing-keys.test-key-001", () -> signingKeyPem);
+        registry.add("admin.jwt.issuer", () -> "admin-service");
+        registry.add("admin.jwt.expected-token-type", () -> "admin");
+        registry.add("admin.auth-service.base-url", wireMock::baseUrl);
+        registry.add("admin.account-service.base-url", wireMock::baseUrl);
+        registry.add("admin.security-service.base-url", wireMock::baseUrl);
+    }
+
+    @Autowired MockMvc mockMvc;
+    @Autowired JdbcTemplate jdbcTemplate;
+
+    /** All three portfolio tenants registered + ACTIVE. */
+    private static final String ALL_ACTIVE_TENANTS = """
+            {
+              "items": [
+                {"tenantId":"fan-platform","displayName":"Fan Platform","tenantType":"B2C_CONSUMER",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"wms","displayName":"Warehouse Management Platform","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"scm","displayName":"Supply Chain Management Platform","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"}
+              ],
+              "page":0,"size":100,"totalElements":3,"totalPages":1
+            }
+            """;
+
+    @BeforeEach
+    void resetAndSeed() {
+        wireMock.resetAll();
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(ALL_ACTIVE_TENANTS)));
+        seedOperator(SUPER_ADMIN_UUID, "*");
+        seedOperator(WMS_OP_UUID, "wms");
+    }
+
+    private void seedOperator(String operatorId, String tenantId) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
+                Integer.class, operatorId);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
+                       created_at, updated_at, version)
+                    VALUES (?, ?, ?, 'x', ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    """, operatorId, tenantId, operatorId + "@example.com",
+                    "Op " + operatorId.substring(operatorId.length() - 2));
+        }
+    }
+
+    private String token(String operatorId) {
+        return "Bearer " + jwt.operatorToken(operatorId);
+    }
+
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("SUPER_ADMIN → 200, contract shape exact, gap binds all tenants, erp/finance available=false")
+    void superAdmin_returnsFullCatalog() throws Exception {
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(SUPER_ADMIN_UUID)))
+                .andExpect(status().isOk())
+                // exactly 5 products in catalog order
+                .andExpect(jsonPath("$.products.length()").value(5))
+                .andExpect(jsonPath("$.products[0].productKey").value("gap"))
+                .andExpect(jsonPath("$.products[0].displayName").value("Global Account Platform"))
+                .andExpect(jsonPath("$.products[0].available").value(true))
+                .andExpect(jsonPath("$.products[0].baseRoute").value("/gap"))
+                // gap federates all registered ACTIVE tenants for a platform-scope op
+                .andExpect(jsonPath("$.products[0].tenants",
+                        org.hamcrest.Matchers.containsInAnyOrder("fan-platform", "wms", "scm")))
+                .andExpect(jsonPath("$.products[1].productKey").value("wms"))
+                .andExpect(jsonPath("$.products[1].available").value(true))
+                .andExpect(jsonPath("$.products[1].tenants[0]").value("wms"))
+                .andExpect(jsonPath("$.products[2].productKey").value("scm"))
+                .andExpect(jsonPath("$.products[2].tenants[0]").value("scm"))
+                // erp / finance — coming-soon placeholder
+                .andExpect(jsonPath("$.products[3].productKey").value("erp"))
+                .andExpect(jsonPath("$.products[3].available").value(false))
+                .andExpect(jsonPath("$.products[3].tenants.length()").value(0))
+                .andExpect(jsonPath("$.products[4].productKey").value("finance"))
+                .andExpect(jsonPath("$.products[4].available").value(false))
+                .andExpect(jsonPath("$.products[4].tenants.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("multi-tenant isolation regression: wms-scoped operator never sees fan-platform/scm slugs")
+    void singleTenantOperator_isCrossTenantIsolated() throws Exception {
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(WMS_OP_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(5))
+                // gap shows ONLY the operator's own tenant — not the full list
+                .andExpect(jsonPath("$.products[0].productKey").value("gap"))
+                .andExpect(jsonPath("$.products[0].tenants.length()").value(1))
+                .andExpect(jsonPath("$.products[0].tenants[0]").value("wms"))
+                // wms product → own tenant
+                .andExpect(jsonPath("$.products[1].tenants[0]").value("wms"))
+                // scm product → not selectable by a wms operator
+                .andExpect(jsonPath("$.products[2].productKey").value("scm"))
+                .andExpect(jsonPath("$.products[2].tenants.length()").value(0))
+                // hard isolation assertion: NO product anywhere leaks another tenant
+                .andExpect(jsonPath(
+                        "$.products[*].tenants[?(@ == 'fan-platform' || @ == 'scm')]")
+                        .doesNotExist());
+    }
+
+    @Test
+    @DisplayName("no operator JWT → 401 TOKEN_INVALID")
+    void noToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/admin/console/registry"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
+    @Test
+    @DisplayName("account-service tenant list 5xx → 503 (no partial catalog)")
+    void accountServiceDown_returns503() throws Exception {
+        wireMock.resetAll();
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse().withStatus(503)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"code\":\"DOWNSTREAM_ERROR\"}")));
+
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(SUPER_ADMIN_UUID)))
+                .andExpect(status().isServiceUnavailable());
+    }
+}
