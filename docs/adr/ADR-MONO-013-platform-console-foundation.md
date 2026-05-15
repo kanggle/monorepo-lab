@@ -1,0 +1,203 @@
+# ADR-MONO-013 — platform-console Foundation: Single-UI Console Model, New-Project Placement, admin-web Parity-Gated Retirement, Cross-Project Integration Contract
+
+**Status:** PROPOSED
+**Date:** 2026-05-16
+**History:** PROPOSED 2026-05-16 (TASK-MONO-107 — foundation criteria pre-authored from a converged design dialogue; this is the criteria/decision document, not the bootstrap authorisation).
+**Decision driver:** A unified AWS/GCP-console-style operations surface over the portfolio's enterprise suite (gap · scm · wms + future erp · finance) was requested. The design dialogue converged on a single model (B — console *is* the UI), a placement (new `projects/platform-console/`), and a retirement path (GAP `admin-web` parity-gated removal). Per ADR-MONO-003a § D2.1, adding any new project under `projects/<name>/` resets the shared-library churn clock and shifts portfolio narrative scope — both decision points that require a fresh ADR. This is that fresh ADR for `platform-console`.
+**Supersedes:** none.
+**Related:** [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D2.1 (new project bootstrap requires fresh ADR — this ADR satisfies that for `platform-console`), [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) § 1.4 + § D3 (Template ↔ monorepo sync; new-project churn-clock context), [ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) (finance bootstrap — governs this ADR's Phase 5, NOT re-decided here), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) § D4 (project ordering parent), [global-account-platform PROJECT.md](../../projects/global-account-platform/PROJECT.md) (GAP service map — `admin-web` retirement is a GAP spec change), [docs/project-overview.md](../project-overview.md) § 2.6 (finance/erp 미생성 roadmap), [TEMPLATE.md](../../TEMPLATE.md) § Local Network Convention (`console.local` hostname), [`rules/taxonomy.md`](../../rules/taxonomy.md) (D3 domain/trait choices), memory [`project_portfolio_7axis_architecture`](../../../memory/project_portfolio_7axis_architecture.md), memory [`project_gap_idp_promotion`](../../../memory/project_gap_idp_promotion.md) (GAP = standard OIDC AS, the SSO backbone this console depends on).
+
+---
+
+## 1. Context
+
+### 1.1 What was asked
+
+An AWS/GCP-console-style single screen to operate the portfolio's enterprise suite: **gap, scm, erp, wms, finance**. Of these, `gap`/`wms`/`scm` exist; `erp`/`finance` are 미생성 (per project-overview § 2.6, post-Phase-5).
+
+### 1.2 The design dialogue and what it converged
+
+A multi-turn design dialogue resolved four decisions that this ADR records:
+
+1. **Integration model.** `wms`/`scm` are **backend-only** (no frontend app); `erp`/`finance` do not exist. A pure SSO launcher (portal → redirect to each product's own UI) has nothing to launch into for backend-only domains. The dialogue converged on **Model B — the console *is* the single UI**, rendering each domain's operational screens by calling that domain's gateway/admin REST APIs. This matches the AWS-console anatomy (one console app over many service APIs).
+2. **Placement.** Because the console federates multiple `projects/<name>/` domains and GAP returns to backend-only, the console is intrinsically a cross-project artifact. Hosting it inside GAP would exceed GAP's declared scope (it would reach into wms/scm/erp/finance APIs). Converged on a **new project `projects/platform-console/`**.
+3. **GAP `admin-web` retirement.** The user stated `admin-web` will be removed once the console is complete. The console therefore absorbs GAP's operator surface. Retirement is **parity-gated**: the console must reach functional parity with `admin-web`'s operator features (lock/unlock, force-logout, audit query) **and that parity must be verified** before `admin-web` is removed — otherwise live operator capability is lost.
+4. **finance/erp domain governance is JIT.** `finance`/`erp` taxonomy + `rules/domains/<d>.md` are authored *just-in-time* at each domain's bootstrap (Phase 5/6), NOT pre-authored at Phase 0 — consistent with `rules/README.md` on-demand policy ("do not auto-generate stubs") and to avoid an early, idle churn-clock reset. finance bootstrap remains governed by **ADR-MONO-008**; erp by a future ADR. This ADR does **not** re-decide them.
+
+### 1.3 Why an ADR
+
+Per ADR-MONO-003a § D2.1, adding a new project skeleton under `projects/<name>/` is not an OVERRIDE-class change: it resets the `libs/`/`settings.gradle` churn clock and shifts portfolio narrative scope. `platform-console` is a new project → it requires a fresh ADR. This is that ADR (structurally analogous to ADR-MONO-008 for finance).
+
+### 1.4 Why PROPOSED, not ACCEPTED
+
+PROPOSED ≠ "we will build it eventually". PROPOSED = "the model/placement/retirement-path/contract are decided; the moment the console project is actually bootstrapped is the ACCEPTED transition" — the same staged pattern as ADR-MONO-003b and ADR-MONO-008. The design decisions (D1–D4) are converged from the dialogue; execution gating (D7/D8) defers the skeleton-creation churn to an explicit ACCEPTED moment.
+
+### 1.5 Scope: what "platform-console bootstrap" means
+
+The ACCEPTED transition produces, in sequence:
+
+1. `projects/platform-console/` with `PROJECT.md` (domain + traits + service_types per D3), a `frontend-app` skeleton, first task in `tasks/ready/`.
+2. GAP-side: console registered as an OIDC client + a product/tenant registry surface the console catalog reads (GAP project-internal task).
+3. Monorepo `settings.gradle` / root `package.json` / Traefik `console.local` registration.
+
+Subsequent phases (D6) deliver the operator-parity MVP, the `admin-web` retirement, per-domain sections, and the BFF aggregation tier.
+
+---
+
+## 2. Decision
+
+### D1 — Integration model
+
+| Option | Mechanics | Fit for this codebase | Verdict |
+|---|---|---|---|
+| **A. SSO launcher portal** | Portal → SSO → redirect to each product's own frontend | Requires a frontend per product; wms/scm have none, erp/finance don't exist → only gap `admin-web` is a real target (and that is being retired). Degenerate. | Rejected |
+| **B. Console *is* the UI** | One console frontend renders every domain's screens by calling that domain's gateway/admin REST API; SSO via GAP OIDC | Matches backend-only reality of wms/scm and the AWS-console anatomy. Single frontend. erp/finance slot in as data-driven catalog entries. | **CHOSEN** |
+| **C. Micro-frontend shell** | Shell composes each product UI via Module Federation/iframe | No per-product UI exists to compose; highest maintenance for lowest marginal value here | Rejected |
+| **Hybrid** | Launcher for products with their own UI, console-render for backend-only | Collapses to B once `admin-web` (the only product UI) is retired | Rejected (collapses to B) |
+
+**Decision: Model B.** The console is the sole frontend for the enterprise suite. Domains stay backend-only; the console federates them through a backend-for-frontend (BFF) integration contract (D5).
+
+### D2 — Placement
+
+| Option | Verdict |
+|---|---|
+| New `projects/platform-console/` | **CHOSEN** — cross-project artifact; GAP returns to pure backend IdP; clean boundary |
+| Inside GAP (`apps/portal-web`) | Rejected — federating wms/scm/erp/finance APIs exceeds GAP's declared scope; GAP hosts no frontend after `admin-web` retirement |
+| Monorepo-level `platform/` | Rejected — `platform/` is project-agnostic rules, not a running app |
+
+**Decision: new project `projects/platform-console/`.** Consequence: GAP's PROJECT.md service map loses `admin-web` (D4); GAP becomes backend-only (IdP + service APIs).
+
+### D3 — Project classification (recommended; finalised at ACCEPTED)
+
+Per `rules/taxonomy.md`:
+
+- **Domain (recommended):** `saas` — horizontal, non-industry internal platform surface (same rationale GAP used for `saas`: an internal product-family shared layer, not an industry vertical).
+- **Trait stack (proposed):** `multi-tenant` (tenant/context switcher is core), `integration-heavy` (fans out to N gateway APIs with CB/retry/timeout), `audit-heavy` (operator actions — lock/unlock/force-logout — must be traceable; inherited from absorbing GAP's operator surface). `internal-system` evaluated at ACCEPTED (the console is operator-facing, not end-user).
+- **service_types:** `frontend-app` (the console UI) minimum; `rest-api` added when the console-bff (Phase 7) lands.
+
+Finalised at the ACCEPTED transition (D7.2), same pattern as ADR-MONO-008 § D2.
+
+### D4 — GAP `admin-web` parity-gated retirement
+
+Retirement is **not a delete**; it is a deprecation gated on verified parity.
+
+1. The console must reach functional parity with `admin-web`'s operator surface: account lock/unlock, force-logout, audit query (and any other `admin-web` capability enumerated at Phase 2).
+2. Parity must be **verified** (Phase 2 acceptance) before any removal.
+3. Removal is a **GAP spec change first**: GAP `PROJECT.md` service map drops the `admin-web` row and records console absorption; GAP specs referencing `admin-web` updated; then the app is removed. Handled as a GAP project-internal task (spec-first).
+
+Sequencing is enforced by D6 (Phase 2 → gate → Phase 3).
+
+### D5 — Cross-project integration (BFF) contract skeleton
+
+Every domain federated by the console must satisfy a contract. This ADR fixes the **skeleton**; the full contract is its own spec deliverable (Phase 0, root task / spec — see D6).
+
+| Contract element | Requirement |
+|---|---|
+| **Identity** | Console is a registered GAP OIDC client; user authenticates once via GAP Authorization Code + PKCE; access token carries `tenant_id` |
+| **Tenant/product registry** | GAP exposes a registry surface the console catalog reads → catalog is **data-driven** (erp/finance appear as `available:false` until bootstrapped, flipped on with config only — zero console rework) |
+| **Routing** | Each domain reachable at its Traefik hostname (`wms.local`, `scm.local`, …); console reaches domains server-side via gateway/admin APIs |
+| **Console-facing API surface** | Each domain's gateway/admin service exposes the read/ops endpoints the console renders; calls are tenant-scoped; isolation enforced (cross-tenant denied) |
+| **Resilience** | Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines; one domain down ≠ console down |
+
+### D6 — Phased roadmap (decided sequence + dependency gates)
+
+| Phase | Deliverable | Location | Gate | Model |
+|---|---|---|---|---|
+| 0 | This ADR + full BFF integration-contract spec | root `tasks/` + `docs/adr/` + spec | — | Opus |
+| 1 | `platform-console` skeleton + GAP OIDC client + tenant/product registry surface | root `tasks/` (new project) + GAP `tasks/` | ADR-013 ACCEPTED | Opus (classification/tenant), Sonnet (skeleton) |
+| 2 | Console B-MVP, first surface = **GAP operator parity** | `platform-console` `tasks/` | Phase 1 | Sonnet; contract change → Opus |
+| 3 | `admin-web` retirement (GAP PROJECT.md spec change → app removal) | GAP `tasks/` (spec-first) | **Phase 2 parity verified** | Opus |
+| 4 | wms / scm console sections | `platform-console` `tasks/` | Phase 2 (proven contract) | Sonnet; contract ext → Opus |
+| 5 | finance-platform built **to the proven contract** (governed by ADR-MONO-008) | per ADR-MONO-008 | Phase 4 | Opus/Sonnet |
+| 6 | erp-platform built to the proven contract (future erp ADR) | future erp ADR | Phase 5 | Opus/Sonnet |
+| 7 | console-bff fan-out + cross-domain dashboards | `platform-console` `tasks/` | 5 domains live | Opus (composition), Sonnet (shell) |
+| 8 | Federation hardening — cross-product e2e, observability, multi-tenant isolation regression | root `tasks/` | all domains integrated | Sonnet; isolation → Opus |
+
+**Dependency invariants:** ADR-013 ACCEPTED gates all phases · Phase 2 parity-verified gates Phase 3 retirement · the contract (Phase 0) is validated by the MVP (Phase 2) before finance/erp (5/6) are built to it → eliminates retrofit · BFF aggregation (7) requires all 5 domains. finance/erp taxonomy/rules are JIT at Phase 5/6, governed by ADR-MONO-008 / future erp ADR — **not this ADR**.
+
+### D7 — Readiness criteria (evaluated before ACCEPTED)
+
+| # | Criterion |
+|---|---|
+| D7.1 | Model B + new-project placement re-confirmed against current monorepo state |
+| D7.2 | D3 classification finalised (domain + trait stack + service_types) against `rules/taxonomy.md` |
+| D7.3 | Phase 0 BFF integration-contract spec authored (or scoped as the ACCEPTED first artifact) |
+| D7.4 | GAP `admin-web` operator-surface capabilities enumerated (parity checklist for Phase 2) |
+| D7.5 | User-explicit bootstrap intent recorded (D8.1) |
+| D7.6 | Shared-library churn-clock reset acknowledged (ADR-MONO-003a § D2.1 consequence — same as ADR-MONO-008 § 3.3) |
+
+### D8 — ACCEPTED transition mechanics
+
+**D8.1 — User-explicit intent forms.** Any of: "ADR-013 ACCEPTED", "platform-console 부트스트랩 시작", "콘솔 프로젝트 만들어" with affirmative direction. Ambiguous statements ("콘솔은 언제?") do not satisfy.
+
+**D8.2 — Commit pattern.** Typically 2 PRs: **PR-A** doc-only (this ADR PROPOSED → ACCEPTED + § 6 row + memory update); **PR-B** bootstrap artifact (`projects/platform-console/` skeleton + GAP OIDC client/registry + `settings.gradle`/`package.json`/`console.local`).
+
+**D8.3 — Audit-trail row (§ 6 format).**
+```
+| YYYY-MM-DD | ACCEPTED | <classification> | <Phase reached> | <user-intent-quote> | <PR-A # / PR-B #> |
+```
+
+---
+
+## 3. Consequences
+
+### 3.1 PROPOSED merge (this PR)
+- ADR-MONO-003a § D2.1's mandate satisfied — `platform-console` now has its required fresh ADR (PROPOSED).
+- No project created. No churn-clock reset yet. Monorepo state unchanged.
+- A future "should we build the console now?" question has a concrete checklist (§ D7) + sequence (§ D6).
+
+### 3.2 ACCEPTED moment (future)
+- D7.1–D7.6 evaluated; D8.1 intent confirmed; D8.2 commit pattern followed.
+- `projects/platform-console/` created; GAP gains OIDC client + registry surface.
+- Shared-library churn clock reset (settings.gradle), per ADR-MONO-003a § D2.1 — same expected consequence as ADR-MONO-008 § 3.3.
+
+### 3.3 Post-bootstrap
+- Monorepo project count 5 → 6 (`platform-console`). GAP becomes backend-only once Phase 3 completes.
+- GAP PROJECT.md service map mutated (`admin-web` removed) — a recorded GAP spec change, parity-gated.
+- finance/erp, when bootstrapped (ADR-MONO-008 / future erp ADR), inherit the proven console contract → zero console retrofit.
+
+### 3.4 Future-self / future-LLM-session
+- A session evaluating "build the console now?" reads § D7 + § D6.
+- A session prompted to "build the console" reads § D8.1 intent forms + § D6 sequence before mutating anything.
+- finance/erp taxonomy/rules are explicitly out of this ADR — a session must not pre-author them here (§ 1.2 / § D6).
+
+---
+
+## 4. Alternatives Considered
+
+- **4.1 SSO launcher-only (D1 Option A).** Rejected — degenerate for backend-only wms/scm and a being-retired `admin-web`.
+- **4.2 Hybrid launcher+console.** Rejected — collapses to B once `admin-web` retires.
+- **4.3 Micro-frontend shell (D1 Option C).** Rejected — no per-product UI to compose; worst ROI here.
+- **4.4 Console inside GAP.** Rejected — exceeds GAP scope; GAP hosts no frontend post-retirement.
+- **4.5 Build finance/erp before the console.** Rejected — two full domain projects (months) gating one frontend; collides with the recorded roadmap order + ADR-MONO-003 Phase-5 freeze; a data-driven catalog makes erp/finance zero-rework later anyway. The contract-first/MVP-validates sequence (§ D6) captures the benefit without the cost.
+- **4.6 Pre-author finance/erp taxonomy at Phase 0.** Rejected — speculative rules months before use; violates `rules/README.md` on-demand policy; resets churn clock early and idle. JIT at Phase 5/6.
+- **4.7 ACCEPTED now (skip PROPOSED).** Rejected — identical reasoning to ADR-MONO-008 § 4.5: the design is decided but project-creation churn waits for an explicit bootstrap moment.
+
+## 5. Relationship to ADR-MONO-008 / ADR-MONO-003a
+
+| Aspect | ADR-MONO-003a | ADR-MONO-008 | ADR-MONO-013 (this) |
+|---|---|---|---|
+| Scope | Meta: new project bootstrap needs fresh ADR | finance bootstrap | platform-console bootstrap + integration contract + admin-web retirement |
+| Status | ACCEPTED | PROPOSED | PROPOSED |
+| Churn-clock | Defines the rule | Resets on finance ACCEPTED | Resets on console ACCEPTED |
+| Governs finance/erp? | n/a | **Yes (finance)** | **No** — explicitly defers to ADR-MONO-008 / future erp ADR |
+
+## 6. Status Transition History
+
+Append-only.
+
+| Date | Transition | Classification | Phase reached | User intent quote | PR(s) |
+|---|---|---|---|---|---|
+| 2026-05-16 | created PROPOSED | TBD (D3) | Phase 0 (criteria pre-author) | n/a (design dialogue convergence, not bootstrap intent) | TBD (this PR) |
+
+(ACCEPTED row reserved — appended at bootstrap moment per § D8.3.)
+
+## 7. Provenance
+
+- ADR-MONO-003a § D2.1 — explicit mandate for a fresh ADR on new project bootstrap; this ADR satisfies it for `platform-console`.
+- ADR-MONO-008 — structural template (PROPOSED criteria-doc pattern) and the governing ADR for this ADR's Phase 5 (finance); not re-decided here.
+- GAP PROJECT.md § Service Map — `admin-web` is the only existing product UI; its parity-gated retirement is a GAP spec change.
+- Memory `project_gap_idp_promotion` — GAP as standard OIDC AS is the SSO backbone Model B depends on.
+- Design dialogue 2026-05-15~16 — converged D1 (Model B) / D2 (new project) / D4 (parity-gated retirement) / § 1.2.4 (finance/erp JIT).
+
+분석=Opus 4.7 / 구현 권장: ADR·통합계약 spec = Opus (model/placement/retirement-path/contract phrasing require interpretive judgement; structurally identical to TASK-MONO-071 → ADR-MONO-008 PROPOSED authoring path) / 콘솔 Next.js 구현 = Sonnet 4.6.
