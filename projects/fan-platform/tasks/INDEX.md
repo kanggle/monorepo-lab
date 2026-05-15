@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-007-e2e-path-and-oauth-client-name-drift.md` — 2026-05-15 audit reconcile 의 fan genuine 2건: F16 (`specs/integration/v1-e2e-scenarios.md` `/api/v1/artist/artists` off-by-one extra segment → `artist-api.md`+`gateway-service/architecture.md` canonical `/api/v1/artists`; grep all `/api/v1/artist/`) + F21 (`fan-platform-web/architecture.md:150` `fan-platform-realm-internal-services-client` → GAP V0011 seed canonical `fan-platform-internal-services-client`). spec-only, GAP V0011 read-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical string/path fix).
+(empty)
 
 ## in-progress
 
@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-007-e2e-path-and-oauth-client-name-drift.md` — impl `task/spec-drift-cohort-2026-05-16` (spec-only, GAP V0011 read-only, no `apps/`). **WI-1 (F16)**: `v1-e2e-scenarios.md` step 1/2 `/api/v1/artist/artists`·`/api/v1/artist/artists/{id}/status` off-by-one → canonical `/api/v1/artists`·`/api/v1/artists/{id}/status` (artist-api.md L16-19 + gateway-service/architecture.md L146-149 route 표 = authority; 두 step 모두 positive valid-call 201/200 확인 — Edge Case negative-test 아님). **Edge-Case 편집 제외**: `gateway-service/architecture.md:152` 의 `/api/v1/artist/**` 는 회피한 catch-all glob 을 설명하는 prose (route 표는 이미 canonical) — task Scope("e2e doc 가 유일 edit target") + Edge Case + Failure Scenario("정당한 다른 endpoint blind replace 금지") 에 따라 미편집·문서화. AC grep 의도 "(no extra-segment off-by-one form remains)" 충족. **WI-2 (F21)**: `fan-platform-web/architecture.md:150` `fan-platform-realm-internal-services-client` → `fan-platform-internal-services-client` (client_id 확인, Keycloak realm 아님; GAP V0011 seed L84 = canonical; gap-integration.md:48/103 이미 정합). `grep realm-internal-services-client`=0, GAP/apps diff 0, dead-ref 0. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
