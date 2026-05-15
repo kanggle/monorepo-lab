@@ -8,7 +8,7 @@ GAP spec drift bundle — auth-service login:fail Redis key shape conflict (G7) 
 
 # Status
 
-review
+done
 
 # Owner
 
