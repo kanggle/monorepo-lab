@@ -2,10 +2,9 @@ package com.example.admin.application;
 
 import com.example.admin.application.event.AdminEventPublisher;
 import com.example.admin.application.exception.AuditFailureException;
+import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +35,7 @@ class AdminActionAuditorTest {
     AdminActionJpaRepository repo;
 
     @Mock
-    AdminOperatorJpaRepository operatorRepo;
+    OperatorLookupPort operatorLookupPort;
 
     @Mock
     AdminEventPublisher publisher;
@@ -47,16 +46,13 @@ class AdminActionAuditorTest {
     @InjectMocks
     AdminActionAuditor auditor;
 
-    @Mock
-    AdminOperatorJpaEntity operatorEntity;
-
     private OperatorContext op() {
         return new OperatorContext("op-1", "jti-1");
     }
 
     private void stubOperatorResolution() {
-        when(operatorRepo.findByOperatorId("op-1")).thenReturn(Optional.of(operatorEntity));
-        when(operatorEntity.getId()).thenReturn(42L);
+        when(operatorLookupPort.findByOperatorId("op-1"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(42L, "op-1", "fan-platform")));
     }
 
     @Test
@@ -96,7 +92,7 @@ class AdminActionAuditorTest {
 
     @Test
     void recordStart_throws_audit_failure_when_operator_row_missing() {
-        when(operatorRepo.findByOperatorId("op-1")).thenReturn(Optional.empty());
+        when(operatorLookupPort.findByOperatorId("op-1")).thenReturn(Optional.empty());
 
         AdminActionAuditor.StartRecord start = new AdminActionAuditor.StartRecord(
                 "audit-1", ActionCode.ACCOUNT_LOCK, op(),
@@ -134,8 +130,8 @@ class AdminActionAuditorTest {
     @Test
     void recordDenied_inserts_row_and_emits_event() {
         // In unit scope SecurityContext is absent → operator UUID resolves to "unknown".
-        when(operatorRepo.findByOperatorId("unknown")).thenReturn(Optional.of(operatorEntity));
-        when(operatorEntity.getId()).thenReturn(7L);
+        when(operatorLookupPort.findByOperatorId("unknown"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(7L, "unknown", "fan-platform")));
 
         auditor.recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock",
                 "/api/admin/accounts/acc-1/lock", "POST", "acc-1");
@@ -154,7 +150,7 @@ class AdminActionAuditorTest {
 
     @Test
     void recordDenied_fail_closed_when_operator_row_missing() {
-        when(operatorRepo.findByOperatorId("unknown")).thenReturn(Optional.empty());
+        when(operatorLookupPort.findByOperatorId("unknown")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> auditor.recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock",
                 "/api/admin/accounts/acc-1/lock", "POST", "acc-1"))
@@ -184,7 +180,6 @@ class AdminActionAuditorTest {
     @Test
     void recordCrossTenantDenied_inserts_denied_row_with_own_tenant_and_emits_event() {
         stubOperatorResolution();
-        when(operatorEntity.getTenantId()).thenReturn("fan-platform");
 
         OperatorContext actor = op();
         auditor.recordCrossTenantDenied(
@@ -204,7 +199,6 @@ class AdminActionAuditorTest {
     @Test
     void recordCrossTenantDenied_bestEffort_swallows_db_failure_and_does_not_throw() {
         stubOperatorResolution();
-        when(operatorEntity.getTenantId()).thenReturn("fan-platform");
         doThrow(new RuntimeException("db down")).when(repo).save(any());
 
         // Must NOT throw — best-effort swallows the exception

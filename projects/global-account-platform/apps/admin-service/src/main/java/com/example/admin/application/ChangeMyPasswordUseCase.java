@@ -3,8 +3,7 @@ package com.example.admin.application;
 import com.example.admin.application.exception.CurrentPasswordMismatchException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.PasswordPolicyViolationException;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,23 +15,22 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class ChangeMyPasswordUseCase {
 
-    private final AdminOperatorJpaRepository operatorRepository;
+    private final AdminOperatorPort operatorPort;
     private final PasswordHasher passwordHasher;
 
     @Transactional
     public void changeMyPassword(String operatorUuid, String currentPassword, String newPassword) {
-        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorUnauthorizedException(
                         "Operator not found for operatorId=" + operatorUuid));
 
-        if (!passwordHasher.verify(currentPassword, entity.getPasswordHash())) {
+        if (!passwordHasher.verify(currentPassword, operator.passwordHash())) {
             throw new CurrentPasswordMismatchException();
         }
         validatePasswordPolicy(newPassword);
 
         String newHash = passwordHasher.hash(newPassword);
-        entity.changePasswordHash(newHash, Instant.now());
-        operatorRepository.save(entity);
+        operatorPort.changePasswordHash(operator.internalId(), newHash, Instant.now());
     }
 
     private static void validatePasswordPolicy(String password) {

@@ -1,11 +1,7 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorNotFoundException;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaEntity;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,35 +18,33 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PatchOperatorRoleUseCase {
 
-    private final AdminOperatorJpaRepository operatorRepository;
-    private final AdminOperatorRoleJpaRepository operatorRoleRepository;
+    private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
     private final CachingPermissionEvaluator cachingPermissionEvaluator;
-    private final OperatorRoleResolver operatorRoleResolver;
 
     @Transactional
     public PatchRolesResult patchRoles(String operatorUuid,
                                        List<String> roleNames,
                                        OperatorContext actor,
                                        String reason) {
-        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorUuid));
 
-        Map<String, AdminRoleJpaEntity> resolvedRoles = operatorRoleResolver.resolveRoles(roleNames);
+        Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);
 
         Instant now = Instant.now();
-        Long actorInternalId = operatorRoleResolver.resolveActorInternalId(actor);
+        Long actorInternalId = operatorPort.resolveActorInternalId(
+                actor == null ? null : actor.operatorId());
 
-        operatorRoleRepository.deleteByOperatorId(entity.getId());
+        operatorPort.deleteOperatorRoles(operator.internalId());
 
-        List<AdminOperatorRoleJpaEntity> bindings = new ArrayList<>(resolvedRoles.size());
-        for (AdminRoleJpaEntity role : resolvedRoles.values()) {
-            bindings.add(AdminOperatorRoleJpaEntity.create(entity.getId(), role.getId(), now, actorInternalId));
+        List<AdminOperatorPort.NewRoleBinding> bindings = new ArrayList<>(resolvedRoles.size());
+        for (AdminOperatorPort.RoleView role : resolvedRoles.values()) {
+            bindings.add(new AdminOperatorPort.NewRoleBinding(
+                    operator.internalId(), role.id(), now, actorInternalId, operator.tenantId()));
         }
-        if (!bindings.isEmpty()) {
-            operatorRoleRepository.saveAll(bindings);
-        }
+        operatorPort.saveOperatorRoles(bindings);
 
         String auditId = auditor.newAuditId();
         auditor.record(new AdminActionAuditor.AuditRecord(
@@ -59,7 +53,7 @@ public class PatchOperatorRoleUseCase {
                 actor,
                 "OPERATOR",
                 operatorUuid,
-                OperatorRoleResolver.normalizeReason(reason),
+                AuditReasons.normalize(reason),
                 null,
                 "roles:" + auditId,
                 Outcome.SUCCESS,

@@ -5,14 +5,9 @@ import com.example.admin.application.exception.InvalidCredentialsException;
 import com.example.admin.application.exception.InvalidLoginRequestException;
 import com.example.admin.application.exception.InvalidRecoveryCodeException;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
+import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.AdminOperatorTotpPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaEntity;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaRepository;
 import com.example.admin.infrastructure.security.BootstrapTokenService;
 import com.example.admin.infrastructure.security.JwtSigner;
 import com.example.admin.infrastructure.security.TotpGenerator;
@@ -22,10 +17,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.security.password.PasswordHasher;
-import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,8 +40,9 @@ import java.util.Map;
  *
  * <p>Recovery code consumption: hashes are stored as a JSON array column on
  * {@code admin_operator_totp}. On match, the hash is removed and the row
- * re-saved. The {@code @Version} column on the entity gives optimistic
- * locking; on conflict we retry exactly once.
+ * re-saved via {@link AdminOperatorTotpPort#tryUpdateRecoveryHashes}, which
+ * returns {@code false} on optimistic-lock conflict so the loop retries
+ * exactly once.
  */
 @Slf4j
 @Service
@@ -63,10 +57,8 @@ public class AdminLoginService {
      */
     private static final String DUMMY_PLAINTEXT = "<timing_dummy_plaintext>";
 
-    private final AdminOperatorJpaRepository operatorRepository;
-    private final AdminOperatorRoleJpaRepository operatorRoleRepository;
-    private final AdminRoleJpaRepository roleRepository;
-    private final AdminOperatorTotpJpaRepository totpRepository;
+    private final AdminOperatorPort operatorPort;
+    private final AdminOperatorTotpPort totpPort;
     private final PasswordHasher passwordHasher;
     private final TotpGenerator totpGenerator;
     private final TotpSecretCipher cipher;
@@ -85,27 +77,27 @@ public class AdminLoginService {
     @Transactional
     public LoginResult login(String operatorUuid, String password,
                              String totpCode, String recoveryCode) {
-        AdminOperatorJpaEntity operator = operatorRepository.findByOperatorId(operatorUuid).orElse(null);
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid).orElse(null);
 
         // Password verification (timing-leveled between miss and wrong-password).
-        if (operator == null || operator.getPasswordHash() == null) {
+        if (operator == null || operator.passwordHash() == null) {
             // Consume comparable CPU time so the caller cannot distinguish miss from wrong password.
             passwordHasher.verify(DUMMY_PLAINTEXT, dummyHash());
             throw new InvalidCredentialsException();
         }
-        if (!passwordHasher.verify(password, operator.getPasswordHash())) {
+        if (!passwordHasher.verify(password, operator.passwordHash())) {
             throw new InvalidCredentialsException();
         }
 
-        boolean require2fa = roleSetRequires2fa(operator.getId());
+        boolean require2fa = operatorPort.anyRoleRequires2fa(operator.internalId());
         boolean twofaUsed = false;
 
         if (require2fa) {
-            AdminOperatorTotpJpaEntity totpRow = totpRepository.findById(operator.getId()).orElse(null);
+            AdminOperatorTotpPort.TotpRow totpRow = totpPort.findByOperator(operator.internalId()).orElse(null);
             if (totpRow == null) {
                 throw buildEnrollmentRequired(operatorUuid);
             }
-            if (totpRow.getLastUsedAt() == null) {
+            if (totpRow.lastUsedAt() == null) {
                 // Enrolled but never verified — allow re-enrollment or verify
                 throw buildEnrollmentRequired(operatorUuid);
             }
@@ -116,25 +108,24 @@ public class AdminLoginService {
                         "Exactly one of totpCode or recoveryCode must be provided");
             }
             if (hasTotp) {
-                byte[] secret = cipher.decrypt(totpRow.getSecretEncrypted(),
-                        operator.getId(), totpRow.getSecretKeyId());
+                byte[] secret = cipher.decrypt(totpRow.secretEncrypted(),
+                        operator.internalId(), totpRow.secretKeyId());
                 try {
                     if (!totpGenerator.verify(secret, totpCode)) {
                         throw new InvalidTwoFaCodeException("TOTP code does not match");
                     }
-                    totpRow.markUsed(Instant.now());
-                    totpRepository.save(totpRow);
+                    totpPort.markUsed(operator.internalId(), Instant.now());
                 } finally {
                     java.util.Arrays.fill(secret, (byte) 0);
                 }
             } else {
-                consumeRecoveryCode(operator.getId(), recoveryCode);
+                consumeRecoveryCode(operator.internalId(), recoveryCode);
             }
             twofaUsed = true;
         }
 
         String accessToken = mintAccessToken(operatorUuid);
-        AdminRefreshTokenIssuer.Issued refresh = refreshTokenIssuer.issue(operator.getId(), operatorUuid, null);
+        AdminRefreshTokenIssuer.Issued refresh = refreshTokenIssuer.issue(operator.internalId(), operatorUuid, null);
         return new LoginResult(
                 accessToken,
                 jwtProperties.getAccessTokenTtlSeconds(),
@@ -143,25 +134,18 @@ public class AdminLoginService {
                 twofaUsed);
     }
 
-    private boolean roleSetRequires2fa(long operatorPk) {
-        List<AdminOperatorRoleJpaEntity> bindings = operatorRoleRepository.findByOperatorId(operatorPk);
-        if (bindings.isEmpty()) return false;
-        List<Long> roleIds = new ArrayList<>(bindings.size());
-        for (AdminOperatorRoleJpaEntity b : bindings) roleIds.add(b.getRoleId());
-        return roleRepository.findAllById(roleIds).stream().anyMatch(r -> r.isRequire2fa());
-    }
-
     /**
      * Recovery code consumption with a single optimistic-lock retry. On match,
-     * removes the hash from the JSON array and saves the row. On conflict
-     * (another concurrent login consumed a code), re-reads and retries once.
+     * removes the hash from the JSON array and saves the row via the port's
+     * version-checked update. On conflict (another concurrent login consumed a
+     * code), re-reads and retries once.
      */
     private void consumeRecoveryCode(long operatorPk, String rawCode) {
         String normalized = rawCode.trim().toUpperCase();
         for (int attempt = 0; attempt < 2; attempt++) {
-            AdminOperatorTotpJpaEntity row = totpRepository.findById(operatorPk)
+            AdminOperatorTotpPort.TotpRow row = totpPort.findByOperator(operatorPk)
                     .orElseThrow(() -> new InvalidRecoveryCodeException("2FA not enrolled"));
-            List<String> hashes = parseHashes(row.getRecoveryCodesHashed());
+            List<String> hashes = parseHashes(row.recoveryCodesHashed());
             int matchIdx = -1;
             for (int i = 0; i < hashes.size(); i++) {
                 if (passwordHasher.verify(normalized, hashes.get(i))) {
@@ -173,14 +157,12 @@ public class AdminLoginService {
                 throw new InvalidRecoveryCodeException("Recovery code does not match");
             }
             hashes.remove(matchIdx);
-            row.replaceRecoveryHashes(serializeHashes(hashes), Instant.now());
-            try {
-                totpRepository.saveAndFlush(row);
+            if (totpPort.tryUpdateRecoveryHashes(
+                    operatorPk, row.version(), serializeHashes(hashes), Instant.now())) {
                 return;
-            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
-                log.debug("Optimistic lock conflict on recovery code consume (attempt={})", attempt, ex);
-                // fall through to retry
             }
+            log.debug("Optimistic lock conflict on recovery code consume (attempt={})", attempt);
+            // fall through to retry
         }
         throw new InvalidRecoveryCodeException("Recovery code consume failed after retry");
     }
