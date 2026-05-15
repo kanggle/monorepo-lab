@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-014-inventory-visibility-architecture-missing-sections.md` — 2026-05-15 audit reconcile 의 SCM genuine 1건 (S20): `inventory-visibility-service/architecture.md` 가 sibling `procurement-service` 대비 10 standard section 누락 (Observability / Failure Modes / Testing Strategy / Mandatory·Trait Rule mapping / Saga / Outbox+audit_log / Idempotency / Multi-tenancy / References) → service-accurate authoring 또는 justified "N/A — <reason>" (zero-state convention), ADR-MONO-012 canonical form 보존. S3 (HTTP code drift, SCM-BE-010 fixed) / S10 (event envelope) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (bounded section authoring).
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-014-inventory-visibility-architecture-missing-sections.md` — impl `task/spec-drift-cohort-2026-05-16` (spec-only, no `apps/`). S20: `inventory-visibility-service/architecture.md` 에 누락 10 standard section 을 `## Dependencies` 뒤에 append (procurement-service 구조 parity, IVS-accurate — copy-paste 아님). **substantive**: Saga/Long-running (ADR-MONO-005 **Cat C** consumer + **Cat D** sweep, A/B 없음 명시) · Idempotency (T8 `event_dedupe`, mutating REST 없음 → no Idempotency-Key) · Trait mapping (**batch-heavy B1/B3/B5/B6 ✅ = scm 첫 구현**, T8 ✅) · Mandatory mapping (**S5 positive-primary** — IVS 가 S5 reference impl; procurement 의 S5-negative 와 대비) · Observability/Failure Modes/Testing 전부 IVS-specific. **justified N/A**: Outbox (ADR-MONO-005 Cat C best-effort 의도적 deviation, self-healing 근거) · audit_log/S7 (state machine 없음, event_dedupe provenance) · Multi-tenancy (scm = single-org, multi-tenant trait 미선언 — 단 tenant_id=scm fail-closed gate 유지). ADR-MONO-012 canonical form(Identity 표 + `### Service Type Composition` H3) 무손상 (append-only). dead-ref 0, apps/ 0. 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
