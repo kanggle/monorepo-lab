@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-293-wms-spec-drift-gateway-routes-openitems-idempotency.md` — 2026-05-15 audit reconcile 의 WMS genuine 3건: W9 (`gateway-service/architecture.md` route table 가 outbound + `/webhooks/erp/order` 누락, `overview.md` 와 내부 불일치; notification no-REST 는 정상) + W18 (master/outbound `architecture.md` "Open Items (Before First Impl)" 가 완료 파일을 미작성 prerequisite 로 서술 → `inventory-service` retrospective ✅/⚠️/❌ format 답습; inventory 는 STALE = reference) + W15 (master/inventory/inbound/outbound/admin Idempotency Redis key shape+cap drift, normalize vs document 결정; portfolio-wide 면 ADR; notification Postgres 는 scope 외). W2 (eventVersion) / W8 (9 dead-refs) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (W15 decision-bearing/ADR).
 
 ## in-progress
 

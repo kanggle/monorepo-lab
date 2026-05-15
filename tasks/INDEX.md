@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-105-platform-doc-consistency-bundle.md` — 2026-05-15 portfolio spec-drift audit reconcile 의 monorepo-level genuine 잔존 3건: P13 (`platform/service-types/frontend-app.md` 2 broken skill links → `/SKILL.md`) + P14 (`api-gateway-policy.md` ↔ `error-handling.md` 6 error-code 중복 dedup, error-handling.md = SoT) + P23 (`jwt-standard-claims.md` `entrypoint.md` 미인덱스 + heading style; "double-orphan" 은 false 라 scope 외). spec-only, HARDSTOP-03 guard. 9 stale finding (BE-144/151/156·SCM-BE-010·ADR-001·ADR-MONO-012 D3 closure) reconcile 제외. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical shared-doc consistency).
 
 ## in-progress
 

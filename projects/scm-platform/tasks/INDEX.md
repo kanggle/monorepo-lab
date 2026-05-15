@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-014-inventory-visibility-architecture-missing-sections.md` — 2026-05-15 audit reconcile 의 SCM genuine 1건 (S20): `inventory-visibility-service/architecture.md` 가 sibling `procurement-service` 대비 10 standard section 누락 (Observability / Failure Modes / Testing Strategy / Mandatory·Trait Rule mapping / Saga / Outbox+audit_log / Idempotency / Multi-tenancy / References) → service-accurate authoring 또는 justified "N/A — <reason>" (zero-state convention), ADR-MONO-012 canonical form 보존. S3 (HTTP code drift, SCM-BE-010 fixed) / S10 (event envelope) reconcile STALE 제외. spec-only, no `apps/`. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (bounded section authoring).
 
 ## in-progress
 
