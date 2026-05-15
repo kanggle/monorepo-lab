@@ -1,6 +1,6 @@
 # Activation Rules
 
-> **Role**: Tells agents "when trait/domain X is declared in [`PROJECT.md`](../../PROJECT.md), activate the following rule categories and skill bundles". This is a **short dispatch table**, not a rule definition.
+> **Role**: Tells agents "when trait/domain X is declared in a project's `PROJECT.md` (`projects/<name>/PROJECT.md`), activate the following rule categories and skill bundles". This is a **short dispatch table**, not a rule definition.
 >
 > **Detailed rule content** lives in:
 > - [`rules/traits/<trait>.md`](../../rules/traits/) — trait Mandatory Rules, Forbidden Patterns, Required Artifacts, Checklists

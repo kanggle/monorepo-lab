@@ -21,6 +21,14 @@ All implementation tasks targeting this service must follow this declaration,
 | Event publication | none |
 | Shared state | Redis — rate-limit counters only (ephemeral) |
 
+### Service Type Composition
+
+`gateway-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`, in an edge gateway role — no
+domain aggregates, no Kafka surface. Spring Cloud Gateway (reactive)
+applies OAuth2 Resource Server JWT validation, RewritePath filtering,
+and tenant isolation at the edge.
+
 ---
 
 ## Role

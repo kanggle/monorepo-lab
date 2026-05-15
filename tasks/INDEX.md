@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-101-fan-platform-canonical-align-rules-common-broken-link.md` — audit-driver re-run bundle (validate-rules + dead-link audit 재실행으로 발견된 2 finding closure): (1) fan-platform 4 service architecture.md `### Service Type Composition` H3 backfill (ADR-MONO-012 D1 "always present" 의무 충족, **portfolio 32/32 service canonical 완전 정렬**) + (2) shared 영역 broken `[PROJECT.md](../[../]*PROJECT.md)` link 7 hit / 6 file fix (rules/common.md L13 + .claude/agents/{common,domain}/README.md + .claude/skills/domain/README.md + .claude/config/{traits,activation-rules,domains}.md — 모두 repo-root PROJECT.md 부재 라 broken, wording 평문으로 정정). HARDSTOP-10 hook CRLF/LF simulation mismatch **4th instance** 발생 → PowerShell 우회 (메모리 답습). hook source 강화 별 task 후보. fixture 22/22 PASS. CLAUDE.md / production code / Service Type 값 / Architecture Style 값 = 0 변경. D4 OVERRIDE per ADR-MONO-003a § D1.1.
 
 ## done
 

@@ -1,6 +1,6 @@
 # Trait Definitions
 
-> **Role**: Routing catalog for agent runtime dispatch. This file lists every valid `trait` value used in [`PROJECT.md`](../../PROJECT.md) `traits:` declarations.
+> **Role**: Routing catalog for agent runtime dispatch. This file lists every valid `trait` value used in a project's `PROJECT.md` (`projects/<name>/PROJECT.md`) `traits:` declarations.
 >
 > **Detailed definitions** (each trait's meaning, when to select it, and cross-trait compatibility) live in [`rules/taxonomy.md`](../../rules/taxonomy.md). When adding a new trait, update **both** files in the same change.
 >

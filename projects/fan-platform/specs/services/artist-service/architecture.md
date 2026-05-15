@@ -23,6 +23,14 @@ All implementation tasks targeting this service must follow this declaration,
 | Cache | Redis 7 (artist directory search read-through, fail-open) |
 | Event bus | Kafka 3.7 (outbox-driven publisher) |
 
+### Service Type Composition
+
+`artist-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Synchronous HTTP read/write API
+over the `artist` master-data aggregate plus a Kafka outbox publisher
+for downstream consumers (community-service). No inbound event-consumer
+surface — the outbox is publication-only.
+
 ---
 
 ## Architecture Style Rationale
