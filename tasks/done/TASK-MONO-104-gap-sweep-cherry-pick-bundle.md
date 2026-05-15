@@ -8,7 +8,7 @@ GAP sweep dry-run cherry-pick bundle — security/gateway/admin 3 trivial polish
 
 # Status
 
-review
+done
 
 # Owner
 
