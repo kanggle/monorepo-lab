@@ -202,9 +202,31 @@ operator session 수명은 다음 두 토큰으로 구성된다:
 - 키 보관이 KMS/Vault로 이전되는 시점(별도 ADR 생성 및 링크)
 - operator JWT와 user JWT를 동일 issuer로 통합하는 결정
 
+## Platform Console Registry (TASK-BE-296)
+
+admin-service 는 `GET /api/admin/console/registry` 로 platform-console 의
+data-driven product/tenant catalog 를 노출한다. 이 표면이 admin-service 에
+배치되는 이유는 (1) operator 인증 경계(`OperatorAuthenticationFilter`)가 본
+서비스 단일 소유, (2) cross-tenant operator scope(ADR-002 `tenant_id='*'`
+sentinel)가 본 서비스 모델, (3) gateway 가 `/api/admin/**` 의 operator JWT
+검증을 본 서비스에 위임하는 플랫폼 불변식 — 신규 인증 인프라 0.
+
+- **read-only**: 도메인 상태·audit row 미생성 (기존 tenant read-path
+  `GetTenantUseCase`/`ListTenantsUseCase` 와 동일 정책). admin-service 의
+  "도메인 로직 미수용" 원칙 유지 — registry 는 기존 tenant/product 메타의
+  projection 일 뿐 새 aggregate 아님.
+- **operator-scoped + tenant-aware**: 운영자의 `admin_operators.tenant_id`
+  로 선택 가능 tenant 결정 (`'*'` ⇒ 전체 ACTIVE 테넌트, 단일 ⇒ 자기 테넌트
+  1개). 다른 테넌트 slug 누출 금지 ([rules/traits/multi-tenant.md](../../../../../rules/traits/multi-tenant.md) M6 격리 회귀 테스트 필수).
+- tenant 목록은 account-service owns — `ListTenantsUseCase` (TenantProvisioningPort
+  read-through, CB/retry) 재사용. account-service 불가 시 503 (부분 catalog
+  금지).
+- 상세 contract: [specs/contracts/http/console-registry-api.md](../../contracts/http/console-registry-api.md).
+  product catalog/`available` 규칙 동기 소스: [specs/features/multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console".
+
 ## Integration Rules
 
-- **HTTP 컨트랙트 (외부)**: [specs/contracts/http/admin-api.md](../../contracts/http/) — admin 전용 엔드포인트
+- **HTTP 컨트랙트 (외부)**: [specs/contracts/http/admin-api.md](../../contracts/http/) — admin 전용 엔드포인트. [specs/contracts/http/console-registry-api.md](../../contracts/http/) — platform-console product/tenant registry (`GET /api/admin/console/registry`, TASK-BE-296)
 - **HTTP 컨트랙트 (out-going)**:
   - [specs/contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) — 강제 로그아웃
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) — lock/unlock/delete
