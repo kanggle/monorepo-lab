@@ -8,7 +8,7 @@ ADR-MONO-012a forward ADR (option C-1 누적 3건 corrections) + CLAUDE.md cosme
 
 # Status
 
-review
+done
 
 # Owner
 
