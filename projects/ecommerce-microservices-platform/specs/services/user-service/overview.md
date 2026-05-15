@@ -43,8 +43,8 @@
 
 ## Key invariants
 
-1. **No credential ownership** — user-service 는 password / hash / JWT token 직접 보관 / 검증 금지; `auth-service` (또는 GAP) 가 owner.
-2. **`userId` is external identifier** — auth-service 가 발급한 ID 를 그대로 사용, 자체 sequence 생성 안 함.
+1. **No credential ownership** — user-service 는 password / hash / JWT token 직접 보관 / 검증 금지; GAP (global-account-platform) 가 owner (in-tree auth-service 는 TASK-BE-132 으로 폐기).
+2. **`userId` is external identifier** — GAP 가 발급한 ID 를 그대로 사용, 자체 sequence 생성 안 함.
 3. **No token cache** — JWT / refresh token 을 user-service 가 cache 하지 않음.
 4. **Profile data exposed via published contracts only** — DB 직접 조회 금지; HTTP / event 만 통과.
 5. **Presentation ↛ persistence** — controller 가 repository 직접 호출 금지 (architecture.md § Layered Rules).
@@ -63,7 +63,7 @@
 
 - PostgreSQL — user profile persistence
 - Kafka — event consumption + publication
-- `auth-service` / GAP (event source: `UserSignedUp`)
+- ~~`auth-service`~~ (deprecated) → GAP (event source: `UserSignedUp`; GAP `AccountSignedUp` 위임)
 
 ## Out of scope (v1)
 

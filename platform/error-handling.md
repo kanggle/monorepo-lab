@@ -218,6 +218,7 @@ Owned by `outbound-service`. See `rules/domains/wms.md` and
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
 | SHIPMENT_NOT_FOUND | 404 | Shipment record does not exist for the given id or order |
 | EXTERNAL_SERVICE_UNAVAILABLE | 503 | Third-party integration (TMS / supplier / external WMS adapter) is unreachable after retries / circuit-breaker exhausted. Distinct from `SERVICE_UNAVAILABLE` (internal monorepo service) — different operator playbook (3rd-party SLA, support ticket vs internal restart). |
+| EXTERNAL_TIMEOUT | 503 | Third-party integration (TMS / supplier / external WMS adapter) accepted the call but did not respond within the call deadline after Resilience4j retry exhaustion. Distinct from `EXTERNAL_SERVICE_UNAVAILABLE` (could not establish the call / circuit OPEN) and from Platform-Common General `DOWNSTREAM_ERROR` (502, *internal* monorepo service 5xx/timeout) — same 503 surface as its sibling, different operator signal: timeout = upstream slow/overloaded and may self-recover (idempotent retry reasonable); unavailable = upstream down or load-shed. (504 Gateway Timeout would be marginally more precise but is not in this doc's HTTP Status Mapping table; 503 keeps parity with the sibling and the "Upstream dependency unavailable" mapping row.) |
 
 ## Admin  `[domain: wms]`
 

@@ -142,3 +142,146 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 | Out | PostgreSQL (inventory-visibility schema) | JDBC | InventoryNode / InventorySnapshot / NodeStaleness / EventDedupe |
 | Out | Redis | TCP | read-model cache (fail-OPEN) |
 | Out | GAP `/oauth2/jwks` | HTTPS | JWT 서명 검증 (libs/java-security) |
+
+## Saga / Long-running Flow (ADR-MONO-005)
+
+Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md). `inventory-visibility-service` is a **read-model**; it owns no aggregate state machine and makes no outbound synchronous business call, so it has **no Category A (multi-step saga) and no Category B (synchronous external) flow**. Two ADR-MONO-005 categories do apply:
+
+| Flow | Category | Resilience config | Fail behavior | Metrics | Status |
+|---|---|---|---|---|---|
+| wms inventory event consumption (`wms.inventory.{received,adjusted,transferred}.v1`) | **C** (single-step idempotent consume, retry + DLT, no saga row) | manual ACK; 3 retries exponential backoff (1s, 2s); invalid envelope (null `eventId`/`payload`) → immediate DLT, no retry | duplicate `eventId` skipped via `event_dedupe`; retry exhaustion → `<topic>.DLT` (no silent discard) | consumer lag, DLT route count, dedupe-skip count | Compliant |
+| staleness detection sweep (`StalenessDetectionScheduler`) | **D** (periodic TTL-style sweep, cluster singleton) | `@Scheduled(fixedDelay = 5 min)` + ShedLock; each run recomputes node status from `last_event_at` (deterministic, rerun-safe) | ShedLock not acquired → silent skip + metric (not an error, B5) | run/lag/failure metrics (B6) | Compliant |
+
+The outbound `scm.inventory.alert.v1` publish is **at-most-once, no outbox** (Category C best-effort) — see § Outbox + audit_log invariants for the deliberate-deviation rationale.
+
+## Outbox + audit_log invariants
+
+### Transactional outbox
+
+**N/A — deliberate ADR-MONO-005 Category C deviation.** `inventory-visibility-service` does **not** run a transactional outbox. The only published event, `scm.inventory.alert.v1` (SNAPSHOT_STALE / NODE_UNREACHABLE), is emitted **best-effort at-most-once** by `KafkaAlertPublisherAdapter`. Justification: the alert is a non-authoritative notification, not a state-of-record change — the authoritative state is the `NodeStaleness` table maintained by the 5-minute sweep. A dropped alert self-heals: the next sweep re-evaluates and re-publishes for any node still STALE/UNREACHABLE. Paying transactional-outbox cost for a self-healing notification is unjustified (ADR-MONO-005 Cat C). The envelope still uses the platform standard shape (`source = "scm-platform-inventory-visibility-service"`, `schemaVersion = 1`) per [`inventory-visibility-subscriptions.md`](../../contracts/events/inventory-visibility-subscriptions.md).
+
+### Audit log (S7)
+
+**N/A — no domain state machine.** scm S7 (state-transition audit trail) targets aggregates with auditable business transitions (e.g. PO lifecycle in `procurement-service`). `inventory-visibility-service` is a projection: snapshot mutations are idempotent re-applications of external `wms-platform` events, not operator-driven state transitions, and there are no mutating REST endpoints. Processing provenance is instead captured by the **`event_dedupe`** table (`eventId` + processed marker) — every applied wms event is traceable to its source envelope. The project is not `audit-heavy` (PROJECT.md § Out of Scope); no immutable external-retention audit store is in v1 scope.
+
+## Idempotency (T8)
+
+`inventory-visibility-service` has **no mutating REST endpoints**, so the `Idempotency-Key` header pattern (T1, used by `procurement-service`) does **not** apply here. Idempotency lives entirely on the **event-consumer** side (T8):
+
+- **Dedupe store**: `event_dedupe` table keyed on the wms envelope `eventId` (UUID v7). A duplicate `eventId` is skipped without mutation — re-delivering the same wms event leaves the snapshot byte-identical.
+- **Idempotent projection**: snapshot application is itself rerun-safe — `received` = upsert by `(skuId, nodeId)`, `adjusted` = delta apply guarded by the dedupe check, `transferred` = dual-row (source + destination) update in one unit. Replaying an already-applied `eventId` is a no-op.
+- **Sweep idempotency** (batch-heavy B1): `StalenessDetectionScheduler` recomputes each node's status from `last_event_at`; running it twice in succession yields the same `NodeStaleness` rows (no accumulating side-effect).
+
+```
+event_dedupe(event_id UUID PRIMARY KEY, topic, processed_at TIMESTAMPTZ)
+```
+
+Invalid envelopes (null `eventId` or null `payload`) bypass dedupe and route straight to DLT (cannot key the dedupe table).
+
+## Multi-tenancy
+
+**N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a GAP `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant).
+
+The `tenant_id=scm` claim is still **fail-closed enforced** (single-tenant gate, defense-in-depth — consistent with `procurement-service`):
+
+1. **Gateway** — `TenantClaimValidator` rejects tokens whose `tenant_id ∉ {scm, *}` at JWT decode time.
+2. **Service JWT validator chain** — `AllowedIssuersValidator` + `TenantClaimValidator` re-run during local decode (the gateway forwards the bearer; the service decodes again).
+3. **Service filter** — `TenantClaimEnforcer` servlet filter rejects with 403 `TENANT_FORBIDDEN` when the claim is missing or not in `{scm, *}` (public actuator paths skipped).
+
+The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "scm"`. Consumed `wms-platform` events are cross-project but are projected into the single `scm` tenant scope.
+
+## Mandatory Rule mapping (rules/domains/scm.md)
+
+| Rule | Status | Mechanism |
+|---|---|---|
+| **S1** Multi-leg state transitions idempotent + tx-protected | N/A | No aggregate state machine — read-model only. The idempotent event projection (`event_dedupe` + upsert) is the analogue. |
+| **S2** Supplier external calls carry idempotency key | N/A | No outbound supplier/external business call (only DB / Redis / JWKS). |
+| **S3** Settlement period lock immutability | N/A | No settlement domain (deferred to v2 `settlement-service`). |
+| **S4** Demand forecast reproducibility | N/A | No forecasting (deferred to v2 `demand-planning-service`). |
+| **S5** Cross-node inventory visibility eventual consistency | ✅ Applied (primary subject) | **This service is S5's reference implementation**: eventual-consistency read-model; all 4 read endpoints emit `meta.warning: "Not for procurement decisions (S5)"`; `procurement-service` has a structural Forbidden Dependency on it. |
+| **S6** Supplier credentials encryption | N/A | No supplier credentials stored (no supplier integration surface). |
+| **S7** State transition audit trail | N/A | No state machine; processing provenance via `event_dedupe` (see § Outbox + audit_log invariants). |
+| **S8** Reconciliation discrepancy auto-close forbidden | N/A | No reconciliation (deferred to v2 `settlement-service`). |
+
+> S5 is **positive primary** compliance here (contrast `procurement-service`, where S5 is *negative* structural compliance — it must not depend on this service).
+
+## Trait Rule mapping (rules/traits/)
+
+| Trait Rule | Status | Mechanism |
+|---|---|---|
+| **T1** Idempotency on mutating endpoints | N/A | No mutating REST endpoints (read-only API). Idempotency is event-side (T8). |
+| **T8** Idempotent event consumption | ✅ | `event_dedupe` table keyed on wms `eventId` (UUID v7); duplicate → skip without mutation. |
+| **T2 / T3** Atomic state-change + transactional outbox / polling relay | N/A | No transactional outbox — alert is best-effort Cat C (deliberate, see § Outbox + audit_log invariants). |
+| **T4** State machine via dedicated module | N/A | Read-model; `NodeStaleness` status (FRESH/STALE/UNREACHABLE) is a derived classification, not a domain state machine. |
+| **T7** Optimistic locking on aggregates | ✅ (ordering-based) | `wms-platform` is the sole write source; the single consumer group consumes per-node-partition-ordered events, serialising snapshot writes per node. Read API and sweep do not mutate snapshots. No concurrent multi-writer to guard. |
+| **I2 / I3** Circuit breaker / retry+jitter on external calls | N/A (no sync external) | No outbound synchronous business call. Consumer resilience = manual ACK + 3-retry + DLT (Cat C). |
+| **I7 / I8** Vendor SDK isolation / vendor types never reach domain | N/A | No external vendor SDK — inbound is intra-platform Kafka; outbound is infra (PG/Redis/Kafka). |
+| **batch-heavy B1** Idempotent + rerunnable batch | ✅ | `StalenessDetectionScheduler` recomputes status from `last_event_at` — rerun-safe, no accumulating side-effect. |
+| **batch-heavy B2** Checkpoint + partial-failure recovery | ✅ (minimal, justified) | Single-pass over a bounded node set (no chunking needed); a killed run is fully recovered by the next 5-min tick (B1 rerun-safety substitutes for checkpointing). |
+| **batch-heavy B3** Retry policy | ✅ | Transient failure → next scheduled tick re-runs (self-healing); the consumer path uses explicit 3-retry + DLT. |
+| **batch-heavy B5** Distributed lock for cluster singleton | ✅ | **ShedLock** on `StalenessDetectionScheduler` — the first `batch-heavy` compliance in scm-platform; lock-not-acquired → silent skip + metric. |
+| **batch-heavy B6** Observation + alerting | ✅ | Scheduler run/lag/failure metrics (see § Observability); `lag.seconds > 2 × interval` SLO alert. |
+| **batch-heavy B7** Resource isolation (batch ↔ OLTP) | ✅ (low-risk) | Bounded read-mostly node-set sweep; no large UPDATE/INSERT, no OLTP pool contention. |
+| **batch-heavy B8** Reproducibility | N/A | Project is not `data-intensive`; no model/input-hash retention requirement. |
+
+## Observability
+
+- Logback pattern includes `traceId`, `requestId`, `tenantId` (= `scm`), `accountId` MDC keys (set by `libs/java-observability`).
+- Custom Micrometer metrics:
+  - **Event consumer**: dedupe-skip count, DLT-route count, consumer lag per topic.
+  - **Staleness scheduler** (batch-heavy B6): `staleness_sweep_run_count{result=success|failed|skipped}`, `staleness_sweep_duration_seconds` (histogram), `staleness_sweep_lag_seconds` (gauge — SLO alert when `> 2 × 5 min`), `staleness_sweep_failure_count`.
+  - **Alert publish**: `scm_inventory_alert_publish_total{result=success|failed}` (best-effort; failure is non-fatal, re-published next sweep).
+  - **Redis cache**: hit / miss / unavailable counters (mirrors the `X-Cache: HIT/MISS/UNAVAILABLE` response header).
+- Tracing: OTLP via `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`; dev sampling 100%.
+- Prometheus scrape on `/actuator/prometheus`, **internal docker network only** — never gateway-routed externally.
+
+## Failure Modes
+
+| # | Situation | Behavior |
+|---|---|---|
+| 1 | Duplicate wms `eventId` | skipped, no mutation (`event_dedupe`, T8) |
+| 2 | Invalid envelope (null `eventId` / `payload`) | immediate `<topic>.DLT`, no retry |
+| 3 | Transient consumer processing error | 3 retries (1s, 2s exponential) → `<topic>.DLT` on exhaustion |
+| 4 | Cross-tenant JWT (`tenant_id ∉ {scm, *}`) | 403 `TENANT_FORBIDDEN` (validator chain or `TenantClaimEnforcer`) |
+| 5 | Redis cache miss / Redis outage | **fail-OPEN** → fall back to PostgreSQL; response header `X-Cache: UNAVAILABLE`; never 5xx (invariant #6) |
+| 6 | wms topic silent / consumer lag grows | node `last_event_at` ages → sweep flips node to STALE / UNREACHABLE → `SNAPSHOT_STALE` alert |
+| 7 | `StalenessDetectionScheduler` ShedLock held by another replica | silent skip + `staleness_sweep_run_count{result=skipped}` (not an error, B5) |
+| 8 | Alert Kafka publish fails | at-most-once → dropped; re-published on next 5-min sweep if node still stale (no outbox, Cat C — deliberate) |
+| 9 | Node has never reported any event | classified `UNREACHABLE` → `NODE_UNREACHABLE` alert |
+| 10 | Read endpoint serves eventually-stale data | by design — response carries `meta.warning: "Not for procurement decisions (S5)"` (not a failure) |
+| 11 | Snapshot query for unknown SKU / node | empty result (read-model absence is normal, not 404) |
+
+## Testing Strategy
+
+- **Unit** (`./gradlew :apps:inventory-visibility-service:test`):
+  - Domain: `InventorySnapshot` (received upsert / adjusted delta / transferred dual-row apply), `NodeStaleness` FRESH/STALE/UNREACHABLE classification, `InventoryNode`, `EventDedupeRecord`.
+  - Application: use-case services with mocked ports.
+  - Adapters: 3 Kafka consumer mappers, validator units (`TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`), `TenantClaimEnforcerTest`.
+- **Slice**: JPA adapter slices (H2), Redis cache adapter (fail-open path), REST controller slices (S5 `meta.warning` assertion), error-handler slice.
+- **Integration** (`./gradlew :apps:inventory-visibility-service:integrationTest`, `@Tag("integration")`, Testcontainers PostgreSQL + Redis + Kafka):
+  - Consume `wms.inventory.{received,adjusted,transferred}.v1` → snapshot upsert / delta / dual-row.
+  - Duplicate `eventId` → idempotent skip (snapshot unchanged).
+  - Poison envelope → DLT; transient error → 3-retry then DLT.
+  - `StalenessDetectionScheduler` ShedLock — 2-instance singleton (only one runs); STALE/UNREACHABLE → `scm.inventory.alert.v1` published.
+  - Redis outage → fail-open fallback, `X-Cache: UNAVAILABLE`, no 5xx.
+  - Cross-tenant JWT → 403; missing tenant claim → 401.
+  - All 4 read endpoints carry `meta.warning: "Not for procurement decisions (S5)"`.
+
+`integrationTest` is excluded from `./gradlew check` so the fast feedback loop stays Docker-free (same convention as `procurement-service`).
+
+## References
+
+- `platform/architecture-decision-rule.md`
+- `platform/service-types/rest-api.md` + `platform/service-types/event-consumer.md` (dual-type — documented exception to "read exactly one service-type file", see § Service Type Composition)
+- `platform/error-handling.md`
+- `rules/domains/scm.md` (esp. **S5** — this service is S5's reference implementation)
+- `rules/traits/transactional.md` (T8), `rules/traits/integration-heavy.md`, `rules/traits/batch-heavy.md` (B1/B3/B5/B6)
+- [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — Category C consumer + Category D sweep + no-outbox best-effort alert
+- [`procurement-service/architecture.md`](../procurement-service/architecture.md) — sibling architecture (section structure reference)
+- [`gateway-service/architecture.md`](../gateway-service/architecture.md)
+- [`gap-integration.md`](../../integration/gap-integration.md)
+- [`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md)
+- [`inventory-visibility-api.md`](../../contracts/http/inventory-visibility-api.md)
+- [`inventory-visibility-subscriptions.md`](../../contracts/events/inventory-visibility-subscriptions.md)
+- [`data-model.md`](data-model.md) · [`staleness-monitoring.md`](staleness-monitoring.md) · [`overview.md`](overview.md)
+- TASK-SCM-BE-003 — bootstrap (first `batch-heavy` code) · TASK-SCM-BE-008 — `/nodes` public decision · TASK-SCM-BE-014 — this section-completion task

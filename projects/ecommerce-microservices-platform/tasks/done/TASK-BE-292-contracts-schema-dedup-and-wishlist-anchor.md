@@ -8,7 +8,7 @@ Ecommerce contracts hygiene (decision-bearing) — empty contracts/schemas/ vs 1
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -59,6 +59,13 @@ see §2.
 
 Redis key pattern: `inbound:idempotency:{method}:{path_hash}:{idempotency_key}`
 
+> **Cross-service note**: this is the *raw-appended* idempotency-key family
+> (128-char cap). Its shape/cap divergence vs `master-service` (hashed-flat,
+> 64) and `outbound-service` (255-cap) is **intentional** and documented
+> authoritatively in
+> [`master-service/idempotency.md` § Cross-Service Idempotency Key Conventions](../master-service/idempotency.md#cross-service-idempotency-key-conventions-intentional-divergence)
+> (TASK-BE-293 WI-3, decision B).
+
 Where:
 - `{method}`: HTTP method (`POST`, `PATCH`)
 - `{path_hash}`: stable hash of the resolved request path (includes path

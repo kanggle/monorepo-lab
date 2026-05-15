@@ -183,8 +183,8 @@ per trait `transactional` rule T1. Implementation:
 - Storage: Redis (`master:idempotency:{key}` — response snapshot)
 - TTL: 24 hours
 - Scope: `(Idempotency-Key, method, path)` tuple
-- Full strategy: `specs/services/master-service/idempotency.md` (to be authored before
-  implementation per Required Artifacts — see Open Items below)
+- Full strategy: [`specs/services/master-service/idempotency.md`](idempotency.md)
+  (see § Open Items — Retrospective Backfill Audit for authoring provenance)
 
 ---
 
@@ -297,19 +297,26 @@ Known evolution paths (not part of v1 — documented to guide v2 decisions):
 
 ---
 
-## Open Items (Before First Implementation Task)
+## Open Items (Retrospective Backfill Audit)
 
-These must be completed before any `TASK-BE-*` targeting `master-service` is moved to
-`tasks/ready/`:
+> Originally framed as "Before First Implementation Task" prerequisites.
+> `master-service` has been in production since the BE-030/BE-161 series
+> (Master domain + database design). This list is now a **retrospective
+> backfill audit** — each item has a ✅ done / ⚠️ partial / ❌ outstanding
+> status. Outstanding items are candidates for a separate `TASK-BE-*`
+> (project-internal) or `TASK-MONO-*` (shared paths). Audit conducted in
+> TASK-BE-293 (2026-05-16).
 
-1. `specs/services/master-service/domain-model.md` — entities, fields, relationships,
-   invariants, state per entity
-2. `specs/contracts/http/master-service-api.md` — REST endpoints
-3. `specs/contracts/events/master-events.md` — event schemas
-4. `specs/services/master-service/idempotency.md` — idempotency key strategy
-5. Register new error codes (`SKU_CODE_DUPLICATE`, `REFERENCE_INTEGRITY_VIOLATION`) in
-   `platform/error-handling.md`
-6. Add a gateway route for `master-service` in `gateway-service`
+1. ✅ [`domain-model.md`](domain-model.md) — entities, fields, relationships,
+   invariants, state per entity. Authored in the master bootstrap era.
+2. ✅ [`master-service-api.md`](../../contracts/http/master-service-api.md) — REST endpoints.
+3. ✅ [`master-events.md`](../../contracts/events/master-events.md) — event schemas.
+4. ✅ [`idempotency.md`](idempotency.md) — idempotency key strategy.
+5. ✅ Error codes `SKU_CODE_DUPLICATE`, `REFERENCE_INTEGRITY_VIOLATION` registered in
+   [`platform/error-handling.md`](../../../../../platform/error-handling.md).
+6. ✅ Gateway route for `master-service` present in
+   [`gateway-service/architecture.md`](../gateway-service/architecture.md)
+   route table (`/api/v1/master/**`).
 
 ---
 

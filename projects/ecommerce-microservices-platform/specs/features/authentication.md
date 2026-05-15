@@ -31,33 +31,35 @@ Provides user identity management and access control for the platform. Handles a
 
 ## User Flows
 
+> ~~아래 Signup / Login / Token Refresh / Logout 흐름은 폐기된 in-tree auth-service 의 과거 동작이며 런타임을 반영하지 않는다 — 현재 identity/token 은 GAP 가 소유 (상단 DEPRECATED 배너 + `specs/integration/gap-integration.md` 참조).~~
+
 ### Signup
 
 1. Client sends POST /api/auth/signup with email, password, name
-2. auth-service validates input, creates credentials, returns account info (userId, email, name, createdAt)
-3. auth-service publishes UserSignedUp event
+2. ~~auth-service~~ validates input, creates credentials, returns account info (userId, email, name, createdAt)
+3. ~~auth-service~~ publishes UserSignedUp event
 4. user-service consumes UserSignedUp and creates initial profile record
 
 ### Login
 
 1. Client sends POST /api/auth/login with email, password
-2. auth-service validates credentials
+2. ~~auth-service~~ validates credentials
 3. On success: issues access token (JWT, 1h TTL) and refresh token (opaque UUID, 30d TTL in Redis)
-4. auth-service publishes UserLoggedIn event
+4. ~~auth-service~~ publishes UserLoggedIn event
 5. If concurrent session limit exceeded, oldest session is evicted (SessionLimitExceeded event)
 
 ### Token Refresh
 
 1. Client sends POST /api/auth/refresh with refreshToken
-2. auth-service validates token in Redis
+2. ~~auth-service~~ validates token in Redis
 3. Old token is atomically revoked, new token pair issued (token rotation)
-4. auth-service publishes TokenRefreshed event
+4. ~~auth-service~~ publishes TokenRefreshed event
 
 ### Logout
 
 1. Client sends POST /api/auth/logout with refreshToken (requires Bearer JWT)
-2. auth-service removes refresh token from Redis
-3. auth-service publishes UserLoggedOut event
+2. ~~auth-service~~ removes refresh token from Redis
+3. ~~auth-service~~ publishes UserLoggedOut event
 
 ### Request Authorization (Gateway)
 
@@ -84,11 +86,13 @@ Provides user identity management and access control for the platform. Handles a
 
 ## Related Events
 
+> ~~아래 이벤트는 폐기된 in-tree auth-service 가 발행하던 것이며 런타임을 반영하지 않는다 (상단 배너 참조). GAP 위임 후 ecommerce 는 GAP 계정 이벤트를 소비한다.~~
+
 | Event | Publisher | Consumers |
 |---|---|---|
-| UserSignedUp | auth-service | user-service, notification-service (future) |
-| UserLoggedIn | auth-service | audit/analytics |
-| UserLoggedOut | auth-service | audit/analytics |
-| TokenRefreshed | auth-service | audit |
-| LoginFailed | auth-service | audit/security-monitoring |
-| SessionLimitExceeded | auth-service | audit |
+| UserSignedUp | ~~auth-service~~ | user-service, notification-service (future) |
+| UserLoggedIn | ~~auth-service~~ | audit/analytics |
+| UserLoggedOut | ~~auth-service~~ | audit/analytics |
+| TokenRefreshed | ~~auth-service~~ | audit |
+| LoginFailed | ~~auth-service~~ | audit/security-monitoring |
+| SessionLimitExceeded | ~~auth-service~~ | audit |

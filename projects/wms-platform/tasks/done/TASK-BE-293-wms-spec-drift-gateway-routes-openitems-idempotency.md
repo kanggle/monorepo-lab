@@ -8,7 +8,7 @@ WMS spec drift bundle — gateway route table outbound omission (W9) + stale "Op
 
 # Status
 
-ready
+done
 
 # Owner
 

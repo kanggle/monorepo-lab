@@ -147,7 +147,7 @@ token from the session via `'server-only'`.
 ### OIDC client registration
 
 GAP V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
-+ `fan-platform-realm-internal-services-client` + `fan-platform` tenant 시드 적용.
++ `fan-platform-internal-services-client` + `fan-platform` tenant 시드 적용.
 end-to-end OIDC `signIn('gap')` round-trip 정상 작동. dev secret = `fan-platform-dev`.
 
 ---

@@ -18,7 +18,7 @@
 
 ## Responsibilities
 
-- **Expired session cleanup** — `auth-service` 세션 inactivity timeout 경과 row 정리 (직접 DB 접근 금지, API 또는 event 경유).
+- ~~**Expired session cleanup** — `auth-service` 세션 inactivity timeout 경과 row 정리 (직접 DB 접근 금지, API 또는 event 경유).~~ **REMOVED (TASK-BE-132 GAP 위임) — 인증 세션은 GAP 가 소유하며, ecommerce batch-worker 는 더 이상 세션을 정리하지 않는다.**
 - **Stale order cancellation** — `order-service` 의 `PENDING` 상태 30 min 초과 주문 자동 취소 (TASK-BE-138 saga stuck-detector 와 별개 의 longer-horizon cleanup).
 - **Daily sales aggregation** — order / payment 합산 일일 요약 (downstream 분석 dashboard 용).
 - **Elasticsearch index consistency check** — `product-service` 와 `search-service` HTTP read-only 조회 후 drift 검출.

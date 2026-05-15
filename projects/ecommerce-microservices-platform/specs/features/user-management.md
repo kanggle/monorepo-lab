@@ -19,8 +19,8 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 ### Profile Creation (Event-Driven)
 
-1. auth-service publishes UserSignedUp event upon successful registration
-2. user-service consumes event and creates initial profile (userId, email, name)
+1. GAP (global-account-platform) publishes the account-signup event (GAP `AccountSignedUp`, consumed by ecommerce as `UserSignedUp`) upon successful registration in GAP
+2. user-service consumes the event and creates initial profile (userId, email, name)
 3. Profile is created in ACTIVE status
 
 ### Profile Query
@@ -47,7 +47,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 2. user-service transitions profile status to WITHDRAWN
 3. user-service publishes UserWithdrawn event
 4. order-service consumes event and cancels all active orders
-5. auth-service consumes event and invalidates all authentication credentials/sessions
+5. Credential/session invalidation for the withdrawn user is handled GAP-internally (GAP consumes the withdrawal signal) — ecommerce no longer owns this step
 
 ### Admin User Management
 
@@ -63,7 +63,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 - Default address cannot be deleted while other addresses exist (DEFAULT_ADDRESS_CANNOT_BE_DELETED)
 - User ID is sourced from X-User-Id header injected by gateway
 - user-service must not expose or modify authentication credentials
-- Profile email and name are sourced from auth-service via UserSignedUp event and are not directly modifiable
+- Profile email and name are sourced from GAP (global-account-platform) via the account-signup event and are not directly modifiable
 - Admin endpoints require admin role (enforced via gateway)
 - Concurrent address modifications are handled with proper synchronization
 
@@ -76,6 +76,6 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 | Event | Publisher | Consumers |
 |---|---|---|
-| UserSignedUp | auth-service | user-service |
+| UserSignedUp | GAP (global-account-platform) | user-service |
 | UserProfileUpdated | user-service | admin-dashboard (future), notification-service (future) |
-| UserWithdrawn | user-service | order-service, auth-service |
+| UserWithdrawn | user-service | order-service, GAP (credential/session invalidation, GAP-internal) |

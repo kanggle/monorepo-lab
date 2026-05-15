@@ -130,12 +130,12 @@ Tokens carry `tenant_id=fan-platform`.
 
 ### Steps
 
-1. **Admin registers an artist (DRAFT)** — `POST /api/v1/artist/artists` with
+1. **Admin registers an artist (DRAFT)** — `POST /api/v1/artists` with
    `artistType=SOLO`, a unique `stageName`, and a small bio. Asserts
    - 201 status,
    - envelope `{ data: { id, status: DRAFT, stageName, tenantId, ... }, meta }`,
    - id parses as a UUID.
-2. **Admin publishes** — `PATCH /api/v1/artist/artists/{id}/status` with
+2. **Admin publishes** — `PATCH /api/v1/artists/{id}/status` with
    `{"status":"PUBLISHED"}`. Asserts 200 + `data.status=PUBLISHED` +
    `data.publishedAt != null`.
 3. **Outbox -> Kafka assertion (artist)** — Awaitility (30 s, 500 ms poll)

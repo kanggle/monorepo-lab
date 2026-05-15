@@ -69,6 +69,14 @@ ERP webhook endpoint (`POST /webhooks/erp/order`) does NOT use
 
 ### 1.2 Key Format
 
+> **Cross-service note**: `outbound-service` uses the *raw-appended*
+> idempotency-key family but with a **255-char cap** (vs the 128-char
+> `inventory`/`inbound`/`admin` and the 64-char hashed-flat `master`). This
+> wider cap is an intentional saga-flow accommodation; the full WMS
+> divergence is documented authoritatively in
+> [`master-service/idempotency.md` § Cross-Service Idempotency Key Conventions](../master-service/idempotency.md#cross-service-idempotency-key-conventions-intentional-divergence)
+> (TASK-BE-293 WI-3, decision B).
+
 - Type: UUID v4 (recommended) or any opaque string ≤ **255 chars** (per
   trait `transactional` T1 ceiling). Length over → `400 VALIDATION_ERROR`
   with the message `Idempotency-Key header exceeds 255 characters`. The
