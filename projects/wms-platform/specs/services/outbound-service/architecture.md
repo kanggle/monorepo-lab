@@ -653,13 +653,18 @@ Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code
 9. ✅ [`state-machines/saga-status.md`](state-machines/saga-status.md).
 10. ✅ [`sagas/outbound-saga.md`](sagas/outbound-saga.md) — saga document
     per trait `transactional` Required Artifact 2.
-11. ⚠️ Error codes in [`platform/error-handling.md`](../../../../../platform/error-handling.md):
+11. ✅ Error codes in [`platform/error-handling.md`](../../../../../platform/error-handling.md):
     `STATE_TRANSITION_INVALID`, `WAREHOUSE_MISMATCH`, `PARTNER_INVALID_TYPE`,
-    `LOT_REQUIRED`, `EXTERNAL_SERVICE_UNAVAILABLE` are registered ✅, but
-    **`EXTERNAL_TIMEOUT` is NOT present** — the original "(already global)"
-    claim is stale. Outstanding: register `EXTERNAL_TIMEOUT` (shared
-    `platform/error-handling.md`) or confirm it is unused and drop the
-    reference — candidate for a separate `TASK-MONO-*` (shared path).
+    `LOT_REQUIRED`, `EXTERNAL_SERVICE_UNAVAILABLE` registered, and
+    **`EXTERNAL_TIMEOUT` registered** under Outbound `[domain: wms]` adjacent
+    to `EXTERNAL_SERVICE_UNAVAILABLE` (HTTP 503) by **TASK-MONO-106** — closes
+    the prior referenced-but-unregistered drift (the stale "(already global)"
+    framing is retired). Note: hoisting the integration-heavy trait codes
+    (`EXTERNAL_SERVICE_UNAVAILABLE` / `EXTERNAL_TIMEOUT`) into a dedicated
+    Platform-Common `Integration-Heavy Trait` subsection per
+    `error-handling.md` "Rules" is a deliberate **deferred** registry
+    restructure (ADR-bearing `TASK-MONO-*` candidate), intentionally not done
+    in MONO-106.
 12. ✅ Gateway route for `outbound-service` (`/api/v1/outbound/**`) + HMAC-only
     `/webhooks/erp/order` present in
     [`gateway-service/architecture.md`](../gateway-service/architecture.md)
