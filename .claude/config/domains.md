@@ -82,7 +82,7 @@ Choose one primary domain for each service.
 
 ## Rule
 
-Exactly one primary domain must be chosen per project (declared in [`PROJECT.md`](../../PROJECT.md) `domain:` field).
+Exactly one primary domain must be chosen per project (declared in `projects/<name>/PROJECT.md` `domain:` field).
 
 Values not listed above are a **Hard Stop** — see [`CLAUDE.md`](../../CLAUDE.md) Hard Stop Rules.
 

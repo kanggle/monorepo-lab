@@ -10,7 +10,7 @@
 
 모든 프로젝트에 **항상 적용되는** 규칙 파일 목록. [README.md](README.md)의 resolution order에서 common 계층을 로드할 때 이 인덱스를 사용한다.
 
-이 파일에 등록된 규칙은 [PROJECT.md](../PROJECT.md)의 domain/traits와 무관하게 기본 baseline으로 동작한다.
+이 파일에 등록된 규칙은 각 프로젝트의 `PROJECT.md` (`projects/<name>/PROJECT.md`) 의 domain/traits 와 무관하게 기본 baseline 으로 동작한다.
 
 ---
 

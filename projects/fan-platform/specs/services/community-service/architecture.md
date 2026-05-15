@@ -23,6 +23,14 @@ All implementation tasks targeting this service must follow this declaration,
 | Cache | Redis 7 (feed cache only — fail-open) |
 | Event bus | Kafka 3.7 (outbox-driven publisher) |
 
+### Service Type Composition
+
+`community-service` is a single-type `rest-api` service per
+`platform/service-types/INDEX.md`. Synchronous HTTP CRUD over posts
+backed by an internal post state machine (DRAFT/PUBLISHED/HIDDEN/DELETED)
+and a Kafka outbox publisher. No inbound event-consumer surface — the
+outbox is publication-only.
+
 ---
 
 ## Architecture Style Rationale

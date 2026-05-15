@@ -1,6 +1,6 @@
 # Domain-Specific Skills
 
-This directory holds skills that are bound to a specific `domain` declared in [`PROJECT.md`](../../../PROJECT.md).
+This directory holds skills that are bound to a specific `domain` declared in each project's `PROJECT.md` (`projects/<name>/PROJECT.md`).
 
 Currently empty — first-project's domain (`ecommerce`) is served by the existing technology-axis skill tree ([`../backend/`](../backend/), [`../cross-cutting/`](../cross-cutting/), [`../database/`](../database/), [`../frontend/`](../frontend/), [`../infra/`](../infra/), [`../messaging/`](../messaging/), [`../review-checklist/`](../review-checklist/), [`../search/`](../search/), [`../service-types/`](../service-types/), [`../testing/`](../testing/)). This directory exists so domain-specific implementation guides can be added when they appear.
 
@@ -35,7 +35,7 @@ Example split:
 
 ## Activation
 
-Domain skills are activated when the declared `domain` in [`PROJECT.md`](../../../PROJECT.md) matches the subdirectory name. When bootstrapping a new project with a different domain, remove or replace the ecommerce subtree.
+Domain skills are activated when the declared `domain` in a project's `PROJECT.md` (`projects/<name>/PROJECT.md`) matches the subdirectory name. When bootstrapping a new project with a different domain, remove or replace the ecommerce subtree.
 
 See [`../../config/activation-rules.md`](../../config/activation-rules.md) for the routing table.
 

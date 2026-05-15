@@ -21,6 +21,13 @@ layers (`rules/common.md`, `rules/traits/content-heavy.md`,
 | Deployable unit | `web/fan-platform-web/` |
 | Backend dependencies | gateway-service (`http://fan-platform.local`), GAP IdP (`http://gap.local`) |
 
+### Service Type Composition
+
+`fan-platform-web` is a single-type `frontend-app` service per
+`platform/service-types/INDEX.md`. Next.js 15 App Router server-rendered
++ client-side hybrid delivery with next-auth v5 PKCE flow against GAP
+IdP. No backend service-type composition.
+
 ---
 
 ## Architecture Style Rationale

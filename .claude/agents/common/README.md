@@ -1,6 +1,6 @@
 # Common Agents (Domain-Agnostic)
 
-This directory holds agents whose responsibilities are **independent of the project's `domain`** declared in [`PROJECT.md`](../../../PROJECT.md). They are loaded for every project regardless of which domain / traits the project declares.
+This directory holds agents whose responsibilities are **independent of the project's `domain`** declared in each project's `PROJECT.md` (`projects/<name>/PROJECT.md`). They are loaded for every project regardless of which domain / traits the project declares.
 
 Domain-specific agents (when needed) live under [`../domain/`](../domain/) — see that directory's [README](../domain/README.md) for the rule.
 
