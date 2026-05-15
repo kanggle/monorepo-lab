@@ -2,12 +2,10 @@ package com.example.admin.application;
 
 import com.example.admin.application.event.AdminEventPublisher;
 import com.example.admin.application.exception.AuditFailureException;
-import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -102,7 +100,7 @@ public class AdminActionAuditor {
     public static final String REASON_SELF_RECOVERY_REGENERATE = "<self_recovery_regenerate>";
 
     private final AdminActionJpaRepository repository;
-    private final AdminOperatorJpaRepository operatorRepository;
+    private final OperatorLookupPort operatorLookupPort;
     private final AdminEventPublisher eventPublisher;
     private final MeterRegistry meterRegistry;
 
@@ -126,12 +124,12 @@ public class AdminActionAuditor {
             throw new AuditFailureException(
                     "Cannot resolve admin_operators.id: operator UUID is null");
         }
-        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
+        OperatorLookupPort.OperatorSummary summary = operatorLookupPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new AuditFailureException(
                         "admin_operators row not found for operatorId=" + operatorUuid));
-        String tenantId = entity.getTenantId();
+        String tenantId = summary.tenantId();
         if (tenantId == null) tenantId = "fan-platform"; // defensive fallback
-        return new OperatorResolved(entity.getId(), tenantId);
+        return new OperatorResolved(summary.internalId(), tenantId);
     }
 
     public String newAuditId() {

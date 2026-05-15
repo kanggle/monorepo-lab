@@ -3,9 +3,8 @@ package com.example.admin.application;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.SelfSuspendForbiddenException;
 import com.example.admin.application.exception.StateTransitionInvalidException;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.AdminRefreshTokenPort;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +21,7 @@ public class PatchOperatorStatusUseCase {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_SUSPENDED = "SUSPENDED";
 
-    private final AdminOperatorJpaRepository operatorRepository;
+    private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
     private final AdminRefreshTokenPort refreshTokenPort;
 
@@ -41,23 +40,22 @@ public class PatchOperatorStatusUseCase {
                     "Operators cannot suspend their own account");
         }
 
-        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorUuid));
 
-        String previousStatus = entity.getStatus();
+        String previousStatus = operator.status();
         if (Objects.equals(previousStatus, newStatus)) {
             throw new StateTransitionInvalidException(
                     "Operator status is already " + newStatus);
         }
 
         Instant now = Instant.now();
-        entity.changeStatus(newStatus, now);
-        operatorRepository.save(entity);
+        operatorPort.changeStatus(operator.internalId(), newStatus, now);
 
         if (STATUS_SUSPENDED.equals(newStatus)) {
             int revoked = refreshTokenPort.revokeAllForOperator(
-                    entity.getId(), now, AdminRefreshTokenPort.REASON_FORCE_LOGOUT);
+                    operator.internalId(), now, AdminRefreshTokenPort.REASON_FORCE_LOGOUT);
             log.info("Suspended operator {} — revoked {} refresh token(s)", operatorUuid, revoked);
         }
 

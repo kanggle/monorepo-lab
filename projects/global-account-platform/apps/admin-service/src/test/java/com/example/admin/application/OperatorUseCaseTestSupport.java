@@ -1,22 +1,16 @@
 package com.example.admin.application;
 
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaRepository;
+import com.example.admin.application.port.AdminOperatorPort;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.time.Instant;
 
 /**
- * Shared test helpers for the operator administration use case unit tests
- * ({@code CreateOperatorUseCaseTest}, {@code PatchOperatorRoleUseCaseTest}).
+ * Shared test helpers for the operator administration use case unit tests.
  *
- * <p>Extracted as part of TASK-BE-125 to remove verbatim duplication of the
- * reflective constructors and field setters that both tests previously carried.
- * Behaviour must remain identical to the original inlined helpers — this class
- * exists for de-duplication only, not to introduce new fixtures.
+ * <p>Post TASK-BE-288 — {@code OperatorRoleResolver} was inlined into
+ * {@link AdminOperatorPort}, so this support class now only carries the actor
+ * fixture and the port-projection factories ({@code OperatorView},
+ * {@code RoleView}). Tests mock {@link AdminOperatorPort} directly.
  *
  * <p>Package-private by design — only collaborators inside
  * {@code com.example.admin.application} test package may use it.
@@ -27,83 +21,37 @@ final class OperatorUseCaseTestSupport {
         // utility — no instances
     }
 
-    /** Default actor used by both operator-admin use case tests. */
+    /** Default actor used by the operator-admin use case tests. */
     static OperatorContext actor() {
         return new OperatorContext("actor-uuid", "jti-1");
     }
 
-    /**
-     * Reflectively instantiate the package-private {@link OperatorRoleResolver}
-     * from this test package. Mirrors the original helpers in both test classes.
-     */
-    static OperatorRoleResolver newResolver(
-            AdminOperatorJpaRepository operatorRepository,
-            AdminRoleJpaRepository roleRepository) {
-        try {
-            Constructor<OperatorRoleResolver> ctor =
-                    OperatorRoleResolver.class.getDeclaredConstructor(
-                            AdminOperatorJpaRepository.class, AdminRoleJpaRepository.class);
-            ctor.setAccessible(true);
-            return ctor.newInstance(operatorRepository, roleRepository);
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException(ex);
-        }
+    /** Build a {@link AdminOperatorPort.RoleView} fixture. */
+    static AdminOperatorPort.RoleView role(long id, String name) {
+        return new AdminOperatorPort.RoleView(id, name, name, false);
+    }
+
+    /** Build a {@link AdminOperatorPort.RoleView} fixture with explicit require2fa flag. */
+    static AdminOperatorPort.RoleView role(long id, String name, boolean require2fa) {
+        return new AdminOperatorPort.RoleView(id, name, name, require2fa);
     }
 
     /**
-     * Build an {@link AdminRoleJpaEntity} fixture with the given id/name. Uses
-     * the no-arg constructor + reflective field assignment because the JPA entity
-     * does not expose a public constructor for ad-hoc fixtures.
+     * Build an {@link AdminOperatorPort.OperatorView} fixture mirroring the
+     * defaults that the legacy {@code AdminOperatorJpaEntity.create} factory
+     * stamped: {@code passwordHash="hash"}, {@code displayName="Display"},
+     * {@code tenantId="fan-platform"}, {@code createdAt=2026-01-01T00:00Z}.
      */
-    static AdminRoleJpaEntity role(Long id, String name) {
-        try {
-            Constructor<AdminRoleJpaEntity> ctor = AdminRoleJpaEntity.class.getDeclaredConstructor();
-            ctor.setAccessible(true);
-            AdminRoleJpaEntity r = ctor.newInstance();
-            setField(r, "id", id);
-            setField(r, "name", name);
-            setField(r, "description", name);
-            return r;
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException(ex);
-        }
+    static AdminOperatorPort.OperatorView operator(long id, String uuid, String email, String status) {
+        return operator(id, uuid, email, status, "fan-platform");
     }
 
-    /**
-     * Build an {@link AdminOperatorJpaEntity} fixture with the given id/uuid/email/status.
-     * Uses {@link AdminOperatorJpaEntity#create} for canonical defaults and reflectively
-     * assigns the JPA-internal id afterwards.
-     */
-    static AdminOperatorJpaEntity operator(Long id, String uuid, String email, String status) {
-        // TASK-BE-249: use 7-arg factory that includes tenantId
-        AdminOperatorJpaEntity e = AdminOperatorJpaEntity.create(
-                uuid, email, "hash", "Display", status, "fan-platform",
-                Instant.parse("2026-01-01T00:00:00Z"));
-        setField(e, "id", id);
-        return e;
-    }
-
-    /** Reflectively set a field (including inherited) on the given target. */
-    static void setField(Object target, String name, Object value) {
-        try {
-            Field field = findField(target.getClass(), name);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException(ex);
-        }
-    }
-
-    /** Walk the class hierarchy looking for a declared field with the given name. */
-    static Field findField(Class<?> type, String name) throws NoSuchFieldException {
-        Class<?> current = type;
-        while (current != null) {
-            try {
-                return current.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                current = current.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name);
+    /** Same as {@link #operator(long, String, String, String)} with explicit tenantId. */
+    static AdminOperatorPort.OperatorView operator(long id, String uuid, String email,
+                                                   String status, String tenantId) {
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
+        return new AdminOperatorPort.OperatorView(
+                id, uuid, tenantId, email, "hash", "Display", status,
+                null, null, created, created);
     }
 }

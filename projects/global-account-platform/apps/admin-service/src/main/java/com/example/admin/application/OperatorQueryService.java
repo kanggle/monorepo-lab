@@ -1,26 +1,15 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorUnauthorizedException;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaEntity;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminRoleJpaRepository;
+import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.AdminOperatorTotpPort;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,113 +18,63 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class OperatorQueryService {
 
-    private final AdminOperatorJpaRepository operatorRepository;
-    private final AdminOperatorRoleJpaRepository operatorRoleRepository;
-    private final AdminRoleJpaRepository roleRepository;
-    private final AdminOperatorTotpJpaRepository totpRepository;
+    private final AdminOperatorPort operatorPort;
+    private final AdminOperatorTotpPort totpPort;
 
     @Transactional(readOnly = true)
     public OperatorSummary getCurrentOperator(String operatorUuid) {
-        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorUnauthorizedException(
                         "Operator not found for operatorId=" + operatorUuid));
-        return toSummary(entity, loadRoleNames(entity.getId()));
+        List<String> roleNames = new ArrayList<>();
+        for (AdminOperatorPort.RoleView r : operatorPort.findRolesForOperator(operator.internalId())) {
+            roleNames.add(r.name());
+        }
+        Collections.sort(roleNames);
+        return toSummary(operator, roleNames);
     }
 
     @Transactional(readOnly = true)
     public OperatorPage listOperators(String statusFilter, int page, int size) {
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
-        PageRequest pageable = PageRequest.of(page, size, sort);
+        AdminOperatorPort.OperatorPage rows = operatorPort.findOperatorsPage(statusFilter, page, size);
 
-        Page<AdminOperatorJpaEntity> rows;
-        if (statusFilter == null || statusFilter.isBlank()) {
-            rows = operatorRepository.findAll(pageable);
-        } else {
-            rows = operatorRepository.findByStatus(statusFilter, pageable);
-        }
+        List<AdminOperatorPort.OperatorView> content = rows.content();
+        List<Long> operatorIds = new ArrayList<>(content.size());
+        for (AdminOperatorPort.OperatorView op : content) operatorIds.add(op.internalId());
 
-        List<AdminOperatorJpaEntity> content = rows.getContent();
-        Map<Long, List<String>> rolesByOperator = bulkLoadRoles(content);
-        Set<Long> enrolledIds = bulkLoadEnrolledTotpIds(content);
+        Map<Long, List<String>> rolesByOperator = operatorPort.bulkLoadRoleNamesByOperator(operatorIds);
+        Set<Long> enrolledIds = totpPort.findEnrolledOperatorIds(operatorIds);
 
         List<OperatorSummary> summaries = new ArrayList<>(content.size());
-        for (AdminOperatorJpaEntity entity : content) {
-            List<String> roles = rolesByOperator.getOrDefault(entity.getId(), List.of());
+        for (AdminOperatorPort.OperatorView op : content) {
+            List<String> roles = rolesByOperator.getOrDefault(op.internalId(), List.of());
             summaries.add(new OperatorSummary(
-                    entity.getOperatorId(),
-                    entity.getEmail(),
-                    entity.getDisplayName(),
-                    entity.getStatus(),
+                    op.operatorId(),
+                    op.email(),
+                    op.displayName(),
+                    op.status(),
                     roles,
-                    entity.getTotpEnrolledAt() != null || enrolledIds.contains(entity.getId()),
-                    entity.getLastLoginAt(),
-                    entity.getCreatedAt()));
+                    op.totpEnrolledAt() != null || enrolledIds.contains(op.internalId()),
+                    op.lastLoginAt(),
+                    op.createdAt()));
         }
-        return new OperatorPage(summaries, rows.getTotalElements(), rows.getNumber(),
-                rows.getSize(), rows.getTotalPages());
+        return new OperatorPage(summaries, rows.totalElements(), rows.page(),
+                rows.size(), rows.totalPages());
     }
 
-    private List<String> loadRoleNames(Long operatorPk) {
-        List<AdminOperatorRoleJpaEntity> bindings = operatorRoleRepository.findByOperatorId(operatorPk);
-        if (bindings.isEmpty()) return List.of();
-        List<Long> roleIds = new ArrayList<>(bindings.size());
-        for (AdminOperatorRoleJpaEntity b : bindings) roleIds.add(b.getRoleId());
-        List<AdminRoleJpaEntity> roles = roleRepository.findAllById(roleIds);
-        List<String> names = new ArrayList<>(roles.size());
-        for (AdminRoleJpaEntity r : roles) names.add(r.getName());
-        Collections.sort(names);
-        return names;
-    }
-
-    private Map<Long, List<String>> bulkLoadRoles(List<AdminOperatorJpaEntity> operators) {
-        if (operators.isEmpty()) return Map.of();
-        List<Long> ids = new ArrayList<>(operators.size());
-        for (AdminOperatorJpaEntity o : operators) ids.add(o.getId());
-        List<AdminOperatorRoleJpaEntity> bindings = operatorRoleRepository.findByOperatorIdIn(ids);
-        if (bindings.isEmpty()) return Map.of();
-
-        List<Long> roleIds = new ArrayList<>(bindings.size());
-        for (AdminOperatorRoleJpaEntity b : bindings) roleIds.add(b.getRoleId());
-        Map<Long, String> roleNameById = new LinkedHashMap<>();
-        for (AdminRoleJpaEntity r : roleRepository.findAllById(roleIds)) {
-            roleNameById.put(r.getId(), r.getName());
-        }
-
-        Map<Long, List<String>> byOperator = new LinkedHashMap<>();
-        for (AdminOperatorRoleJpaEntity b : bindings) {
-            String roleName = roleNameById.get(b.getRoleId());
-            if (roleName == null) continue;
-            byOperator.computeIfAbsent(b.getOperatorId(), k -> new ArrayList<>()).add(roleName);
-        }
-        for (List<String> names : byOperator.values()) Collections.sort(names);
-        return byOperator;
-    }
-
-    private Set<Long> bulkLoadEnrolledTotpIds(Collection<AdminOperatorJpaEntity> operators) {
-        if (operators.isEmpty()) return Set.of();
-        List<Long> operatorInternalIds = new ArrayList<>(operators.size());
-        for (AdminOperatorJpaEntity op : operators) operatorInternalIds.add(op.getId());
-
-        Set<Long> enrolled = new java.util.HashSet<>();
-        for (AdminOperatorTotpJpaEntity row : totpRepository.findByOperatorIdIn(operatorInternalIds)) {
-            if (row != null && row.getEnrolledAt() != null) enrolled.add(row.getOperatorId());
-        }
-        return enrolled;
-    }
-
-    private OperatorSummary toSummary(AdminOperatorJpaEntity entity, List<String> roles) {
-        boolean totpEnrolled = entity.getTotpEnrolledAt() != null
-                || totpRepository.findById(entity.getId())
-                        .map(row -> row != null && row.getEnrolledAt() != null).orElse(false);
+    private OperatorSummary toSummary(AdminOperatorPort.OperatorView operator, List<String> roles) {
+        boolean totpEnrolled = operator.totpEnrolledAt() != null
+                || totpPort.findByOperator(operator.internalId())
+                        .map(row -> row != null && row.enrolledAt() != null).orElse(false);
         return new OperatorSummary(
-                entity.getOperatorId(),
-                entity.getEmail(),
-                entity.getDisplayName(),
-                entity.getStatus(),
+                operator.operatorId(),
+                operator.email(),
+                operator.displayName(),
+                operator.status(),
                 roles,
                 totpEnrolled,
-                entity.getLastLoginAt(),
-                entity.getCreatedAt());
+                operator.lastLoginAt(),
+                operator.createdAt());
     }
 
     public record OperatorSummary(

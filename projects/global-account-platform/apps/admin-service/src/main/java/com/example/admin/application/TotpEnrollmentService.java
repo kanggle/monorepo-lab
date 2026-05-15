@@ -3,10 +3,8 @@ package com.example.admin.application;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.TotpNotEnrolledException;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaEntity;
-import com.example.admin.infrastructure.persistence.AdminOperatorTotpJpaRepository;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
-import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
+import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.AdminOperatorTotpPort;
 import com.example.admin.infrastructure.security.TotpGenerator;
 import com.example.admin.infrastructure.security.TotpSecretCipher;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -46,8 +44,8 @@ public class TotpEnrollmentService {
     private static final char[] RECOVERY_ALPHABET =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toCharArray();
 
-    private final AdminOperatorJpaRepository operatorRepository;
-    private final AdminOperatorTotpJpaRepository totpRepository;
+    private final AdminOperatorPort operatorPort;
+    private final AdminOperatorTotpPort totpPort;
     private final TotpGenerator totpGenerator;
     private final TotpSecretCipher cipher;
     private final PasswordHasher passwordHasher;
@@ -63,10 +61,10 @@ public class TotpEnrollmentService {
      */
     @Transactional
     public EnrollmentResult enroll(String operatorUuid) {
-        AdminOperatorJpaEntity operator = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "admin_operators row not found for operatorId=" + operatorUuid));
-        long operatorPk = operator.getId();
+        long operatorPk = operator.internalId();
 
         byte[] secret = totpGenerator.newSecret();
         byte[] encrypted = cipher.encrypt(secret, operatorPk);
@@ -86,16 +84,9 @@ public class TotpEnrollmentService {
         }
 
         Instant now = Instant.now();
-        AdminOperatorTotpJpaEntity existing = totpRepository.findById(operatorPk).orElse(null);
-        if (existing == null) {
-            totpRepository.save(AdminOperatorTotpJpaEntity.create(
-                    operatorPk, encrypted, cipher.activeKeyId(), hashedJson, now));
-        } else {
-            existing.replaceSecret(encrypted, cipher.activeKeyId(), hashedJson, now);
-            totpRepository.save(existing);
-        }
+        totpPort.upsertSecret(operatorPk, encrypted, cipher.activeKeyId(), hashedJson, now);
 
-        String otpauth = totpGenerator.otpauthUri(secret, issuer, operator.getEmail());
+        String otpauth = totpGenerator.otpauthUri(secret, issuer, operator.email());
         // Zeroise plaintext secret — best effort; JVM may still retain copies.
         java.util.Arrays.fill(secret, (byte) 0);
         return new EnrollmentResult(otpauth, plainRecovery, now);
@@ -115,14 +106,14 @@ public class TotpEnrollmentService {
      */
     @Transactional
     public List<String> regenerateRecoveryCodes(String operatorUuid) {
-        AdminOperatorJpaEntity operator = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "admin_operators row not found for operatorId=" + operatorUuid));
-        long operatorPk = operator.getId();
+        long operatorPk = operator.internalId();
 
-        AdminOperatorTotpJpaEntity row = totpRepository.findById(operatorPk)
-                .orElseThrow(() -> new TotpNotEnrolledException(
-                        "TOTP not enrolled for operator"));
+        if (totpPort.findByOperator(operatorPk).isEmpty()) {
+            throw new TotpNotEnrolledException("TOTP not enrolled for operator");
+        }
 
         List<String> plainRecovery = new ArrayList<>(RECOVERY_CODE_COUNT);
         List<String> hashed = new ArrayList<>(RECOVERY_CODE_COUNT);
@@ -138,8 +129,7 @@ public class TotpEnrollmentService {
             throw new IllegalStateException("Failed to serialize recovery code hashes", e);
         }
 
-        row.replaceRecoveryHashes(hashedJson, Instant.now());
-        totpRepository.save(row);
+        totpPort.replaceRecoveryHashes(operatorPk, hashedJson, Instant.now());
 
         // Plain-text codes are intentionally NOT logged (R4 compliance).
         return plainRecovery;
@@ -151,19 +141,18 @@ public class TotpEnrollmentService {
      */
     @Transactional
     public void verify(String operatorUuid, String code) {
-        AdminOperatorJpaEntity operator = operatorRepository.findByOperatorId(operatorUuid)
+        AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new InvalidTwoFaCodeException("2FA not enrolled"));
-        AdminOperatorTotpJpaEntity row = totpRepository.findById(operator.getId()).orElse(null);
+        AdminOperatorTotpPort.TotpRow row = totpPort.findByOperator(operator.internalId()).orElse(null);
         if (row == null) {
             throw new InvalidTwoFaCodeException("2FA not enrolled");
         }
-        byte[] secret = cipher.decrypt(row.getSecretEncrypted(), operator.getId(), row.getSecretKeyId());
+        byte[] secret = cipher.decrypt(row.secretEncrypted(), operator.internalId(), row.secretKeyId());
         try {
             if (!totpGenerator.verify(secret, code)) {
                 throw new InvalidTwoFaCodeException("TOTP code does not match");
             }
-            row.markUsed(Instant.now());
-            totpRepository.save(row);
+            totpPort.markUsed(operator.internalId(), Instant.now());
         } finally {
             java.util.Arrays.fill(secret, (byte) 0);
         }

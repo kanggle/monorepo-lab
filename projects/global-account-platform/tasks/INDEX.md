@@ -82,7 +82,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-288-admin-operator-totp-port-refactor.md` — branch `task/be-288-admin-operator-totp-port-refactor` (main 분기, single commit) + PR open 2026-05-15. **Build-verified, review 대기**. `AdminOperatorPort` + `AdminOperatorTotpPort` 신설 (interface + Record projection, JPA 의존 0) + `JpaAdminOperatorAdapter`/`JpaAdminOperatorTotpAdapter` `@Component` + `OperatorRoleResolver` → port + `AuditReasons` 흡수 후 삭제 + 9 application file infra import 정리. 리팩터 순diff 기존 18 file **+359 / −913 = −554 LOC**. 검증: `compileJava`/`compileTestJava` BUILD SUCCESSFUL + `:test` **389 pass / 0 fail / 0 error / 49 Testcontainers IT env-skip** (AC 명시 허용, local Docker 부재 — `project_testcontainers_docker_desktop_blocker`). import 격리 grep = 0 매치 (`application/` 에 `infrastructure.persistence.{rbac.AdminOperator|AdminRole|AdminOperatorTotp}` 잔존 0). spec/contract 변경 0 (additive port, architecture.md Thin Layered 기존 5 port precedent 답습). 세션 크래시(host OOM, redhat.java JDT.LS 38 누수 — `env_jdtls_oom_cascade`) 복구 후 WIP 커밋 → 빌드검증 → review 승격. 분석=Opus 4.7 / 구현=Opus 4.7 (crashed session) / 빌드검증·lifecycle=Opus 4.7.
 
 ## done
 
