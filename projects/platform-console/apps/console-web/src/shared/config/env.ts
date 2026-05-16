@@ -83,6 +83,13 @@ const ServerEnvSchema = z.object({
    *  ${GAP_ADMIN_API_BASE}/api/admin/audit` — request/response/error owned
    *  by GAP `admin-api.md` (authoritative, consumed only, read-only). */
   AUDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for GAP operators-management calls
+   *  (TASK-PC-FE-004 / integration-heavy I1 — same convention as
+   *  ACCOUNTS_TIMEOUT_MS). The 5 operator endpoints hang off
+   *  `${GAP_ADMIN_API_BASE}/api/admin/operators...` — request/response/
+   *  per-endpoint headers/error owned by GAP `admin-api.md` (authoritative,
+   *  consumed only). */
+  OPERATORS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -107,6 +114,7 @@ export function getServerEnv(): ServerEnv {
     GAP_ADMIN_API_BASE: process.env.GAP_ADMIN_API_BASE,
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
+    OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });
