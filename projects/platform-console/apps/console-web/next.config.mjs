@@ -12,8 +12,12 @@ const csp = [
   "font-src 'self' data:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
-  // TODO(TASK-PC-FE-001): add connect-src for GAP OIDC issuer and domain gateway hosts
+  // OIDC redirect + token exchange both go server-side; the browser only ever
+  // navigates to GAP /oauth2/authorize (top-level, not connect-src) and calls
+  // same-origin Next route handlers. connect-src stays 'self'. form-action
+  // allows the GAP authorize redirect target.
+  "connect-src 'self'",
+  "form-action 'self' http://gap.local http://localhost:3000",
 ].join('; ');
 
 const nextConfig = {

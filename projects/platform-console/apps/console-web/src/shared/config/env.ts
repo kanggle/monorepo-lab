@@ -1,50 +1,79 @@
+import { z } from 'zod';
+
 /**
  * Typed environment accessor for console-web.
  *
- * Pattern mirrors admin-web's env.ts (zod-validated at module load time).
- * Server-only secrets (OIDC_*) are validated in getServerEnv() — never
- * exposed as NEXT_PUBLIC_ per frontend-app.md § Environment Variables.
+ * - Client env: only `NEXT_PUBLIC_`-prefixed values, safe to ship to browser.
+ * - Server env: OIDC public-client config + the GAP product/tenant registry
+ *   URL. Validated at access time (server runtime only — never serialised to
+ *   the client), per `platform/service-types/frontend-app.md`
+ *   § Environment Variables (server-only secrets injected at runtime, not
+ *   build time; build artifacts must work across environments without rebuild).
  *
- * TODO(TASK-PC-FE-001): wire clientEnv / getServerEnv() into the real OIDC
- * Auth Code + PKCE flow and BFF request pipeline.
+ * The GAP OIDC client is a PUBLIC client (`platform-console-web`,
+ * Authorization Code + PKCE, no client secret — auth-service
+ * V0015 seed / ADR-003 public-client lineage), so there is no
+ * `OIDC_CLIENT_SECRET`.
+ *
+ * `CONSOLE_REGISTRY_URL` points at the authoritative TASK-BE-296 producer
+ * path: `http://gap.local/api/admin/console/registry` (admin-service,
+ * operator-auth boundary — `console-registry-api.md`).
  */
 
 // ---------------------------------------------------------------------------
 // Client env (safe to send to browser — NEXT_PUBLIC_ prefix only)
 // ---------------------------------------------------------------------------
 
-const NEXT_PUBLIC_APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? 'http://console.local';
+const ClientEnvSchema = z.object({
+  NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
+});
 
-export const clientEnv = {
-  NEXT_PUBLIC_APP_URL,
-} as const;
+export const clientEnv = ClientEnvSchema.parse({
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+});
 
 // ---------------------------------------------------------------------------
 // Server env (server runtime only — never serialised to the client)
 // ---------------------------------------------------------------------------
 
+const ServerEnvSchema = z.object({
+  /** GAP OIDC issuer base (e.g. http://gap.local). OAuth2/OIDC endpoints are
+   *  `${OIDC_ISSUER_URL}/oauth2/{authorize,token,revoke}` (auth-api.md). */
+  OIDC_ISSUER_URL: z.string().url(),
+  /** Public client id registered by TASK-BE-296 (V0015 seed). */
+  OIDC_CLIENT_ID: z.string().min(1).default('platform-console-web'),
+  /** Exact pre-registered redirect URI (no wildcard). */
+  OIDC_REDIRECT_URI: z.string().url(),
+  /** OIDC scopes — must be a subset of the V0015-seeded client scopes
+   *  (`openid profile email tenant.read`). */
+  OIDC_SCOPE: z.string().min(1).default('openid profile email tenant.read'),
+  /** GAP product/tenant registry surface (TASK-BE-296 authoritative path). */
+  CONSOLE_REGISTRY_URL: z
+    .string()
+    .url()
+    .default('http://gap.local/api/admin/console/registry'),
+  /** Outbound timeout (ms) for the registry call (integration-heavy I1). */
+  REGISTRY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
+});
+
+export type ServerEnv = z.infer<typeof ServerEnvSchema>;
+
 /**
  * Returns validated server-side environment.
  * Call only from Server Components, Route Handlers, or Middleware.
- * Throws at startup if a required variable is missing.
+ * Throws if a required variable is missing/invalid.
  */
-export function getServerEnv() {
-  const OIDC_ISSUER_URL = process.env.OIDC_ISSUER_URL;
-  const OIDC_CLIENT_ID = process.env.OIDC_CLIENT_ID;
-  const OIDC_REDIRECT_URI = process.env.OIDC_REDIRECT_URI;
-  const CONSOLE_REGISTRY_URL = process.env.CONSOLE_REGISTRY_URL;
-
-  if (!OIDC_ISSUER_URL) throw new Error('OIDC_ISSUER_URL is required');
-  if (!OIDC_CLIENT_ID) throw new Error('OIDC_CLIENT_ID is required');
-  if (!OIDC_REDIRECT_URI) throw new Error('OIDC_REDIRECT_URI is required');
-  if (!CONSOLE_REGISTRY_URL) throw new Error('CONSOLE_REGISTRY_URL is required');
-
-  return {
-    OIDC_ISSUER_URL,
-    OIDC_CLIENT_ID,
-    OIDC_REDIRECT_URI,
-    CONSOLE_REGISTRY_URL,
-    NEXT_PUBLIC_APP_URL,
-  } as const;
+export function getServerEnv(): ServerEnv {
+  return ServerEnvSchema.parse({
+    OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL,
+    OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID,
+    OIDC_REDIRECT_URI: process.env.OIDC_REDIRECT_URI,
+    OIDC_SCOPE: process.env.OIDC_SCOPE,
+    CONSOLE_REGISTRY_URL: process.env.CONSOLE_REGISTRY_URL,
+    REGISTRY_TIMEOUT_MS: process.env.REGISTRY_TIMEOUT_MS,
+    LOG_LEVEL: process.env.LOG_LEVEL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  });
 }
