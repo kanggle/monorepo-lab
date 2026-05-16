@@ -36,6 +36,8 @@ const { ENV } = vi.hoisted(() => ({
     OIDC_SCOPE: 'openid profile email tenant.read',
     CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 5000,
+    CONSOLE_TOKEN_EXCHANGE_URL: 'http://gap.local/api/admin/auth/token-exchange',
+    TOKEN_EXCHANGE_TIMEOUT_MS: 5000,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
   },
@@ -51,9 +53,42 @@ import { POST as refreshPOST } from '@/app/api/auth/refresh/route';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  OPERATOR_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
 } from '@/shared/lib/session';
+
+/**
+ * Helper: a fetch mock that returns the GAP OIDC token response for the
+ * `/oauth2/token` call and the operator-token-exchange 200 for the
+ * `/api/admin/auth/token-exchange` call (the callback + refresh routes now
+ * perform BOTH — § 2.6 / ADR-MONO-014 wiring).
+ */
+function gapThenExchangeFetch(
+  gapBody: Record<string, unknown>,
+  exchangeBody: Record<string, unknown> = {
+    accessToken: 'op.jwt',
+    expiresIn: 900,
+    tokenType: 'admin',
+  },
+) {
+  return vi.fn((url: string) => {
+    if (String(url).includes('/api/admin/auth/token-exchange')) {
+      return Promise.resolve(
+        new Response(JSON.stringify(exchangeBody), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(gapBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+}
 
 beforeEach(() => {
   cookieJar.clear();
@@ -113,22 +148,17 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(cookieDeletes).toContain(OAUTH_STATE_COOKIE);
   });
 
-  it('exchanges code+verifier as a public client and sets HttpOnly token cookies', async () => {
+  it('exchanges code+verifier as a public client and sets HttpOnly token cookies (+ operator cookie via the § 2.6 exchange)', async () => {
     cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'verifier-xyz', opts: {} });
     cookieJar.set(OAUTH_STATE_COOKIE, { value: 's1|/console', opts: {} });
 
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          access_token: 'acc.jwt',
-          token_type: 'Bearer',
-          expires_in: 1800,
-          refresh_token: 'ref.jwt',
-          scope: 'openid profile email tenant.read',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
+    const fetchMock = gapThenExchangeFetch({
+      access_token: 'acc.jwt',
+      token_type: 'Bearer',
+      expires_in: 1800,
+      refresh_token: 'ref.jwt',
+      scope: 'openid profile email tenant.read',
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const req = new Request(
@@ -159,6 +189,18 @@ describe('GET /api/auth/callback (token exchange)', () => {
       maxAge: 1800,
     });
     expect(ref?.value).toBe('ref.jwt');
+
+    // The operator token (from the § 2.6 exchange) is set in its own
+    // HttpOnly cookie with maxAge = exchange expiresIn.
+    const op = cookieJar.get(OPERATOR_COOKIE);
+    expect(op?.value).toBe('op.jwt');
+    expect(op?.opts).toMatchObject({
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 900,
+    });
   });
 
   it('on token endpoint failure, redirects to /login without setting tokens', async () => {
@@ -182,6 +224,87 @@ describe('GET /api/auth/callback (token exchange)', () => {
     );
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
   });
+
+  it('exchange 401 → redirect not_provisioned, NO operator cookie, GAP cookies cleared (no GAP token left as an admin credential)', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (String(url).includes('/api/admin/auth/token-exchange')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ code: 'TOKEN_INVALID' }), {
+              status: 401,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: 'gap.acc',
+              token_type: 'Bearer',
+              expires_in: 1800,
+              refresh_token: 'gap.ref',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=not_provisioned',
+    );
+    expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
+    // The GAP token must NOT be left usable as an /api/admin/** credential.
+    expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
+    expect(cookieDeletes).toContain(ACCESS_COOKIE);
+    expect(cookieDeletes).toContain(REFRESH_COOKIE);
+  });
+
+  it('exchange unavailable (5xx) → redirect operator_exchange_unavailable, no partial authed state', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (String(url).includes('/api/admin/auth/token-exchange')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ code: 'DOWNSTREAM_ERROR' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: 'gap.acc',
+              token_type: 'Bearer',
+              expires_in: 1800,
+              refresh_token: 'gap.ref',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=operator_exchange_unavailable',
+    );
+    expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
+    expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
+  });
 });
 
 describe('POST /api/auth/refresh (public-client rotation)', () => {
@@ -191,30 +314,34 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
     expect((await res.json()).code).toBe('TOKEN_INVALID');
   });
 
-  it('rotates tokens on success (reuse-refresh-tokens=false)', async () => {
+  it('rotates tokens on success and re-exchanges the operator token', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            access_token: 'new.acc',
-            token_type: 'Bearer',
-            expires_in: 1800,
-            refresh_token: 'new.ref',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
+      gapThenExchangeFetch(
+        {
+          access_token: 'new.acc',
+          token_type: 'Bearer',
+          expires_in: 1800,
+          refresh_token: 'new.ref',
+        },
+        { accessToken: 'new.op', expiresIn: 600, tokenType: 'admin' },
       ),
     );
     const res = await refreshPOST();
     expect(res.status).toBe(200);
     expect(cookieJar.get(ACCESS_COOKIE)?.value).toBe('new.acc');
     expect(cookieJar.get(REFRESH_COOKIE)?.value).toBe('new.ref');
+    // Re-exchange model (ADR-MONO-014 D2): operator cookie refreshed.
+    expect(cookieJar.get(OPERATOR_COOKIE)?.value).toBe('new.op');
+    expect(cookieJar.get(OPERATOR_COOKIE)?.opts).toMatchObject({
+      maxAge: 600,
+    });
   });
 
-  it('clears cookies and 401s when GAP rejects the refresh token', async () => {
+  it('clears all session cookies (incl. operator) and 401s when GAP rejects the refresh token', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'reused.ref', opts: {} });
+    cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op', opts: {} });
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -227,5 +354,42 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
     expect(res.status).toBe(401);
     expect(cookieDeletes).toContain(ACCESS_COOKIE);
     expect(cookieDeletes).toContain(REFRESH_COOKIE);
+    expect(cookieDeletes).toContain(OPERATOR_COOKIE);
+  });
+
+  it('drops the whole session when GAP refresh succeeds but the re-exchange 401s (operator deactivated since login)', async () => {
+    cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
+    cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (String(url).includes('/api/admin/auth/token-exchange')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ code: 'TOKEN_INVALID' }), {
+              status: 401,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: 'new.acc',
+              token_type: 'Bearer',
+              expires_in: 1800,
+              refresh_token: 'new.ref',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+    const res = await refreshPOST();
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe('TOKEN_INVALID');
+    // No stale operator token, no GAP-token fallback on /api/admin/**.
+    expect(cookieDeletes).toContain(ACCESS_COOKIE);
+    expect(cookieDeletes).toContain(REFRESH_COOKIE);
+    expect(cookieDeletes).toContain(OPERATOR_COOKIE);
   });
 });

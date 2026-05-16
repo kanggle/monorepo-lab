@@ -5,8 +5,11 @@ import { getServerEnv } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  OPERATOR_COOKIE,
   tokenCookieOpts,
 } from '@/shared/lib/session';
+import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
+import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -21,7 +24,15 @@ export const runtime = 'nodejs';
  * `settings.token.reuse-refresh-tokens=false` → GAP rotates the refresh token
  * on every call (ADR-003), so the rotated token is re-stored.
  *
- * On failure both token cookies are cleared so the API client falls back to
+ * Re-exchange model (ADR-MONO-014 D2 / console-integration-contract § 2.6):
+ * there is NO operator-refresh token/state — after the GAP access token
+ * rotates, the operator token is re-obtained via a fresh exchange and the
+ * operator cookie is updated. Consistent with callback fail-closed handling:
+ * exchange `401` (operator deactivated/locked since login) or unavailable
+ * → drop the whole session (GAP + operator cookies) and 401; never keep a
+ * stale operator token, never fall back to the GAP token on /api/admin/**.
+ *
+ * On failure all session cookies are cleared so the API client falls back to
  * a clean re-login (no client-side token juggling — task Failure Scenario).
  */
 
@@ -65,6 +76,7 @@ export async function POST() {
     if (!upstream.ok) {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
+      jar.delete(OPERATOR_COOKIE);
       logger.warn('refresh_failed', { requestId, status: upstream.status });
       return NextResponse.json(
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
@@ -83,6 +95,34 @@ export async function POST() {
         maxAge: 2_592_000,
       });
     }
+
+    // --- Re-exchange the operator token (§ 2.6 / ADR-MONO-014 D2) ---------
+    // No operator-refresh state: the rotated GAP access token is re-exchanged
+    // for a fresh operator token. Any exchange failure (fail-closed 401 or
+    // unavailable) drops the WHOLE session — no stale operator token, no
+    // GAP-token fallback on the operator boundary.
+    try {
+      const op = await exchangeForOperatorToken(data.access_token);
+      jar.set(OPERATOR_COOKIE, op.accessToken, {
+        ...tokenCookieOpts,
+        maxAge: op.expiresIn,
+      });
+    } catch (err) {
+      jar.delete(ACCESS_COOKIE);
+      jar.delete(REFRESH_COOKIE);
+      jar.delete(OPERATOR_COOKIE);
+      const failClosed =
+        err instanceof OperatorExchangeError && err.reason === 'fail_closed';
+      logger.warn('refresh_reexchange_failed', {
+        requestId,
+        reason: failClosed ? 'fail_closed' : 'unavailable',
+      });
+      return NextResponse.json(
+        { code: 'TOKEN_INVALID', message: 'operator session ended' },
+        { status: 401 },
+      );
+    }
+
     logger.info('refresh_ok', { requestId });
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -1,5 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getAccessToken } from '@/shared/lib/session';
+import { getOperatorToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { RegistryUnavailableError, ApiError } from './errors';
 import {
@@ -13,9 +13,15 @@ import {
  * Path / auth / envelope per the authoritative producer contract
  * `console-registry-api.md` (TASK-BE-296):
  *   - `GET ${CONSOLE_REGISTRY_URL}` → `http://gap.local/api/admin/console/registry`
- *   - `Authorization: Bearer <operator-token>` (the GAP access token in the
- *     HttpOnly cookie; admin-service `OperatorAuthenticationFilter` verifies —
- *     gateway treats `/api/admin/**` as a public-path subtree and delegates).
+ *   - `Authorization: Bearer <operator-token>` — the **operator token
+ *     obtained via the server-side RFC 8693 exchange**
+ *     (`operator-token-exchange.ts`; console-integration-contract § 2.6 /
+ *     ADR-MONO-014), held in its own HttpOnly cookie (`getOperatorToken()`).
+ *     This is NOT the GAP OIDC access token: the GAP token is only ever the
+ *     exchange `subject_token` and is never an `/api/admin/**` credential
+ *     (§ 2.1 trust-boundary invariant — this closes the latent #569 defect).
+ *     admin-service `OperatorAuthenticationFilter` verifies the token —
+ *     gateway treats `/api/admin/**` as a public-path subtree and delegates.
  *   - No `X-Operator-Reason` (read-only catalog lookup).
  *   - The operator's tenant scope is resolved server-side from
  *     `admin_operators.tenant_id` — the console does NOT send a tenant; GAP
@@ -31,7 +37,10 @@ import {
 export async function fetchRegistry(): Promise<RegistryResponse> {
   const env = getServerEnv();
   const requestId = newRequestId();
-  const token = await getAccessToken();
+  // The /api/admin/** credential is the EXCHANGED operator token — never the
+  // GAP OIDC access token (§ 2.1/§ 2.2/§ 2.6). Absent operator token ⇒ no
+  // usable operator session ⇒ 401 (caller re-logins; the exchange must run).
+  const token = await getOperatorToken();
 
   if (!token) {
     throw new ApiError(401, 'TOKEN_INVALID', 'No operator session');

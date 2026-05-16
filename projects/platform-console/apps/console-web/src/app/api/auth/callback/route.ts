@@ -5,10 +5,13 @@ import { getServerEnv } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  OPERATOR_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   tokenCookieOpts,
 } from '@/shared/lib/session';
+import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
+import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -26,7 +29,16 @@ export const runtime = 'nodejs';
  *      auth-api.md § POST /oauth2/token).
  *   3. Stores access/refresh tokens in HttpOnly Secure SameSite=Strict
  *      cookies ONLY (frontend-app.md § Authentication; never localStorage).
- *   4. Clears the transient PKCE/state cookies and 302s to the post-login
+ *   4. Server-side exchanges the GAP access token for an admin-service
+ *      operator token (RFC 8693 — console-integration-contract § 2.6 /
+ *      ADR-MONO-014) and stores it in its own HttpOnly operator cookie
+ *      (`maxAge = expiresIn`). Fail-closed: exchange `401`
+ *      → `not_provisioned` re-login; unavailable → `operator_exchange_
+ *      unavailable` re-login. On either failure NO operator cookie is set
+ *      and the GAP token cookies are cleared — there is no partial authed
+ *      state and the GAP token can never be used as an `/api/admin/**`
+ *      credential (the #569 defect this closes).
+ *   5. Clears the transient PKCE/state cookies and 302s to the post-login
  *      path carried by the state cookie.
  */
 
@@ -124,6 +136,34 @@ export async function GET(req: Request) {
         // refresh-token TTL from V0015 (PT720H = 2,592,000s).
         maxAge: 2_592_000,
       });
+    }
+
+    // --- Server-side operator-token exchange (§ 2.6 / ADR-MONO-014) -------
+    // The GAP access token is NOT an /api/admin/** credential — exchange it
+    // for the operator token. On failure: NO operator cookie + drop the GAP
+    // cookies (no partial authed state; GAP token never an admin credential).
+    try {
+      const op = await exchangeForOperatorToken(data.access_token);
+      jar.set(OPERATOR_COOKIE, op.accessToken, {
+        ...tokenCookieOpts,
+        maxAge: op.expiresIn,
+      });
+    } catch (err) {
+      jar.delete(ACCESS_COOKIE);
+      jar.delete(REFRESH_COOKIE);
+      jar.delete(OPERATOR_COOKIE);
+      if (
+        err instanceof OperatorExchangeError &&
+        err.reason === 'fail_closed'
+      ) {
+        logger.warn('operator_exchange_not_provisioned', { requestId });
+        return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'not_provisioned');
+      }
+      logger.warn('operator_exchange_unavailable_on_callback', { requestId });
+      return loginRedirect(
+        env.NEXT_PUBLIC_APP_URL,
+        'operator_exchange_unavailable',
+      );
     }
 
     logger.info('oidc_login_success', { requestId });

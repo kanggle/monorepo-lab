@@ -47,9 +47,17 @@ services:
       # (TASK-BE-296 / console-registry-api.md): admin-service operator-auth
       # boundary GET /api/admin/console/registry (gateway public-path subtree
       # → admin-service OperatorAuthenticationFilter). Called server-side with
-      # the logged-in operator's bearer token.
+      # the EXCHANGED operator token (NOT the GAP OIDC token).
       CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://gap.local/api/admin/console/registry}
       REGISTRY_TIMEOUT_MS: ${REGISTRY_TIMEOUT_MS:-5000}
+      # GAP admin-service RFC 8693 operator-token exchange — AUTHORITATIVE
+      # producer path (TASK-BE-298 / admin-api.md / ADR-MONO-014): POST
+      # /api/admin/auth/token-exchange on the same /api/admin/** operator-auth
+      # subtree. Console server-side exchanges the GAP OIDC access token
+      # (subject_token) for a short-lived operator token (token_type=admin).
+      # The GAP OIDC token is never an /api/admin/** credential.
+      CONSOLE_TOKEN_EXCHANGE_URL: ${CONSOLE_TOKEN_EXCHANGE_URL:-http://gap.local/api/admin/auth/token-exchange}
+      TOKEN_EXCHANGE_TIMEOUT_MS: ${TOKEN_EXCHANGE_TIMEOUT_MS:-5000}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
