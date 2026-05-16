@@ -65,6 +65,14 @@ public class OperatorAuthenticationFilter extends OncePerRequestFilter {
         // RequiresPermissionAspect pointcuts.
         if ("POST".equalsIgnoreCase(method) && (
                 "/api/admin/auth/login".equals(path)
+                        // TASK-BE-298 / ADR-MONO-014: token-exchange runs
+                        // WITHOUT an operator JWT — it presents a GAP OIDC
+                        // subject token in the body. This filter is NOT
+                        // widened to accept that OIDC token as a 2nd issuer
+                        // (Option A rejected); the path is simply skipped here
+                        // exactly like /login, and TokenExchangeService does
+                        // the (separate) GAP-JWKS validation + minting.
+                        || "/api/admin/auth/token-exchange".equals(path)
                         || "/api/admin/auth/2fa/enroll".equals(path)
                         || "/api/admin/auth/2fa/verify".equals(path)
                         // TASK-BE-040: refresh runs without an access token —

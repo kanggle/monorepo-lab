@@ -65,6 +65,13 @@ public class SecurityConfig {
                                 "/.well-known/admin/jwks.json").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/admin/auth/login",
+                                // TASK-BE-298 / ADR-MONO-014: token-exchange
+                                // runs without an operator JWT (GAP OIDC
+                                // subject token in body). OperatorAuthentication
+                                // Filter is NOT widened — it only skips this
+                                // path; TokenExchangeService validates the GAP
+                                // subject token separately and fail-closed.
+                                "/api/admin/auth/token-exchange",
                                 "/api/admin/auth/2fa/enroll",
                                 "/api/admin/auth/2fa/verify",
                                 // TASK-BE-040: refresh runs without operator JWT.

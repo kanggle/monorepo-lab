@@ -43,6 +43,16 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public Optional<OperatorView> findByOidcSubject(String oidcSubject) {
+        if (oidcSubject == null || oidcSubject.isBlank()) {
+            // Defensive: a blank/null subject never maps to a provisioned
+            // operator. Empty == fail-closed branch (no token minted).
+            return Optional.empty();
+        }
+        return operatorRepository.findByOidcSubject(oidcSubject).map(JpaAdminOperatorAdapter::toView);
+    }
+
+    @Override
     public boolean existsByTenantIdAndEmail(String tenantId, String email) {
         return operatorRepository.existsByTenantIdAndEmail(tenantId, email);
     }

@@ -60,6 +60,8 @@ class AdminLogoutControllerTest {
     @MockBean TotpEnrollmentService totpService;
     @MockBean BootstrapTokenService bootstrapTokenService;
     @MockBean AdminActionAuditor auditor;
+    // TASK-BE-298: token-exchange dependency of AdminAuthController.
+    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     @BeforeEach
     void setup() {

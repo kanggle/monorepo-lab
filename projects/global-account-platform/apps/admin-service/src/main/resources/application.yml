@@ -80,6 +80,23 @@ admin:
     # Operator refresh token TTL (seconds). 040 default 30 days.
     refresh-token-ttl-seconds: ${ADMIN_JWT_REFRESH_TTL:2592000}
     refresh-token-type: ${ADMIN_JWT_REFRESH_TYPE:admin_refresh}
+  # TASK-BE-298 / ADR-MONO-014 — GAP OIDC platform-console-web subject-token
+  # validation for POST /api/admin/auth/token-exchange. This is the
+  # auth-service (SAS) OIDC trust anchor — a DIFFERENT key space from the
+  # admin-service operator IdP (admin.jwt above). security.md §GAP OIDC
+  # Subject-Token Validation is canonical.
+  oidc:
+    # auth-service JWKS endpoint (same endpoint the gateway consumes).
+    jwks-uri: ${OIDC_JWKS_URI:http://localhost:8081/internal/auth/jwks}
+    # Expected `iss` — auth-service oidc.issuer-url.
+    issuer: ${OIDC_ISSUER:http://localhost:8081}
+    # Expected `aud` member — the platform-console-web client_id (SAS sets the
+    # access-token aud to the registered client_id).
+    audience: ${OIDC_CONSOLE_CLIENT_ID:platform-console-web}
+    # ±tolerance for exp/nbf (jwt-standard-claims.md "Clock Skew" 60s).
+    clock-skew-seconds: ${OIDC_CLOCK_SKEW_SECONDS:60}
+    connect-timeout-ms: ${OIDC_JWKS_CONNECT_TIMEOUT:3000}
+    read-timeout-ms: ${OIDC_JWKS_READ_TIMEOUT:5000}
   totp:
     # otpauth issuer label presented to the operator's authenticator app.
     issuer: ${ADMIN_TOTP_ISSUER:admin-service}

@@ -16,6 +16,16 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     Optional<AdminOperatorJpaEntity> findByOperatorId(String operatorId);
 
     /**
+     * TASK-BE-298 / ADR-MONO-014 — look up an operator by the GAP OIDC
+     * {@code platform-console-web} subject ({@code sub} = account_id UUID).
+     * The deterministic OIDC&lt;-&gt;operator link for
+     * {@code POST /api/admin/auth/token-exchange}. {@code oidc_subject} is a
+     * platform-global UNIQUE column (V0027), so this resolves to at most one
+     * row; a missing row is the fail-closed branch (no token minted).
+     */
+    Optional<AdminOperatorJpaEntity> findByOidcSubject(String oidcSubject);
+
+    /**
      * Per-tenant email uniqueness check. Replaces the legacy single-column
      * {@link #existsByEmail(String)} after V0025 changed the unique index to
      * {@code (tenant_id, email)}.

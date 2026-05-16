@@ -7,6 +7,7 @@ import com.example.admin.application.AdminLogoutService;
 import com.example.admin.application.AdminRefreshTokenService;
 import com.example.admin.application.OperatorContext;
 import com.example.admin.application.Outcome;
+import com.example.admin.application.TokenExchangeService;
 import com.example.admin.application.TotpEnrollmentService;
 import com.example.admin.application.exception.EnrollmentRequiredException;
 import com.example.admin.application.exception.InvalidBootstrapTokenException;
@@ -14,6 +15,7 @@ import com.example.admin.application.exception.InvalidCredentialsException;
 import com.example.admin.application.exception.InvalidLoginRequestException;
 import com.example.admin.application.exception.InvalidRecoveryCodeException;
 import com.example.admin.application.exception.InvalidRefreshTokenException;
+import com.example.admin.application.exception.InvalidTokenExchangeRequestException;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.RefreshTokenReuseDetectedException;
@@ -28,6 +30,8 @@ import com.example.admin.presentation.dto.AdminLogoutRequest;
 import com.example.admin.presentation.dto.AdminRefreshRequest;
 import com.example.admin.presentation.dto.AdminRefreshResponse;
 import com.example.admin.presentation.dto.RegenerateRecoveryCodesResponse;
+import com.example.admin.presentation.dto.TokenExchangeRequest;
+import com.example.admin.presentation.dto.TokenExchangeResponse;
 import com.example.admin.presentation.dto.TotpEnrollResponse;
 import com.example.admin.presentation.dto.TotpVerifyRequest;
 import com.example.admin.presentation.dto.TotpVerifyResponse;
@@ -61,6 +65,7 @@ public class AdminAuthController {
     private final AdminLoginService loginService;
     private final AdminRefreshTokenService refreshService;
     private final AdminLogoutService logoutService;
+    private final TokenExchangeService tokenExchangeService;
     private final AdminActionAuditor auditor;
     private final BootstrapTokenService bootstrapTokenService;
 
@@ -102,6 +107,45 @@ public class AdminAuthController {
                     false, idempotencyKey, startedAt);
             throw ex;
         }
+    }
+
+    /**
+     * TASK-BE-298 / ADR-MONO-014 (ACCEPTED) § D2/D3 — RFC 8693 token exchange.
+     * Unauthenticated like {@code /login} (no prior operator JWT); presents a
+     * GAP OIDC {@code platform-console-web} access token in the body and
+     * receives the canonical operator access token minted by the SAME issuer
+     * as login success ({@code token_type=admin}, {@code iss=admin-service}).
+     *
+     * <p>This is an additional <b>minting</b> path, not a verification-boundary
+     * widening: {@code OperatorAuthenticationFilter} is unchanged and still
+     * rejects a raw OIDC token on a normal {@code /api/admin/**} endpoint
+     * (ADR-MONO-014 D1 — Option A rejected). Fail-closed: subject-token
+     * validation or operator-mapping failure → 401, no token minted; tenant
+     * scope is taken from {@code admin_operators.tenant_id} only, never the
+     * OIDC token. No {@code admin_actions} row (admin-api.md Side Effects).
+     */
+    @PostMapping("/token-exchange")
+    public ResponseEntity<TokenExchangeResponse> tokenExchange(
+            @Valid @RequestBody TokenExchangeRequest body) {
+        // RFC 8693 protocol-shape validation (→ 400 BAD_REQUEST on mismatch).
+        // @NotBlank already enforces subject_token presence (→ 400
+        // VALIDATION_ERROR). grant_type / subject_token_type must be the fixed
+        // RFC 8693 URIs.
+        if (!TokenExchangeRequest.GRANT_TYPE.equals(body.grantType())) {
+            throw new InvalidTokenExchangeRequestException(
+                    "grant_type must be " + TokenExchangeRequest.GRANT_TYPE);
+        }
+        if (!TokenExchangeRequest.SUBJECT_TOKEN_TYPE.equals(body.subjectTokenType())) {
+            throw new InvalidTokenExchangeRequestException(
+                    "subject_token_type must be " + TokenExchangeRequest.SUBJECT_TOKEN_TYPE);
+        }
+
+        TokenExchangeService.ExchangeResult result =
+                tokenExchangeService.exchange(body.subjectToken());
+        return ResponseEntity.ok(new TokenExchangeResponse(
+                result.accessToken(),
+                result.expiresIn(),
+                "admin"));
     }
 
     /**
