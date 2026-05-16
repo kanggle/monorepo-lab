@@ -18,6 +18,12 @@ import { z } from 'zod';
  * `CONSOLE_REGISTRY_URL` points at the authoritative TASK-BE-296 producer
  * path: `http://gap.local/api/admin/console/registry` (admin-service,
  * operator-auth boundary — `console-registry-api.md`).
+ *
+ * `CONSOLE_TOKEN_EXCHANGE_URL` points at the authoritative TASK-BE-298
+ * producer path: `http://gap.local/api/admin/auth/token-exchange`
+ * (admin-service, RFC 8693 — `admin-api.md` / ADR-MONO-014). The console
+ * server-side exchanges the GAP OIDC access token for an operator token
+ * here (console-integration-contract § 2.6).
  */
 
 // ---------------------------------------------------------------------------
@@ -54,6 +60,15 @@ const ServerEnvSchema = z.object({
     .default('http://gap.local/api/admin/console/registry'),
   /** Outbound timeout (ms) for the registry call (integration-heavy I1). */
   REGISTRY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** GAP admin-service RFC 8693 operator-token exchange endpoint
+   *  (TASK-BE-298 / ADR-MONO-014 authoritative path — admin-api.md). */
+  CONSOLE_TOKEN_EXCHANGE_URL: z
+    .string()
+    .url()
+    .default('http://gap.local/api/admin/auth/token-exchange'),
+  /** Outbound timeout (ms) for the operator-token exchange call
+   *  (integration-heavy I1 — same convention as REGISTRY_TIMEOUT_MS). */
+  TOKEN_EXCHANGE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -73,6 +88,8 @@ export function getServerEnv(): ServerEnv {
     OIDC_SCOPE: process.env.OIDC_SCOPE,
     CONSOLE_REGISTRY_URL: process.env.CONSOLE_REGISTRY_URL,
     REGISTRY_TIMEOUT_MS: process.env.REGISTRY_TIMEOUT_MS,
+    CONSOLE_TOKEN_EXCHANGE_URL: process.env.CONSOLE_TOKEN_EXCHANGE_URL,
+    TOKEN_EXCHANGE_TIMEOUT_MS: process.env.TOKEN_EXCHANGE_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });

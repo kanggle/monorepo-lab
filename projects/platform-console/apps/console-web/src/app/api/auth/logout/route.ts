@@ -4,6 +4,7 @@ import { getServerEnv } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  OPERATOR_COOKIE,
   TENANT_COOKIE,
 } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
@@ -50,6 +51,7 @@ export async function POST() {
 
   jar.delete(ACCESS_COOKIE);
   jar.delete(REFRESH_COOKIE);
+  jar.delete(OPERATOR_COOKIE);
   jar.delete(TENANT_COOKIE);
   logger.info('logout_complete', { requestId });
   return new NextResponse(null, { status: 204 });

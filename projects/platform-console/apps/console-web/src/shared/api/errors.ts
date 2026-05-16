@@ -26,6 +26,37 @@ export class RegistryUnavailableError extends Error {
   }
 }
 
+/**
+ * Operator-token exchange (RFC 8693) failure taxonomy
+ * (console-integration-contract § 2.6 fail-closed mapping / ADR-MONO-014):
+ *
+ *   - `fail_closed` — GAP returned `401 TOKEN_INVALID`: the subject token is
+ *     invalid OR the OIDC subject is not mapped to an active operator
+ *     (not provisioned). The caller MUST force re-login (`not_provisioned`);
+ *     NO operator cookie is set / an existing one is dropped. The GAP token
+ *     is never accepted as an `/api/admin/**` credential.
+ *   - `unavailable` — `400`/`5xx`/timeout/network/unexpected `tokenType`:
+ *     session-unavailable. NO operator cookie; the console never falls back
+ *     to the GAP OIDC token on the operator boundary (the #569 defect).
+ *
+ * No `subject_token`/operator token value is ever placed in this error or
+ * logged (security invariant).
+ */
+export class OperatorExchangeError extends Error {
+  readonly reason: 'fail_closed' | 'unavailable';
+  readonly code: string;
+  constructor(
+    reason: OperatorExchangeError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OperatorExchangeError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',

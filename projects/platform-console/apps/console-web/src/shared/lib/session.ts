@@ -9,8 +9,17 @@ import { cookies } from 'next/headers';
  * never read the access/refresh token.
  */
 
+/** GAP OIDC `platform-console-web` access token. NEVER an `/api/admin/**`
+ *  credential — it is only the `subject_token` input to the operator-token
+ *  exchange (console-integration-contract § 2.1 trust-boundary invariant /
+ *  ADR-MONO-014). */
 export const ACCESS_COOKIE = 'console_access_token';
 export const REFRESH_COOKIE = 'console_refresh_token';
+/** admin-service operator token (`token_type=admin`, `iss=admin-service`)
+ *  obtained server-side via the RFC 8693 exchange (§ 2.6). This — and only
+ *  this — is the credential for every `/api/admin/**` call. Re-exchanged on
+ *  every GAP refresh (no operator-refresh state — ADR-MONO-014 D2). */
+export const OPERATOR_COOKIE = 'console_operator_token';
 /** Active tenant for tenant-scoped server-side domain calls (multi-tenant). */
 export const TENANT_COOKIE = 'console_active_tenant';
 /** Short-lived PKCE/state cookies used only between /login and /callback. */
@@ -30,10 +39,28 @@ export const transientCookieOpts = {
   maxAge: 600, // 10 min — bounded login round-trip
 };
 
-/** Server-side read of the current operator's access token (or null). */
+/**
+ * Server-side read of the GAP OIDC access token (or null).
+ *
+ * SCOPE: this token is exclusively the `subject_token` input to the
+ * operator-token exchange (`operator-token-exchange.ts`) and the OAuth
+ * refresh/revoke flows. It MUST NOT be used as an `/api/admin/**` bearer —
+ * use {@link getOperatorToken} for that (console-integration-contract § 2.1
+ * trust-boundary invariant; this is the #569 defect being closed).
+ */
 export async function getAccessToken(): Promise<string | null> {
   const jar = await cookies();
   return jar.get(ACCESS_COOKIE)?.value ?? null;
+}
+
+/**
+ * Server-side read of the exchanged admin-service operator token (or null).
+ * This is the ONLY credential valid for `/api/admin/**`
+ * (console-integration-contract § 2.2 / § 2.6).
+ */
+export async function getOperatorToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(OPERATOR_COOKIE)?.value ?? null;
 }
 
 /** Server-side read of the active tenant (or null when none selected). */
@@ -42,6 +69,14 @@ export async function getActiveTenant(): Promise<string | null> {
   return jar.get(TENANT_COOKIE)?.value ?? null;
 }
 
+/**
+ * A usable operator session requires BOTH the GAP OIDC session (so refresh
+ * can re-exchange — ADR-MONO-014 D2) AND a present operator token (the
+ * `/api/admin/**` credential). A GAP-token-only state is NOT authenticated
+ * for operator actions: the exchange having failed must never leave a
+ * half-working authed state (console-integration-contract § 2.6 fail-closed;
+ * task Failure Scenario "Silent partial authed state").
+ */
 export async function isAuthenticated(): Promise<boolean> {
-  return (await getAccessToken()) !== null;
+  return (await getAccessToken()) !== null && (await getOperatorToken()) !== null;
 }
