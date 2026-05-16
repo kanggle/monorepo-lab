@@ -102,7 +102,7 @@ provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
 - V0008–V0013: OAuth/OIDC SAS 영속 + 시드 (oauth_clients / oauth_scopes / oauth_consent / oauth2_authorization + tenant 시드)
 - V0014: `refresh_tokens.jti` / `rotated_from` VARCHAR(36)→VARCHAR(255) widening (TASK-MONO-046-1 Cluster A — SAS 96-byte URL-safe base64 RT 수용)
 - V0015: `platform-console-web` public OIDC client 시드 (TASK-BE-296)
-- V0016: V0011/V0012 의 `client_settings.settings.client.post-logout-redirect-uris` 를 SAS default-typed `["java.util.ArrayList",[...]]` 형태로 교정 (TASK-BE-297 — plain JSON array 가 `SecurityJackson2Modules.enableDefaultTyping` 하에서 `InvalidTypeIdException` 유발하던 잠재 production 결함. forward-only / 조건부 idempotent / 영향 행 3개만 갱신, clean client 무변경)
+- V0016: V0011/V0012 의 `client_settings.settings.client.post-logout-redirect-uris` 를 SAS default-typed `["java.util.ArrayList",[...]]` 형태로 교정 (TASK-BE-297 — plain JSON array 가 `SecurityJackson2Modules.enableDefaultTyping` 하에서 `InvalidTypeIdException` 유발하던 잠재 production 결함. forward-only / 조건부 idempotent / 영향 행 3개만 갱신, clean client 무변경). **`client_settings` 는 MySQL native `JSON` 컬럼이므로** 교정은 `JSON_SET` + `JSON_EXTRACT` (parsed-tree 구조 변형)로 수행한다 — pre-normalization 문자열 리터럴 `REPLACE()` 는 MySQL 의 JSON 저장 정규화(키 재정렬·`:`/`,` 뒤 공백 재삽입·숫자 재정규화) 때문에 stored text 와 불일치하여 silent no-op 이 된다 (PR #571 에서 IT 3건으로 표면화된 1차 시도의 실패 원인). Flyway 는 본 서비스에서 MySQL 8.0 에만 적용된다 (유일한 H2 슬라이스 테스트 `OAuth2AuthorizationServerSliceTest` 는 `spring.flyway.enabled=false`); 따라서 MySQL 전용 JSON 함수 사용은 portable 하다. no-op 회귀는 `V0016MigrationShapeTest` (non-Docker) 가 즉시 차단한다.
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---

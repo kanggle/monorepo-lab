@@ -36,64 +36,114 @@
 -- clients (demo-spa-client / test-internal-client), never these three rows.
 --
 -- ------------------------------------------------------------------------
--- Fix strategy
+-- Why the first V0016 attempt (ANSI REPLACE on a pre-normalization literal)
+-- was a NO-OP — root cause of PR #571's 3 IT failures
 -- ------------------------------------------------------------------------
--- Option (a) from the task: corrective forward Flyway migration that
--- re-serializes ONLY the three affected rows' client_settings into the typed
--- form. The shared OAuthClientMapper / SecurityJackson2Modules config and ALL
--- already-clean clients (demo-spa-client / test-internal-client / wms / scm /
--- platform-console-web) are left untouched — least blast radius.
+-- `oauth_clients.client_settings` is a MySQL native **JSON** column
+-- (V0008__create_oauth_tables.sql:32 — `client_settings JSON NOT NULL`).
+-- MySQL normalizes every JSON value on STORE:
+--   1. object members are re-ordered (not insertion order),
+--   2. insignificant whitespace is stripped AND MySQL's canonical
+--      JSON→string rendering reinserts a space after every ':' and ',',
+--   3. numbers are renormalized (e.g. 900.000000000 → 900.0).
+-- Consequently the V0011/V0012 row's stored text is NOT the byte sequence the
+-- seed file wrote. Worse: `REPLACE(json_col, lit, rep)` implicitly casts the
+-- JSON value to its *normalized* string form before substituting. The first
+-- V0016 attempt searched for the **pre-normalization seed literal**
+--   '"settings.client.post-logout-redirect-uris":["http://localhost:3000/",...]'
+-- (no spaces, original key order). That substring never appears in the
+-- normalized stored text (spaces after ':'/',' , reordered keys), so both the
+-- REPLACE() and its LIKE guard matched nothing — a silent no-op. The IT still
+-- read the untouched plain array and still threw InvalidTypeIdException citing
+-- 'http://localhost:3000/' as the type id, exactly as before the migration.
 --
--- The corrective value wraps the existing 2-element string array in the
--- allow-listed java.util.ArrayList envelope:
+-- The previous OAuthClientMapperTest passed because it fed the mapper a
+-- hand-built Java String (no MySQL JSON round-trip), so it never exercised the
+-- normalization that defeats a text-substring REPLACE. A new slice/IT-layer
+-- assertion (see test changes for TASK-BE-297) now pins the ACTUAL
+-- post-migration stored value as read back through the JSON column, so a
+-- no-op migration fails fast at the non-Docker layer instead of only after a
+-- CI Testcontainers cycle.
+--
+-- ------------------------------------------------------------------------
+-- Fix strategy (corrected)
+-- ------------------------------------------------------------------------
+-- Mutate the value STRUCTURALLY with MySQL JSON functions, which operate on
+-- the parsed JSON tree and are therefore immune to key ordering, whitespace
+-- and number renormalization. JSON_SET replaces the plain array value with the
+-- allow-listed [typeId, value] wrapper-array required by SAS default typing:
 --     "settings.client.post-logout-redirect-uris":
 --         ["java.util.ArrayList",["http://localhost:3000/","http://fan-platform.local/"]]
--- This deserializes to the byte-equivalent effective ClientSettings: the same
--- key holding the same ordered List<String> of the same URIs. Verified
--- field-by-field by OAuthClientMapperTest (typed form round-trips; original
--- plain form throws).
+-- The inner array is taken verbatim from the existing stored value via
+-- JSON_EXTRACT, so the URIs (and their order) are preserved byte-for-byte
+-- regardless of how MySQL normalized them on the original INSERT. This
+-- deserializes to the byte-equivalent effective ClientSettings: the same key
+-- holding the same ordered List<String> of the same URIs. The
+-- java.util.ArrayList typeId is on the SAS AllowlistTypeIdResolver list and is
+-- the exact wrapper position the clean clients' working
+-- `["java.time.Duration",900.0]` envelope demonstrates SAS round-trips for a
+-- typed value inside the UnmodifiableMap. Verified field-by-field by
+-- OAuthClientMapperTest (typed form round-trips; original plain form throws)
+-- and end-to-end by OAuthClientPostLogoutRedirectUriSeedIntegrationTest.
+--
+-- Only the shared OAuthClientMapper / SecurityJackson2Modules config and ALL
+-- already-clean clients (demo-spa-client / test-internal-client / wms / scm /
+-- platform-console-web) are left untouched — least blast radius.
 --
 -- ------------------------------------------------------------------------
 -- Portability & idempotency
 -- ------------------------------------------------------------------------
--- Uses ANSI REPLACE() string substitution (NOT MySQL JSON_SET / JSON_ARRAY) so
--- the migration runs identically on MySQL (production + Testcontainers
--- integrationTest) and H2 (SAS slice tests) — the same reason V0011/V0012
--- embedded the field inline (PR #144).
+-- MySQL-only JSON functions are deliberate and correct here: Flyway runs ONLY
+-- against MySQL 8.0 in this service. Every test that enables Flyway uses a
+-- MySQLContainer("mysql:8.0"); the sole H2-backed test
+-- (OAuth2AuthorizationServerSliceTest) sets `spring.flyway.enabled=false` and
+-- builds its schema with Hibernate ddl-auto, so no migration ever executes on
+-- H2. (The V0011/V0012 "embed inline so it stays H2-portable" comments predate
+-- that slice test disabling Flyway; the H2 constraint no longer applies to the
+-- migration path.) Production also runs MySQL 8.0. JSON_SET / JSON_EXTRACT /
+-- JSON_TYPE are all available on MySQL 8.0.
 --
--- Idempotent / conditional: the WHERE guard matches ONLY rows still carrying
--- the exact broken plain-array substring. Once corrected (or on a fresh DB
--- where V0011/V0012 were authored correctly in a future edit) the predicate
--- does not match and REPLACE() is additionally a no-op on the absent substring.
--- Forward-only — no down migration (consistent with the migration policy in
--- specs/services/auth-service/data-model.md).
+-- Idempotent / conditional: each UPDATE's WHERE guard fires ONLY when the key
+-- is still present AND its first element is NOT already the corrective type id
+-- ('java.util.ArrayList'). On a corrected DB (or a future DB where V0011/V0012
+-- were authored correctly) the predicate matches nothing and the statement is
+-- a no-op. Forward-only — no down migration (consistent with the migration
+-- policy in specs/services/auth-service/data-model.md).
+
+SET @plr := '$."settings.client.post-logout-redirect-uris"';
 
 -- fan-platform-user-flow-client (V0011)
 UPDATE oauth_clients
-SET client_settings = REPLACE(
+SET client_settings = JSON_SET(
         client_settings,
-        '"settings.client.post-logout-redirect-uris":["http://localhost:3000/","http://fan-platform.local/"]',
-        '"settings.client.post-logout-redirect-uris":["java.util.ArrayList",["http://localhost:3000/","http://fan-platform.local/"]]'
+        @plr,
+        JSON_ARRAY('java.util.ArrayList', JSON_EXTRACT(client_settings, @plr))
     )
 WHERE client_id = 'fan-platform-user-flow-client'
-  AND client_settings LIKE '%"settings.client.post-logout-redirect-uris":["http://localhost:3000/","http://fan-platform.local/"]%';
+  AND JSON_CONTAINS_PATH(client_settings, 'one', @plr)
+  AND JSON_UNQUOTE(JSON_EXTRACT(client_settings, CONCAT(@plr, '[0]')))
+        <> 'java.util.ArrayList';
 
 -- ecommerce-web-store-client (V0012)
 UPDATE oauth_clients
-SET client_settings = REPLACE(
+SET client_settings = JSON_SET(
         client_settings,
-        '"settings.client.post-logout-redirect-uris":["http://localhost:3000/","http://web.ecommerce.local/"]',
-        '"settings.client.post-logout-redirect-uris":["java.util.ArrayList",["http://localhost:3000/","http://web.ecommerce.local/"]]'
+        @plr,
+        JSON_ARRAY('java.util.ArrayList', JSON_EXTRACT(client_settings, @plr))
     )
 WHERE client_id = 'ecommerce-web-store-client'
-  AND client_settings LIKE '%"settings.client.post-logout-redirect-uris":["http://localhost:3000/","http://web.ecommerce.local/"]%';
+  AND JSON_CONTAINS_PATH(client_settings, 'one', @plr)
+  AND JSON_UNQUOTE(JSON_EXTRACT(client_settings, CONCAT(@plr, '[0]')))
+        <> 'java.util.ArrayList';
 
 -- ecommerce-admin-dashboard-client (V0012)
 UPDATE oauth_clients
-SET client_settings = REPLACE(
+SET client_settings = JSON_SET(
         client_settings,
-        '"settings.client.post-logout-redirect-uris":["http://localhost:3001/","http://admin.ecommerce.local/"]',
-        '"settings.client.post-logout-redirect-uris":["java.util.ArrayList",["http://localhost:3001/","http://admin.ecommerce.local/"]]'
+        @plr,
+        JSON_ARRAY('java.util.ArrayList', JSON_EXTRACT(client_settings, @plr))
     )
 WHERE client_id = 'ecommerce-admin-dashboard-client'
-  AND client_settings LIKE '%"settings.client.post-logout-redirect-uris":["http://localhost:3001/","http://admin.ecommerce.local/"]%';
+  AND JSON_CONTAINS_PATH(client_settings, 'one', @plr)
+  AND JSON_UNQUOTE(JSON_EXTRACT(client_settings, CONCAT(@plr, '[0]')))
+        <> 'java.util.ArrayList';

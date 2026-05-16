@@ -264,6 +264,55 @@ class OAuthClientMapperTest {
                 .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
     }
 
+    /**
+     * TASK-BE-297 (PR #571 corrective): pins the value as the mapper reads it
+     * back <b>through a MySQL {@code JSON} column</b>, not as a hand-built
+     * pre-normalization string.
+     *
+     * <p>{@code oauth_clients.client_settings} is a MySQL native {@code JSON}
+     * column. After the corrected V0016
+     * ({@code JSON_SET(cs, '$."..."', JSON_ARRAY('java.util.ArrayList',
+     * JSON_EXTRACT(cs, '$."..."')))}) MySQL stores — and on read renders — the
+     * value in its <b>normalized</b> canonical form: object members re-ordered,
+     * a space reinserted after every {@code :} and {@code ,}. This test feeds
+     * the mapper exactly that normalized rendering (the real stored shape, the
+     * thing the previous hand-built-string tests never exercised) and proves it
+     * still deserializes to the exact {@code List<String>}.
+     *
+     * <p>The companion {@code OAuthClientPostLogoutRedirectUriSeedIntegrationTest}
+     * proves the same end-to-end against a real MySQL Testcontainer; this unit
+     * test is the non-Docker early-warning that the corrective envelope is
+     * read-compatible with MySQL's normalized JSON rendering.
+     */
+    @Test
+    @DisplayName("toRegisteredClient: MySQL-JSON-normalized corrective form (reordered + spaced) round-trips")
+    void toRegisteredClient_mysqlNormalizedCorrectiveForm_deserializesCleanly() {
+        OAuthClientEntity entity = buildPkceClientEntity("fan-platform", "B2C");
+        entity.setClientId("fan-platform-user-flow-client");
+        // Exactly how MySQL renders the JSON column AFTER the corrected V0016:
+        //  - JSON_SET wrapped the array as ["java.util.ArrayList", [ ...uris ]]
+        //  - MySQL re-orders object members and inserts a space after every
+        //    ':' and ',' in its canonical JSON->text rendering. Member order
+        //    below is MySQL 8.0 ordering (by key length, then bytewise) — the
+        //    point is that the mapper's Jackson reader is order/space tolerant.
+        entity.setClientSettings(
+                "{\"@class\": \"java.util.Collections$UnmodifiableMap\", "
+                        + "\"settings.client.require-proof-key\": true, "
+                        + "\"settings.client.require-authorization-consent\": false, "
+                        + "\"settings.client.post-logout-redirect-uris\": "
+                        + "[\"java.util.ArrayList\", "
+                        + "[\"http://localhost:3000/\", \"http://fan-platform.local/\"]]}");
+
+        RegisteredClient client = mapper.toRegisteredClient(entity);
+
+        List<String> postLogout = client.getClientSettings()
+                .getSetting("settings.client.post-logout-redirect-uris");
+        assertThat(postLogout)
+                .as("MySQL-normalized corrective form must deserialize to the exact List<String>")
+                .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
+        assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
+    }
+
     // -----------------------------------------------------------------------
     // Round-trip
     // -----------------------------------------------------------------------
