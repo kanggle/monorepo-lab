@@ -68,6 +68,15 @@ export default async function ConsoleLayout({
                     감사 · 보안
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/operators"
+                    data-testid="nav-operators"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    운영자 관리
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

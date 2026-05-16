@@ -113,6 +113,39 @@ export class AuditUnavailableError extends Error {
   }
 }
 
+/**
+ * GAP operators-management surface degrade signal
+ * (console-integration-contract § 2.4.3 / § 2.5). Sibling of
+ * {@link AccountsUnavailableError} / {@link AuditUnavailableError} —
+ * identical resilience posture for the most privilege-sensitive Phase-2
+ * slice: a `503 DOWNSTREAM_ERROR` / `503 CIRCUIT_OPEN` / timeout on a GAP
+ * operators call degrades ONLY the operators section (the console shell
+ * stays intact). Auth failures (401) are raised as {@link ApiError} so the
+ * caller forces a clean re-login (no partial authed state). Inline-
+ * recoverable producer errors (`403 PERMISSION_DENIED` — not SUPER_ADMIN /
+ * lacks `operator.manage`, `403 TENANT_SCOPE_DENIED`,
+ * `409 OPERATOR_EMAIL_CONFLICT`, `400 ROLE_NOT_FOUND`/`VALIDATION_ERROR`/
+ * `STATE_TRANSITION_INVALID`/`SELF_SUSPEND_FORBIDDEN`/
+ * `CURRENT_PASSWORD_MISMATCH`/`PASSWORD_POLICY_VIOLATION`,
+ * `404 OPERATOR_NOT_FOUND`) are raised as {@link ApiError} so the UI
+ * renders an inline actionable message without crashing. No token /
+ * operator email / password is ever placed in this error.
+ */
+export class OperatorsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: OperatorsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OperatorsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -133,6 +166,21 @@ const MESSAGES: Record<string, string> = {
   AUDIT_RANGE_INVALID: '시작 시각이 종료 시각보다 늦을 수 없습니다.',
   SECURITY_EVENT_READ_REQUIRED:
     '로그인 이력·의심 활동을 조회하려면 보안 이벤트 조회 권한(security.event.read)이 필요합니다.',
+  // --- operators (TASK-PC-FE-004 / §2.4.3) -------------------------------
+  OPERATOR_MANAGE_REQUIRED:
+    '운영자 관리는 SUPER_ADMIN(operator.manage 권한)만 수행할 수 있습니다.',
+  TENANT_SCOPE_DENIED_CREATE:
+    "플랫폼 스코프(*) 운영자는 플랫폼 스코프 운영자만 생성할 수 있습니다. 이 작업을 수행할 권한이 없습니다.",
+  OPERATOR_EMAIL_CONFLICT:
+    '같은 테넌트에 동일한 이메일의 운영자가 이미 존재합니다.',
+  ROLE_NOT_FOUND:
+    '존재하지 않는 역할이 포함되어 있습니다. 역할 목록을 새로고침한 뒤 다시 시도하세요.',
+  OPERATOR_NOT_FOUND: '대상 운영자를 찾을 수 없습니다.',
+  SELF_SUSPEND_FORBIDDEN: '본인 계정은 정지할 수 없습니다.',
+  CURRENT_PASSWORD_MISMATCH: '현재 비밀번호가 일치하지 않습니다.',
+  PASSWORD_POLICY_VIOLATION:
+    '새 비밀번호가 정책을 충족하지 않습니다 (10자 이상, 영문·숫자·특수문자 각 1자 이상).',
+  PASSWORD_CONFIRM_MISMATCH: '새 비밀번호와 확인 입력이 일치하지 않습니다.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
