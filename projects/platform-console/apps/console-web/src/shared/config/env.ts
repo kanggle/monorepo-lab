@@ -69,6 +69,14 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for the operator-token exchange call
    *  (integration-heavy I1 — same convention as REGISTRY_TIMEOUT_MS). */
   TOKEN_EXCHANGE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** GAP admin-service base for the accounts operator surface (TASK-PC-FE-002
+   *  / TASK-BE-296 operator-auth boundary). The 8 account/session endpoints
+   *  hang off `${GAP_ADMIN_API_BASE}/api/admin/...` — request/response/error
+   *  owned by GAP `admin-api.md` (authoritative, consumed only). */
+  GAP_ADMIN_API_BASE: z.string().url().default('http://gap.local'),
+  /** Outbound timeout (ms) for GAP accounts calls (integration-heavy I1 —
+   *  same convention as REGISTRY_TIMEOUT_MS). */
+  ACCOUNTS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -90,6 +98,8 @@ export function getServerEnv(): ServerEnv {
     REGISTRY_TIMEOUT_MS: process.env.REGISTRY_TIMEOUT_MS,
     CONSOLE_TOKEN_EXCHANGE_URL: process.env.CONSOLE_TOKEN_EXCHANGE_URL,
     TOKEN_EXCHANGE_TIMEOUT_MS: process.env.TOKEN_EXCHANGE_TIMEOUT_MS,
+    GAP_ADMIN_API_BASE: process.env.GAP_ADMIN_API_BASE,
+    ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });

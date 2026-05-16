@@ -1,0 +1,72 @@
+import Link from 'next/link';
+import { getAccountsListState } from '@/features/accounts';
+import { AccountsScreen } from '@/features/accounts';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * GAP accounts operator surface route (TASK-PC-FE-002 — ADR-MONO-013
+ * Phase 2 slice 1). The catalog `gap.baseRoute` resolves here.
+ *
+ * Server component: the initial accounts page is fetched server-side via the
+ * GAP admin-service client with the HttpOnly operator token + active tenant
+ * (`getAccountsListState()`). Resilience is handled there:
+ *   - 401/403 → `redirect('/login')` (clean re-login, no partial authed
+ *     state — handled inside `getAccountsListState`).
+ *   - no active tenant → a "select a tenant" gate (never an empty
+ *     `X-Tenant-Id`).
+ *   - 503 / timeout → a degraded notice; the console shell stays intact
+ *     (the `(console)` layout still renders around this).
+ */
+export default async function AccountsPage() {
+  const state = await getAccountsListState({ page: 0, size: 20 });
+
+  if (state.noTenant) {
+    return (
+      <section aria-labelledby="accounts-heading">
+        <h1 id="accounts-heading" className="mb-6 text-2xl font-semibold">
+          계정 운영
+        </h1>
+        <div
+          role="status"
+          data-testid="accounts-no-tenant"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          <p className="mb-2 font-medium text-foreground">
+            테넌트를 먼저 선택하세요.
+          </p>
+          <p>
+            계정 운영 작업은 테넌트 범위로 수행됩니다. 상단의 테넌트
+            스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+          </p>
+          <Link
+            href="/console"
+            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            카탈로그로 이동
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (state.degraded || !state.page) {
+    return (
+      <section aria-labelledby="accounts-heading">
+        <h1 id="accounts-heading" className="mb-6 text-2xl font-semibold">
+          계정 운영
+        </h1>
+        <div
+          role="status"
+          data-testid="accounts-degraded"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          계정 서비스를 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은
+          계속 사용할 수 있습니다. 잠시 후 다시 시도하세요.
+        </div>
+      </section>
+    );
+  }
+
+  return <AccountsScreen initial={state.page} />;
+}
