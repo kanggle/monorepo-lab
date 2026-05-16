@@ -150,6 +150,170 @@ class OAuthClientMapperTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-BE-297 — array-valued custom ClientSettings under SAS default typing
+    // -----------------------------------------------------------------------
+
+    /**
+     * Regression for TASK-BE-297.
+     *
+     * <p>V0011 / V0012 seeded {@code settings.client.post-logout-redirect-uris}
+     * as a <b>plain JSON array</b> {@code ["http://localhost:3000/","http://fan-platform.local/"]}.
+     * {@code OAuthClientMapper}'s SAS-enriched ObjectMapper has
+     * {@code SecurityJackson2Modules.enableDefaultTyping} active: a collection
+     * value must carry a {@code [typeId, value]} wrapper-array envelope, where
+     * {@code typeId} is an allow-listed class (e.g. {@code java.util.ArrayList}).
+     * A plain 2-element string array is read as {@code [typeId="http://localhost:3000/", value=...]}
+     * → {@code InvalidTypeIdException} → {@code OAuthClientMappingException}.
+     *
+     * <p>This test asserts the CORRECTIVE typed form (the form produced by
+     * {@code V0016}) deserializes cleanly and that the effective
+     * {@code post-logout-redirect-uris} setting is the exact same
+     * {@code List<String>}.
+     */
+    @Test
+    @DisplayName("toRegisteredClient: SAS-typed array custom setting (post-logout-redirect-uris) round-trips")
+    void toRegisteredClient_typedArrayCustomSetting_deserializesCleanly() {
+        OAuthClientEntity entity = buildPkceClientEntity("fan-platform", "B2C");
+        entity.setClientId("fan-platform-user-flow-client");
+        // The corrective V0016 form: array wrapped as [typeId, value] with an
+        // allow-listed concrete collection type id (java.util.ArrayList).
+        entity.setClientSettings("""
+                {"@class":"java.util.Collections$UnmodifiableMap",\
+                "settings.client.require-proof-key":true,\
+                "settings.client.require-authorization-consent":false,\
+                "settings.client.post-logout-redirect-uris":\
+                ["java.util.ArrayList",["http://localhost:3000/","http://fan-platform.local/"]]}""");
+
+        RegisteredClient client = mapper.toRegisteredClient(entity);
+
+        List<String> postLogout = client.getClientSettings()
+                .getSetting("settings.client.post-logout-redirect-uris");
+        assertThat(postLogout)
+                .as("post-logout-redirect-uris must deserialize as the exact List<String>")
+                .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
+        // Standard SAS keys still correct alongside the custom array setting.
+        assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
+    }
+
+    /**
+     * Negative control for TASK-BE-297: proves the ORIGINAL (defective) V0011 /
+     * V0012 form — a plain JSON array with no {@code [typeId, value]} envelope —
+     * is exactly what throws, justifying the corrective migration. If SAS ever
+     * changes its default-typing behaviour so a plain array deserializes
+     * cleanly, this test fails and the migration can be revisited.
+     */
+    @Test
+    @DisplayName("toRegisteredClient: ORIGINAL plain-array post-logout-redirect-uris throws (defect proof)")
+    void toRegisteredClient_plainArrayCustomSetting_throws() {
+        OAuthClientEntity entity = buildPkceClientEntity("fan-platform", "B2C");
+        entity.setClientId("fan-platform-user-flow-client");
+        entity.setClientSettings("""
+                {"@class":"java.util.Collections$UnmodifiableMap",\
+                "settings.client.require-proof-key":true,\
+                "settings.client.require-authorization-consent":false,\
+                "settings.client.post-logout-redirect-uris":\
+                ["http://localhost:3000/","http://fan-platform.local/"]}""");
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> mapper.toRegisteredClient(entity))
+                .isInstanceOf(OAuthClientMappingException.class)
+                .hasMessageContaining("fan-platform-user-flow-client");
+    }
+
+    /**
+     * TASK-BE-297: the corrective typed form must SERIALIZE back (toEntity)
+     * without loss — i.e. a clean save path keeps the array typed. This pins
+     * the exact wrapper-array shape the V0016 migration must write so future
+     * mapper changes that would silently alter it are caught.
+     */
+    @Test
+    @DisplayName("round-trip: typed array custom setting survives entity → RegisteredClient → entity")
+    void roundTrip_typedArrayCustomSetting_preserved() {
+        OAuthClientEntity original = buildPkceClientEntity("fan-platform", "B2C");
+        original.setClientId("fan-platform-user-flow-client");
+        original.setClientSettings("""
+                {"@class":"java.util.Collections$UnmodifiableMap",\
+                "settings.client.require-proof-key":true,\
+                "settings.client.require-authorization-consent":false,\
+                "settings.client.post-logout-redirect-uris":\
+                ["java.util.ArrayList",["http://localhost:3000/","http://fan-platform.local/"]]}""");
+
+        RegisteredClient client = mapper.toRegisteredClient(original);
+        OAuthClientEntity restored = mapper.toEntity(client);
+
+        // Re-read the re-serialized settings: the array must STILL be present
+        // and STILL deserialize to the same List<String> (no envelope loss).
+        OAuthClientEntity reloaded = new OAuthClientEntity();
+        reloaded.setId(restored.getId());
+        reloaded.setClientId(restored.getClientId());
+        reloaded.setTenantId(restored.getTenantId());
+        reloaded.setTenantType(restored.getTenantType());
+        reloaded.setClientName(restored.getClientName());
+        reloaded.setClientAuthenticationMethods(restored.getClientAuthenticationMethods());
+        reloaded.setAuthorizationGrantTypes(restored.getAuthorizationGrantTypes());
+        reloaded.setRedirectUris(restored.getRedirectUris());
+        reloaded.setScopes(restored.getScopes());
+        reloaded.setClientSettings(restored.getClientSettings());
+        reloaded.setTokenSettings(restored.getTokenSettings());
+
+        RegisteredClient roundTripped = mapper.toRegisteredClient(reloaded);
+        List<String> postLogout = roundTripped.getClientSettings()
+                .getSetting("settings.client.post-logout-redirect-uris");
+        assertThat(postLogout)
+                .as("post-logout-redirect-uris must survive a full mapper round-trip")
+                .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
+    }
+
+    /**
+     * TASK-BE-297 (PR #571 corrective): pins the value as the mapper reads it
+     * back <b>through a MySQL {@code JSON} column</b>, not as a hand-built
+     * pre-normalization string.
+     *
+     * <p>{@code oauth_clients.client_settings} is a MySQL native {@code JSON}
+     * column. After the corrected V0016
+     * ({@code JSON_SET(cs, '$."..."', JSON_ARRAY('java.util.ArrayList',
+     * JSON_EXTRACT(cs, '$."..."')))}) MySQL stores — and on read renders — the
+     * value in its <b>normalized</b> canonical form: object members re-ordered,
+     * a space reinserted after every {@code :} and {@code ,}. This test feeds
+     * the mapper exactly that normalized rendering (the real stored shape, the
+     * thing the previous hand-built-string tests never exercised) and proves it
+     * still deserializes to the exact {@code List<String>}.
+     *
+     * <p>The companion {@code OAuthClientPostLogoutRedirectUriSeedIntegrationTest}
+     * proves the same end-to-end against a real MySQL Testcontainer; this unit
+     * test is the non-Docker early-warning that the corrective envelope is
+     * read-compatible with MySQL's normalized JSON rendering.
+     */
+    @Test
+    @DisplayName("toRegisteredClient: MySQL-JSON-normalized corrective form (reordered + spaced) round-trips")
+    void toRegisteredClient_mysqlNormalizedCorrectiveForm_deserializesCleanly() {
+        OAuthClientEntity entity = buildPkceClientEntity("fan-platform", "B2C");
+        entity.setClientId("fan-platform-user-flow-client");
+        // Exactly how MySQL renders the JSON column AFTER the corrected V0016:
+        //  - JSON_SET wrapped the array as ["java.util.ArrayList", [ ...uris ]]
+        //  - MySQL re-orders object members and inserts a space after every
+        //    ':' and ',' in its canonical JSON->text rendering. Member order
+        //    below is MySQL 8.0 ordering (by key length, then bytewise) — the
+        //    point is that the mapper's Jackson reader is order/space tolerant.
+        entity.setClientSettings(
+                "{\"@class\": \"java.util.Collections$UnmodifiableMap\", "
+                        + "\"settings.client.require-proof-key\": true, "
+                        + "\"settings.client.require-authorization-consent\": false, "
+                        + "\"settings.client.post-logout-redirect-uris\": "
+                        + "[\"java.util.ArrayList\", "
+                        + "[\"http://localhost:3000/\", \"http://fan-platform.local/\"]]}");
+
+        RegisteredClient client = mapper.toRegisteredClient(entity);
+
+        List<String> postLogout = client.getClientSettings()
+                .getSetting("settings.client.post-logout-redirect-uris");
+        assertThat(postLogout)
+                .as("MySQL-normalized corrective form must deserialize to the exact List<String>")
+                .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
+        assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
+    }
+
+    // -----------------------------------------------------------------------
     // Round-trip
     // -----------------------------------------------------------------------
 

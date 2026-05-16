@@ -101,6 +101,8 @@ provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
 - V0007: `credentials` / `refresh_tokens` / `social_identities` 에 `tenant_id` 추가 + 인덱스 swap (TASK-BE-229 multi-tenant Phase 2/3)
 - V0008–V0013: OAuth/OIDC SAS 영속 + 시드 (oauth_clients / oauth_scopes / oauth_consent / oauth2_authorization + tenant 시드)
 - V0014: `refresh_tokens.jti` / `rotated_from` VARCHAR(36)→VARCHAR(255) widening (TASK-MONO-046-1 Cluster A — SAS 96-byte URL-safe base64 RT 수용)
+- V0015: `platform-console-web` public OIDC client 시드 (TASK-BE-296)
+- V0016: V0011/V0012 의 `client_settings.settings.client.post-logout-redirect-uris` 를 SAS default-typed `["java.util.ArrayList",[...]]` 형태로 교정 (TASK-BE-297 — plain JSON array 가 `SecurityJackson2Modules.enableDefaultTyping` 하에서 `InvalidTypeIdException` 유발하던 잠재 production 결함. forward-only / 조건부 idempotent / 영향 행 3개만 갱신, clean client 무변경). **`client_settings` 는 MySQL native `JSON` 컬럼이므로** 교정은 `JSON_SET` + `JSON_EXTRACT` (parsed-tree 구조 변형)로 수행한다 — pre-normalization 문자열 리터럴 `REPLACE()` 는 MySQL 의 JSON 저장 정규화(키 재정렬·`:`/`,` 뒤 공백 재삽입·숫자 재정규화) 때문에 stored text 와 불일치하여 silent no-op 이 된다 (PR #571 에서 IT 3건으로 표면화된 1차 시도의 실패 원인). Flyway 는 본 서비스에서 MySQL 8.0 에만 적용된다 (유일한 H2 슬라이스 테스트 `OAuth2AuthorizationServerSliceTest` 는 `spring.flyway.enabled=false`); 따라서 MySQL 전용 JSON 함수 사용은 portable 하다. no-op 회귀는 `V0016MigrationShapeTest` (non-Docker) 가 즉시 차단한다.
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---
@@ -148,6 +150,8 @@ OAuth 2.0 등록 클라이언트. `client_id` 는 글로벌 unique — lookup은
 **인덱스**: `uk_oauth_clients_client_id` (UNIQUE), `idx_oauth_clients_tenant_client (tenant_id, client_id)`
 
 **Tenant 캐리어 전략 (Option B)**: `client_settings` 내 `custom.tenant_id` / `custom.tenant_type` 키에 테넌트 정보를 저장한다. `TenantClaimTokenCustomizer`와 `SasRefreshTokenAuthenticationProvider`가 이 값을 읽어 JWT claim을 주입한다. `clientName = "tenantId|tenantType"` 패턴(TASK-BE-251 in-memory 방식)은 더 이상 사용하지 않는다.
+
+**`client_settings` 직렬화 불변식 (TASK-BE-297)**: `OAuthClientMapper`는 `SecurityJackson2Modules.enableDefaultTyping`이 활성화된 SAS-enriched `ObjectMapper`로 `client_settings`를 읽고 쓴다. 따라서 **컬렉션/배열 값은 반드시 `[typeId, value]` wrapper-array 형태**로 직렬화되어야 하며, `typeId`는 SAS `AllowlistTypeIdResolver` 허용 목록의 구체 타입이어야 한다 (예: `java.util.ArrayList`). 표준 SAS 값(`Duration` → `["java.time.Duration",900.000000000]`)은 이미 이 형태다. 커스텀 배열 setting(예: `settings.client.post-logout-redirect-uris`)을 seed SQL에 직접 작성할 때 plain JSON array(`["a","b"]`)로 쓰면 element 0가 Java type id로 해석되어 `InvalidTypeIdException` → `OAuthClientMappingException`이 발생한다. 반드시 `["java.util.ArrayList",["a","b"]]` 형태로 작성한다. (V0011/V0012의 plain-array 결함은 V0016에서 교정됨.)
 
 **Secret 정책**: `client_secret_hash`는 BCrypt(cost=10) 해시만 저장. 평문 저장 금지. `JpaRegisteredClientRepository.save()`가 `{noop}` prefix 탐지 시 즉시 BCrypt 인코딩.
 
