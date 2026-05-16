@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAuthenticated, getActiveTenant } from '@/shared/lib/session';
 import { getCatalog } from '@/features/catalog';
@@ -43,9 +44,33 @@ export default async function ConsoleLayout({
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border bg-primary text-primary-foreground">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <span className="text-lg font-semibold tracking-tight">
-            Platform Console
-          </span>
+          <div className="flex items-center gap-6">
+            <span className="text-lg font-semibold tracking-tight">
+              Platform Console
+            </span>
+            <nav aria-label="콘솔 내비게이션">
+              <ul className="flex items-center gap-4 text-sm">
+                <li>
+                  <Link
+                    href="/console"
+                    data-testid="nav-catalog"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    카탈로그
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/audit"
+                    data-testid="nav-audit"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    감사 · 보안
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </div>
           <div className="flex items-center gap-4">
             <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
             <LogoutButton />

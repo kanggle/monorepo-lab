@@ -77,6 +77,12 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for GAP accounts calls (integration-heavy I1 —
    *  same convention as REGISTRY_TIMEOUT_MS). */
   ACCOUNTS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for the GAP unified audit read call
+   *  (TASK-PC-FE-003 / integration-heavy I1 — same convention as
+   *  ACCOUNTS_TIMEOUT_MS). The audit endpoint is `GET
+   *  ${GAP_ADMIN_API_BASE}/api/admin/audit` — request/response/error owned
+   *  by GAP `admin-api.md` (authoritative, consumed only, read-only). */
+  AUDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -100,6 +106,7 @@ export function getServerEnv(): ServerEnv {
     TOKEN_EXCHANGE_TIMEOUT_MS: process.env.TOKEN_EXCHANGE_TIMEOUT_MS,
     GAP_ADMIN_API_BASE: process.env.GAP_ADMIN_API_BASE,
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
+    AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });
