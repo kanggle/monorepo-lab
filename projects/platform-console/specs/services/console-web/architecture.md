@@ -66,11 +66,13 @@ apps/console-web/
 │   │   │   ├── layout.tsx             # topbar + tenant switcher + catalog nav
 │   │   │   ├── page.tsx               # data-driven 서비스 카탈로그 (현 skeleton: 정적 placeholder)
 │   │   │   ├── accounts/              # ✅ GAP accounts 운영자 parity 라우트 (catalog gap.baseRoute → 여기, TASK-PC-FE-002)
+│   │   │   ├── audit/                 # ✅ GAP audit+security read parity 라우트 (in-console nav, TASK-PC-FE-003)
 │   │   │   ├── wms/                   # wms 운영 섹션 (Phase 4)
 │   │   │   └── scm/                   # scm 운영 섹션 (Phase 4)
 │   │   ├── api/                       # Route Handlers (auth proxy / health / 도메인 변이 프록시)
 │   │   │   ├── auth/{login,logout,callback,refresh}/route.ts  # OIDC + HttpOnly cookie (Phase 2)
 │   │   │   ├── accounts/...           # ✅ accounts 변이 same-origin 프록시 (client mutation → server operator token, TASK-PC-FE-002)
+│   │   │   ├── audit/route.ts         # ✅ audit read same-origin GET 프록시 (client read → server operator token, read-only, TASK-PC-FE-003)
 │   │   │   └── health/route.ts        # ✅ skeleton
 │   │   └── layout.tsx                 # ✅ skeleton (root)
 │   ├── features/                      # 도메인 섹션 단위 (Phase 2+)
@@ -81,6 +83,11 @@ apps/console-web/
 │   │   │   ├── api/                   #   server-side GAP admin-service 호출 (8 ops, operator token)
 │   │   │   ├── hooks/                 #   TanStack Query read/mutation 훅
 │   │   │   ├── components/            #   검색·테이블·상세·reason-capture+confirm 다이얼로그
+│   │   │   └── index.ts              #   feature public API (배럴)
+│   │   ├── audit/                     # ✅ GAP audit+security read parity (Phase 2 slice 2, TASK-PC-FE-003)
+│   │   │   ├── api/                   #   server-side GAP admin-service 호출 (GET /api/admin/audit, operator token, READ-ONLY)
+│   │   │   ├── hooks/                 #   TanStack Query read 훅 (변이 없음 — meta-audit, 1 쿼리 = 1 호출)
+│   │   │   ├── components/            #   필터 바·source별 discriminated 테이블·권한/테넌트/degraded 상태
 │   │   │   └── index.ts              #   feature public API (배럴)
 │   │   └── wms-ops/ scm-ops/ ...      # 잔여 도메인별 운영 화면 (Phase 4+)
 │   └── shared/
@@ -160,11 +167,12 @@ GAP access token·operator token 모두 **절대 JavaScript 접근 불가** (Htt
 - **인증/세션**: GAP `auth-service` (OIDC AS, ADR-001) — public client Auth Code+PKCE. GAP-side OIDC client + 레지스트리 surface 는 선행 task `TASK-BE-296` (GAP project-internal). `/api/admin/**` operator 자격은 GAP `admin-service POST /api/admin/auth/token-exchange` (RFC 8693, ADR-MONO-014) 으로 server-side 교환한 operator token — GAP OIDC token 은 subject token 입력으로만 쓰이며 결코 `/api/admin/**` 자격이 아니다 (선행 task `TASK-BE-298`, GAP project-internal, merged).
 - **도메인 호출**: 각 도메인 `gateway`/`admin` REST API (server-side, 테넌트 스코프). 도메인별 endpoint 스키마는 그 도메인 `specs/contracts/` 소유, 섹션 빌드 시 cross-ref.
   - **GAP accounts (`features/accounts`, TASK-PC-FE-002)**: 8 operator 작업(search/detail/lock/unlock/bulk-lock/revoke-session/gdpr-delete/export)을 server-side 로 호출. authoritative producer 계약 = GAP [`admin-api.md`](../../../../global-account-platform/specs/contracts/http/admin-api.md) (`GET /api/admin/accounts`, `POST /api/admin/accounts/{id}/lock`, `POST /api/admin/accounts/bulk-lock`, `POST /api/admin/accounts/{id}/unlock`, `POST /api/admin/sessions/{accountId}/revoke`, `POST /api/admin/accounts/{id}/gdpr-delete`, `GET /api/admin/accounts/{id}/export`) — **변경 없음, 소비만**. 소비 의무(operator token / `X-Tenant-Id` / mutation `X-Operator-Reason`+`Idempotency-Key` / resilience)는 [`console-integration-contract.md` § 2.4](../../contracts/console-integration-contract.md) 의 GAP-accounts cross-reference 가 canonical.
+  - **GAP audit+security (`features/audit`, TASK-PC-FE-003)**: 통합 감사 read 1 endpoint 를 server-side 로 호출 — **read-only** (변이 없음 → `X-Operator-Reason`/`Idempotency-Key`/destructive dialog 없음). authoritative producer 계약 = GAP [`admin-api.md` §`GET /api/admin/audit`](../../../../global-account-platform/specs/contracts/http/admin-api.md) (admin_actions + login_history + suspicious_events 통합 뷰, `source` discriminant) — **변경 없음, 소비만**. 소비 의무(operator token / `X-Tenant-Id` + SUPER_ADMIN `tenantId` / `source=login_history|suspicious` ⇒ `security.event.read` 교차 권한 / read-query meta-audit / producer-masked PII / resilience)는 [`console-integration-contract.md` § 2.4.2](../../contracts/console-integration-contract.md) 의 GAP-audit cross-reference 가 canonical.
 - **퍼시스턴스 / 이벤트 발행**: **없음** — DB·outbox·도메인 이벤트 미소유. 표현 계층에 한정.
 
 ## Testing Strategy
 
-- **Unit/Component**: Vitest + Testing Library — `features/<F>/components/*` · `hooks/*` (Phase 2). `features/accounts` (TASK-PC-FE-002): API client per-operation(operator-token bearer ≠ GAP token / `X-Tenant-Id` / mutation `X-Operator-Reason`+`Idempotency-Key` / 401·403·400·404·503 매핑), 컴포넌트(검색 페이지네이션 / 상세 / reason-gated 변이 / gdpr 이중확인 / bulk-lock 다중선택 / export / 503·timeout degrade / 401 재로그인).
+- **Unit/Component**: Vitest + Testing Library — `features/<F>/components/*` · `hooks/*` (Phase 2). `features/accounts` (TASK-PC-FE-002): API client per-operation(operator-token bearer ≠ GAP token / `X-Tenant-Id` / mutation `X-Operator-Reason`+`Idempotency-Key` / 401·403·400·404·503 매핑), 컴포넌트(검색 페이지네이션 / 상세 / reason-gated 변이 / gdpr 이중확인 / bulk-lock 다중선택 / export / 503·timeout degrade / 401 재로그인). `features/audit` (TASK-PC-FE-003): API client(operator-token bearer ≠ GAP token / `X-Tenant-Id` / filter·source·page 직렬화 / `size` ≤ 100 cap / **`X-Operator-Reason`·`Idempotency-Key` 부재 단언** / 401·403 PERMISSION_DENIED·403 TENANT_SCOPE_DENIED·422·503 매핑), 컴포넌트(필터 제출 / source 전환 / source별 discriminated row 렌더 / security source w/o `security.event.read` inline 권한거부 / tenant-scope-denied inline / 페이지네이션 / 503·timeout degrade / 401 재로그인 / 빈 상태 / unknown source generic row).
 - **Contract tests**: `shared/api/*.test.ts` — 통합 계약·레지스트리 응답 스키마 정합
 - **a11y**: axe-core, primitives 자동 검사
 - **E2E (Playwright)**: 로그인 → 카탈로그 → 테넌트 전환 critical journey + multi-tenant 격리 회귀
@@ -193,6 +201,7 @@ GAP access token·operator token 모두 **절대 JavaScript 접근 불가** (Htt
 - [`ADR-MONO-014`](../../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) — operator-auth 교환 결정 (D2 re-exchange · D3 OIDC↔operator mapping · D4 spec-first)
 - GAP [`admin-api.md` §`POST /api/admin/auth/token-exchange`](../../../../global-account-platform/specs/contracts/http/admin-api.md) + [`admin-service/security.md`](../../../../global-account-platform/specs/services/admin-service/security.md) — 교환 producer 계약 (authoritative, 소비만)
 - GAP [`admin-api.md`](../../../../global-account-platform/specs/contracts/http/admin-api.md) §§ accounts/sessions (`GET /api/admin/accounts`·`.../lock`·`bulk-lock`·`.../unlock`·`POST /api/admin/sessions/{accountId}/revoke`·`.../gdpr-delete`·`GET .../export`) — GAP accounts parity producer 계약 (authoritative, 소비만; `features/accounts` / TASK-PC-FE-002)
+- GAP [`admin-api.md` §`GET /api/admin/audit`](../../../../global-account-platform/specs/contracts/http/admin-api.md) — GAP audit+security read parity producer 계약 (authoritative, 소비만; `features/audit` / TASK-PC-FE-003)
 - [`admin-web/architecture.md`](../../../../global-account-platform/specs/services/admin-web/architecture.md) — parity 대상 sibling frontend-app (흡수 후 Phase 3 폐기)
 - [`admin-dashboard/architecture.md`](../../../../ecommerce-microservices-platform/specs/services/admin-dashboard/architecture.md) — sibling frontend-app (Layered by Feature)
 - [`.claude/skills/frontend/architecture/layered-by-feature/SKILL.md`](../../../../../.claude/skills/frontend/architecture/layered-by-feature/SKILL.md)
