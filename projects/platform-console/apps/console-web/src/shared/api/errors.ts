@@ -84,6 +84,35 @@ export class AccountsUnavailableError extends Error {
   }
 }
 
+/**
+ * GAP audit + security read surface degrade signal
+ * (console-integration-contract § 2.4.2 / § 2.5). Sibling of
+ * {@link AccountsUnavailableError} — identical resilience posture for the
+ * READ-ONLY audit slice: a `503 DOWNSTREAM_ERROR` / `503 CIRCUIT_OPEN` /
+ * timeout on a GAP audit call degrades ONLY the audit section (the console
+ * shell stays intact). Auth failures (401) are raised as {@link ApiError}
+ * so the caller forces a clean re-login (no partial authed state).
+ * Inline-recoverable producer errors (`403 PERMISSION_DENIED` — incl. the
+ * intersection-permission rule, `403 TENANT_SCOPE_DENIED`,
+ * `422 VALIDATION_ERROR`) are raised as {@link ApiError} so the UI renders
+ * an inline actionable message without crashing. No token / audit-row PII
+ * is ever placed in this error.
+ */
+export class AuditUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: AuditUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AuditUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -100,6 +129,10 @@ const MESSAGES: Record<string, string> = {
     '이전 요청과 다른 내용으로 같은 작업이 재시도되었습니다.',
   VALIDATION_ERROR: '입력값이 올바르지 않습니다.',
   NO_ACTIVE_TENANT: '테넌트를 먼저 선택해주세요.',
+  TENANT_SCOPE_DENIED: '해당 테넌트에 대한 조회 권한이 없습니다.',
+  AUDIT_RANGE_INVALID: '시작 시각이 종료 시각보다 늦을 수 없습니다.',
+  SECURITY_EVENT_READ_REQUIRED:
+    '로그인 이력·의심 활동을 조회하려면 보안 이벤트 조회 권한(security.event.read)이 필요합니다.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
