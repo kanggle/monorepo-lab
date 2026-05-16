@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-001-console-web-shell-gap-sso.md` — console-web 셸: GAP OIDC Auth Code+PKCE 로그인(HttpOnly cookie) + data-driven 서비스 카탈로그(GAP product/tenant 레지스트리 소비) + 테넌트 스위처. ADR-MONO-013 Phase 1→2 bridge. **선행**: GAP `TASK-BE-296` (OIDC public client + 레지스트리 surface).
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-001-console-web-shell-gap-sso.md` — impl `task/pc-fe-001-console-web-shell-gap-sso` (off main `e9b6fdb1`, BE-296 머지 후). frontend-engineer(Opus) — ADR-MONO-013 Phase 1→2 bridge. **선행 충족**: GAP `TASK-BE-296` (#568 머지). Layered-by-Feature 셸: GAP OIDC **Auth Code + PKCE** server routes (`app/api/auth/{login,callback,refresh,logout,session}` + `shared/lib/pkce.ts`·`session.ts`) — HttpOnly·Secure·SameSite=strict 쿠키, public client(secret 없음), 401→server refresh. **data-driven 카탈로그** (`features/catalog`, registry-client/types, `available:false`→"coming soon", 코드변경 0). **테넌트 스위처** (`features/tenant`). resilience(registry timeout→degraded). **경로 정렬**: `.env.example`/`docker-compose.yml`/`.env.local.example`/`console-integration-contract.md` 를 BE-296 권위 경로 `http://gap.local/api/admin/console/registry` 로 수정(placeholder `/internal/console/registry` supersede). a11y(WCAG AA, axe) + web-vitals + perf budget(login 109KB/console 132KB ≤ 180/250). **검증**: `pnpm build` 성공(라우트 7, First Load 99.9KB) · `pnpm lint` ✔ 0 · `pnpm exec vitest run` **6/6 suites · 26/26 tests PASS** (auth-routes/use-catalog/TenantSwitcher/ServiceCatalog/registry-contract/tenant-isolation). **오케스트레이터 2-fix** (에이전트 보고 stream-timeout 유실 → 직접 검증): (1) `auth-routes.test.ts` `vi.mock` factory TDZ → `vi.hoisted()` ; (2) `ServiceTile` `aria-disabled` on `<li>`(role listitem 미지원, jsx-a11y) → 내부 `<div role="group" aria-disabled>` 로 이전(+testid 동반, ServiceCatalog 단언 유지). scope=`projects/platform-console/` only. E2E(Playwright)는 services 필요 → CI/manual. lifecycle = ready → review (in-progress 우회, single-PR). 분석=Opus 4.7 / 구현=Opus 4.7 (frontend-engineer) / 검증·fix=Opus 4.7 (orchestrator).
 
 ## done
 
