@@ -3,8 +3,11 @@ package com.example.auth.integration;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -81,10 +84,41 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
 
     private static final String PLR_KEY = "settings.client.post-logout-redirect-uris";
 
+    private static final Logger log =
+            LoggerFactory.getLogger(OAuthClientPostLogoutRedirectUriSeedIntegrationTest.class);
+
     @Container
     @SuppressWarnings("resource")
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379);
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    /**
+     * Logs the RAW {@code client_settings} JSON column exactly as MySQL stores
+     * (and renders) it AFTER all migrations — including V0016 — have run, read
+     * straight from the table via JDBC (bypassing the SAS mapper that throws).
+     *
+     * <p>This is the cycle-3 diagnostic: cycles 1 and 2 both failed with a
+     * byte-identical {@code InvalidTypeIdException} citing
+     * {@code 'http://localhost:3000/'}, the tell-tale of a V0016 zero-row
+     * no-op. If a future cycle still fails, this WARN line makes the actual
+     * post-migration stored shape visible in the CI log so the next step is
+     * evidence-driven, not another guess.
+     */
+    private void dumpRawClientSettings(String clientId) {
+        try {
+            String raw = jdbcTemplate.queryForObject(
+                    "SELECT client_settings FROM oauth_clients WHERE client_id = ?",
+                    String.class, clientId);
+            log.warn("[BE-297 diagnostic] post-migration raw client_settings for {} = {}",
+                    clientId, raw);
+        } catch (Exception e) {
+            log.warn("[BE-297 diagnostic] could not read raw client_settings for {}: {}",
+                    clientId, e.toString());
+        }
+    }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -104,6 +138,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
     @Test
     @DisplayName("V0016: fan-platform-user-flow-client resolves; post-logout-redirect-uris == seeded URIs")
     void fanPlatformClient_resolvesWithPostLogoutRedirectUris() {
+        dumpRawClientSettings("fan-platform-user-flow-client");
         RegisteredClient client =
                 registeredClientRepository.findByClientId("fan-platform-user-flow-client");
 
@@ -136,6 +171,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
     @Test
     @DisplayName("V0016: ecommerce-web-store-client resolves; post-logout-redirect-uris == seeded URIs")
     void ecommerceWebStoreClient_resolvesWithPostLogoutRedirectUris() {
+        dumpRawClientSettings("ecommerce-web-store-client");
         RegisteredClient client =
                 registeredClientRepository.findByClientId("ecommerce-web-store-client");
 
@@ -155,6 +191,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
     @Test
     @DisplayName("V0016: ecommerce-admin-dashboard-client resolves; post-logout-redirect-uris == seeded URIs")
     void ecommerceAdminDashboardClient_resolvesWithPostLogoutRedirectUris() {
+        dumpRawClientSettings("ecommerce-admin-dashboard-client");
         RegisteredClient client =
                 registeredClientRepository.findByClientId("ecommerce-admin-dashboard-client");
 

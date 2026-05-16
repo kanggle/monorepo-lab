@@ -122,14 +122,47 @@ class V0016MigrationShapeTest {
         assertThat(body).contains("'fan-platform-user-flow-client'");   // V0011
         assertThat(body).contains("'ecommerce-web-store-client'");      // V0012
         assertThat(body).contains("'ecommerce-admin-dashboard-client'"); // V0012
-        // Idempotency: skip rows already carrying the corrective type id at [0].
+        // Idempotency MUST be NULL-safe. Cycle 2 used
+        // `JSON_UNQUOTE(JSON_EXTRACT(...)) <> 'java.util.ArrayList'`; when the
+        // path argument resolved to NULL the predicate was NULL (not TRUE), so
+        // the WHERE silently excluded every target row — the cycle-2 no-op.
+        // `JSON_SEARCH(...) IS NULL` always yields TRUE/FALSE, never NULL, so it
+        // can never silently drop a row that still needs correcting.
         assertThat(body)
-                .as("each UPDATE must skip rows whose value is already the corrective "
-                        + "['java.util.ArrayList', ...] envelope (idempotent / forward-safe)")
-                .contains("<> 'java.util.ArrayList'");
+                .as("idempotency guard must be the NULL-safe JSON_SEARCH(...) IS NULL "
+                        + "form (a `<> 'java.util.ArrayList'` comparison is NULL-unsafe — "
+                        + "the cycle-2 zero-row no-op)")
+                .contains("'java.util.ArrayList'")
+                .contains("IS NULL")
+                .doesNotContain("<> 'java.util.ArrayList'");
         // Forward-only: no down/rollback statement (data-model.md migration policy).
         assertThat(body.toUpperCase())
                 .as("forward-only migration — no DROP/rollback of the corrected value")
                 .doesNotContain("ROLLBACK");
+    }
+
+    /**
+     * Cycle-3 regression trap. Cycle 2 hoisted the JSON path into a MySQL user
+     * variable ({@code SET @plr := '$."..."';}) and referenced {@code @plr}
+     * across the subsequent UPDATEs. Flyway executes a migration as individual
+     * statements; the {@code SET @plr} did not reliably resolve for the later
+     * statements, so {@code @plr} was NULL and every UPDATE matched zero rows —
+     * a silent no-op byte-identical to cycle 1. The corrected migration inlines
+     * the path literal in every statement and uses no cross-statement state, so
+     * each UPDATE is wholly self-contained and immune to statement splitting.
+     */
+    @Test
+    @DisplayName("V0016 uses no cross-statement MySQL user variable (cycle-2 @plr no-op trap)")
+    void usesNoCrossStatementUserVariable() {
+        String body = body();
+        assertThat(body)
+                .as("no MySQL user variable — the cycle-2 `SET @plr := ...` referenced "
+                        + "across Flyway-split statements resolved to NULL and made every "
+                        + "UPDATE a zero-row no-op")
+                .doesNotContain("@");
+        assertThat(body)
+                .as("the JSON path literal must be inlined verbatim in each statement so "
+                        + "every UPDATE is self-contained")
+                .contains("'$.\"settings.client.post-logout-redirect-uris\"'");
     }
 }
