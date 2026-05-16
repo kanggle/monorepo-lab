@@ -124,17 +124,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * unrelated existing client + the shared mapper, risking regression to live
  * fan-platform / ecommerce OAuth clients.
  *
- * <p><b>Recommended follow-up (not created here):</b> a separate future task
- * should fix {@code OAuthClientMapper} and/or the V0011 + V0012 seeds so the
- * affected clients deserialize their {@code post-logout-redirect-uris}
- * ClientSettings correctly (re-serialize the seed rows through the
- * SAS-enriched mapper so the array carries its {@code [typeId, value]}
- * envelope, OR write the array in SAS default-typed form in the seed SQL, OR
- * special-case {@code post-logout-redirect-uris} in the mapper), validated by
- * a dedicated round-trip test. NOTE: the TASK-BE-296 task file lives in
- * {@code tasks/review/} (lifecycle-frozen — HARDSTOP-05) so this writeup is
- * recorded here, in the test that surfaced the defect, rather than in the
- * frozen task file.
+ * <p><b>Follow-up status: RESOLVED by TASK-BE-297.</b> The corrective forward
+ * Flyway migration {@code V0016__fix_post_logout_redirect_uris_default_typing.sql}
+ * re-serializes the three affected rows'
+ * {@code settings.client.post-logout-redirect-uris} into the SAS default-typed
+ * {@code ["java.util.ArrayList",[...]]} wrapper-array envelope (byte-equivalent
+ * effective ClientSettings — same key, same ordered {@code List<String>}). The
+ * shared {@code OAuthClientMapper} / {@code SecurityJackson2Modules} config and
+ * every clean client are untouched (least blast radius). Severity verdict
+ * (BE-297): genuine latent PRODUCTION break, not a test-only artifact —
+ * {@code JpaRegisteredClientRepository} is the production
+ * {@link RegisteredClientRepository} bean on the {@code @Order(1)} SAS chain.
+ * Round-trip + clean-client regression coverage:
+ * {@code OAuthClientPostLogoutRedirectUriSeedIntegrationTest} +
+ * {@code OAuthClientMapperTest} (TASK-BE-297 cases).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
