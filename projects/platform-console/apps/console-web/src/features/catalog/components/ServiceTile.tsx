@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import type { RegistryProduct } from '@/shared/api/registry-types';
+import { resolveConsoleRoute } from '../lib/console-route';
 
 /**
  * One catalog tile. Rendered STRICTLY from the registry item — there is no
@@ -11,7 +12,8 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
  * non-interactive "coming soon" tile, identical treatment (task Edge Case).
  */
 export function ServiceTile({ product }: { product: RegistryProduct }) {
-  const { productKey, displayName, available, tenants, baseRoute } = product;
+  const { productKey, displayName, available, tenants } = product;
+  const href = resolveConsoleRoute(product);
 
   if (!available) {
     return (
@@ -48,7 +50,7 @@ export function ServiceTile({ product }: { product: RegistryProduct }) {
   return (
     <li data-testid={`tile-${productKey}`}>
       <Link
-        href={baseRoute}
+        href={href}
         className={cn(
           'block rounded-lg border border-border bg-background p-5 transition-colors',
           'hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',

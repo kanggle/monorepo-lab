@@ -57,12 +57,49 @@ export class OperatorExchangeError extends Error {
   }
 }
 
+/**
+ * GAP accounts surface degrade signal (console-integration-contract § 2.4.1 /
+ * § 2.5). Mirrors {@link RegistryUnavailableError}: a `503 DOWNSTREAM_ERROR` /
+ * `503 CIRCUIT_OPEN` / timeout on a GAP accounts call must degrade ONLY the
+ * accounts section — the console shell stays intact. Auth failures
+ * (401/403) are raised as {@link ApiError} so the caller forces a clean
+ * re-login (no partial authed state). Inline-recoverable producer errors
+ * (`400 STATE_TRANSITION_INVALID`/`REASON_REQUIRED`, `404 ACCOUNT_NOT_FOUND`,
+ * `409 IDEMPOTENCY_KEY_CONFLICT`, `422 BATCH_SIZE_EXCEEDED`) are raised as
+ * {@link ApiError} too so the UI can render an inline actionable message
+ * without crashing. No token / PII is ever placed in this error.
+ */
+export class AccountsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: AccountsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AccountsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
   DOWNSTREAM_ERROR: '하위 서비스 호출에 실패했습니다.',
   CIRCUIT_OPEN: '서비스가 일시적으로 응답할 수 없습니다.',
   TENANT_FORBIDDEN: '선택한 테넌트에 대한 권한이 없습니다.',
+  PERMISSION_DENIED: '이 작업을 수행할 권한이 없습니다.',
+  STATE_TRANSITION_INVALID:
+    '현재 계정 상태에서는 이 작업을 수행할 수 없습니다.',
+  REASON_REQUIRED: '감사 사유를 입력해야 합니다.',
+  ACCOUNT_NOT_FOUND: '대상 계정을 찾을 수 없습니다.',
+  BATCH_SIZE_EXCEEDED: '한 번에 처리할 수 있는 계정 수를 초과했습니다 (최대 100).',
+  IDEMPOTENCY_KEY_CONFLICT:
+    '이전 요청과 다른 내용으로 같은 작업이 재시도되었습니다.',
+  VALIDATION_ERROR: '입력값이 올바르지 않습니다.',
+  NO_ACTIVE_TENANT: '테넌트를 먼저 선택해주세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

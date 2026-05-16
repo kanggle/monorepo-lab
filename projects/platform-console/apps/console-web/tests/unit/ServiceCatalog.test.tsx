@@ -28,10 +28,15 @@ describe('ServiceCatalog (data-driven)', () => {
     expect(screen.getByText('Global Account Platform')).toBeInTheDocument();
   });
 
-  it('renders an available product as a navigable link to its baseRoute', () => {
+  it('renders an available product as a navigable link to its console route', () => {
+    // TASK-PC-FE-002: the GAP tile resolves to the Phase-2 operator surface
+    // (`/accounts`) via `resolveConsoleRoute` — the registry `baseRoute` is
+    // the logical prefix; which screen it lands on is console-internal.
+    // (Dedicated coverage of the mapping lives in catalog-route.test.tsx;
+    // non-GAP products still use their registry `baseRoute` unchanged.)
     render(<ServiceCatalog catalog={{ products: [gap], degraded: false }} />);
     const link = screen.getByRole('link', { name: /Global Account Platform/ });
-    expect(link).toHaveAttribute('href', '/gap');
+    expect(link).toHaveAttribute('href', '/accounts');
   });
 
   it('renders available:false as a non-interactive "coming soon" tile', () => {
