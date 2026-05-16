@@ -1,8 +1,8 @@
 # ADR-MONO-014 — platform-console Operator Authentication Model (GAP OIDC ↔ admin-service Operator Token Exchange)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-16
-**History:** PROPOSED 2026-05-16 (TASK-MONO-109 — resolves a HARDSTOP-06/09 surfaced during ADR-MONO-013 Phase 2 investigation; decision direction **B (RFC 8693-style token exchange)** chosen by user-explicit answer).
+**History:** PROPOSED 2026-05-16 (TASK-MONO-109, PR #570 — resolves a HARDSTOP-06/09 surfaced during ADR-MONO-013 Phase 2 investigation; decision direction **B (RFC 8693-style token exchange)** chosen by user-explicit answer). ACCEPTED 2026-05-16 (TASK-MONO-110 — user-explicit intent "ACCEPTED 승격 + BE-298 착수"; § D6 readiness gate met; `TASK-BE-298` authored, § D5 sequence unblocked).
 **Decision driver:** Phase 2 (console GAP-operator parity) investigation found that every `/api/admin/**` operator endpoint — including the BE-296 registry — requires an **admin-service-issued operator token** (`token_type=admin`, `iss=admin-service`), while `platform-console` authenticates operators via the GAP OIDC public client `platform-console-web` (issued by auth-service / Spring Authorization Server). No spec or ADR defines how the OIDC login token becomes an operator token. The console↔operator integration is unrealizable until this is decided.
 **Supersedes:** none. **Amends:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) § D5 (which fixed only the OIDC skeleton and deferred the operator-auth bridge). **Reconciles:** `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.1 ↔ § 2.2 (self-contradictory, shipped in PR #569) + `projects/global-account-platform/specs/contracts/http/console-registry-api.md` § Authentication.
 **Related:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md), GAP [ADR-001](../../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) (OIDC AS), GAP [ADR-002](../../projects/global-account-platform/docs/adr/) (`tenant_id='*'` platform-scope sentinel), GAP [ADR-003](../../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) (public-client lineage), `projects/global-account-platform/specs/services/admin-service/security.md` (operator JWT boundary), TASK-BE-296 (#568), TASK-PC-FE-001 (#569), RFC 8693 (OAuth 2.0 Token Exchange).
@@ -21,9 +21,9 @@
 
 Per `platform/hardstop-rules.md` HARDSTOP-06 #3 + HARDSTOP-09 #2: the resolution is cross-service (GAP auth-service + GAP admin-service + platform-console), irreversible-ish (defines the operator trust boundary), and shapes ADR-MONO-013 Phase 2–8. It cannot be chosen during implementation. This ADR is that decision record; Phase 2 / `TASK-PC-FE-002` is PAUSED until it is ACCEPTED.
 
-### 1.3 Why PROPOSED, not ACCEPTED
+### 1.3 Staged PROPOSED → ACCEPTED (history)
 
-The decision *direction* (Model B) is chosen, but ACCEPTED gates real churn (a new GAP exchange endpoint + OIDC↔operator mapping + contract rewrite + Phase-2 resume). Same staged pattern as ADR-MONO-008/013: PROPOSED records the decision + design + sequencing; ACCEPTED authorises execution.
+This ADR followed the ADR-MONO-008/013 staged pattern: **PROPOSED** (2026-05-16, PR #570) recorded the decision direction (Model B) + design + sequencing while deferring real churn (a new GAP exchange endpoint + OIDC↔operator mapping + contract rewrite + Phase-2 resume); **ACCEPTED** (2026-05-16, TASK-MONO-110) authorises that execution on user-explicit intent. Phase 2 / `TASK-PC-FE-002` stays unstarted until `TASK-BE-298` is **merged** (§ D5 / Consequences "Future-self") — ACCEPTED unblocks the sequence, it does not itself complete the bridge.
 
 ---
 
@@ -62,9 +62,9 @@ ACCEPTED execution MUST reconcile, before any console code change:
 2. **platform-console `TASK-PC-FE-002a`** (or FE-001 follow-up): console server-side exchange wiring (on session establish/refresh: GAP token → operator token; registry + operator API client use the operator token) + fix the `console-integration-contract.md` self-contradiction shipped in #569.
 3. **THEN** Phase 2 operator-parity slices resume: `TASK-PC-FE-002` accounts (search/detail/lock/unlock/bulk-lock/revoke-session/gdpr-delete/export) → `FE-003` audit + security read → `FE-004` operators mgmt → `FE-005` dashboards → `FE-006` parity verification (gates ADR-MONO-013 Phase 3 admin-web retirement).
 
-### D6 — Readiness + ACCEPTED transition
+### D6 — Readiness + ACCEPTED transition (MET)
 
-ACCEPTED when: D2/D3 endpoint shape + mapping key finalised in the GAP impl task scope; user-explicit intent ("ADR-014 ACCEPTED" / "토큰 익스체인지 진행" / equivalent). On ACCEPTED: append § 6 row, author `TASK-BE-298`, begin D5 sequence. Until then Phase 2 / `TASK-PC-FE-002` stays unstarted.
+ACCEPTED gate criteria — **all met 2026-05-16**: D2/D3 endpoint shape + mapping key are finalised-in-scope for the GAP impl task (`TASK-BE-298`); user-explicit intent given ("ACCEPTED 승격 + BE-298 착수"). On ACCEPTED (executed by `TASK-MONO-110`): § 6 ACCEPTED row appended, `TASK-BE-298` authored in GAP `tasks/ready/`, § D5 sequence begun. Phase 2 / `TASK-PC-FE-002` remains unstarted until `TASK-BE-298` is **merged** (the ACCEPTED flip unblocks, it does not bridge).
 
 ---
 
@@ -94,9 +94,10 @@ Append-only.
 
 | Date | Transition | Decision | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-05-16 | created PROPOSED | B (RFC 8693 token exchange) | "B. Token Exchange" (resolution-direction answer) | this PR |
+| 2026-05-16 | created PROPOSED | B (RFC 8693 token exchange) | "B. Token Exchange" (resolution-direction answer) | #570 (TASK-MONO-109) |
+| 2026-05-16 | PROPOSED → ACCEPTED | B (unchanged) | "ACCEPTED 승격 + BE-298 착수" | this PR (TASK-MONO-110) |
 
-(ACCEPTED row reserved — appended when execution begins per § D6.)
+ACCEPTED execution: `TASK-BE-298` authored (GAP, spec-first); § D5 sequence in progress. Phase 2 / `TASK-PC-FE-002` stays unstarted until `TASK-BE-298` merged.
 
 ## 7. Provenance
 
