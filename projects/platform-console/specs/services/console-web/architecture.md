@@ -129,10 +129,11 @@ apps/console-web/
 1. `/login` → GAP `/oauth2/authorize` (PKCE `code_challenge`) 리다이렉트
 2. GAP 콜백 → `/api/auth/callback` (Next.js route handler) 가 `code`+`code_verifier` 로 `/oauth2/token` 교환
 3. 성공 시 `Set-Cookie: accessToken/refreshToken; HttpOnly; Secure; SameSite=Strict`
-4. 이후 모든 요청 쿠키 자동 전달; 401 → `/api/auth/refresh` → 쿠키 회전 → 재시도
-5. 로그아웃 → GAP revoke + 쿠키 삭제
+4. **서버측 operator-token 교환** (ADR-MONO-014 D2 / TASK-PC-FE-002a) — GAP access token 을 GAP `admin-service POST /api/admin/auth/token-exchange` (RFC 8693, subject_token=GAP access token) 으로 단명 operator token (`token_type=admin`, `iss=admin-service`) 으로 교환해 별도 HttpOnly operator 쿠키에 저장. GAP OIDC token 은 `/api/admin/**` 자격이 **아니며** subject token 입력으로만 사용된다. exchange `401`(미프로비저닝) → 강제 재로그인(`not_provisioned`); timeout/unreachable/5xx → 세션 불가(operator 쿠키 미설정, partial authed state 금지 — GAP token 으로 fallback 안 함).
+5. 이후 모든 요청 쿠키 자동 전달; 401 → `/api/auth/refresh` → GAP 쿠키 회전 + **operator-token 재교환**(re-exchange 모델, operator-refresh state 없음) → 재시도
+6. 로그아웃 → GAP revoke + GAP/operator 쿠키 삭제
 
-Access token 은 **절대 JavaScript 접근 불가** (HttpOnly) — `frontend-app.md` 필수.
+GAP access token·operator token 모두 **절대 JavaScript 접근 불가** (HttpOnly) — `frontend-app.md` 필수. 교환 계약 상세는 GAP [`admin-api.md` §`POST /api/admin/auth/token-exchange`](../../../../global-account-platform/specs/contracts/http/admin-api.md) + [`admin-service/security.md` §GAP OIDC Subject-Token Validation](../../../../global-account-platform/specs/services/admin-service/security.md), 소비 의무는 [`console-integration-contract.md` § 2.1/§ 2.6](../../contracts/console-integration-contract.md).
 
 ## Performance Budget
 
@@ -150,7 +151,7 @@ Access token 은 **절대 JavaScript 접근 불가** (HttpOnly) — `frontend-ap
 `console-web` 은 `frontend-app` 으로서 **백엔드 컨트랙트의 소비자**이며 자체 컨트랙트·영속 상태를 소유하지 않는다.
 
 - **통합 계약**: [specs/contracts/console-integration-contract.md](../../contracts/console-integration-contract.md) — OIDC public client / product·tenant 레지스트리 / per-domain console-facing API / resilience. 콘솔은 envelope 를 소유하지 않으며, 도메인 spec 선행 변경 후 follow.
-- **인증/세션**: GAP `auth-service` (OIDC AS, ADR-001) — public client Auth Code+PKCE. GAP-side OIDC client + 레지스트리 surface 는 선행 task `TASK-BE-296` (GAP project-internal).
+- **인증/세션**: GAP `auth-service` (OIDC AS, ADR-001) — public client Auth Code+PKCE. GAP-side OIDC client + 레지스트리 surface 는 선행 task `TASK-BE-296` (GAP project-internal). `/api/admin/**` operator 자격은 GAP `admin-service POST /api/admin/auth/token-exchange` (RFC 8693, ADR-MONO-014) 으로 server-side 교환한 operator token — GAP OIDC token 은 subject token 입력으로만 쓰이며 결코 `/api/admin/**` 자격이 아니다 (선행 task `TASK-BE-298`, GAP project-internal, merged).
 - **도메인 호출**: 각 도메인 `gateway`/`admin` REST API (server-side, 테넌트 스코프). 도메인별 endpoint 스키마는 그 도메인 `specs/contracts/` 소유, 섹션 빌드 시 cross-ref.
 - **퍼시스턴스 / 이벤트 발행**: **없음** — DB·outbox·도메인 이벤트 미소유. 표현 계층에 한정.
 
@@ -173,15 +174,17 @@ Access token 은 **절대 JavaScript 접근 불가** (HttpOnly) — `frontend-ap
 
 1. 소비하는 통합 계약([console-integration-contract.md](../../contracts/console-integration-contract.md)) / 도메인 컨트랙트 변경은 **소유 측 spec 선행** — console-web 은 그 후 `shared/api/*` 타입+파서+contract test 동시 갱신 follow.
 2. 라우트·feature 폴더 구조 변경은 § Internal Structure Rule + § Allowed Dependencies 정합 유지 (Layered by Feature 위반 차단).
-3. 인증 흐름(OIDC public client / PKCE / HttpOnly 쿠키 / refresh route) 변경은 [frontend-app.md](../../../../../platform/service-types/frontend-app.md) 필수 요구 + GAP `auth-service` 호환성 확인 선행. access token JS 접근 불가 불변식 유지.
+3. 인증 흐름(OIDC public client / PKCE / HttpOnly 쿠키 / refresh route / **operator-token 교환** ADR-MONO-014) 변경은 [frontend-app.md](../../../../../platform/service-types/frontend-app.md) 필수 요구 + GAP `auth-service`·`admin-service` 호환성 확인 선행. GAP access token·operator token JS 접근 불가 + GAP OIDC token 이 `/api/admin/**` 자격이 아니라는 불변식 유지.
 4. § Performance Budget 회귀 동반 변경 차단 (CI 강제).
 5. 도메인 동작 변경 필요 시 소유 도메인 task 로 분리 — console-web 은 호출·표현만. GAP `admin-web` 폐기는 ADR-MONO-013 Phase 3 (parity-gated, GAP project-internal) — console-web task 아님.
 
 ## References
 
 - [`platform/service-types/frontend-app.md`](../../../../../platform/service-types/frontend-app.md)
-- [`console-integration-contract.md`](../../contracts/console-integration-contract.md) — 소비 통합 계약
+- [`console-integration-contract.md`](../../contracts/console-integration-contract.md) — 소비 통합 계약 (§ 2.1/§ 2.6 operator-token 교환)
 - [`ADR-MONO-013`](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md) — 콘솔 foundation (D1 Model B · D4 admin-web 폐기 · D5 계약 · D6 roadmap)
+- [`ADR-MONO-014`](../../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) — operator-auth 교환 결정 (D2 re-exchange · D3 OIDC↔operator mapping · D4 spec-first)
+- GAP [`admin-api.md` §`POST /api/admin/auth/token-exchange`](../../../../global-account-platform/specs/contracts/http/admin-api.md) + [`admin-service/security.md`](../../../../global-account-platform/specs/services/admin-service/security.md) — 교환 producer 계약 (authoritative, 소비만)
 - [`admin-web/architecture.md`](../../../../global-account-platform/specs/services/admin-web/architecture.md) — parity 대상 sibling frontend-app (흡수 후 Phase 3 폐기)
 - [`admin-dashboard/architecture.md`](../../../../ecommerce-microservices-platform/specs/services/admin-dashboard/architecture.md) — sibling frontend-app (Layered by Feature)
 - [`.claude/skills/frontend/architecture/layered-by-feature/SKILL.md`](../../../../../.claude/skills/frontend/architecture/layered-by-feature/SKILL.md)
