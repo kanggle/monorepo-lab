@@ -12,6 +12,7 @@ import com.example.admin.application.exception.InvalidCredentialsException;
 import com.example.admin.application.exception.InvalidLoginRequestException;
 import com.example.admin.application.exception.InvalidRecoveryCodeException;
 import com.example.admin.application.exception.InvalidRefreshTokenException;
+import com.example.admin.application.exception.InvalidTokenExchangeRequestException;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.OperatorNotFoundException;
@@ -130,6 +131,18 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(InvalidLoginRequestException.class)
     public ResponseEntity<ErrorResponse> handleInvalidLoginRequest(InvalidLoginRequestException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("BAD_REQUEST", e.getMessage()));
+    }
+
+    // TASK-BE-298 / ADR-MONO-014 — RFC 8693 protocol-shape error
+    // (grant_type / subject_token_type mismatch). admin-api.md
+    // §token-exchange error table: 400 BAD_REQUEST. (A subject-token /
+    // mapping failure is SubjectTokenInvalidException, which extends
+    // OperatorUnauthorizedException → 401 TOKEN_INVALID, handled above.)
+    @ExceptionHandler(InvalidTokenExchangeRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTokenExchange(
+            InvalidTokenExchangeRequestException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("BAD_REQUEST", e.getMessage()));
     }

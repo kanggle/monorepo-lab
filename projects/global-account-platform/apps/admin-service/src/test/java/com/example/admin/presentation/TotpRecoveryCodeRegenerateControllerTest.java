@@ -61,6 +61,8 @@ class TotpRecoveryCodeRegenerateControllerTest {
     @MockBean BootstrapTokenService bootstrapTokenService;
     @MockBean AdminRefreshTokenService refreshService;
     @MockBean AdminLogoutService logoutService;
+    // TASK-BE-298: token-exchange dependency of AdminAuthController.
+    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     private String bearer() {
         return "Bearer " + jwt.operatorToken(OPERATOR_ID);

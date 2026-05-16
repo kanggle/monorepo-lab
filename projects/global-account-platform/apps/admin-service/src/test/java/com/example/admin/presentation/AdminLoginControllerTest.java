@@ -62,6 +62,9 @@ class AdminLoginControllerTest {
     @MockBean BootstrapTokenService bootstrapTokenService;
     @MockBean com.example.admin.application.AdminRefreshTokenService refreshService;
     @MockBean com.example.admin.application.AdminLogoutService logoutService;
+    // TASK-BE-298: AdminAuthController now also wires the token-exchange
+    // service (POST /api/admin/auth/token-exchange) — unused in login tests.
+    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     @BeforeEach
     void setup() {

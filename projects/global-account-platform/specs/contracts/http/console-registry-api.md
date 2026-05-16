@@ -69,6 +69,22 @@ tenants.
   (`token_type = "admin"`, `iss = "admin-service"`).
 - Verified by admin-service `OperatorAuthenticationFilter` before the
   controller is reached (gateway does not double-verify — platform invariant).
+
+> **Operator-token acquisition (TASK-BE-298 / ADR-MONO-014, producer
+> requirement UNCHANGED)**: platform-console does not hold an
+> admin-service operator token directly — it authenticates operators via the
+> GAP OIDC `platform-console-web` client and then **exchanges** that subject
+> token for the operator token via
+> [`POST /api/admin/auth/token-exchange`](admin-api.md) (RFC 8693). The
+> exchanged token is the **same** operator token this endpoint requires:
+> `token_type=admin`, `iss=admin-service`, verified by the **same**
+> `OperatorAuthenticationFilter`. This contract's producer requirement is
+> therefore **unchanged** — only the consumer's token-acquisition step is
+> defined elsewhere. The console-side wiring + the
+> `projects/platform-console/specs/contracts/console-integration-contract.md`
+> §2.1/§2.2 self-contradiction fix are **out of scope here** (ADR-MONO-014
+> § D5 step 2 = `TASK-PC-FE-002a`, a cross-project platform-console task);
+> this file only cross-references it.
 - `X-Operator-Reason` is **NOT** required: this is a read-only catalog lookup
   for the operator's own console shell, not an operational command against
   another subject (same exemption rationale as the

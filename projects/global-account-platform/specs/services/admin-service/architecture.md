@@ -194,6 +194,30 @@ operator session 수명은 다음 두 토큰으로 구성된다:
 
 이 절은 [security.md §Session Lifecycle](./security.md)에서 더 상세히 규정된다.
 
+### Operator-Token Minting Paths (ADR-MONO-014 sanctioned sibling path)
+
+admin-service 가 operator access token 을 민팅하는 경로는 다음 **둘**이며,
+둘 다 동일한 self-issuing 발급기(동일 서명 키·동일 claim 조립·`token_type=admin`·
+`iss=admin-service`)를 통과한다. self-issuing IdP 경계는 보존된다:
+
+1. **password (+ optional TOTP) login** — `POST /api/admin/auth/login`
+   (`AdminLoginService`, TASK-BE-029-3). canonical 발급 경로.
+2. **GAP OIDC token exchange** — `POST /api/admin/auth/token-exchange`
+   (TASK-BE-298, ADR-MONO-014 ACCEPTED § D2/D3). platform-console 이 보유한
+   GAP OIDC `platform-console-web` access token 을 검증(auth-service JWKS)하고
+   OIDC subject 를 `admin_operators` row 로 **fail-closed** 해석한 뒤, 위
+   1번과 **동일한 발급기**로 operator token 을 민팅한다. tenant 스코프는
+   `admin_operators.tenant_id`(ADR-002 `'*'` sentinel 포함)에서만 결정되며
+   subject token 의 어떤 claim 으로도 상승하지 않는다.
+
+> **불변식 (ADR-MONO-014 D1 — Option A 기각)**: exchange 는 **발급(minting)
+> 경로의 형제**일 뿐, 검증(verification) 경계의 확장이 아니다.
+> `OperatorAuthenticationFilter` 는 단일 issuer(`iss=admin-service`,
+> `token_type=admin`)만 수용하도록 **확장되지 않는다** — `/api/admin/**` 의
+> 일반 엔드포인트에 raw GAP OIDC 토큰을 제시하면 여전히 `401`. admin-service
+> 는 외부 IdP 토큰을 **수용하지 않는** self-issuing operator IdP 로 남는다.
+> 회귀 테스트가 이 불변식을 고정한다.
+
 ### Migration Trigger (re-open conditions)
 
 다음 조건 중 하나가 충족되면 본 섹션을 재작성:

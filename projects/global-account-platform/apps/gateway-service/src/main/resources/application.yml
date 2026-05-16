@@ -116,6 +116,11 @@ gateway:
     # operator JWT verification is delegated to admin-service
     # OperatorAuthenticationFilter. admin-api.md §Authentication Exceptions.
     - POST:/api/admin/auth/login
+    # TASK-BE-298 / ADR-MONO-014: GAP OIDC -> operator token exchange.
+    # No prior operator JWT (GAP OIDC subject token in body); admin-service
+    # TokenExchangeService validates the subject token against auth-service
+    # JWKS and fail-closed mints the operator token. Same model as /login.
+    - POST:/api/admin/auth/token-exchange
     - POST:/api/admin/auth/2fa/enroll
     - POST:/api/admin/auth/2fa/verify
     - POST:/api/admin/auth/refresh

@@ -23,10 +23,24 @@ base path: `/api/admin`
 | Method | Path | 대체 인증 | X-Operator-Reason |
 |---|---|---|---|
 | `POST` | `/api/admin/auth/login` | 없음 (username + password + 선택적 TOTP 코드 body) | 요구 없음 |
+| `POST` | `/api/admin/auth/token-exchange` | **GAP OIDC `platform-console-web` subject token 필수** (RFC 8693 body) | 요구 없음 |
 | `POST` | `/api/admin/auth/2fa/enroll` | **bootstrap token 필수** | 요구 없음 |
 | `POST` | `/api/admin/auth/2fa/verify` | **bootstrap token 필수** | 요구 없음 |
 | `POST` | `/api/admin/auth/refresh` | 없음 (refresh JWT body) | 요구 없음 |
 | `GET` | `/.well-known/admin/jwks.json` | 없음 (public key 노출) | 요구 없음 |
+
+> **`/api/admin/auth/token-exchange` (TASK-BE-298 / ADR-MONO-014)**: 이 경로는
+> 정식 operator JWT 없이 호출 가능한 **추가 operator-token 발급 경로**다. 정식
+> operator JWT 대신 GAP OIDC `platform-console-web` access token(subject token)을
+> body 로 제시한다 — 이는 `/api/admin/auth/login` 의 "요청자 본인 인증 플로우"
+> 예외와 동일 성격(다른 대상에 대한 운영 명령이 아님). admin-service 는 이
+> subject token 을 auth-service JWKS 로 검증한 뒤 OIDC subject 를
+> `admin_operators` row 로 fail-closed 해석하고 **기존 login-success 발급기와
+> 동일한 operator access token**(`token_type=admin`, `iss=admin-service`)을
+> 민팅한다. `OperatorAuthenticationFilter` 는 **확장되지 않는다** — 2번째
+> issuer 를 수용하지 않으며(ADR-MONO-014 D1 Option A 기각), exchange 는
+> password+TOTP login mint 의 **형제 발급 경로**일 뿐이다 (자세한 검증 정책:
+> [security.md §GAP OIDC Subject-Token Validation](../../services/admin-service/security.md)).
 
 위 경로 외의 어떤 `/api/admin/*` 요청도 operator JWT + `X-Operator-Reason`이 없으면 401/400으로 거부된다.
 
@@ -436,6 +450,83 @@ base path: `/api/admin`
 | 500 | `AUDIT_FAILURE` | 성공 경로 감사 row 기록 실패 (fail-closed). 실패 경로의 secondary 감사 실패는 삼켜지고 원래 응답이 유지됨 |
 
 감사: `action_code = OPERATOR_LOGIN`, `target_type = OPERATOR`, `target_id = operator_id`, `permission_used = auth.login`, `reason = "<self_login>"`, `twofa_used = TRUE|FALSE` (2FA 경로 여부), `outcome = SUCCESS|FAILURE`.
+
+---
+
+## POST /api/admin/auth/token-exchange
+
+**TASK-BE-298 / ADR-MONO-014 (ACCEPTED) § D2/D3 — RFC 8693 token exchange.**
+
+platform-console 이 보유한 **GAP OIDC `platform-console-web` access token**
+(subject token)을 단명 **operator access token**(`token_type=admin`,
+`iss=admin-service`)으로 교환한다. console 이 `/api/admin/**` operator
+엔드포인트(BE-296 registry 포함)를 operator trust boundary 확장 없이 호출할 수
+있게 하는 GAP-side bridge다 (ADR-MONO-014 D1 Option A 기각 — `OperatorAuthenticationFilter`
+는 2번째 issuer 를 수용하지 않으며, 본 엔드포인트는 password+TOTP login mint 의
+**형제 발급 경로**일 뿐이다).
+
+**Auth required**: 없음 (body 의 GAP OIDC subject token 이 인증 수단)
+**Required permission**: 없음 (operator-token 발급 경로 — RBAC 평가 대상 아님)
+**X-Operator-Reason**: 요구 없음 (`/login` 과 동일 — 요청자 본인 인증 플로우)
+
+**Headers**: 없음 (subject token 은 Authorization 헤더가 아닌 body)
+
+**Request** (RFC 8693 `application/json`):
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "eyJhbGciOi... (GAP OIDC platform-console-web access token)",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token"
+}
+```
+
+- `grant_type` MUST be `urn:ietf:params:oauth:grant-type:token-exchange`.
+- `subject_token_type` MUST be `urn:ietf:params:oauth:token-type:access_token`.
+- `subject_token` 은 auth-service(SAS)가 `platform-console-web` client 에
+  발급한 OIDC access token. 검증 정책(JWKS·iss·aud·exp·nbf·RS256·clock skew)은
+  [security.md §GAP OIDC Subject-Token Validation](../../services/admin-service/security.md)
+  가 canonical.
+- 이 엔드포인트는 **재발급(re-exchange)** 모델이다 — 별도 operator-refresh
+  state 를 두지 않는다 (ADR-MONO-014 D2). console 은 자신의 GAP refresh 로
+  rotate 한 access token 으로 매번 재교환한다.
+
+**Response 200**:
+```json
+{
+  "accessToken": "eyJhbGciOi... (operator JWT)",
+  "expiresIn": 3600,
+  "tokenType": "admin"
+}
+```
+
+- `accessToken`: `/api/admin/auth/login` 성공 응답의 `accessToken` 과
+  **동일 구조·동일 발급기·동일 서명 키**: `{sub: operator_uuid,
+  iss: "admin-service", jti: uuidV7, iat, exp, token_type: "admin"}`. tenant
+  스코프는 **`admin_operators.tenant_id` 에서만** 결정된다 (ADR-002 `'*'`
+  SUPER_ADMIN sentinel 포함) — subject token 의 어떤 claim(`tenant_id` 등)도
+  스코프 결정에 사용하지 않는다.
+- `expiresIn`: 초 단위 TTL. operator access TTL
+  (`admin.jwt.access-token-ttl-seconds`, 기본 3600) 이하.
+- refresh token 은 발급하지 않는다 (re-exchange 모델, ADR-MONO-014 D2).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `subject_token` 누락 |
+| 400 | `BAD_REQUEST` | `grant_type` 또는 `subject_token_type` 가 RFC 8693 지정 값과 불일치 |
+| 401 | `TOKEN_INVALID` | subject token 서명/`iss`/`aud`/`exp`/`nbf` 검증 실패, `platform-console-web` 가 아닌 client 에 발급된 토큰, GAP OIDC access token 이 아님(예: operator/bootstrap 토큰 제시), auth-service JWKS 도달 불가, **또는** OIDC subject 에 매핑되는 활성 `admin_operators` row 부재(미매핑/비활성/잠금 — fail-closed, 토큰 미발급) |
+
+> **Fail-closed invariant**: subject token 검증 또는 operator 해석의
+> 어떠한 모호함도 `401 TOKEN_INVALID`(기존 `OperatorUnauthorizedException`)로
+> 귀결되며 **operator token 은 절대 발급되지 않는다**. OIDC token 으로부터
+> 스코프가 상승하는 경로는 존재하지 않는다.
+
+**Side Effects**: 없음 (`admin_actions` 기록 없음 — `/login` 과 달리 이
+엔드포인트는 자체 감사 row 를 남기지 않는다. 후속 operator 명령이 각자의 감사
+row 를 남긴다. operator-token 발급 자체의 추적은 GAP OIDC subject token 의
+auth-service 측 발급 이력으로 커버됨). OIDC↔operator 링크 키 결정·근거는
+[data-model.md §OIDC Subject ↔ Operator Link Key](../../services/admin-service/data-model.md).
 
 ---
 

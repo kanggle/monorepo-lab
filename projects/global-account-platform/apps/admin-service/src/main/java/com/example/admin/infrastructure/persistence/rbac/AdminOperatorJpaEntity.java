@@ -51,6 +51,15 @@ public class AdminOperatorJpaEntity {
     @Column(name = "totp_enrolled_at")
     private Instant totpEnrolledAt;
 
+    // TASK-BE-298 / ADR-MONO-014: GAP OIDC platform-console-web access token
+    // `sub` (account_id UUID). The OIDC<->operator link key for
+    // POST /api/admin/auth/token-exchange. NULL = console-token-exchange not
+    // provisioned for this operator (fail-closed default). Platform-global
+    // UNIQUE (uk_admin_operators_oidc_subject, V0027) — OIDC subject space is
+    // tenant-independent. Link-only: tenant scope is `tenant_id`, never this.
+    @Column(name = "oidc_subject", length = 255)
+    private String oidcSubject;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 

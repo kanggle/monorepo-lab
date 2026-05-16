@@ -9,7 +9,6 @@ import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.AdminOperatorTotpPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
 import com.example.admin.infrastructure.security.BootstrapTokenService;
-import com.example.admin.infrastructure.security.JwtSigner;
 import com.example.admin.infrastructure.security.TotpGenerator;
 import com.example.admin.infrastructure.security.TotpSecretCipher;
 import com.example.common.id.UuidV7;
@@ -25,9 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TASK-BE-029-3 — operator self-login. Password verification via Argon2id,
@@ -63,10 +60,10 @@ public class AdminLoginService {
     private final TotpGenerator totpGenerator;
     private final TotpSecretCipher cipher;
     private final BootstrapTokenService bootstrapTokenService;
-    private final JwtSigner jwtSigner;
     private final ObjectMapper objectMapper;
     private final AdminJwtProperties jwtProperties;
     private final AdminRefreshTokenIssuer refreshTokenIssuer;
+    private final OperatorAccessTokenIssuer accessTokenIssuer;
 
     private volatile String cachedDummyHash;
 
@@ -184,16 +181,9 @@ public class AdminLoginService {
     }
 
     private String mintAccessToken(String operatorUuid) {
-        Instant now = Instant.now();
-        long ttl = jwtProperties.getAccessTokenTtlSeconds();
-        Map<String, Object> claims = new LinkedHashMap<>();
-        claims.put("sub", operatorUuid);
-        claims.put("iss", jwtProperties.getIssuer());
-        claims.put("jti", UuidV7.randomString());
-        claims.put("token_type", jwtProperties.getExpectedTokenType());
-        claims.put("iat", now);
-        claims.put("exp", now.plusSeconds(ttl));
-        return jwtSigner.sign(claims);
+        // TASK-BE-298: single claim-assembly source — shared with the GAP OIDC
+        // token-exchange path (architecture.md §Operator-Token Minting Paths).
+        return accessTokenIssuer.mint(operatorUuid);
     }
 
     private String dummyHash() {

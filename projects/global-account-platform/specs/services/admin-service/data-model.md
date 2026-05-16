@@ -30,6 +30,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `status` | VARCHAR(20) | NOT NULL, DEFAULT 'ACTIVE' | internal | `ACTIVE` / `DISABLED` / `LOCKED`. 소프트 비활성 플래그 |
 | `totp_secret_encrypted` | VARBINARY(255) | NULL | **restricted** | TOTP 시크릿 (envelope encryption). **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
 | `totp_enrolled_at` | DATETIME(6) | NULL | internal | TOTP 등록 완료 시각. **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
+| `oidc_subject` | VARCHAR(255) | NULL, UNIQUE | internal | **신규 (TASK-BE-298, Flyway V0027)** — GAP OIDC `platform-console-web` access token 의 `sub`(account_id UUID). `POST /api/admin/auth/token-exchange` 의 OIDC↔operator **링크 키**. `NULL` = console-token-exchange 미허용 운영자 (fail-closed 기본값 — 명시적 provisioning 으로만 활성화). 플랫폼-전역 UNIQUE (OIDC subject 공간은 테넌트 무관 — 아래 §OIDC Subject ↔ Operator Link Key). 스코프 상승 비-소스: 이 컬럼은 **링크에만** 쓰이고, tenant 스코프는 `tenant_id` 가 단일 진실 소스 |
 | `last_login_at` | DATETIME(6) | NULL | internal | 마지막 operator JWT 발급 시각 |
 | `created_at` | DATETIME(6) | NOT NULL | internal | — |
 | `updated_at` | DATETIME(6) | NOT NULL | internal | — |
@@ -37,8 +38,43 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 
 **인덱스**:
 - `uk_admin_operators_operator_id` UNIQUE (`operator_id`)
-- `uk_admin_operators_email` UNIQUE (`email`)
+- `uk_admin_operators_email` UNIQUE (`email`) — V0025에서 복합
+  `uk_admin_operators_tenant_email (tenant_id, email)` 로 대체됨 (TASK-BE-249)
 - `idx_admin_operators_status` (`status`) — 활성 운영자 조회
+- `uk_admin_operators_oidc_subject` UNIQUE (`oidc_subject`) — **신규
+  (TASK-BE-298, V0027)**. NULL 다수 허용(MySQL UNIQUE 는 다중 NULL 허용),
+  non-NULL 값은 플랫폼-전역 유일. `token-exchange` 의 OIDC subject → operator
+  결정적 단건 조회 인덱스
+
+> **OIDC Subject ↔ Operator Link Key (TASK-BE-298 / ADR-MONO-014 § D3 sub-decision)**
+>
+> ADR-MONO-014 D3 은 OIDC subject ↔ operator 매핑이 **명시적·결정적·
+> operator-row-authoritative**(OIDC token 이 스코프를 상승시키지 않음)여야
+> 한다고만 고정하고, 링크 키 선택을 GAP 구현 태스크의 sub-decision 으로
+> 위임했다. **선택: provisioned `admin_operators.oidc_subject VARCHAR(255)
+> NULL UNIQUE` 컬럼** (vs. verified-email 매칭).
+>
+> **근거 (oidc_subject 선택, email 기각)**:
+> - **결정성/안정성**: OIDC `sub`(auth-service account_id UUID)는 불변·전역
+>   유일 식별자. email 은 변경 가능하며 `admin_operators` 에서 `(tenant_id,
+>   email)` 복합 UNIQUE 라 **테넌트 무관한 OIDC `sub` 단독으로는 단건
+>   해석이 모호**(같은 email 이 다중 테넌트에 존재 가능, OIDC token 은
+>   tenant claim 을 신뢰 소스로 쓰지 않음 → email+tenant 조인 불가).
+> - **PII 결합 회피**: email 은 `confidential` 등급 PII (R1). operator
+>   인증 경계의 링크 키를 PII 에 결합하면 R1/R4 노출면이 커진다.
+>   `oidc_subject`(불투명 UUID, `internal` 등급)는 비-PII 키.
+> - **명시적 fail-closed 기본값**: `oidc_subject` 는 NULL 기본. 운영자는
+>   명시적 provisioning 으로만 console-exchange 가 활성화된다 — 대다수
+>   운영자는 NULL 이라 exchange 시 fail-closed `401`. email 매칭이면 모든
+>   기존 운영자가 암묵적으로 exchange 가능해져 fail-closed 원칙 위배.
+> - **스코프 상승 비-소스**: 이 컬럼은 **링크에만** 사용. tenant 스코프는
+>   `admin_operators.tenant_id`(ADR-002 sentinel 포함)가 단일 진실 소스이며
+>   OIDC token 의 어떤 claim 도 스코프 결정에 쓰이지 않는다.
+>
+> **Provisioning**: `oidc_subject` 채움은 별도 운영 경로(operator
+> provisioning / 향후 admin API)의 책임 — 본 태스크는 컬럼+제약+링크 해석만
+> 도입한다. dev/test seed 는 Flyway dev migration 또는 IT seed 에서 직접
+> 설정한다.
 
 ### `admin_roles`
 
@@ -207,6 +243,16 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   - `V00NN+2__seed_admin_roles_and_permissions.sql` — [rbac.md](./rbac.md) seed 매트릭스 INSERT
 - `totp_secret_encrypted`, `totp_enrolled_at`, `admin_roles.require_2fa`는 본 태스크에서 컬럼만 생성하고 평가 로직은 추가하지 않는다 (TASK-BE-029 예약).
 - PII/시크릿 컬럼(`password_hash`, `totp_secret_encrypted`, `email`) 변경은 단방향만 허용 — down migration 금지.
+- **TASK-BE-298 (Flyway `V0027__add_oidc_subject_to_admin_operators.sql`)**:
+  `admin_operators.oidc_subject VARCHAR(255) NULL` + `UNIQUE` 인덱스
+  `uk_admin_operators_oidc_subject` 추가. **forward-only**(down 금지),
+  **idempotent**(`INFORMATION_SCHEMA` 기반 컬럼/인덱스 존재 가드 — 컬럼이
+  이미 있으면 no-op), **MySQL-structural**(`ALTER TABLE ... ADD COLUMN` /
+  `ADD UNIQUE INDEX` DDL — text-substring / `@var` 접근 금지). TASK-BE-297
+  V0016 cycle-3 교훈 직접 적용: cross-statement MySQL user variable 금지,
+  idempotency 가드는 NULL-safe(`INFORMATION_SCHEMA` count = 0 비교). 비-Docker
+  shape-pin 테스트가 본 구조 불변식을 고정한다 (text-substring/`@var` 회귀
+  fast-fail).
 
 ---
 
@@ -216,7 +262,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 |---|---|
 | **restricted** | `admin_operators.password_hash`, `admin_operators.totp_secret_encrypted` |
 | **confidential** | `admin_operators.email`, `admin_operators.display_name`, `admin_actions.reason` |
-| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
+| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
 | **internal (special)** | `outbox.payload` — `admin.action.performed` envelope을 직렬화하여 포함. `target.displayHint`처럼 **upstream에서 이미 마스킹된** confidential 원본의 파생값을 포함할 수 있다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4 — 중앙 masking utility 경유 강제). 원문 PII는 포함되지 않음을 스펙 레벨에서 보장하므로 분류는 `internal`. 단, `reason` 필드(운영자 입력 원문) 전달 시 소비자 측에서 필요에 따라 추가 필터링을 고려한다. |
 | **public** | 없음 |
 

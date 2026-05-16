@@ -1,9 +1,12 @@
 package com.example.admin.infrastructure.config;
 
+import com.example.admin.application.port.GapOidcSubjectTokenValidator;
 import com.example.admin.infrastructure.security.AdminJwtKeyStore;
+import com.example.admin.infrastructure.security.GapOidcJwksSubjectTokenValidator;
 import com.example.admin.infrastructure.security.IssuerEnforcingJwtVerifier;
 import com.example.admin.infrastructure.security.JwtSigner;
 import com.example.security.jwt.JwtVerifier;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -25,10 +28,24 @@ import org.springframework.context.annotation.Primary;
  */
 @Slf4j
 @Configuration
-@EnableConfigurationProperties(AdminJwtProperties.class)
+@EnableConfigurationProperties({AdminJwtProperties.class, GapOidcProperties.class})
 public class JwtConfig {
 
     private static final String DEV_PLACEHOLDER_MARKER = "dev-only-placeholder";
+
+    /**
+     * TASK-BE-298 / ADR-MONO-014 — validator for the GAP OIDC
+     * {@code platform-console-web} subject token presented to
+     * {@code POST /api/admin/auth/token-exchange}. Verifies against the
+     * <b>auth-service JWKS</b> (a separate key space from the admin operator
+     * IdP). Fail-closed on any error (security.md §GAP OIDC Subject-Token
+     * Validation).
+     */
+    @Bean
+    GapOidcSubjectTokenValidator gapOidcSubjectTokenValidator(
+            GapOidcProperties gapOidcProperties, ObjectMapper objectMapper) {
+        return new GapOidcJwksSubjectTokenValidator(gapOidcProperties, objectMapper);
+    }
 
     @Bean
     public AdminJwtKeyStore adminJwtKeyStore(AdminJwtProperties properties) {
