@@ -8,7 +8,7 @@ auth-service OAuth-client port extraction (behavior-neutral application→infras
 
 # Status
 
-review
+done
 
 # Owner
 
