@@ -157,3 +157,7 @@ scm 종결 후 결정. 추천 순서 (이번 세션 분석): **scm → erp → m
 ### Forward pointer (2026-05-13) — D4 ordering progression
 
 § D4 의 `scm → finance → erp → mes` 순서 중 scm 단계 완료 (2026-05-04~07, TASK-MONO-040 / 042 + SCM-BE-001~003 + INT-001 series). 다음 단계 **finance** 결정은 **[ADR-MONO-008 — finance-platform Bootstrap](ADR-MONO-008-finance-platform-bootstrap.md)** (PROPOSED 2026-05-13, TASK-MONO-071) 로 이관. ADR-MONO-008 ACCEPTED 전환 시 finance 부트스트랩 실행 + § D4 ordering 한 칸 진행. erp / mes 단계는 ADR-MONO-008 ACCEPTED 후 별도 ADR (ADR-MONO-009 / 010 candidate) 으로 분기.
+
+### Forward pointer (2026-05-18) — D4 ordering progressed: scm → **finance**
+
+**[ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) ACCEPTED 2026-05-18** (TASK-MONO-113, D5.1–D5.6 + § D6.1 user-explicit intent 충족; D1 Option C — Template fork `kanggle/finance-platform` + monorepo `projects/finance-platform/` direct-include; domain `fintech` / traits `[transactional, regulated, audit-heavy]`). § D4 의 `scm → finance → erp → mes` 순서가 **finance 단계로 한 칸 진행** — finance 부트스트랩 artifact = PR-B / TASK-MONO-114. 다음(`erp`) 단계는 ADR-MONO-008 § 3.2 + 본 § D4 대로 별도 ADR (ADR-MONO-009 candidate) 으로 분기, 미착수.

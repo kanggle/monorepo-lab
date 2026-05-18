@@ -1,8 +1,8 @@
 # ADR-MONO-008 — finance-platform Bootstrap Criteria, Integration Mode, Template-First Procedure
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-13
-**History:** PROPOSED 2026-05-13 (TASK-MONO-071 — bootstrap criteria pre-authored; not the bootstrap authorisation).
+**History:** PROPOSED 2026-05-13 (TASK-MONO-071 — bootstrap criteria pre-authored; not the bootstrap authorisation). · ACCEPTED 2026-05-18 (TASK-MONO-113 — D5.1–D5.6 evaluated, § D6.1 user-explicit intent satisfied; D1 Option C; PR-A doc-only transition, bootstrap artifact = PR-B / TASK-MONO-114).
 **Decision driver:** Phase 5 LAUNCHED 2026-05-13 (ADR-MONO-003b ACCEPTED) — `kanggle/project-template` exists and is operational. ADR-MONO-002 § D4 recommends `scm → finance → erp → mes` ordering; scm shipped 2026-05-04~07; finance is next. ADR-MONO-003a § D2.1 mandates that any new project bootstrap requires a fresh ADR because it resets the shared-library churn clock and shifts portfolio narrative scope — both decision points the D4 OVERRIDE was not designed to cover. This ADR is that fresh ADR for finance.
 **Supersedes:** none.
 **Related:** [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) § D4 (ordering parent), [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D2.1 (new domain bootstrap requires fresh ADR — this ADR satisfies that), [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) § 1.4 + § D3 (Template ↔ monorepo sync context), [TEMPLATE.md](../../TEMPLATE.md) § Phase 6+ (downstream procedure), [`rules/taxonomy.md`](../../rules/taxonomy.md) § Financial Services (domain choices), memory [`project_portfolio_7axis_architecture`](../../../memory/project_portfolio_7axis_architecture.md), memory [`project_scm_platform_bootstrap`](../../../memory/project_scm_platform_bootstrap.md) (5번째 프로젝트 부트스트랩 reference).
@@ -255,8 +255,9 @@ Append-only.
 | Date | Transition | Option | Classification | Standalone / Monorepo / Both | User intent quote | PR(s) |
 |---|---|---|---|---|---|---|
 | 2026-05-13 | created PROPOSED | TBD | TBD | TBD | n/a (criteria pre-author, not bootstrap intent) | TBD (this PR) |
+| 2026-05-18 | ACCEPTED | C (Both) | fintech / [transactional, regulated, audit-heavy] / [rest-api, event-consumer] | Both (kanggle/finance-platform standalone via Template fork + projects/finance-platform/ monorepo direct-include) | "finance-platform bootstrap" → domain "fintech" → integration mode "C. Both" (deliberate AskUserQuestion authorization, 2026-05-18; satisfies § D6.1 affirmative-direction form, not the excluded ambiguous form) | PR-A #TBD-MONO-113 / PR-B #TBD-MONO-114 |
 
-(ACCEPTED row reserved — appended at bootstrap moment per § D6.3 format.)
+(ACCEPTED row appended 2026-05-18 per § D6.3 format. PR-A/PR-B numbers backfilled at PR open / close chore — append-only, no rewrite. D5.2 trait stack excludes ADR § D2's "optional event-driven" — not one of the 11 taxonomy traits, would HARDSTOP-02.)
 
 ---
 
