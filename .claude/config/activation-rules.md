@@ -195,7 +195,7 @@ Activate:
 - KYC / compliance rules
 - stricter failure handling rules
 
-→ Detailed rules: *(file to be created when a project declares this domain)*
+→ Detailed rules: [`rules/domains/fintech.md`](../../rules/domains/fintech.md)
 
 ---
 

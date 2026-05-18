@@ -41,6 +41,7 @@ declare -A PROJECT_REMOTES=(
     ["global-account-platform"]="https://github.com/kanggle/global-account-platform.git"
     ["fan-platform"]="https://github.com/kanggle/fan-platform.git"
     ["scm-platform"]="https://github.com/kanggle/scm-platform.git"
+    ["finance-platform"]="https://github.com/kanggle/finance-platform.git"
 )
 
 # Project → integration type. Governs how post-process rewrites gradle files.
@@ -70,6 +71,7 @@ declare -A PROJECT_TYPES=(
     ["global-account-platform"]="direct-include"
     ["fan-platform"]="direct-include"
     ["scm-platform"]="direct-include"
+    ["finance-platform"]="direct-include"
 )
 
 # Shared paths kept at extracted repo root.
