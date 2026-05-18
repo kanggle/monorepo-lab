@@ -39,9 +39,9 @@ public class SocialIdentity {
     }
 
     /**
-     * Creates a new (unsaved) social identity. Semantics are byte-identical to the prior
-     * {@code SocialIdentityJpaEntity.create(5-arg)}: {@code tenantId} defaults to
-     * {@code "fan-platform"} when null; {@code connectedAt == lastUsedAt == Instant.now()}.
+     * Creates a new (unsaved) social identity: {@code tenantId} defaults to
+     * {@code "fan-platform"} when null; {@code connectedAt == lastUsedAt == Instant.now()};
+     * {@code id} is {@code null} until persisted.
      */
     public static SocialIdentity create(String accountId, String tenantId, String provider,
                                         String providerUserId, String providerEmail) {
