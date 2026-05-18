@@ -21,9 +21,9 @@ spring:
     open-in-view: false
 
   flyway:
-    # No migrations yet — TASK-FIN-BE-001 lands the V1 schema. Disabled until
-    # then so the skeleton boots cleanly without a populated migration dir.
-    enabled: false
+    # V1__init.sql (MySQL) shipped by TASK-FIN-BE-001 — Flyway owns the
+    # schema; Hibernate validates only (spring.jpa.hibernate.ddl-auto).
+    enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
@@ -88,3 +88,25 @@ financeplatform:
     # precedent).
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:finance}
+  account:
+    crypto:
+      # AES-256-GCM key for regulated PII column encryption (F7). Dev default
+      # below; production MUST supply a 32-byte FINANCE_ACCOUNT_PII_KEY env
+      # var. Boot self-test fails fast on a missing/misconfigured key
+      # (Failure Mode #15).
+      pii-key: ${FINANCE_ACCOUNT_PII_KEY:finance-account-dev-pii-key-32bytes!!}
+    idempotency:
+      # F1 store TTL (≥ 24h). Redis primary + idempotency_keys DB fallback.
+      ttl-seconds: ${FINANCE_IDEMPOTENCY_TTL_SECONDS:86400}
+    compliance:
+      # v1 StubComplianceAdapter sanction list (CSV of owner refs). Empty in
+      # production-like runs; the IT suite seeds a known sanctioned ref.
+      sanctioned-owner-refs: ${FINANCE_SANCTIONED_OWNER_REFS:}
+
+# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
+# / unit runs disable it (no Kafka) via application-test.yml.
+outbox:
+  polling:
+    enabled: ${OUTBOX_POLLING_ENABLED:true}
+    interval-ms: 1000
+    batch-size: 50
