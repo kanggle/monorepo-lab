@@ -8,7 +8,7 @@ console-web Phase 2 slice 3 — GAP operators management operator parity (list/c
 
 # Status
 
-ready
+done
 
 # Owner
 

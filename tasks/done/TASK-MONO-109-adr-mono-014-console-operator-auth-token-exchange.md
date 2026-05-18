@@ -8,7 +8,7 @@ ADR-MONO-014 — platform-console operator auth (token exchange) PROPOSED
 
 # Status
 
-ready
+done
 
 # Owner
 

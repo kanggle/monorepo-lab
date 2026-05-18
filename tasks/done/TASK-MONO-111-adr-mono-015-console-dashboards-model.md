@@ -8,7 +8,7 @@ ADR-MONO-015 — platform-console dashboards model (composed operator overview) 
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ ADR-MONO-013 ACCEPTED transition + platform-console Phase 1 bootstrap
 
 # Status
 
-ready
+done
 
 # Owner
 

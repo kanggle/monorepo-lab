@@ -8,7 +8,7 @@ platform-console OIDC public client + product/tenant registry surface
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ console-web shell — GAP OIDC SSO + data-driven service catalog + tenant switch
 
 # Status
 
-ready
+done
 
 # Owner
 

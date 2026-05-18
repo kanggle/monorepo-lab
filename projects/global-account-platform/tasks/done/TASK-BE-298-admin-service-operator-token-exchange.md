@@ -8,7 +8,7 @@ admin-service operator token exchange (GAP OIDC → operator token, RFC 8693)
 
 # Status
 
-ready
+done
 
 # Owner
 

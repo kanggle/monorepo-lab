@@ -8,7 +8,7 @@ ADR-MONO-014 ACCEPTED transition + author GAP TASK-BE-298 (operator token exchan
 
 # Status
 
-ready
+done
 
 # Owner
 
