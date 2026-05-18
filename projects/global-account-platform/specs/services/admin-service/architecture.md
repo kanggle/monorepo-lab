@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | Operator administration (계정 lock/unlock + 강제 로그아웃 + 감사 조회 프록시) |
 | Deployable unit | `apps/admin-service/` |
-| Data store | PostgreSQL (감사 로그만, downstream 도메인 상태 미보유) |
+| Data store | MySQL (감사 로그만, downstream 도메인 상태 미보유) |
 | Event publication | Kafka via outbox (`admin.action.performed` 이벤트) |
 | Event consumption | none (single-type rest-api) |
 

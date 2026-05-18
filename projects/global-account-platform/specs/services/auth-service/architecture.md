@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot, Spring Authorization Server (SAS) 1.x |
 | Bounded Context | OIDC Authorization Server (token issuance + JWKS + refresh rotation + revoke + reuse detection) |
 | Deployable unit | `apps/auth-service/` |
-| Data store | PostgreSQL (credentials + refresh tokens + login history + JPA OAuth2 영속화) |
+| Data store | MySQL (credentials + refresh tokens + login history + JPA OAuth2 영속화) |
 | Event publication | Kafka via outbox (auth.token.* + auth.login.* + auth.reuse.detected) |
 | Event consumption | none (single-type identity-platform) |
 

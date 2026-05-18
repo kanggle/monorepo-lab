@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | Community (아티스트 포스트 + 댓글 + 반응 + 팬 피드) |
 | Deployable unit | `apps/community-service/` |
-| Data store | PostgreSQL (owned) |
+| Data store | MySQL (owned) |
 | Event publication | Kafka via outbox (community.post.* lifecycle events) |
 | Event consumption | none (single-type rest-api) |
 
