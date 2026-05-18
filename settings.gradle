@@ -71,3 +71,13 @@ include(
     'projects:scm-platform:apps:inventory-visibility-service',
     'projects:scm-platform:tests:e2e'
 )
+
+// Project: finance-platform
+// TASK-MONO-114 bootstrap (ADR-MONO-008 ACCEPTED Option C). v1 = account-service
+// only (Hexagonal Account lifecycle); gateway / ledger / wallet / kyc deferred
+// to v2. account-service skeleton has no business logic yet — TASK-FIN-BE-001
+// implements it. This bootstrap intentionally resets the libs/ churn clock
+// (ADR-MONO-003a § D2.1, recorded in ADR-MONO-008 § 3.3).
+include(
+    'projects:finance-platform:apps:account-service'
+)

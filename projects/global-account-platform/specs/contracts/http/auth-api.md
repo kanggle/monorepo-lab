@@ -262,10 +262,13 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | `ecommerce-web-store-client` | `ecommerce` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3000/api/auth/callback/gap`, `http://web.ecommerce.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read`, `ecommerce.consumer` | V0012 |
 | `ecommerce-admin-dashboard-client` | `ecommerce` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3001/api/auth/callback/gap`, `http://admin.ecommerce.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read`, `ecommerce.operator` | V0012 |
 | `scm-platform-internal-services-client` | `scm` | `client_credentials` | No | — | `scm.read`, `scm.write` | V0013 |
+| `finance-platform-internal-services-client` | `finance` | `client_credentials` | No | — | `finance.read`, `finance.write` | V0017 |
 
 > `fan-platform-internal-services-client` (client_credentials) is deferred to v2 — see TASK-MONO-026 Out of Scope.
 >
 > `scm-platform-user-flow-client` (PKCE) is deferred to scm v2 when frontend is introduced — see TASK-MONO-042 Out of Scope. v1 is backend-only.
+>
+> `finance-platform-user-flow-client` (PKCE) is not issued — finance v1 is backend-only and its UI is rendered by the unified platform console (ADR-MONO-013 §3.3, ADR-MONO-008). See TASK-MONO-114.
 
 ---
 

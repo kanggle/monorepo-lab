@@ -1,0 +1,178 @@
+# =============================================================================
+# finance-platform — Local Development Infrastructure (v1 placeholder)
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C):
+#   gateway-service is reached via http://finance.local/ — Traefik routes based
+#   on Host header. No PORT_PREFIX, no host-port slot allocation.
+#
+# Status: v1 bootstrap (TASK-MONO-114, ADR-MONO-008 ACCEPTED Option C). The
+# gateway-service block below is commented out — its Spring Boot module is not
+# yet generated. account-service has a minimal skeleton (no business logic);
+# its block is commented out too until TASK-FIN-BE-001 lands the implementation
+# (Dockerfile + Flyway schema + domain code). The first impl task will:
+#   1. Implement projects/finance-platform/apps/account-service/ (domain code +
+#      Dockerfile + Flyway V1 schema),
+#   2. Activate the account-service / gateway-service blocks below,
+#   3. Activate Traefik labels so http://finance.local/ resolves.
+#
+# Backing services (mysql / redis) are placeholders — they are defined here so
+# `docker compose --project-directory projects/finance-platform config`
+# validates the file shape, but they are only meaningfully used once at least
+# one application service depends on them.
+#
+# Prerequisites (when activated):
+#   1. Start the shared Traefik stack:  pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
+#   2. Add `127.0.0.1 finance.local` to your hosts file (one-time setup)
+#
+# Usage (after first service skeleton lands):
+#   pnpm finance:up    — start everything in this compose file
+#   pnpm finance:down  — stop containers (volumes preserved)
+#   pnpm finance:logs  — tail logs
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # gateway-service — activated by a follow-up task.
+  # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
+  # (tenant_id=finance only), rate limit.
+  # ---------------------------------------------------------------------------
+  # gateway-service:
+  #   image: finance-platform/gateway-service:local
+  #   container_name: finance-platform-gateway
+  #   build:
+  #     context: ./apps/gateway-service
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   expose:
+  #     - "8080"
+  #   environment:
+  #     SERVER_PORT: "8080"
+  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #     OIDC_REQUIRED_TENANT_ID: finance
+  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-finance-platform-internal-services-client}
+  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-finance-dev}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: "6379"
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://finance.local}
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     mysql:
+  #       condition: service_healthy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=traefik-net"
+  #     - "traefik.http.routers.finance-platform.rule=Host(`finance.local`)"
+  #     - "traefik.http.routers.finance-platform.entrypoints=web"
+  #     - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
+  #   networks:
+  #     - finance-platform-net
+  #     - traefik-net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # account-service — activated by TASK-FIN-BE-001 (skeleton present, no
+  # business logic / Dockerfile / Flyway schema yet).
+  # Account lifecycle: KYC, available/ledger balance, hold/release/capture,
+  # account state machine, idempotent fund movement, immutable audit_log.
+  # ---------------------------------------------------------------------------
+  # account-service:
+  #   image: finance-platform/account-service:local
+  #   container_name: finance-platform-account
+  #   build:
+  #     context: ./apps/account-service
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   expose:
+  #     - "8080"
+  #   environment:
+  #     SERVER_PORT: "8080"
+  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+  #     MYSQL_HOST: mysql
+  #     MYSQL_PORT: "3306"
+  #     MYSQL_DB: ${MYSQL_DB:-finance_db}
+  #     MYSQL_USER: ${MYSQL_USER:-finance}
+  #     MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
+  #     REDIS_HOST: redis
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - finance-platform-net
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — backing store for account-service (TASK-FIN-BE-001+). finance_db.
+  # Mirrors GAP's MySQL engine choice (GAP Identity tables are MySQL); fintech
+  # account/balance tables live here. expose: only — no host port (Local
+  # Network Convention, production parity).
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: finance-platform-mysql
+    restart: unless-stopped
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DB:-finance_db}
+      MYSQL_USER: ${MYSQL_USER:-finance}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - finance-platform-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — rate-limit counters (gateway), short-lived idempotency cache.
+  # expose: only — no host port (Local Network Convention).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: finance-platform-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - finance-platform-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  finance-platform-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net

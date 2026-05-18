@@ -133,6 +133,7 @@ jobs:
       gap: ${{ steps.filter.outputs.gap == 'true' && steps.filter.outputs.code-changed == 'true' }}
       fan: ${{ steps.filter.outputs.fan == 'true' && steps.filter.outputs.code-changed == 'true' }}
       scm: ${{ steps.filter.outputs.scm == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      finance: ${{ steps.filter.outputs.finance == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
@@ -175,6 +176,10 @@ jobs:
               - 'projects/scm-platform/**'
               - '!projects/scm-platform/tasks/**'
               - '!projects/scm-platform/**/*.md'
+            finance:
+              - 'projects/finance-platform/**'
+              - '!projects/finance-platform/tasks/**'
+              - '!projects/finance-platform/**/*.md'
             contracts:
               - 'projects/*/specs/contracts/**'
             observability:
@@ -220,7 +225,7 @@ jobs:
     needs: changes
     # Activate when:
     #   - any shared library / cross-project path changed (libs, workflows)
-    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm)
+    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm, finance)
     #   - push to main always runs (safety net regardless of filter)
     # spec/chore PRs (tasks/** or *.md only) produce no matching flag → skip.
     if: >-
@@ -231,7 +236,8 @@ jobs:
       needs.changes.outputs.ecommerce == 'true' ||
       needs.changes.outputs.gap == 'true' ||
       needs.changes.outputs.fan == 'true' ||
-      needs.changes.outputs.scm == 'true'
+      needs.changes.outputs.scm == 'true' ||
+      needs.changes.outputs.finance == 'true'
 
     steps:
       - name: Checkout
@@ -332,6 +338,17 @@ jobs:
           :projects:scm-platform:apps:gateway-service:check
           :projects:scm-platform:apps:procurement-service:check
           :projects:scm-platform:apps:inventory-visibility-service:check
+          --no-daemon --stacktrace
+
+      - name: Build and check finance-platform backend (Docker-free)
+        # finance-platform integration tests carry @Tag("integration") and are
+        # excluded from default :test/:check tasks (see account-service
+        # build.gradle). v1 bootstrap (TASK-MONO-114) = account-service
+        # skeleton only (no business logic / no tests yet); TASK-FIN-BE-001
+        # lands the domain + test pyramid + Testcontainers IT.
+        run: >-
+          ./gradlew
+          :projects:finance-platform:apps:account-service:check
           --no-daemon --stacktrace
 
       - name: Upload test reports on failure
