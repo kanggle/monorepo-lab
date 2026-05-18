@@ -43,8 +43,8 @@
 
 - **domain**: `saas` · **traits**: `transactional`, `regulated`, `audit-heavy`, `integration-heavy`, `multi-tenant`
 - **포지션**: monorepo 의 **표준 OIDC IdP** (ADR-001 ACCEPTED). 모든 프로젝트가 GAP 의 RS256 access token 을 OAuth2 Resource Server 패턴으로 검증.
-- **상태**: 5 backend + admin-web 운영 진입. 표준 `/oauth2/{authorize,token,jwks,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` 노출.
-- **service map (5 active + 1 frontend + 2 frozen demo)**:
+- **상태**: 5 backend 운영 (**backend-only IdP**). `admin-web` 운영자 콘솔은 2026-05-18 폐기 — 운영자 UI 는 통합 platform console 이 흡수 ([ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) Phase 3, TASK-BE-299). 표준 `/oauth2/{authorize,token,jwks,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` 노출.
+- **service map (5 active + 2 frozen demo)**:
 
 | Service | Type | 책임 |
 |---|---|---|
@@ -53,7 +53,7 @@
 | `account-service` | rest-api | 회원가입, 프로필, 계정 상태 기계, 테넌트 메타 |
 | `security-service` | event-consumer | Kafka 보안 이벤트 + 비정상 탐지 + 감사 read-only HTTP |
 | `admin-service` | rest-api | 운영자 lock/unlock, 강제 로그아웃, 감사 조회 |
-| `admin-web` | frontend-app | 운영자 콘솔 |
+| ~~`admin-web`~~ | ~~frontend-app~~ | **RETIRED 2026-05-18** — 운영자 UI 는 platform console 이 흡수 (ADR-MONO-013 Phase 3) |
 | ~~`community-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
 | ~~`membership-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
 
@@ -118,7 +118,7 @@
 
 - **domain**: `saas` · **traits**: `multi-tenant`, `integration-heavy`, `audit-heavy` · **service_types**: `frontend-app`
 - **포지션**: 포트폴리오 엔터프라이즈 스위트(gap·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
-- **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔이 GAP 운영자 parity 검증 후 Phase 3 폐기 → GAP 백엔드-only IdP 회귀.
+- **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → GAP 백엔드-only IdP 회귀.
 - **상태**: Phase 1 부트스트랩 (TASK-MONO-108) — `console-web` 부트 가능 skeleton + PROJECT.md/specs/contract/first task. SSO·data-driven 카탈로그·도메인 화면은 TASK-PC-FE-001 (Phase 2). GAP 측 선행 = TASK-BE-296.
 - **service map**:
 

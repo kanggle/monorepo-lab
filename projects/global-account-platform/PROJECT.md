@@ -2,7 +2,7 @@
 name: global-account-platform
 domain: saas
 traits: [transactional, regulated, audit-heavy, integration-heavy, multi-tenant]
-service_types: [rest-api, event-consumer, frontend-app, identity-platform]
+service_types: [rest-api, event-consumer, identity-platform]
 compliance: [gdpr, pipa]
 data_sensitivity: pii-sensitive
 scale_tier: startup
@@ -87,6 +87,14 @@ WMS 같은 enterprise 소비자는 [specs/features/multi-tenancy.md](specs/featu
 | `membership-service` | rest-api | **FROZEN** — 플랫폼의 product-layer demo consumer. 신규 기능 태스크 발행 금지 |
 
 두 서비스는 `account-service` 내부 API를 호출하여 플랫폼 레이어의 소비자로 동작하며, 포트폴리오의 integration 예시 역할만 수행한다. 스코프 재개방 없이 새 기능·태스크를 만들지 않는다.
+
+### admin-web — RETIRED 2026-05-18 (ADR-MONO-013 Phase 3)
+
+GAP `admin-web` (운영자 전용 Next.js 콘솔, 유일했던 `frontend-app`) 은 **2026-05-18 폐기**되었다. 운영자 표면 전체(계정 lock/unlock/bulk-lock/revoke-session/gdpr-delete/export · 감사 · 보안 login-history/suspicious · 운영자 create/edit-roles/change-status/password · operator overview) 는 [`projects/platform-console/`](../platform-console/PROJECT.md) (Model B, 단일 콘솔) 가 **흡수**했다.
+
+- **Parity-gated**: 폐기 전 콘솔이 verified parity 달성 — [ADR-MONO-013 § 6](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) additive note + [console-integration-contract § 3](../platform-console/specs/contracts/console-integration-contract.md) (16/16 verified matrix, `parity-verification.test.ts` 로 programmatically attested). 운영자 capability 손실 0.
+- **거버넌스**: [ADR-MONO-013 § D4](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) (parity-gated retirement) + § D6 Phase 3, [ADR-MONO-014](../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (operator-auth bridge) + [ADR-MONO-015](../../docs/adr/ADR-MONO-015-platform-console-dashboards-model.md) (dashboards model). 흡수 경로 = platform-console TASK-PC-FE-002…006 + GAP TASK-BE-296 (OIDC client + registry) / TASK-BE-298 (operator token exchange) / **TASK-BE-299** (본 폐기).
+- **결과**: GAP 는 **backend-only IdP** (auth/account/admin/security/gateway + frozen demo) 로 회귀 — `service_types` 에서 `frontend-app` 제거됨. 폐기된 spec 의 원본(architecture/dependencies/observability)은 git history 에 보존; 단일 forward pointer 는 [`specs/services/admin-web/overview.md`](specs/services/admin-web/overview.md) (RETIRED record).
 
 ## Overrides
 
