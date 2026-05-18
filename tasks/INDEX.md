@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-115-finance-integration-ci-job.md` — finance-platform Integration CI job 추가 (account-service Testcontainers — scm [TASK-MONO-048](done/TASK-MONO-048-scm-integration-ci-job.md) 동형). `.github/workflows/ci.yml` 에 `finance-integration-tests` job 신설 (`scm-integration-tests` 직답습; MySQL 8 + Redis + Kafka, 기존 `outputs.finance` flag 재사용·negation 미사용·신규 filter 불필요) + `Build and check finance-platform backend` stale 주석(`no tests yet`) 갱신. 트리거: TASK-FIN-BE-001 impl PR #598 (`ce2d16ce`) 의 4 Testcontainers IT (idempotency exactly-once / cross-tenant 403 / audit append-only / SETTLED immutable) 가 local+dispatcher 구조검증만 통과·CI 미실행 → green-wash 금지 차원에서 정직하게 surfaced 한 backlog 의 해소. spec-only (본 spec PR); impl(ci.yml) 은 별 PR (PR Separation Rule). (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — scm 직답습, 결정 무)
 
 ## in-progress
 
