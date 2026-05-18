@@ -8,7 +8,7 @@ console-web Phase 2 slice 2 — GAP audit + security read operator parity (unifi
 
 # Status
 
-ready
+done
 
 # Owner
 

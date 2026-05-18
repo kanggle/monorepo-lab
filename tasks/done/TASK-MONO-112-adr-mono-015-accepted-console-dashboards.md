@@ -8,7 +8,7 @@ ADR-MONO-015 ACCEPTED transition + author TASK-PC-FE-005 (composed operator over
 
 # Status
 
-ready
+done
 
 # Owner
 

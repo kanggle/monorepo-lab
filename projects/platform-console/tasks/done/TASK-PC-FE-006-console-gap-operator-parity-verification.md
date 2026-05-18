@@ -8,7 +8,7 @@ console-web Phase 2 slice 5 (FINAL) — GAP admin-web operator-parity verificati
 
 # Status
 
-ready
+done
 
 # Owner
 

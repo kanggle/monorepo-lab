@@ -8,7 +8,7 @@ OAuthClientMapper default-typing fails on array-valued ClientSettings (V0011/V00
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ console-web Phase 2 slice 4 — GAP operator overview (composed dashboards, read
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ ADR-MONO-013 — platform-console foundation criteria (PROPOSED)
 
 # Status
 
-ready
+done
 
 # Owner
 
