@@ -8,7 +8,7 @@ account-service bootstrap — Hexagonal Account lifecycle (KYC / available-ledge
 
 # Status
 
-review
+done
 
 # Owner
 
