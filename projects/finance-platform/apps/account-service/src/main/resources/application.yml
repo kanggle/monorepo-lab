@@ -18,6 +18,12 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         jdbc.time_zone: UTC
+        type:
+          # Hibernate 6.2+: treat @Enumerated(EnumType.STRING) as VARCHAR
+          # for schema-validation and DDL generation. Prevents the native
+          # MySQL ENUM type mismatch against Flyway CHAR/VARCHAR columns
+          # (TASK-FIN-BE-002 / TASK-MONO-115 CI red fix).
+          preferred_enum_jdbc_type: VARCHAR
     open-in-view: false
 
   flyway:
