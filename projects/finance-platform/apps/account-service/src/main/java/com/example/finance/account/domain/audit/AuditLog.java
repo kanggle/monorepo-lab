@@ -54,6 +54,7 @@ public class AuditLog {
     private String actorAccountId;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "actor_type", length = 20, nullable = false)
     private ActorType actorType;
 
