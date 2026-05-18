@@ -8,7 +8,7 @@ finance-platform bootstrap artifact (PR-B) — `rules/domains/fintech.md` + `pro
 
 # Status
 
-review
+done
 
 # Owner
 
