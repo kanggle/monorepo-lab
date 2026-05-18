@@ -8,7 +8,7 @@ auth-service `SocialIdentityJpaEntity` app-unused factory/mutators removal — B
 
 # Status
 
-review
+done
 
 # Owner
 
