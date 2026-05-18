@@ -572,6 +572,52 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded (v2-planned — no current exception class) |
 | FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 
+## Account / Balance / Transaction  `[domain: fintech]`
+
+Owned by `account-service`. Account lifecycle + available/ledger balance + fund-movement state machine. See [`rules/domains/fintech.md`](../rules/domains/fintech.md) § Standard Error Codes (F1–F5).
+
+| Code | HTTP | Description |
+|---|---|---|
+| ACCOUNT_NOT_FOUND | 404 | Account does not exist (`AccountNotFoundException`) |
+| ACCOUNT_NOT_ACTIVE | 409 | Fund operation attempted on a non-ACTIVE (PENDING_KYC/RESTRICTED/CLOSED) account (`AccountNotActiveException`) |
+| ACCOUNT_FROZEN | 409 | Fund movement attempted on a FROZEN account (`AccountFrozenException`) |
+| ACCOUNT_STATUS_TRANSITION_INVALID | 409 | Disallowed account state-machine transition (`AccountStatusTransitionInvalidException`). Cf. Transactional-Trait `STATE_TRANSITION_INVALID` for the generic shape |
+| INSUFFICIENT_AVAILABLE_BALANCE | 422 | available balance (= ledger − held) < requested amount (`InsufficientAvailableBalanceException`) (F2) |
+| HOLD_NOT_FOUND | 404 | Hold does not exist for capture/release (`HoldNotFoundException`) |
+| HOLD_ALREADY_SETTLED | 409 | Hold already captured/released/expired; re-processing rejected (`HoldAlreadySettledException`) |
+| TRANSACTION_NOT_FOUND | 404 | Transaction does not exist (`TransactionNotFoundException`) |
+| TRANSACTION_STATUS_TRANSITION_INVALID | 409 | Disallowed transaction state-machine transition (`TransactionStatusTransitionInvalidException`) |
+| TRANSACTION_ALREADY_SETTLED | 409 | Mutation of a SETTLED/COMPLETED transaction; correction is reversal-only (`TransactionAlreadySettledException`) (F3) |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` matches a prior request but the payload differs (`IdempotencyKeyConflictException`) (F1). Cf. Platform-Common `DUPLICATE_REQUEST` (409); scm procurement uses `IDEMPOTENCY_KEY_MISMATCH` (422) for its variant — fintech uses 409 conflict semantics |
+| CURRENCY_MISMATCH | 422 | Mixed-currency operation or unsupported currency (`CurrencyMismatchException`) (F5) |
+| AMOUNT_INVALID | 422 | Amount ≤ 0, scale violation, or minor-units violation (`AmountInvalidException`) (F5) |
+| IDEMPOTENCY_STORE_UNAVAILABLE | 503 | Redis primary and DB-fallback idempotency store both unavailable (fail-CLOSED, F1) |
+
+> `IDEMPOTENCY_KEY_REQUIRED` (400) on mutating endpoints — see Platform-Common Transactional Trait section. `CONCURRENT_MODIFICATION` (409, optimistic-lock) — Platform-Common.
+
+## KYC / Compliance  `[domain: fintech]`
+
+Owned by `account-service` v1 (compliance gate); `kyc-service` v2. Fund-movement compliance gate (F4). See [`rules/domains/fintech.md`](../rules/domains/fintech.md).
+
+| Code | HTTP | Description |
+|---|---|---|
+| KYC_REQUIRED | 403 | Fund movement attempted with KYC incomplete (`KycRequiredException`) (F4) |
+| KYC_LEVEL_INSUFFICIENT | 403 | Current KYC level below the requested operation's required level (`KycLevelInsufficientException`) |
+| AML_SCREENING_REQUIRED | 422 | AML screening unresolved; transaction cannot proceed (`AmlScreeningRequiredException`) |
+| SANCTION_HIT | 422 | Sanction/watchlist match — transaction FAILED + operator review queue (no auto-clear, F4/F8) (`SanctionHitException`) |
+| TRANSACTION_LIMIT_EXCEEDED | 422 | KYC-tier / policy transaction limit exceeded (`TransactionLimitExceededException`) |
+
+## Reconciliation / Ledger  `[domain: fintech]`
+
+Forward-declared (fintech.md F8 / ledger v2). v1 models the operator queue; real external matching + double-entry = v2 (ADR-MONO-008 § D3) — **v2-planned**, no exception classes yet.
+
+| Code | HTTP | Description |
+|---|---|---|
+| RECONCILIATION_DISCREPANCY | 422 | Internal ledger ↔ external statement mismatch; operator review (auto-close forbidden, F8) — **v2-planned** |
+| RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a locked reconciliation period (F8) — **v2-planned** |
+| LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (ledger invariant) — **v2-planned** |
+| LEDGER_PERIOD_CLOSED | 422 | Journal attempt on a closed accounting period — **v2-planned** |
+
 ---
 
 # Rules
