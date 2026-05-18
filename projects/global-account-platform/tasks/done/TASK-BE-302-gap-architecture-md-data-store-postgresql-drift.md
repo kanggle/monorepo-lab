@@ -8,7 +8,7 @@ GAP architecture.md Identity-table "Data store" drift fix — PostgreSQL → MyS
 
 # Status
 
-review
+done
 
 # Owner
 
