@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-115-finance-integration-ci-job.md` — finance-platform Integration CI job 추가 (account-service Testcontainers — scm [TASK-MONO-048](done/TASK-MONO-048-scm-integration-ci-job.md) 동형). `.github/workflows/ci.yml` 에 `finance-integration-tests` job 신설 (`scm-integration-tests` 직답습; MySQL 8 + Redis + Kafka, 기존 `outputs.finance` flag 재사용·negation 미사용·신규 filter 불필요) + `Build and check finance-platform backend` stale 주석(`no tests yet`) 갱신. 트리거: TASK-FIN-BE-001 impl PR #598 (`ce2d16ce`) 의 4 Testcontainers IT (idempotency exactly-once / cross-tenant 403 / audit append-only / SETTLED immutable) 가 local+dispatcher 구조검증만 통과·CI 미실행 → green-wash 금지 차원에서 정직하게 surfaced 한 backlog 의 해소. spec-only (본 spec PR); impl(ci.yml) 은 별 PR (PR Separation Rule). (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — scm 직답습, 결정 무)
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-115-finance-integration-ci-job.md` — (impl PR, ci.yml) finance-platform Integration CI job. `.github/workflows/ci.yml` 에 `finance-integration-tests` job 추가 (`scm-integration-tests` 직답습 — name `Integration (finance-platform, Testcontainers)` / needs `[changes,build-and-test]` / timeout 30 / `if:` 기존 `outputs.finance` flag 재사용·pure-positive·negation 미사용·신규 filter 불필요 / run `:projects:finance-platform:apps:account-service:integrationTest` / upload `finance-integration-test-reports`; scm 직후·frontend-checks 직전 삽입, job 17→18) + `Build and check finance-platform backend` stale 주석(`no tests yet … TASK-FIN-BE-001 lands`) → scm-step 형태 갱신. finance `integrationTest` Gradle task 기등록(build.gradle L104) → scm MONO-048 Edge Case 1 N/A. YAML js-yaml parse OK·finance job 구조 == scm job. green-wash 금지로 TASK-FIN-BE-001 close 시 정직 surfaced 한 CI-IT gap 해소 (4 IT: idempotency exactly-once / cross-tenant 403 / audit append-only / SETTLED immutable 가 실 CI MySQL+Redis+Kafka 위 행위 증명). 분석=Opus 4.7 / 구현=Opus 4.7 (scm 직답습 mechanical, 직접 구현). close chore = impl PR 머지 후.
 
 ## done
 

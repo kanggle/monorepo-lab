@@ -8,7 +8,7 @@ finance-platform Integration CI job 추가 (account-service Testcontainers — s
 
 # Status
 
-ready
+review
 
 # Owner
 
