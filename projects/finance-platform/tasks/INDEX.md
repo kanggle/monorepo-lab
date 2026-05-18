@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-002-enum-schema-validation-fix.md` — **Fix issue found in TASK-FIN-BE-001** (surfaced by TASK-MONO-115 `finance-integration-tests` CI job run `26034213923`, `11 tests, 11 failed`). Hibernate 6 + `MySQLDialect` maps `@Enumerated(EnumType.STRING)` → native MySQL `ENUM(...)` for schema-validation, mismatching Flyway `V1__init.sql` `CHAR(3)`/`VARCHAR` columns → `SchemaManagementException` on `accounts.currency` → `entityManagerFactory` fails → all 4 IT (11 tests) fail on ApplicationContext load (cascade). **Systemic single-pattern**: every `@Enumerated(EnumType.STRING)` field (Account/Balance/Hold/Transaction/AuditLog/AccountStatusHistory status·type·kyc·currency·actor_type) carries the same latent mismatch (validation bailed at the first column). Fix = global `hibernate.type.preferred_enum_jdbc_type=VARCHAR` (Hibernate 6.2+) or per-field `@JdbcTypeCode(SqlTypes.VARCHAR)`; **V1 DDL is correct & spec-compliant — do NOT change it** (entity/config defect, not schema). Verify via the TASK-MONO-115 CI job (`:check` green ≠ sufficient — that gate hid this). spec-only (this spec PR); impl is a separate PR. 선행=TASK-MONO-115 #601 merged. (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — well-understood Hibernate-6/MySQL pattern, breadth not depth)
 
 ## in-progress
 
