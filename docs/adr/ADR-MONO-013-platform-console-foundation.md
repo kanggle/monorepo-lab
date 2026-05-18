@@ -195,6 +195,8 @@ Append-only.
 
 D7.1–D7.6 at ACCEPTED: D7.1 Model B + new-project re-confirmed · D7.2 D3 finalised vs `rules/taxonomy.md` (enums verified) · D7.3 BFF integration-contract spec scoped as PR-B first artifact (TASK-MONO-108 § Scope) · D7.4 GAP `admin-web` operator surface enumerated (accounts lock/unlock/bulk-lock/revoke-session/gdpr-delete/export · audit · dashboards · operators create/roles/status/password · security login-history/suspicious) → Phase 2 parity checklist · D7.5 intent "ADR-013 ACCEPTED" · D7.6 churn-clock reset acknowledged (ADR-MONO-003a § D2.1; reset occurs at PR-B `settings.gradle` change, not this doc PR).
 
+> **Additive note — Phase 2 parity verified by TASK-PC-FE-006 (PR (this PR)).** The D7.4 parity checklist (the `dashboards` line refined by ADR-MONO-015 D2 = composed operator overview, *not* Grafana) was finalised into a **verified parity matrix** in [`console-integration-contract.md` § 3](../../projects/platform-console/specs/contracts/console-integration-contract.md) and attested programmatically (16/16 rows, `apps/console-web/tests/unit/parity-verification.test.ts`). ADR-MONO-013 Phase 2 = **COMPLETE (5/5 slices)**; the § D6 Phase 3 `admin-web`-retirement gate (row 3, "Phase 2 parity verified") is **satisfied**. This note is **additive only** — no ADR-MONO-013 decision (D1–D8) is changed (ADR-013 ACCEPTED; HARDSTOP-04 discipline). The retirement itself remains a separate GAP project-internal spec-first task (GAP `PROJECT.md` service map), out of scope of FE-006.
+
 ## 7. Provenance
 
 - ADR-MONO-003a § D2.1 — explicit mandate for a fresh ADR on new project bootstrap; this ADR satisfies it for `platform-console`.
