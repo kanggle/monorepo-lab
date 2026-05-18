@@ -52,6 +52,15 @@ export default async function ConsoleLayout({
               <ul className="flex items-center gap-4 text-sm">
                 <li>
                   <Link
+                    href="/dashboards"
+                    data-testid="nav-dashboards"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    개요
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/console"
                     data-testid="nav-catalog"
                     className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
