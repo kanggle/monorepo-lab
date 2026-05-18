@@ -343,9 +343,9 @@ jobs:
       - name: Build and check finance-platform backend (Docker-free)
         # finance-platform integration tests carry @Tag("integration") and are
         # excluded from default :test/:check tasks (see account-service
-        # build.gradle). v1 bootstrap (TASK-MONO-114) = account-service
-        # skeleton only (no business logic / no tests yet); TASK-FIN-BE-001
-        # lands the domain + test pyramid + Testcontainers IT.
+        # build.gradle). Docker-backed integrationTest is invoked separately
+        # on dev environments / finance-integration-tests job below.
+        # TASK-FIN-BE-001: account-service
         run: >-
           ./gradlew
           :projects:finance-platform:apps:account-service:check
@@ -950,6 +950,57 @@ jobs:
           path: |
             projects/scm-platform/apps/*/build/reports/tests/integrationTest/
             projects/scm-platform/apps/*/build/test-results/integrationTest/
+          retention-days: 7
+
+  finance-integration-tests:
+    name: Integration (finance-platform, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # finance integration suite boots MySQL 8 + Redis + Kafka (libs/java-messaging
+    # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
+    # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
+    # relies on its own Docker-free `check` signal.
+    # Activate for finance changes or cross-project (libs/workflows). TASK-MONO-115.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.finance == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run finance integration suites
+        run: >-
+          ./gradlew
+          :projects:finance-platform:apps:account-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload finance integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-integration-test-reports
+          path: |
+            projects/finance-platform/apps/*/build/reports/tests/integrationTest/
+            projects/finance-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:
