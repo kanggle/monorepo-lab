@@ -1,4 +1,6 @@
-package com.example.auth.infrastructure.oauth;
+package com.example.auth.application.port;
+
+import com.example.auth.domain.oauth.OAuthUserInfo;
 
 /**
  * Interface for OAuth provider HTTP clients.
@@ -13,7 +15,7 @@ public interface OAuthClient {
      * @param code        the authorization code received from the provider callback
      * @param redirectUri the redirect URI used in the original authorization request
      * @return user info from the provider
-     * @throws OAuthProviderException if the provider call fails
+     * @throws com.example.auth.application.exception.OAuthProviderException if the provider call fails
      */
     OAuthUserInfo exchangeCodeForUserInfo(String code, String redirectUri);
 }

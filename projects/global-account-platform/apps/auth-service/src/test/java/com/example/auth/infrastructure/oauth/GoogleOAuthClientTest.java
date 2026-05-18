@@ -1,6 +1,8 @@
 package com.example.auth.infrastructure.oauth;
 
+import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import io.jsonwebtoken.Jwts;

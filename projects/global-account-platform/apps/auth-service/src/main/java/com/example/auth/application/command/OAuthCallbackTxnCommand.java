@@ -2,7 +2,7 @@ package com.example.auth.application.command;
 
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.session.SessionContext;
-import com.example.auth.infrastructure.oauth.OAuthUserInfo;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 
 import java.util.Optional;
 

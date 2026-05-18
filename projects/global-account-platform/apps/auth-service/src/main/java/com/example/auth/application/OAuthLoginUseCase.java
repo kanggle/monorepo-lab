@@ -4,16 +4,20 @@ import com.example.auth.application.command.OAuthCallbackCommand;
 import com.example.auth.application.command.OAuthCallbackTxnCommand;
 import com.example.auth.application.exception.*;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.OAuthClient;
+import com.example.auth.application.port.OAuthClientProvider;
+import com.example.auth.application.port.OAuthProviderConfig;
+import com.example.auth.application.port.OAuthProviderConfigPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.OAuthAuthorizeResult;
 import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
-import com.example.auth.infrastructure.oauth.*;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +32,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class OAuthLoginUseCase {
 
-    private final OAuthProperties oAuthProperties;
-    private final OAuthClientFactory oAuthClientFactory;
+    private final OAuthProviderConfigPort oAuthProviderConfigPort;
+    private final OAuthClientProvider oAuthClientProvider;
     private final OAuthStateStore oAuthStateStore;
     private final OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     private final AccountServicePort accountServicePort;
@@ -41,19 +45,19 @@ public class OAuthLoginUseCase {
      */
     public OAuthAuthorizeResult authorize(String providerStr, String redirectUri) {
         OAuthProvider provider = parseProvider(providerStr);
-        OAuthProperties.ProviderProperties props = getProviderProperties(provider);
+        OAuthProviderConfig config = oAuthProviderConfigPort.get(provider);
 
         String effectiveRedirectUri = (redirectUri != null && !redirectUri.isBlank())
-                ? redirectUri : props.getRedirectUri();
+                ? redirectUri : config.defaultRedirectUri();
 
-        validateRedirectUri(props, effectiveRedirectUri);
+        validateRedirectUri(config, effectiveRedirectUri);
 
         String state = UuidV7.randomString();
 
         // Persist via the domain port — key prefix + TTL live in the adapter.
         oAuthStateStore.store(state, provider);
 
-        String authorizationUrl = buildAuthorizationUrl(props, effectiveRedirectUri, state);
+        String authorizationUrl = buildAuthorizationUrl(config, effectiveRedirectUri, state);
 
         return new OAuthAuthorizeResult(authorizationUrl, state);
     }
@@ -101,13 +105,13 @@ public class OAuthLoginUseCase {
             throw new InvalidOAuthStateException();
         }
 
-        OAuthProperties.ProviderProperties props = getProviderProperties(provider);
+        OAuthProviderConfig config = oAuthProviderConfigPort.get(provider);
         String effectiveRedirectUri = (command.redirectUri() != null && !command.redirectUri().isBlank())
-                ? command.redirectUri() : props.getRedirectUri();
-        validateRedirectUri(props, effectiveRedirectUri);
+                ? command.redirectUri() : config.defaultRedirectUri();
+        validateRedirectUri(config, effectiveRedirectUri);
 
         // External HTTP: token exchange + userinfo. OUTSIDE @Transactional (TASK-BE-069).
-        OAuthClient client = oAuthClientFactory.getClient(provider);
+        OAuthClient client = oAuthClientProvider.getClient(provider);
         OAuthUserInfo userInfo;
         try {
             userInfo = client.exchangeCodeForUserInfo(command.code(), effectiveRedirectUri);
@@ -158,30 +162,22 @@ public class OAuthLoginUseCase {
         }
     }
 
-    private OAuthProperties.ProviderProperties getProviderProperties(OAuthProvider provider) {
-        return switch (provider) {
-            case GOOGLE -> oAuthProperties.getGoogle();
-            case KAKAO -> oAuthProperties.getKakao();
-            case MICROSOFT -> oAuthProperties.getMicrosoft();
-        };
-    }
-
-    private void validateRedirectUri(OAuthProperties.ProviderProperties props, String redirectUri) {
+    private void validateRedirectUri(OAuthProviderConfig config, String redirectUri) {
         if (redirectUri == null || redirectUri.isBlank()) {
             throw new InvalidOAuthRedirectUriException();
         }
-        if (!props.resolveAllowedRedirectUris().contains(redirectUri)) {
+        if (!config.allowedRedirectUris().contains(redirectUri)) {
             throw new InvalidOAuthRedirectUriException();
         }
     }
 
-    private String buildAuthorizationUrl(OAuthProperties.ProviderProperties props,
+    private String buildAuthorizationUrl(OAuthProviderConfig config,
                                           String redirectUri, String state) {
-        return props.getAuthUri()
-                + "?client_id=" + encode(props.getClientId())
+        return config.authUri()
+                + "?client_id=" + encode(config.clientId())
                 + "&redirect_uri=" + encode(redirectUri)
                 + "&response_type=code"
-                + "&scope=" + encode(props.getScopes().replace(",", " "))
+                + "&scope=" + encode(config.scopes().replace(",", " "))
                 + "&state=" + encode(state);
     }
 

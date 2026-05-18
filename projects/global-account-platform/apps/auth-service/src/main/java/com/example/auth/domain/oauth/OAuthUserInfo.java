@@ -1,6 +1,4 @@
-package com.example.auth.infrastructure.oauth;
-
-import com.example.auth.domain.oauth.OAuthProvider;
+package com.example.auth.domain.oauth;
 
 /**
  * User information retrieved from an OAuth provider after code exchange.

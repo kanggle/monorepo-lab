@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth;
 
+import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,5 +50,14 @@ class OAuthClientFactoryTest {
     @DisplayName("getClient returns MicrosoftOAuthClient for MICROSOFT")
     void getClientMicrosoft() {
         assertThat(factory.getClient(OAuthProvider.MICROSOFT)).isSameAs(microsoftClient);
+    }
+
+    @Test
+    @DisplayName("factory implements the OAuthClientProvider port — same returned clients via the port type")
+    void factoryImplementsOAuthClientProviderPort() {
+        OAuthClientProvider provider = factory;
+        assertThat(provider.getClient(OAuthProvider.GOOGLE)).isSameAs(googleClient);
+        assertThat(provider.getClient(OAuthProvider.KAKAO)).isSameAs(kakaoClient);
+        assertThat(provider.getClient(OAuthProvider.MICROSOFT)).isSameAs(microsoftClient);
     }
 }
