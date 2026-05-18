@@ -42,12 +42,13 @@
                     │ · IP Reputation         │
                     │ · 자동 계정 잠금          │
                     └─────────────────────────┘
-
-    ┌──────────────┐
-    │  Admin Web   │  Next.js 15 · React 19
-    │  (Frontend)  │  운영자 콘솔
-    └──────────────┘
 ```
+
+> **운영자 콘솔**: GAP `admin-web` 은 2026-05-18 폐기되었다 (ADR-MONO-013 Phase 3).
+> 운영자 UI 는 통합 [`projects/platform-console/`](../platform-console/PROJECT.md)
+> 가 흡수했고, GAP 은 **backend-only IdP** 로 회귀했다 — 아래 표기는 backend 5
+> 서비스만 다룬다. 상세: [`docs/migration-notes.md`](docs/migration-notes.md)
+> § "admin-web retirement", [`PROJECT.md`](PROJECT.md) § "admin-web — RETIRED".
 
 ---
 
@@ -55,15 +56,14 @@
 
 | Layer | Technology |
 |---|---|
-| **Language** | Java 21, TypeScript 5 |
+| **Language** | Java 21 |
 | **Backend** | Spring Boot 3, Spring Cloud Gateway, Spring Data JPA |
-| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS, shadcn/ui |
 | **Database** | MySQL 8.0, Redis 7 |
 | **Messaging** | Apache Kafka 3.7 (KRaft) |
 | **Auth** | JWT (self-signed JWKS), Argon2id, TOTP 2FA, OAuth 2.0 (Google/Kakao) |
 | **Observability** | Prometheus, Grafana, Loki, Promtail |
 | **Infra** | Docker Compose, GitHub Actions CI/CD |
-| **Testing** | JUnit 5, Testcontainers, WireMock, RestAssured, Vitest |
+| **Testing** | JUnit 5, Testcontainers, WireMock, RestAssured |
 | **Build** | Gradle 8.14 (multi-module monorepo) |
 
 ---
@@ -144,7 +144,8 @@ main CI 의 GAP Integration job 에서 모두 deterministic PASS. **portfolio �
 | `account-service` | REST API | 8082 | 회원가입, 프로필, 계정 상태 기계, GDPR 삭제/내보내기 |
 | `security-service` | Event Consumer | 8084 | Kafka 이벤트 소비, 비정상 탐지, 자동 잠금 |
 | `admin-service` | REST API | 8085 | 운영자 RBAC/2FA, lock/unlock, 감사 조회 |
-| `admin-web` | Next.js | 3000 | 관리자 콘솔 (로그인, 계정 관리, 감사 로그) |
+
+> 운영자 콘솔(`admin-web`)은 2026-05-18 폐기 — [`projects/platform-console/`](../platform-console/PROJECT.md) 가 흡수 (ADR-MONO-013 Phase 3).
 
 ---
 
@@ -153,7 +154,6 @@ main CI 의 GAP Integration job 에서 모두 deterministic PASS. **portfolio �
 ### Prerequisites
 - Java 21+
 - Docker Desktop
-- Node.js 20+ (admin-web)
 
 ### 1. Infrastructure
 
@@ -188,12 +188,11 @@ pnpm gap:up                   # http://gap.local/ 으로 gateway 접근
 > 절대 활성화하지 마세요. 프로덕션은 `application-prod.yml` + 실제 secret
 > 주입 경로를 사용합니다.
 
-### 3. Frontend
-```bash
-cd apps/admin-web
-pnpm install
-pnpm dev
-```
+### 3. Operator console
+
+GAP `admin-web` 은 폐기되었다 (2026-05-18, ADR-MONO-013 Phase 3). 운영자 UI 는
+통합 콘솔이 흡수했다 — [`projects/platform-console/`](../platform-console/) 의
+README / `pnpm console:dev` 참조.
 
 ### 4. E2E Tests
 ```bash
@@ -245,8 +244,7 @@ global-account-platform/
 │   ├── account-service/       # 계정/프로필/GDPR
 │   ├── admin-service/         # 운영자 RBAC/2FA/감사
 │   ├── security-service/      # 보안 이벤트 소비/탐지
-│   ├── gateway-service/       # API 게이트웨이
-│   └── admin-web/             # 관리자 프론트엔드
+│   └── gateway-service/       # API 게이트웨이 (admin-web 폐기 — projects/platform-console/ 가 흡수)
 ├── libs/                      # 공유 라이브러리 (common, web, messaging, security, observability)
 ├── tests/e2e/                 # E2E 통합 테스트
 ├── specs/                     # 스펙 (contracts, services, features, use-cases)
