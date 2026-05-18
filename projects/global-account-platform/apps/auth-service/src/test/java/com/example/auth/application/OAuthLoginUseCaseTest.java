@@ -5,20 +5,21 @@ import com.example.auth.application.command.OAuthCallbackTxnCommand;
 import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
+import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.OAuthClient;
+import com.example.auth.application.port.OAuthClientProvider;
+import com.example.auth.application.port.OAuthProviderConfig;
+import com.example.auth.application.port.OAuthProviderConfigPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
-import com.example.auth.infrastructure.oauth.OAuthClient;
-import com.example.auth.infrastructure.oauth.OAuthClientFactory;
-import com.example.auth.infrastructure.oauth.OAuthProperties;
-import com.example.auth.infrastructure.oauth.OAuthProviderException;
-import com.example.auth.infrastructure.oauth.OAuthUserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,14 +61,25 @@ import static org.mockito.Mockito.when;
  *
  * <p>TASK-BE-300: the pre-txn social-identity existence read is now via the
  * {@code SocialIdentityRepository} domain port + {@code SocialIdentity} domain model
- * (was the JPA entity/repository directly). Assertions are byte-identical to the
- * pre-extraction test — the port hoist is behavior-neutral.
+ * (was the JPA entity/repository directly).
+ *
+ * <p>TASK-BE-301: the provider-client selector is now the {@code OAuthClientProvider}
+ * application port (was the concrete {@code OAuthClientFactory}) and the per-provider
+ * configuration is the {@code OAuthProviderConfigPort} application port (was the Spring
+ * {@code OAuthProperties} {@code @ConfigurationProperties} type). The stub
+ * {@code OAuthProviderConfig} records carry the SAME values the previous
+ * {@code OAuthProperties.ProviderProperties} setup used (clientId
+ * {@code test-google-client-id}, the same redirectUri / allowlist / scopes / authUri,
+ * and the legacy single-redirect fallback mapped to its resolved allowlist), so every
+ * assertion below — authorization-URL content, redirect-URI exact-match allowlist,
+ * trailing-slash reject, legacy/blank fallback, callback HTTP-before-txn ordering — is
+ * byte-identical to the pre-extraction test. The port hoist is behavior-neutral.
  */
 @ExtendWith(MockitoExtension.class)
 class OAuthLoginUseCaseTest {
 
-    @Mock private OAuthProperties oAuthProperties;
-    @Mock private OAuthClientFactory oAuthClientFactory;
+    @Mock private OAuthProviderConfigPort oAuthProviderConfigPort;
+    @Mock private OAuthClientProvider oAuthClientProvider;
     @Mock private OAuthStateStore oAuthStateStore;
     @Mock private OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     @Mock private AccountServicePort accountServicePort;
@@ -84,24 +97,26 @@ class OAuthLoginUseCaseTest {
             "provider-user-1", "user@example.com", "User", OAuthProvider.GOOGLE);
 
     private OAuthCallbackCommand command;
-    private OAuthProperties.ProviderProperties googleProps;
 
     @BeforeEach
     void setUp() {
         command = new OAuthCallbackCommand("GOOGLE", CODE, STATE, REDIRECT_URI, CTX);
 
-        googleProps = new OAuthProperties.ProviderProperties();
-        googleProps.setClientId("test-google-client-id");
-        googleProps.setClientSecret("test-google-client-secret");
-        googleProps.setRedirectUri(REDIRECT_URI);
-        googleProps.setAllowedRedirectUris(java.util.List.of(REDIRECT_URI));
-        googleProps.setScopes("openid,email,profile");
-        googleProps.setTokenUri("https://oauth2.googleapis.com/token");
-        googleProps.setAuthUri("https://accounts.google.com/o/oauth2/v2/auth");
-        // Lenient: a couple of tests short-circuit before reading provider props
+        // Mirrors the previous OAuthProperties.ProviderProperties google setup exactly:
+        // clientId, defaultRedirectUri (= props.redirectUri), single-entry allowlist
+        // (= props.allowedRedirectUris == [REDIRECT_URI]), scopes, authUri. The
+        // allowedRedirectUris value reproduces resolveAllowedRedirectUris() for that
+        // setup (non-empty allowlist → copy).
+        OAuthProviderConfig googleConfig = new OAuthProviderConfig(
+                "test-google-client-id",
+                "https://accounts.google.com/o/oauth2/v2/auth",
+                "openid,email,profile",
+                REDIRECT_URI,
+                List.of(REDIRECT_URI));
+        // Lenient: a couple of tests short-circuit before reading provider config
         // (e.g. invalid-state callback). Strict stubs would fail those tests
         // even though the setup is logically required for most others.
-        lenient().when(oAuthProperties.getGoogle()).thenReturn(googleProps);
+        lenient().when(oAuthProviderConfigPort.get(OAuthProvider.GOOGLE)).thenReturn(googleConfig);
     }
 
     @Test
@@ -110,7 +125,7 @@ class OAuthLoginUseCaseTest {
     void callback_newIdentity_allHttpBeforeTransactionalStep() {
         // given
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
@@ -155,7 +170,7 @@ class OAuthLoginUseCaseTest {
             + "pre-existing SocialIdentity, getAccountStatus still runs before txn")
     void callback_existingIdentity_skipsSocialSignup() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         SocialIdentity existing = SocialIdentity.create(
                 "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
@@ -190,7 +205,7 @@ class OAuthLoginUseCaseTest {
             + "txn step decides what to do with it")
     void callback_accountStatusEmpty_propagatesEmpty() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
@@ -216,7 +231,7 @@ class OAuthLoginUseCaseTest {
         assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
                 .isInstanceOf(InvalidOAuthStateException.class);
 
-        verify(oAuthClientFactory, never()).getClient(any());
+        verify(oAuthClientProvider, never()).getClient(any());
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
@@ -226,7 +241,7 @@ class OAuthLoginUseCaseTest {
     @DisplayName("callback: provider HTTP failure propagates; account-service HTTP and txn step NOT called")
     void callback_providerHttpFailure_skipsAccountServiceAndTxn() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         OAuthProviderException providerFailure =
                 new OAuthProviderException("google token exchange failed");
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenThrow(providerFailure);
@@ -243,7 +258,7 @@ class OAuthLoginUseCaseTest {
     @DisplayName("callback: empty email from provider → reject BEFORE account-service HTTP and txn step")
     void callback_emptyEmail_skipsAccountServiceAndTxn() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         OAuthUserInfo noEmail = new OAuthUserInfo(
                 "provider-user-1", "", "User", OAuthProvider.GOOGLE);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(noEmail);
@@ -261,7 +276,7 @@ class OAuthLoginUseCaseTest {
             + "(already performed — single-shot semantics preserved)")
     void callback_txnFailure_httpNotRetried() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
@@ -304,7 +319,7 @@ class OAuthLoginUseCaseTest {
     }
 
     @Test
-    @DisplayName("authorize: redirectUri null → 기본값(props.redirectUri) 으로 fallback, 화이트리스트 통과")
+    @DisplayName("authorize: redirectUri null → 기본값(config.defaultRedirectUri) 으로 fallback, 화이트리스트 통과")
     void authorize_nullRedirectUri_fallsBackToDefault() {
         var result = oAuthLoginUseCase.authorize("GOOGLE", null);
 
@@ -316,12 +331,17 @@ class OAuthLoginUseCaseTest {
     @Test
     @DisplayName("authorize: 단일 redirect-uri 만 설정된 레거시 props → resolveAllowedRedirectUris 가 fallback 으로 동작")
     void authorize_legacyConfigWithoutAllowlist_fallsBackToSingleRedirectUri() {
-        OAuthProperties.ProviderProperties legacy = new OAuthProperties.ProviderProperties();
-        legacy.setClientId("legacy-id");
-        legacy.setRedirectUri("https://legacy.example.com/cb");
-        legacy.setScopes("openid");
-        legacy.setAuthUri("https://legacy.example.com/auth");
-        when(oAuthProperties.getGoogle()).thenReturn(legacy);
+        // Legacy props (empty allowedRedirectUris + a single redirectUri) resolve
+        // via resolveAllowedRedirectUris() to a single-entry allowlist. The adapter
+        // reproduces that, so the equivalent config carries
+        // allowedRedirectUris == [defaultRedirectUri].
+        OAuthProviderConfig legacy = new OAuthProviderConfig(
+                "legacy-id",
+                "https://legacy.example.com/auth",
+                "openid",
+                "https://legacy.example.com/cb",
+                List.of("https://legacy.example.com/cb"));
+        when(oAuthProviderConfigPort.get(OAuthProvider.GOOGLE)).thenReturn(legacy);
 
         var result = oAuthLoginUseCase.authorize("GOOGLE", "https://legacy.example.com/cb");
         assertThat(result.state()).isNotBlank();
@@ -342,7 +362,7 @@ class OAuthLoginUseCaseTest {
         assertThatThrownBy(() -> oAuthLoginUseCase.callback(evil))
                 .isInstanceOf(InvalidOAuthRedirectUriException.class);
 
-        verify(oAuthClientFactory, never()).getClient(any());
+        verify(oAuthClientProvider, never()).getClient(any());
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
@@ -357,14 +377,21 @@ class OAuthLoginUseCaseTest {
     }
 
     @Test
-    @DisplayName("callback: redirectUri blank → falls back to provider properties default "
+    @DisplayName("callback: redirectUri blank → falls back to provider config default "
             + "and still calls HTTP before txn")
     void callback_redirectUriFallback() {
-        OAuthProperties.ProviderProperties google = new OAuthProperties.ProviderProperties();
-        google.setRedirectUri("http://default/callback");
-        when(oAuthProperties.getGoogle()).thenReturn(google);
+        // Old setup: props with only redirectUri=http://default/callback and an empty
+        // allowedRedirectUris → resolveAllowedRedirectUris() == [http://default/callback].
+        // The adapter reproduces that exactly.
+        OAuthProviderConfig google = new OAuthProviderConfig(
+                null,
+                null,
+                null,
+                "http://default/callback",
+                List.of("http://default/callback"));
+        when(oAuthProviderConfigPort.get(OAuthProvider.GOOGLE)).thenReturn(google);
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
-        when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(anyString(), anyString())).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());

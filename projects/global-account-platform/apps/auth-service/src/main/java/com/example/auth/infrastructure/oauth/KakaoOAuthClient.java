@@ -1,6 +1,9 @@
 package com.example.auth.infrastructure.oauth;
 
+import com.example.auth.application.exception.OAuthProviderException;
+import com.example.auth.application.port.OAuthClient;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;

@@ -144,9 +144,9 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("EMAIL_REQUIRED", "Email is required for social login"));
     }
 
-    @ExceptionHandler(com.example.auth.infrastructure.oauth.OAuthProviderException.class)
+    @ExceptionHandler(com.example.auth.application.exception.OAuthProviderException.class)
     public ResponseEntity<ErrorResponse> handleOAuthProviderError(
-            com.example.auth.infrastructure.oauth.OAuthProviderException e) {
+            com.example.auth.application.exception.OAuthProviderException e) {
         log.error("OAuth provider error: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ErrorResponse.of("PROVIDER_ERROR", "OAuth provider error"));

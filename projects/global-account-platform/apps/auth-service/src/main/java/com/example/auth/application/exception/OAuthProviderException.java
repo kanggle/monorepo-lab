@@ -1,4 +1,4 @@
-package com.example.auth.infrastructure.oauth;
+package com.example.auth.application.exception;
 
 /**
  * Thrown when an OAuth provider call fails (token exchange, user info retrieval, etc.).

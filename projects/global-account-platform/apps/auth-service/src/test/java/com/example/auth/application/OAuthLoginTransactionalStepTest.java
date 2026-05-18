@@ -14,7 +14,7 @@ import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
-import com.example.auth.infrastructure.oauth.OAuthUserInfo;
+import com.example.auth.domain.oauth.OAuthUserInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
