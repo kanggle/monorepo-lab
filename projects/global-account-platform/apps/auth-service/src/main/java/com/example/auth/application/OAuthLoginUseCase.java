@@ -10,10 +10,10 @@ import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.repository.OAuthStateStore;
+import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.infrastructure.oauth.*;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaRepository;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,7 @@ public class OAuthLoginUseCase {
     private final OAuthStateStore oAuthStateStore;
     private final OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     private final AccountServicePort accountServicePort;
-    private final SocialIdentityJpaRepository socialIdentityJpaRepository;
+    private final SocialIdentityRepository socialIdentityRepository;
 
     /**
      * Generates an authorization URL for the given OAuth provider.
@@ -122,8 +122,8 @@ public class OAuthLoginUseCase {
         }
 
         // Non-txn DB read: does a local social identity already exist for this provider user?
-        Optional<SocialIdentityJpaEntity> existingIdentity =
-                socialIdentityJpaRepository.findByProviderAndProviderUserId(
+        Optional<SocialIdentity> existingIdentity =
+                socialIdentityRepository.findByProviderAndProviderUserId(
                         provider.name(), userInfo.providerUserId());
 
         // Internal HTTP to account-service. OUTSIDE @Transactional (TASK-BE-072).

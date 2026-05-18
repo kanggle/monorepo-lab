@@ -8,12 +8,13 @@ import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.RegisterDeviceSessionResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.infrastructure.oauth.OAuthUserInfo;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,11 @@ import static org.mockito.Mockito.when;
  * carries pre-resolved {@code accountId}, {@code isNewAccount}, and
  * {@code accountStatus}. This test therefore has NO {@code AccountServicePort} mock.
  *
+ * <p>TASK-BE-300: social identity persistence is now via the {@code SocialIdentityRepository}
+ * domain port + {@code SocialIdentity} domain model (was the JPA entity/repository directly).
+ * Assertions are byte-identical to the pre-extraction test — same accountId / branch /
+ * result — proving the port hoist is behavior-neutral.
+ *
  * <p>Confirms the DB-side steps (social identity upsert, account status guard based
  * on the pre-fetched value, device session registration, refresh token persist,
  * event publish) execute against the input command and do NOT touch any external
@@ -55,7 +61,7 @@ class OAuthLoginTransactionalStepTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private AuthEventPublisher authEventPublisher;
     @Mock private RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
-    @Mock private SocialIdentityJpaRepository socialIdentityJpaRepository;
+    @Mock private SocialIdentityRepository socialIdentityRepository;
 
     @InjectMocks
     private OAuthLoginTransactionalStep step;
@@ -72,7 +78,7 @@ class OAuthLoginTransactionalStepTest {
         OAuthCallbackTxnCommand command = new OAuthCallbackTxnCommand(
                 OAuthProvider.GOOGLE, USER_INFO, CTX,
                 "acc-123", true, Optional.of("ACTIVE"));
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-123"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
@@ -88,7 +94,17 @@ class OAuthLoginTransactionalStepTest {
         assertThat(result.refreshToken()).isEqualTo("refresh-jwt");
         assertThat(result.isNewAccount()).isTrue();
 
-        verify(socialIdentityJpaRepository).save(any());
+        // Byte-identical to pre-extraction: a new SocialIdentity is saved with the
+        // pre-resolved accountId / provider / providerUserId / email (port type only differs).
+        ArgumentCaptor<SocialIdentity> captor = ArgumentCaptor.forClass(SocialIdentity.class);
+        verify(socialIdentityRepository).save(captor.capture());
+        SocialIdentity saved = captor.getValue();
+        assertThat(saved.getId()).isNull();
+        assertThat(saved.getAccountId()).isEqualTo("acc-123");
+        assertThat(saved.getProvider()).isEqualTo("GOOGLE");
+        assertThat(saved.getProviderUserId()).isEqualTo("provider-user-1");
+        assertThat(saved.getProviderEmail()).isEqualTo("user@example.com");
+        assertThat(saved.getTenantId()).isEqualTo("fan-platform");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
         verify(authEventPublisher).publishLoginSucceeded(
                 eq("acc-123"), eq("jti-1"), anyString(), any(SessionContext.class),
@@ -99,15 +115,15 @@ class OAuthLoginTransactionalStepTest {
     }
 
     @Test
-    @DisplayName("persistLogin: existing social identity → uses the pre-resolved accountId, "
-            + "returns newAccount=false")
+    @DisplayName("persistLogin: existing social identity → updates lastUsedAt, keeps the "
+            + "pre-resolved accountId, returns newAccount=false")
     void persistLogin_existingSocialIdentity() {
         OAuthCallbackTxnCommand command = new OAuthCallbackTxnCommand(
                 OAuthProvider.GOOGLE, USER_INFO, CTX,
                 "acc-existing", false, Optional.of("ACTIVE"));
-        var existing = com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity.create(
-                "acc-existing", "GOOGLE", "provider-user-1", "user@example.com");
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        SocialIdentity existing = SocialIdentity.create(
+                "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
         when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-existing"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-2", false, List.of()));
@@ -120,10 +136,12 @@ class OAuthLoginTransactionalStepTest {
         OAuthLoginResult result = step.persistLogin(command);
 
         assertThat(result.isNewAccount()).isFalse();
-        ArgumentCaptor<com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity> captor =
-                ArgumentCaptor.forClass(com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity.class);
-        verify(socialIdentityJpaRepository).save(captor.capture());
+        ArgumentCaptor<SocialIdentity> captor = ArgumentCaptor.forClass(SocialIdentity.class);
+        verify(socialIdentityRepository).save(captor.capture());
+        // Byte-identical assertion: the existing identity is persisted with its
+        // accountId unchanged (email equal → no providerEmail change either).
         assertThat(captor.getValue().getAccountId()).isEqualTo("acc-existing");
+        assertThat(captor.getValue().getProviderEmail()).isEqualTo("user@example.com");
     }
 
     @Test
@@ -133,9 +151,9 @@ class OAuthLoginTransactionalStepTest {
         OAuthCallbackTxnCommand command = new OAuthCallbackTxnCommand(
                 OAuthProvider.GOOGLE, USER_INFO, CTX,
                 "acc-locked", false, Optional.of("LOCKED"));
-        var existing = com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity.create(
-                "acc-locked", "GOOGLE", "provider-user-1", "user@example.com");
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        SocialIdentity existing = SocialIdentity.create(
+                "acc-locked", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> step.persistLogin(command))
@@ -153,7 +171,7 @@ class OAuthLoginTransactionalStepTest {
         OAuthCallbackTxnCommand command = new OAuthCallbackTxnCommand(
                 OAuthProvider.GOOGLE, USER_INFO, CTX,
                 "acc-new", true, Optional.empty());
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(registerOrUpdateDeviceSessionUseCase.execute(eq("acc-new"), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));

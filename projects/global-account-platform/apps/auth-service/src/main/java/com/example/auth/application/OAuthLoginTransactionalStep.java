@@ -9,13 +9,13 @@ import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.RegisterDeviceSessionResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.infrastructure.oauth.OAuthUserInfo;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -43,7 +43,7 @@ public class OAuthLoginTransactionalStep {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AuthEventPublisher authEventPublisher;
     private final RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
-    private final SocialIdentityJpaRepository socialIdentityJpaRepository;
+    private final SocialIdentityRepository socialIdentityRepository;
 
     @Transactional
     public OAuthLoginResult persistLogin(OAuthCallbackTxnCommand command) {
@@ -59,8 +59,8 @@ public class OAuthLoginTransactionalStep {
         TenantContext tenantContext = TenantContext.defaultContext();
 
         // Upsert local social identity.
-        Optional<SocialIdentityJpaEntity> existingIdentity =
-                socialIdentityJpaRepository.findByProviderAndProviderUserId(
+        Optional<SocialIdentity> existingIdentity =
+                socialIdentityRepository.findByProviderAndProviderUserId(
                         provider.name(), userInfo.providerUserId());
 
         if (existingIdentity.isPresent()) {
@@ -69,12 +69,12 @@ public class OAuthLoginTransactionalStep {
             if (userInfo.email() != null && !userInfo.email().equals(identity.getProviderEmail())) {
                 identity.updateProviderEmail(userInfo.email());
             }
-            socialIdentityJpaRepository.save(identity);
+            socialIdentityRepository.save(identity);
         } else {
-            var newIdentity = SocialIdentityJpaEntity.create(
+            var newIdentity = SocialIdentity.create(
                     accountId, tenantContext.tenantId(),
                     provider.name(), userInfo.providerUserId(), userInfo.email());
-            socialIdentityJpaRepository.save(newIdentity);
+            socialIdentityRepository.save(newIdentity);
         }
 
         // Account status check against pre-fetched value (no HTTP here).

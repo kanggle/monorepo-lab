@@ -19,7 +19,7 @@ import java.util.Optional;
  * @param userInfo        provider userinfo response
  * @param sessionContext  request session context
  * @param accountId       account id resolved either from a pre-existing
- *                        {@code SocialIdentityJpaEntity} or from
+ *                        {@code SocialIdentity} or from
  *                        {@code accountServicePort.socialSignup(...)}
  * @param isNewAccount    whether the resolution above created a new account
  * @param accountStatus   pre-fetched account status (empty if account-service
