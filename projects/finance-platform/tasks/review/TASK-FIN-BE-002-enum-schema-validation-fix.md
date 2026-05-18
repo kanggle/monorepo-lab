@@ -8,7 +8,7 @@ account-service Hibernate enum schema-validation mismatch fix — `@Enumerated(E
 
 # Status
 
-ready
+review
 
 # Owner
 

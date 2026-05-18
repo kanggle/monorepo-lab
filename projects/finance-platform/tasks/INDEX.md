@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-002-enum-schema-validation-fix.md` — **Fix issue found in TASK-FIN-BE-001** (surfaced by TASK-MONO-115 `finance-integration-tests` CI job run `26034213923`, `11 tests, 11 failed`). Hibernate 6 + `MySQLDialect` maps `@Enumerated(EnumType.STRING)` → native MySQL `ENUM(...)` for schema-validation, mismatching Flyway `V1__init.sql` `CHAR(3)`/`VARCHAR` columns → `SchemaManagementException` on `accounts.currency` → `entityManagerFactory` fails → all 4 IT (11 tests) fail on ApplicationContext load (cascade). **Systemic single-pattern**: every `@Enumerated(EnumType.STRING)` field (Account/Balance/Hold/Transaction/AuditLog/AccountStatusHistory status·type·kyc·currency·actor_type) carries the same latent mismatch (validation bailed at the first column). Fix = global `hibernate.type.preferred_enum_jdbc_type=VARCHAR` (Hibernate 6.2+) or per-field `@JdbcTypeCode(SqlTypes.VARCHAR)`; **V1 DDL is correct & spec-compliant — do NOT change it** (entity/config defect, not schema). Verify via the TASK-MONO-115 CI job (`:check` green ≠ sufficient — that gate hid this). spec-only (this spec PR); impl is a separate PR. 선행=TASK-MONO-115 #601 merged. (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — well-understood Hibernate-6/MySQL pattern, breadth not depth)
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FIN-BE-002-enum-schema-validation-fix.md` — (impl PR, `application.yml`) **Fix issue found in TASK-FIN-BE-001** (surfaced by TASK-MONO-115 CI run `26034213923`, `11 tests, 11 failed`). Hibernate 6 + `MySQLDialect` mapped `@Enumerated(EnumType.STRING)` → native MySQL `ENUM(...)` for schema-validation vs Flyway `CHAR(3)`/`VARCHAR` → context-load cascade. **Fix** = global `spring.jpa.properties.hibernate.type.preferred_enum_jdbc_type: VARCHAR` (Hibernate 6.2+) in `application.yml` (+6 line, single file) — systemic over all 13 `@Enumerated(EnumType.STRING)` fields, no per-field annotation, V1 DDL untouched (entity/config defect). impl=backend-engineer(Sonnet dispatch) / **dispatcher BE-301 독립 재검증**: diff scope=application.yml only; property path=`hibernate.type.preferred_enum_jdbc_type=VARCHAR` Hibernate-6.2+ canonical; application-test.yml overlay 무충돌(test profile property 상속·ddl-auto:validate 일관, 재독); `:check` 11-XML 재실측 117/0/0/0 무regression; V1/migration/contract/architecture.md/ADR/ci.yml 전무. 행위증명=impl PR 의 MONO-115 `finance-integration-tests` job (4 IT/11 test green on 실 MySQL — local Docker blocker, CI authoritative). 머지 시 main `finance-integration-tests` RED→GREEN, finance v1 행위-증명 gap 종결. close chore = impl PR 머지 후.
 
 ## done
 
