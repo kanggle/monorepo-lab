@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | Account / Profile + Tenant lifecycle (per `rules/domains/saas.md`) |
 | Deployable unit | `apps/account-service/` |
-| Data store | PostgreSQL (owned, not shared) |
+| Data store | MySQL (owned, not shared) |
 | Event publication | Kafka via outbox (`account.status.changed` 등 계정 lifecycle events) |
 | Event consumption | none (single-type rest-api) |
 

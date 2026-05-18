@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | Membership (구독 플랜 + 프리미엄 콘텐츠 접근 제어) |
 | Deployable unit | `apps/membership-service/` |
-| Data store | PostgreSQL (owned) |
+| Data store | MySQL (owned) |
 | Event publication | Kafka via outbox (subscription.* lifecycle events) |
 | Event consumption | none (single-type rest-api) |
 

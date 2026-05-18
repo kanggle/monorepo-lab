@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | Security analytics (suspicious activity detection + login attempt history) |
 | Deployable unit | `apps/security-service/` |
-| Data store | PostgreSQL (security history + detection state) |
+| Data store | MySQL (security history + detection state) |
 | Event publication | Kafka via outbox (auth.reuse.detected 등 detection alerts) |
 | Event consumption | Kafka (auth.login.attempt + account.status.changed 등 보안 source topics) |
 
