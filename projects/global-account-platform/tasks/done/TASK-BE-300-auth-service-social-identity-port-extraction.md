@@ -8,7 +8,7 @@ auth-service SocialIdentity domain-port extraction (behavior-neutral application
 
 # Status
 
-review
+done
 
 # Owner
 
