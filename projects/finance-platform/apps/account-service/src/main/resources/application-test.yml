@@ -1,0 +1,37 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.datasource.* (MySQL Testcontainer), spring.data.redis.host (Redis
+# Testcontainer), and spring.security.oauth2.resourceserver.jwt.jwk-set-uri
+# (MockWebServer JWKS) via @DynamicPropertySource. H2 is FORBIDDEN — slice
+# tests stub the service layer; integration tests use real MySQL+Redis.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+outbox:
+  polling:
+    # Tighten the loop in tests so the relay reacts within an awaitility
+    # timeout. Disabled by default; integration tests explicitly enable it.
+    enabled: false
+    interval-ms: 200
+    batch-size: 50
+
+financeplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    required-tenant-id: finance
+  account:
+    crypto:
+      pii-key: finance-account-test-pii-key-32bytes!
+    idempotency:
+      ttl-seconds: 86400
+    compliance:
+      sanctioned-owner-refs: ""

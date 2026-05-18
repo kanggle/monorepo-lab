@@ -80,38 +80,53 @@ services:
   #     start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # account-service — activated by TASK-FIN-BE-001 (skeleton present, no
-  # business logic / Dockerfile / Flyway schema yet).
-  # Account lifecycle: KYC, available/ledger balance, hold/release/capture,
-  # account state machine, idempotent fund movement, immutable audit_log.
+  # account-service — activated by TASK-FIN-BE-001. Account lifecycle: KYC,
+  # available/ledger balance, hold/release/capture, account state machine,
+  # idempotent fund movement, immutable audit_log. gateway-service is v1-
+  # deferred (architecture.md § Identity), so Traefik routes finance.local
+  # directly to account-service until the gateway lands.
   # ---------------------------------------------------------------------------
-  # account-service:
-  #   image: finance-platform/account-service:local
-  #   container_name: finance-platform-account
-  #   build:
-  #     context: ./apps/account-service
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8080"
-  #   environment:
-  #     SERVER_PORT: "8080"
-  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     MYSQL_HOST: mysql
-  #     MYSQL_PORT: "3306"
-  #     MYSQL_DB: ${MYSQL_DB:-finance_db}
-  #     MYSQL_USER: ${MYSQL_USER:-finance}
-  #     MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
-  #     REDIS_HOST: redis
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
-  #   depends_on:
-  #     mysql:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - finance-platform-net
+  account-service:
+    image: finance-platform/account-service:local
+    container_name: finance-platform-account
+    build:
+      context: ./apps/account-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: ${MYSQL_DB:-finance_db}
+      MYSQL_USER: ${MYSQL_USER:-finance}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      FINANCE_ACCOUNT_PII_KEY: ${FINANCE_ACCOUNT_PII_KEY:-finance-account-dev-pii-key-32bytes!!}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.finance-platform.rule=Host(`finance.local`)"
+      - "traefik.http.routers.finance-platform.entrypoints=web"
+      - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
+    networks:
+      - finance-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   # ---------------------------------------------------------------------------
   # MySQL 8 — backing store for account-service (TASK-FIN-BE-001+). finance_db.
