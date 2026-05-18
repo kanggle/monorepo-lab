@@ -8,7 +8,7 @@ ADR-MONO-008 PROPOSED → ACCEPTED transition — finance-platform bootstrap aut
 
 # Status
 
-review
+done
 
 # Owner
 
