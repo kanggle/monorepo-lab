@@ -8,7 +8,7 @@ GAP admin-web parity-gated retirement (ADR-MONO-013 Phase 3 — spec-first app r
 
 # Status
 
-ready
+done
 
 # Owner
 
