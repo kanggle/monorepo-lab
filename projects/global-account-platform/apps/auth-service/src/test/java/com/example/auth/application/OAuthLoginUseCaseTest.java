@@ -11,14 +11,14 @@ import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.repository.OAuthStateStore;
+import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.infrastructure.oauth.OAuthClient;
 import com.example.auth.infrastructure.oauth.OAuthClientFactory;
 import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.oauth.OAuthProviderException;
 import com.example.auth.infrastructure.oauth.OAuthUserInfo;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity;
-import com.example.auth.infrastructure.persistence.SocialIdentityJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +56,11 @@ import static org.mockito.Mockito.when;
  *       {@code accountId} / {@code isNewAccount} / {@code accountStatus} via
  *       {@link OAuthCallbackTxnCommand}.</li>
  * </ul>
+ *
+ * <p>TASK-BE-300: the pre-txn social-identity existence read is now via the
+ * {@code SocialIdentityRepository} domain port + {@code SocialIdentity} domain model
+ * (was the JPA entity/repository directly). Assertions are byte-identical to the
+ * pre-extraction test — the port hoist is behavior-neutral.
  */
 @ExtendWith(MockitoExtension.class)
 class OAuthLoginUseCaseTest {
@@ -65,7 +70,7 @@ class OAuthLoginUseCaseTest {
     @Mock private OAuthStateStore oAuthStateStore;
     @Mock private OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     @Mock private AccountServicePort accountServicePort;
-    @Mock private SocialIdentityJpaRepository socialIdentityJpaRepository;
+    @Mock private SocialIdentityRepository socialIdentityRepository;
     @Mock private OAuthClient oAuthClient;
 
     @InjectMocks
@@ -107,7 +112,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(
                 "user@example.com", "GOOGLE", "provider-user-1", "User"))
@@ -147,14 +152,14 @@ class OAuthLoginUseCaseTest {
 
     @Test
     @DisplayName("callback (existing identity): socialSignup NOT called, accountId taken from "
-            + "pre-existing SocialIdentityJpaEntity, getAccountStatus still runs before txn")
+            + "pre-existing SocialIdentity, getAccountStatus still runs before txn")
     void callback_existingIdentity_skipsSocialSignup() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        var existing = SocialIdentityJpaEntity.create(
-                "acc-existing", "GOOGLE", "provider-user-1", "user@example.com");
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        SocialIdentity existing = SocialIdentity.create(
+                "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
         when(accountServicePort.getAccountStatus("acc-existing"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-existing", "ACTIVE")));
@@ -187,7 +192,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
@@ -258,7 +263,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
@@ -361,7 +366,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientFactory.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(anyString(), anyString())).thenReturn(USER_INFO);
-        when(socialIdentityJpaRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));

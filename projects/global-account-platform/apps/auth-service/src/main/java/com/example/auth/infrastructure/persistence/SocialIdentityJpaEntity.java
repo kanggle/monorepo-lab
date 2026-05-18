@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.persistence;
 
+import com.example.auth.domain.social.SocialIdentity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -72,5 +73,24 @@ public class SocialIdentityJpaEntity {
 
     public void updateProviderEmail(String email) {
         this.providerEmail = email;
+    }
+
+    public SocialIdentity toDomain() {
+        return new SocialIdentity(id, accountId,
+                tenantId != null ? tenantId : "fan-platform",
+                provider, providerUserId, providerEmail, connectedAt, lastUsedAt);
+    }
+
+    public static SocialIdentityJpaEntity fromDomain(SocialIdentity identity) {
+        SocialIdentityJpaEntity entity = new SocialIdentityJpaEntity();
+        entity.id = identity.getId();
+        entity.accountId = identity.getAccountId();
+        entity.tenantId = identity.getTenantId();
+        entity.provider = identity.getProvider();
+        entity.providerUserId = identity.getProviderUserId();
+        entity.providerEmail = identity.getProviderEmail();
+        entity.connectedAt = identity.getConnectedAt();
+        entity.lastUsedAt = identity.getLastUsedAt();
+        return entity;
     }
 }
