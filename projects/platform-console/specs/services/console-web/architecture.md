@@ -5,6 +5,8 @@ All implementation tasks targeting this service must follow this declaration
 and `platform/architecture-decision-rule.md`.
 
 > **Status: v1 skeleton (ADR-MONO-013 Phase 1, TASK-MONO-108).** Boot-able minimal shell only. The real shell (GAP OIDC SSO, data-driven catalog, tenant switcher, federated domain screens) is implemented by `TASK-PC-FE-001` (Phase 1→2) and later domain-section tasks. This declaration is the target architecture all those tasks follow.
+>
+> **Phase 2 operator-parity COMPLETE (FE-002..006).** The GAP operator surface is fully implemented and bound: `features/accounts` (FE-002, § 2.4.1), `features/audit` (FE-003, § 2.4.2), `features/operators` (FE-004, § 2.4.3), `features/dashboards` composed overview (FE-005, § 2.4.4). `TASK-PC-FE-006` (Phase 2 slice 5/5, the capstone) formally **verified** the parity matrix ([`console-integration-contract.md` § 3](../../contracts/console-integration-contract.md), 16/16 rows attested by `tests/unit/parity-verification.test.ts`) — the ADR-MONO-013 § 6 Phase 3 `admin-web`-retirement gate ("Phase 2 parity verified") is satisfied. Retirement itself is a separate GAP project-internal spec-first task (out of scope here).
 
 ---
 

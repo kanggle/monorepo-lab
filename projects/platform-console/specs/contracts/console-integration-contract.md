@@ -2,7 +2,7 @@
 
 > The contract every product must satisfy to be federated by `platform-console`.
 > Authoritative skeleton: [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md) § D5. The operator-auth bridge (§ 2.1 server-side exchange step + § 2.6) is decided by [ADR-MONO-014](../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (ACCEPTED) § D2/D3/D4 and realised by `TASK-PC-FE-002a`. This document is the full form.
-> Status: **v1 skeleton** — element shapes are normative; concrete per-domain endpoint schemas are added as each domain section is built (ADR-MONO-013 Phase 2/4/5/6).
+> Status: **v1 skeleton** — element shapes are normative; concrete per-domain endpoint schemas are added as each domain section is built (ADR-MONO-013 Phase 2/4/5/6). The GAP operator surface (§ 2.4.1–§ 2.4.4) is fully bound; **§ 3 is finalized as a VERIFIED parity matrix** (TASK-PC-FE-006 — ADR-MONO-013 Phase 2 = 5/5 COMPLETE, Phase 3 retirement gate satisfied).
 
 ---
 
@@ -198,17 +198,76 @@ The operator credential the console presents to `/api/admin/**` (§ 2.2 registry
 
 ---
 
-## 3. GAP `admin-web` absorption (Phase 3 reference)
+## 3. GAP `admin-web` absorption — VERIFIED parity matrix (Phase 3 gate)
 
-The console's GAP section must reach functional parity with the existing GAP `admin-web` operator surface before `admin-web` is retired (ADR-MONO-013 D4, parity-gated). Parity checklist (enumerated at ACCEPTED, ADR-MONO-013 § 6 D7.4):
+The console's GAP section must reach functional parity with the existing GAP
+`admin-web` operator surface before `admin-web` is retired (ADR-MONO-013 D4,
+parity-gated). The parity checklist (enumerated at ACCEPTED, ADR-MONO-013 § 6
+D7.4; the `dashboards` line **refined** by ADR-MONO-015 D2 — composed operator
+overview, *not* Grafana) is **finalized below as a verified parity matrix**.
 
-- accounts: search, detail, lock/unlock, bulk-lock, revoke-session, GDPR-delete, export — **implemented by TASK-PC-FE-002** (`features/accounts`, console-facing surface bound in § 2.4.1); formal parity verification is `FE-006`.
-- audit: query — **implemented by TASK-PC-FE-003** (`features/audit`, console-facing surface bound in § 2.4.2); formal parity verification is `FE-006`.
-- dashboards — **implemented by TASK-PC-FE-005** (`features/dashboards`, console-facing surface bound in § 2.4.4); ADR-MONO-015-refined (composed operator overview, **not** Grafana — composition of the existing accounts/audit/operators reads, no new producer); formal parity verification is `FE-006`.
-- operators: create, edit-roles, change-status, change-password — **implemented by TASK-PC-FE-004** (`features/operators`, console-facing surface bound in § 2.4.3, `operator.manage`/SUPER_ADMIN gating + per-endpoint header matrix); formal parity verification is `FE-006`.
-- security: login-history, suspicious — **implemented by TASK-PC-FE-003** (`features/audit` unified-view `source=login_history|suspicious`, bound in § 2.4.2, intersection-permission `security.event.read`); formal parity verification is `FE-006`.
+> **Status: VERIFIED by TASK-PC-FE-006** (ADR-MONO-013 Phase 2 slice 5 of 5 —
+> the capstone). Each row was attested by the consolidated parity-verification
+> test (`apps/console-web/tests/unit/parity-verification.test.ts`), which
+> iterates the single machine-readable matrix fixture
+> (`apps/console-web/tests/unit/parity-matrix.ts`). The fixture **is** this
+> table in executable form — the spec table and the test cannot drift (one
+> source). Verification = attestation over the **existing**, unmodified
+> FE-002..005 surface (FE-006 implemented no feature/route/producer; it only
+> verifies). No real parity gap was found — all 16 rows verified.
 
-Retirement itself is a GAP project-internal spec-first change (GAP `PROJECT.md` service map), not a `platform-console` task.
+### 3.1 Verified parity matrix
+
+Legend: **Kind** `R` = read, `M` = mutation. **Headers** column states the
+per-capability mutation-header obligation attested by the test (`reason` =
+`X-Operator-Reason`, `idem` = `Idempotency-Key`); read rows assert **no**
+mutation artifacts. Every row's server client authenticates with the
+**exchanged operator token** (`getOperatorToken()`, never the GAP OIDC access
+token — the #569 trust-boundary invariant) and sends `X-Tenant-Id` (active
+tenant; blocked, never empty, when none selected) — attested for every row.
+
+| # | admin-web operator capability | Console feature module | Contract § | GAP producer endpoint (`admin-api.md` §) | Kind | Mutation headers | Verified |
+|---|---|---|---|---|---|---|---|
+| 1 | accounts: search / list | `features/accounts` `searchAccounts` | § 2.4.1 | `GET /api/admin/accounts` (`admin-api.md` § L68) | R | — (no mutation artifacts) | verified by TASK-PC-FE-006 |
+| 2 | accounts: detail | `features/accounts` `getAccountByEmail` (composed: search/list item + ops 3–8 — **no fabricated GET-by-id**, consistent with FE-002 / `admin-api.md` having no producer GET-by-id) | § 2.4.1 | composed over `GET /api/admin/accounts` + ops 3–8 (no dedicated producer endpoint) | R | — (no mutation artifacts) | verified by TASK-PC-FE-006 |
+| 3 | accounts: lock | `features/accounts` `lockAccount` | § 2.4.1 | `POST /api/admin/accounts/{accountId}/lock` (§ L130) | M | reason + idem; reason+confirm-gated | verified by TASK-PC-FE-006 |
+| 4 | accounts: unlock | `features/accounts` `unlockAccount` | § 2.4.1 | `POST /api/admin/accounts/{accountId}/unlock` (§ L244) | M | reason + idem; reason+confirm-gated | verified by TASK-PC-FE-006 |
+| 5 | accounts: bulk-lock | `features/accounts` `bulkLockAccounts` | § 2.4.1 | `POST /api/admin/accounts/bulk-lock` (§ L179) | M | reason + idem (single key per confirmed action); multi-select confirm | verified by TASK-PC-FE-006 |
+| 6 | accounts: revoke-session | `features/accounts` `revokeSessions` | § 2.4.1 | `POST /api/admin/sessions/{accountId}/revoke` (§ L278) | M | reason + idem; reason+confirm-gated | verified by TASK-PC-FE-006 |
+| 7 | accounts: gdpr-delete | `features/accounts` `gdprDeleteAccount` | § 2.4.1 | `POST /api/admin/accounts/{accountId}/gdpr-delete` (§ L739, irreversible) | M | reason + idem; double-confirm + typed confirmation | verified by TASK-PC-FE-006 |
+| 8 | accounts: export | `features/accounts` `exportAccount` | § 2.4.1 | `GET /api/admin/accounts/{accountId}/export` (§ L786, unmasked PII — producer meta-audits) | R (audited) | reason **required** (producer-mandated audit reason on a GET); **no idem** (not an idempotency-bearing mutation) | verified by TASK-PC-FE-006 |
+| 9 | audit: query | `features/audit` `queryAudit` | § 2.4.2 | `GET /api/admin/audit` (§ L320, `source=admin`/unfiltered) | R | — (no mutation artifacts; reason/idem absent asserted) | verified by TASK-PC-FE-006 |
+| 10 | security: login-history | `features/audit` `queryAudit({source:'login_history'})` | § 2.4.2 | `GET /api/admin/audit?source=login_history` (§ L320) | R | — (no mutation artifacts); intersection-permission `audit.read` ∧ `security.event.read` (producer-authoritative) | verified by TASK-PC-FE-006 |
+| 11 | security: suspicious | `features/audit` `queryAudit({source:'suspicious'})` | § 2.4.2 | `GET /api/admin/audit?source=suspicious` (§ L320) | R | — (no mutation artifacts); intersection-permission `audit.read` ∧ `security.event.read` | verified by TASK-PC-FE-006 |
+| 12 | operators: create | `features/operators` `createOperator` | § 2.4.3 | `POST /api/admin/operators` (§ L907) | M | **reason + idem** (producer requires BOTH); reason+elevated-confirm-gated | verified by TASK-PC-FE-006 |
+| 13 | operators: edit-roles | `features/operators` `editOperatorRoles` | § 2.4.3 | `PATCH /api/admin/operators/{operatorId}/roles` (§ L963, full-replace; `[]` allowed) | M | **reason ONLY — `Idempotency-Key` MUST NOT be sent** (FE-004 per-endpoint header non-uniformity; producer does not list it; absence asserted) | verified by TASK-PC-FE-006 |
+| 14 | operators: change-status | `features/operators` `changeOperatorStatus` | § 2.4.3 | `PATCH /api/admin/operators/{operatorId}/status` (§ L1008, ACTIVE↔SUSPENDED) | M | **reason ONLY — `Idempotency-Key` MUST NOT be sent** (FE-004 non-uniformity; absence asserted) | verified by TASK-PC-FE-006 |
+| 15 | operators: change-password | `features/operators` `changeOwnPassword` | § 2.4.3 | `PATCH /api/admin/operators/me/password` (§ L1056, **self only** — no admin-set-other) | M (self) | **no reason, no idem** (self path; valid operator token only — per the producer) | verified by TASK-PC-FE-006 |
+| 16 | dashboards (**ADR-MONO-015-refined composed operator overview, NOT Grafana**) | `features/dashboards` `getOperatorOverview` | § 2.4.4 | **no new producer** — bounded fan-out composing the EXISTING reads `GET /api/admin/accounts` + `GET /api/admin/audit` + `GET /api/admin/operators` (§§ L68/L320/L859), per-source isolated | R | — (no mutation artifacts on ANY leg; reason/idem absent asserted); per-source isolation (403/503/timeout → that card only; 401 on any leg → whole-overview re-login) | verified by TASK-PC-FE-006 |
+
+> **`dashboards` row — explicit ADR-MONO-015 D2 note:** row 16 is the
+> **refined** parity line — a composed operator overview built from the
+> already-integrated accounts/audit/operators read surfaces, **not** a
+> reproduction of `admin-web`'s Grafana observability iframe. Observability /
+> Grafana metrics dashboards are **out of scope** of the platform-console
+> parity gate and, if ever required, are a separate observability ADR (never
+> an `admin-web`-retirement blocker). The Phase 3 retirement decision stays
+> defensible because the Grafana observability view is explicitly re-scoped to
+> operator/SRE tooling, independent of the console.
+
+### 3.2 Phase 2 parity COMPLETE — Phase 3 gate satisfied
+
+**Phase 2 parity COMPLETE** (ADR-MONO-013 § D6 Phase 2 = 5/5 slices: FE-002
+accounts → FE-003 audit+security → FE-004 operators → FE-005 dashboards →
+FE-006 parity-verify). All 16 rows of the § 3.1 matrix are verified by
+TASK-PC-FE-006; the **ADR-MONO-013 § 6 Phase 3 `admin-web`-retirement gate
+('Phase 2 parity verified', § 6 row 3) is satisfied**.
+
+Retirement itself is a **separate GAP project-internal spec-first task** (GAP
+`PROJECT.md` service map → `admin-web` row removed → app removal), explicitly
+**out of scope here**. FE-006 only *satisfies the gate*; it does not retire
+anything and touches no GAP code/spec. Merging FE-006 must **not** be read as
+authorizing `admin-web` removal — that is a distinct GAP-internal change.
 
 ---
 
