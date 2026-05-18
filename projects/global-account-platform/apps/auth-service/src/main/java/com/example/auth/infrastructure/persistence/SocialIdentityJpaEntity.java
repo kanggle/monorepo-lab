@@ -40,41 +40,6 @@ public class SocialIdentityJpaEntity {
     @Column(name = "last_used_at", nullable = false)
     private Instant lastUsedAt;
 
-    /**
-     * Creates a new social identity with the given tenant context (TASK-BE-229).
-     */
-    public static SocialIdentityJpaEntity create(String accountId, String tenantId, String provider,
-                                                  String providerUserId, String providerEmail) {
-        SocialIdentityJpaEntity entity = new SocialIdentityJpaEntity();
-        entity.accountId = accountId;
-        entity.tenantId = tenantId != null ? tenantId : "fan-platform";
-        entity.provider = provider;
-        entity.providerUserId = providerUserId;
-        entity.providerEmail = providerEmail;
-        Instant now = Instant.now();
-        entity.connectedAt = now;
-        entity.lastUsedAt = now;
-        return entity;
-    }
-
-    /**
-     * @deprecated Use {@link #create(String, String, String, String, String)} which requires tenantId.
-     *             Retained for backwards compatibility; defaults to "fan-platform".
-     */
-    @Deprecated
-    public static SocialIdentityJpaEntity create(String accountId, String provider,
-                                                  String providerUserId, String providerEmail) {
-        return create(accountId, "fan-platform", provider, providerUserId, providerEmail);
-    }
-
-    public void updateLastUsedAt() {
-        this.lastUsedAt = Instant.now();
-    }
-
-    public void updateProviderEmail(String email) {
-        this.providerEmail = email;
-    }
-
     public SocialIdentity toDomain() {
         return new SocialIdentity(id, accountId,
                 tenantId != null ? tenantId : "fan-platform",

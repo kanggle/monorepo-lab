@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.persistence;
 
+import com.example.auth.domain.social.SocialIdentity;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,7 +61,8 @@ class SocialIdentityJpaRepositoryTest {
     @DisplayName("findByProviderAndProviderUserId — 일치하는 소셜 계정 반환")
     void findByProviderAndProviderUserId_existing_returnsEntity() {
         String accountId = uuid();
-        repo.saveAndFlush(SocialIdentityJpaEntity.create(accountId, "google", "google-uid-123", "user@gmail.com"));
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(accountId, null, "google", "google-uid-123", "user@gmail.com")));
 
         Optional<SocialIdentityJpaEntity> result =
                 repo.findByProviderAndProviderUserId("google", "google-uid-123");
@@ -79,7 +81,8 @@ class SocialIdentityJpaRepositoryTest {
     @Test
     @DisplayName("findByProviderAndProviderUserId — provider가 같아도 providerUserId가 다르면 제외")
     void findByProviderAndProviderUserId_sameProviderDifferentUserId_returnsEmpty() {
-        repo.saveAndFlush(SocialIdentityJpaEntity.create(uuid(), "google", "uid-a", null));
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(uuid(), null, "google", "uid-a", null)));
 
         assertThat(repo.findByProviderAndProviderUserId("google", "uid-b")).isEmpty();
     }
@@ -90,8 +93,10 @@ class SocialIdentityJpaRepositoryTest {
     @DisplayName("findByAccountId — 단일 계정의 소셜 연동 목록 반환")
     void findByAccountId_existing_returnsLinkedIdentities() {
         String accountId = uuid();
-        repo.saveAndFlush(SocialIdentityJpaEntity.create(accountId, "google", uuid(), "g@gmail.com"));
-        repo.saveAndFlush(SocialIdentityJpaEntity.create(accountId, "kakao", uuid(), null));
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(accountId, null, "google", uuid(), "g@gmail.com")));
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(accountId, null, "kakao", uuid(), null)));
 
         List<SocialIdentityJpaEntity> result = repo.findByAccountId(accountId);
 
