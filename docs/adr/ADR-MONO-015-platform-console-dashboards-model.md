@@ -1,8 +1,8 @@
 # ADR-MONO-015 — platform-console Dashboards Model (Composed Operator Overview, not Grafana Embed)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-16
-**History:** PROPOSED 2026-05-16 (TASK-MONO-111 — resolves a HARDSTOP-06/09 surfaced during the ADR-MONO-013 Phase 2 slice-4 (FE-005 dashboards) investigation; decision direction **B (composed operator overview)** chosen by user-explicit answer).
+**History:** PROPOSED 2026-05-16 (TASK-MONO-111, PR #578 — resolves a HARDSTOP-06/09 surfaced during the ADR-MONO-013 Phase 2 slice-4 (FE-005 dashboards) investigation; decision direction **B (composed operator overview)** chosen by user-explicit answer). ACCEPTED 2026-05-16 (TASK-MONO-112 — user-explicit intent "ACCEPTED 승격 + FE-005 착수"; § D6 readiness gate met; `TASK-PC-FE-005` authored, § D5 sequence unblocked).
 **Decision driver:** ADR-MONO-013 § 3 / D7.4 parity checklist lists a `dashboards` line for the GAP `admin-web` absorption, but — unlike accounts/audit/operators/security — there is **no GAP producer endpoint** for it (the `admin-api.md` inventory has no `/api/admin/dashboard*`) and the `admin-web` reference implementation is a **Grafana iframe** (`admin-web/architecture.md:75`). The console (ADR-MONO-013 Model B) cannot realize the `dashboards` parity line without an architecture decision on what "console dashboards" *is* — embed Grafana (a cross-origin observability-auth boundary) vs compose an overview from existing read APIs vs defer. This decision is unspecifiable during implementation.
 **Supersedes:** none. **Amends:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) § 3 / § D7.4 (the `dashboards` parity-checklist line — additively refined here, no ADR-013 decision change). **Reconciles:** `projects/platform-console/specs/contracts/console-integration-contract.md` § 3 (the bare `dashboards` line — bound to a § 2.4.4 surface post-ACCEPTED).
 **Related:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) (console foundation, Model B, parity-gated admin-web retirement), [ADR-MONO-014](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (operator token — the credential the overview reads use; same staged-ADR precedent), `projects/global-account-platform/specs/services/admin-web/architecture.md` (`dashboards/page.tsx` = Grafana iframe — the parity source), `projects/global-account-platform/specs/contracts/http/admin-api.md` (no dashboard endpoint — the gap), TASK-PC-FE-002/003/004 (#575/#576/#577 — the read surfaces the overview composes).
@@ -21,9 +21,9 @@
 
 Per `platform/hardstop-rules.md` HARDSTOP-06 (#3, required spec missing/conflicting) + HARDSTOP-09 (#2, architecture decision not in specs): realizing the `dashboards` line forces a cross-cutting decision with an auth/deployment-boundary dimension (does the console embed Grafana? how does an operator authenticate to Grafana cross-origin from `console.local`? is the observability stack in the console's reach?), or a redefinition of what "parity" means for this line. Either is an architecture decision that cannot be made silently during FE-005 implementation — choosing implicitly would bake an undefendable decision (the exact HARDSTOP-09 failure mode). Same staged-ADR discipline as ADR-MONO-013/014: this is the decision record; `TASK-PC-FE-005` is PAUSED until it is ACCEPTED.
 
-### 1.3 Staged PROPOSED → ACCEPTED
+### 1.3 Staged PROPOSED → ACCEPTED (history)
 
-Same pattern as ADR-MONO-008/013/014. PROPOSED records the decision direction (Model B) + the parity-redefinition + the downstream sequence; ACCEPTED (user-explicit) authorizes the spec reconciliation + `TASK-PC-FE-005`. ACCEPTED does not itself implement — it unblocks.
+Same pattern as ADR-MONO-008/013/014: **PROPOSED** (2026-05-16, PR #578, TASK-MONO-111) recorded the decision direction (Model B) + the parity-redefinition + the downstream sequence; **ACCEPTED** (2026-05-16, TASK-MONO-112) authorizes the spec reconciliation + `TASK-PC-FE-005` execution on user-explicit intent. ACCEPTED unblocks the § D5 sequence — it does not itself implement; `TASK-PC-FE-005` (build) + `FE-006` (parity-verify) follow as their own tasks/PRs.
 
 ---
 
@@ -63,9 +63,9 @@ ACCEPTED execution (TASK-PC-FE-005) MUST, before code:
 2. **`TASK-PC-FE-006`** (parity-verify, slice 5/5): formal verification of the **refined** § 3 checklist — accounts/audit/operators/security + the D2-refined dashboards (overview) — = the ADR-MONO-013 Phase 3 admin-web-retirement gate.
 3. ADR-MONO-013 § 3 / D7.4 carries the additive D2 refinement note (no ADR-013 decision change).
 
-### D6 — Readiness + ACCEPTED transition
+### D6 — Readiness + ACCEPTED transition (MET)
 
-ACCEPTED when: user-explicit intent ("ADR-015 ACCEPTED" / "대시보드 진행" / equivalent). On ACCEPTED (a follow-up governance task, ADR-MONO-014/TASK-MONO-110 precedent): append § 6 ACCEPTED row, reword § 1.3/§ D6 to ACCEPTED past-tense, author `TASK-PC-FE-005`, begin the D5 sequence. Until then `TASK-PC-FE-005` / FE-006 stay unstarted (FE-006 depends on the dashboards line being resolved).
+ACCEPTED gate — **met 2026-05-16**: user-explicit intent given ("ACCEPTED 승격 + FE-005 착수"). On ACCEPTED (executed by `TASK-MONO-112`, ADR-MONO-014/TASK-MONO-110 precedent): § 6 ACCEPTED row appended, § 1.3/§ D6 reworded to ACCEPTED past-tense, `TASK-PC-FE-005` authored in `projects/platform-console/tasks/ready/`, § D5 sequence begun. `FE-006` remains unstarted until `TASK-PC-FE-005` is merged (it verifies the resolved dashboards line); the ACCEPTED flip unblocks, it does not build.
 
 ---
 
@@ -95,9 +95,10 @@ Append-only.
 
 | Date | Transition | Decision | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-05-16 | created PROPOSED | B (composed operator overview) | "B. 합성 operator overview (read)" (resolution-direction answer) | this PR (TASK-MONO-111) |
+| 2026-05-16 | created PROPOSED | B (composed operator overview) | "B. 합성 operator overview (read)" (resolution-direction answer) | #578 (TASK-MONO-111) |
+| 2026-05-16 | PROPOSED → ACCEPTED | B (unchanged) | "ACCEPTED 승격 + FE-005 착수" | this PR (TASK-MONO-112) |
 
-(ACCEPTED row reserved — appended when execution begins per § D6.)
+ACCEPTED execution: `TASK-PC-FE-005` authored (platform-console, spec-first composed overview); § D5 sequence in progress. `FE-006` stays unstarted until `TASK-PC-FE-005` merged.
 
 ## 7. Provenance
 
