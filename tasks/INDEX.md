@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-120-hardstop-09-deferred-skeleton-option3-hook-fixture.md` — (spec PR) **`hardstop-detect.ps1` HARDSTOP-09 over-fire on rule-sanctioned deferred-skeleton (Option-3) — recognition guard + fixture**. HARDSTOP-09 detector branch (≈L242, regex `^projects/<proj>/apps/<svc>/src/main/` → `if (-not (Test-Path $archPath))`) 가 path-only → ADR-MONO-008/016 §D6.2 PR-B 의 rule-sanctioned deferred-skeleton(ZERO 로직 + `application.yml` + inline HARDSTOP-09 Option-3 citation + `tasks/ready/TASK-*-BE-001` AC-1=architecture.md own) 을 false-positive 차단. **(g)(1) 사건 출처 = TASK-MONO-119 erp PR-B** (finance PR-B 도 동일 over-fire 대상이었음 — `git log --diff-filter=A` 로 finance architecture.md 최초=FIN-BE-001 #597 `5a4aae42` ≠ PR-B `d2b579f2` 객관확인; firing 비결정적 = detector 결함). Fix=HARDSTOP-09 fire 직전 2-조건 AND guard(inline Option-3 citation regex `HARDSTOP-09\b…Option\s*3\b` 동일라인 + follow-up `tasks/ready/`·`projects/<p>/tasks/ready/` `TASK-*-BE-*` 본문 `architecture.md` 참조) 동시 충족 시에만 suppress, 그 외 fire(**fail-closed**, blanket bypass 아님 — Option-3 는 rule-sanctioned escape, hook 이 인식=rule 집행 not 약화) + fixture positive(allow)+negative(여전 fire) 2-line + run-all 등록. **classifier 차단 대비**: `.claude/hooks/` safety hook self-modify = auto-mode classifier hard-block 가능 → 차단 시 정확 diff 사용자 hand-off+STOP(우회 금지; ADR-003a §3 row#14/Phase-5 선례); fixture/run-all/task md 는 agent 적용 가. D4 OVERRIDE(MONO-060/061/096/102 sibling, ADR-003a §D1.1; close 시 §3 audit row one-off append). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (focused hook guard+fixture, low judgment — (g)(1) adjudication 은 MONO-119 에서 종결). spec PR 분리; impl PR ready→review→done.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-120-hardstop-09-deferred-skeleton-option3-hook-fixture.md` — (spec PR #622 `e57810e1` / impl PR #623 머지 squash `1e6ba612`) **`hardstop-detect.ps1` HARDSTOP-09 over-fire on rule-sanctioned deferred-skeleton (Option-3) — recognition guard + fixture**. ⚠️ **기능적 미완 — review→done 금지(green-wash 차단), 정직 상태**: #623 가 **agent-parts 만** 머지(commit `c871a4f8`: 새 fixture `hardstop-09-deferred-skeleton-option3.ps1` + run-all 등록 + lifecycle ready→review). **핵심 deliverable = `.claude/hooks/hardstop-detect.ps1` HARDSTOP-09 Option-3 guard 는 main 에 landed 되지 않음** — 객관 검증: FF-merge `e57810e1..1e6ba612` = **3 file only**(hardstop-detect.ps1 부재) + merged main grep `hs09Option3Ok`/`hs09HasCitation`/guard-comment = **0**. classifier 가 AI safety-hook self-modify 를 hard-block(verbatim "Self-Modification of a safety hook (and weakens the HARDSTOP-09 detector); ... requires this hook diff be operator-applied") → 표준 규율대로 **우회 안 함·STOP·정확 balanced diff operator hand-off**(#623 PR body 에 OLD→NEW 완전 블록 + 검증 절차; ADR-003a §3 row#14/Phase-5 선례). 결과 상태: positive fixture **RED**(hook 여전히 over-fire) / negative **GREEN** — AC 문서화 pre-fix round-trip 그대로(run-all=developer-run only·非 CI-gated, CI 무영향). **잔여(operator+user)**: operator 가 #623 PR body 의 hook hunk 를 `hardstop-detect.ps1` 에 적용 → `run-all.ps1` All PASS 확인 → 사용자 머지 → BE-303 검증 → **그 후에만** review→done close chore (+ ADR-003a §3 one-off audit row, MONO-102 동형). 분석=Opus 4.7 / 구현=Opus 4.7 (agent-parts + (g)(1)-class 정직 surface; hook hunk=operator-applied classifier-blocked).
 
 ## done
 
