@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-005-platform-console-operator-read-consumer-reconciliation.md` — **ready**. ADR-MONO-013 § D6 **Phase 5 prerequisite** (finance console section) — the **scm Phase 4 `TASK-SCM-BE-015` analog**. Spec-only `(B) document/accept` of finance's **existing** GAP-RS256 JWT chain (`AllowedIssuersValidator` + `TenantClaimValidator` `tenant_id ∈ {finance,*}` + `X-Token-Type=user`) recording `platform-console` (separate ADR-MONO-013-governed project, GAP's own `platform-console-web` client) as a **sanctioned external operator read consumer** of the v1-live read surface (`GET /accounts/{id}` · `/balances` · `/transactions`). **No finance ADR** (governing = ADR-MONO-013; finance domain governance stays ADR-MONO-008, untouched). **2 files** (`gap-integration.md` + `PROJECT.md`) — finance has no `gateway-public-routes.md` (gateway v1-deferred), so the honest finance shape is the SCM-BE-015 *subset*; `account-api.md` / `account-service/architecture.md` authoritative + byte-unchanged. Read-only (finance write + v2 `admin-service` excluded); frontmatter byte-unchanged (finance deliberately excludes `multi-tenant`/`integration-heavy`). Unblocks `TASK-PC-FE-009` (platform-console `tasks/backlog/`). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (cross-project document/accept boundary judgement).
 
 ## in-progress
 
