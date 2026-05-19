@@ -3,28 +3,43 @@ package com.example.finance.account.infrastructure.idempotency;
 import com.example.finance.account.application.port.outbound.IdempotencyStore;
 import com.example.finance.account.domain.error.DomainErrors.IdempotencyStoreUnavailableException;
 import com.example.finance.account.infrastructure.persistence.jpa.IdempotencyKeyJpaEntity;
-import com.example.finance.account.infrastructure.persistence.jpa.IdempotencyKeyJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Idempotency store (fintech F1, transactional T1; architecture.md §
- * Idempotency). Redis is the primary (atomic read); the
- * {@code idempotency_keys} table is the fallback when Redis is offline.
+ * Idempotency). Implements <b>atomic claim-before-execute</b>: the
+ * {@code idempotency_keys} composite PK {@code (idempotency_key, endpoint,
+ * tenant_id)} is the authoritative concurrency gate — exactly one concurrent
+ * caller inserts the sentinel claim row ({@code response_status = 0}), the
+ * rest see it and REPLAY / IN_PROGRESS / CONFLICT. Redis is a best-effort
+ * accelerator for COMPLETED replays only (never the correctness authority),
+ * realising the architecture.md "Redis primary" read fast-path while the
+ * stronger DB gate subsumes the previous non-atomic check-then-act.
  *
- * <p><b>Fail-CLOSED</b>: if BOTH Redis and the DB are unreachable on lookup,
- * {@link IdempotencyStoreUnavailableException} (→ 503) is raised — for a
- * mutating fund write the idempotency guarantee outweighs availability (F1),
- * so we refuse rather than risk a double fund movement.
+ * <p><b>This orchestrator is intentionally NOT {@code @Transactional}.</b>
+ * Each DB operation is a single-statement {@code REQUIRES_NEW} transaction on
+ * {@link IdempotencyKeyTx}. The duplicate-key {@link DataIntegrityViolationException}
+ * is caught HERE — outside that transaction — so a poisoned (rollback-only)
+ * transaction is never continued (which would fail the commit with
+ * {@code UnexpectedRollbackException}); the follow-up read then runs in a
+ * fresh transaction.
  *
- * <p>Key scope = {@code (idempotencyKey, endpoint, tenantId)}.
+ * <p><b>Fail-CLOSED</b>: if the authoritative DB is unreachable on a claim for
+ * a mutating fund write, {@link IdempotencyStoreUnavailableException} (→ 503)
+ * is raised — the idempotency guarantee outweighs availability (F1).
+ *
+ * <p>Key scope = {@code (idempotencyKey, endpoint, tenantId)}; TTL ≥ 24h; an
+ * expired in-progress sentinel (crashed executor) is reclaimable.
  */
 @Slf4j
 @Component
@@ -33,18 +48,18 @@ public class RedisOrDbIdempotencyStore implements IdempotencyStore {
     private static final String PREFIX = "finance:account:idem:";
 
     private final StringRedisTemplate redis;
-    private final IdempotencyKeyJpaRepository jpa;
+    private final IdempotencyKeyTx tx;
     private final ObjectMapper objectMapper;
     private final Duration ttl;
 
     public RedisOrDbIdempotencyStore(
             StringRedisTemplate redis,
-            IdempotencyKeyJpaRepository jpa,
+            IdempotencyKeyTx tx,
             ObjectMapper objectMapper,
             @Value("${financeplatform.account.idempotency.ttl-seconds:86400}")
             long ttlSeconds) {
         this.redis = redis;
-        this.jpa = jpa;
+        this.tx = tx;
         this.objectMapper = objectMapper;
         this.ttl = Duration.ofSeconds(ttlSeconds);
     }
@@ -54,67 +69,110 @@ public class RedisOrDbIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public Lookup findExisting(String tenantId, String endpoint,
-                               String key, String payloadHash) {
-        boolean redisDown = false;
+    public Claim claim(String tenantId, String endpoint, String key,
+                       String payloadHash) {
+        // 1. Redis fast-path: a cached COMPLETED response replays without
+        //    touching the DB. Any other Redis state defers to the DB gate.
         try {
             String raw = redis.opsForValue().get(redisKey(tenantId, endpoint, key));
             if (raw != null) {
                 Wire w = readWire(raw);
-                return w.payloadHash().equals(payloadHash)
-                        ? Lookup.replay(new StoredResponse(w.status(), w.body()))
-                        : Lookup.conflict();
+                if (w.status() >= 200 && w.payloadHash().equals(payloadHash)) {
+                    return Claim.replay(new StoredResponse(w.status(), w.body()));
+                }
             }
-        } catch (DataAccessException e) {
-            redisDown = true;
-            log.warn("Idempotency Redis lookup failed, falling back to DB: {}",
-                    e.getMessage());
+        } catch (DataAccessException redisDown) {
+            log.warn("Idempotency Redis read failed, DB authoritative: {}",
+                    redisDown.getMessage());
         }
+
+        // 2. DB is the authoritative atomic gate. The insert is its own
+        //    REQUIRES_NEW transaction; a duplicate-key violation rolls THAT
+        //    transaction back and propagates here (outside any transaction),
+        //    where it is caught cleanly.
+        Instant now = Instant.now();
         try {
-            var row = jpa.findByIdempotencyKeyAndEndpointAndTenantId(
-                    key, endpoint, tenantId);
-            if (row.isEmpty()) {
-                return Lookup.miss();
-            }
-            var r = row.get();
-            return r.getPayloadHash().equals(payloadHash)
-                    ? Lookup.replay(new StoredResponse(
-                            r.getResponseStatus(), r.getResponseBody()))
-                    : Lookup.conflict();
-        } catch (DataAccessException dbEx) {
-            if (redisDown) {
-                // Both stores down → fail-CLOSED (F1).
-                throw new IdempotencyStoreUnavailableException(
-                        "Idempotency store unavailable (Redis + DB down)");
-            }
-            log.warn("Idempotency DB lookup failed (Redis was up, miss): {}",
-                    dbEx.getMessage());
-            return Lookup.miss();
+            tx.insertClaim(key, endpoint, tenantId, payloadHash,
+                    now, now.plus(ttl));
+            return Claim.execute();                 // we won the claim
+        } catch (DataIntegrityViolationException dup) {
+            return resolveExisting(tenantId, endpoint, key, payloadHash, now);
+        } catch (DataAccessException dbDown) {
+            throw new IdempotencyStoreUnavailableException(
+                    "Idempotency store unavailable on claim (DB down)");
         }
     }
 
-    @Override
-    public void store(String tenantId, String endpoint, String key,
-                      String payloadHash, StoredResponse response) {
-        String serialized = serialize(payloadHash, response);
-        boolean redisStored = false;
-        try {
-            redis.opsForValue().set(redisKey(tenantId, endpoint, key), serialized, ttl);
-            redisStored = true;
-        } catch (DataAccessException e) {
-            log.warn("Idempotency Redis store failed, using DB fallback: {}",
-                    e.getMessage());
-        }
-        try {
-            Instant now = Instant.now();
-            jpa.save(IdempotencyKeyJpaEntity.of(key, endpoint, tenantId, payloadHash,
-                    response.status(), response.body(), now, now.plus(ttl)));
-        } catch (DataAccessException dbEx) {
-            if (!redisStored) {
-                throw new IdempotencyStoreUnavailableException(
-                        "Idempotency store unavailable on write (Redis + DB down)");
+    private Claim resolveExisting(String tenantId, String endpoint, String key,
+                                  String payloadHash, Instant now) {
+        Optional<IdempotencyKeyJpaEntity> rowOpt =
+                tx.find(key, endpoint, tenantId);
+        if (rowOpt.isEmpty()) {
+            // Row vanished between the failed insert and this read
+            // (concurrent release/reclaim). One bounded retry.
+            try {
+                tx.insertClaim(key, endpoint, tenantId, payloadHash,
+                        now, now.plus(ttl));
+                return Claim.execute();
+            } catch (DataIntegrityViolationException stillThere) {
+                rowOpt = tx.find(key, endpoint, tenantId);
+                if (rowOpt.isEmpty()) {
+                    throw new IdempotencyStoreUnavailableException(
+                            "Idempotency claim race unresolved");
+                }
             }
-            log.warn("Idempotency DB store failed (Redis ok): {}", dbEx.getMessage());
+        }
+        IdempotencyKeyJpaEntity r = rowOpt.get();
+        if (!r.getPayloadHash().equals(payloadHash)) {
+            return Claim.conflict();
+        }
+        if (r.getResponseStatus() >= 200) {
+            StoredResponse stored =
+                    new StoredResponse(r.getResponseStatus(), r.getResponseBody());
+            cache(tenantId, endpoint, key, payloadHash, stored); // refresh fast-path
+            return Claim.replay(stored);
+        }
+        // Sentinel (IN_PROGRESS). Reclaim if the prior executor's claim expired.
+        if (r.getExpiresAt().isBefore(now)) {
+            tx.delete(key, endpoint, tenantId);
+            try {
+                tx.insertClaim(key, endpoint, tenantId, payloadHash,
+                        now, now.plus(ttl));
+                return Claim.execute();
+            } catch (DataIntegrityViolationException reclaimedByOther) {
+                return Claim.inProgress();
+            }
+        }
+        return Claim.inProgress();
+    }
+
+    @Override
+    public void complete(String tenantId, String endpoint, String key,
+                         String payloadHash, StoredResponse response) {
+        tx.markCompleted(key, endpoint, tenantId,
+                response.status(), response.body());
+        cache(tenantId, endpoint, key, payloadHash, response);
+    }
+
+    @Override
+    public void release(String tenantId, String endpoint, String key) {
+        tx.delete(key, endpoint, tenantId);
+        try {
+            redis.delete(redisKey(tenantId, endpoint, key));
+        } catch (DataAccessException ignored) {
+            log.warn("Idempotency Redis delete failed (best-effort): {}",
+                    ignored.getMessage());
+        }
+    }
+
+    private void cache(String tenantId, String endpoint, String key,
+                       String payloadHash, StoredResponse r) {
+        try {
+            redis.opsForValue().set(redisKey(tenantId, endpoint, key),
+                    serialize(payloadHash, r), ttl);
+        } catch (DataAccessException ignored) {
+            log.warn("Idempotency Redis cache write failed (best-effort): {}",
+                    ignored.getMessage());
         }
     }
 
