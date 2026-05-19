@@ -106,6 +106,22 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for wms operations calls (integration-heavy I1 —
    *  same convention as ACCOUNTS_TIMEOUT_MS). */
   WMS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** scm gateway base for the operations surface (TASK-PC-FE-008 /
+   *  § 2.4.6). The read-only procurement-PO + inventory-visibility
+   *  endpoints hang off `${SCM_GATEWAY_BASE_URL}/api/v1/procurement/...`
+   *  and `.../api/v1/inventory-visibility/...` — request/response/error
+   *  owned by scm `procurement-api.md` / `inventory-visibility-api.md`
+   *  (authoritative, consumed read-only). Aligned with the registry
+   *  `baseRoute` for `productKey=scm`; the scm gateway hostname is
+   *  `scm.local`. NOTE: like wms (NOT GAP) this is reached with the GAP
+   *  OIDC access token DIRECTLY — the § 2.4.5 per-domain credential rule
+   *  reused (the #569 invariant is GAP-domain-scoped; scm's gateway
+   *  validates the GAP RS256 token + `tenant_id ∈ {scm,*}` claim
+   *  producer-side per TASK-SCM-BE-015). */
+  SCM_GATEWAY_BASE_URL: z.string().url().default('http://scm.local'),
+  /** Outbound timeout (ms) for scm operations calls (integration-heavy I1 —
+   *  same convention as WMS_TIMEOUT_MS). */
+  SCM_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -133,6 +149,8 @@ export function getServerEnv(): ServerEnv {
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
+    SCM_GATEWAY_BASE_URL: process.env.SCM_GATEWAY_BASE_URL,
+    SCM_TIMEOUT_MS: process.env.SCM_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });

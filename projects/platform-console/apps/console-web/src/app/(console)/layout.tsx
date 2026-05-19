@@ -95,6 +95,15 @@ export default async function ConsoleLayout({
                     WMS 운영
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/scm"
+                    data-testid="nav-scm"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    SCM 운영
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

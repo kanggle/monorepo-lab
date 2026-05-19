@@ -182,6 +182,65 @@ export class WmsUnavailableError extends Error {
   }
 }
 
+/**
+ * scm gateway operations surface degrade signal
+ * (console-integration-contract § 2.4.6 / § 2.5). Sibling of
+ * {@link WmsUnavailableError} — the SECOND **non-GAP** federated domain
+ * section (read-only). A `503 SERVICE_UNAVAILABLE` / `503 NODE_UNREACHABLE`
+ * / timeout / network failure on an scm call degrades ONLY the scm section
+ * (the console shell + the GAP/wms sections stay intact). Auth failures
+ * (`401` — the GAP OIDC session expired) are raised as {@link ApiError} so
+ * the caller forces a clean WHOLE-SESSION re-login (no partial authed
+ * state — NOT a per-section degrade). Inline-recoverable producer errors
+ * (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`,
+ * `404 PO_NOT_FOUND`/`NODE_NOT_FOUND`, `400|422 VALIDATION_ERROR`) are
+ * raised as {@link ApiError} so the UI renders an inline actionable
+ * message without crashing.
+ *
+ * `429 RATE_LIMIT_EXCEEDED` carries a `Retry-After` and is modeled by
+ * {@link ScmRateLimitedError} (a bounded backoff, NOT a degrade) — the
+ * console must not auto-retry-storm the rate-limited gateway.
+ *
+ * NOTE the credential reuse: like the wms sibling (NOT the GAP ones), the
+ * scm credential is the GAP OIDC access token itself — the § 2.4.5
+ * per-domain credential rule reused verbatim (the #569 invariant is
+ * GAP-domain-scoped — § 2.4.6). The scm error envelope is **flat**
+ * `{ code, message, timestamp }` (DISTINCT from wms's nested
+ * `{ error: { code } }`). No token / PII is ever placed in this error.
+ */
+export class ScmUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: ScmUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ScmUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
+ * scm `429 RATE_LIMIT_EXCEEDED` signal (console-integration-contract
+ * § 2.4.6 / task Edge Case "429 Retry-After"). The scm gateway returns
+ * `Retry-After: 1`; the console honours it with ONE bounded backoff +
+ * an inline "rate-limited, retrying" notice — it MUST NOT auto-retry-storm
+ * into the gateway. `retryAfterSeconds` is the parsed `Retry-After`
+ * (defaulted to a small bound when absent/invalid). No token / PII here.
+ */
+export class ScmRateLimitedError extends Error {
+  readonly code = 'RATE_LIMIT_EXCEEDED';
+  readonly retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number, message: string) {
+    super(message);
+    this.name = 'ScmRateLimitedError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -226,6 +285,15 @@ const MESSAGES: Record<string, string> = {
     'wms 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   ALERT_ALREADY_ACKNOWLEDGED:
     '이미 확인 처리된 알림입니다. 목록을 새로고침하세요.',
+  // --- scm operations (TASK-PC-FE-008 / §2.4.6) --------------------------
+  PO_NOT_FOUND: '대상 발주(PO)를 찾을 수 없습니다.',
+  NODE_NOT_FOUND: '대상 노드를 찾을 수 없습니다.',
+  NODE_UNREACHABLE:
+    '해당 노드는 이벤트를 보고한 적이 없어 조회할 수 없습니다.',
+  RATE_LIMIT_EXCEEDED:
+    'scm 게이트웨이 요청이 일시적으로 제한되었습니다. 잠시 후 자동으로 다시 시도합니다.',
+  SCM_NOT_ELIGIBLE:
+    'scm 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
