@@ -3,28 +3,35 @@ package com.example.finance.account.integration;
 import com.example.finance.account.application.AccountApplicationService;
 import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.OpenAccountCommand;
+import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.port.outbound.IdempotencyStore;
 import com.example.finance.account.application.view.AccountView;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.finance.account.presentation.dto.ApiEnvelope;
+import com.example.finance.account.presentation.support.IdempotentExecution;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration test for fintech F1 idempotency (Testcontainers MySQL + Redis).
- * Proves: same Idempotency-Key + identical payload, issued concurrently,
- * causes the fund movement to occur EXACTLY ONCE (replay returns the first
- * stored response, no second balance mutation).
+ * Drives the <b>production</b> {@link IdempotentExecution} wrapper (NOT a
+ * hand-rolled findExisting/store simulation): the same Idempotency-Key +
+ * identical payload, issued by 8 concurrent threads, must execute the
+ * fund-moving action <b>exactly once</b> (atomic claim-before-execute) — the
+ * losers replay the winner's stored response, no second balance mutation.
  */
 class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTest {
 
@@ -36,9 +43,9 @@ class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTe
     @Autowired
     AccountApplicationService service;
     @Autowired
-    IdempotencyStore idempotencyStore;
+    IdempotentExecution idempotentExecution;
     @Autowired
-    ObjectMapper objectMapper;
+    IdempotencyStore idempotencyStore;
 
     @Test
     @DisplayName("F1: same key + identical payload concurrently → funds move exactly once")
@@ -51,63 +58,64 @@ class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTe
 
         String endpoint = "POST /api/finance/accounts/{id}/holds";
         String key = "idem-concurrent-1";
-        String payloadHash = "hash-fixed";
-        String storedBody = objectMapper.writeValueAsString(
-                java.util.Map.of("holdId", "first-only"));
+        // Identical payload object across every thread → identical payload hash.
+        Map<String, Object> payload = Map.of(
+                "accountId", acc.accountId(), "amount", "3000", "currency", "KRW");
 
-        // Simulate the controller wrapper's behaviour under contention: the
-        // first writer stores the response; replays return it verbatim. The
-        // fund-moving service call is only invoked when the store reports MISS.
+        // The fund-moving action runs ONLY for the claim winner. The counter
+        // proves exactly-once at the production guarantee (not the assertion).
+        AtomicInteger actionExecuted = new AtomicInteger();
         int threads = 8;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
-        Callable<Boolean> task = () -> {
-            IdempotencyStore.Lookup lk = idempotencyStore.findExisting(
-                    TENANT_FINANCE, endpoint, key, payloadHash);
-            if (lk.outcome() == IdempotencyStore.Lookup.Outcome.MISS) {
-                try {
-                    service.placeHold(new com.example.finance.account.application
-                            .command.PlaceHoldCommand(HOLDER, acc.accountId(),
-                            "3000", "KRW", 3600, "checkout"));
-                    idempotencyStore.store(TENANT_FINANCE, endpoint, key,
-                            payloadHash, new IdempotencyStore.StoredResponse(
-                                    201, storedBody));
-                    return true; // this thread performed the movement
-                } catch (RuntimeException dup) {
-                    return false; // lost the race; another thread moved funds
-                }
-            }
-            return false;
-        };
-        List<Future<Boolean>> futures = pool.invokeAll(
+        Callable<ResponseEntity<?>> task = () -> idempotentExecution.run(
+                TENANT_FINANCE, endpoint, key, payload, () -> {
+                    actionExecuted.incrementAndGet();
+                    service.placeHold(new PlaceHoldCommand(
+                            HOLDER, acc.accountId(), "3000", "KRW", 3600, "checkout"));
+                    return ResponseEntity.status(201)
+                            .body(ApiEnvelope.of(Map.of("held", "3000")));
+                });
+
+        List<Future<ResponseEntity<?>>> futures = pool.invokeAll(
                 java.util.Collections.nCopies(threads, task));
         pool.shutdown();
 
-        long performed = 0;
-        for (Future<Boolean> f : futures) if (Boolean.TRUE.equals(f.get())) performed++;
-
-        // Fund movement happened at most once (often exactly once); the held
-        // amount is never doubled. With 10000 ledger and a 3000 hold, available
-        // must be 7000 — NOT 4000 (which would prove a double movement).
+        // Exactly one thread performed the fund movement (genuine F1, via the
+        // production atomic claim — the assertion is NOT weakened).
+        assertThat(actionExecuted.get()).isEqualTo(1);
+        // Every thread got the same successful 201 (winner real + losers replay).
+        for (Future<ResponseEntity<?>> f : futures) {
+            assertThat(f.get().getStatusCode().is2xxSuccessful()).isTrue();
+        }
+        // Balance moved exactly once: 10000 ledger, one 3000 hold → available 7000.
         var b = service.getBalances(acc.accountId(), HOLDER).get(0);
-        assertThat(performed).isLessThanOrEqualTo(1);
         assertThat(b.held()).isEqualTo("3000");
         assertThat(b.available()).isEqualTo("7000");
     }
 
     @Test
-    @DisplayName("F1: same key + DIFFERENT payload → CONFLICT signalled by the store")
-    void differentPayloadConflict() {
+    @DisplayName("F1: claim of same key + DIFFERENT payload → CONFLICT; identical → REPLAY")
+    void differentPayloadConflictAndReplay() {
         String endpoint = "POST /api/finance/accounts";
         String key = "idem-conflict-1";
-        idempotencyStore.store(TENANT_FINANCE, endpoint, key, "hash-A",
+
+        // Win the claim, then complete it with a stored response.
+        IdempotencyStore.Claim won = idempotencyStore.claim(
+                TENANT_FINANCE, endpoint, key, "hash-A");
+        assertThat(won.outcome())
+                .isEqualTo(IdempotencyStore.Claim.Outcome.EXECUTE);
+        idempotencyStore.complete(TENANT_FINANCE, endpoint, key, "hash-A",
                 new IdempotencyStore.StoredResponse(201, "{\"a\":1}"));
 
-        IdempotencyStore.Lookup same = idempotencyStore.findExisting(
+        IdempotencyStore.Claim same = idempotencyStore.claim(
                 TENANT_FINANCE, endpoint, key, "hash-A");
-        IdempotencyStore.Lookup diff = idempotencyStore.findExisting(
+        IdempotencyStore.Claim diff = idempotencyStore.claim(
                 TENANT_FINANCE, endpoint, key, "hash-B");
 
-        assertThat(same.outcome()).isEqualTo(IdempotencyStore.Lookup.Outcome.REPLAY);
-        assertThat(diff.outcome()).isEqualTo(IdempotencyStore.Lookup.Outcome.CONFLICT);
+        assertThat(same.outcome())
+                .isEqualTo(IdempotencyStore.Claim.Outcome.REPLAY);
+        assertThat(same.storedResponse().status()).isEqualTo(201);
+        assertThat(diff.outcome())
+                .isEqualTo(IdempotencyStore.Claim.Outcome.CONFLICT);
     }
 }
