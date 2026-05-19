@@ -8,7 +8,7 @@ scm-platform — platform-console operator read-consumer spec reconciliation (AD
 
 # Status
 
-ready
+review
 
 # Owner
 

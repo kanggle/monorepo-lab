@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-015-platform-console-operator-read-consumer-reconciliation.md` — **spec-only** reconciliation (governed by **ADR-MONO-013** § D6 Phase 4; **no scm ADR** — (B) document/accept of an existing gateway capability). Records `platform-console` (ADR-MONO-013 Model B) as a **sanctioned external operator read consumer** of scm's existing read surface (procurement PO read + inventory-visibility), using a human operator's GAP `platform-console-web` OIDC token (RS256, `tenant_id ∈ {scm,*}`, `X-Token-Type=user`) validated by the **existing** `TenantClaimValidator` — no new client/code/route/auth-model change. Edits `gateway-public-routes.md` (+ `last_updated` bump) / `gap-integration.md` / `PROJECT.md` (frontmatter byte-unchanged — scm stays single-org backend-only). **Prerequisite for `TASK-PC-FE-008`** (platform-console scm console section; FE-008 `backlog → ready` gated on this + TASK-PC-FE-007 merged). Recommended impl model **Opus** (cross-project document/accept-vs-ADR boundary judgement). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-015-platform-console-operator-read-consumer-reconciliation.md` — **impl (review)**, spec-only. ADR-MONO-013 § D6 Phase 4 scm-side prerequisite for `TASK-PC-FE-008`. Records `platform-console` (Model B) as a sanctioned external **read** consumer of scm's existing read surface (procurement PO read + inventory-visibility) via a human operator's GAP `platform-console-web` OIDC token validated by the **existing** `AllowedIssuersValidator`+`TenantClaimValidator`(`tenant_id ∈ {scm,*}`)+`JwtHeaderEnrichmentFilter`(`X-Token-Type=user`) chain — **(B) document/accept, no scm ADR** (ADR-MONO-013 governs; existing capability, no competing convention). Edits: `gateway-public-routes.md` (new `### platform-console operator read consumer` subsection + `last_updated` 2026-05-11→2026-05-19) / `gap-integration.md` (new `## platform-console Operator Read Consumer` section + 3 참조) / `PROJECT.md` § GAP IdP Integration (1 clarifying bullet). **purely additive spec prose** (+1 date bump); **frontmatter byte-unchanged** (domain=`scm`, traits=`[transactional,integration-heavy,batch-heavy]` — single-org/`multi-tenant`-non-declaration preserved); `gateway-service/architecture.md` untouched; no `apps/`/code/OAuth-client/route/auth-model change; scope = scm-platform only. Unblocks `TASK-PC-FE-008` (FE-008 `backlog→ready` once this + `TASK-PC-FE-007` merged). spec-authoring commit `80821732` separate from impl commit (scm PR Separation Rule). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 

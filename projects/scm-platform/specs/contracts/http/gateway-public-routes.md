@@ -1,6 +1,6 @@
 ---
 status: live
-last_updated: 2026-05-11
+last_updated: 2026-05-19
 owners: scm-platform/backend
 ---
 
@@ -33,6 +33,52 @@ scm v1 = backend only — the **primary** authentication shape is
 `grant_type=client_credentials` against the V0013-seeded
 `scm-platform-internal-services-client`. Human-user (PKCE / authorization_code)
 flow is deferred to v2 when a frontend ships.
+
+### platform-console operator read consumer (ADR-MONO-013 Model B)
+
+The "v1 = backend only / human-flow deferred to v2" statement above scopes
+**scm hosting its own frontend** and **registering its own
+`scm-platform-user-flow-client`** (V0013 table, DEFERRED). It does **not**
+restrict authorized external API consumers. Per
+[ADR-MONO-013](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
+(ACCEPTED — § D1 Model B, § D6 Phase 4), the `platform-console` project (a
+separate, ADR-MONO-013-governed operator console — **not** an scm frontend) is
+a **sanctioned external read consumer** of scm's existing read surface:
+
+| Consumed (read-only) | scm contract |
+|---|---|
+| `GET /api/v1/procurement/po`, `GET /api/v1/procurement/po/{poId}` | [`procurement-api.md`](./procurement-api.md) |
+| `GET /api/v1/inventory-visibility/{snapshot, sku/{sku}, staleness, nodes}` | [`inventory-visibility-api.md`](./inventory-visibility-api.md) |
+
+- **Credential — existing capability, no change.** The console calls these
+  **server-side** with a human operator's **GAP `platform-console-web` OIDC
+  access token** (RS256, issued by GAP per ADR-001). This token is validated by
+  the **already-existing** gateway chain exactly like any GAP RS256 token:
+  `AllowedIssuersValidator` + `TenantClaimValidator` (`tenant_id ∈ { scm, * }`)
+  + `JwtHeaderEnrichmentFilter` surfacing `X-Token-Type=user` (the human-caller
+  shape already specified in [`gap-integration.md`](../../integration/gap-integration.md)
+  Edge Case E1/E3). **No new scm OAuth client, no new gateway route, no new
+  gateway code, no auth-model change** — this subsection is a reality-alignment
+  acknowledgment, not a capability change.
+- **Read-only.** The console consumes only the reads above. PO write
+  (`/po/{poId}/submit|confirm|cancel`) and the procurement webhooks are
+  buyer/machine paths and are **not** console-consumed.
+- **Single-org preserved.** scm remains single-organization (the deliberate
+  `multi-tenant` non-declaration in [`PROJECT.md`](../../../PROJECT.md) is
+  **unaffected**). Tenant scoping stays the GAP `tenant_id` claim enforced by
+  the **existing** producer-side `TenantClaimValidator`; cross-tenant tokens are
+  rejected `403 TENANT_FORBIDDEN` exactly as today. The console's own
+  multi-tenant/audit-heavy obligations are the console's, not scm's.
+- **Consumer-only.** scm owns `procurement-api.md` / `inventory-visibility-api.md`
+  (authoritative, unchanged). The console-side obligation is specified in
+  platform-console
+  [`console-integration-contract.md`](../../../../platform-console/specs/contracts/console-integration-contract.md)
+  § 2.4.6 (authored by `TASK-PC-FE-008`), reusing its § 2.4.5 per-domain
+  credential rule (GAP-token-direct for scm/wms, distinct from GAP's own
+  operator-token exchange).
+- The deferred `scm-platform-user-flow-client` (V0013 table) stays deferred and
+  is **unrelated** — the console uses GAP's **own** `platform-console-web`
+  client, never an scm-registered client.
 
 ## Error envelope
 

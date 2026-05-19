@@ -72,6 +72,7 @@ GAP 측 인프라 ([TASK-MONO-042](../../tasks/done/) 머지 완료):
 - account-service V0015: `tenants` 에 `scm` row (B2B_ENTERPRISE)
 - auth-service V0013: `oauth_clients` 에 `scm-platform-internal-services-client` (client_credentials, scopes=`scm.read`/`scm.write`)
 - v1 = backend only. user-flow PKCE client 는 frontend 도입 시 별도 V slot.
+- **platform-console (ADR-MONO-013 Model B) = 외부 운영자 read consumer**: scm 의 read surface(procurement PO read + inventory-visibility)를 GAP **자체** `platform-console-web` OIDC 토큰으로 server-side 소비한다 ([gap-integration.md § platform-console Operator Read Consumer](specs/integration/gap-integration.md), [gateway-public-routes.md](specs/contracts/http/gateway-public-routes.md), TASK-SCM-BE-015). scm 자신은 backend-only 유지 — scm frontend 없음, scm user-flow client 없음, single-org 불변(이 인정으로 traits 변경 없음).
 
 dev 환경 토큰 발급 예:
 ```
