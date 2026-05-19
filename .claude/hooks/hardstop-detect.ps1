@@ -243,7 +243,55 @@ try {
         $proj = $matches['proj']
         $svc  = $matches['svc']
         $archPath = Join-Path $repoRoot ("projects/$proj/specs/services/$svc/architecture.md")
-        if (-not (Test-Path $archPath -PathType Leaf)) {
+                if (-not (Test-Path $archPath -PathType Leaf)) {
+            # ===== HARDSTOP-09 Option-3 deferred-skeleton recognition guard =====
+            # platform/hardstop-rules.md HARDSTOP-09 Remediation Option 3 allows a
+            # reversible+local deferred skeleton: an inline citation of the choice
+            # + a follow-up tasks/ready/ task to backfill architecture.md. The
+            # ADR-MONO-008/016 § D6.2 PR-B bootstrap pattern is exactly this.
+            # Suppress ONLY when BOTH signals hold; otherwise fall through and fire
+            # (fail-closed — NOT a blanket bypass; Option 3 is the rule-sanctioned
+            # escape and the reviewer still verifies substance). Provenance:
+            # TASK-MONO-120 (erp PR-B (g)(1) over-fire — finance PR-B was the same
+            # target; `git log --diff-filter=A` showed finance architecture.md
+            # first appeared at TASK-FIN-BE-001 #597, not at the bootstrap PR-B).
+            $post09 = ""
+            $absFile09 = Join-Path $repoRoot $relFromRoot
+            if ($data.tool_name -eq 'Write' -or ($data.tool_input -and $data.tool_input.content)) {
+                $post09 = $newString
+            } elseif (Test-Path $absFile09 -PathType Leaf) {
+                $existing09 = Get-Content -Raw -Path $absFile09 -ErrorAction SilentlyContinue
+                if ($existing09 -and $oldString -and $newString -and $existing09.Contains($oldString)) {
+                    $post09 = $existing09.Replace($oldString, $newString)
+                } elseif ($existing09) {
+                    $post09 = $existing09
+                } else {
+                    $post09 = $newString
+                }
+            } else {
+                $post09 = $newString
+            }
+            $hs09HasCitation = ($post09 -and $post09 -match '(?im)HARDSTOP-09\b[^\r\n]{0,80}\bOption\s*3\b')
+            $hs09HasBackfillTask = $false
+            if ($hs09HasCitation) {
+                $hs09ReadyDirs = @(
+                    (Join-Path $repoRoot 'tasks/ready'),
+                    (Join-Path $repoRoot ("projects/$proj/tasks/ready"))
+                )
+                foreach ($rd in $hs09ReadyDirs) {
+                    if (Test-Path $rd -PathType Container) {
+                        $hs09Cand = Get-ChildItem -Path $rd -Filter 'TASK-*.md' -File -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Name -match '(?i)^TASK-[A-Z0-9-]*BE-' }
+                        foreach ($hc in $hs09Cand) {
+                            $hs09Body = Get-Content -Raw -Path $hc.FullName -ErrorAction SilentlyContinue
+                            if ($hs09Body -and $hs09Body -match 'architecture\.md') { $hs09HasBackfillTask = $true; break }
+                        }
+                    }
+                    if ($hs09HasBackfillTask) { break }
+                }
+            }
+            $hs09Option3Ok = ($hs09HasCitation -and $hs09HasBackfillTask)
+            if (-not $hs09Option3Ok) {
             $stanza = @"
 [VIOLATION] HARDSTOP-09: Task implementation under ``projects/$proj/apps/$svc/src/main/`` requires a service architecture declaration, but ``projects/$proj/specs/services/$svc/architecture.md`` does not exist.
 [WHY] Architecture decisions made implicitly during implementation produce code that later cannot be defended against "why was this chosen" review questions — and shape every downstream task that builds on the same service. The Architecture Decision Rule (``platform/architecture-decision-rule.md``) forbids choosing architecture during implementation.
@@ -254,6 +302,7 @@ try {
 [REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
 "@
             Write-Block $stanza
+            }
         }
     }
 
