@@ -8,7 +8,7 @@ ADR-MONO-016 작성 (PROPOSED) — erp-platform Bootstrap Criteria / Integration
 
 # Status
 
-ready
+review
 
 # Owner
 
