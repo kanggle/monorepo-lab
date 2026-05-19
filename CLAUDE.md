@@ -104,6 +104,8 @@ If a source is empty or absent, skip to the next. Layers 2–4 conflict resoluti
 - **Monorepo-level work** (shared paths: `libs/`, `platform/`, `rules/`, `.claude/`, `tasks/templates/`, `docs/guides/`, root `build.gradle`/`settings.gradle`/`.github/workflows/`/`scripts/`/`package.json`, `CLAUDE.md`, `TEMPLATE.md`, or cross-project structural changes) → task in repo-root `tasks/ready/`, follow [`tasks/INDEX.md`](tasks/INDEX.md) § "When to Use Root vs Project Tasks".
 - Specs win over tasks. If implementation requires spec or contract changes, update them first.
 - Tasks must contain all required sections: **Goal / Scope / Acceptance Criteria / Related Specs / Related Contracts / Edge Cases / Failure Scenarios**.
+- **Objective merge verification before any close chore** — a "merged it" statement is not proof. Run `gh pr view <n> --json state,mergedAt,mergeCommit` **and** confirm `git log origin/main` tip matches the squash commit before moving `review/ → done/`. If not actually merged: STOP (do not close — green-wash prohibited).
+- **`git mv review/ → done/` re-stage check** — `git mv` stages the *review*-state blob; after editing the task's Status `review → done` you MUST `git add <done-path>` again and verify with `git show :<done-path>` that the staged blob reads `done`. (Skipping this lands a `Status: review` file under `done/`.)
 
 Lifecycle and review rules: `tasks/INDEX.md` (root) and each `projects/<name>/tasks/INDEX.md`.
 
