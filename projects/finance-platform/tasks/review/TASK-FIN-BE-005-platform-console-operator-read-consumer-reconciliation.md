@@ -8,7 +8,7 @@ finance-platform — platform-console operator read-consumer spec reconciliation
 
 # Status
 
-ready
+review
 
 # Owner
 
