@@ -75,11 +75,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-PC-FE-008-console-scm-operations-section.md` — ADR-MONO-013 § D6 **Phase 4 slice 2/2** (scm operations section, read-only: procurement PO read + inventory-visibility). **BLOCKED** on a cross-project spec-first prerequisite: an scm project-internal task reconciling `scm-platform/specs/contracts/http/gateway-public-routes.md` ("v1 backend-only / human-PKCE deferred to v2") to record `platform-console` (Model B) as a sanctioned human/operator GAP-token read consumer. `backlog → ready` only once that scm-side task is authored + linked (INDEX move rule). Reuses the FE-007 non-GAP per-domain-credential pattern. Recommended impl model **Opus** (contract ext + cross-project spec dep). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-007-console-wms-operations-section.md` — ADR-MONO-013 § D6 **Phase 4 slice 1/2** (wms operations section: `admin-service-api.md` § 1 dashboard read surface + the single `alerts/{id}/acknowledge` operational mutation). **First non-GAP domain binding** — spec-first adds `console-integration-contract.md` **§ 2.4.5** establishing the **per-domain credential rule** (GAP = RFC 8693 exchanged operator token / § 2.6 / #569 invariant *GAP-domain-scoped*; **wms = GAP OIDC access token directly**, RS256/ADR-001, `tenant_id=wms` JWT claim — wms has no operator-exchange and *requires* the GAP token). This is the contract-extension that verifies the ADR-MONO-013 § 3.3 "zero retrofit" assumption against a real non-GAP domain. § 3 GAP-parity matrix **not** mutated (additive domain scope). Recommended impl model **Opus** (ADR-MONO-013 § D6 Phase 4 = "contract ext → Opus"; auth-divergence is security-sensitive interpretive judgement). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
