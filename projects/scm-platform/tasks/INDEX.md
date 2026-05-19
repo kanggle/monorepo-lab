@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-015-platform-console-operator-read-consumer-reconciliation.md` — **spec-only** reconciliation (governed by **ADR-MONO-013** § D6 Phase 4; **no scm ADR** — (B) document/accept of an existing gateway capability). Records `platform-console` (ADR-MONO-013 Model B) as a **sanctioned external operator read consumer** of scm's existing read surface (procurement PO read + inventory-visibility), using a human operator's GAP `platform-console-web` OIDC token (RS256, `tenant_id ∈ {scm,*}`, `X-Token-Type=user`) validated by the **existing** `TenantClaimValidator` — no new client/code/route/auth-model change. Edits `gateway-public-routes.md` (+ `last_updated` bump) / `gap-integration.md` / `PROJECT.md` (frontmatter byte-unchanged — scm stays single-org backend-only). **Prerequisite for `TASK-PC-FE-008`** (platform-console scm console section; FE-008 `backlog → ready` gated on this + TASK-PC-FE-007 merged). Recommended impl model **Opus** (cross-project document/accept-vs-ADR boundary judgement). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
