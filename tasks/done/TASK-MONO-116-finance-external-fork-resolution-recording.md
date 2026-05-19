@@ -8,7 +8,7 @@ finance-platform 외부 Template-fork 완료 기록 — ADR-MONO-008 §6 + ADR-M
 
 # Status
 
-review
+done
 
 # Owner
 
