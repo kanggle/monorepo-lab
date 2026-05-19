@@ -15,7 +15,7 @@
 
 ---
 
-## 2. 프로젝트 카탈로그 (6 도메인 + platform-console)
+## 2. 프로젝트 카탈로그 (7 도메인 + platform-console)
 
 각 프로젝트는 [`projects/<name>/PROJECT.md`](../projects/) 에 `domain` + `traits` 를 선언하고, 그에 따라 [`rules/domains/`](../rules/domains/) + [`rules/traits/`](../rules/traits/) 의 규칙 layer 가 자동으로 활성화된다.
 
@@ -57,8 +57,8 @@
 | ~~`community-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
 | ~~`membership-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
 
-- **multi-tenancy**: row-level isolation (`accounts.tenant_id`). JWT `tenant_id` claim 으로 cross-tenant 거부. 현재 등록 tenant: `wms` / `scm` / `fan-platform` / `finance` + B2C 기본.
-- **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm/finance) 가 사용자 일괄 생성.
+- **multi-tenancy**: row-level isolation (`accounts.tenant_id`). JWT `tenant_id` claim 으로 cross-tenant 거부. 현재 등록 tenant: `wms` / `scm` / `fan-platform` / `finance` / `erp` + B2C 기본.
+- **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm/finance/erp) 가 사용자 일괄 생성.
 - **OIDC AS 운영 깊이 증명 (2026-05-09 closure)**: SAS public-client (PKCE) `refresh_token` rotation + reuse detection + `revoke` (custom converter + provider-side fallback) + 3 OAuth provider callback (Google/Kakao/Microsoft) 모두 main CI deterministic PASS. 13-cycle 미해결 9 deferred IT 회복 ([ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md), [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)). Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus 1.
 
 ### 2.3 [ecommerce-microservices-platform](../projects/ecommerce-microservices-platform/PROJECT.md) — B2C 이커머스 (v1 ✅ 풀스택)
@@ -144,13 +144,26 @@
 - **ID provider**: GAP OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
 - **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
 
-### 2.8 향후 도메인 (계획)
+### 2.8 [erp-platform](../projects/erp-platform/PROJECT.md) — 전사 기간계 (v1 부트스트랩 🚧)
 
-| Project | Domain | 상태 |
+- **domain**: `erp` · **traits**: `internal-system`, `transactional`, `audit-heavy` · **service_types**: `rest-api`
+- **포지션**: monorepo Phase 6 **두 번째 Template 다운스트림 부트스트랩** ([ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md), ACCEPTED 2026-05-19, Option C). 7번째 도메인 프로젝트, `internal-system`-primary 첫 사용 (`kanggle/erp-platform` standalone Template fork + monorepo direct-include 병존; standalone fork = 사용자 셸 hand-off PENDING).
+- **상태**: v1 부트스트랩 (TASK-MONO-119) — `projects/erp-platform/` tree + masterdata-service 부트 가능 skeleton (비즈니스 로직 0) + PROJECT.md/specs/GAP V0018 시드 + monorepo wiring. 도메인 구현 = TASK-ERP-BE-001 (deferred).
+- **service map (v1)**:
+
+| Service | Type | 책임 |
 |---|---|---|
-| `erp-platform` | `erp` | 미생성 — finance 다음 (ADR-MONO-002 § D4 ordering; ADR-MONO-009 후보) |
+| `gateway-service` | rest-api | OIDC + `tenant_id=erp` gate + internal-only 경계 (masterdata-service 활성화와 함께) |
+| `masterdata-service` | rest-api | 조직 마스터데이터 — 부서/직원/직급/비용센터/거래처 / 참조 무결성 / 유효기간 / 불변 audit_log |
 
-`mes`/`hr`/`판매`/`구매`/`생산` 등은 **명시적으로 드롭** (포트폴리오 7축 architecture 결정, 2026-05-07).
+- **v2 deferred**: `approval-service` (결재 워크플로 — ADR-016 §D3), `read-model-service` (통합 조회), `permission-service`, `notification-service`, `admin-service`
+- **framing 정합**: 7축 메모리의 광의 erp("회계·구매·재고·HR 통합" + 자체 admin SPA) 는 ADR-MONO-016 SoT 상 v1=마스터데이터+결재+통합 read model (도메인 로직 미보유, 7축 책임 경계); UI=platform-console parity slice (ADR-MONO-013 바인딩, 자체 SPA superseded) (PROJECT.md § ADR-MONO-016 vs 7축 framing 정합).
+- **ID provider**: GAP OIDC RS256 + `tenant_id=erp` claim (V0018 ×2 시드: account tenant + auth client_credentials `erp-platform-internal-services-client`).
+- **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
+
+### 2.9 향후 도메인 (계획)
+
+erp = 포트폴리오 **마지막 도메인** (ADR-MONO-002 § D4 ordering `scm → finance → erp → mes` 에서 erp 까지 부트스트랩 완료). `mes`/`hr`/`판매`/`구매`/`생산` 등은 **명시적으로 드롭** (포트폴리오 7축 architecture 결정, 2026-05-07; mes 재제안 금지). 추가 신규 도메인 부트스트랩 ADR 은 예정 없음.
 
 ---
 

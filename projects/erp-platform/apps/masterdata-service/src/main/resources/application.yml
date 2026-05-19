@@ -1,0 +1,109 @@
+# -----------------------------------------------------------------------------
+# erp-platform masterdata-service — v1 bootstrap skeleton config.
+#
+# HARDSTOP-09 note (remediation option 3 — reversible + local skeleton, NO
+# architecture decision is made in this file): this is the deliberate
+# deferred-impl skeleton authored by TASK-MONO-119 (ADR-MONO-016 §D6.2 PR-B),
+# byte-mirroring the finance account-service PR-B skeleton precedent
+# (TASK-MONO-114, squash d2b579f2 — that PR-B also shipped account-service
+# application.yml + bootstrap class with NO architecture.md; the finance
+# architecture.md was added later by the TASK-FIN-BE-001 spec PR #597
+# 5a4aae42, not by the bootstrap). Spring just boots; Flyway disabled (no
+# migrations yet); the four package dirs are empty .gitkeep placeholders, not
+# a Hexagonal-layout decision. The service architecture decision (Hexagonal
+# layer boundaries, Service Type, erp E1-E8 mapping) is owned by the
+# ALREADY-FILED follow-up task projects/erp-platform/tasks/ready/
+# TASK-ERP-BE-001-masterdata-service-bootstrap.md (AC-1: architecture.md MUST
+# exist before any domain implementation — HARDSTOP-09 is enforced at that
+# stage, which is the correct gate, not the zero-logic bootstrap).
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: erp-platform-masterdata-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:erp}
+    password: ${MYSQL_PASSWORD:erp}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    # No migrations yet — TASK-ERP-BE-001 lands the V1 schema. Disabled until
+    # then so the skeleton boots cleanly without a populated migration dir.
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          # V0018 SQL seeded the erp-platform OIDC client against GAP's
+          # standard /oauth2/jwks endpoint (scm / finance / wms alignment).
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.erp.masterdata: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} actorId=%X{actorId:-}]"
+
+erpplatform:
+  oauth2:
+    # D2-b deprecation window: SAS issuer + legacy "global-account-platform"
+    # string. Keep byte-identical to gateway-service's allowed-issuers when the
+    # gateway-service is introduced (cross-service issuer drift guard — scm /
+    # finance precedent).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}

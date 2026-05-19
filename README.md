@@ -23,7 +23,7 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 Each project is extracted to its own standalone repo via [`scripts/sync-portfolio.sh`](scripts/sync-portfolio.sh) for easier discovery. This monorepo retains the full development history and shared library development.
 
-_6th project — finance-platform (fintech domain — account-service v1; `transactional + regulated + audit-heavy`) — was bootstrapped 2026-05-18 as the first downstream Template fork per [ADR-MONO-008](docs/adr/ADR-MONO-008-finance-platform-bootstrap.md) (ACCEPTED, Option C: standalone Template fork + monorepo direct-include). scm-platform is operational; erp-platform / mes-platform remain planned — taxonomy entries already in [`rules/taxonomy.md`](rules/taxonomy.md), bootstrap pending to validate the Template extraction triggers._
+_7th project — erp-platform (erp domain — masterdata-service v1; `internal-system + transactional + audit-heavy`) — was bootstrapped 2026-05-19 as the second downstream Template fork per [ADR-MONO-016](docs/adr/ADR-MONO-016-erp-platform-bootstrap.md) (ACCEPTED, Option C: standalone Template fork + monorepo direct-include; standalone fork = user-shell hand-off PENDING). It follows the 6th project finance-platform (fintech — account-service v1) bootstrapped 2026-05-18 per [ADR-MONO-008](docs/adr/ADR-MONO-008-finance-platform-bootstrap.md). erp is the portfolio's final domain (ADR-MONO-002 § D4 ordering `scm → finance → erp`); mes-platform remains intentionally dropped — no further bootstrap ADR planned._
 
 ---
 
@@ -145,8 +145,8 @@ See [rules/README.md](rules/README.md) for the full taxonomy and on-demand polic
 
 **Currently defined in the library:**
 
-- Domains: `wms`, `ecommerce`, `saas`, `fan-platform`, `scm`, `fintech`
-- Traits: `transactional`, `integration-heavy`, `read-heavy`, `content-heavy`, `regulated`, `audit-heavy`, `multi-tenant`, `batch-heavy`
+- Domains: `wms`, `ecommerce`, `saas`, `fan-platform`, `scm`, `fintech`, `erp`
+- Traits: `transactional`, `integration-heavy`, `read-heavy`, `content-heavy`, `regulated`, `audit-heavy`, `multi-tenant`, `batch-heavy`, `internal-system`
 
 Additional domains/traits get rule files when a new project declares them.
 

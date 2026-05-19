@@ -81,3 +81,13 @@ include(
 include(
     'projects:finance-platform:apps:account-service'
 )
+
+// Project: erp-platform
+// TASK-MONO-119 bootstrap (ADR-MONO-016 ACCEPTED Option C). v1 = masterdata-service
+// only (Hexagonal organization master data); gateway / approval / read-model /
+// permission deferred to v2. masterdata-service skeleton has no business logic
+// yet — TASK-ERP-BE-001 implements it. This bootstrap intentionally resets the
+// libs/ churn clock (ADR-MONO-003a § D2.1, recorded in ADR-MONO-016 § 3.3).
+include(
+    'projects:erp-platform:apps:masterdata-service'
+)

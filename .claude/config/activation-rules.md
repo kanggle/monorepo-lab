@@ -261,6 +261,19 @@ Activate:
 
 ---
 
+### erp
+Activate:
+- master data integrity rules (single source of record, reference integrity, effective dating)
+- approval workflow state machine + authorized-approver rules
+- integrated read-model responsibility-boundary rules (read-only projection, no domain business logic)
+- permission-matrix + data-scope authorization rules (fail-closed)
+- internal-system boundary rules (SSO, no external traffic, internal network)
+- immutable audit trail on master / approval / permission change rules
+
+→ Detailed rules: [`rules/domains/erp.md`](../../rules/domains/erp.md)
+
+---
+
 ### logistics
 Activate:
 - shipment state machine rules
@@ -312,7 +325,7 @@ Activate:
 
 ---
 
-> **Other domains** (reservation, erp, groupware, accounting-system, analytics, bi, reporting, ad-platform, cdp, dmp, sns, forum, content-platform, ott, media-streaming, live-streaming, collaboration-tool, crm, developer-platform, pg, banking, securities, delivery-platform, fleet-management, edtech, lms, online-course, game-platform, game-backoffice) — listed in [`domains.md`](domains.md) catalog; activation mapping and detailed rules files will be added on-demand when a project declares them.
+> **Other domains** (reservation, groupware, accounting-system, analytics, bi, reporting, ad-platform, cdp, dmp, sns, forum, content-platform, ott, media-streaming, live-streaming, collaboration-tool, crm, developer-platform, pg, banking, securities, delivery-platform, fleet-management, edtech, lms, online-course, game-platform, game-backoffice) — listed in [`domains.md`](domains.md) catalog; activation mapping and detailed rules files will be added on-demand when a project declares them.
 
 ---
 
