@@ -8,7 +8,7 @@ console-web Phase 4 slice 2 — scm operations console section (read-only: procu
 
 # Status
 
-review
+done
 
 # Owner
 
