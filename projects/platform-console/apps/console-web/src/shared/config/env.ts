@@ -90,6 +90,22 @@ const ServerEnvSchema = z.object({
    *  per-endpoint headers/error owned by GAP `admin-api.md` (authoritative,
    *  consumed only). */
   OPERATORS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
+   *  § 2.4.5). The dashboard read-model + alert-ack endpoints hang off
+   *  `${WMS_ADMIN_BASE_URL}/dashboard/...` (+ `/operations/...`) —
+   *  request/response/error owned by wms `admin-service-api.md`
+   *  (authoritative, consumed only). Aligned with the registry `baseRoute`
+   *  for `productKey=wms`; the wms gateway hostname is `wms.local`. NOTE:
+   *  unlike the GAP surface this is reached with the GAP OIDC access token
+   *  directly (the wms gateway requires it — § 2.4.5 per-domain credential
+   *  divergence; the #569 invariant is GAP-domain-scoped). */
+  WMS_ADMIN_BASE_URL: z
+    .string()
+    .url()
+    .default('http://wms.local/api/v1/admin'),
+  /** Outbound timeout (ms) for wms operations calls (integration-heavy I1 —
+   *  same convention as ACCOUNTS_TIMEOUT_MS). */
+  WMS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -115,6 +131,8 @@ export function getServerEnv(): ServerEnv {
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
+    WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
+    WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });

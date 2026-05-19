@@ -86,6 +86,15 @@ export default async function ConsoleLayout({
                     운영자 관리
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/wms"
+                    data-testid="nav-wms"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    WMS 운영
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

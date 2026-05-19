@@ -8,7 +8,7 @@ console-web Phase 4 slice 1 — wms operations console section (read surface + a
 
 # Status
 
-ready
+review
 
 # Owner
 

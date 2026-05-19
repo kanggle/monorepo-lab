@@ -146,6 +146,42 @@ export class OperatorsUnavailableError extends Error {
   }
 }
 
+/**
+ * wms `admin-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.5 / § 2.5). Sibling of
+ * {@link AccountsUnavailableError} / {@link AuditUnavailableError} /
+ * {@link OperatorsUnavailableError} — identical resilience posture for the
+ * first **non-GAP** federated domain section: a `503 SERVICE_UNAVAILABLE` /
+ * timeout / network failure on a wms call degrades ONLY the wms section (the
+ * console shell + the GAP sections stay intact). Auth failures (`401` —
+ * the GAP OIDC session expired) are raised as {@link ApiError} so the caller
+ * forces a clean WHOLE-SESSION re-login (no partial authed state — this is
+ * NOT a per-section degrade). Inline-recoverable producer errors
+ * (`403 FORBIDDEN` role-insufficient, `404` not-found,
+ * `400 VALIDATION_ERROR`, `422 STATE_TRANSITION_INVALID` alert already
+ * acknowledged, `409 DUPLICATE_REQUEST`) are raised as {@link ApiError} so
+ * the UI renders an inline actionable message without crashing.
+ *
+ * NOTE the credential divergence: unlike the GAP siblings, the wms
+ * credential is the GAP OIDC access token itself (the wms gateway requires
+ * it; the #569 invariant is GAP-domain-scoped — § 2.4.5). No token / PII is
+ * ever placed in this error.
+ */
+export class WmsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: WmsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'WmsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -181,6 +217,15 @@ const MESSAGES: Record<string, string> = {
   PASSWORD_POLICY_VIOLATION:
     '새 비밀번호가 정책을 충족하지 않습니다 (10자 이상, 영문·숫자·특수문자 각 1자 이상).',
   PASSWORD_CONFIRM_MISMATCH: '새 비밀번호와 확인 입력이 일치하지 않습니다.',
+  // --- wms operations (TASK-PC-FE-007 / §2.4.5) --------------------------
+  FORBIDDEN: '이 작업을 수행할 권한이 없습니다. (역할 확인 필요)',
+  NOT_FOUND: '대상을 찾을 수 없습니다.',
+  DUPLICATE_REQUEST:
+    '이전 요청과 다른 내용으로 같은 작업이 재시도되었습니다.',
+  WMS_NOT_ELIGIBLE:
+    'wms 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  ALERT_ALREADY_ACKNOWLEDGED:
+    '이미 확인 처리된 알림입니다. 목록을 새로고침하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
