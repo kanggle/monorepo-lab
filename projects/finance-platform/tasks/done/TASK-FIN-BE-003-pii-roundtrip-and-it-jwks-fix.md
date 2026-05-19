@@ -8,7 +8,7 @@ account-service: PiiEncryptor `owner_ref` persistence round-trip + cross-tenant 
 
 # Status
 
-review
+done
 
 # Owner
 
