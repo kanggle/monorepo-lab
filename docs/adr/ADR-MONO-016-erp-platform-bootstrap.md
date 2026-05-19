@@ -1,8 +1,8 @@
 # ADR-MONO-016 — erp-platform Bootstrap Criteria, Integration Mode, Classification, Procedure, Readiness
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-05-19
-**History:** PROPOSED 2026-05-19 (TASK-MONO-117 — bootstrap criteria pre-authored; **NOT** the bootstrap authorisation). ACCEPTED transition deferred to a future task at user-explicit intent (§ D6.1), structurally identical to ADR-MONO-008's PROPOSED→ACCEPTED two-stage path (TASK-MONO-071 → TASK-MONO-113).
+**History:** PROPOSED 2026-05-19 (TASK-MONO-117 — bootstrap criteria pre-authored; **NOT** the bootstrap authorisation). ACCEPTED transition deferred to a future task at user-explicit intent (§ D6.1), structurally identical to ADR-MONO-008's PROPOSED→ACCEPTED two-stage path (TASK-MONO-071 → TASK-MONO-113). · **ACCEPTED 2026-05-19 (TASK-MONO-118 — § D6.1 user-explicit intent "ADR-016 ACCEPTED" satisfied [exact form, not the excluded ambiguous form]; D5.1–D5.7 evaluated; D1 = Option C (Both) / D2 = `erp` `[internal-system, transactional, audit-heavy]` `[rest-api]` / D3 = `masterdata-service` finalized via AskUserQuestion; NOT self-ACCEPT — governed §D6 transition, ADR-MONO-008/TASK-MONO-113 + ADR-MONO-013/TASK-MONO-108 analog. Bootstrap artifact = PR-B / TASK-MONO-119, dependency-correct base = this PR-A merged main).**
 **Decision driver:** finance-platform v1 fully closed **both sides** 2026-05-19 (monorepo behavioural-proof chain TASK-MONO-115 → FIN-BE-002 → FIN-BE-003 → FIN-BE-004, `finance-integration-tests` CI 12/12; standalone Template fork `kanggle/finance-platform` confirmed; TASK-MONO-116 append-only recording; **ADR-MONO-008 fully resolved**). ADR-MONO-002 § D4 ordering `scm → finance → erp → mes`: scm shipped 2026-05-04~07, finance closed 2026-05-19, **erp is next**. ADR-MONO-003a § D2.1 mandates a fresh ADR for any new-project bootstrap (resets the shared-library churn clock + shifts portfolio narrative scope). This ADR is that fresh ADR for erp.
 **Supersedes:** none.
 **Related:** [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) § D4 (ordering parent — `finance → erp` forward-pointer appended by TASK-MONO-117), [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) § D2.1 (fresh-ADR mandate — this ADR satisfies it) + § 3 audit-trail, [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) § 1.4 + § D3 (Template ↔ monorepo sync context), [ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) (structural template — finance bootstrap, same § 1–§ 7 / D1–D6 shape + two-stage PROPOSED→ACCEPTED pattern), **[ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) (ACCEPTED, binding — Model B: unified `platform-console` is the only UI for the enterprise suite incl. "future erp" → erp is backend-only)** + [ADR-MONO-014](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) / [ADR-MONO-015](ADR-MONO-015-platform-console-dashboards-model.md) (console operator-auth / dashboards refinements — referenced, not modified), [`rules/taxonomy.md`](../../rules/taxonomy.md) § Domains (`erp` L75) + § Traits (11 traits), memory [`project_portfolio_7axis_architecture`](../../../memory/project_portfolio_7axis_architecture.md), memory [`project_platform_console_adr_013`](../../../memory/project_platform_console_adr_013.md) (GAP backend-only precedent).
@@ -24,6 +24,8 @@ Per ADR-MONO-003a § D2.1, adding any new project skeleton under `projects/<name
 ### 1.3 Why PROPOSED, not ACCEPTED
 
 PROPOSED ≠ "we will bootstrap erp eventually". PROPOSED = "if we choose to bootstrap erp, here are the criteria the moment must satisfy". The user has not stated erp bootstrap intent in this session — the directive was explicitly *"draft the PROPOSED ADR"*. Authoring criteria before the decision is exactly the staged pattern that made ADR-MONO-003b and ADR-MONO-008 work cleanly. **self-ACCEPT is prohibited**: the dispatcher never unilaterally declares this ADR ACCEPTED; the ACCEPTED transition is a separate future task at user-explicit intent (§ D6.1).
+
+> **[Reconcile — ACCEPTED 2026-05-19, TASK-MONO-118]** This section records why PROPOSED was correct at authoring time (preserved as history). The user subsequently stated the exact §D6.1 intent (`"ADR-016 ACCEPTED"`) and finalized D1/D3 via AskUserQuestion; the ACCEPTED transition was then performed by TASK-MONO-118 as the mechanical §D6 execution (NOT self-ACCEPT — the dispatcher still did not unilaterally decide). See § 6.
 
 ### 1.4 Scope: what "erp bootstrap" means
 
@@ -192,6 +194,8 @@ Same reasoning as ADR-MONO-008 § 4.3/4.4 — kept as D1 Option A/B, not default
 
 Rejected — identical reasoning to ADR-MONO-003b § 4.6 / ADR-MONO-008 § 4.5. The user has not stated erp bootstrap intent in this session (the directive was "draft the PROPOSED ADR"). PROPOSED is the correct status for criteria authored before the decision. self-ACCEPT prohibited.
 
+> **[Reconcile — ACCEPTED 2026-05-19, TASK-MONO-118]** "in this session" refers to the PROPOSED-authoring session (TASK-MONO-117). In a subsequent turn the user gave the exact §D6.1 intent (`"ADR-016 ACCEPTED"`) + AskUserQuestion D1/D3 finalization → the two-stage PROPOSED→ACCEPTED path completed as designed (this alternative correctly stayed rejected; ACCEPTED came via the proper §D6 governed transition, not a skip).
+
 ---
 
 ## 5. Relationship to prior ADRs
@@ -215,8 +219,11 @@ Append-only.
 | Date | Transition | Option | Classification | Standalone / Monorepo / Both | User intent quote | PR(s) |
 |---|---|---|---|---|---|---|
 | 2026-05-19 | created PROPOSED | TBD | TBD (proposed: `erp` / [internal-system, transactional, audit-heavy] / [rest-api, (event-consumer)]) | TBD | n/a (criteria pre-author via TASK-MONO-117; user directive = "draft the PROPOSED ADR", NOT bootstrap intent) | spec PR #615 (squash `eeb80039`) / impl PR #616 (squash `d189ffcc`) / close chore PR (this) — TASK-MONO-117 |
+| 2026-05-19 | ACCEPTED | C (Both) | `erp` / [internal-system, transactional, audit-heavy] / [rest-api] | Both (Template fork `kanggle/erp-platform` + monorepo `projects/erp-platform/` direct-include) | "ADR-016 ACCEPTED" (exact § D6.1 intent form, not the excluded ambiguous form) + AskUserQuestion finalization D1 = Option C (Both) / D3 = `masterdata-service` (2026-05-19) | PR-A (TASK-MONO-118) — PR#/squash backfilled at close chore per this §'s convention / PR-B (TASK-MONO-119) bootstrap artifact |
 
 (PROPOSED row appended 2026-05-19 per § D6.3 format. PR numbers backfilled at PR open / close chore — append-only, no rewrite. D2 trait stack excludes the descriptive "workflow-heavy" — not one of the 11 taxonomy traits, would HARDSTOP-02 at bootstrap; same lesson as ADR-MONO-008 D5.2's "optional event-driven" exclusion. ACCEPTED row appended only at the future user-intent transition — self-ACCEPT prohibited.)
+
+(ACCEPTED row appended 2026-05-19 per § D6.3 — TASK-MONO-118 PR-A, the mechanical § D6 execution of the user's exact § D6.1 intent "ADR-016 ACCEPTED" + AskUserQuestion D1/D3 finalization. NOT self-ACCEPT: the dispatcher did not unilaterally decide. The created-PROPOSED row + the prior note are preserved byte-unchanged (append-only). D1–D6 decision bodies unchanged; only Status/History/§1.3/§4.5 reconciled to ACCEPTED tense per the ADR-MONO-013/TASK-MONO-108 + ADR-MONO-008/TASK-MONO-113 precedent. erp = the portfolio's final domain — mes intentionally dropped; no further bootstrap ADR expected.)
 
 ---
 
