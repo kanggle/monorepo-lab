@@ -8,7 +8,7 @@ ADR-MONO-016 PROPOSED → ACCEPTED transition + recording — erp-platform 부�
 
 # Status
 
-ready
+review
 
 # Owner
 
