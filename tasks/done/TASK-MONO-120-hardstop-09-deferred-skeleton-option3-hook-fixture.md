@@ -8,7 +8,7 @@ TASK-MONO-120
 
 # Status
 
-review
+done
 
 # Owner
 
