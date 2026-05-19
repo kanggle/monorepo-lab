@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-116-finance-external-fork-resolution-recording.md` — (spec PR) finance-platform 외부 `kanggle/finance-platform` Template-fork 완료 기록. 사용자 2026-05-19 셸 실행 (옵션 A: `gh repo create --template kanggle/project-template` + stale ref prune); 객관 검증 `gh repo view` → `templateRepository={name:project-template,owner:kanggle}` + PUBLIC + `createdAt 2026-05-19T03:42:33Z` = ADR-MONO-008 D1 **Option C** standalone side 충족. ADR-MONO-008 §6 (append-only) + ADR-MONO-003a §3 (row #17, L181 "no re-authorisation needed") 에 **append-only resolution row** 추가 → PR-B(MONO-114) 가 정직하게 PENDING 으로 남긴 standalone side 해소. **신규 ADR 불요** (reality-alignment, competing convention 무 — BE-290/302 메타). 기존 §6/§3 row 본문 byte-unchanged (append-only 절대). doc-only, 코드/projects/빌드/CI 변경 0. 머지 ⇒ finance v1 monorepo-side(행위-증명 chain) + standalone-side 양쪽 완전 종결 = ADR-MONO-008 전 항목 해소, erp ADR-MONO-009 선행 gate(§3.2) ungated. impl PR 분리 (PR Separation Rule); agent memory 동기화는 repo 외부 (D4 step 20).
 
 ## in-progress
 
