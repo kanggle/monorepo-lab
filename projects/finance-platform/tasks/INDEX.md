@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-004-idempotency-concurrency-exactly-once-fix.md` — **Fix issue found in TASK-FIN-BE-001** (surfaced by MONO-115 run `26071043853` once FIN-BE-003 cleared D1/D2; finance IT now **11/12**, single residual). `IdempotencyConcurrencyIntegrationTest.concurrentSameKeyMovesFundsOnce` L92 `assertThat(performed).isLessThanOrEqualTo(1)` fails → `performed>1`: 8-thread concurrent same-Idempotency-Key, ≥2 threads complete the fund movement = fintech **F1 exactly-once** not demonstrated. Distinct concurrency defect class (not FIN-BE-003 PII/JWKS), **not a regression** (test never ran to completion before — cascade-masked), scoped out per FIN-BE-003 Failure Scenario A. **Implementer MUST determine** H1 (test asserts at the wrong layer — it bypasses the production `IdempotentExecution` wrapper; fix = drive the real path, only if prod genuinely atomic) vs H2 (real prod gap — `IdempotentExecution`/`RedisOrDbIdempotencyStore.store` not first-writer-atomic, or `Balance` `@Version` not serializing concurrent `placeHold`). green-wash prohibited: green only via a genuine prod F1/F2 guarantee, never by weakening the assertion. Scope per finding: test-only (H1) or `infrastructure/idempotency/**` + optional new forward migration (H2); NO V1 edit / FIN-BE-002·003 regression / contract / ci.yml. Verify via MONO-115 CI (`:check` ≠ sufficient). 선행=FIN-BE-003 #607 merged. Merge ⇒ main `finance-integration-tests` RED→GREEN = honest chain true terminal. (분석=Opus 4.7 / 구현 권장=Opus 4.7 — real MySQL+Redis concurrency, F1/F2 correctness, Docker-blocker→CI-only = highest cycle-burn risk)
 
 ## in-progress
 
