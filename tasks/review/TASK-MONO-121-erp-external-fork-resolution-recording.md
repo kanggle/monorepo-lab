@@ -8,7 +8,7 @@ erp-platform 외부 Template-fork 완료 기록 — ADR-MONO-016 §6 + ADR-MONO-
 
 # Status
 
-ready
+review
 
 # Owner
 
