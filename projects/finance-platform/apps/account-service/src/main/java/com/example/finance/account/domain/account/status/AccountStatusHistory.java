@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -42,14 +44,17 @@ public class AccountStatusHistory {
     private String tenantId;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "from_status", length = 20, nullable = false)
     private AccountStatus fromStatus;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "to_status", length = 20, nullable = false)
     private AccountStatus toStatus;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "actor_type", length = 20, nullable = false)
     private ActorType actorType;
 
