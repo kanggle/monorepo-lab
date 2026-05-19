@@ -75,11 +75,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-- `TASK-PC-FE-008-console-scm-operations-section.md` — ADR-MONO-013 § D6 **Phase 4 slice 2/2** (scm operations section, read-only: procurement PO read + inventory-visibility). **BLOCKED** on a cross-project spec-first prerequisite: an scm project-internal task reconciling `scm-platform/specs/contracts/http/gateway-public-routes.md` ("v1 backend-only / human-PKCE deferred to v2") to record `platform-console` (Model B) as a sanctioned human/operator GAP-token read consumer. `backlog → ready` only once that scm-side task is authored + linked (INDEX move rule). Reuses the FE-007 non-GAP per-domain-credential pattern. Recommended impl model **Opus** (contract ext + cross-project spec dep). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
+(empty)
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-008-console-scm-operations-section.md` — ADR-MONO-013 § D6 **Phase 4 slice 2/2** (scm operations section, **read-only**: procurement PO read + inventory-visibility; S5 `meta.warning` surfacing). **Promoted `backlog → ready`** — both cross-project prerequisites **MERGED** to origin/main: `TASK-PC-FE-007` (PR #633 `81395376`; §2.4.5 per-domain-credential rule now on main, reused) **and** `TASK-SCM-BE-015` (scm-side reconciliation; spec PR #635 `385be18c` + impl PR #636 `bfb9ef8a` — scm gateway-public-routes.md now records platform-console as a sanctioned external read consumer; (B) document/accept, no scm ADR). Spec-first gate satisfied. Reuses FE-007 non-GAP per-domain-credential pattern; spec-first adds `console-integration-contract.md` **§ 2.4.6** (scm read-only binding, reuse §2.4.5, S5 obligation). Recommended impl model **Opus** (contract ext + cross-project spec dep). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
