@@ -214,7 +214,7 @@ Append-only.
 
 | Date | Transition | Option | Classification | Standalone / Monorepo / Both | User intent quote | PR(s) |
 |---|---|---|---|---|---|---|
-| 2026-05-19 | created PROPOSED | TBD | TBD (proposed: `erp` / [internal-system, transactional, audit-heavy] / [rest-api, (event-consumer)]) | TBD | n/a (criteria pre-author via TASK-MONO-117; user directive = "draft the PROPOSED ADR", NOT bootstrap intent) | impl PR (TASK-MONO-117) — PR#/squash backfilled at close chore per this §'s convention |
+| 2026-05-19 | created PROPOSED | TBD | TBD (proposed: `erp` / [internal-system, transactional, audit-heavy] / [rest-api, (event-consumer)]) | TBD | n/a (criteria pre-author via TASK-MONO-117; user directive = "draft the PROPOSED ADR", NOT bootstrap intent) | spec PR #615 (squash `eeb80039`) / impl PR #616 (squash `d189ffcc`) / close chore PR (this) — TASK-MONO-117 |
 
 (PROPOSED row appended 2026-05-19 per § D6.3 format. PR numbers backfilled at PR open / close chore — append-only, no rewrite. D2 trait stack excludes the descriptive "workflow-heavy" — not one of the 11 taxonomy traits, would HARDSTOP-02 at bootstrap; same lesson as ADR-MONO-008 D5.2's "optional event-driven" exclusion. ACCEPTED row appended only at the future user-intent transition — self-ACCEPT prohibited.)
 
