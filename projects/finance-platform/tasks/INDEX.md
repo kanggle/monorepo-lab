@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-003-pii-roundtrip-and-it-jwks-fix.md` — **Fix issues found in TASK-FIN-BE-001** (surfaced by TASK-MONO-115 run `26036483067` once TASK-FIN-BE-002 #604 unblocked context-load; 2/11 IT pass, **9 fail on 2 distinct defects**). **Defect 1** (×8): `AccountRepositoryAdapter` writes plaintext `ownerRef` back onto the JPA-**managed** `saved` entity post-`save()` (L31) → dirty-flush re-persists plaintext over the encrypted envelope → load `decryptFromString(plaintext)` fails (`Illegal base64 character 2d`); also violates fintech **F7** (PII must be encrypted at rest). Fix = persisted column always the encrypted envelope + return plaintext domain object without dirtying the managed entity. **Defect 2** (×1): `AbstractAccountIntegrationTest` JWKS = unreachable `localhost:9`; `CrossTenantHttpIntegrationTest` cross-tenant token path needs a live JWKS (MockWebServer + `@DynamicPropertySource`) so the signed token decodes and tenant-claim → 403 (test-harness only, no prod change). Scope = `infrastructure/persistence/**` (prod) + `integration/**` (test); NO V1/migration/contract/architecture.md/ADR/enum-mapping/ci.yml. Verify via MONO-115 CI job (`:check` ≠ sufficient — gate that hid both); merge flips main `finance-integration-tests` RED→GREEN (terminal fix of the honest green-wash chain). 선행=TASK-FIN-BE-002 #604 merged. (분석=Opus 4.7 / 구현 권장=Opus 4.7 — regulated-PII at-rest correctness + JPA managed-entity dirty-flush + F1/F3/F6 IT must stay green; correctness-critical)
 
 ## in-progress
 
