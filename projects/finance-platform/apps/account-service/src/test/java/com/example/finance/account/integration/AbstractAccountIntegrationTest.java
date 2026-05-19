@@ -1,6 +1,10 @@
 package com.example.finance.account.integration;
 
 import com.example.testsupport.integration.DockerAvailableCondition;
+import okhttp3.mockwebserver.Dispatcher;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,9 +62,43 @@ public abstract class AbstractAccountIntegrationTest {
             new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
                     .withExposedPorts(6379);
 
+    /**
+     * Base-owned JWKS endpoint. There must be exactly ONE
+     * {@code spring.security.oauth2.resourceserver.jwt.jwk-set-uri}
+     * registration: a second {@code @DynamicPropertySource} in a subclass that
+     * adds the same key is non-deterministically shadowed by this base method
+     * (the prior cross-tenant IT failed for exactly that reason). So the base
+     * owns the only registration and points it at a reachable MockWebServer;
+     * application-layer ITs never present a token (empty key set is fine), and
+     * a subclass that drives the HTTP+JWT path publishes its signing key's
+     * public JWK via {@link #publishJwks(String)} in {@code @BeforeAll}.
+     */
+    private static volatile String jwksBody = "{\"keys\":[]}";
+
+    @SuppressWarnings("resource")
+    protected static final MockWebServer JWKS = new MockWebServer();
+
+    /** Replace the served JWK set (subclass HTTP+JWT path, in {@code @BeforeAll}). */
+    protected static void publishJwks(String jwksJson) {
+        jwksBody = jwksJson;
+    }
+
     static {
         MYSQL.start();
         KAFKA.start();
+        JWKS.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                return new MockResponse()
+                        .setHeader("Content-Type", "application/json")
+                        .setBody(jwksBody);
+            }
+        });
+        try {
+            JWKS.start();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("JWKS MockWebServer start failed", e);
+        }
     }
 
     @DynamicPropertySource
@@ -76,9 +114,11 @@ public abstract class AbstractAccountIntegrationTest {
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
-        // No JWKS discovery — application-layer ITs bypass the resource server.
+        // Single jwk-set-uri registration (base-owned reachable MockWebServer).
+        // App-layer ITs never present a token; the HTTP+JWT IT publishes its
+        // public JWK via publishJwks(...) in @BeforeAll before its first request.
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-                () -> "http://localhost:9/oauth2/jwks");
+                () -> JWKS.url("/oauth2/jwks").toString());
         registry.add("financeplatform.oauth2.allowed-issuers", () -> "http://test-issuer");
         // Deterministic sanction list for the F4 IT.
         registry.add("financeplatform.account.compliance.sanctioned-owner-refs",

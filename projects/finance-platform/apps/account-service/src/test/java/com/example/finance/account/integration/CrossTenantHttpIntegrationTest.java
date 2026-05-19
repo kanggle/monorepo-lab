@@ -7,16 +7,11 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -35,40 +30,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class CrossTenantHttpIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static MockWebServer jwks;
     private static RSAKey rsaKey;
 
     @Autowired
     MockMvc mockMvc;
 
     @BeforeAll
-    static void startJwks() throws Exception {
+    static void publishSigningKey() throws Exception {
         rsaKey = new RSAKeyGenerator(2048).keyID("test-key").generate();
-        jwks = new MockWebServer();
-        String jwksJson = "{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}";
-        jwks.setDispatcher(new okhttp3.mockwebserver.Dispatcher() {
-            @Override
-            public MockResponse dispatch(okhttp3.mockwebserver.RecordedRequest r) {
-                return new MockResponse()
-                        .setHeader("Content-Type", "application/json")
-                        .setBody(jwksJson);
-            }
-        });
-        jwks.start();
-    }
-
-    @AfterAll
-    static void stopJwks() throws Exception {
-        jwks.shutdown();
-    }
-
-    @DynamicPropertySource
-    static void jwksProps(DynamicPropertyRegistry registry) {
-        registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-                () -> jwks.url("/oauth2/jwks").toString());
-        registry.add("financeplatform.oauth2.allowed-issuers",
-                () -> "http://test-issuer");
-        registry.add("financeplatform.oauth2.required-tenant-id", () -> "finance");
+        // Publish the public JWK into the base-owned JWKS server. The single
+        // jwk-set-uri registration lives in AbstractAccountIntegrationTest
+        // (a duplicate @DynamicPropertySource here was non-deterministically
+        // shadowed by the base — the original failure). @BeforeAll runs before
+        // the resource server lazily fetches the JWK set on the first request.
+        // allowed-issuers (http://test-issuer) is set by the base; required-
+        // tenant-id (finance) by application-test.yml — both already cover this.
+        publishJwks("{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}");
     }
 
     private String token(String tenant) throws Exception {
