@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-117-adr-mono-016-erp-bootstrap-proposed.md` — (spec PR) erp-platform(7번째) 부트스트랩 fresh ADR 을 **ADR-MONO-016** 으로 **PROPOSED 작성** (ADR-MONO-003a §D2.1 강제, ADR-008/003b PROPOSED pre-author 동형; self-ACCEPT 금지 — ACCEPTED 는 별 task+user intent). 선행 gate=finance 양쪽 완전 종결(MONO-116 #614 `0aa03aa7`)로 해소. **⚠️ 번호 collision 정정**: `ADR-MONO-009`=Chrome DevTools MCP 기존 PROPOSED 별건, ADR-MONO-001~015 contiguous 객관실측 → erp ADR=**016**(사용자 "009" 발화는 stale 메모리 shorthand, substance 불변·식별자만 사실정정). **⚠️ ADR-013 바인딩**: ACCEPTED Model B 가 "future erp"=platform-console 유일 UI 명시 → erp=backend-only, UI=console parity slice(GAP backend-only 동형), 자체 admin SPA framing superseded; ADR-016 D-block 이 이를 인코딩(위배=HARDSTOP-04-class). impl=ADR-016 신규(ADR-008 §1–7 동형 D1–D6+§6 append-only)+forward-pointer(ADR-002 §D4 finance→erp / ADR-008 "009"→016 / ADR-003a §3 PROPOSED-publish row, 전부 append·기존 decision 불변). doc-only, 코드/projects/빌드/CI 0. 분석=Opus / 구현 권장=Opus(meta-policy ADR authoring, dispatcher 직접). impl PR 분리(PR Separation Rule).
 
 ## in-progress
 
