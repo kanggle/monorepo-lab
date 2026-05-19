@@ -308,6 +308,162 @@ non-GAP domain is bound for the first time, and it surfaces a genuine
 > is a federated **domain** section, the first verification of the
 > generalised per-domain integration contract, not a GAP parity capability.
 
+#### 2.4.6 scm operations surface (TASK-PC-FE-008 — cross-reference, not a redefinition)
+
+The **second non-GAP** per-domain binding of § 2.4 (ADR-MONO-013 Phase 4
+slice 2 — the slice that **completes** Phase 4: `FE-007 wms` → `FE-008 scm`).
+The console's `features/scm-ops` renders, **server-side and tenant-scoped**,
+the scm gateway's existing **read-only** procurement-PO and
+inventory-visibility surface. There is **no operator-mutation parity** for
+scm at v1 (scm has no `admin-service` — deferred to scm v2 per
+`gateway-public-routes.md`); this section is **strictly read-only**. The
+producer contracts are **authoritative and unchanged** — this section only
+states the consumer obligation and points at the owning scm specs. This
+binding is the second instance that verifies ADR-MONO-013 § 3.3's "zero
+retrofit" assumption across a non-GAP domain, and the proof that the
+**per-domain credential rule defined in § 2.4.5 generalises** (it is reused
+verbatim here, not re-derived).
+
+- **Authoritative producers (owned by scm, do NOT redefine here —
+  consumed read-only)**: scm
+  [`procurement-api.md`](../../../scm-platform/specs/contracts/http/procurement-api.md)
+  (PO read **only** — list + detail) and
+  [`inventory-visibility-api.md`](../../../scm-platform/specs/contracts/http/inventory-visibility-api.md)
+  (snapshot / per-SKU / staleness / nodes) — **unchanged, consumed only**.
+  The console consumes exactly these endpoints (request/response/headers/
+  error tables are canonical there):
+
+  | # | Operation | Producer endpoint (scm spec §) | Kind |
+  |---|---|---|---|
+  | 1 | PO list / search | `GET /api/v1/procurement/po` (`procurement-api.md` § `GET /api/procurement/po`) | read |
+  | 2 | PO detail | `GET /api/v1/procurement/po/{poId}` (`procurement-api.md` § `GET /api/procurement/po/{poId}`) | read |
+  | 3 | inventory-visibility snapshot | `GET /api/v1/inventory-visibility/snapshot` (cross-node / single-node) | read |
+  | 4 | inventory-visibility per-SKU | `GET /api/v1/inventory-visibility/sku/{sku}` (Redis-cached, `X-Cache` header) | read |
+  | 5 | inventory-visibility staleness | `GET /api/v1/inventory-visibility/staleness` (FRESH/STALE/UNREACHABLE per node) | read |
+  | 6 | inventory-visibility nodes | `GET /api/v1/inventory-visibility/nodes` (node list + status) | read |
+
+  The scm PO **write** surface (`procurement-api.md`
+  `POST /api/procurement/po`, `.../{poId}/submit|confirm|cancel`) and the
+  procurement webhooks (`/webhooks/supplier-ack`, `/webhooks/asn`) are
+  buyer/business mutations + machine ingress, **not** an operator-parity
+  surface — **explicitly out of scope** (read-only section), not silently
+  dropped. scm's other v2-deferred surfaces (suppliers / demand /
+  logistics / settlement / `admin-service`) are likewise out of scope.
+
+- **Per-domain credential selection — reuse of the § 2.4.5 rule (do NOT
+  re-derive, do NOT diverge)**: the normative per-domain credential rule is
+  **defined in § 2.4.5** (each § 2.4.x binding declares its own credential
+  against its producer's auth contract; an implementer MUST NOT
+  blanket-apply one domain's auth model to another). **scm reuses that
+  rule with the same outcome as wms**: the scm gateway validates a GAP
+  RS256 JWT (ADR-001) against GAP's JWKS, `tenant_id ∈ { scm, * }` enforced
+  producer-side from the JWT claim (scm `gateway-public-routes.md`
+  § *platform-console operator read consumer* — the merged TASK-SCM-BE-015
+  reconciliation that sanctions the console as an external read consumer of
+  the existing scm gateway capability: `AllowedIssuersValidator` +
+  `TenantClaimValidator` + `X-Token-Type=user`). The credential is
+  therefore the operator's **GAP `platform-console-web` OIDC access token**
+  itself (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001),
+  sent **directly** as `Authorization: Bearer <GAP OIDC access token>`
+  server-side — **never** the GAP § 2.6 exchanged operator token
+  (`getOperatorToken()`; that is GAP-domain-scoped — the #569
+  trust-boundary invariant does **not** generalise to scm, exactly as
+  § 2.4.5 states for wms). The console's `features/scm-ops` client uses
+  `getAccessToken()` and **never** `getOperatorToken()` (asserted by test —
+  the same shape as the FE-007 assertion; the cross-domain regression is
+  extended so GAP = operator-token / wms = GAP-OIDC / scm = GAP-OIDC all
+  hold in one place). **Tenant model**: scm resolves the tenant from the
+  JWT `tenant_id` claim producer-side — the console does **not** send
+  `X-Tenant-Id` (the tenant rides inside the GAP OIDC token, exactly the
+  § 2.4.5 wms divergence). When the operator's GAP token is not
+  scm-eligible (no `scm` tenant and not a platform-scope `*` operator) the
+  console **blocks the section** with an actionable "no scm-scoped access"
+  state — no cross-tenant call is ever fabricated; scm rejects cross-tenant
+  producer-side regardless (`403 TENANT_FORBIDDEN`, never weakened here).
+
+- **Read-only binding (normative — no mutation scaffolding at all)**: there
+  is **no** mutation anywhere in this section. **No** `Idempotency-Key`,
+  **no** `X-Operator-Reason`, **no** confirm dialogs, **no** PO write call
+  (`/submit|/confirm|/cancel`), **no** procurement webhook. Carrying the
+  FE-007 alert-ack mutation scaffolding **or** the GAP § 2.4.1 mutation
+  scaffolding (reason/idempotency/destructive-confirm) into this section is
+  a **defect** (asserted absent by test — same read discipline as
+  §§ 2.4.2/2.4.4). Every scm call is a pure `GET`.
+
+- **S5 visibility-warning surfacing (scm trait constraint, normative —
+  contract obligation, not a UX nicety)**: every inventory-visibility
+  response carries the producer envelope
+  `meta.warning: "Not for procurement decisions (S5)"`
+  (`inventory-visibility-api.md` — present on snapshot / sku / staleness /
+  nodes). The console **MUST render that warning prominently on every
+  inventory-visibility view** and **MUST NOT strip, hide, or de-emphasise
+  it**. This is a deliberate scm domain constraint (the visibility
+  read-model is explicitly *not* a procurement source of truth — S5); the
+  warning is a **required, surfaced** field of the view-model, never an
+  optional/discardable one (asserted by test on every inventory-visibility
+  view). The PO read surface carries no such warning (procurement PO is the
+  authoritative procurement record); the S5 obligation is
+  inventory-visibility-specific.
+
+- **Resilience (§ 2.5) — scm flat error envelope (DISTINCT from wms's
+  nested shape and GAP's)**: the scm gateway/service error envelope is
+  **flat** `{ code, message, details?, timestamp }` (per
+  `procurement-api.md` / `inventory-visibility-api.md` § Error Codes /
+  `platform/error-handling.md`) — **NOT** wms's nested
+  `{ error: { code … } }` (§ 2.4.5) and not assumed-identical to GAP's. The
+  scm client MUST parse the scm **flat** shape (a wms-nested parser would
+  mis-render / crash — asserted). Mapping: `401 UNAUTHORIZED` → forced
+  **whole-session GAP re-login** (the GAP OIDC session expired — not a
+  per-section degrade, no partial authed state, consistent with
+  FE-002..007); `403 TENANT_FORBIDDEN` / `403 PERMISSION_DENIED` /
+  `403 FORBIDDEN` (token not scm-scoped or insufficient scope) → inline
+  "not available / not scoped" (no crash, no re-login loop);
+  `404 PO_NOT_FOUND` / `404 NODE_NOT_FOUND` / `400|422 VALIDATION_ERROR` →
+  inline actionable (no crash); **`429 RATE_LIMIT_EXCEEDED`
+  (`Retry-After: 1`)** → a **bounded backoff** + an inline
+  "rate-limited, retrying" notice — the console MUST NOT auto-retry-storm
+  into the gateway (one bounded retry honouring `Retry-After`, then surface
+  the notice); `503 SERVICE_UNAVAILABLE` / `503 NODE_UNREACHABLE` /
+  timeout / network → **only the scm section degrades** (the console shell
+  + the GAP/wms sections stay intact). **Freshness honesty**: the
+  inventory-visibility `X-Cache` header (`HIT|MISS|UNAVAILABLE` on the
+  per-SKU read) and the `/staleness` per-node status (`FRESH|STALE|
+  UNREACHABLE`) MUST be surfaced **honestly** (a `STALE`/`UNREACHABLE` node
+  is shown as such, never hidden; the reachable nodes still render; the S5
+  warning is shown regardless of node status). The console MUST NOT
+  aggressively auto-refetch the rate-limited gateway. Unknown/future PO
+  `status` or node `status` enum values degrade to a generic label —
+  the consumer parser is tolerant and never throws on an unrecognised
+  value.
+
+- **Producer immutability**: this is a **cross-reference only**. Any change
+  to the scm procurement / inventory-visibility producer contract is an scm
+  project-internal spec-first change in `procurement-api.md` /
+  `inventory-visibility-api.md`; this section follows it, never redefines
+  it (§ 5 Change Rule). The scm-side acknowledgment of this console
+  consumer is the merged scm `gateway-public-routes.md`
+  § *platform-console operator read consumer* (TASK-SCM-BE-015) — the
+  spec-first basis for this binding.
+
+- **§ 3 parity matrix is NOT mutated by this binding**: § 3 is the **GAP
+  `admin-web` parity matrix**, finalized by TASK-PC-FE-006 (16/16 rows; see
+  § 3). scm is **additive domain scope** federated by the console — **not**
+  a GAP-`admin-web` parity-gate row. This binding adds **no** row to § 3
+  and changes **none**; the Phase 3 `admin-web`-retirement gate is
+  unaffected. (This § 2.4.6 prose deliberately does **not** use the § 3.1
+  per-row attestation marker phrase, so the FE-006 no-drift guard's count
+  of that marker stays exactly 16.)
+
+> **Not a § 3 parity row**: like § 2.4.5 and unlike §§ 2.4.1–2.4.4,
+> § 2.4.6 has **no** § 3 line. § 3 is the GAP `admin-web` absorption parity
+> gate (FE-006-finalized); the scm section is a federated **domain**
+> section — the binding that **completes ADR-MONO-013 Phase 4** (wms +
+> scm) and confirms the § 2.4.5 per-domain credential rule generalises.
+> Phase 5/6 finance/erp console sections inherit this proven non-GAP
+> contract (each new § 2.4.x binding declares its own credential against
+> its producer, per the § 2.4.5 rule — not a guess copied from another
+> domain).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
