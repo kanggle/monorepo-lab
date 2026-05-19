@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-122-claude-md-be303-be299-task-rules-promote.md` — (spec PR) **CLAUDE.md § Task Rules 에 BE-303(객관 머지 검증)+BE-299(git mv review→done re-stage) 운영 규율 승격** — /audit-memory 2026-05-19 Phase 5 사용자 P1+P2 명시 동의. agent-memory(`project_refactor_sweep_status.md`)에만 있던 레포-전체 close-chore governance 를 catalog 2-bullet 로 표면화 (메모리=worked-example detail 보존·self-annotation 완료, 중복 아님; branch_hygiene/ci_path_filter_074/be_276 promote 선례 동형). 신규 ADR 불요(reality-alignment·competing convention 무). doc-only 1 파일(CLAUDE.md 2-bullet append-only)+lifecycle. P3~P7=audit 미선택 scope-out. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (append-only 2-bullet, dispatcher `git diff --numstat`=`2 0` 재검증). spec PR 분리; impl PR ready→review→done (승격 규율 close chore 자기적용).
 
 ## in-progress
 
