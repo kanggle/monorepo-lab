@@ -167,6 +167,147 @@ This is a **read-only** binding — there is **no mutation**, therefore the § 2
 
 > **§ 3 parity line satisfiable**: with `features/dashboards` bound here, the ADR-MONO-015-**refined** § 3 "dashboards" parity line (composed operator overview, **not** Grafana) is **satisfiable**; `FE-006` formally verifies the full refined checklist (ADR-MONO-013 Phase 3 admin-web-retirement gate).
 
+#### 2.4.5 wms operations surface (TASK-PC-FE-007 — cross-reference, not a redefinition)
+
+The **first non-GAP** per-domain binding of § 2.4 (ADR-MONO-013 Phase 4
+slice 1). The console's `features/wms-ops` renders, **server-side and
+tenant-scoped**, the wms `admin-service` **dashboard read-model** surface plus
+the single operational mutation that surface exposes (alert acknowledge). The
+producer contract is **authoritative and unchanged** — this section only
+states the consumer obligation and points at the owning wms spec. This is the
+binding that **verifies** ADR-MONO-013 § 3.3's "zero retrofit" assumption: a
+non-GAP domain is bound for the first time, and it surfaces a genuine
+**auth-model divergence** from the GAP operator surface (§§ 2.4.1–2.4.4).
+
+- **Authoritative producer (owned by wms, do NOT redefine here)**: wms
+  [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md)
+  — **unchanged, consumed only**. The console consumes exactly the **§ 1
+  Dashboard / Read-Model** reads and the one operational mutation on that
+  surface (request/response/headers/error tables are canonical there):
+
+  | # | Operation | Producer endpoint (`admin-service-api.md` §) | Kind |
+  |---|---|---|---|
+  | 1 | inventory snapshot | `GET /api/v1/admin/dashboard/inventory` (§ 1.1) | read |
+  | 2 | inventory by-key | `GET /api/v1/admin/dashboard/inventory/by-key` (§ 1.1) | read |
+  | 3 | throughput | `GET /api/v1/admin/dashboard/throughput` (§ 1.2) | read |
+  | 4 | orders | `GET /api/v1/admin/dashboard/orders` (§ 1.3) | read |
+  | 5 | shipments | `GET /api/v1/admin/dashboard/shipments` (§ 1.3) | read |
+  | 6 | asns | `GET /api/v1/admin/dashboard/asns` (§ 1.4) | read |
+  | 7 | asn inspection | `GET /api/v1/admin/dashboard/asns/{asnId}/inspection` (§ 1.4) | read |
+  | 8 | adjustments audit | `GET /api/v1/admin/dashboard/adjustments` (§ 1.5, **append-only** — no PATCH/DELETE) | read |
+  | 9 | alerts | `GET /api/v1/admin/dashboard/alerts` (§ 1.6) | read |
+  | 10 | **alert acknowledge** | `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` (§ 1.6) | **mutation** |
+  | 11 | master refs | `GET /api/v1/admin/dashboard/refs/{type}` (§ 1.7) | read |
+  | 12 | projection status | `GET /api/v1/admin/operations/projection-status` (§ 6.2) | read |
+
+  The wms write-admin surface (`admin-service-api.md` §§ 2–5: User / Role /
+  Assignment / Settings, `WMS_ADMIN`+ heavy writes) is **explicitly out of v1
+  console scope** — deferred to a later slice, not silently dropped.
+
+- **Per-domain credential selection (the key correctness element — normative)**:
+  **each § 2.4.x binding declares which credential it uses, and an
+  implementer MUST NOT blanket-apply one domain's auth model to another.**
+  The credential is a first-class, per-domain contract element, not an
+  implementation detail:
+
+  | Domain binding | `/api/admin/**` credential | Mechanism | Authority |
+  |---|---|---|---|
+  | GAP (§§ 2.4.1–2.4.4) | the **exchanged operator token** (`token_type=admin`, `iss=admin-service`), `getOperatorToken()` | server-side RFC 8693 token exchange (§ 2.6) | ADR-MONO-014; the **#569 trust-boundary invariant** (§ 2.1) — the GAP OIDC access token is **never** sent to GAP's `/api/admin/**` |
+  | **wms (§ 2.4.5, this binding)** | the **GAP OIDC access token** itself (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001) | sent **directly** as `Authorization: Bearer <GAP OIDC access token>` | wms `admin-service-api.md` § Global Conventions + `gap-integration.md`: RS256 JWT issued by GAP per ADR-001, validated against GAP JWKS by the wms gateway + admin-service; **`tenant_id=wms` enforced producer-side from the JWT claim**. wms has **no** token-exchange and **requires** the GAP OIDC token |
+
+  **The #569 trust-boundary invariant is GAP-domain-scoped and does NOT
+  generalise to wms.** #569 forbids the GAP OIDC access token on **GAP's**
+  `/api/admin/**` boundary *because GAP requires the § 2.6 exchanged operator
+  token there*. wms's gateway, by contrast, *requires* exactly the GAP OIDC
+  access token — these are **not in conflict; they are different per-domain
+  bindings**. An implementer must therefore neither (a) wrongly carry the
+  GAP operator-token-exchange (§ 2.6) to wms (wms would reject it — wrong
+  issuer/type — and it would misapply the GAP-domain auth model), nor (b)
+  wrongly treat "a GAP token on an admin path" as a universal #569 violation
+  (it is the *required* wms credential). The console's `features/wms-ops`
+  client uses `getAccessToken()` and **never** `getOperatorToken()`
+  (asserted by test — the inverse of the FE-002..006 assertion). Future
+  finance/erp console sections (Phase 5/6) inherit **this stated rule**: each
+  new § 2.4.x binding declares its credential explicitly, against its
+  producer's auth contract — not a guess copied from another domain.
+
+- **Tenant model divergence**: wms resolves the operator's tenant from the
+  **JWT `tenant_id` claim** (`=wms`) — **not** an `X-Tenant-Id` header (the
+  GAP §§ 2.4.1–2.4.4 mechanism) and **not** a producer-side
+  `admin_operators.tenant_id` lookup (the § 2.2/§ 2.6 GAP mechanism). The
+  console therefore does **not** send `X-Tenant-Id` to wms; the tenant is
+  carried implicitly inside the GAP OIDC access token. The console presents a
+  wms session from the data-driven registry (§ 2.2): the `tenants[]` for
+  `productKey=wms` drives which tenant the operator may select; when the
+  operator's GAP token is not wms-eligible (no `wms` tenant and not a
+  platform-scope `*` operator) the console **blocks the section** with an
+  actionable "no wms-scoped access" state — **no cross-tenant call is ever
+  fabricated**, and wms rejects cross-tenant producer-side regardless (never
+  weakened here). The console sends wms's required `X-Request-Id` (the wms
+  gateway echoes/generates it); `X-Actor-Id` is set by the wms gateway from
+  the JWT — **the console does not forge it**.
+
+- **Mutation discipline (alert-ack only)**:
+  `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` requires an
+  `Idempotency-Key` (UUID; producer scope `(Idempotency-Key, method, path)`,
+  TTL 24h per `admin-service-api.md` § Idempotency Semantics) and
+  `WMS_OPERATOR`+ role; the request body is **empty** (the producer sets
+  `acknowledged_at = now()`, `acknowledged_by = X-Actor-Id`). It is
+  **reason-free** — wms does **not** define `X-Operator-Reason` on this (or
+  any) surface; **carrying GAP's § 2.4.1 `X-Operator-Reason` header over to
+  the wms alert-ack is a header-matrix-drift defect** (asserted absent by
+  test). The `Idempotency-Key` is `crypto.randomUUID()`, **stable across one
+  user-confirmed action** (a retried/replayed confirmed ack reuses it →
+  producer replays the cached response) and **freshly regenerated per a new
+  confirmed attempt**. The action is **confirm-gated in the UI** (no
+  one-click ack). **All § 1 dashboard reads are pure reads — they carry NO
+  `Idempotency-Key`, NO `X-Operator-Reason`, NO body, and the test asserts
+  the absence of every mutation artifact on them.**
+
+- **Resilience (§ 2.5)**: the wms section reuses the registry/accounts-client
+  `integration-heavy` discipline (AbortController hard timeout, structured
+  logging, no unbounded default). The **wms error envelope is nested** —
+  `{ "error": { "code", "message", "timestamp", … } }` (per
+  `admin-service-api.md` § Error Envelope / `platform/error-handling.md`),
+  **distinct from GAP's flat `{ code, message, timestamp }`**; the wms client
+  MUST parse the wms (nested-`error`) shape — assuming GAP's flat shape
+  mis-renders / crashes (asserted). Mapping: `401`/`UNAUTHORIZED` → forced
+  **whole-session GAP re-login** (the GAP OIDC session expired — not a
+  per-section degrade, no partial authed state); `403`/`FORBIDDEN`
+  (role-insufficient — e.g. a `WMS_VIEWER` attempting the `WMS_OPERATOR`+
+  ack, or a non-`WMS_ADMIN` hitting `projection-status`) → inline "not
+  available to your role" (no crash, no re-login loop); `503` /
+  `CONFLICT`-class `DUPLICATE_REQUEST` `503` / timeout → **only the wms
+  section degrades** (the console shell + the GAP sections stay intact);
+  `404` (alert/asn/inventory not found) / `400 VALIDATION_ERROR` (throughput
+  range > 90 days, `to < from`) / `422 STATE_TRANSITION_INVALID` (alert
+  already acknowledged) / `409 DUPLICATE_REQUEST` → inline actionable (no
+  crash). **Read-model lag honesty**: wms dashboard responses may carry
+  `X-Read-Model-Lag-Seconds` (set by the producer when the slowest
+  contributing projection lags > 5 s); the console surfaces it as a
+  **non-blocking "data may lag ~Ns" hint** — the section still renders
+  (eventual-consistency honesty, not an error). The console MUST NOT
+  aggressively auto-refetch around the lag (the read-model is eventually
+  consistent by design; lag is surfaced, not polled-around).
+
+- **§ 3 parity matrix is NOT mutated by this binding**: § 3 is the **GAP
+  `admin-web` parity matrix**, finalized by TASK-PC-FE-006 (16/16 rows
+  VERIFIED — see § 3). wms is **additive domain scope** federated by the
+  console — **not** a GAP-`admin-web` parity-gate row. This binding adds
+  **no** row to § 3 and
+  changes **none**; the Phase 3 `admin-web`-retirement gate is unaffected.
+
+- **Producer immutability**: this is a **cross-reference only**. Any change
+  to the wms admin/dashboard producer contract is a wms project-internal
+  spec-first change in `admin-service-api.md`; this section follows it, never
+  redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: unlike §§ 2.4.1–2.4.4 (whose closing notes mark
+> a § 3 parity line satisfiable), § 2.4.5 has **no** § 3 line. § 3 is the
+> GAP `admin-web` absorption parity gate (FE-006-finalized); the wms section
+> is a federated **domain** section, the first verification of the
+> generalised per-domain integration contract, not a GAP parity capability.
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).

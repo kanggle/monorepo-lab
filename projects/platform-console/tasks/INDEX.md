@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-PC-FE-008-console-scm-operations-section.md` — ADR-MONO-013 § D6 **Phase 4 slice 2/2** (scm operations section, read-only: procurement PO read + inventory-visibility). **BLOCKED** on a cross-project spec-first prerequisite: an scm project-internal task reconciling `scm-platform/specs/contracts/http/gateway-public-routes.md` ("v1 backend-only / human-PKCE deferred to v2") to record `platform-console` (Model B) as a sanctioned human/operator GAP-token read consumer. `backlog → ready` only once that scm-side task is authored + linked (INDEX move rule). Reuses the FE-007 non-GAP per-domain-credential pattern. Recommended impl model **Opus** (contract ext + cross-project spec dep). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## ready
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-007-console-wms-operations-section.md` — **impl PR (review)**. frontend-engineer(Opus). ADR-MONO-013 § D6 **Phase 4 slice 1/2** — the **first non-GAP** domain federated by the console. **Spec-first (same PR, before/with code)**: `console-integration-contract.md` **§ 2.4.5** added (wms binding cross-ref to `admin-service-api.md` § 1 read-model 12 reads + `alerts/{id}/acknowledge` + `operations/projection-status`; the normative **per-domain credential selection** rule — GAP = RFC 8693 exchanged operator token (§ 2.6 / #569 *GAP-domain-scoped*) vs **wms = GAP OIDC access token directly** (`getAccessToken()`, RS256/ADR-001, `tenant_id=wms` JWT claim, no operator-exchange); tenant-model divergence (JWT claim vs `X-Tenant-Id`); wms **nested** error envelope `{ error: { code … } }`; § 2.5 resilience; read-model-lag honesty) — **§ 3 GAP-parity matrix byte-unchanged** (wms is additive domain scope, not a parity row; verified by the `parity-verification` no-drift guard staying 16/16) + `console-web/architecture.md` `features/wms-ops` module + `(console)/wms` route + `api/wms/**` proxy + § Auth Flow per-domain-credential rule (canonical Identity table + `### Service Type Composition` H3 byte-intact, ADR-MONO-012 D3). wms/GAP specs unchanged. **Code**: `features/wms-ops/` (api: `getAccessToken()` server-side — **never** `getOperatorToken()` (grep-verified absent), AbortController hard timeout, wms nested-envelope parser, `X-Read-Model-Lag-Seconds` surfaced, 12 reads + one confirm-gated `acknowledgeAlert` with `Idempotency-Key` only (stable per confirmed action / fresh per attempt), no `X-Operator-Reason`, empty body) + hooks + components (inventory snapshot table/filters/pagination, append-only adjustments read-only, alerts confirm-gated ack, read-model-lag banner, WCAG AA) + `(console)/wms` server component (registry-driven eligibility gate — no cross-tenant call fabricated) + `api/wms/**` same-origin proxy + in-console nav. **Gates**: `pnpm build` ✓ (`/wms` 147 kB gz < 250 budget, no perf regression vs sibling 144–149 kB), `pnpm lint` 0, `pnpm exec vitest run` **342/342 (32 files; +55 new across 6 wms suites incl. the per-domain-credential both-sides regression; 0 regression — GAP path STILL operator-token, `gap.baseRoute` unchanged, wms nav/route resolves)**, axe WCAG AA clean. Scope = `projects/platform-console/` only (wms/GAP/shared-path untouched — `git diff --stat` verified). Recommended impl model **Opus** (contract-extension; security-sensitive auth-divergence). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## done
 
