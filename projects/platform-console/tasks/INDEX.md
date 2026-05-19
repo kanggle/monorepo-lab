@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-PC-FE-009-console-finance-operations-section.md` — **backlog (BLOCKED — spec-first cross-project gate)**. ADR-MONO-013 § D6 **Phase 5** — the finance console section (third non-GAP federation; Phase 4 = FE-007 wms + FE-008 scm). **strictly read-only** (finance v1 = no `admin-service`, v2-deferred per ADR-MONO-008 § D3 — no operator-mutation parity, closest to FE-008 scm). Reuses § 2.4.5 (wms) per-domain-credential rule + § 2.4.6 (scm) flat-envelope/read-only discipline **verbatim** (finance = GAP OIDC access token direct via `getAccessToken()`, never `getOperatorToken()`; `tenant_id ∈ {finance,*}` from JWT claim, no `X-Tenant-Id`). Spec-first **§ 2.4.7** binding: finance read surface `GET /accounts/{id}`·`/balances`·`/transactions` (**no list/search GET — account-id-driven, honest constraint**); finance **flat** error envelope (distinct producer, own parser); **no 429** (finance has none — not cargo-culted from scm); finance write + v2 `admin-service` excluded. **fintech obligations (finance analog of scm S5)**: F5 money = precision-exact minor-units **string** (no float/Number coercion) + confidential/F7 (no balance/txn/ref logging) + honest regulated-state surfacing (FROZEN/RESTRICTED/CLOSED/FAILED/REVERSED). **§ 3 parity matrix NOT mutated** (count stays 16). **BLOCKED ON** `TASK-FIN-BE-005` (finance-platform — finance-side spec-first reconciliation, authored + in `review/`); `backlog → ready` only after FIN-BE-005 + FE-007 + FE-008 all merged (spec-first; mirrors scm `TASK-SCM-BE-015` ⊃ FE-008). 분석=Opus 4.7 / 구현 권장=frontend-engineer Opus 4.7 (contract ext + cross-project; dispatcher 독립 재검증).
 
 ## ready
 
