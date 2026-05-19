@@ -8,7 +8,7 @@ erp-platform 부트스트랩 artifact — 7번째 portfolio 프로젝트 (ADR-MO
 
 # Status
 
-review
+done
 
 # Owner
 
