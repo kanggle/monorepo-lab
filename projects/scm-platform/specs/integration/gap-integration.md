@@ -118,6 +118,35 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 v2 user-f
 
 ---
 
+## platform-console Operator Read Consumer (ADR-MONO-013)
+
+> 본 섹션은 [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
+> (ACCEPTED, Model B) § D6 Phase 4 의 scm-side 인정 — **새 capability 가 아니라
+> 기존 토큰 검증 규칙의 reality-alignment**. 규범적 계약은
+> [`gateway-public-routes.md` § platform-console operator read consumer](../contracts/http/gateway-public-routes.md)
+> 가 canonical; 본 섹션은 통합 요약이다.
+
+- `platform-console` 은 scm 의 v2-deferred frontend 가 **아니다** — 별도
+  ADR-MONO-013 프로젝트(Model B 단일 운영 콘솔). scm 의 read surface(procurement
+  PO read + inventory-visibility read)를 **server-side** 로 호출한다.
+- **사용 토큰 = GAP 자체 `platform-console-web` OIDC access token** (운영자
+  Auth Code+PKCE 로그인, RS256). `scm-platform-internal-services-client`(V0013,
+  client_credentials) 도 아니고, deferred `scm-platform-user-flow-client` 도
+  아니다 — scm 에 새 OAuth client 를 등록하지 **않는다**.
+- 이 토큰은 위 § Token 검증 규칙 1–5 + Edge Case E1/E3 의 **기존** 경로로
+  검증된다: RS256/JWKS → issuer allowlist → `tenant_id ∈ { scm, * }`
+  (`TenantClaimValidator`) → `JwtHeaderEnrichmentFilter` 가 사람 caller 를
+  `X-Token-Type=user` 로 표면화. **gateway 코드/route/auth-model 변경 0**.
+- **read-only**: PO write(`submit/confirm/cancel`) · webhook 은 console 소비
+  대상 아님. scm 은 single-org 유지(`multi-tenant`/`audit-heavy` 미선언 불변) —
+  tenant 격리는 GAP `tenant_id` claim + 기존 producer-side gate 가 권위.
+- 소비측 의무(per-domain credential 규칙 등)는 platform-console
+  [`console-integration-contract.md`](../../../platform-console/specs/contracts/console-integration-contract.md)
+  § 2.4.6(`TASK-PC-FE-008`) / § 2.4.5 가 canonical. scm 은 consumer-only,
+  `procurement-api.md`/`inventory-visibility-api.md` 무변경.
+
+---
+
 ## dev smoke test
 
 dev 토큰 발급:
@@ -164,3 +193,6 @@ curl -H "Authorization: Bearer ${TOKEN}" \
 - [fan-platform 의 동일 통합](../../../fan-platform/specs/integration/gap-integration.md) — reference pattern
 - TASK-MONO-042 — GAP V0013/V0015 scm-platform OIDC 시드 (V0013 SQL: `scm-platform-internal-services-client`, V0015 SQL: `scm` tenant)
 - TASK-SCM-BE-001 — 본 통합의 첫 구현 태스크 (gateway-service bootstrap)
+- [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md) — platform-console (Model B) § D6 Phase 4: scm read consumer 거버넌스 (본 통합의 console consumer 인정 권위)
+- [platform-console `console-integration-contract.md`](../../../platform-console/specs/contracts/console-integration-contract.md) § 2.4.5/§ 2.4.6 — 소비측 per-domain credential 계약 (consumer obligation canonical)
+- TASK-SCM-BE-015 — 본 console read-consumer reconciliation 태스크
