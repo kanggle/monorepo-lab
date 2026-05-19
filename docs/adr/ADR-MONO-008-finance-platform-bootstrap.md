@@ -237,7 +237,7 @@ Rejected: identical reasoning to ADR-MONO-003b § 4.6. The user has not stated b
 | Status | ACCEPTED | ACCEPTED | PROPOSED |
 | Key decision | scm catalyst + D4 ordering | Launch criteria + procedure + sync + rollback | Integration mode + classification + procedure + readiness checklist |
 | Audit trail | n/a | § 6 transition history | § 6 transition history (analogous structure) |
-| Forward pointer pattern | § D4 footer to ADR-MONO-008 (after this PR) | § Status + § 6 (canonical) | n/a — will get one if ADR-MONO-009 (erp) is filed |
+| Forward pointer pattern | § D4 footer to ADR-MONO-008 (after this PR) | § Status + § 6 (canonical) | § 5 → ADR-MONO-016 (erp). NB: identifier corrected — `ADR-MONO-009` = Chrome DevTools MCP (gap #4, pre-existing); erp bootstrap ADR = **ADR-MONO-016**, filed PROPOSED 2026-05-19 (TASK-MONO-117). |
 
 **Practical reading order for a new session evaluating "should we bootstrap finance now?"**:
 
