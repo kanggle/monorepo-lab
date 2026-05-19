@@ -1,0 +1,178 @@
+# =============================================================================
+# erp-platform — Local Development Infrastructure (v1 placeholder)
+# =============================================================================
+# Hostname-based routing (per ADR-MONO-001 Option C):
+#   gateway-service is reached via http://erp.local/ — Traefik routes based
+#   on Host header. No PORT_PREFIX, no host-port slot allocation.
+#
+# Status: v1 bootstrap (TASK-MONO-119, ADR-MONO-016 ACCEPTED Option C). The
+# gateway-service block below is commented out — its Spring Boot module is not
+# yet generated. masterdata-service has a minimal skeleton (no business logic);
+# its block is commented out too until TASK-ERP-BE-001 lands the implementation
+# (Dockerfile + Flyway schema + domain code). The first impl task will:
+#   1. Implement projects/erp-platform/apps/masterdata-service/ (domain code +
+#      Dockerfile + Flyway V1 schema),
+#   2. Activate the masterdata-service / gateway-service blocks below,
+#   3. Activate Traefik labels so http://erp.local/ resolves.
+#
+# Backing services (mysql / redis) are placeholders — they are defined here so
+# `docker compose --project-directory projects/erp-platform config`
+# validates the file shape, but they are only meaningfully used once at least
+# one application service depends on them.
+#
+# Prerequisites (when activated):
+#   1. Start the shared Traefik stack:  pnpm traefik:up
+#      (creates the external `traefik-net` network this compose file joins)
+#   2. Add `127.0.0.1 erp.local` to your hosts file (one-time setup)
+#
+# Usage (after first service skeleton lands):
+#   pnpm erp:up    — start everything in this compose file
+#   pnpm erp:down  — stop containers (volumes preserved)
+#   pnpm erp:logs  — tail logs
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # gateway-service — activated by a follow-up task.
+  # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
+  # (tenant_id=erp only), internal-only boundary enforcement, rate limit.
+  # ---------------------------------------------------------------------------
+  # gateway-service:
+  #   image: erp-platform/gateway-service:local
+  #   container_name: erp-platform-gateway
+  #   build:
+  #     context: ./apps/gateway-service
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   expose:
+  #     - "8080"
+  #   environment:
+  #     SERVER_PORT: "8080"
+  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #     OIDC_REQUIRED_TENANT_ID: erp
+  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-erp-platform-internal-services-client}
+  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-erp-dev}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: "6379"
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://erp.local}
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     mysql:
+  #       condition: service_healthy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=traefik-net"
+  #     - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+  #     - "traefik.http.routers.erp-platform.entrypoints=web"
+  #     - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
+  #   networks:
+  #     - erp-platform-net
+  #     - traefik-net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # masterdata-service — activated by TASK-ERP-BE-001 (skeleton present, no
+  # business logic / Dockerfile / Flyway schema yet).
+  # Organization master data: 부서 / 직원 / 직급 / 비용센터 / 거래처 —
+  # reference integrity, effective dating, immutable audit_log.
+  # ---------------------------------------------------------------------------
+  # masterdata-service:
+  #   image: erp-platform/masterdata-service:local
+  #   container_name: erp-platform-masterdata
+  #   build:
+  #     context: ./apps/masterdata-service
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   expose:
+  #     - "8080"
+  #   environment:
+  #     SERVER_PORT: "8080"
+  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+  #     MYSQL_HOST: mysql
+  #     MYSQL_PORT: "3306"
+  #     MYSQL_DB: ${MYSQL_DB:-erp_db}
+  #     MYSQL_USER: ${MYSQL_USER:-erp}
+  #     MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
+  #     REDIS_HOST: redis
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - erp-platform-net
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — backing store for masterdata-service (TASK-ERP-BE-001+). erp_db.
+  # Mirrors GAP's MySQL engine choice (GAP Identity tables are MySQL); erp
+  # master-data tables live here. expose: only — no host port (Local
+  # Network Convention, production parity).
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: erp-platform-mysql
+    restart: unless-stopped
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DB:-erp_db}
+      MYSQL_USER: ${MYSQL_USER:-erp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - erp-platform-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — rate-limit counters (gateway), short-lived idempotency cache.
+  # expose: only — no host port (Local Network Convention).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: erp-platform-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - erp-platform-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  erp-platform-net:
+    driver: bridge
+  traefik-net:
+    external: true
+    name: traefik-net

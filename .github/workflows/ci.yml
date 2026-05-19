@@ -134,6 +134,7 @@ jobs:
       fan: ${{ steps.filter.outputs.fan == 'true' && steps.filter.outputs.code-changed == 'true' }}
       scm: ${{ steps.filter.outputs.scm == 'true' && steps.filter.outputs.code-changed == 'true' }}
       finance: ${{ steps.filter.outputs.finance == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      erp: ${{ steps.filter.outputs.erp == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
@@ -180,6 +181,10 @@ jobs:
               - 'projects/finance-platform/**'
               - '!projects/finance-platform/tasks/**'
               - '!projects/finance-platform/**/*.md'
+            erp:
+              - 'projects/erp-platform/**'
+              - '!projects/erp-platform/tasks/**'
+              - '!projects/erp-platform/**/*.md'
             contracts:
               - 'projects/*/specs/contracts/**'
             observability:
@@ -225,7 +230,7 @@ jobs:
     needs: changes
     # Activate when:
     #   - any shared library / cross-project path changed (libs, workflows)
-    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm, finance)
+    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm, finance, erp)
     #   - push to main always runs (safety net regardless of filter)
     # spec/chore PRs (tasks/** or *.md only) produce no matching flag → skip.
     if: >-
@@ -237,7 +242,8 @@ jobs:
       needs.changes.outputs.gap == 'true' ||
       needs.changes.outputs.fan == 'true' ||
       needs.changes.outputs.scm == 'true' ||
-      needs.changes.outputs.finance == 'true'
+      needs.changes.outputs.finance == 'true' ||
+      needs.changes.outputs.erp == 'true'
 
     steps:
       - name: Checkout
@@ -349,6 +355,17 @@ jobs:
         run: >-
           ./gradlew
           :projects:finance-platform:apps:account-service:check
+          --no-daemon --stacktrace
+
+      - name: Build and check erp-platform backend (Docker-free)
+        # erp-platform integration tests carry @Tag("integration") and are
+        # excluded from default :test/:check tasks (see masterdata-service
+        # build.gradle). v1 bootstrap (TASK-MONO-119) = masterdata-service
+        # skeleton only (no business logic / no tests yet); TASK-ERP-BE-001
+        # lands the domain + test pyramid + Testcontainers IT.
+        run: >-
+          ./gradlew
+          :projects:erp-platform:apps:masterdata-service:check
           --no-daemon --stacktrace
 
       - name: Upload test reports on failure

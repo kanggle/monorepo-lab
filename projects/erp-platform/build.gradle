@@ -1,0 +1,26 @@
+// Project: erp-platform
+//
+// Placeholder build file for project-level common configuration.
+// Shared settings for all modules in this project (apps/* and tests/*) go here.
+//
+// Root build.gradle applies Java + Lombok + JUnit Platform to every subproject
+// including this project's modules; this file is only needed when
+// erp-platform needs configuration distinct from other projects in the
+// monorepo.
+//
+// Typical future additions (add as needed — keep empty until concrete need):
+//
+// configure(subprojects.findAll { it.path.startsWith(':projects:erp-platform:apps:') }) {
+//     apply plugin: 'org.springframework.boot'
+//     apply plugin: 'io.spring.dependency-management'
+//
+//     dependencies {
+//         implementation 'org.springframework.boot:spring-boot-starter-web'
+//         implementation 'org.springframework.boot:spring-boot-starter-actuator'
+//         implementation project(':libs:java-common')
+//         implementation project(':libs:java-web')
+//         implementation project(':libs:java-observability')
+//         implementation project(':libs:java-security')
+//         implementation project(':libs:java-messaging')  // outbox / Kafka (event-consumer)
+//     }
+// }

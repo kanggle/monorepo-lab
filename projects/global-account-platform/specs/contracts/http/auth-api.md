@@ -263,12 +263,15 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | `ecommerce-admin-dashboard-client` | `ecommerce` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3001/api/auth/callback/gap`, `http://admin.ecommerce.local/api/auth/callback/gap` | `openid`, `profile`, `email`, `tenant.read`, `ecommerce.operator` | V0012 |
 | `scm-platform-internal-services-client` | `scm` | `client_credentials` | No | — | `scm.read`, `scm.write` | V0013 |
 | `finance-platform-internal-services-client` | `finance` | `client_credentials` | No | — | `finance.read`, `finance.write` | V0017 |
+| `erp-platform-internal-services-client` | `erp` | `client_credentials` | No | — | `erp.read`, `erp.write` | V0018 |
 
 > `fan-platform-internal-services-client` (client_credentials) is deferred to v2 — see TASK-MONO-026 Out of Scope.
 >
 > `scm-platform-user-flow-client` (PKCE) is deferred to scm v2 when frontend is introduced — see TASK-MONO-042 Out of Scope. v1 is backend-only.
 >
 > `finance-platform-user-flow-client` (PKCE) is not issued — finance v1 is backend-only and its UI is rendered by the unified platform console (ADR-MONO-013 §3.3, ADR-MONO-008). See TASK-MONO-114.
+>
+> `erp-platform-user-flow-client` (PKCE) is not issued — erp v1 is backend-only (internal-system domain) and its UI is rendered by the unified platform console (ADR-MONO-013 §3.3, ADR-MONO-016). See TASK-MONO-119.
 
 ---
 
