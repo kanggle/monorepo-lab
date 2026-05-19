@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-121-erp-external-fork-resolution-recording.md` — (spec PR) **erp-platform 외부 Template-fork 완료 기록 — ADR-MONO-016 §6 + ADR-MONO-003a §3 row #21 append-only (Option C standalone side 확정; TASK-MONO-116 finance 동형)**. 사용자 2026-05-19 셸 `gh repo create kanggle/erp-platform --template kanggle/project-template --public --clone` 실행 → **dispatcher 독립 객관 검증** `gh repo view`: `templateRepository=kanggle/project-template` / owner `kanggle` / PUBLIC / `isTemplate:false` / `createdAt 2026-05-19T10:01:11Z` = 진짜 Template-derived fork. ADR-016 §6 2026-05-19 ACCEPTED row 의 `Both (Template fork...)` 가 decision 으로만 기록돼 있던 standalone artifact 실생성을 **신규 row append 로 확정** (221/222 row + 224/226 주석 + ADR-003a §3 #1~#20 byte-unchanged — append-only 절대). 신규 ADR 불요 (reality-alignment·competing convention 무·"no re-authorisation needed" 명시 인가·MONO-116 직전 동형). **정직 단서 (green-wash 금지)**: 동반 stale-ref-prune 사용자 명령은 경로 오류로 **실패** → 본 task 가 "완료"로 기록하지 **않음**, 별도 user-shell 재-handoff. doc-only (2 ADR append + lifecycle), 코드/projects/빌드/CI 0. 머지 ⇒ erp v1 monorepo+standalone 양쪽 완전 종결 = ADR-MONO-016 전 항목 해소; Template downstream 실사용 finance+erp **2회 CONFIRMED** (Phase 5 "전략 작동" 2차 실증). erp=portfolio 마지막 도메인(mes 드롭)→신규 부트스트랩 ADR 더 없음. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (append-only row ×2, 설계결정 무 — 본 spec 이 근거 확정; dispatcher add-only 재검증 필수). spec PR 분리; impl PR ready→review→done.
 
 ## in-progress
 
