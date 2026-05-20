@@ -8,7 +8,7 @@ ADR-MONO-017 PROPOSED → ACCEPTED transition + recording — `platform-console-
 
 # Status
 
-review
+done
 
 # Owner
 
