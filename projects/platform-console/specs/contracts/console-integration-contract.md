@@ -1046,16 +1046,175 @@ structural exception `console-web` itself takes from `rest-api.md`'s
 | 1 | `GET /actuator/health` | Liveness / readiness probe; Traefik health-check target; smoke-target for the IT harness | None (Spring Boot Actuator `health` default — unauthenticated readiness only; no detailed components surfaced beyond `status`) | `console-bff` |
 
 > **Phase 7 MVP "Operator Overview" composition route** is added by
-> **TASK-PC-FE-011** via an additive `§ 2.4.9.1` sub-section. The skeleton
-> task (TASK-PC-BE-001) does **not** define any composition route's
-> request/response schema — that authoring is TASK-PC-FE-011's spec-first
-> scope (ADR-MONO-017 § 3.3 #3).
+> **TASK-PC-FE-011** via the additive `§ 2.4.9.1` sub-section below.
 
 > **Not a § 3 parity row**: like §§ 2.4.5–2.4.8, this BFF section has **no**
 > § 3 line. § 3 is the GAP `admin-web` absorption parity gate (FE-006
 > finalized, 16 rows, immutable until a future ADR-amendment); composition
 > routes are **additive** to the operator surface, never replace a parity
 > row.
+
+#### 2.4.9.1 `GET /api/console/dashboards/operator-overview` — MVP "Operator Overview" composition route (TASK-PC-FE-011)
+
+The **first concrete `§ 2.4.9.X` composition route** on top of the
+[`console-bff`](../services/console-bff/architecture.md) skeleton landed by
+TASK-PC-BE-001. Governed by [ADR-MONO-017](../../../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md)
+§ D8 (Phase 7 MVP = 1 "Operator Overview"). This sub-section is **additive**
+to § 2.4.9 — all hard invariants, auth flow, resilience, observability,
+logging, and edge-routing constraints declared in § 2.4.9 apply verbatim
+and are **not re-derived** here. ADR-MONO-013 § 3.3 "zero retrofit" — **sixth
+confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
+
+##### Surface
+
+| # | Method / Path | Purpose | Auth | Producer |
+|---|---|---|---|---|
+| 1 | `GET /api/console/dashboards/operator-overview` | Single composed cross-domain dashboard envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the per-leg outcome (`ok` / `degraded` / `forbidden`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <gap-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Operator-Token: <rfc8693-operator-token>` (request-scoped, for GAP leg) + `X-Tenant-Id: <active-tenant>` (forwarded verbatim) — all three set server-side by `console-web` 's SSR route, never by the browser. Absent any of the three → fail-closed (`400 NO_ACTIVE_TENANT` if `X-Tenant-Id` absent; otherwise `401 TOKEN_INVALID`) before any outbound leg | `console-bff` |
+
+> The route is **GET only — read-only**. ADR-MONO-017 § 2.4.9 hard invariant
+> "no mutation at MVP" applies; therefore `Idempotency-Key`,
+> `X-Operator-Reason`, destructive-confirm scaffolding, and any
+> POST/PUT/PATCH/DELETE method MUST NOT appear on this route or any future
+> `§ 2.4.9.X` MVP dashboard route. Adding a mutation surface requires a
+> fresh ADR amendment to ADR-MONO-017.
+
+##### Composed producers (5 domains, reuse-only — D3.A / § 3.3 zero retrofit)
+
+The composition route fans out across **existing** per-domain read
+endpoints — one card per domain, **no producer retrofit**. The producer
+contracts are authoritative in their respective files and are **not
+redefined here**:
+
+| # | Card | Composed producer endpoint | Domain credential (§ 2.4.9 D4) | Producer spec § (authoritative) | Read content surfaced |
+|---|---|---|---|---|---|
+| 1 | accounts summary | `GET /api/admin/accounts?page=0&size=1` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` | GAP [`admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot) |
+| 2 | wms inventory health | `GET /api/v1/admin/dashboard/inventory` (snapshot) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.1 Dashboard / Read-Model (already bound by § 2.4.5 / FE-007) | inventory snapshot health summary (stock total, alert count) |
+| 3 | scm procurement / inventory | `GET /api/scm/inventory/visibility` (snapshot) — the existing scm gateway public read (§ 2.4.6 / FE-008) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
+| 4 | finance balance health | `GET /api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → an `operatorDefaultAccountId` resolution mechanism is required (registry-side or operator-profile-side; spec-first decided **at MVP impl** — see § Implementation guidance); if absent → that card renders `forbidden` (not a crash) |
+| 5 | erp masterdata snapshot | `GET /api/erp/masterdata/departments?active=true&page=0&size=1` (page total snapshot, asOf=now implicit) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.8 verbatim) | erp [`masterdata-api.md`](../../../erp-platform/specs/contracts/http/masterdata-api.md) § Departments (already bound by § 2.4.8 / FE-010) | active department count (snapshot, asOf=now — E3 effective-dating implicit) |
+
+**Producer immutability**: the 5 producer contracts above are **byte-unchanged
+spec-side and impl-side** (ADR-MONO-017 § 3.3 sixth confirmation). The
+console-bff composition use-case calls the existing GETs verbatim;
+no `/summary` / `/dashboard-card` aggregating endpoint is added to any
+producer (D3.B rejection).
+
+##### Response schema (`200 OK`)
+
+```json
+{
+  "asOf": "2026-05-20T10:30:00Z",
+  "cards": [
+    { "domain": "gap",     "status": "ok",         "data": { "accountCount": 12345 } },
+    { "domain": "wms",     "status": "ok",         "data": { "inventorySnapshot": { … } } },
+    { "domain": "scm",     "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
+    { "domain": "finance", "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
+    { "domain": "erp",     "status": "ok",         "data": { "activeDepartmentCount": 87 } }
+  ]
+}
+```
+
+- `asOf`: composition request server-side timestamp (ISO-8601 UTC). Operators see "data as-of HH:MM:SS" in the UI.
+- `cards[]`: **exactly 5 entries** in **fixed order** `[gap, wms, scm, finance, erp]` (UI rendering ordering invariant; never reordered by status).
+- `cards[i].status` ∈ `{ "ok", "degraded", "forbidden" }`:
+  - `ok` → `data` is the card's composed payload (domain-specific shape, declared per row in the producer endpoint above).
+  - `degraded` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }`; `data` absent. Card renders "data unavailable, retry pending" placeholder.
+  - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }` (last covers e.g. finance's `operatorDefaultAccountId` absent); `data` absent. Card renders "not available to your role / tenant" placeholder.
+- **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 5 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
+
+##### Error envelope (composition-level errors, NOT per-leg)
+
+For the inbound-validation errors **before** any outbound leg fires
+(absent tenant / token), the standard console-bff error envelope applies
+(`GlobalExceptionHandler` scope = `adapter.inbound.web`, per
+[`console-bff/architecture.md`](../services/console-bff/architecture.md)):
+
+| Status | Code | Cause |
+|---|---|---|
+| `400` | `NO_ACTIVE_TENANT` | `X-Tenant-Id` absent or blank |
+| `401` | `TOKEN_INVALID` | `Authorization` bearer absent / invalid; or per § 2.4.4 D3 — `401` from any outbound leg surfaces as composition-level `401` (cross-leg discipline: tokens are shared across legs from the same inbound request; a 401 on one is a 401 for all) |
+| `503` | reserved | NEVER emitted at MVP — D5.B is rejected |
+
+##### Auth flow (verbatim from § 2.4.9, restated for cross-reference only)
+
+- **Inbound** (console-web SSR → console-bff): `Authorization` (GAP OIDC access token, inbound principal) + `X-Operator-Token` (RFC 8693 exchanged operator token, request-scoped via `OperatorCredentialContext`) + `X-Tenant-Id` (operator's selected active tenant). The browser **never** reaches console-bff directly.
+- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → GapOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
+
+##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
+
+- Per-leg circuit-breaker keyed by `(domain, route)` via `libs/java-web` Resilience4j.
+- Per-leg hard timeout bounded so the composition's total fan-out latency budget is not exceeded.
+- Aggregation degrade: every responsive leg's `data` + per-failed-leg `{ status: "degraded" / "forbidden", reason }` card.
+- All-down still returns 200 with all-degraded/forbidden envelope. D5.B (all-or-nothing 503) is forbidden.
+
+##### Observability (verbatim from § 2.4.9 + MVP-specific label values)
+
+The 3 mandatory BFF metric families emit per-leg samples with the
+following label values for this route:
+
+| Metric | Labels per emit |
+|---|---|
+| `bff_fanout_latency_seconds{domain,route}` | `domain` ∈ `{gap,wms,scm,finance,erp}` × `route` = `"operator-overview"` |
+| `bff_fanout_errors_total{domain,route,code}` | same `domain`/`route` + `code` ∈ `{5xx,timeout,circuit_open,tenant_forbidden,permission_denied,missing_prerequisite}` |
+| `bff_aggregation_degrade_count_total{dashboard,degraded_domain}` | `dashboard = "operator-overview"` + `degraded_domain` ∈ `{gap,wms,scm,finance,erp}` (one increment per degraded/forbidden card per response) |
+
+OTel `traceparent` propagates inbound → every outbound leg; per-leg span
+carries `bff.domain` + `bff.route="operator-overview"` attributes.
+
+##### Implementation guidance (impl PR scope notes — not contract)
+
+- **`operatorDefaultAccountId` resolution** (finance card prerequisite) is an
+  impl-PR decision: either (a) the GAP registry surface (§ 2.2) returns a
+  per-operator `finance.defaultAccountId` claim/attribute, or (b) the
+  console-bff composition use-case skips the finance leg and renders
+  `forbidden / MISSING_PREREQUISITE` when no default is available. Option
+  (b) is the **minimal MVP-correct path** — option (a) is a follow-up
+  spec-first change in GAP `admin-api.md` registry surface, not in scope
+  here. Pick (b) at MVP; (a) is a separately-tracked enhancement.
+- **`asOf` field source**: server-side composition-request `Instant.now()`
+  at request entry (NOT per-leg response timestamp); operators see the
+  composition timestamp, not the slowest leg's freshness. wms's
+  `X-Read-Model-Lag-Seconds` (per § 2.4.5) MAY surface as an additional
+  card-level hint but is NOT in the v1 envelope schema.
+
+##### console-web side obligations (FE)
+
+- Server route `(console)/api/console/dashboards/operator-overview` (Next.js
+  App Router server route) forwards the 3 headers (Authorization /
+  X-Operator-Token / X-Tenant-Id) to `console-bff` server-side. Browser
+  never sees them.
+- `features/operator-overview/` (`<OperatorOverviewScreen>` server
+  component + `<DomainCard>` × 5 + `<OverviewDegradeBanner>` if all-down)
+  renders the composed envelope. Per-card UI shape:
+  - `ok` → card-specific summary (count, snapshot, etc.).
+  - `degraded` → "data unavailable" placeholder + retry affordance (explicit
+    user retry, no auto-poll — § 2.4.4 / § 2.5 invariant).
+  - `forbidden` → "not available to your role / tenant" placeholder (no
+    re-login loop).
+- Route `(console)/dashboards/overview` is the operator-facing entry; a
+  navigation entry in the in-console nav (`<MainNav>` "Operator Overview")
+  is added.
+- No client-side polling, no auto-refresh interval — operator-initiated
+  retry only (matches § 2.4.4 / § 2.4.9 invariant — bounded fan-out,
+  meta-audit-respecting).
+
+##### Hard invariants this MVP route inherits (HARD INVARIANT — ADR-MONO-017 § D4 + § 3.3 + § 2.4.9)
+
+- **No producer retrofit** — 5 producer specs (`{global-account-platform, wms-platform, scm-platform, finance-platform, erp-platform}/specs/contracts/`) byte-unchanged.
+- **Per-domain credential dispatch** verbatim from §§ 2.4.5/6/7/8 + § 2.6.
+- **Read-only** — no `Idempotency-Key` / `X-Operator-Reason` / mutation method.
+- **Producer-authoritative tenant gate** — `X-Tenant-Id` pass-through; BFF never re-derives or relaxes.
+- **Per-card degrade** discipline — composition never blanks; `401`-cross-leg vs `403`/timeout-per-leg distinction preserved.
+- **§ 3 parity matrix byte-unchanged** (attestation-marker count = exactly **16** — `parity-verification.test.ts` no-drift guard).
+- **ADR-MONO-017 D1-D8 byte-unchanged** (no ADR amendment in this PR — this is execution under the ACCEPTED frame).
+
+> **Phase 7 = MVP-only at this commit**. Subsequent Phase 7 dashboards
+> (e.g. domain health, throughput) are separate future tasks (ADR-MONO-017
+> § D8); they will be added as `§ 2.4.9.2`, `§ 2.4.9.3`, … sub-sections,
+> each inheriting the hard invariants above.
+
+> **Not a § 3 parity row**: composition routes are additive to the operator
+> surface, never replace a § 3 row. § 3 count remains **16** post-merge.
 
 ### 2.5 Resilience
 
