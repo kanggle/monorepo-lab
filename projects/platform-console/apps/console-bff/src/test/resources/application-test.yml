@@ -32,7 +32,19 @@ management:
       export:
         enabled: false
 
+# Test-profile diagnostic surface — surface server-side errors so CI failure
+# messages carry root cause without needing log-file scraping. Reverts when
+# the IT failure is resolved (TASK-PC-BE-001 follow-up commit).
+server:
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+
 logging:
   level:
-    root: WARN
+    root: INFO
     com.kanggle.platformconsole.bff: DEBUG
+    org.springframework.boot.actuate: DEBUG
+    io.micrometer: DEBUG
+    org.springframework.web: INFO

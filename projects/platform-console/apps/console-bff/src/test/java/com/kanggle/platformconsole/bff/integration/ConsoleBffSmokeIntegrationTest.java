@@ -104,8 +104,14 @@ class ConsoleBffSmokeIntegrationTest extends AbstractConsoleBffIntegrationTest {
     void actuatorPrometheus_exposesMandatoryMetrics() {
         ResponseEntity<String> response = restTemplate.getForEntity(
                 "http://localhost:" + port + "/actuator/prometheus", String.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         String body = response.getBody();
+        // Diagnostic: surface response body verbatim into the assertion message so
+        // a non-200 status carries the server-side error envelope (with
+        // server.error.include-stacktrace=always) into the JUnit XML.
+        assertThat(response.getStatusCode())
+                .as("non-200 body (first 4000 chars):\n%s",
+                        body == null ? "<null>" : body.substring(0, Math.min(4000, body.length())))
+                .isEqualTo(HttpStatus.OK);
         assertThat(body).contains("bff_fanout_latency_seconds");
         assertThat(body).contains("bff_fanout_errors_total");
         assertThat(body).contains("bff_aggregation_degrade_count_total");
