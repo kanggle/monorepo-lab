@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-124-erp-integration-ci-job.md` — erp-platform Integration CI job 추가 (masterdata-service Testcontainers — finance TASK-MONO-115 동형, scm TASK-MONO-048 원형). TASK-ERP-BE-001 #650 (`b110e03f`) 의 3 IT 클래스 (abstract base + `MasterdataLifecycleIntegrationTest` + `IdempotencyConcurrencyIntegrationTest`) 가 local + dispatcher 구조검증만 통과·CI 실행 미수행 인 정직 backlog 해소. `finance-integration-tests` job ([ci.yml#L972-L1021](../.github/workflows/ci.yml#L972-L1021)) verbatim 답습 — name `Integration (erp-platform, Testcontainers)` / needs `[changes,build-and-test]` / timeout 30 / `if:` 기존 `outputs.erp` flag 재사용 (pure-positive, MONO-074/075 negation-free 규율) / run `:projects:erp-platform:apps:masterdata-service:integrationTest` / upload `erp-integration-test-reports` (retention 7) + `Build and check erp-platform backend` stale 주석 갱신. 신규 path-filter 불필요(`erp` flag 기등록 ci.yml L137+L184-L187 MONO-119). dependency 선행=ERP-BE-001 (머지·`integrationTest` Gradle task L107 등록 확인), 후속=없음(외부 Template-fork 는 MONO-121 으로 이미 종결). Failure Scenario A=CI 가 local 통과한 IT 의 진짜 행위 gap 노출 시 그것이 본 task 존재 이유(green-wash 방지의 성과); fix 는 별 erp fix-task 로 분리(finance MONO-115→FIN-BE-002→003→004 honest chain 동형 가능). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical verbatim 답습 + 단일 service step).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-124-erp-integration-ci-job.md` — (in this impl PR) **erp-platform Integration CI job — finance TASK-MONO-115 동형, scm TASK-MONO-048 원형**. `.github/workflows/ci.yml` 에 `erp-integration-tests` job 추가 (`finance-integration-tests` verbatim 답습; name `Integration (erp-platform, Testcontainers)` / needs `[changes,build-and-test]` / timeout 30 / `if:` 기존 `outputs.erp` flag 재사용·pure-positive·negation 미사용 / run `:projects:erp-platform:apps:masterdata-service:integrationTest` / upload `erp-integration-test-reports`; finance 직후 삽입, job 18→19) + `Build and check erp-platform backend` stale 주석 갱신. 단일 service step (finance shape 동형), MySQL 8 + Kafka 컨테이너 (Redis 미사용 — abstract base 객관 verified). impl PR 자체가 `.github/workflows/` 변경 → `workflows` flag → 모든 dedicated job 강제 활성화 + 첫 erp Integration job 실 검증. Failure Scenario A 발현 시 = 본 task 존재 이유 (green-wash 방지의 성과), fix 는 별 erp fix-task 로 분리 (finance MONO-115→FIN-BE-002→003→004 honest chain 동형 가능). 분석=Opus 4.7 / 구현=Opus 4.7 (mechanical verbatim 답습 + 단일 service step + self-review).
 
 ## done
 
