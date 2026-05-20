@@ -72,10 +72,19 @@ public class ObservabilityConfig {
      * the explicit registry, the endpoint auto-registers from
      * {@code PrometheusScrapeEndpointAutoConfiguration}; if not, this bean
      * registers it directly.
+     *
+     * <p>Uses the Spring Boot 3.3.1+ non-deprecated constructor
+     * {@code (PrometheusRegistry, Properties)}; passing {@code null} for the
+     * Properties argument is the documented "use {@code
+     * PrometheusPropertiesLoader.load()} default" path — semantically
+     * identical to the now-deprecated single-arg constructor, which itself
+     * delegates {@code this(prometheusRegistry, null)}. Removal target is
+     * Spring Boot 3.5.0 (TASK-PC-BE-003 / TASK-PC-BE-001 § Honest gaps (b)
+     * closure).
      */
     @Bean
     public PrometheusScrapeEndpoint prometheusScrapeEndpoint(PrometheusMeterRegistry registry) {
-        return new PrometheusScrapeEndpoint(registry.getPrometheusRegistry());
+        return new PrometheusScrapeEndpoint(registry.getPrometheusRegistry(), null);
     }
 
     /**
