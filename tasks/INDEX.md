@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-125-adr-017-console-bff-proposed-authoring.md` — author ADR-MONO-017 PROPOSED — `platform-console-bff` Architecture (Phase 7 Aggregation & Cross-Domain Dashboards). ADR-MONO-013 § D6 Phase 7 gate (5/5 domains live) satisfied 2026-05-20 by FE-010 #661 `eaa1de51`; staged-ADR PROPOSED authoring per ADR-014/015/016 sibling pattern (PROPOSED records direction + D1-D8 frame + sequence, ACCEPTED transition is separate follow-up task). PROPOSED CHOSEN-direction defaults: D1=REST orchestrator (B; smallest blast radius, zero-retrofit affirming) / D2=server-side fan-out only (affirms ADR-013 § D5) / D3=reuse existing per-domain reads verbatim (§ 3.3 fifth confirmation) / D4=per-domain credential rule extended verbatim (FE-007..010 invariant, never re-derived) / D5=per-domain circuit-breaker inherited from § 2.5 / D6=`tenant_id` claim pass-through (producer-side gate authority) / D7=per-domain fan-out attribution (reuse ADR-006 observability stack) / D8=MVP = 1 "Operator Overview" cross-domain dashboard (ADR-015 composed-overview generalised). HARDSTOP-04 discipline: ADR-013 D1-D8 byte-unchanged; 2 additive amendments only (§ D5 parenthetical + § History new "Additive note" → count 4→5). ADR-MONO-003a § 3 audit row append (one-off, new child-ADR creation category). doc-only (3 PR per root strict PR Separation Rule). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (staged-ADR governance precision; dispatcher-direct per ADR-008/013/014/015/016 PROPOSED).
 
 ## in-progress
 
