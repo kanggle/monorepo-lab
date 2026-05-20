@@ -14,6 +14,23 @@ management:
   endpoint:
     health:
       show-details: never
+  endpoints:
+    web:
+      exposure:
+        # Mirror prod application.yml — explicit since the test profile is a partial merge.
+        include: health,info,prometheus
+  # CI Linux runners do not expose an OTLP receiver on :4318. Disable tracing
+  # export so the observability stack does not surface a side-effect 500 on
+  # /actuator/prometheus when the OTLP HTTP exporter cannot reach the receiver.
+  # Outbound `traceparent` header propagation is a Spring Boot core feature
+  # independent of this exporter (TASK-PC-FE-011 will exercise it with real
+  # outbound legs); the skeleton's IT only asserts metric exposition.
+  tracing:
+    enabled: false
+  otlp:
+    tracing:
+      export:
+        enabled: false
 
 logging:
   level:
