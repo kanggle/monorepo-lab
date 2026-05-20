@@ -17,17 +17,29 @@ public final class PublicPaths {
 
     /**
      * Exact public paths (no wildcard).
+     *
+     * <p>{@code /actuator/prometheus} must be listed here as an exact match,
+     * NOT only as a prefix. Spring Security 6.4's request matcher resolves
+     * {@code AntPathRequestMatcher("/actuator/prometheus**")} differently
+     * across servlet pipeline stages — under the OAuth2 Resource Server +
+     * Servlet stack the prefix wildcard matched outbound scrapes
+     * ({@code /actuator/prometheus/anything}) but missed the exact base
+     * path operators actually scrape. CI surface: PR #669 4th run, IT body
+     * {@code {"code":"UNAUTHORIZED","message":"Authentication required"}}.
      */
     public static final List<String> EXACT = List.of(
             "/actuator/health",
-            "/actuator/info"
+            "/actuator/info",
+            "/actuator/prometheus"
     );
 
     /**
      * Public path prefixes (callers append {@code **}).
-     * Prometheus scrape endpoint is also public for the observability stack.
+     * Covers Actuator health probes (e.g. {@code /actuator/health/liveness},
+     * {@code /actuator/health/readiness}) and any future Prometheus sub-paths.
      */
     public static final List<String> PREFIXES = List.of(
-            "/actuator/prometheus"
+            "/actuator/health/",
+            "/actuator/prometheus/"
     );
 }
