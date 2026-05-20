@@ -3,6 +3,9 @@ package com.kanggle.platformconsole.bff.infrastructure.config;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusScrapeEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -40,6 +43,40 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class ObservabilityConfig {
+
+    /**
+     * Explicit {@link PrometheusMeterRegistry} bean.
+     *
+     * <p>CI surface (PR #669 9th cycle, 26156906507): the IT body revealed
+     * {@code NoResourceFoundException: No static resource actuator/prometheus} —
+     * Spring MVC was routing the path to {@code ResourceHttpRequestHandler}
+     * because {@code PrometheusScrapeEndpoint} was never registered. Spring Boot
+     * 3.4 + Micrometer 1.14 + our dependency layout (libs/java-observability +
+     * micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp on the
+     * classpath) did not trigger
+     * {@code PrometheusMetricsExportAutoConfiguration}'s
+     * {@code PrometheusMeterRegistry} auto-wiring in the IT context. Explicit
+     * bean definition removes the auto-config conditional dependency entirely
+     * and is the documented Spring Boot fallback when auto-wiring does not
+     * apply.
+     */
+    @Bean
+    public PrometheusMeterRegistry prometheusMeterRegistry() {
+        return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+    }
+
+    /**
+     * Explicit {@link PrometheusScrapeEndpoint} bean — registers
+     * {@code /actuator/prometheus}. Belt-and-braces alongside the
+     * {@link #prometheusMeterRegistry()} bean above; if the auto-config picks
+     * the explicit registry, the endpoint auto-registers from
+     * {@code PrometheusScrapeEndpointAutoConfiguration}; if not, this bean
+     * registers it directly.
+     */
+    @Bean
+    public PrometheusScrapeEndpoint prometheusScrapeEndpoint(PrometheusMeterRegistry registry) {
+        return new PrometheusScrapeEndpoint(registry.getPrometheusRegistry());
+    }
 
     /**
      * Eager Timer (histogram) for per-outbound-domain fan-out latency.
