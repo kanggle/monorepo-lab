@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-012-erp-api-test-strip-crlf-aware.md` — **READY**. TASK-PC-FE-011 § Honest gaps **(b)** 약속 fix-task. `tests/unit/erp-api.test.ts:902-918` 의 *"the erp source carries NO 429/Retry-After handling code (grep-asserted)"* 단언이 strip-comment regex 의 line-ending 가정 결함 때문에 false-fail. **Root cause** (확인됨): `erp-api.ts` CRLF (`\r\n`) 줄 끝 → `.split('\n')` 후 각 line 의 trailing `\r` 잔류 → `l.replace(/\/\/.*$/, '')` 의 `.` 가 default 에서 `\r` 매치 불가 + `$` (no `m` flag) 가 string end (`\r` 다음) 만 매치 → line-comment 안에 trailing `\r` 가 있으면 매치 fail → strip 통과 → line 291 `// land HERE (no Retry-After / backoff branch; erp has no` 같은 line-comment 가 stripped 결과에 잔류 → `\bRetry-After\b` true 매치. **Fix**: line-comment regex 를 `replace(/\/\/[^\n]*/g, '')` (CRLF-safe) 로 교체 + line-ending 회귀 차단용 `expect(stripped).not.toMatch(/\r/)` 단언 추가 + 다른 `tests/unit/*-api.test.ts` 의 동일 패턴 sweep. **STRENGTHEN-ONLY** (단언 약화 / skip 절대 불가). production source `src/features/erp-ops/api/erp-api.ts` byte-unchanged. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (단순 regex hardening, scope 좁음) / 리뷰=Opus 4.7.
 
 ## in-progress
 
