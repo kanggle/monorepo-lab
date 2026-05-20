@@ -1,0 +1,64 @@
+package com.kanggle.platformconsole.bff.adapter.outbound.http;
+
+import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.GapAccountsReadPort;
+import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+
+import java.util.Map;
+
+/**
+ * GAP accounts summary outbound leg for the Operator Overview composition.
+ *
+ * <p>Surfaces:
+ * <ul>
+ *   <li>Endpoint: {@code GET /api/admin/accounts?page=0&size=1}
+ *       (page total snapshot — {@code totalElements} is the count surfaced)</li>
+ *   <li>Credential: RFC 8693 exchanged <b>operator</b> token (per
+ *       {@code console-integration-contract.md} § 2.4.9.1 row 1 / § 2.6) —
+ *       resolved by the caller via
+ *       {@link com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort#selectFor(DomainTarget)}
+ *       and passed verbatim as the {@code credential} parameter.</li>
+ *   <li>Tenant: {@code X-Tenant-Id} header forwarded verbatim (D6.A
+ *       producer-authoritative).</li>
+ * </ul>
+ *
+ * <p>Errors are propagated as {@link org.springframework.web.client.RestClientException}
+ * subtypes (notably {@link HttpClientErrorException}) — the composition use-case
+ * maps them to {@code LegOutcome} per the degrade-policy classification (D5.A).
+ */
+@Component
+public class GapAccountsReadAdapter implements GapAccountsReadPort {
+
+    private final RestClient client;
+
+    public GapAccountsReadAdapter(@Qualifier("gapRestClient") RestClient client) {
+        this.client = client;
+    }
+
+    @Override
+    public DomainTarget domainTarget() {
+        return DomainTarget.GAP;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> read(String tenantId, String credential) {
+        return (Map<String, Object>) client.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/admin/accounts")
+                        .queryParam("page", 0)
+                        .queryParam("size", 1)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential)
+                .header("X-Tenant-Id", tenantId)
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .body(Map.class);
+    }
+}

@@ -1,5 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.inbound.web;
 
+import com.kanggle.platformconsole.bff.adapter.outbound.http.MissingTenantException;
+import com.kanggle.platformconsole.bff.application.usecase.UpstreamUnauthorizedException;
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +38,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MissingCredentialException.class)
     public ResponseEntity<ObjectNode> handleMissingCredential(MissingCredentialException ex) {
+        return error(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", ex.getMessage());
+    }
+
+    @ExceptionHandler(MissingTenantException.class)
+    public ResponseEntity<ObjectNode> handleMissingTenant(MissingTenantException ex) {
+        // § 2.4.9.1 error envelope: 400 NO_ACTIVE_TENANT when X-Tenant-Id absent.
+        return error(HttpStatus.BAD_REQUEST, "NO_ACTIVE_TENANT", ex.getMessage());
+    }
+
+    @ExceptionHandler(UpstreamUnauthorizedException.class)
+    public ResponseEntity<ObjectNode> handleUpstreamUnauthorized(UpstreamUnauthorizedException ex) {
+        // § 2.4.9.1 / § 2.4.4 D3: any outbound leg 401 → composition-level 401.
         return error(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", ex.getMessage());
     }
 
