@@ -48,3 +48,6 @@ logging:
     org.springframework.boot.actuate: DEBUG
     io.micrometer: DEBUG
     org.springframework.web: INFO
+    # Surface which RequestMatcher fired (or did not fire) on /actuator/prometheus.
+    org.springframework.security: DEBUG
+    org.springframework.security.web.access.intercept: TRACE

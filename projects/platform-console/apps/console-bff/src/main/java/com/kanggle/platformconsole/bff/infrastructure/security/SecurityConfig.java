@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -56,20 +57,21 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Actuator endpoints — use EndpointRequest (Spring Boot Actuator's
-                        // own RequestMatcher). `toAnyEndpoint()` matches every endpoint
-                        // exposed via `management.endpoints.web.exposure.include`
-                        // (application.yml: health, info, prometheus) — the exposure
-                        // setting is the security boundary; any endpoint not on the
-                        // exposure list returns 404 regardless of authorization.
-                        //
-                        // `EndpointRequest.to("health", "info", "prometheus")` did NOT
-                        // match the `prometheus` endpoint in the IT (CI surface: PR #669
-                        // 6th run still 401), even though `health` matched. The selector
-                        // resolution may differ across endpoint id sources; toAnyEndpoint
-                        // is the documented Spring Boot Actuator + Spring Security 6
-                        // pattern for read-only operator-public actuator endpoints when
-                        // the exposure list is the boundary.
+                        // Actuator endpoints — defense in depth (3 matchers):
+                        //   (1) AntPathRequestMatcher("/actuator/**") — pure path match,
+                        //       bypasses MVC pattern resolution and endpoint id selectors
+                        //       entirely. CI surface (PR #669 cycles 5-7): both
+                        //       requestMatchers(String) and EndpointRequest variants
+                        //       missed /actuator/prometheus though /actuator/health
+                        //       matched — strongest hypothesis is matcher resolution
+                        //       not seeing EndpointHandlerMapping at construction time.
+                        //   (2) EndpointRequest.toAnyEndpoint() — actuator-aware,
+                        //       redundant on top of (1) but kept as documented
+                        //       Spring Boot pattern for clarity.
+                        //   (3) The boundary is `management.endpoints.web.exposure.include`
+                        //       in application.yml — any actuator endpoint not on that
+                        //       list returns 404 regardless of authorization.
+                        .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                         .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
