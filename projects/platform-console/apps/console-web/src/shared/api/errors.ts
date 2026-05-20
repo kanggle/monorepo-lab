@@ -241,6 +241,53 @@ export class ScmRateLimitedError extends Error {
   }
 }
 
+/**
+ * finance `account-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.7 / § 2.5). Sibling of
+ * {@link ScmUnavailableError} / {@link WmsUnavailableError} — the THIRD
+ * **non-GAP** federated domain section (read-only). A
+ * `503 SERVICE_UNAVAILABLE` / timeout / network failure on a finance
+ * call degrades ONLY the finance section (the console shell + the
+ * GAP / wms / scm sections stay intact). Auth failures (`401` — the
+ * GAP OIDC session expired) are raised as {@link ApiError} so the
+ * caller forces a clean WHOLE-SESSION re-login (no partial authed
+ * state — NOT a per-section degrade). Inline-recoverable producer
+ * errors (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`,
+ * `404 ACCOUNT_NOT_FOUND`, `400|422 VALIDATION_ERROR`) are raised as
+ * {@link ApiError} so the UI renders an inline actionable message
+ * without crashing.
+ *
+ * NOTE — **no 429**: finance has NO documented rate-limit response
+ * (`account-api.md` § Error code → HTTP status carries no `429`); the
+ * console does NOT fabricate a backoff path for finance (an honest
+ * difference from scm — § 2.4.6 — recorded, not cargo-culted). A
+ * `RateLimitedError` is intentionally absent for finance.
+ *
+ * NOTE the credential reuse: like the wms + scm siblings (NOT the GAP
+ * ones), the finance credential is the GAP OIDC access token itself —
+ * the § 2.4.5 per-domain credential rule reused verbatim (the #569
+ * invariant is GAP-domain-scoped — § 2.4.7). The finance error envelope
+ * is **flat** `{ code, message, details?, timestamp }` — same wire shape
+ * as scm but a DISTINCT producer (own parser, finance error-code
+ * vocabulary; NOT wms's nested `{ error: { code } }`). No token / PII /
+ * balance / txn / account-ref is ever placed in this error
+ * (confidential + F7).
+ */
+export class FinanceUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: FinanceUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'FinanceUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -294,6 +341,11 @@ const MESSAGES: Record<string, string> = {
     'scm 게이트웨이 요청이 일시적으로 제한되었습니다. 잠시 후 자동으로 다시 시도합니다.',
   SCM_NOT_ELIGIBLE:
     'scm 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- finance operations (TASK-PC-FE-009 / §2.4.7) -----------------------
+  // (`ACCOUNT_NOT_FOUND` is shared verbatim with the GAP accounts surface —
+  // finance reuses the existing entry; the producer code is identical.)
+  FINANCE_NOT_ELIGIBLE:
+    'finance 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

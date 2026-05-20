@@ -8,7 +8,7 @@ console-web Phase 5 — finance operations console section (read-only: account +
 
 # Status
 
-ready
+review
 
 # Owner
 

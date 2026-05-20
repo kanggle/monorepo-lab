@@ -122,6 +122,21 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for scm operations calls (integration-heavy I1 —
    *  same convention as WMS_TIMEOUT_MS). */
   SCM_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** finance `account-service` base for the operations surface
+   *  (TASK-PC-FE-009 / § 2.4.7). The read-only account + balances +
+   *  transactions endpoints hang off `${FINANCE_BASE_URL}/api/finance/...`
+   *  — request/response/error owned by finance `account-api.md`
+   *  (authoritative, consumed read-only). Aligned with the registry
+   *  `baseRoute` for `productKey=finance`; the finance hostname is
+   *  `finance.local`. NOTE: like wms + scm (NOT GAP) this is reached
+   *  with the GAP OIDC access token DIRECTLY — the § 2.4.5 per-domain
+   *  credential rule reused (the #569 invariant is GAP-domain-scoped;
+   *  finance validates the GAP RS256 token + `tenant_id ∈ {finance,*}`
+   *  claim producer-side per TASK-FIN-BE-005). */
+  FINANCE_BASE_URL: z.string().url().default('http://finance.local'),
+  /** Outbound timeout (ms) for finance operations calls
+   *  (integration-heavy I1 — same convention as SCM_TIMEOUT_MS). */
+  FINANCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -151,6 +166,8 @@ export function getServerEnv(): ServerEnv {
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     SCM_GATEWAY_BASE_URL: process.env.SCM_GATEWAY_BASE_URL,
     SCM_TIMEOUT_MS: process.env.SCM_TIMEOUT_MS,
+    FINANCE_BASE_URL: process.env.FINANCE_BASE_URL,
+    FINANCE_TIMEOUT_MS: process.env.FINANCE_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });
