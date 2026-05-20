@@ -61,6 +61,15 @@ export default async function ConsoleLayout({
                 </li>
                 <li>
                   <Link
+                    href="/dashboards/overview"
+                    data-testid="nav-operator-overview"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    통합 개요
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/console"
                     data-testid="nav-catalog"
                     className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
