@@ -8,7 +8,7 @@ ADR-MONO-017 PROPOSED authoring — platform-console-bff Architecture (Phase 7 A
 
 # Status
 
-review
+done
 
 # Owner
 
