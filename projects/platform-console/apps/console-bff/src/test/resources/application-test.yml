@@ -1,0 +1,21 @@
+# Test profile overrides for console-bff.
+# Slice tests use @WebMvcTest with addFilters=false — security not exercised by unit slices.
+# Integration tests wire a MockWebServer for the JWKS endpoint via @DynamicPropertySource.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Overridden per-test via @DynamicPropertySource in AbstractConsoleBffIntegrationTest.
+          jwk-set-uri: http://localhost:0/oauth2/jwks
+          issuer-uri: http://test-issuer
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: WARN
+    com.kanggle.platformconsole.bff: DEBUG

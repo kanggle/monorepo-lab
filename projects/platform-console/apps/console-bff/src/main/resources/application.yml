@@ -1,0 +1,67 @@
+# -----------------------------------------------------------------------------
+# platform-console console-bff — Spring Boot skeleton configuration.
+#
+# ADR-MONO-017 ACCEPTED (2026-05-20) post-ACCEPTED execution.
+# TASK-PC-BE-001 impl PR.
+#
+# Hard invariants enforced here:
+#   - No datasource / JPA / Flyway / Redis / Kafka configuration (stateless BFF)
+#   - OAuth2 Resource Server wired to GAP JWKS (RS256)
+#   - CONSOLE_BFF_GAP_ISSUER_URL env var for GAP JWKS discovery
+#   - /actuator/health and /actuator/prometheus are the only public endpoints
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: platform-console-console-bff
+
+  # OAuth2 Resource Server — inbound GAP OIDC access token validation (RS256).
+  # JWKS URI is derived from the GAP issuer URL (standard /.well-known/openid-configuration
+  # discovery). Override with CONSOLE_BFF_GAP_ISSUER_URL env var in production.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}
+          jwk-set-uri: ${CONSOLE_BFF_JWK_SET_URI:${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}/oauth2/jwks}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      # No component details leaked (AC-9: show-details never to anonymous)
+      show-details: never
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.kanggle.platformconsole.bff: INFO
+  pattern:
+    # Structured MDC — traceId, requestId are populated by OTel / Micrometer.
+    # Tokens and PII are NEVER logged (architecture.md § Logging discipline).
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-}]"
+
+consolebff:
+  gap:
+    issuer-url: ${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}
