@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-001-masterdata-service-bootstrap.md` — erp-platform 의 첫 service `masterdata-service` Spring Boot 부트스트랩 (Hexagonal; 조직 마스터데이터 — 부서/직원/직급/비용센터/거래처 / 참조 무결성 / 유효기간 / 불변 audit_log). 부트스트랩 PR (TASK-MONO-119) 에서 task 만 author, 구현은 본 task 에서.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-001-masterdata-service-bootstrap.md` — **erp-platform 첫 도메인 서비스 `masterdata-service` Hexagonal 구현 (spec-first 2-PR + close chore)**. 분석=Opus 4.7 / 구현=backend-engineer(Opus dispatch) / 리뷰=Opus 4.7. **spec PR #649** (squash `16a5d1fe`): architecture.md(Hexagonal, ADR-MONO-012 canonical, HARDSTOP-09/10; Service Type=`rest-api` single — outbox≠event-consumer, finance-account / scm-procurement 선례) + masterdata-api.md + erp-masterdata-events.md + platform/error-handling.md erp Standard Error Codes. **impl PR (this)**: domain(5 aggregate Department/Employee/JobGrade/CostCenter/BusinessPartner + EffectivePeriod VO + MasterStatusMachine + AuditLog append-only + AuthorizationDecision, framework-free) / application(`MasterdataApplicationService` 단일 @Transactional 경계, authorize→repo→audit→event 순서) / infra(JPA adapters + outbox + DbIdempotencyStore FIN-BE-004 final form + RoleScopeAuthorizationAdapter fail-CLOSED + RS256 JWT chain) / presentation(5 controllers ≡ contract + GlobalExceptionHandler + TenantClaimEnforcer + IdempotentExecution) / Flyway V1 MySQL InnoDB 9-table. `:check` 36/0/0/0 (7 XML). docker-compose `erp.local` Traefik label active + backing service expose-only.
 
 ## done
 
