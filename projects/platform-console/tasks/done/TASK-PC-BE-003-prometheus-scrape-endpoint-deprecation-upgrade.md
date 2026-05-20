@@ -8,7 +8,7 @@ console-bff — `PrometheusScrapeEndpoint(PrometheusRegistry)` deprecated 생성
 
 # Status
 
-ready
+done
 
 # Owner
 
