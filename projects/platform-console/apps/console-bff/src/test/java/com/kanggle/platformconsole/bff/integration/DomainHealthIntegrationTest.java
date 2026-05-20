@@ -26,6 +26,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -335,6 +337,10 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         h.set(HttpHeaders.AUTHORIZATION, "Bearer " + gapOidcJwt);
         // X-Tenant-Id intentionally absent.
 
+        // MockWebServer.getRequestCount() is lifetime-accumulated across all
+        // tests in this class. Snapshot before/after and assert no delta —
+        // mirrors OperatorOverviewIntegrationTest.inbound_missing_tenant_400.
+        Set<Integer> beforeCounts = snapshotRequestCounts();
         ResponseEntity<String> response = callHealth(h);
         String body = response.getBody();
 
@@ -343,12 +349,9 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(body).as("body:\n%s", body).contains("\"code\":\"NO_ACTIVE_TENANT\"");
 
-        // No outbound fires.
-        assertThat(GAP.getRequestCount()).isZero();
-        assertThat(WMS.getRequestCount()).isZero();
-        assertThat(SCM.getRequestCount()).isZero();
-        assertThat(FINANCE.getRequestCount()).isZero();
-        assertThat(ERP.getRequestCount()).isZero();
+        // No outbound fired between before/after snapshot.
+        Set<Integer> afterCounts = snapshotRequestCounts();
+        assertThat(afterCounts).as("no outbound expected").isEqualTo(beforeCounts);
     }
 
     @Test
@@ -358,14 +361,24 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         h.set("X-Tenant-Id", "gap");
         // Authorization intentionally absent.
 
+        Set<Integer> beforeCounts = snapshotRequestCounts();
         ResponseEntity<String> response = callHealth(h);
 
         assertThat(response.getStatusCode())
+                .as("non-401 body:\n%s", response.getBody())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(GAP.getRequestCount()).isZero();
-        assertThat(WMS.getRequestCount()).isZero();
-        assertThat(SCM.getRequestCount()).isZero();
-        assertThat(FINANCE.getRequestCount()).isZero();
-        assertThat(ERP.getRequestCount()).isZero();
+
+        Set<Integer> afterCounts = snapshotRequestCounts();
+        assertThat(afterCounts).as("no outbound expected").isEqualTo(beforeCounts);
+    }
+
+    private static Set<Integer> snapshotRequestCounts() {
+        Set<Integer> s = new HashSet<>();
+        s.add(GAP.getRequestCount());
+        s.add(WMS.getRequestCount());
+        s.add(SCM.getRequestCount());
+        s.add(FINANCE.getRequestCount());
+        s.add(ERP.getRequestCount());
+        return s;
     }
 }
