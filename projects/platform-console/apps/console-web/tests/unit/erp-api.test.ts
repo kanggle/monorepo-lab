@@ -907,11 +907,20 @@ describe('erp-api — erp FLAT error envelope (NOT wms NESTED) + § 2.5 + no-429
     // Strip block-comment + line-comment content so we only look at
     // executable code. The doc-comments narrate WHY there is no
     // 429 path — they are allowed to mention 429 / Retry-After.
+    //
+    // CRLF-safe: normalise `\r\n` → `\n` BEFORE stripping so that the
+    // line-comment regex's `.*$` (which does not match `\r`) reaches
+    // the end-of-line anchor reliably on Windows checkouts. Without
+    // this, a line-comment with a trailing `\r` survives the strip
+    // and trips the `Retry-After` assertion below (TASK-PC-FE-012).
     const stripped = apiSrc
+      .replace(/\r\n/g, '\n')
       .replace(/\/\*[\s\S]*?\*\//g, '')
-      .split('\n')
-      .map((l) => l.replace(/\/\/.*$/, ''))
-      .join('\n');
+      .replace(/\/\/.*$/gm, '');
+    // Line-ending regression guard — if a `\r` survives the strip,
+    // the assertions below would silently false-pass on a
+    // different CRLF case in the future.
+    expect(stripped).not.toMatch(/\r/);
     expect(/\bRetry-After\b/i.test(stripped)).toBe(false);
     expect(/\b429\b/.test(stripped)).toBe(false);
     expect(/RateLimited/.test(stripped)).toBe(false);
