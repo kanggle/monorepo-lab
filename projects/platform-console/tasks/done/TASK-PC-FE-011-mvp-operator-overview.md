@@ -8,7 +8,7 @@ MVP "Operator Overview" cross-domain dashboard — first concrete `§ 2.4.9.X` c
 
 # Status
 
-ready
+done
 
 # Owner
 
