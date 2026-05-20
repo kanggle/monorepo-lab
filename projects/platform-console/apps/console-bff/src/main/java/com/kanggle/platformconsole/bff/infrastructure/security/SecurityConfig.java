@@ -73,6 +73,17 @@ public class SecurityConfig {
                         //       list returns 404 regardless of authorization.
                         .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                         .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
+                        // Spring MVC's default ERROR dispatch forwards to /error. If a
+                        // public endpoint (e.g. /actuator/prometheus) throws, the
+                        // ExceptionTranslationFilter forwards to /error which is THEN
+                        // re-evaluated against the security chain. Without permitAll on
+                        // /error, the original throw is hidden behind a 401 from the
+                        // error path — exactly what PR #669 8th cycle DEBUG output
+                        // showed: "Securing GET /actuator/prometheus → Secured →
+                        // Securing GET /error → 401". Standard Spring Boot practice is
+                        // /error permitAll (anonymous OK) so the underlying exception
+                        // surfaces with its proper status code + body.
+                        .requestMatchers(new AntPathRequestMatcher("/error")).permitAll()
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
                         .anyRequest().authenticated()
