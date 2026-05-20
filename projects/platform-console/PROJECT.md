@@ -2,7 +2,7 @@
 name: platform-console
 domain: saas
 traits: [multi-tenant, integration-heavy, audit-heavy]
-service_types: [frontend-app]
+service_types: [frontend-app, rest-api]
 compliance: []
 data_sensitivity: internal
 scale_tier: startup
@@ -40,17 +40,12 @@ taxonomy_version: 0.1
 
 ## Service Map
 
-### v1 (ADR-MONO-013 Phase 1~2)
+### v1 (ADR-MONO-013 Phase 1~2 + Phase 7 skeleton)
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
-| `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. |
-
-### v2+ (ADR-MONO-013 Phase 7 — deferred, 별도 task)
-
-| Service | Service Type | 핵심 책임 |
-|---|---|---|
-| `console-bff` | rest-api | 교차 도메인 집약 API. 다수 gateway/admin API를 fan-out·합성해 단일 화면 대시보드(WMS 입고 + SCM PO + Finance AR aging 등) 제공. 5 도메인 완비 후. |
+| `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. Phase 4~6 = 4개 non-GAP 도메인(wms/scm/finance/erp) 운영 화면 federation 완료. |
+| `console-bff` | rest-api | 교차 도메인 집약 BFF (Backend-for-Frontend). 5 도메인(GAP + wms + scm + finance + erp)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드(MVP = "Operator Overview") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 = skeleton + `GET /actuator/health`; MVP "Operator Overview" cross-domain dashboard 는 후속 task (`TASK-PC-FE-011`). |
 
 상세 아키텍처는 각 service의 `specs/services/<service>/architecture.md`에서 선언.
 

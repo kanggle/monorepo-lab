@@ -911,6 +911,152 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
 > dashboards) gate is **ungated to 5/5 domains live**
 > (GAP + wms + scm + finance + erp).
 
+#### 2.4.9 `console-bff` server-side composition surface (TASK-PC-BE-001 — first BFF surface owner, **not** a cross-reference)
+
+The **first BFF-owned** entry in § 2.4 (ADR-MONO-013 Phase 7, governed by
+[ADR-MONO-017](../../../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md)
+ACCEPTED 2026-05-20). Unlike §§ 2.4.1–2.4.8, **this section is not a
+cross-reference to a producer in another project** — it is the contract surface
+that the **new `console-bff` service** (this project, `apps/console-bff/`) owns
+and exposes. The producer of these routes is `console-bff` itself; the
+**consumed-from-this-section** legs (e.g. `GET /api/admin/accounts` count,
+wms inventory health, …) remain authoritatively owned by their respective
+domains and are **NOT redefined here** (ADR-MONO-017 D3.A / § 3.3 "zero
+retrofit", fifth confirmation across the portfolio).
+
+This section is the **architectural frame** authored by the skeleton task
+(TASK-PC-BE-001). The first concrete composition route — the MVP "Operator
+Overview" cross-domain dashboard (ADR-MONO-017 D8) — is added by the
+post-skeleton task TASK-PC-FE-011 via an additive § 2.4.9.1 sub-section.
+The skeleton task itself adds **only** the operational `GET /actuator/health`
+contract row (smoke-target for the IT harness and Traefik probe).
+
+##### Hard invariants this BFF surface inherits (HARD INVARIANT — ADR-MONO-017 D4, byte-verbatim)
+
+> **The per-domain credential rule defined in §§ 2.4.5 / 2.4.6 / 2.4.7 / 2.4.8
+> (and the § 2.6 RFC 8693 exchanged operator token for the GAP-domain leg) is
+> a HARD INVARIANT. `console-bff` is the rule's *credential dispatcher*, never
+> its rewriter.** Re-introducing the rejected ADR-MONO-017 D4.B (single
+> unified BFF token) or D4.C (operator-token-only across all domains) on any
+> future § 2.4.9.X composition route is a contract defect.
+
+- **Inbound auth (console-web → console-bff)**: server-side only — the
+  browser never reaches the BFF. console-web's App-Router server route holds
+  the two tokens already established at login (per
+  [`console-web/architecture.md`](../services/console-web/architecture.md) +
+  FE-002a) and forwards them to `console-bff` on every call:
+  - `Authorization: Bearer <gap-oidc-access-token>` — the inbound principal,
+    RS256 / JWKS = GAP (standard OAuth2 Resource Server validation: issuer
+    / audience / exp / signature),
+  - `X-Operator-Token: <rfc8693-operator-token>` — request-scoped, available
+    to outbound clients via a `OperatorCredentialContext`; the inbound auth
+    filter MUST NOT treat it as the inbound principal,
+  - `X-Tenant-Id: <active-tenant>` — operator's selected active tenant; absent
+    is fail-closed `400 NO_ACTIVE_TENANT` before any outbound call.
+- **Outbound per-domain credential dispatch (verbatim from §§ 2.4.5/6/7/8 +
+  § 2.6)**:
+
+  | Outbound domain | Credential | Source on this request |
+  |---|---|---|
+  | GAP (`/api/admin/**`) | RFC 8693 exchanged operator token (§ 2.6) | inbound `X-Operator-Token` |
+  | wms (`/api/wms/**`) | GAP OIDC access token (§ 2.4.5) | inbound `Authorization` |
+  | scm (`/api/scm/**`) | GAP OIDC access token (§ 2.4.6) | inbound `Authorization` |
+  | finance (`/api/finance/**`) | GAP OIDC access token (§ 2.4.7) | inbound `Authorization` |
+  | erp (`/api/erp/**`) | GAP OIDC access token (§ 2.4.8) | inbound `Authorization` |
+
+  The BFF **never** falls back from one credential to another (#569 invariant
+  preserved). The BFF **never** mints its own token. The BFF **never** rewrites
+  or expands the per-domain producer-side tenant enforcement (D6.A — producer
+  authority preserved).
+- **Tenant pass-through (D6.A)**: `X-Tenant-Id` is forwarded **verbatim** on
+  every outbound leg; each producer's `TenantClaimValidator`
+  (`tenant_id ∈ {<domain>,*}`) remains the authoritative gate. The BFF
+  performs no tenant re-derivation, no widening, no central gate (D6.B
+  rejection).
+- **Read-only at MVP — mutations forbidden**: every Phase 7 dashboard at MVP
+  is composition of **reads** (D3.A). No § 2.4.9.X composition route is a
+  mutation; therefore **no** `Idempotency-Key` / `X-Operator-Reason` /
+  destructive-confirm scaffolding applies at the BFF layer. Adding a
+  mutation surface requires a fresh ADR amendment to ADR-MONO-017.
+- **No producer retrofit (D3.A / § 3.3 zero retrofit fifth confirmation)**:
+  every § 2.4.9.X composition route fans out across **existing** per-domain
+  read endpoints unchanged. Aggregating producer endpoints per domain (`/summary`
+  / `/dashboard-card`) — ADR-MONO-017 D3.B rejection — are NOT introduced.
+
+##### Resilience (D5.A — per-domain CB inherited from § 2.5)
+
+- Each outbound leg is governed by a circuit-breaker keyed by `(domain, route)`
+  via `libs/java-web` Resilience4j primitives; a wms outage does not open the
+  breaker for scm.
+- **Aggregation degrade discipline** — partial-failure composition rendering:
+  every responsive leg's data + per-failed-leg
+  `{ status: "degraded", domain, reason }` card. **All-down still returns 200
+  with an all-degraded envelope** — composition routes never blank the
+  dashboard. ADR-MONO-017 D5.B (all-or-nothing 503) is rejected.
+- **`401` discipline (cross-leg)**: `401` on **any** outbound leg surfaces as
+  whole-composition `401 TOKEN_INVALID` to console-web (auth is **not** a
+  per-card degrade — tokens are shared across legs from the same inbound
+  request; mirrors § 2.4.4 D3 invariant).
+- **`403` discipline (per-leg)**: `403 PERMISSION_DENIED` /
+  `403 TENANT_FORBIDDEN` on a leg renders as a per-card "scope denied"
+  placeholder (classification `forbidden`, distinct from degrade
+  `degraded`). Mirrors the per-card isolation of § 2.4.4.
+
+##### Observability (D7.A — Vector + VictoriaMetrics reuse, [ADR-MONO-006](../../../../docs/adr/ADR-MONO-006-observability-stack.md))
+
+Mandatory metric set every § 2.4.9.X composition route MUST emit (no
+opt-out):
+
+- `bff_fanout_latency_seconds{domain,route}` — histogram per outbound leg.
+- `bff_fanout_errors_total{domain,route,code}` — counter per outbound leg
+  failure classification (`5xx`, `timeout`, `circuit_open`,
+  `tenant_forbidden`, `permission_denied`).
+- `bff_aggregation_degrade_count_total{dashboard,degraded_domain}` — counter
+  whenever a composition response renders a degraded leg.
+
+OTel `traceparent` propagates inbound → every outbound leg; per-leg span
+carries `bff.domain` + `bff.route` attributes (per-domain attribution in the
+trace UI). ADR-MONO-017 D7.B (BFF-level aggregate-only metrics) is rejected —
+operator must be able to diagnose which leg degraded.
+
+##### Logging discipline (inherited)
+
+Tokens (inbound `Authorization`, `X-Operator-Token`, all outbound bearer
+values), PII (account ids, masked IPs, operator emails, money minor-units
+strings, employee / business-partner financial fields) MUST NOT appear in
+logs. Inherits the § 2.6 logging invariant + the per-domain producer
+obligations (e.g. finance F7, erp E7).
+
+##### Edge routing (Local Network Convention)
+
+`console-bff` registers Traefik labels for hostname `console-bff.local` (no
+`PORT_PREFIX`, hostname-based routing; the [`infra/traefik/`](../../../../infra/traefik/)
+shared stack). The hostname is **internal-only** — `console-web` server-side
+routes call it server-side; the browser never reaches it. The BFF therefore
+does **not** route through a `gateway-service` (there is none in
+`platform-console`); the trust boundary at the Traefik front is the same
+`console.local` host that fronts `console-web`. This is identical to the
+structural exception `console-web` itself takes from `rest-api.md`'s
+"all external traffic enters through gateway-service" requirement.
+
+##### v1 (skeleton task TASK-PC-BE-001) endpoint surface
+
+| # | Method / Path | Purpose | Auth | Producer |
+|---|---|---|---|---|
+| 1 | `GET /actuator/health` | Liveness / readiness probe; Traefik health-check target; smoke-target for the IT harness | None (Spring Boot Actuator `health` default — unauthenticated readiness only; no detailed components surfaced beyond `status`) | `console-bff` |
+
+> **Phase 7 MVP "Operator Overview" composition route** is added by
+> **TASK-PC-FE-011** via an additive `§ 2.4.9.1` sub-section. The skeleton
+> task (TASK-PC-BE-001) does **not** define any composition route's
+> request/response schema — that authoring is TASK-PC-FE-011's spec-first
+> scope (ADR-MONO-017 § 3.3 #3).
+
+> **Not a § 3 parity row**: like §§ 2.4.5–2.4.8, this BFF section has **no**
+> § 3 line. § 3 is the GAP `admin-web` absorption parity gate (FE-006
+> finalized, 16 rows, immutable until a future ADR-amendment); composition
+> routes are **additive** to the operator surface, never replace a parity
+> row.
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
