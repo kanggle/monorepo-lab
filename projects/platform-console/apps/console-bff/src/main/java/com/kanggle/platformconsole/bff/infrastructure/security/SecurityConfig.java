@@ -57,14 +57,20 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Actuator endpoints — use EndpointRequest (Spring Boot Actuator's
-                        // own RequestMatcher) because actuator endpoints are mapped via
-                        // EndpointHandlerMapping, not RequestMappingHandlerMapping.
-                        // Spring Security 6's requestMatchers(String...) resolves through
-                        // MVC pattern parsing which does not see EndpointHandlerMapping
-                        // paths — matches fall through to anyRequest().authenticated().
-                        // CI surface: PR #669 5th run, /actuator/prometheus still 401 even
-                        // after PublicPaths.EXACT included the exact path.
-                        .requestMatchers(EndpointRequest.to("health", "info", "prometheus")).permitAll()
+                        // own RequestMatcher). `toAnyEndpoint()` matches every endpoint
+                        // exposed via `management.endpoints.web.exposure.include`
+                        // (application.yml: health, info, prometheus) — the exposure
+                        // setting is the security boundary; any endpoint not on the
+                        // exposure list returns 404 regardless of authorization.
+                        //
+                        // `EndpointRequest.to("health", "info", "prometheus")` did NOT
+                        // match the `prometheus` endpoint in the IT (CI surface: PR #669
+                        // 6th run still 401), even though `health` matched. The selector
+                        // resolution may differ across endpoint id sources; toAnyEndpoint
+                        // is the documented Spring Boot Actuator + Spring Security 6
+                        // pattern for read-only operator-public actuator endpoints when
+                        // the exposure list is the boundary.
+                        .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
                         .anyRequest().authenticated()
