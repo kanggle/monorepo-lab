@@ -32,6 +32,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
+    // Kafka — outbox relay via libs/java-messaging OutboxPollingScheduler
+    implementation 'org.springframework.kafka:spring-kafka'
+
     // Database — MySQL (mirrors GAP's Identity-store engine choice)
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-mysql'
@@ -59,6 +62,7 @@ dependencies {
     // Test (unit + slice)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.assertj:assertj-core'
 
     // JWT signing helper used by validator unit tests and the integration suite.
@@ -70,6 +74,7 @@ dependencies {
     // Testcontainers (integration tests, @Tag("integration"))
     testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
     testImplementation 'org.testcontainers:mysql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
     testImplementation 'org.awaitility:awaitility:4.2.2'
 

@@ -40,9 +40,9 @@ spring:
     open-in-view: false
 
   flyway:
-    # No migrations yet — TASK-ERP-BE-001 lands the V1 schema. Disabled until
-    # then so the skeleton boots cleanly without a populated migration dir.
-    enabled: false
+    # V1__init.sql (MySQL) shipped by TASK-ERP-BE-001 — Flyway owns the
+    # schema; Hibernate validates only (spring.jpa.hibernate.ddl-auto).
+    enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
@@ -107,3 +107,16 @@ erpplatform:
     # finance precedent).
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
+  masterdata:
+    idempotency:
+      # Idempotency store TTL (≥ 24h, architecture.md § Idempotency, FIN-BE-004
+      # final form). DB-table primary inside the mutation Tx.
+      ttl-seconds: ${ERP_IDEMPOTENCY_TTL_SECONDS:86400}
+
+# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
+# / unit runs disable it (no Kafka) via application-test.yml.
+outbox:
+  polling:
+    enabled: ${OUTBOX_POLLING_ENABLED:true}
+    interval-ms: 1000
+    batch-size: 50

@@ -80,38 +80,52 @@ services:
   #     start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # masterdata-service — activated by TASK-ERP-BE-001 (skeleton present, no
-  # business logic / Dockerfile / Flyway schema yet).
-  # Organization master data: 부서 / 직원 / 직급 / 비용센터 / 거래처 —
-  # reference integrity, effective dating, immutable audit_log.
+  # masterdata-service — TASK-ERP-BE-001 active. Organization master data:
+  # 부서 / 직원 / 직급 / 비용센터 / 거래처 — reference integrity, effective
+  # dating, immutable audit_log. Until gateway-service is introduced (v1
+  # deferred per ADR-MONO-016 / PROJECT.md Service Map), masterdata-service
+  # is directly behind the shared Traefik on erp.local.
   # ---------------------------------------------------------------------------
-  # masterdata-service:
-  #   image: erp-platform/masterdata-service:local
-  #   container_name: erp-platform-masterdata
-  #   build:
-  #     context: ./apps/masterdata-service
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8080"
-  #   environment:
-  #     SERVER_PORT: "8080"
-  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     MYSQL_HOST: mysql
-  #     MYSQL_PORT: "3306"
-  #     MYSQL_DB: ${MYSQL_DB:-erp_db}
-  #     MYSQL_USER: ${MYSQL_USER:-erp}
-  #     MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
-  #     REDIS_HOST: redis
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
-  #   depends_on:
-  #     mysql:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - erp-platform-net
+  masterdata-service:
+    image: erp-platform/masterdata-service:local
+    container_name: erp-platform-masterdata
+    build:
+      context: ./apps/masterdata-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: ${MYSQL_DB:-erp_db}
+      MYSQL_USER: ${MYSQL_USER:-erp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+      - "traefik.http.routers.erp-platform.entrypoints=web"
+      - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
+    networks:
+      - erp-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # MySQL 8 — backing store for masterdata-service (TASK-ERP-BE-001+). erp_db.
