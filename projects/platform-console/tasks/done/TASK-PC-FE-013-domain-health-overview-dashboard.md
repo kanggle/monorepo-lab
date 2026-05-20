@@ -8,7 +8,7 @@ Phase 7 두 번째 cross-domain dashboard — Domain Health Overview (console-bf
 
 # Status
 
-ready
+done
 
 # Owner
 
