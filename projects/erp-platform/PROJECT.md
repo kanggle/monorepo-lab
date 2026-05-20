@@ -79,6 +79,7 @@ GAP 측 인프라 (TASK-MONO-119 V0018 시드):
 - account-service V0018: `tenants` 에 `erp` row (B2B_ENTERPRISE — scm/finance 와 동일 type, 내부-서비스 모델)
 - auth-service V0018: `oauth_clients` 에 `erp-platform-internal-services-client` (client_credentials, scopes=`erp.read`/`erp.write`)
 - v1 = backend only. user-flow PKCE client 는 별도 V slot (v1 미발행 — 콘솔이 GAP public client 로 렌더, ADR-MONO-013).
+- `platform-console` (ADR-MONO-013 Model B) 은 erp 의 **external operator read consumer** 로서, GAP 자신의 `platform-console-web` 콘솔 클라이언트 토큰으로 v1-live read 표면 (`/api/erp/masterdata/{departments,employees,job-grades,cost-centers,business-partners}` list+detail 10 GET) 을 server-side 소비한다 (write/mutation + v2 services 제외). 이는 **`erp-platform-internal-services-client` 가 아니며** (해당 client 는 v1 의 유일한 erp OAuth client 로 유지·무관) — 검증 경로는 기존 GAP RS256 + `tenant_id ∈ {erp,*}` 체인 그대로, 신규 erp OAuth client / route / auth-model 변경 없음. erp 는 backend-only 를 유지하고 (no erp frontend, no erp user-flow client), 콘솔 traits (`multi-tenant`/`integration-heavy`) 는 콘솔의 것이지 erp 의 것이 아니다 (frontmatter 불변). 상세 = [specs/integration/gap-integration.md § platform-console Operator Read Consumer](specs/integration/gap-integration.md).
 
 dev 환경 토큰 발급 예:
 ```
