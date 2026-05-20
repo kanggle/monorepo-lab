@@ -360,9 +360,9 @@ jobs:
       - name: Build and check erp-platform backend (Docker-free)
         # erp-platform integration tests carry @Tag("integration") and are
         # excluded from default :test/:check tasks (see masterdata-service
-        # build.gradle). v1 bootstrap (TASK-MONO-119) = masterdata-service
-        # skeleton only (no business logic / no tests yet); TASK-ERP-BE-001
-        # lands the domain + test pyramid + Testcontainers IT.
+        # build.gradle). Docker-backed integrationTest is invoked separately
+        # on dev environments / erp-integration-tests job below.
+        # TASK-ERP-BE-001: masterdata-service
         run: >-
           ./gradlew
           :projects:erp-platform:apps:masterdata-service:check
@@ -1018,6 +1018,57 @@ jobs:
           path: |
             projects/finance-platform/apps/*/build/reports/tests/integrationTest/
             projects/finance-platform/apps/*/build/test-results/integrationTest/
+          retention-days: 7
+
+  erp-integration-tests:
+    name: Integration (erp-platform, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # erp integration suite boots MySQL 8 + Kafka (libs/java-messaging
+    # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
+    # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
+    # relies on its own Docker-free `check` signal.
+    # Activate for erp changes or cross-project (libs/workflows). TASK-MONO-124.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.erp == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run erp integration suites
+        run: >-
+          ./gradlew
+          :projects:erp-platform:apps:masterdata-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload erp integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-integration-test-reports
+          path: |
+            projects/erp-platform/apps/*/build/reports/tests/integrationTest/
+            projects/erp-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:
