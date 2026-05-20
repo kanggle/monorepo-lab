@@ -1216,6 +1216,167 @@ carries `bff.domain` + `bff.route="operator-overview"` attributes.
 > **Not a § 3 parity row**: composition routes are additive to the operator
 > surface, never replace a § 3 row. § 3 count remains **16** post-merge.
 
+#### 2.4.9.2 `GET /api/console/dashboards/domain-health` — Phase 7 "Domain Health Overview" composition route (TASK-PC-FE-013)
+
+The **second concrete `§ 2.4.9.X` composition route**. Governed by
+[ADR-MONO-017](../../../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md)
+§ 3.3 #4 (pre-authorised: *"Subsequent Phase 7 dashboards (domain health,
+throughput) — separate tasks"*). This sub-section is **additive** to
+§ 2.4.9 — all hard invariants, auth flow, resilience, observability,
+logging, and edge-routing constraints declared in § 2.4.9 apply verbatim
+**with one explicit clarification** (§ D4 scope, below). ADR-MONO-013
+§ 3.3 "zero retrofit" — **seventh confirmation** (Phase 2/4/5/6/7-skeleton/
+7-MVP/7-health across the portfolio).
+
+> **§ D4 scope clarification (doc-level only, ADR text byte-unchanged)**:
+> ADR-MONO-017 § D4 "per-domain credential rule" governs § 2.4.5/6/7/8
+> *data API legs* (each domain's bearer-token-required `/api/…/**`).
+> Public no-auth metadata endpoints — specifically Spring Boot actuator
+> endpoints exposed `permitAll` by every producer's SecurityConfig (GAP
+> gateway-service, WMS gateway-service, SCM gateway-service +
+> inventory-visibility-service + procurement-service, finance
+> account-service, erp masterdata-service — all verified 2026-05-21) —
+> are **outside** D4's scope. Health legs in this route therefore make
+> their outbound calls **without any Authorization header** (and without
+> X-Tenant-Id, since actuator endpoints are not tenant-scoped). The D4
+> sealed-switch in `CredentialSelectionAdapter` is **never invoked** on
+> these legs. This clarification narrows D4 — it does not amend it.
+
+##### Surface
+
+| # | Method / Path | Purpose | Auth (inbound) | Producer |
+|---|---|---|---|---|
+| 1 | `GET /api/console/dashboards/domain-health` | Single composed cross-domain health envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the producer's Spring Boot `/actuator/health` status (`UP` / `DOWN` / `OUT_OF_SERVICE` / `UNKNOWN`) wrapped in the per-leg outcome (`ok` / `degraded`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <gap-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Tenant-Id: <active-tenant>` (forwarded to log MDC and degrade counter — **not** to outbound actuator legs); **`X-Operator-Token` NOT required** for this route (no outbound leg consumes it; the D4 sealed-switch is not invoked). Absent `Authorization` → `401 TOKEN_INVALID` before any outbound leg. Absent `X-Tenant-Id` → `400 NO_ACTIVE_TENANT` (for log/audit traceability, not because legs need it) | `console-bff` |
+
+> The route is **GET only — read-only**. The hard invariant in § 2.4.9.1
+> applies verbatim: no `Idempotency-Key`, no `X-Operator-Reason`, no
+> destructive-confirm, no POST/PUT/PATCH/DELETE. Adding a mutation surface
+> requires a fresh ADR amendment to ADR-MONO-017.
+
+##### Composed producers (5 domains, reuse-only — § 3.3 zero retrofit #7)
+
+The composition route fans out across **existing** public actuator
+endpoints — one card per domain, **no producer retrofit**. The 5 endpoints
+are Spring Boot actuator standards; the per-producer SecurityConfig
+declarations that mark them `permitAll` are authoritative in their
+respective service files and are **not redefined here**:
+
+| # | Card | Composed producer endpoint | Outbound auth | Producer SecurityConfig (authoritative permitAll) | Read content surfaced |
+|---|---|---|---|---|---|
+| 1 | gap health | `GET http://gap.local/actuator/health` (gateway-service primary entry) | **None** (public actuator, no `Authorization`, no `X-Tenant-Id`) | GAP `gateway-service` `application.yml` `public-paths` includes `GET:/actuator/health` | `{"status": "UP" \| "DOWN" \| "OUT_OF_SERVICE" \| "UNKNOWN"}` aggregated status (Spring Boot `management.endpoint.health.show-details: never` per console-bff baseline; no component drill-down) |
+| 2 | wms health | `GET http://wms.local/actuator/health` (gateway-service primary entry) | **None** | WMS `gateway-service` `SecurityConfig.PUBLIC_PATHS` includes `/actuator/health` + `/actuator/health/**` | same aggregated status |
+| 3 | scm health | `GET http://scm.local/actuator/health` (gateway-service primary entry) | **None** | SCM `gateway-service` `SecurityConfig.PUBLIC_PATHS` includes `/actuator/health` | same aggregated status |
+| 4 | finance health | `GET http://finance.local/actuator/health` (`account-service` direct — finance has no gateway-service in v1) | **None** | finance `account-service` `SecurityConfig` `permitAll` includes `/actuator/{health,info,prometheus}` | same aggregated status |
+| 5 | erp health | `GET http://erp.local/actuator/health` (`masterdata-service` direct — erp has no gateway-service in v1) | **None** | erp `masterdata-service` `SecurityConfig` `permitAll` includes `/actuator/{health,info,prometheus}` | same aggregated status |
+
+**Producer immutability**: the 5 producer SecurityConfig declarations above
+are **byte-unchanged spec-side and impl-side** (§ 3.3 seventh confirmation).
+The console-bff composition use-case calls the existing public actuator
+endpoints verbatim. The 5 outbound `RestClient` beans (`gapRestClient` /
+`wmsRestClient` / `scmRestClient` / `financeRestClient` / `erpRestClient`)
+registered for § 2.4.9.1 are **reused** here (same base URLs, same per-leg
+2s timeout); no new `RestClient` bean is added.
+
+##### Response schema (`200 OK`)
+
+```json
+{
+  "asOf": "2026-05-21T01:30:00Z",
+  "cards": [
+    { "domain": "gap",     "status": "ok",       "data": { "status": "UP" } },
+    { "domain": "wms",     "status": "ok",       "data": { "status": "UP" } },
+    { "domain": "scm",     "status": "degraded", "reason": "DOWNSTREAM_ERROR" },
+    { "domain": "finance", "status": "ok",       "data": { "status": "OUT_OF_SERVICE" } },
+    { "domain": "erp",     "status": "ok",       "data": { "status": "UP" } }
+  ]
+}
+```
+
+- `asOf`: composition request server-side timestamp (ISO-8601 UTC). Operators see "data as-of HH:MM:SS" in the UI.
+- `cards[]`: **exactly 5 entries** in **fixed order** `[gap, wms, scm, finance, erp]` (UI rendering ordering invariant; never reordered by status).
+- `cards[i].status` ∈ `{ "ok", "degraded" }` — **note**: `forbidden` is **never emitted** on this route (outbound actuator legs are public; HTTP `403` from a leg falls through to `degraded` like any other non-success status, since `403` from a public actuator means a misconfigured producer, not an operator-permission decision; treating it as `forbidden` would mis-signal a producer regression as a per-card-permission UX state).
+- `cards[i].data.status` ∈ Spring Boot health enum `{ "UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN" }`:
+  - `UP` → green/healthy card visual.
+  - `DOWN` → red/critical visual; operator surface is **NOT degraded** (the leg returned a successful health document — the producer is honestly reporting itself as down). Distinction from `degraded` (the BFF could not reach the producer at all).
+  - `OUT_OF_SERVICE` → maintenance yellow visual.
+  - `UNKNOWN` → grey/inconclusive visual.
+- `cards[i].status == "degraded"` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }`; `data` absent. Card renders "leg unreachable" placeholder + retry affordance.
+- **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 5 cards in `degraded` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
+
+##### Error envelope (composition-level errors, NOT per-leg)
+
+| Status | Code | Cause |
+|---|---|---|
+| `400` | `NO_ACTIVE_TENANT` | `X-Tenant-Id` absent or blank (for log/audit traceability, not because outbound legs need it — the inbound check is preserved for symmetry with § 2.4.9.1 and for log MDC) |
+| `401` | `TOKEN_INVALID` | inbound `Authorization` bearer absent / invalid (Spring Security OAuth2 ResourceServer rejection — happens at filter chain, before controller) |
+| `503` | reserved | NEVER emitted (D5.B is rejected; same as § 2.4.9.1) |
+
+**No `401 TOKEN_INVALID` cross-leg collapse** — this route's outbound legs
+have no `Authorization` header, so a 401 from any leg is itself an
+unexpected (producer-side actuator misconfiguration) and is mapped to
+`degraded` for that card, not to a composition-level 401. This is an
+intentional divergence from § 2.4.9.1 D3 cross-leg rule (which exists
+because every leg there shares the inbound operator/OIDC credential — a
+401 from one is a 401 for all).
+
+##### Auth flow
+
+- **Inbound** (console-web SSR → console-bff): `Authorization` (GAP OIDC access token, inbound principal — Spring Security validates against GAP JWKS) + `X-Tenant-Id` (operator's selected active tenant, forwarded for log MDC). The browser **never** reaches console-bff directly.
+- **Outbound** (console-bff → each domain's `/actuator/health`): **no headers** beyond `Accept: application/json`. No `Authorization`, no `X-Tenant-Id`, no `X-Operator-Token`. D4 sealed-switch is not invoked.
+
+##### Resilience
+
+- Per-leg circuit-breaker keyed by `(domain, route="domain-health")` via `libs/java-web` Resilience4j — sibling circuit instance to § 2.4.9.1's `(domain, "operator-overview")` (independent state, so one dashboard's circuit trip does not bleed into the other).
+- Per-leg hard timeout reused (2s, the existing per-leg config in `RestClientConfig.PER_LEG_TIMEOUT`).
+- Composition-level 5s budget reused.
+- Aggregation degrade: every responsive leg's `data` + per-failed-leg `{ status: "degraded", reason }` card.
+- All-down still returns 200 with all-degraded envelope. D5.B (all-or-nothing 503) is forbidden.
+
+##### Observability
+
+The 3 mandatory BFF metric families emit per-leg samples with the
+following label values for this route:
+
+| Metric | Labels per emit |
+|---|---|
+| `bff_fanout_latency_seconds{domain,route}` | `domain` ∈ `{gap,wms,scm,finance,erp}` × `route` = `"domain-health"` |
+| `bff_fanout_errors_total{domain,route,code}` | same `domain`/`route` + `code` ∈ `{5xx,timeout,circuit_open}` (no `tenant_forbidden` / `permission_denied` / `missing_prerequisite` — those classifications belong to data legs only) |
+| `bff_aggregation_degrade_count_total{dashboard,degraded_domain}` | `dashboard = "domain-health"` + `degraded_domain` ∈ `{gap,wms,scm,finance,erp}` (one increment per `degraded` card per response) |
+
+OTel `traceparent` propagates inbound → every outbound leg; per-leg span
+carries `bff.domain` + `bff.route="domain-health"` attributes.
+
+##### Implementation guidance (impl PR scope notes — not contract)
+
+- **No credential pre-resolve**: the use case (`DomainHealthCompositionUseCase`) MUST NOT invoke `CredentialSelectionPort.selectFor(...)` on any path. Grep-assert in tests.
+- **`asOf` field source**: server-side composition-request `Instant.now()` at request entry (same as § 2.4.9.1).
+- **Span attribute reuse**: existing `bff.domain` + new `bff.route="domain-health"` — no new attribute key.
+
+##### console-web side obligations (FE)
+
+- Server route `(console)/api/console/dashboards/domain-health` (Next.js App Router server route) forwards `Authorization` + `X-Tenant-Id` to `console-bff` server-side. **Does NOT forward `X-Operator-Token`** (the BFF route does not require it; sending it would be misleading). Browser never sees the inbound headers.
+- `features/domain-health/` (`<DomainHealthScreen>` server component + `<DomainHealthCard>` × 5 + `<DegradeBanner>` if all-down + `<RetryButton>` client-only) renders the composed envelope. Per-card UI shape:
+  - `ok` + `data.status="UP"` → green-checkmark card.
+  - `ok` + `data.status="DOWN"` → red-cross card (producer self-reported critical — NOT a BFF/network failure).
+  - `ok` + `data.status="OUT_OF_SERVICE"` → yellow-wrench card (planned maintenance).
+  - `ok` + `data.status="UNKNOWN"` → grey-question card.
+  - `degraded` → "leg unreachable" placeholder + retry affordance.
+- Route `(console)/dashboards/health` is the operator-facing entry; a navigation entry in the in-console nav (`<MainNav>` "도메인 상태") is added alongside the existing "통합 개요".
+- No client-side polling, no auto-refresh interval — operator-initiated retry only (matches § 2.4.4 / § 2.4.9 invariant).
+
+##### Hard invariants this route inherits (HARD INVARIANT — ADR-MONO-017 + § 3.3 + § 2.4.9)
+
+- **No producer retrofit** — 5 producer SecurityConfig + actuator wiring byte-unchanged.
+- **D4 scope clarification** — D4 governs data legs only; this route's actuator legs are explicitly outside D4. The sealed-switch is NOT invoked on these legs (grep-asserted).
+- **Read-only** — no `Idempotency-Key` / `X-Operator-Reason` / mutation method.
+- **No `Authorization` / `X-Tenant-Id` / `X-Operator-Token` on outbound legs** (grep-asserted).
+- **Per-card degrade** discipline — composition never blanks.
+- **§ 3 parity matrix byte-unchanged** (attestation-marker count = exactly **16**).
+- **ADR-MONO-017 D1-D8 byte-unchanged** (no ADR amendment in this PR).
+
+> **Not a § 3 parity row**: composition routes are additive to the operator
+> surface, never replace a § 3 row. § 3 count remains **16** post-merge.
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
