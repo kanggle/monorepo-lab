@@ -31,6 +31,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `totp_secret_encrypted` | VARBINARY(255) | NULL | **restricted** | TOTP 시크릿 (envelope encryption). **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
 | `totp_enrolled_at` | DATETIME(6) | NULL | internal | TOTP 등록 완료 시각. **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
 | `oidc_subject` | VARCHAR(255) | NULL, UNIQUE | internal | **신규 (TASK-BE-298, Flyway V0027)** — GAP OIDC `platform-console-web` access token 의 `sub`(account_id UUID). `POST /api/admin/auth/token-exchange` 의 OIDC↔operator **링크 키**. `NULL` = console-token-exchange 미허용 운영자 (fail-closed 기본값 — 명시적 provisioning 으로만 활성화). 플랫폼-전역 UNIQUE (OIDC subject 공간은 테넌트 무관 — 아래 §OIDC Subject ↔ Operator Link Key). 스코프 상승 비-소스: 이 컬럼은 **링크에만** 쓰이고, tenant 스코프는 `tenant_id` 가 단일 진실 소스 |
+| `finance_default_account_id` | VARCHAR(36) | NULL | internal | **신규 (TASK-BE-304, Flyway V0028)** — 운영자가 platform-console `Operator Overview` (ADR-MONO-017 / `console-integration-contract.md § 2.4.9.1`) 의 finance 카드에서 기본으로 조회할 finance-platform 계정 UUID. `NULL` = 미설정 — platform-console 가 finance 카드를 `forbidden / MISSING_PREREQUISITE` 로 렌더링 (MVP option (b) 잔존 path). 비-NULL = `console-registry-api.md` 응답의 finance product item 에 `operatorContext.defaultAccountId` 로 emit (option (a) 활성화). **불투명 식별자** — GAP 는 finance-platform 에 verify 하지 않음 (cross-service decoupling); stale 값은 BFF 호출 시 finance `404 ACCOUNT_NOT_FOUND` 로 자연 노출. 인덱스 부재 (조회는 항상 operator row PK 단건). 분류 = **internal** (운영자가 선택한 외부 시스템 식별자; PII 아님, credential 아님). |
 | `last_login_at` | DATETIME(6) | NULL | internal | 마지막 operator JWT 발급 시각 |
 | `created_at` | DATETIME(6) | NOT NULL | internal | — |
 | `updated_at` | DATETIME(6) | NOT NULL | internal | — |
@@ -253,6 +254,20 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   idempotency 가드는 NULL-safe(`INFORMATION_SCHEMA` count = 0 비교). 비-Docker
   shape-pin 테스트가 본 구조 불변식을 고정한다 (text-substring/`@var` 회귀
   fast-fail).
+- **TASK-BE-304 (Flyway `V0028__add_finance_default_account_id_to_admin_operators.sql`)**:
+  `admin_operators.finance_default_account_id VARCHAR(36) NULL` 단일 컬럼
+  추가. **forward-only**(down 금지), **idempotent**(`INFORMATION_SCHEMA`
+  기반 컬럼 존재 가드 — V0027 패턴 verbatim 재사용, NULL-safe `count = 0`
+  비교), **MySQL-structural**(`ALTER TABLE … ADD COLUMN` DDL — V0027
+  교훈 적용: text-substring / `@var` 접근 금지). **인덱스 부재** (조회는
+  `findByOperatorId` 단건 PK 룩업 — secondary 인덱스 불필요, write cost
+  추가 회피). **백필 부재** — 기존 운영자 row 의 새 컬럼 값은 NULL (= MVP
+  option (b) 의 `forbidden / MISSING_PREREQUISITE` 잔존 path, 운영자 행동
+  변화 0). 평문 외부 식별자 저장 (PII / credential 아님 — 분류
+  `internal`); 값 변경은 별 admin-api / operator-management mutation
+  surface 의 책임(out-of-scope here). 비-Docker shape-pin 테스트가 본
+  구조 불변식을 고정한다 (단일 컬럼·NULL 허용·인덱스 부재 회귀
+  fast-fail).
 
 ---
 
@@ -262,7 +277,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 |---|---|
 | **restricted** | `admin_operators.password_hash`, `admin_operators.totp_secret_encrypted` |
 | **confidential** | `admin_operators.email`, `admin_operators.display_name`, `admin_actions.reason` |
-| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
+| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
 | **internal (special)** | `outbox.payload` — `admin.action.performed` envelope을 직렬화하여 포함. `target.displayHint`처럼 **upstream에서 이미 마스킹된** confidential 원본의 파생값을 포함할 수 있다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4 — 중앙 masking utility 경유 강제). 원문 PII는 포함되지 않음을 스펙 레벨에서 보장하므로 분류는 `internal`. 단, `reason` 필드(운영자 입력 원문) 전달 시 소비자 측에서 필요에 따라 추가 필터링을 고려한다. |
 | **public** | 없음 |
 

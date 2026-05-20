@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-304-finance-default-account-id-registry-surface.md` — Phase 1 of platform-console `Operator Overview` finance card `MISSING_PREREQUISITE` resolution (option (a) per `console-integration-contract.md § 2.4.9.1 Implementation guidance`). GAP-side producer-only capability extension: extend `console-registry-api.md` `GET /api/admin/console/registry` response shape with optional `operatorContext: { defaultAccountId?: string }` nested object on every product item (emitted on **finance** product item only in v1, from `admin_operators.finance_default_account_id`); Flyway V0028 forward-only `ALTER TABLE admin_operators ADD COLUMN finance_default_account_id VARCHAR(36) NULL`; admin-service `ConsoleRegistryUseCase` emit logic + `@JsonInclude(NON_NULL)` omission discipline. **Phase 2 platform-console-side consumer adoption is out of scope** (separate task after merge — console-web registry consumer + console-bff `FinanceBalanceReadAdapter` activation). Sequential per BE-296→FE-002a / FIN-BE-005→FE-009 / ERP-BE-002→FE-010 precedent. No ADR (additive optional field on read-only registry; option (a) pre-authorized in § 2.4.9.1). 0 byte diff outside `projects/global-account-platform/apps/admin-service/` (AC-6: console-bff unaffected — D4 HARD INVARIANT preserved; AC-7: § 3.3 zero retrofit, 5 producers + console-web all byte-unchanged). spec-first 3-PR chain (spec → impl → close). 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
