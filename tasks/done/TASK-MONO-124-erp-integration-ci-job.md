@@ -8,7 +8,7 @@ erp-platform Integration CI job 추가 (masterdata-service Testcontainers — fi
 
 # Status
 
-review
+done
 
 # Owner
 
