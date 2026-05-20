@@ -663,6 +663,254 @@ time** (it is reused verbatim here, not re-derived).
 > ADR-MONO-013 Phase 5 = COMPLETE; erp (Phase 6) inherits the proven
 > non-GAP contract (third confirmation of § 3.3 zero-retrofit).
 
+#### 2.4.8 erp operations surface (TASK-PC-FE-010 — cross-reference, not a redefinition)
+
+The **fourth non-GAP** per-domain binding of § 2.4 (ADR-MONO-013
+Phase 6 — the **first internal-system-primary** non-GAP federation,
+adding the fourth confirmation across a fourth trait shape: FE-007
+transactional, FE-008 integration-heavy, FE-009 regulated/transactional,
+**FE-010 internal-system + transactional + audit-heavy**). The
+console's `features/erp-ops` renders, **server-side and
+tenant-scoped**, the erp `masterdata-service`'s existing **read-only**
+master surface — 5 masters × {list, detail} = **10 GET endpoints**,
+all supporting `?asOf=<ISO-8601>` point-in-time read (architecture.md
+E3 with `[effectiveFrom, effectiveTo)` half-open semantics). There is
+**no operator-mutation parity** for erp at v1 (erp v1 has **no
+`admin-service`** — v2-deferred per ADR-MONO-016 § D3 / erp
+`PROJECT.md` § v1 OUT); this section is **strictly read-only**,
+closest to the FE-008 scm and FE-009 finance precedents. The producer
+contract is **authoritative and unchanged** — this section only states
+the consumer obligation and points at the owning erp spec. This
+binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
+"zero retrofit" assumption across a non-GAP domain, and the
+**third** confirmation that the per-domain credential rule defined in
+§ 2.4.5 generalises (it is reused verbatim here, not re-derived).
+
+- **Authoritative producer (owned by erp, do NOT redefine here —
+  consumed read-only)**: erp
+  [`masterdata-api.md`](../../../erp-platform/specs/contracts/http/masterdata-api.md)
+  — **unchanged, consumed only**. The console consumes exactly these
+  endpoints (request/response/headers/error tables are canonical
+  there):
+
+  | # | Master | List endpoint (`masterdata-api.md` §) | Detail endpoint | Notes |
+  |---|---|---|---|---|
+  | 1 | departments | `GET /api/erp/masterdata/departments` (`?asOf=&active=&parentId=&page=&size=`) | `GET /api/erp/masterdata/departments/{id}` (`?asOf=`) | hierarchical (`parentId`) |
+  | 2 | employees | `GET /api/erp/masterdata/employees` (`?asOf=&active=&departmentId=&costCenterId=&page=&size=`) | `GET /api/erp/masterdata/employees/{id}` (`?asOf=`) | cross-refs department / jobGrade / costCenter |
+  | 3 | job-grades | `GET /api/erp/masterdata/job-grades` (`?asOf=&active=&page=&size=`, ordered by `displayOrder` asc) | `GET /api/erp/masterdata/job-grades/{id}` (`?asOf=`) | leaf |
+  | 4 | cost-centers | `GET /api/erp/masterdata/cost-centers` (`?asOf=&active=&departmentId=&page=&size=`) | `GET /api/erp/masterdata/cost-centers/{id}` (`?asOf=`) | references department |
+  | 5 | business-partners | `GET /api/erp/masterdata/business-partners` (`?asOf=&active=&partnerType=&page=&size=`) | `GET /api/erp/masterdata/business-partners/{id}` (`?asOf=`) | confidential financial details (paymentTerms) |
+
+  **Honest erp read-surface constraint (recorded, not papered over —
+  DIFFERENT from finance)**: erp v1 exposes **both list and detail**
+  GETs for every master (10 endpoints), **AND** supports
+  `?asOf=<past>` point-in-time read on all of them. This is the
+  **inverse** of the FE-009 finance situation (finance had
+  `GET /accounts/{id}` only, account-id-driven; erp has full
+  list+detail with effective-dating). The honest erp section is
+  therefore **list-driven** (browsable index for each master,
+  drillable into detail) **with explicit effective-dating** (an
+  operator can supply `?asOf=<ISO-8601>` to view historical state —
+  first-class UI surface for the E3 invariant). Force-fitting the
+  finance account-id-driven shape onto erp is **forbidden**. The erp
+  **write/mutation** surface (16 endpoints — 5×`POST` create / 5×`PATCH`
+  / 5×`POST /retire` / 1×`POST .../move-parent`) is operator-domain
+  mutation requiring `Idempotency-Key` (E1 / transactional T1) +
+  role-scoped E6 fail-CLOSED authorization + append-only E8 audit —
+  **not** an operator-parity console surface at v1; **explicitly out
+  of scope** (not silently dropped). erp's v2 `approval-service` /
+  `read-model-service` / future `admin-service` / `notification-service`
+  / `permission-service` are likewise out of scope (all v2-deferred
+  per ADR-MONO-016 § D3 / erp `PROJECT.md` § v1 OUT).
+
+- **Per-domain credential selection — reuse of the § 2.4.5 rule (do
+  NOT re-derive, do NOT diverge)**: the normative per-domain
+  credential rule is **defined in § 2.4.5** (each § 2.4.x binding
+  declares its own credential against its producer's auth contract;
+  an implementer MUST NOT blanket-apply one domain's auth model to
+  another). **erp reuses that rule with the same outcome as wms / scm /
+  finance**: the erp `masterdata-service` validates a GAP RS256 JWT
+  (ADR-001) against GAP's JWKS, `tenant_id ∈ { erp, * }` enforced
+  producer-side from the JWT claim (erp
+  [`gap-integration.md`](../../../erp-platform/specs/integration/gap-integration.md)
+  § *platform-console Operator Read Consumer* — the merged
+  TASK-ERP-BE-002 reconciliation that sanctions the console as an
+  external operator GAP-token read consumer of the existing erp read
+  surface; the erp "internal-only 경계" #6 / E7 narrative is
+  **clarified, not weakened** — boundary scopes non-GAP-SSO traffic;
+  GAP-authenticated console traffic routed through internal Traefik
+  is within the SSO boundary). The credential is therefore the
+  operator's **GAP `platform-console-web` OIDC access token** itself
+  (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001),
+  sent **directly** as `Authorization: Bearer <GAP OIDC access token>`
+  server-side — **never** the GAP § 2.6 exchanged operator token
+  (`getOperatorToken()`; that is GAP-domain-scoped — the #569
+  trust-boundary invariant does **not** generalise to erp, exactly
+  as § 2.4.5 states for wms, § 2.4.6 confirms for scm, and § 2.4.7
+  confirms again for finance). The console's `features/erp-ops`
+  client uses `getAccessToken()` and **never** `getOperatorToken()`
+  (asserted by test — the same shape as the FE-007/FE-008/FE-009
+  assertions; the cross-domain regression is extended so
+  GAP = operator-token / wms = GAP-OIDC / scm = GAP-OIDC /
+  finance = GAP-OIDC / **erp = GAP-OIDC** all hold in one place — 5
+  domains). **Tenant model**: erp resolves the tenant from the JWT
+  `tenant_id` claim producer-side — the console does **not** send
+  `X-Tenant-Id` (the tenant rides inside the GAP OIDC token, exactly
+  the § 2.4.5 / § 2.4.6 / § 2.4.7 divergence). When the operator's
+  GAP token is not erp-eligible (no `erp` tenant and not a
+  platform-scope `*` operator) the console **blocks the section**
+  with an actionable "no erp-scoped access" state — no cross-tenant
+  call is ever fabricated; erp rejects cross-tenant producer-side
+  regardless (`403 TENANT_FORBIDDEN`, never weakened here).
+
+- **Read-only binding (normative — no mutation scaffolding at all)**:
+  there is **no** mutation anywhere in this section. **No**
+  `Idempotency-Key`, **no** `X-Operator-Reason`, **no** confirm
+  dialogs, **no** erp write call (`POST .../departments`,
+  `PATCH .../{id}`, `POST .../retire`, `POST .../move-parent`,
+  etc.), **no** v2 `approval-service` / `read-model-service` /
+  future `admin-service` / `notification-service` / `permission-service`
+  surface. Carrying the FE-007 alert-ack mutation scaffolding **or**
+  the GAP § 2.4.1 mutation scaffolding (reason / idempotency /
+  destructive-confirm) into this section is a **defect** (asserted
+  absent by test — same read discipline as §§ 2.4.2 / 2.4.4 / 2.4.6 /
+  2.4.7). Every erp call is a pure `GET`. The producer-side
+  `IDEMPOTENCY_KEY_REQUIRED` / `IDEMPOTENCY_KEY_CONFLICT` (409) and
+  `MASTERDATA_DUPLICATE_KEY` / `MASTERDATA_REFERENCE_VIOLATION` /
+  `MASTERDATA_PARENT_CYCLE` (409) + `MASTERDATA_EFFECTIVE_PERIOD_INVALID`
+  (422) are **mutation-only** per `masterdata-api.md` — reads never
+  hit them (recorded, not invented; surface them only if/when
+  surfacing producer audit history downstream).
+
+- **erp internal-system producer obligations surfacing (erp domain
+  constraint, normative — the erp analog of the scm § 2.4.6 S5 /
+  finance § 2.4.7 F5/F7 obligations — contract obligations, NOT UX
+  niceties)**:
+
+  - **E2 effective-dating + E3 point-in-time (UX-first-class, not
+    buried)**: every master detail surfaces `effectivePeriod:
+    { effectiveFrom, effectiveTo }` **honestly** —
+    `effectiveTo: null` (open-ended / currently active) and
+    `effectiveTo: <past>` (retired) rendered **visually distinct**
+    (retired rows clearly de-emphasised but **not hidden**). The
+    console **MUST** expose the `?asOf=<ISO-8601>` query as a
+    first-class user-controllable input (an `<AsOfPicker>` shared
+    component / URL parameter), and the rendered list/detail
+    **MUST** correctly reflect the state-at-that-instant (the E3
+    invariant). Substituting "current state" for `?asOf=<past>` is
+    the core erp UX defect to avoid — asserted by test (the
+    producer client receives `asOf=<past>` verbatim AND the
+    rendered state matches the asOf-instant response, NOT the
+    current-state response).
+
+  - **E1 reference integrity surfacing**: when the console renders
+    a master detail referencing other masters (e.g. employee →
+    department / jobGrade / costCenter; cost-center → department;
+    department → parent), broken / retired references are
+    surfaced **honestly** (a retired-reference badge or similar,
+    NOT silently sanitized). When the producer rejects a mutation
+    due to E1 (which the console doesn't issue, but might surface
+    as a historic audit reason), the producer message is rendered
+    faithfully.
+
+  - **confidential + audit-heavy discipline**: erp is
+    `data_sensitivity: confidential`; producer enforces it. The
+    console **MUST NOT** log employee PII (names / contact info),
+    business-partner financial identifiers (`paymentTerms`
+    `termDays`/`method`, banking refs), cost-center sensitive
+    attributes, or the token (reinforced no-PII / no-token logging
+    for confidential internal master data). The architecture E8
+    (append-only `audit_log`) is the producer's authority on change
+    history; the console renders that history (when surfaced)
+    faithfully, never doctored.
+
+  - **honest enum / status surfacing**: master `status` enums
+    (`ACTIVE` / `RETIRED` and any future addition) + employee
+    employment status (`EMPLOYED` / `ON_LEAVE` / `SEPARATED` per
+    architecture.md) — surfaced **honestly** (a `RETIRED` master
+    is shown as such, never hidden; a `SEPARATED` employee is
+    rendered as such, never filtered). Unknown / future enum
+    values degrade to a generic label, never a parser throw (same
+    tolerant-parser discipline as scm node/PO status — § 2.4.6 —
+    and finance account/txn status — § 2.4.7).
+
+- **Resilience (§ 2.5) — erp flat error envelope (SAME flat shape
+  as scm and finance but a DISTINCT producer; NOT wms's nested
+  shape)**: the erp error envelope is **flat** `{ code, message,
+  details?, timestamp }`, success `{ data, meta: { timestamp,
+  page?, size?, totalElements? } }` (per `masterdata-api.md` §
+  envelopes / `platform/error-handling.md` erp section). The wire
+  shape is **byte-identical to scm's and finance's flat envelope**
+  (same field names, same nesting) — but **erp is a DISTINCT
+  producer** (different domain authority); the client MUST parse
+  the erp flat shape against the **erp** error-code vocabulary,
+  never blanket-assume scm/finance/wms parser identity. A
+  wms-nested `{ error: { code … } }` body MUST NOT be misparsed as
+  erp (asserted by test — the erp code path does not accidentally
+  go through a wms-nested parser; each domain owns its own parser
+  even when the wire shape is identical). Mapping:
+  `401 UNAUTHORIZED` → forced **whole-session GAP re-login** (the
+  GAP OIDC session expired — not a per-section degrade, no
+  partial authed state, consistent with FE-002..009);
+  `403 TENANT_FORBIDDEN` / `403 FORBIDDEN` /
+  `403 DATA_SCOPE_FORBIDDEN` / `403 PERMISSION_DENIED` /
+  `403 EXTERNAL_TRAFFIC_REJECTED` (token not erp-scoped /
+  insufficient scope / outside operator's organization subtree per
+  E6 / external traffic at the internal-only boundary per E7) →
+  inline "not available / not scoped" (no crash, no re-login loop);
+  `404 MASTERDATA_NOT_FOUND` → inline actionable "no such record"
+  (no crash); `400 VALIDATION_ERROR` / `422` → inline actionable;
+  `503 SERVICE_UNAVAILABLE` / timeout / network → **only the erp
+  section degrades** (the console shell + the GAP / wms / scm /
+  finance sections stay intact). The mutation-only codes
+  (`409 MASTERDATA_DUPLICATE_KEY` / `MASTERDATA_REFERENCE_VIOLATION` /
+  `MASTERDATA_PARENT_CYCLE` / `IDEMPOTENCY_KEY_CONFLICT` /
+  `CONCURRENT_MODIFICATION`; `400 IDEMPOTENCY_KEY_REQUIRED`;
+  `422 MASTERDATA_EFFECTIVE_PERIOD_INVALID`) are unreachable on
+  the read surface and recorded for cross-reference completeness
+  only (the console MUST NOT special-case them on a GET path).
+  **erp has NO documented `429` / rate-limit response**
+  (`masterdata-api.md` § Error code → HTTP status has none —
+  confirmed honestly, identical to finance § 2.4.7); the console
+  MUST NOT fabricate a backoff clause for erp (no `Retry-After`
+  branch, no rate-limit-storm guard for erp; this is an honest
+  difference from § 2.4.6 — recorded, **not cargo-culted from
+  scm**, asserted absent by test).
+
+- **Producer immutability**: this is a **cross-reference only**.
+  Any change to the erp `masterdata-service` read producer
+  contract is an erp project-internal spec-first change in
+  `masterdata-api.md`; this section follows it, never redefines
+  it (§ 5 Change Rule). The erp-side acknowledgment of this
+  console consumer is the merged erp `gap-integration.md` §
+  *platform-console Operator Read Consumer* (TASK-ERP-BE-002) —
+  the spec-first basis for this binding.
+
+- **§ 3 parity matrix is NOT mutated by this binding**: § 3 is
+  the **GAP `admin-web` parity matrix**, finalized by
+  TASK-PC-FE-006 (16/16 rows; see § 3). erp is **additive domain
+  scope** federated by the console — **not** a GAP-`admin-web`
+  parity-gate row. This binding adds **no** row to § 3 and changes
+  **none**; the Phase 3 `admin-web`-retirement gate is unaffected.
+  (This § 2.4.8 prose deliberately does **not** use the § 3.1
+  per-row attestation marker phrase, so the FE-006 no-drift
+  guard's count of that marker stays exactly 16 — the FE-006
+  guard remains green after this binding.)
+
+> **Not a § 3 parity row**: like § 2.4.5 / § 2.4.6 / § 2.4.7 and
+> unlike §§ 2.4.1–2.4.4, § 2.4.8 has **no** § 3 line. § 3 is the
+> GAP `admin-web` absorption parity gate (FE-006-finalized); the
+> erp section is a federated **domain** section — the **fourth**
+> instance that verifies ADR-MONO-013 § 3.3's "zero retrofit"
+> assumption across a non-GAP domain, and the **first
+> internal-system-primary** confirmation (wms transactional →
+> scm integration-heavy → finance regulated/transactional →
+> **erp internal-system + transactional + audit-heavy**) — four
+> trait shapes, zero retrofit, zero re-derivation. ADR-MONO-013
+> Phase 6 = COMPLETE; Phase 7 (`console-bff` + cross-domain
+> dashboards) gate is **ungated to 5/5 domains live**
+> (GAP + wms + scm + finance + erp).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
