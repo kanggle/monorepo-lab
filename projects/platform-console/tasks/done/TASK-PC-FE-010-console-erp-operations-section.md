@@ -8,7 +8,7 @@ console-web Phase 6 — erp operations console section (read-only: 5 masters × 
 
 # Status
 
-review
+done
 
 # Owner
 
