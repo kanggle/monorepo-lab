@@ -620,6 +620,47 @@ Forward-declared (fintech.md F8 / ledger v2). v1 models the operator queue; real
 
 ---
 
+## Master Data  `[domain: erp]`
+
+Owned by `masterdata-service` v1. Organization master-data lifecycle —
+Department hierarchy / Employee org-attributes / JobGrade / CostCenter /
+BusinessPartner — with reference integrity, effective-dated revisions,
+and append-only audit. See [`rules/domains/erp.md`](../rules/domains/erp.md)
+§ Standard Error Codes (E1·E2).
+
+| Code | HTTP | Description |
+|---|---|---|
+| MASTERDATA_NOT_FOUND | 404 | Master record (Department / Employee / JobGrade / CostCenter / BusinessPartner) with given id does not exist; also emitted when a referenced parent / department / costCenter / jobGrade id is unknown (`MasterdataNotFoundException`) (E1) |
+| MASTERDATA_DUPLICATE_KEY | 409 | Natural-key collision on create (per-aggregate unique constraint — `department.code`, `employee.employeeNumber`, `jobGrade.code`, `costCenter.code`, `businessPartner.code`) (`MasterdataDuplicateKeyException`) (E1) |
+| MASTERDATA_REFERENCE_VIOLATION | 409 | Retire blocked because ≥1 live referencer still points at this row (employees → department / costCenter / jobGrade; costCenters → department; child departments → parent). `details` enumerates the referencer kinds (`MasterdataReferenceViolationException`) (E1) |
+| MASTERDATA_PARENT_CYCLE | 409 | `Department.moveParent` would close a cycle — the candidate new parent is a descendant of, or equal to, this department (`MasterdataParentCycleException`) (E1) |
+| MASTERDATA_EFFECTIVE_PERIOD_INVALID | 422 | Effective-dated revision insert / append violates the period invariant: overlapping `[effectiveFrom, effectiveTo)` interval on the same natural key, OR `effectiveTo ≤ effectiveFrom` (`MasterdataEffectivePeriodInvalidException`) (E2) |
+
+## Authorization  `[domain: erp]`
+
+Owned by `masterdata-service` v1; `permission-service` v2. Single
+un-bypassable authorization path (role-set + organization-scope evaluation
+before any repository call); fail-CLOSED on missing role/scope (E6·E7).
+
+| Code | HTTP | Description |
+|---|---|---|
+| PERMISSION_DENIED | 403 | Caller lacks the required role for the requested use case (`PermissionDeniedException`) (E6). Cross-project: same string as GAP admin-service `PermissionDeniedException` — erp-local emission. |
+| DATA_SCOPE_FORBIDDEN | 403 | Caller has the required role but the target row's owning department is outside the caller's organization scope (descendant departments only) (`DataScopeForbiddenException`) (E6) |
+| EXTERNAL_TRAFFIC_REJECTED | 403 | External (non-internal-network) traffic reached the application layer. Primary enforcement is at the Traefik / network layer (`internal: true` Docker network); this code is the application-layer fallback surface (E7) |
+
+> `TENANT_FORBIDDEN` (403, cross-tenant JWT) — see `Tenant  [domain: saas]`
+> section; erp consumes the same string with `tenant_id ∈ {erp, *}`
+> semantics (defense-in-depth via the JWT validator chain).
+> `IDEMPOTENCY_KEY_REQUIRED` (400) and `IDEMPOTENCY_KEY_CONFLICT` (409,
+> same-key-different-payload) on mutating endpoints — see Platform-Common
+> Transactional Trait section + `DUPLICATE_REQUEST`. `CONCURRENT_MODIFICATION`
+> (409, optimistic-lock) — Platform-Common Transactional Trait `CONFLICT`
+> shape; erp uses the descriptive name in the contract surface for
+> readability. `UNAUTHORIZED` (401, missing/invalid/expired JWT) —
+> Platform-Common Authentication.
+
+---
+
 # Rules
 
 - Services must never expose stack traces, internal class names, or SQL in error responses.
