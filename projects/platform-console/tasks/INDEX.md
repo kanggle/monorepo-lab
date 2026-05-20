@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-BE-003-prometheus-scrape-endpoint-deprecation-upgrade.md` — **READY**. TASK-PC-BE-001 § Honest gaps **(b)** 약속 fix-task. [`ObservabilityConfig.java:77`](projects/platform-console/apps/console-bff/src/main/java/com/kanggle/platformconsole/bff/infrastructure/config/ObservabilityConfig.java#L77) 의 `new PrometheusScrapeEndpoint(registry.getPrometheusRegistry())` 가 Spring Boot 3.3.1 부터 deprecated, **3.5.0 에서 removal 예정** (`@Deprecated(since = "3.3.1", forRemoval = true)` — spring-boot-actuator 3.4.1 sources 확인). 새 생성자 `new PrometheusScrapeEndpoint(registry.getPrometheusRegistry(), null)` 로 교체 — 두 번째 `Properties` 인수가 `null` 일 때 새 생성자가 `PrometheusPropertiesLoader.load()` (no-arg) 사용 → deprecated 생성자 본체 `this(prometheusRegistry, null)` 위임과 정확히 동일 wire behavior. **No spec / contract / ADR change** (mechanical mechanical 1-line upgrade). **No behavior change**. **3 mandatory metric families** (`bff_fanout_latency_seconds` / `bff_fanout_errors_total` / `bff_aggregation_degrade_count_total`) 그대로 expose. console-web / 5 producer / TS / docs / hooks byte-unchanged. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical 1-line upgrade) / 리뷰=Opus 4.7.
 
 ## in-progress
 
