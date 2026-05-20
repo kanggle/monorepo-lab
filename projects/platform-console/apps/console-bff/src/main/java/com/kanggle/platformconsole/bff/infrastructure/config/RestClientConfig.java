@@ -51,7 +51,7 @@ public class RestClientConfig {
 
     @Bean(name = "gapRestClient")
     public RestClient gapRestClient(RestClient.Builder builder,
-                                    @Value("${consolebff.outbound.gap.base-url:http://gap.local}") String baseUrl) {
+                                    @Value("${consolebff.outbound.gap.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
@@ -60,7 +60,7 @@ public class RestClientConfig {
 
     @Bean(name = "wmsRestClient")
     public RestClient wmsRestClient(RestClient.Builder builder,
-                                    @Value("${consolebff.outbound.wms.base-url:http://wms.local}") String baseUrl) {
+                                    @Value("${consolebff.outbound.wms.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
@@ -69,7 +69,7 @@ public class RestClientConfig {
 
     @Bean(name = "scmRestClient")
     public RestClient scmRestClient(RestClient.Builder builder,
-                                    @Value("${consolebff.outbound.scm.base-url:http://scm.local}") String baseUrl) {
+                                    @Value("${consolebff.outbound.scm.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
@@ -78,7 +78,7 @@ public class RestClientConfig {
 
     @Bean(name = "financeRestClient")
     public RestClient financeRestClient(RestClient.Builder builder,
-                                        @Value("${consolebff.outbound.finance.base-url:http://finance.local}") String baseUrl) {
+                                        @Value("${consolebff.outbound.finance.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
@@ -87,7 +87,7 @@ public class RestClientConfig {
 
     @Bean(name = "erpRestClient")
     public RestClient erpRestClient(RestClient.Builder builder,
-                                    @Value("${consolebff.outbound.erp.base-url:http://erp.local}") String baseUrl) {
+                                    @Value("${consolebff.outbound.erp.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
