@@ -73,6 +73,47 @@ services:
       retries: 5
       start_period: 20s
 
+  # ---------------------------------------------------------------------------
+  # console-bff — Spring Boot Hexagonal BFF (TASK-PC-BE-001).
+  #
+  # Internal-only (console-web server-side calls only — browser never reaches
+  # this hostname directly). Traefik routes console-bff.local → this container.
+  # NO CORS labels (architecture.md § Edge Routing + AC-11 internal-only).
+  # expose: only — no host-port publish (Local Network Convention ADR-MONO-001).
+  #
+  # Per-domain credential dispatch is request-scoped (stateless, no DB/Redis).
+  # GAP issuer URL is passed via CONSOLE_BFF_GAP_ISSUER_URL (JWKS discovery).
+  # ---------------------------------------------------------------------------
+  console-bff:
+    build:
+      context: ./apps/console-bff
+      dockerfile: Dockerfile
+    container_name: platform-console-bff
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: "8080"
+      # GAP OIDC issuer for RS256 JWKS validation of inbound bearer tokens.
+      CONSOLE_BFF_GAP_ISSUER_URL: ${CONSOLE_BFF_GAP_ISSUER_URL:-http://gap.local}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.console-bff.rule=Host(`console-bff.local`)"
+      - "traefik.http.routers.console-bff.entrypoints=web"
+      - "traefik.http.services.console-bff.loadbalancer.server.port=8080"
+      # NOTE: CORS NOT enabled — internal-only; only console-web server-side
+      # calls reach this hostname (architecture.md § Edge Routing).
+    networks:
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 networks:
   traefik-net:
     external: true

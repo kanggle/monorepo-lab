@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-BE-001-console-bff-skeleton.md` — **READY**. backend-engineer(Sonnet — shell skeleton; cf. ADR-MONO-013 § D6 Phase 7 row "Opus composition, Sonnet shell"). **ADR-MONO-017 § 3.3 #2 first post-ACCEPTED execution** (sibling to ADR-MONO-014 → TASK-BE-298, ADR-MONO-015 → TASK-PC-FE-005). spec-first 2-PR: **spec PR** (이 ready/ entry + `specs/services/console-bff/architecture.md` 신규 Identity-table canonical + `PROJECT.md` `service_types += rest-api` + Service Map § v1 promotion + `console-integration-contract.md` § 2.4.9 신규 = BFF surface frame + hard invariants + observability set + edge-routing internal-only + v1 endpoint row = `GET /actuator/health` 단일) → **impl PR** (`apps/console-bff/` Spring Boot 3.4 / Java 21 Hexagonal + `SecurityConfig` OAuth2 RS RS256 + `CredentialSelectionPort` 5-row verbatim from § 2.4.9 + `OperatorCredentialContext` `@RequestScope` + Dockerfile + docker-compose `console-bff.local` Traefik label internal-only + Testcontainers IT + CI path-filter job `platform-console-bff-*`). **Hard invariants byte-unchanged enforce**: ADR-MONO-017 D1-D8 + § 2.4.5/6/7/8 + § 2.6 + § 3 parity count = 16. **Producer spec/contract 변경 0** (zero retrofit 다섯 번째 확인). MVP "Operator Overview" composition route 는 본 task 범위 밖 — 후속 TASK-PC-FE-011 (§ 2.4.9.1 additive + `features/operator-overview/`). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (shell skeleton; MVP composition route = Opus).
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-BE-001-console-bff-skeleton.md` — **REVIEW**. backend-engineer(Sonnet 4.6). **ADR-MONO-017 § 3.3 #2 first post-ACCEPTED execution** impl PR. Landed: `apps/console-bff/` Spring Boot 3.4 / Java 21 Hexagonal skeleton (~35 files) — `ConsoleBffApplication`, domain layer (`DomainTarget` enum / `OutboundCredential` sealed + `CredentialSelectionPort` / `MissingCredentialException` / `LegOutcome` / `DegradePolicy`), application layer (`OperatorOverviewCompositionUseCase` placeholder + `DomainReadPort` outbound port), adapter inbound (`GlobalExceptionHandler`), adapter outbound (`CredentialSelectionAdapter` 5-row switch + `OperatorCredentialContext` `@RequestScope`), infrastructure (`SecurityConfig` OAuth2 RS RS256 + `PublicPaths` + `ObservabilityConfig` 3-metric eager registration + `RestClientConfig` OTel tracing). Tests: domain unit (5-row exhaustive credential selection + fail-closed), application unit (degrade-policy shapes), slice (`ActuatorHealthSliceTest` — 200 no-auth + 401 authenticated chain), IT (`ConsoleBffSmokeIntegrationTest` — `@SpringBootTest` + MockWebServer JWKS + health 200 + prometheus 3-metric + 5-row dispatch dry-run + header reading). `Dockerfile` (eclipse-temurin 21 alpine multi-stage). `docker-compose.yml` updated with `console-bff` service block + Traefik `console-bff.local` internal-only labels (no CORS). `settings.gradle` module registered. CI: `platform-console` positive path-filter + `build-and-test` step + `platform-console-bff-integration-tests` job. Hard invariants enforced: 0 `Idempotency-Key`/`X-Operator-Reason` in production code · 0 fallback path in credential selector · 0 producer spec changes · 0 console-web changes · ADR-MONO-017 D1-D8 byte-unchanged. 분석=Opus 4.7 / 구현=Sonnet 4.6 (shell skeleton).
 
 ## done
 

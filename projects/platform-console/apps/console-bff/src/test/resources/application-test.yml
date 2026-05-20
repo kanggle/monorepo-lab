@@ -1,0 +1,53 @@
+# Test profile overrides for console-bff.
+# Slice tests use @WebMvcTest with addFilters=false — security not exercised by unit slices.
+# Integration tests wire a MockWebServer for the JWKS endpoint via @DynamicPropertySource.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Overridden per-test via @DynamicPropertySource in AbstractConsoleBffIntegrationTest.
+          jwk-set-uri: http://localhost:0/oauth2/jwks
+          issuer-uri: http://test-issuer
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        # Mirror prod application.yml — explicit since the test profile is a partial merge.
+        include: health,info,prometheus
+  # CI Linux runners do not expose an OTLP receiver on :4318. Disable tracing
+  # export so the observability stack does not surface a side-effect 500 on
+  # /actuator/prometheus when the OTLP HTTP exporter cannot reach the receiver.
+  # Outbound `traceparent` header propagation is a Spring Boot core feature
+  # independent of this exporter (TASK-PC-FE-011 will exercise it with real
+  # outbound legs); the skeleton's IT only asserts metric exposition.
+  tracing:
+    enabled: false
+  otlp:
+    tracing:
+      export:
+        enabled: false
+
+# Test-profile diagnostic surface — surface server-side errors so CI failure
+# messages carry root cause without needing log-file scraping. Reverts when
+# the IT failure is resolved (TASK-PC-BE-001 follow-up commit).
+server:
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+
+logging:
+  level:
+    root: INFO
+    com.kanggle.platformconsole.bff: DEBUG
+    org.springframework.boot.actuate: DEBUG
+    io.micrometer: DEBUG
+    org.springframework.web: INFO
+    # Surface which RequestMatcher fired (or did not fire) on /actuator/prometheus.
+    org.springframework.security: DEBUG
+    org.springframework.security.web.access.intercept: TRACE

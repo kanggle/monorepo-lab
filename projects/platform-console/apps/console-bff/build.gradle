@@ -1,0 +1,115 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.kanggle.platformconsole.bff'
+
+// -------------------------------------------------------------------------
+// platform-console console-bff — Spring Boot Hexagonal skeleton.
+//
+// ADR-MONO-017 ACCEPTED (2026-05-20) post-ACCEPTED execution.
+// TASK-PC-BE-001 impl PR.
+//
+// This service is a stateless REST orchestrator / Backend-for-Frontend (BFF)
+// that composes cross-domain read views for the unified operator console.
+//
+// Hard invariants (ADR-MONO-017 D1-D8):
+//   - NO persistence (no JPA / Flyway / Redis / Kafka)
+//   - NO mutations at MVP (no Idempotency-Key / X-Operator-Reason scaffolding)
+//   - Per-domain credential dispatch via CredentialSelectionPort (D4.A)
+//   - Inbound: OAuth2 Resource Server RS256 JWKS = GAP issuer
+//   - Outbound: X-Operator-Token forwarded request-scoped (OperatorCredentialContext)
+//
+// Source sets:
+// * `test`            — unit + slice tests (default, excludes 'integration' tag).
+// * `integrationTest` — @SpringBootTest + WireMock (GAP JWKS stub).
+//                       Tagged @Tag("integration"); excluded from `test` so
+//                       `./gradlew check` stays Docker-free.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Structured logging (prod profile)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Shared libs
+    implementation project(':libs:java-common')
+    implementation project(':libs:java-web')
+    implementation project(':libs:java-security')
+    implementation project(':libs:java-observability')
+
+    // Test (unit + slice)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.assertj:assertj-core'
+
+    // JWT signing helper used by validator unit tests and the integration suite.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // Shared Testcontainers base utilities (DockerAvailableCondition etc.)
+    testImplementation testFixtures(project(':libs:java-test-support'))
+
+    // Testcontainers (integration tests, @Tag("integration"))
+    // Note: console-bff has no DB/Kafka containers — Testcontainers is included
+    // as baseline harness infrastructure; actual containers are WireMock only.
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // MockWebServer for the JWKS stand-in.
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+    }
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'console-bff.jar'
+}
+
+// Default `test` task: unit + slice only. Excludes Docker-dependent tests so
+// `./gradlew check` stays fast and Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY @Tag("integration") tests.
+// Not wired into `check` so the fast feedback loop stays Docker-free.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+}

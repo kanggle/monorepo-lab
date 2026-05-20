@@ -91,3 +91,11 @@ include(
 include(
     'projects:erp-platform:apps:masterdata-service'
 )
+
+// Project: platform-console
+// TASK-PC-BE-001 (ADR-MONO-017 ACCEPTED Option C, post-ACCEPTED execution).
+// v1 = console-bff only (Hexagonal REST orchestrator / BFF; stateless, no DB).
+// console-web is a Next.js app outside Gradle scope.
+include(
+    'projects:platform-console:apps:console-bff'
+)

@@ -135,6 +135,7 @@ jobs:
       scm: ${{ steps.filter.outputs.scm == 'true' && steps.filter.outputs.code-changed == 'true' }}
       finance: ${{ steps.filter.outputs.finance == 'true' && steps.filter.outputs.code-changed == 'true' }}
       erp: ${{ steps.filter.outputs.erp == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      platform-console: ${{ steps.filter.outputs.platform-console == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
@@ -185,6 +186,14 @@ jobs:
               - 'projects/erp-platform/**'
               - '!projects/erp-platform/tasks/**'
               - '!projects/erp-platform/**/*.md'
+            # TASK-PC-BE-001: pure-positive filter for platform-console backend
+            # (console-bff). No negation patterns (MONO-074/075 quirk rule).
+            # console-web (Next.js, no Gradle) is not gated by this filter —
+            # its changes still flow through the existing `libs` or `workflows`
+            # fallback paths since it has no dedicated backend job.
+            platform-console:
+              - 'projects/platform-console/apps/console-bff/**'
+              - 'projects/platform-console/docker-compose.yml'
             contracts:
               - 'projects/*/specs/contracts/**'
             observability:
@@ -243,7 +252,8 @@ jobs:
       needs.changes.outputs.fan == 'true' ||
       needs.changes.outputs.scm == 'true' ||
       needs.changes.outputs.finance == 'true' ||
-      needs.changes.outputs.erp == 'true'
+      needs.changes.outputs.erp == 'true' ||
+      needs.changes.outputs.platform-console == 'true'
 
     steps:
       - name: Checkout
@@ -366,6 +376,17 @@ jobs:
         run: >-
           ./gradlew
           :projects:erp-platform:apps:masterdata-service:check
+          --no-daemon --stacktrace
+
+      - name: Build and check platform-console backend (Docker-free)
+        # platform-console console-bff integration tests carry @Tag("integration")
+        # and are excluded from default :test/:check tasks (see console-bff
+        # build.gradle). Docker-backed integrationTest is invoked separately
+        # in the platform-console-bff-integration-tests job below.
+        # TASK-PC-BE-001: console-bff (ADR-MONO-017 ACCEPTED post-ACCEPTED execution)
+        run: >-
+          ./gradlew
+          :projects:platform-console:apps:console-bff:check
           --no-daemon --stacktrace
 
       - name: Upload test reports on failure
@@ -1069,6 +1090,58 @@ jobs:
           path: |
             projects/erp-platform/apps/*/build/reports/tests/integrationTest/
             projects/erp-platform/apps/*/build/test-results/integrationTest/
+          retention-days: 7
+
+  platform-console-bff-integration-tests:
+    name: Integration (platform-console console-bff, Testcontainers + WireMock JWKS)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # console-bff integration suite boots the full Spring context with WireMock
+    # stubbing the GAP JWKS endpoint. No DB/Kafka containers — stateless BFF.
+    # Scoped to monorepo-lab; standalone repo extraction relies on its own
+    # Docker-free `check` signal.
+    # Activate for platform-console changes or cross-project (libs/workflows).
+    # TASK-PC-BE-001 (ADR-MONO-017 ACCEPTED post-ACCEPTED execution).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.platform-console == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run platform-console console-bff integration suites
+        run: >-
+          ./gradlew
+          :projects:platform-console:apps:console-bff:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload platform-console integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-console-bff-integration-test-reports
+          path: |
+            projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
+            projects/platform-console/apps/console-bff/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:
