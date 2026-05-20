@@ -76,6 +76,7 @@ GAP 측 인프라 (TASK-MONO-114 V0017 시드):
 - account-service V0017: `tenants` 에 `finance` row (B2B_ENTERPRISE — scm 과 동일 type, 내부-서비스 모델)
 - auth-service V0017: `oauth_clients` 에 `finance-platform-internal-services-client` (client_credentials, scopes=`finance.read`/`finance.write`)
 - v1 = backend only. user-flow PKCE client 는 별도 V slot (v1 미발행 — 콘솔이 GAP public client 로 렌더, ADR-MONO-013).
+- **platform-console operator read consumer (ADR-MONO-013 Model B)** — `platform-console` (별도 ADR-MONO-013-governed 프로젝트) 가 GAP **자신의** `platform-console-web` 콘솔 클라이언트로 finance 의 v1 read 표면(`GET /accounts/{id}`·`/balances`·`/transactions`)을 **외부 운영자 read consumer** 로서 server-side 소비한다 (read-only; 상세 = [`gap-integration.md` § platform-console Operator Read Consumer](specs/integration/gap-integration.md#platform-console-operator-read-consumer-adr-mono-013)). finance 자체는 backend-only 유지 — finance 프론트엔드 없음, finance user-flow 클라이언트 없음 (deferred `finance-platform-user-flow-client` 는 무관). 콘솔의 trait 은 콘솔의 것이지 finance 의 것이 아니다 — finance 는 `multi-tenant`/`integration-heavy` 미선언 유지 (§ Out of Scope). finance 도메인 거버넌스는 ADR-MONO-008 그대로 (재결정 아님).
 
 dev 환경 토큰 발급 예:
 ```
