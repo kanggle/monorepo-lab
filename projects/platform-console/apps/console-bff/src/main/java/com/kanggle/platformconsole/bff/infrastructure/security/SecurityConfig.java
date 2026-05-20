@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -55,6 +56,15 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Actuator endpoints — use EndpointRequest (Spring Boot Actuator's
+                        // own RequestMatcher) because actuator endpoints are mapped via
+                        // EndpointHandlerMapping, not RequestMappingHandlerMapping.
+                        // Spring Security 6's requestMatchers(String...) resolves through
+                        // MVC pattern parsing which does not see EndpointHandlerMapping
+                        // paths — matches fall through to anyRequest().authenticated().
+                        // CI surface: PR #669 5th run, /actuator/prometheus still 401 even
+                        // after PublicPaths.EXACT included the exact path.
+                        .requestMatchers(EndpointRequest.to("health", "info", "prometheus")).permitAll()
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
                         .anyRequest().authenticated()
