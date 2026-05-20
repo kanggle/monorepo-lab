@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
+import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -28,7 +29,7 @@ import java.util.Map;
  * FE concern (per § 2.4.9.1 row 3 and the FE-half spec).
  */
 @Component
-public class ScmInventoryReadAdapter implements DomainReadPort<Map<String, Object>> {
+public class ScmInventoryReadAdapter implements OperatorOverviewCompositionUseCase.ScmInventoryReadPort {
 
     private final RestClient client;
 

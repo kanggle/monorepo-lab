@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
+import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -39,7 +40,7 @@ import java.util.Map;
  * id-aware overload.
  */
 @Component
-public class FinanceBalanceReadAdapter implements DomainReadPort<Map<String, Object>> {
+public class FinanceBalanceReadAdapter implements OperatorOverviewCompositionUseCase.FinanceBalanceReadPort {
 
     private final RestClient client;
 

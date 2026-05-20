@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
+import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -27,7 +28,7 @@ import java.util.Map;
  * {@code asOf} so the producer applies "now" semantics).
  */
 @Component
-public class ErpDepartmentsReadAdapter implements DomainReadPort<Map<String, Object>> {
+public class ErpDepartmentsReadAdapter implements OperatorOverviewCompositionUseCase.ErpDepartmentsReadPort {
 
     private final RestClient client;
 
