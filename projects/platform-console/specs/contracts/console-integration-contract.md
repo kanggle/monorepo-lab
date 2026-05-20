@@ -464,6 +464,205 @@ verbatim here, not re-derived).
 > its producer, per the § 2.4.5 rule — not a guess copied from another
 > domain).
 
+#### 2.4.7 finance operations surface (TASK-PC-FE-009 — cross-reference, not a redefinition)
+
+The **third non-GAP** per-domain binding of § 2.4 (ADR-MONO-013 Phase 5 —
+the slice that **closes** the non-GAP federation cycle: `FE-007 wms` →
+`FE-008 scm` → `FE-009 finance`). The console's `features/finance-ops`
+renders, **server-side and tenant-scoped**, the finance `account-service`'s
+existing **read-only** account + balances + transactions surface. There
+is **no operator-mutation parity** for finance at v1 (finance v1 has
+**no `admin-service`** — deferred to finance v2 per ADR-MONO-008 § D3 /
+finance `PROJECT.md` v2 Service Map); this section is **strictly
+read-only** (closest to the FE-008 scm precedent). The producer contract
+is **authoritative and unchanged** — this section only states the
+consumer obligation and points at the owning finance spec. This binding
+is the **third** instance that verifies ADR-MONO-013 § 3.3's "zero
+retrofit" assumption across a non-GAP domain, and the proof that the
+**per-domain credential rule defined in § 2.4.5 generalises a second
+time** (it is reused verbatim here, not re-derived).
+
+- **Authoritative producer (owned by finance, do NOT redefine here —
+  consumed read-only)**: finance
+  [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md)
+  — **unchanged, consumed only**. The console consumes exactly these
+  endpoints (request/response/headers/error tables are canonical there):
+
+  | # | Operation | Producer endpoint (`account-api.md` §) | Kind |
+  |---|---|---|---|
+  | 1 | account by id | `GET /api/finance/accounts/{id}` (account + balances: status, currency, kycLevel) | read |
+  | 2 | balances | `GET /api/finance/accounts/{id}/balances` (per-currency `ledger`/`available`/`held` as F5 money) | read |
+  | 3 | transactions | `GET /api/finance/accounts/{id}/transactions` (paginated `?page=&size=&type=&status=`; `counterpartyAccountId?`, `reversalOfTransactionId?`) | read |
+
+  **Honest finance read-surface constraint (recorded, not papered over)**:
+  finance v1 exposes **no account list/search `GET`** — only
+  `GET /accounts/{id}`. The section is therefore **account-id-driven**
+  (operator supplies/selects an `accountId`; no searchable account index
+  at v1). This is the *inverse* of the FE-002 GAP situation (GAP had
+  no GET-by-id and composed a detail view from search; finance has
+  GET-by-id but no list) — fabricating a non-existent finance
+  list/search endpoint is **forbidden**. A list/search surface, if ever
+  needed, is a finance producer-side spec-first change (out of scope
+  here). The finance **write/mutation** surface (`POST /accounts`,
+  `/kyc/upgrade`, `/holds`, `/holds/{holdId}/capture`,
+  `/holds/{holdId}/release`, `/transfers`) is domain fund-movement /
+  operator-domain mutation (`Idempotency-Key`, fintech F1) — **not** an
+  operator-parity console surface; **explicitly out of scope** (not
+  silently dropped). finance's v2 `admin-service` operator surface
+  (reconciliation queue / KYC review / limits) is likewise out of
+  scope (v2-deferred per ADR-MONO-008 § D3).
+
+- **Per-domain credential selection — reuse of the § 2.4.5 rule (do NOT
+  re-derive, do NOT diverge)**: the normative per-domain credential rule
+  is **defined in § 2.4.5** (each § 2.4.x binding declares its own
+  credential against its producer's auth contract; an implementer MUST
+  NOT blanket-apply one domain's auth model to another). **finance
+  reuses that rule with the same outcome as wms and scm**: the finance
+  `account-service` validates a GAP RS256 JWT (ADR-001) against GAP's
+  JWKS, `tenant_id ∈ { finance, * }` enforced producer-side from the
+  JWT claim (finance
+  [`gap-integration.md`](../../../finance-platform/specs/integration/gap-integration.md)
+  § *platform-console Operator Read Consumer* — the merged
+  TASK-FIN-BE-005 reconciliation that sanctions the console as an
+  external operator GAP-token read consumer of the existing finance
+  read surface: `AllowedIssuersValidator` + `TenantClaimValidator`
+  + `X-Token-Type=user`). The credential is therefore the operator's
+  **GAP `platform-console-web` OIDC access token** itself
+  (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001),
+  sent **directly** as `Authorization: Bearer <GAP OIDC access token>`
+  server-side — **never** the GAP § 2.6 exchanged operator token
+  (`getOperatorToken()`; that is GAP-domain-scoped — the #569
+  trust-boundary invariant does **not** generalise to finance, exactly
+  as § 2.4.5 states for wms and § 2.4.6 confirms for scm). The
+  console's `features/finance-ops` client uses `getAccessToken()` and
+  **never** `getOperatorToken()` (asserted by test — the same shape as
+  the FE-007/FE-008 assertions; the cross-domain regression is
+  extended so GAP = operator-token / wms = GAP-OIDC / scm = GAP-OIDC /
+  **finance = GAP-OIDC** all hold in one place). **Tenant model**:
+  finance resolves the tenant from the JWT `tenant_id` claim
+  producer-side — the console does **not** send `X-Tenant-Id` (the
+  tenant rides inside the GAP OIDC token, exactly the § 2.4.5 / § 2.4.6
+  divergence). When the operator's GAP token is not finance-eligible
+  (no `finance` tenant and not a platform-scope `*` operator) the
+  console **blocks the section** with an actionable "no finance-scoped
+  access" state — no cross-tenant call is ever fabricated; finance
+  rejects cross-tenant producer-side regardless (`403 TENANT_FORBIDDEN`,
+  never weakened here).
+
+- **Read-only binding (normative — no mutation scaffolding at all)**:
+  there is **no** mutation anywhere in this section. **No**
+  `Idempotency-Key`, **no** `X-Operator-Reason`, **no** confirm
+  dialogs, **no** finance write call (`POST /accounts`,
+  `/kyc/upgrade`, `/holds`, `/holds/{holdId}/capture|release`,
+  `/transfers`), **no** v2 `admin-service` surface. Carrying the
+  FE-007 alert-ack mutation scaffolding **or** the GAP § 2.4.1
+  mutation scaffolding (reason/idempotency/destructive-confirm) into
+  this section is a **defect** (asserted absent by test — same read
+  discipline as §§ 2.4.2/2.4.4/2.4.6). Every finance call is a pure
+  `GET`. `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is **mutation-only** per
+  `account-api.md` — reads never hit it (recorded, not invented).
+
+- **fintech producer obligations surfacing (finance domain constraint,
+  normative — the finance analog of the scm § 2.4.6 S5 obligation —
+  contract obligations, NOT UX niceties)**:
+
+  - **F5 money shape (contract obligation, NOT a UX nicety)**: every
+    money value is `{ amount: "<string-integer-minor-units>", currency }`
+    with a per-currency minor-unit scale (KRW=0, USD=2; the
+    `account-api.md` § Money clause is verbatim). The console **MUST**
+    render money faithfully from the **string** minor-units
+    (scale-correct display) and **MUST NOT** coerce it to a float / JS
+    `Number` / lose precision anywhere (parse / store / arithmetic /
+    display). This is a deliberate fintech domain constraint (F5) — the
+    money view-model field is a **required, precision-preserving**
+    element, never a float, never optional/discardable. A round-trip
+    of a large minor-units amount (e.g. KRW `"1234567890123"`) MUST be
+    **bit-exact** as a string. Asserted by test — there is **no**
+    `Number(...)` / `parseFloat(...)` / `parseInt(...)` applied to an
+    `amount` value anywhere in `features/finance-ops/`.
+
+  - **confidential + F7 discipline**: finance is
+    `data_sensitivity: confidential`; producer masks PII / regulated
+    identifiers (F7). The console **MUST NOT** log balances,
+    transactions, account refs, or the token (reinforced no-PII /
+    no-token logging for confidential financial data — § 2.6 logging
+    invariant extended). Tokens / PII / balances / transactions /
+    account refs never appear in structured logs / state / events
+    beyond render.
+
+  - **honest regulated-state surfacing**: account status
+    (`PENDING_KYC | ACTIVE | RESTRICTED | FROZEN | CLOSED`), KYC level,
+    transaction status (incl. `FAILED | REVERSED`, sanction-driven),
+    `reversalOfTransactionId`, `counterpartyAccountId?` — surfaced
+    **honestly** (a `FROZEN` / `RESTRICTED` / `CLOSED` account or a
+    `FAILED` / `REVERSED` txn is shown as such, never hidden /
+    de-emphasised). Unknown / future account `status`, txn `status`,
+    or txn `type` enum values degrade to a generic label, never a
+    parser throw (same tolerant-parser discipline as scm node/PO
+    status — § 2.4.6).
+
+- **Resilience (§ 2.5) — finance flat error envelope (SAME flat shape
+  as scm but a DISTINCT producer; NOT wms's nested shape)**: the
+  finance error envelope is **flat** `{ code, message, details?,
+  timestamp }`, success `{ data, meta: { timestamp } }` (per
+  `account-api.md` § envelopes / `platform/error-handling.md`
+  fintech). The wire shape is **byte-identical to scm's flat
+  envelope** (same field names, same nesting) — but **finance is a
+  DISTINCT producer** (different domain authority); the client MUST
+  parse the finance flat shape against the **finance** error-code
+  vocabulary, never blanket-assume scm/wms parser identity. A
+  wms-nested `{ error: { code … } }` body MUST NOT be misparsed as
+  finance (asserted by test — the finance code path does not
+  accidentally go through a wms-nested parser). Mapping:
+  `401 UNAUTHORIZED` → forced **whole-session GAP re-login** (the
+  GAP OIDC session expired — not a per-section degrade, no partial
+  authed state, consistent with FE-002..008);
+  `403 TENANT_FORBIDDEN` / `403 PERMISSION_DENIED` /
+  `403 FORBIDDEN` (token not finance-scoped or insufficient scope) →
+  inline "not available / not scoped" (no crash, no re-login loop);
+  `404 ACCOUNT_NOT_FOUND` → inline actionable "no such account" (no
+  crash); `400 VALIDATION_ERROR` / `422` → inline actionable;
+  `503 SERVICE_UNAVAILABLE` / timeout / network → **only the finance
+  section degrades** (the console shell + the GAP / wms / scm
+  sections stay intact). **finance has NO documented `429` /
+  rate-limit response** (`account-api.md` § Error code → HTTP status
+  has none — confirmed honestly); the console MUST NOT fabricate a
+  backoff clause for finance (no `Retry-After` branch, no
+  rate-limit-storm guard for finance; this is an honest difference
+  from § 2.4.6 — recorded, **not cargo-culted from scm**, asserted
+  absent by test). `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is
+  mutation-only and unreachable on the read surface (recorded).
+
+- **Producer immutability**: this is a **cross-reference only**. Any
+  change to the finance `account-service` read producer contract is a
+  finance project-internal spec-first change in `account-api.md`;
+  this section follows it, never redefines it (§ 5 Change Rule). The
+  finance-side acknowledgment of this console consumer is the merged
+  finance `gap-integration.md` § *platform-console Operator Read
+  Consumer* (TASK-FIN-BE-005) — the spec-first basis for this
+  binding.
+
+- **§ 3 parity matrix is NOT mutated by this binding**: § 3 is the
+  **GAP `admin-web` parity matrix**, finalized by TASK-PC-FE-006
+  (16/16 rows; see § 3). finance is **additive domain scope**
+  federated by the console — **not** a GAP-`admin-web` parity-gate
+  row. This binding adds **no** row to § 3 and changes **none**; the
+  Phase 3 `admin-web`-retirement gate is unaffected. (This § 2.4.7
+  prose deliberately does **not** use the § 3.1 per-row attestation
+  marker phrase, so the FE-006 no-drift guard's count of that marker
+  stays exactly 16 — the FE-006 guard remains green after this
+  binding.)
+
+> **Not a § 3 parity row**: like § 2.4.5 / § 2.4.6 and unlike
+> §§ 2.4.1–2.4.4, § 2.4.7 has **no** § 3 line. § 3 is the GAP
+> `admin-web` absorption parity gate (FE-006-finalized); the finance
+> section is a federated **domain** section — the **third** instance
+> that verifies ADR-MONO-013 § 3.3's "zero retrofit" assumption across
+> a non-GAP domain, and the second confirmation that the § 2.4.5
+> per-domain credential rule generalises (wms → scm → **finance**).
+> ADR-MONO-013 Phase 5 = COMPLETE; erp (Phase 6) inherits the proven
+> non-GAP contract (third confirmation of § 3.3 zero-retrofit).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).

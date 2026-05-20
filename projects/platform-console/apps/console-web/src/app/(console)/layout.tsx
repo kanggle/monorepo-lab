@@ -104,6 +104,15 @@ export default async function ConsoleLayout({
                     SCM 운영
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/finance"
+                    data-testid="nav-finance"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    Finance 운영
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>
