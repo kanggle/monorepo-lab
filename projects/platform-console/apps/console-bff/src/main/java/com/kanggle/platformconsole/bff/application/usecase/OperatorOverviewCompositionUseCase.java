@@ -135,7 +135,34 @@ public class OperatorOverviewCompositionUseCase {
      *                                       per-leg outcomes)
      */
     public List<CompositionLeg> compose(String tenantId) {
-        Map<DomainTarget, CompositionLeg> results = fanOut(tenantId);
+        // (0) Pre-resolve credentials on the SERVLET THREAD where the request
+        //     scope is active. Each virtual thread spawned by fanOut() runs in
+        //     its OWN thread context — Spring's RequestContextHolder is thread-
+        //     local (inheritable=false), so dereferencing the @RequestScope
+        //     `OperatorCredentialContext` proxy inside a virtual thread throws
+        //     ScopeNotActiveException. Resolving here once, then passing plain
+        //     `OutboundCredential` records into the fan-out, keeps virtual
+        //     threads free of any request-scoped state.
+        //
+        //     ADR-MONO-017 D4 HARD INVARIANT is fully preserved: the sealed
+        //     switch in CredentialSelectionAdapter is invoked exactly as before
+        //     (5 calls, no fallback, no default arm). Per-leg failure surfaces
+        //     are unchanged — MissingCredentialException at resolve time maps
+        //     to the same `forbidden / MISSING_PREREQUISITE` per-card outcome
+        //     that the previous in-virtual-thread time() handler emitted.
+        Map<DomainTarget, OutboundCredential> preResolved = new EnumMap<>(DomainTarget.class);
+        Map<DomainTarget, CompositionLeg> earlyDecided = new EnumMap<>(DomainTarget.class);
+        for (DomainTarget domain : CARD_ORDER) {
+            try {
+                preResolved.put(domain, credentialSelection.selectFor(domain));
+            } catch (MissingCredentialException mce) {
+                emitErrorCounter(domain, "missing_prerequisite");
+                earlyDecided.put(domain,
+                        CompositionLeg.outcomeOnly(LegOutcome.forbidden(domain, "MISSING_PREREQUISITE")));
+            }
+        }
+
+        Map<DomainTarget, CompositionLeg> results = fanOut(tenantId, preResolved, earlyDecided);
 
         // (1) Cross-leg 401: collapse to composition-level 401
         //     (§ 2.4.4 D3 / § 2.4.9.1 — auth is not a per-card degrade).
@@ -171,14 +198,29 @@ public class OperatorOverviewCompositionUseCase {
     // Internal fan-out
     // ------------------------------------------------------------------
 
-    private Map<DomainTarget, CompositionLeg> fanOut(String tenantId) {
+    private Map<DomainTarget, CompositionLeg> fanOut(
+            String tenantId,
+            Map<DomainTarget, OutboundCredential> preResolved,
+            Map<DomainTarget, CompositionLeg> earlyDecided) {
         // Java 21 virtual-thread executor: each leg gets its own VT.
+        // Each leg receives its credential as a PLAIN VALUE (record) — no
+        // request-scoped bean is dereferenced inside the virtual thread.
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            CompletableFuture<CompositionLeg> gapFuture = supply(executor, () -> callGap(tenantId));
-            CompletableFuture<CompositionLeg> wmsFuture = supply(executor, () -> callWms(tenantId));
-            CompletableFuture<CompositionLeg> scmFuture = supply(executor, () -> callScm(tenantId));
-            CompletableFuture<CompositionLeg> financeFuture = supply(executor, () -> callFinance(tenantId));
-            CompletableFuture<CompositionLeg> erpFuture = supply(executor, () -> callErp(tenantId));
+            CompletableFuture<CompositionLeg> gapFuture = legFuture(executor,
+                    DomainTarget.GAP, earlyDecided,
+                    cred -> callGap(tenantId, cred), preResolved);
+            CompletableFuture<CompositionLeg> wmsFuture = legFuture(executor,
+                    DomainTarget.WMS, earlyDecided,
+                    cred -> callWms(tenantId, cred), preResolved);
+            CompletableFuture<CompositionLeg> scmFuture = legFuture(executor,
+                    DomainTarget.SCM, earlyDecided,
+                    cred -> callScm(tenantId, cred), preResolved);
+            CompletableFuture<CompositionLeg> financeFuture = legFuture(executor,
+                    DomainTarget.FINANCE, earlyDecided,
+                    cred -> callFinance(tenantId, cred), preResolved);
+            CompletableFuture<CompositionLeg> erpFuture = legFuture(executor,
+                    DomainTarget.ERP, earlyDecided,
+                    cred -> callErp(tenantId, cred), preResolved);
 
             CompletableFuture<Void> all = CompletableFuture.allOf(
                     gapFuture, wmsFuture, scmFuture, financeFuture, erpFuture);
@@ -213,6 +255,26 @@ public class OperatorOverviewCompositionUseCase {
         return CompletableFuture.supplyAsync(body, executor);
     }
 
+    /**
+     * Builds the future for a single leg. Honours an {@code earlyDecided}
+     * outcome (e.g. {@code MISSING_PREREQUISITE} from credential pre-resolve)
+     * without spawning a virtual thread; otherwise dispatches the body with
+     * the pre-resolved {@link OutboundCredential}.
+     */
+    private static CompletableFuture<CompositionLeg> legFuture(
+            ExecutorService executor,
+            DomainTarget domain,
+            Map<DomainTarget, CompositionLeg> earlyDecided,
+            java.util.function.Function<OutboundCredential, CompositionLeg> body,
+            Map<DomainTarget, OutboundCredential> preResolved) {
+        CompositionLeg early = earlyDecided.get(domain);
+        if (early != null) {
+            return CompletableFuture.completedFuture(early);
+        }
+        OutboundCredential cred = preResolved.get(domain);
+        return CompletableFuture.supplyAsync(() -> body.apply(cred), executor);
+    }
+
     private CompositionLeg resolve(CompletableFuture<CompositionLeg> f, DomainTarget domain) {
         if (f.isDone() && !f.isCompletedExceptionally()) {
             try {
@@ -237,25 +299,25 @@ public class OperatorOverviewCompositionUseCase {
     //   (3) Classifies failures into LegOutcome per § 2.4.9 observability table.
     // ------------------------------------------------------------------
 
-    private CompositionLeg callGap(String tenantId) {
+    private CompositionLeg callGap(String tenantId, OutboundCredential cred) {
         return time(DomainTarget.GAP, () -> {
-            String bearer = bearerFor(DomainTarget.GAP);
+            String bearer = bearerFromCred(cred);
             Map<String, Object> data = gapPort.read(tenantId, bearer);
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), data);
         });
     }
 
-    private CompositionLeg callWms(String tenantId) {
+    private CompositionLeg callWms(String tenantId, OutboundCredential cred) {
         return time(DomainTarget.WMS, () -> {
-            String bearer = bearerFor(DomainTarget.WMS);
+            String bearer = bearerFromCred(cred);
             Map<String, Object> data = wmsPort.read(tenantId, bearer);
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), data);
         });
     }
 
-    private CompositionLeg callScm(String tenantId) {
+    private CompositionLeg callScm(String tenantId, OutboundCredential cred) {
         return time(DomainTarget.SCM, () -> {
-            String bearer = bearerFor(DomainTarget.SCM);
+            String bearer = bearerFromCred(cred);
             Map<String, Object> data = scmPort.read(tenantId, bearer);
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), data);
         });
@@ -272,7 +334,7 @@ public class OperatorOverviewCompositionUseCase {
      *
      * <p>The unit test asserts this branch.
      */
-    private CompositionLeg callFinance(String tenantId) {
+    private CompositionLeg callFinance(String tenantId, OutboundCredential cred) {
         Optional<String> accountId = resolveOperatorDefaultAccountId();
         if (accountId.isEmpty()) {
             emitErrorCounter(DomainTarget.FINANCE, "missing_prerequisite");
@@ -280,7 +342,7 @@ public class OperatorOverviewCompositionUseCase {
                     LegOutcome.forbidden(DomainTarget.FINANCE, "MISSING_PREREQUISITE"));
         }
         return time(DomainTarget.FINANCE, () -> {
-            String bearer = bearerFor(DomainTarget.FINANCE);
+            String bearer = bearerFromCred(cred);
             // The narrow port adapter for finance dispatches to /balances when an
             // id is supplied; the underlying adapter wires the path template.
             Map<String, Object> data = financePort.read(tenantId, bearer);
@@ -288,21 +350,22 @@ public class OperatorOverviewCompositionUseCase {
         });
     }
 
-    private CompositionLeg callErp(String tenantId) {
+    private CompositionLeg callErp(String tenantId, OutboundCredential cred) {
         return time(DomainTarget.ERP, () -> {
-            String bearer = bearerFor(DomainTarget.ERP);
+            String bearer = bearerFromCred(cred);
             Map<String, Object> data = erpPort.read(tenantId, bearer);
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), data);
         });
     }
 
     /**
-     * Resolves the bearer token value for {@code domain} via the
-     * {@link CredentialSelectionPort} (D4 HARD INVARIANT). Switches on the
-     * sealed {@link OutboundCredential} hierarchy — never falls back.
+     * Returns the bearer-token string from a pre-resolved
+     * {@link OutboundCredential}. Switches on the sealed hierarchy — no
+     * default arm, no fallback (ADR-MONO-017 D4 HARD INVARIANT). The
+     * sealed-switch lives in {@code CredentialSelectionAdapter}; this helper
+     * is its dual on the consumer side (reading the resolved record).
      */
-    private String bearerFor(DomainTarget domain) {
-        OutboundCredential cred = credentialSelection.selectFor(domain);
+    private static String bearerFromCred(OutboundCredential cred) {
         return switch (cred) {
             case OutboundCredential.OperatorToken t -> t.token();
             case OutboundCredential.GapOidcAccessToken t -> t.token();
