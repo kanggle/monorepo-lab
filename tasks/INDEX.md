@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-127-be303-ci-result-dimension-enhance.md` — **READY**. TASK-MONO-122 (BE-303/BE-299 promote, done) 의 BE-303 bullet 만 *in-place enhance*. 현 BE-303 룰은 머지 상태 차원 (`gh pr view --json state,mergedAt,mergeCommit` + `git log origin/main` tip 일치) 만 검증 — **PR-time CI 가 RED 상태로 squash-merge** 된 케이스는 머지 상태 차원에서 정상이지만 main 회귀 surface. **driven by**: TASK-PC-BE-002 회귀 회복 saga 2026-05-20 (PR #676/#677/#678) — TASK-PC-FE-011 PR #672 가 머지 직전 마지막 PR-time check `Integration (platform-console console-bff, ...): fail 55s` 상태로 squash-merge → main 4 회 연속 (`b378b201` / `71974cf6` 등) console-bff IT RED → 1순위 TASK-PC-FE-012 (PR #675) 의 CI 가 회귀 mirror 로 FAIL → TASK-PC-BE-002 0순위 promotion 으로 회복. **Enhancement**: BE-303 룰에 **CI 결과 차원** 추가 — `gh pr view --json ...,statusCheckRollup` 의 `state=MERGED` + `git log origin/main` tip 일치 + 머지 직전 `gh pr checks <n>` snapshot 의 **0 failing required checks** 세 차원 모두 충족 시에만 close chore 진입. RED 가 있으면 STOP → main GREEN 회복 fix-task 가 close chore 앞에 와야 함. **Scope**: `CLAUDE.md` 단일 bullet (line 107) in-place 교체 — BE-299 bullet + 다른 5 bullet + Lifecycle 줄 byte-unchanged. **No agent-memory mutation** (memory § 10 detail 보존, MONO-122 promote 동형 catalog=CLAUDE.md / detail=memory pattern). **No code / projects / build / CI / ADR change**. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (룰 텍스트 정확성 + reality-alignment 의도 보존) / 리뷰=Opus 4.7.
 
 ## in-progress
 
