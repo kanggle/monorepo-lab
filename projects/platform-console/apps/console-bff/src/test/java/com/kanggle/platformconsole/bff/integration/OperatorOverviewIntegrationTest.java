@@ -141,12 +141,11 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     }
 
     private static void resetMockServer(MockWebServer server) {
-        server.setDispatcher(new Dispatcher() {
-            @Override
-            public MockResponse dispatch(RecordedRequest request) {
-                return new MockResponse().setResponseCode(500).setBody("unstubbed");
-            }
-        });
+        // Restore default QueueDispatcher so subsequent `enqueue(...)` calls
+        // succeed (MockWebServer internally casts to QueueDispatcher when
+        // enqueue is invoked; a custom Dispatcher set here would trigger
+        // ClassCastException — CI surface PR #672 cycle 2).
+        server.setDispatcher(new okhttp3.mockwebserver.QueueDispatcher());
         // Drain pending requests so per-test takeRequest() sees a clean queue.
         try {
             while (true) {
