@@ -8,7 +8,7 @@ console-bff — Operator Overview fan-out 의 virtual thread × `@RequestScope` 
 
 # Status
 
-ready
+done
 
 # Owner
 
