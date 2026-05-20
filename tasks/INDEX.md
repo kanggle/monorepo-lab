@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-123-adr-013-phase-4-5-audit-trail-backfill.md` — **ready**. ADR-MONO-013 § 6 audit-trail backfill (additive-only, HARDSTOP-04 / D1–D8 unchanged). Restores the FE-006-established *"Additive note — Phase X COMPLETE"* pattern at **Phase 4 complete** (FE-007 #633 `81395376` + FE-008 #637 `c34fc0ac` — 2026-05-19) and **Phase 5 complete** (FE-009 #644 `29b01826` + FIN-BE-005 #639/#640/#641 — 2026-05-20). Self-consistency restoration: ADR file last touched at `16cfdc00` (FE-006 / Phase 2 capstone, 2026-05-16), never updated at Phase 4/5 complete despite the FE-006 pattern. Spec-only docs(adr) chore; no decision change; no new ADR; scope = `docs/adr/ADR-MONO-013-platform-console-foundation.md` + root `tasks/INDEX.md` only. Strict PR Separation (root rule, identical to finance): spec PR (this) + impl PR + close chore PR. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (HARDSTOP-04 boundary judgement; 9 squash hashes verbatim verification against `git log origin/main`).
 
 ## in-progress
 
