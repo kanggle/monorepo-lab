@@ -8,7 +8,7 @@ masterdata-service bootstrap — Hexagonal organization master data (부서/직�
 
 # Status
 
-review
+done
 
 # Owner
 
