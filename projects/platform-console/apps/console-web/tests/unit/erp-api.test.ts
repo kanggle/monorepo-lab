@@ -1,0 +1,919 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+/**
+ * `features/erp-ops/api/erp-api.ts` — the security-critical core of
+ * TASK-PC-FE-010 (the FOURTH non-GAP federated domain; the FIRST
+ * internal-system-primary confirmation; ADR-MONO-013 Phase 6).
+ * STRICTLY READ-ONLY.
+ *
+ * THE CENTRAL ASSERTIONS (console-integration-contract § 2.4.8 —
+ * REUSE of the § 2.4.5 per-domain credential rule, NOT re-derived;
+ * same outcome as wms / scm / finance / the EXACT INVERSE of the
+ * FE-002..006 GAP assertion):
+ *
+ *   - every erp call's bearer is the **GAP OIDC ACCESS token** (the
+ *     `console_access_token` cookie), NEVER the exchanged operator
+ *     token;
+ *   - the operator-token path is ABSENT for erp (the erp client
+ *     does NOT call `getOperatorToken()` — pinned so a future
+ *     refactor cannot blanket-apply one domain's auth to all
+ *     domains; the #569 invariant is GAP-domain-scoped and does NOT
+ *     generalise to erp);
+ *   - the console sends NO `X-Tenant-Id` (erp resolves tenant from
+ *     the JWT `tenant_id ∈ {erp,*}` claim producer-side —
+ *     tenant-model divergence reused from § 2.4.5);
+ *   - EVERY call is a pure GET — NO mutation artifacts anywhere (no
+ *     Idempotency-Key, no X-Operator-Reason, no body, no erp write,
+ *     no v2 approval-service / read-model-service / future
+ *     admin-service surface);
+ *   - the erp FLAT error envelope
+ *     `{ code, message, details?, timestamp }` is parsed (NOT
+ *     wms's NESTED `{ error: { code } }`);
+ *   - **NO 429 / Retry-After / backoff branch** (§ 2.4.8 — identical
+ *     to finance § 2.4.7; honest difference from scm § 2.4.6 — erp
+ *     has no documented 429; a stray 429 falls through as a
+ *     surfaced `ApiError` with NO retry, NO Retry-After honour);
+ *   - **E3 `?asOf=` thread-through** — when the caller supplies
+ *     `asOf=<past>`, the producer client receives `asOf=<past>`
+ *     verbatim (the CORE invariant the task pins);
+ *   - 401 → ApiError(401) (whole-session re-login); 403 →
+ *     ApiError(403) inline; 404 MASTERDATA_NOT_FOUND → ApiError
+ *     inline; 503/timeout → ErpUnavailableError (section degrades
+ *     only).
+ *
+ * `next/headers` cookies() + getServerEnv() mocked (FE-001..009
+ * lane).
+ */
+
+const cookieJar = new Map<string, string>();
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (n: string) =>
+      cookieJar.has(n) ? { value: cookieJar.get(n)! } : undefined,
+  }),
+}));
+
+const { ENV } = vi.hoisted(() => ({
+  ENV: {
+    OIDC_ISSUER_URL: 'http://gap.local',
+    OIDC_CLIENT_ID: 'platform-console-web',
+    OIDC_REDIRECT_URI: 'http://console.local/api/auth/callback',
+    OIDC_SCOPE: 'openid profile email tenant.read',
+    CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
+    REGISTRY_TIMEOUT_MS: 50,
+    CONSOLE_TOKEN_EXCHANGE_URL:
+      'http://gap.local/api/admin/auth/token-exchange',
+    TOKEN_EXCHANGE_TIMEOUT_MS: 50,
+    GAP_ADMIN_API_BASE: 'http://gap.local',
+    ACCOUNTS_TIMEOUT_MS: 50,
+    AUDIT_TIMEOUT_MS: 50,
+    OPERATORS_TIMEOUT_MS: 50,
+    WMS_ADMIN_BASE_URL: 'http://wms.local/api/v1/admin',
+    WMS_TIMEOUT_MS: 50,
+    SCM_GATEWAY_BASE_URL: 'http://scm.local',
+    SCM_TIMEOUT_MS: 50,
+    FINANCE_BASE_URL: 'http://finance.local',
+    FINANCE_TIMEOUT_MS: 50,
+    ERP_BASE_URL: 'http://erp.local',
+    ERP_TIMEOUT_MS: 50,
+    LOG_LEVEL: 'info' as const,
+    NEXT_PUBLIC_APP_URL: 'http://console.local',
+  },
+}));
+vi.mock('@/shared/config/env', () => ({
+  clientEnv: { NEXT_PUBLIC_APP_URL: ENV.NEXT_PUBLIC_APP_URL },
+  getServerEnv: () => ENV,
+}));
+
+import * as sessionModule from '@/shared/lib/session';
+
+import {
+  listDepartments,
+  getDepartmentById,
+  listEmployees,
+  getEmployeeById,
+  listJobGrades,
+  getJobGradeById,
+  listCostCenters,
+  getCostCenterById,
+  listBusinessPartners,
+  getBusinessPartnerById,
+} from '@/features/erp-ops/api/erp-api';
+import {
+  ApiError,
+  ErpUnavailableError,
+} from '@/shared/api/errors';
+import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
+import {
+  DepartmentSchema,
+  EmployeeSchema,
+  EffectivePeriodSchema,
+} from '@/features/erp-ops/api/types';
+
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers },
+  });
+}
+
+function erpError(code: string, status: number, message = 'err') {
+  return new Response(
+    JSON.stringify({
+      code,
+      message,
+      timestamp: '2026-05-20T00:00:00.000Z',
+    }),
+    { status, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+const DEPT_LIST_ENVELOPE = {
+  data: [
+    {
+      id: 'dept-1',
+      code: 'DEPT-001',
+      name: 'Sales',
+      parentId: null,
+      status: 'ACTIVE',
+      effectivePeriod: {
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    },
+    {
+      id: 'dept-2',
+      code: 'DEPT-002',
+      name: 'Legacy',
+      parentId: null,
+      status: 'RETIRED',
+      effectivePeriod: {
+        effectiveFrom: '2025-01-01',
+        effectiveTo: '2025-12-31',
+      },
+    },
+  ],
+  meta: { page: 0, size: 20, totalElements: 2, timestamp: 'x' },
+};
+
+const DEPT_DETAIL_ENVELOPE = {
+  data: {
+    id: 'dept-1',
+    code: 'DEPT-001',
+    name: 'Sales',
+    parentId: null,
+    status: 'ACTIVE',
+    effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    audit: {
+      createdAt: '2026-01-01T00:00:00Z',
+      createdBy: 'operator-1',
+      updatedAt: '2026-01-01T00:00:00Z',
+      updatedBy: 'operator-1',
+    },
+  },
+  meta: { timestamp: 'x' },
+};
+
+const EMP_LIST_ENVELOPE = {
+  data: [
+    {
+      id: 'emp-1',
+      employeeNumber: 'EMP-001',
+      name: '홍길동',
+      departmentId: 'dept-1',
+      jobGradeId: 'jg-1',
+      costCenterId: 'cc-1',
+      status: 'ACTIVE',
+      employmentStatus: 'EMPLOYED',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+    {
+      id: 'emp-2',
+      employeeNumber: 'EMP-002',
+      name: 'Jane',
+      departmentId: 'dept-1',
+      jobGradeId: 'jg-1',
+      costCenterId: 'cc-1',
+      status: 'ACTIVE',
+      employmentStatus: 'SEPARATED',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+  ],
+  meta: { page: 0, size: 20, totalElements: 2, timestamp: 'x' },
+};
+
+beforeEach(() => {
+  cookieJar.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+// ===========================================================================
+// 1. Per-domain credential — GAP OIDC token, NEVER getOperatorToken()
+// ===========================================================================
+
+describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the INVERSE of #569)', () => {
+  it('sends the GAP OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-erp');
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(DEPT_LIST_ENVELOPE));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listDepartments({});
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe(
+      'Bearer GAP-OIDC-ACCESS-required-by-erp',
+    );
+    expect(headers.Authorization).not.toContain(
+      'OPERATOR-TOKEN-must-not-be-used',
+    );
+    expect(String(url)).toContain('http://erp.local/api/erp/masterdata/departments');
+  });
+
+  it('uses getAccessToken() and NEVER getOperatorToken() for erp (pins the per-domain rule)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
+    const getAccessSpy = vi.spyOn(sessionModule, 'getAccessToken');
+    const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(EMP_LIST_ENVELOPE)),
+    );
+
+    await listEmployees({});
+
+    expect(getAccessSpy).toHaveBeenCalled();
+    // The operator-token path is ABSENT for erp — same shape as the
+    // FE-007/FE-008/FE-009 assertions; a future blanket-apply
+    // refactor would break this.
+    expect(getOperatorSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws 401 with NO fetch when the GAP session is absent (whole-session re-login signal)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const err = await listDepartments({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends NO X-Tenant-Id (erp resolves tenant from the JWT claim — tenant-model divergence)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(DEPT_LIST_ENVELOPE));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listDepartments({});
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(headers['X-Tenant-Id']).toBeUndefined();
+    expect(headers['X-Request-Id']).toBeTruthy();
+  });
+});
+
+// ===========================================================================
+// 2. STRICTLY read-only — every call is a pure GET, no mutation artifacts.
+// ===========================================================================
+
+describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4.8)', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+  });
+
+  it('every read is a pure GET with NO mutation artifacts', async () => {
+    // Producer-side detail body — used for every detail leg
+    // (department / employee / job-grade / cost-center /
+    // business-partner). The detail schemas all share the same
+    // common shape (code/name/status/effectivePeriod) so a single
+    // body satisfies all five detail parsers.
+    const DETAIL_BODY = {
+      data: {
+        id: 'x',
+        code: 'X',
+        name: 'X',
+        employeeNumber: 'EMP-X',
+        partnerType: 'CUSTOMER',
+        status: 'ACTIVE',
+        effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+      },
+      meta: { timestamp: 'x' },
+    };
+    // An empty list satisfies every list-response schema (the
+    // `data: []` array bypasses the per-item shape check).
+    const EMPTY_LIST = {
+      data: [],
+      meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
+    };
+    const calls: Array<[string, RequestInit]> = [];
+    const fetchMock = vi.fn((u: string, init?: RequestInit) => {
+      calls.push([String(u), init as RequestInit]);
+      const url = new URL(String(u));
+      // A list URL ends with `/{master}` (no trailing path
+      // segment); a detail URL has `/{master}/{id}`.
+      const isDetail = /\/(departments|employees|job-grades|cost-centers|business-partners)\/[^/]+$/
+        .test(url.pathname);
+      if (isDetail) {
+        return Promise.resolve(jsonResponse(DETAIL_BODY));
+      }
+      return Promise.resolve(jsonResponse(EMPTY_LIST));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Exercise all 10 read functions.
+    await listDepartments({});
+    await getDepartmentById('dept-1');
+    await listEmployees({});
+    await getEmployeeById('emp-1');
+    await listJobGrades({});
+    await getJobGradeById('jg-1');
+    await listCostCenters({});
+    await getCostCenterById('cc-1');
+    await listBusinessPartners({});
+    await getBusinessPartnerById('bp-1');
+
+    expect(calls.length).toBe(10);
+    for (const [, init] of calls) {
+      const h = init.headers as Record<string, string>;
+      expect(init.method).toBe('GET');
+      expect(init.body).toBeUndefined();
+      expect(h['Idempotency-Key']).toBeUndefined();
+      expect(h['X-Operator-Reason']).toBeUndefined();
+      expect(h['Content-Type']).toBeUndefined();
+    }
+    // The api module exports ONLY read functions — no erp write
+    // (`POST .../departments` / `PATCH .../{id}` / `POST .../retire`
+    // / `POST .../move-parent` — 16 mutation endpoints), no v2
+    // approval-service / read-model-service / future admin-service
+    // surface.
+    const mod = await import('@/features/erp-ops/api/erp-api');
+    const exported = Object.keys(mod).sort();
+    expect(exported).toEqual(
+      [
+        'getBusinessPartnerById',
+        'getCostCenterById',
+        'getDepartmentById',
+        'getEmployeeById',
+        'getJobGradeById',
+        'listBusinessPartners',
+        'listCostCenters',
+        'listDepartments',
+        'listEmployees',
+        'listJobGrades',
+      ].sort(),
+    );
+    // None of the exports look like a mutation (no create/patch/
+    // retire/move/post/put/delete in the symbol name).
+    for (const name of exported) {
+      expect(/(create|patch|retire|move|post|put|delete|write|update)/i.test(name))
+        .toBe(false);
+    }
+  });
+
+  it('the proxy directory exposes ONLY GET route handlers (no mutation route at all)', async () => {
+    const proxyRoot = path.resolve(__dirname, '../../src/app/api/erp');
+    function walk(p: string): string[] {
+      const out: string[] = [];
+      for (const name of readdirSync(p)) {
+        const full = path.join(p, name);
+        if (statSync(full).isDirectory()) out.push(...walk(full));
+        else out.push(full);
+      }
+      return out;
+    }
+    const tsFiles = walk(proxyRoot).filter((f) => f.endsWith('.ts'));
+    expect(tsFiles.length).toBeGreaterThan(0);
+
+    let routeFiles = 0;
+    for (const f of tsFiles) {
+      const src = readFileSync(f, 'utf8');
+      // `_proxy.ts` itself is the shared error mapper — no route
+      // handler exports.
+      if (path.basename(f) === '_proxy.ts') continue;
+      // Each route handler MUST export GET only — no POST/PUT/
+      // PATCH/DELETE handlers (§ 2.4.8 read-only proxy).
+      expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
+      routeFiles += 1;
+    }
+    // 5 list + 5 detail = 10 route files.
+    expect(routeFiles).toBe(10);
+  });
+});
+
+// ===========================================================================
+// 3. E3 asOf thread-through — the CORE erp UX invariant.
+// ===========================================================================
+
+describe('erp-api — E3 `?asOf=` thread-through (§ 2.4.8 CORE invariant)', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+  });
+
+  it('threads `asOf=<past>` through to every LIST endpoint verbatim', async () => {
+    // Producer-side: list envelope shape — same for every master
+    // (data: []). An empty data array satisfies every list parser.
+    const EMPTY_LIST = {
+      data: [],
+      meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
+    };
+    // Fresh Response per call (Response bodies are one-shot).
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(EMPTY_LIST)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listDepartments({ asOf: '2025-01-01' });
+    await listEmployees({ asOf: '2025-01-01' });
+    await listJobGrades({ asOf: '2025-01-01' });
+    await listCostCenters({ asOf: '2025-01-01' });
+    await listBusinessPartners({ asOf: '2025-01-01' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    for (const [url] of fetchMock.mock.calls) {
+      const u = new URL(String(url));
+      expect(u.searchParams.get('asOf')).toBe('2025-01-01');
+    }
+  });
+
+  it('threads `asOf=<past>` through to every DETAIL endpoint verbatim', async () => {
+    // Producer-side: a detail body shape compatible with every
+    // master detail schema (they all extend a common
+    // `{ id, code, name, status, effectivePeriod }` shape and
+    // tolerate passthrough fields).
+    const DETAIL_BODY = {
+      data: {
+        id: 'x',
+        code: 'X',
+        name: 'X',
+        employeeNumber: 'EMP-X',
+        partnerType: 'CUSTOMER',
+        status: 'ACTIVE',
+        effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+      },
+      meta: { timestamp: 'x' },
+    };
+    // Fresh Response per call (Response bodies are one-shot).
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(DETAIL_BODY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getDepartmentById('dept-1', { asOf: '2025-01-01' });
+    await getEmployeeById('emp-1', { asOf: '2025-01-01' });
+    await getJobGradeById('jg-1', { asOf: '2025-01-01' });
+    await getCostCenterById('cc-1', { asOf: '2025-01-01' });
+    await getBusinessPartnerById('bp-1', { asOf: '2025-01-01' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    for (const [url] of fetchMock.mock.calls) {
+      const u = new URL(String(url));
+      expect(u.searchParams.get('asOf')).toBe('2025-01-01');
+    }
+  });
+
+  it('rendered state matches the asOf-instant response (not current state)', async () => {
+    // Producer-side: at asOf=2025-06-01 the department was ACTIVE
+    // ("historical state"); current state (2026-) is RETIRED. The
+    // test feeds the asOf-instant body and asserts the client
+    // returns it verbatim (NO current-state substitution — the core
+    // E3 defect to avoid).
+    const asOfBody = {
+      data: {
+        id: 'dept-x',
+        code: 'DEPT-X',
+        name: 'Historical Sales',
+        parentId: null,
+        status: 'ACTIVE', // active at the asOf instant
+        effectivePeriod: {
+          effectiveFrom: '2025-01-01',
+          effectiveTo: '2025-12-31',
+        },
+      },
+      meta: { timestamp: '2025-06-01T00:00:00Z' },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(asOfBody));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const dept = await getDepartmentById('dept-x', { asOf: '2025-06-01' });
+
+    // The asOf threaded through verbatim.
+    const u = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(u.searchParams.get('asOf')).toBe('2025-06-01');
+    // The rendered state matches the asOf-instant response — the
+    // department was ACTIVE at that instant (current state is
+    // irrelevant).
+    expect(dept.status).toBe('ACTIVE');
+    expect(dept.name).toBe('Historical Sales');
+    expect(dept.effectivePeriod.effectiveTo).toBe('2025-12-31');
+  });
+
+  it('omits `asOf` from the query when not supplied (producer resolves to today UTC)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(DEPT_LIST_ENVELOPE));
+    vi.stubGlobal('fetch', fetchMock);
+    await listDepartments({});
+    const u = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(u.searchParams.get('asOf')).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 4. Confidential / audit-heavy — no token / PII / financial / sensitive logging
+// ===========================================================================
+
+describe('erp-api — confidential + audit-heavy (no token / PII / financial / sensitive logging; § 2.4.8)', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+  });
+
+  it('logs neither the token nor the response body (success path)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(EMP_LIST_ENVELOPE)),
+    );
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await listEmployees({});
+
+    const all = [
+      ...logSpy.mock.calls,
+      ...infoSpy.mock.calls,
+      ...warnSpy.mock.calls,
+      ...errorSpy.mock.calls,
+    ]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(all).not.toContain('GAP-OIDC-ACCESS');
+    // Employee PII — names / contact / employeeNumber must NEVER
+    // appear in any log line.
+    expect(all).not.toContain('홍길동');
+    expect(all).not.toContain('EMP-001');
+    expect(all).not.toContain('emp-1');
+  });
+
+  it('logs no business-partner financial details on a business-partners read', async () => {
+    const BP_ENVELOPE = {
+      data: [
+        {
+          id: 'bp-secret',
+          code: 'BP-CONFIDENTIAL',
+          name: 'ACME Corp',
+          partnerType: 'CUSTOMER',
+          paymentTerms: { termDays: 30, method: 'BANK_TRANSFER' },
+          status: 'ACTIVE',
+          effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+        },
+      ],
+      meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(BP_ENVELOPE)));
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await listBusinessPartners({});
+
+    const all = [
+      ...logSpy.mock.calls,
+      ...infoSpy.mock.calls,
+      ...warnSpy.mock.calls,
+      ...errorSpy.mock.calls,
+    ]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(all).not.toContain('GAP-OIDC-ACCESS');
+    // Financial details + identifiers MUST NOT appear in logs.
+    expect(all).not.toContain('BP-CONFIDENTIAL');
+    expect(all).not.toContain('ACME Corp');
+    expect(all).not.toContain('BANK_TRANSFER');
+    expect(all).not.toContain('30');
+    expect(all).not.toContain('bp-secret');
+  });
+
+  it('logs no record id on a detail read (sanitised path uses `{id}` placeholder)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(DEPT_DETAIL_ENVELOPE)),
+    );
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await getDepartmentById('dept-secret-id');
+
+    const all = [
+      ...logSpy.mock.calls,
+      ...infoSpy.mock.calls,
+      ...warnSpy.mock.calls,
+      ...errorSpy.mock.calls,
+    ]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(all).not.toContain('dept-secret-id');
+    // The sanitised path placeholder IS present (proves the
+    // logger ran and used the literal `{id}` placeholder).
+    expect(all).toContain('/api/erp/masterdata/departments/{id}');
+  });
+});
+
+// ===========================================================================
+// 5. E2 effective-period + honest enum surfacing (RETIRED + SEPARATED;
+//    unknown → generic label, no throw)
+// ===========================================================================
+
+describe('erp-api / types — honest enum surfacing + tolerant parsing (§ 2.4.8)', () => {
+  it('a RETIRED department status parses without throwing (surfaced honestly downstream)', () => {
+    expect(() =>
+      DepartmentSchema.parse({
+        id: 'd',
+        code: 'D',
+        name: 'X',
+        status: 'RETIRED',
+        effectivePeriod: { effectiveFrom: '2025-01-01', effectiveTo: '2025-12-31' },
+      }),
+    ).not.toThrow();
+  });
+
+  it('a SEPARATED employee parses without throwing (surfaced honestly downstream)', () => {
+    expect(() =>
+      EmployeeSchema.parse({
+        id: 'e',
+        employeeNumber: 'E',
+        name: 'X',
+        status: 'ACTIVE',
+        employmentStatus: 'SEPARATED',
+        effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+      }),
+    ).not.toThrow();
+  });
+
+  it('an unknown / future master status parses without throwing (generic label downstream)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: {
+            ...DEPT_DETAIL_ENVELOPE.data,
+            status: 'FUTURE_LIMBO_STATE',
+          },
+          meta: { timestamp: 'x' },
+        }),
+      ),
+    );
+    const d = await getDepartmentById('dept-1');
+    expect(d.status).toBe('FUTURE_LIMBO_STATE');
+  });
+
+  it('an unknown / future employment status parses without throwing', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            {
+              id: 'emp-9',
+              employeeNumber: 'EMP-009',
+              name: 'X',
+              status: 'ACTIVE',
+              employmentStatus: 'FUTURE_LEAVE_TYPE',
+              effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+            },
+          ],
+          meta: { page: 0, size: 20, totalElements: 1 },
+        }),
+      ),
+    );
+    const r = await listEmployees({});
+    expect(r.data[0].employmentStatus).toBe('FUTURE_LEAVE_TYPE');
+  });
+
+  it('EffectivePeriod requires effectiveFrom; effectiveTo is nullable (E2 shape)', () => {
+    // Active (effectiveTo: null) parses.
+    expect(() =>
+      EffectivePeriodSchema.parse({ effectiveFrom: '2026-01-01', effectiveTo: null }),
+    ).not.toThrow();
+    // Retired (effectiveTo: past) parses.
+    expect(() =>
+      EffectivePeriodSchema.parse({
+        effectiveFrom: '2025-01-01',
+        effectiveTo: '2025-12-31',
+      }),
+    ).not.toThrow();
+    // Missing effectiveFrom fails.
+    const r = EffectivePeriodSchema.safeParse({ effectiveTo: null });
+    expect(r.success).toBe(false);
+  });
+});
+
+// ===========================================================================
+// 6. erp FLAT error envelope (NOT wms NESTED) + § 2.5 mapping.
+//    NO 429 / Retry-After branch is taken (erp has no documented 429).
+// ===========================================================================
+
+describe('erp-api — erp FLAT error envelope (NOT wms NESTED) + § 2.5 + no-429-branch', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+  });
+
+  it('401 → ApiError(401) — whole-session re-login (no partial authed state)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('UNAUTHORIZED', 401)),
+    );
+    const err = await listDepartments({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(err.code).toBe('UNAUTHORIZED');
+  });
+
+  it('403 TENANT_FORBIDDEN → ApiError(403) inline "not scoped"', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('TENANT_FORBIDDEN', 403)),
+    );
+    const err = await listEmployees({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('TENANT_FORBIDDEN');
+  });
+
+  it('403 DATA_SCOPE_FORBIDDEN → ApiError(403) inline (E6 data-scope rejection)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('DATA_SCOPE_FORBIDDEN', 403)),
+    );
+    const err = await getEmployeeById('emp-1').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('DATA_SCOPE_FORBIDDEN');
+  });
+
+  it('403 EXTERNAL_TRAFFIC_REJECTED → ApiError(403) inline (E7 internal-only boundary)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('EXTERNAL_TRAFFIC_REJECTED', 403)),
+    );
+    const err = await listDepartments({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('EXTERNAL_TRAFFIC_REJECTED');
+  });
+
+  it('404 MASTERDATA_NOT_FOUND → ApiError(404) inline actionable (the erp v1 reality)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('MASTERDATA_NOT_FOUND', 404)),
+    );
+    const err = await getDepartmentById('nope').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    // The code comes from the FLAT top-level `code`, NOT a nested
+    // `error.code` — proves the erp-shape parser (a wms-nested
+    // parser would yield the synthetic HTTP_404).
+    expect(err.code).toBe('MASTERDATA_NOT_FOUND');
+  });
+
+  it('a wms-NESTED { error: { code } } body is NOT mis-parsed as erp (no accidental cross-wire)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: { code: 'WMS_NESTED_SHAPE', message: 'x' },
+          }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    const err = await listEmployees({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(422);
+    // The erp parser reads the FLAT top-level `code` — a
+    // wms-nested body has none, so it degrades to the synthetic
+    // fallback (NOT 'WMS_NESTED_SHAPE') and never crashes. Pins
+    // per-domain envelope correctness — each domain owns its own
+    // parser even when the wire shape is identical.
+    expect(err.code).toBe('HTTP_422');
+  });
+
+  it('503 → ErpUnavailableError (ONLY the erp section degrades)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(erpError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const err = await listDepartments({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ErpUnavailableError);
+    expect(err.reason).toBe('downstream');
+  });
+
+  it('timeout → ErpUnavailableError(timeout)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_u: string, init?: RequestInit) => {
+        return new Promise((_res, rej) => {
+          init?.signal?.addEventListener('abort', () => {
+            const e = new Error('aborted');
+            e.name = 'AbortError';
+            rej(e);
+          });
+        });
+      }),
+    );
+    const err = await listEmployees({}).catch((e) => e);
+    expect(err).toBeInstanceOf(ErpUnavailableError);
+    expect(err.reason).toBe('timeout');
+  });
+
+  it('a malformed / non-JSON error body does NOT crash (defensive parse)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('not json', {
+          status: 404,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+      ),
+    );
+    const err = await getDepartmentById('x').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('HTTP_404'); // synthetic fallback, no throw
+  });
+
+  // The HEADLINE no-429 assertion (identical to finance § 2.4.7 —
+  // erp has no documented 429). A 429 from erp MUST fail-fast
+  // through the default-error path (a surfaced ApiError), NOT
+  // through a Retry-After / backoff branch. Exactly ONE fetch is
+  // made (no retry / no storm).
+  it('NO 429 handling path exists for erp — a stray 429 surfaces as a generic ApiError, NO retry, NO Retry-After honour', async () => {
+    let n = 0;
+    const fetchMock = vi.fn(() => {
+      n += 1;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ code: 'RATE_LIMIT_EXCEEDED', message: 'x' }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': '1', // a Retry-After header the client must IGNORE
+            },
+          },
+        ),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const err = await listDepartments({}).catch((e) => e);
+    // The client surfaced the 429 as a generic ApiError (NOT a
+    // bounded-backoff ScmRateLimitedError sibling, NOT a retried
+    // success). The presence of an `ApiError(429)` rather than a
+    // domain-specific RateLimitedError is itself the assertion.
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(429);
+    // EXACTLY ONE fetch — no retry, no Retry-After honour, no
+    // storm (the precise "no 429 handling" invariant — § 2.4.8).
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(n).toBe(1);
+  });
+
+  it('the erp source carries NO 429/Retry-After handling code (grep-asserted)', () => {
+    const apiSrc = readFileSync(
+      path.resolve(__dirname, '../../src/features/erp-ops/api/erp-api.ts'),
+      'utf8',
+    );
+    // Strip block-comment + line-comment content so we only look at
+    // executable code. The doc-comments narrate WHY there is no
+    // 429 path — they are allowed to mention 429 / Retry-After.
+    const stripped = apiSrc
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((l) => l.replace(/\/\/.*$/, ''))
+      .join('\n');
+    expect(/\bRetry-After\b/i.test(stripped)).toBe(false);
+    expect(/\b429\b/.test(stripped)).toBe(false);
+    expect(/RateLimited/.test(stripped)).toBe(false);
+  });
+});

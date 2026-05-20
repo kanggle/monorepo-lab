@@ -137,6 +137,22 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for finance operations calls
    *  (integration-heavy I1 — same convention as SCM_TIMEOUT_MS). */
   FINANCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** erp `masterdata-service` base for the operations surface
+   *  (TASK-PC-FE-010 / § 2.4.8). The read-only 5 master × {list,
+   *  detail} = 10 GET endpoints hang off
+   *  `${ERP_BASE_URL}/api/erp/masterdata/...` — request/response/error
+   *  owned by erp `masterdata-api.md` (authoritative, consumed
+   *  read-only). Aligned with the registry `baseRoute` for
+   *  `productKey=erp`; the erp hostname is `erp.local`. NOTE: like
+   *  wms + scm + finance (NOT GAP) this is reached with the GAP OIDC
+   *  access token DIRECTLY — the § 2.4.5 per-domain credential rule
+   *  reused (the #569 invariant is GAP-domain-scoped; erp validates
+   *  the GAP RS256 token + `tenant_id ∈ {erp,*}` claim producer-side
+   *  per TASK-ERP-BE-002). */
+  ERP_BASE_URL: z.string().url().default('http://erp.local'),
+  /** Outbound timeout (ms) for erp operations calls
+   *  (integration-heavy I1 — same convention as FINANCE_TIMEOUT_MS). */
+  ERP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -168,6 +184,8 @@ export function getServerEnv(): ServerEnv {
     SCM_TIMEOUT_MS: process.env.SCM_TIMEOUT_MS,
     FINANCE_BASE_URL: process.env.FINANCE_BASE_URL,
     FINANCE_TIMEOUT_MS: process.env.FINANCE_TIMEOUT_MS,
+    ERP_BASE_URL: process.env.ERP_BASE_URL,
+    ERP_TIMEOUT_MS: process.env.ERP_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });

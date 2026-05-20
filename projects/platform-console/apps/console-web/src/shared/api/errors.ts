@@ -288,6 +288,59 @@ export class FinanceUnavailableError extends Error {
   }
 }
 
+/**
+ * erp `masterdata-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.8 / § 2.5). Sibling of
+ * {@link FinanceUnavailableError} / {@link ScmUnavailableError} /
+ * {@link WmsUnavailableError} — the FOURTH **non-GAP** federated
+ * domain section and the **first internal-system-primary**
+ * (read-only). A `503 SERVICE_UNAVAILABLE` / timeout / network
+ * failure on an erp call degrades ONLY the erp section (the
+ * console shell + the GAP / wms / scm / finance sections stay
+ * intact). Auth failures (`401` — the GAP OIDC session expired)
+ * are raised as {@link ApiError} so the caller forces a clean
+ * WHOLE-SESSION re-login (no partial authed state — NOT a
+ * per-section degrade). Inline-recoverable producer errors
+ * (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`/
+ * `DATA_SCOPE_FORBIDDEN`/`EXTERNAL_TRAFFIC_REJECTED`,
+ * `404 MASTERDATA_NOT_FOUND`, `400|422 VALIDATION_ERROR`) are
+ * raised as {@link ApiError} so the UI renders an inline actionable
+ * message without crashing.
+ *
+ * NOTE — **no 429**: erp has NO documented rate-limit response
+ * (`masterdata-api.md` § Error code → HTTP status carries no `429`,
+ * identical to finance § 2.4.7); the console does NOT fabricate a
+ * backoff path for erp (an honest difference from scm — § 2.4.6 —
+ * recorded, not cargo-culted). A `RateLimitedError` is
+ * intentionally absent for erp.
+ *
+ * NOTE the credential reuse: like the wms + scm + finance siblings
+ * (NOT the GAP ones), the erp credential is the GAP OIDC access
+ * token itself — the § 2.4.5 per-domain credential rule reused
+ * verbatim (the #569 invariant is GAP-domain-scoped — § 2.4.8).
+ * The erp error envelope is **flat** `{ code, message, details?,
+ * timestamp }` — same wire shape as scm and finance but a DISTINCT
+ * producer (own parser, erp error-code vocabulary; NOT wms's
+ * nested `{ error: { code } }`). No token / PII (employee names /
+ * contact) / business-partner financial details (paymentTerms) /
+ * cost-center sensitive attrs is ever placed in this error
+ * (confidential + audit-heavy).
+ */
+export class ErpUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: ErpUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ErpUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -346,6 +399,14 @@ const MESSAGES: Record<string, string> = {
   // finance reuses the existing entry; the producer code is identical.)
   FINANCE_NOT_ELIGIBLE:
     'finance 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- erp operations (TASK-PC-FE-010 / §2.4.8) ---------------------------
+  MASTERDATA_NOT_FOUND: '대상 마스터 레코드를 찾을 수 없습니다.',
+  DATA_SCOPE_FORBIDDEN:
+    '해당 조직 범위에 대한 조회 권한이 없습니다. (E6 데이터 스코프)',
+  EXTERNAL_TRAFFIC_REJECTED:
+    'erp 는 내부 전용 경계입니다. 콘솔의 SSO 세션을 통해서만 조회할 수 있습니다.',
+  ERP_NOT_ELIGIBLE:
+    'erp 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

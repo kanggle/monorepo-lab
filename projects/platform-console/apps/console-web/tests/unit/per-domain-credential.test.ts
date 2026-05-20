@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Per-domain credential selection — the cross-domain regression that pins
- * ALL FOUR domains' credentials in one place (console-integration-
+ * ALL FIVE domains' credentials in one place (console-integration-
  * contract § 2.4.5 normative rule, REUSED by § 2.4.6 for scm AND
- * § 2.4.7 for finance — NOT re-derived). Extended by TASK-PC-FE-009 to
- * cover finance (Phase 5 COMPLETE):
+ * § 2.4.7 for finance AND § 2.4.8 for erp — NOT re-derived). Extended
+ * by TASK-PC-FE-010 to cover erp (Phase 6 COMPLETE — the FIRST
+ * internal-system-primary confirmation):
  *
  *   - GAP (§§ 2.4.1–2.4.4) STILL authenticates with the EXCHANGED
  *     operator token (`getOperatorToken()`) — FE-002..006 unchanged, NOT
- *     regressed by FE-007/FE-008/FE-009 (the divergence is ADDITIVE);
+ *     regressed by FE-007/FE-008/FE-009/FE-010 (the divergence is
+ *     ADDITIVE);
  *   - wms (§ 2.4.5) authenticates with the GAP OIDC ACCESS token
  *     (`getAccessToken()`) and NEVER the operator token;
  *   - scm (§ 2.4.6) ALSO authenticates with the GAP OIDC ACCESS token
@@ -17,12 +19,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     rule generalises (the #569 invariant is GAP-domain-scoped);
  *   - finance (§ 2.4.7) ALSO authenticates with the GAP OIDC ACCESS
  *     token (`getAccessToken()`) and NEVER the operator token — the
- *     § 2.4.5 rule generalises a SECOND time.
+ *     § 2.4.5 rule generalises a SECOND time;
+ *   - erp (§ 2.4.8) ALSO authenticates with the GAP OIDC ACCESS token
+ *     (`getAccessToken()`) and NEVER the operator token — the § 2.4.5
+ *     rule generalises a THIRD time across the FIRST
+ *     internal-system-primary trait shape.
  *
- * Asserting all four in one test makes a future refactor that
+ * Asserting all five in one test makes a future refactor that
  * blanket-applies one domain's auth to another fail loudly (the failure
- * mode § 2.4.5/§ 2.4.6/§ 2.4.7 exists to prevent — the per-domain
- * credential rule holds across GAP / wms / scm / finance).
+ * mode § 2.4.5/§ 2.4.6/§ 2.4.7/§ 2.4.8 exists to prevent — the
+ * per-domain credential rule holds across GAP / wms / scm / finance /
+ * erp).
  */
 
 const cookieJar = new Map<string, string>();
@@ -53,6 +60,8 @@ const { ENV } = vi.hoisted(() => ({
     SCM_TIMEOUT_MS: 50,
     FINANCE_BASE_URL: 'http://finance.local',
     FINANCE_TIMEOUT_MS: 50,
+    ERP_BASE_URL: 'http://erp.local',
+    ERP_TIMEOUT_MS: 50,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
   },
@@ -66,6 +75,7 @@ import { searchAccounts } from '@/features/accounts/api/accounts-api';
 import { listInventory } from '@/features/wms-ops/api/wms-api';
 import { listPurchaseOrders } from '@/features/scm-ops/api/scm-api';
 import { getAccount } from '@/features/finance-ops/api/finance-api';
+import { listDepartments } from '@/features/erp-ops/api/erp-api';
 import {
   ACCESS_COOKIE,
   OPERATOR_COOKIE,
@@ -84,8 +94,8 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7) — all 4 domains pinned', () => {
-  it('GAP uses the EXCHANGED operator token; wms AND scm AND finance use the GAP OIDC access token', async () => {
+describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 2.4.8) — all 5 domains pinned', () => {
+  it('GAP uses the EXCHANGED operator token; wms AND scm AND finance AND erp use the GAP OIDC access token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'EXCHANGED-OPERATOR');
     cookieJar.set(TENANT_COOKIE, 'scm');
@@ -131,6 +141,10 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7) — 
       },
       meta: { timestamp: 'x' },
     };
+    const ERP_DEPT_ENV = {
+      data: [],
+      meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
+    };
     const fetchMock = vi.fn((url: string) => {
       const u = String(url);
       if (u.includes('/api/admin/accounts'))
@@ -139,6 +153,8 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7) — 
         return Promise.resolve(jsonResponse(SCM_PO_ENV));
       if (u.includes('/api/finance/accounts/'))
         return Promise.resolve(jsonResponse(FIN_ACCT_ENV));
+      if (u.includes('/api/erp/masterdata/'))
+        return Promise.resolve(jsonResponse(ERP_DEPT_ENV));
       return Promise.resolve(jsonResponse(WMS_PAGE));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -182,14 +198,28 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7) — 
     expect(finHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(finHeaders['X-Tenant-Id']).toBeUndefined();
 
-    // GAP uses a DIFFERENT credential from wms/scm/finance — the
+    // erp ops (FE-010 path — the § 2.4.5 rule REUSED a THIRD time
+    // across the FIRST internal-system-primary trait shape: the GAP
+    // OIDC access token, NOT the operator token; NO X-Tenant-Id —
+    // erp resolves the tenant from the JWT `tenant_id ∈ {erp,*}`
+    // claim).
+    await listDepartments({});
+    const erpHeaders = (fetchMock.mock.calls[4][1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(erpHeaders.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(erpHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
+    expect(erpHeaders['X-Tenant-Id']).toBeUndefined();
+
+    // GAP uses a DIFFERENT credential from wms/scm/finance/erp — the
     // divergence is real and additive (FE-002..006 unchanged). wms,
-    // scm, AND finance share the SAME GAP-OIDC credential (the
-    // § 2.4.5 rule generalises to scm and finance).
+    // scm, finance AND erp share the SAME GAP-OIDC credential (the
+    // § 2.4.5 rule generalises to scm, finance, AND erp).
     expect(gapHeaders.Authorization).not.toBe(wmsHeaders.Authorization);
     expect(gapHeaders.Authorization).not.toBe(scmHeaders.Authorization);
     expect(gapHeaders.Authorization).not.toBe(finHeaders.Authorization);
+    expect(gapHeaders.Authorization).not.toBe(erpHeaders.Authorization);
     expect(wmsHeaders.Authorization).toBe(scmHeaders.Authorization);
     expect(scmHeaders.Authorization).toBe(finHeaders.Authorization);
+    expect(finHeaders.Authorization).toBe(erpHeaders.Authorization);
   });
 });

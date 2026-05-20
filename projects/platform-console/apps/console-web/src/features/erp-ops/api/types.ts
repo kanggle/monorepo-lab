@@ -1,0 +1,363 @@
+import { z } from 'zod';
+
+/**
+ * Feature-local types for the erp `masterdata-service`'s read-only
+ * 5-master × {list, detail} = 10 GET surface (TASK-PC-FE-010 —
+ * ADR-MONO-013 Phase 6, the FOURTH non-GAP federated domain and the
+ * FIRST internal-system-primary confirmation: wms transactional →
+ * scm integration-heavy → finance regulated/transactional → erp
+ * internal-system + transactional + audit-heavy).
+ *
+ * Authoritative producer contract (do NOT redefine — consume read-only):
+ *   `erp-platform/specs/contracts/http/masterdata-api.md`
+ *     § Department / Employee / JobGrade / CostCenter / BusinessPartner
+ *     each exposing `GET .../{master}` (list) and `GET .../{master}/{id}`
+ *     (detail), all with `?asOf=<ISO-8601>` query (E3 point-in-time).
+ *
+ * Consumer obligation: `console-integration-contract.md` § 2.4.8
+ * (reuses the § 2.4.5 per-domain credential rule — NOT re-derived;
+ * same outcome as § 2.4.6 scm / § 2.4.7 finance).
+ *
+ * erp-side spec-first basis:
+ * `erp-platform/specs/integration/gap-integration.md` § *platform-
+ * console Operator Read Consumer* (TASK-ERP-BE-002, merged
+ * 2026-05-20).
+ *
+ * These zod schemas are the runtime parsers the api-client / tests
+ * assert against. They are feature-local (not cross-feature) per
+ * architecture.md § Allowed Dependencies.
+ *
+ * E2 EFFECTIVE-DATING invariant (§ 2.4.8 / E2 architecture
+ * obligation): every master detail surfaces `effectivePeriod` as a
+ * REQUIRED, first-class field. `effectiveTo: null` (open-ended /
+ * active) vs `effectiveTo: <past>` (retired) MUST both render —
+ * retired rows visually distinct but NEVER hidden / filtered (a
+ * test asserts this).
+ *
+ * TOLERANCE invariant (§ 2.4.8 / task Edge Case "Unknown/future
+ * enum"): every read shape is permissive — unknown / future master
+ * `status` (`RETIRED` and any future addition) and employee
+ * `employmentStatus` (`SEPARATED` and any future addition) parse
+ * to a generic string value and NEVER throw. Only the fields the
+ * UI strictly needs are required; everything else is passthrough.
+ */
+
+// ---------------------------------------------------------------------------
+// EffectivePeriod — E2 first-class field on every master detail.
+// ---------------------------------------------------------------------------
+
+/**
+ * `EffectivePeriod` — `{ effectiveFrom, effectiveTo }`. `effectiveTo`
+ * may be `null` (open-ended / active). Both fields are ISO-8601
+ * DATE strings (the producer wire shape from `masterdata-api.md` §
+ * Common shapes). The consumer surfaces them HONESTLY — retired
+ * rows (`effectiveTo` in the past) are rendered visually distinct
+ * but NOT hidden (E2 honesty).
+ */
+export const EffectivePeriodSchema = z.object({
+  effectiveFrom: z.string(),
+  effectiveTo: z.string().nullable(),
+});
+export type EffectivePeriod = z.infer<typeof EffectivePeriodSchema>;
+
+/** Producer master `status` enum surfaced HONESTLY (a `RETIRED`
+ *  master is shown as such, never hidden — § 2.4.8). Stored as a
+ *  free string so unknown / future values render generically (no
+ *  parser throw, tolerant-parser discipline). */
+export const KNOWN_MASTER_STATUSES = ['ACTIVE', 'RETIRED'] as const;
+export type KnownMasterStatus = (typeof KNOWN_MASTER_STATUSES)[number];
+
+/** Producer employee `employmentStatus` enum surfaced HONESTLY (a
+ *  `SEPARATED` employee is shown as such, never filtered out —
+ *  § 2.4.8). Free string for tolerance. */
+export const KNOWN_EMPLOYMENT_STATUSES = [
+  'EMPLOYED',
+  'ON_LEAVE',
+  'SEPARATED',
+] as const;
+export type KnownEmploymentStatus =
+  (typeof KNOWN_EMPLOYMENT_STATUSES)[number];
+
+/** Producer business-partner `partnerType` enum. Free string for
+ *  tolerance — unknown / future values render with a generic
+ *  label. */
+export const KNOWN_PARTNER_TYPES = [
+  'CUSTOMER',
+  'SUPPLIER',
+  'BOTH',
+] as const;
+export type KnownPartnerType = (typeof KNOWN_PARTNER_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Audit — append-only audit (E8) surfaced on detail responses.
+// ---------------------------------------------------------------------------
+
+export const AuditSchema = z
+  .object({
+    createdAt: z.string().optional(),
+    createdBy: z.string().optional(),
+    updatedAt: z.string().optional(),
+    updatedBy: z.string().optional(),
+  })
+  .partial()
+  .passthrough();
+export type Audit = z.infer<typeof AuditSchema>;
+
+// ---------------------------------------------------------------------------
+// erp success envelope shapes — flat (same wire as scm/finance,
+// distinct producer / own parser).
+// ---------------------------------------------------------------------------
+
+/** erp success-meta: `{ timestamp, page?, size?, totalElements? }`.
+ *  Producer-specific — kept distinct from finance / scm meta even
+ *  though byte-identical (each domain owns its own parser). */
+export const ErpMetaSchema = z
+  .object({
+    timestamp: z.string().optional(),
+    page: z.number().int().nonnegative().optional(),
+    size: z.number().int().positive().optional(),
+    totalElements: z.number().int().nonnegative().optional(),
+  })
+  .passthrough();
+export type ErpMeta = z.infer<typeof ErpMetaSchema>;
+
+// ---------------------------------------------------------------------------
+// Department — list + detail (E3 point-in-time read; parentId for
+// hierarchical structure).
+//   GET /api/erp/masterdata/departments (?asOf=&active=&parentId=&page=&size=)
+//   GET /api/erp/masterdata/departments/{id} (?asOf=)
+// ---------------------------------------------------------------------------
+
+export const DepartmentSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    parentId: z.string().nullable().optional(),
+    // tolerated as free string (unknown → generic label).
+    status: z.string(),
+    effectivePeriod: EffectivePeriodSchema,
+    audit: AuditSchema.optional(),
+  })
+  .passthrough();
+export type Department = z.infer<typeof DepartmentSchema>;
+
+export const DepartmentListResponseSchema = z.object({
+  data: z.array(DepartmentSchema),
+  meta: ErpMetaSchema,
+});
+export type DepartmentListResponse = z.infer<typeof DepartmentListResponseSchema>;
+
+export const DepartmentDetailResponseSchema = z.object({
+  data: DepartmentSchema,
+  meta: ErpMetaSchema,
+});
+export type DepartmentDetailResponse = z.infer<typeof DepartmentDetailResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Employee — list + detail (cross-refs department / jobGrade /
+// costCenter; employment status).
+//   GET /api/erp/masterdata/employees (?asOf=&active=&departmentId=&costCenterId=&page=&size=)
+//   GET /api/erp/masterdata/employees/{id} (?asOf=)
+// ---------------------------------------------------------------------------
+
+export const EmployeeSchema = z
+  .object({
+    id: z.string(),
+    employeeNumber: z.string(),
+    // confidential / E7 — surfaced to the operator UI but never
+    // logged by the api module.
+    name: z.string(),
+    departmentId: z.string().nullable().optional(),
+    jobGradeId: z.string().nullable().optional(),
+    costCenterId: z.string().nullable().optional(),
+    // master `status` (`ACTIVE`/`RETIRED`) — honest tolerant.
+    status: z.string(),
+    // separate from master status: employment lifecycle
+    // (`EMPLOYED`/`ON_LEAVE`/`SEPARATED`/...) — honest tolerant.
+    employmentStatus: z.string().optional(),
+    effectivePeriod: EffectivePeriodSchema,
+    audit: AuditSchema.optional(),
+  })
+  .passthrough();
+export type Employee = z.infer<typeof EmployeeSchema>;
+
+export const EmployeeListResponseSchema = z.object({
+  data: z.array(EmployeeSchema),
+  meta: ErpMetaSchema,
+});
+export type EmployeeListResponse = z.infer<typeof EmployeeListResponseSchema>;
+
+export const EmployeeDetailResponseSchema = z.object({
+  data: EmployeeSchema,
+  meta: ErpMetaSchema,
+});
+export type EmployeeDetailResponse = z.infer<typeof EmployeeDetailResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// JobGrade — list (ordered by `displayOrder` asc producer-side) + detail.
+//   GET /api/erp/masterdata/job-grades (?asOf=&active=&page=&size=)
+//   GET /api/erp/masterdata/job-grades/{id} (?asOf=)
+// ---------------------------------------------------------------------------
+
+export const JobGradeSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    displayOrder: z.number().int().optional(),
+    status: z.string(),
+    effectivePeriod: EffectivePeriodSchema,
+    audit: AuditSchema.optional(),
+  })
+  .passthrough();
+export type JobGrade = z.infer<typeof JobGradeSchema>;
+
+export const JobGradeListResponseSchema = z.object({
+  data: z.array(JobGradeSchema),
+  meta: ErpMetaSchema,
+});
+export type JobGradeListResponse = z.infer<typeof JobGradeListResponseSchema>;
+
+export const JobGradeDetailResponseSchema = z.object({
+  data: JobGradeSchema,
+  meta: ErpMetaSchema,
+});
+export type JobGradeDetailResponse = z.infer<typeof JobGradeDetailResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// CostCenter — list + detail (references department).
+//   GET /api/erp/masterdata/cost-centers (?asOf=&active=&departmentId=&page=&size=)
+//   GET /api/erp/masterdata/cost-centers/{id} (?asOf=)
+// ---------------------------------------------------------------------------
+
+export const CostCenterSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    departmentId: z.string().nullable().optional(),
+    status: z.string(),
+    effectivePeriod: EffectivePeriodSchema,
+    audit: AuditSchema.optional(),
+  })
+  .passthrough();
+export type CostCenter = z.infer<typeof CostCenterSchema>;
+
+export const CostCenterListResponseSchema = z.object({
+  data: z.array(CostCenterSchema),
+  meta: ErpMetaSchema,
+});
+export type CostCenterListResponse = z.infer<typeof CostCenterListResponseSchema>;
+
+export const CostCenterDetailResponseSchema = z.object({
+  data: CostCenterSchema,
+  meta: ErpMetaSchema,
+});
+export type CostCenterDetailResponse = z.infer<typeof CostCenterDetailResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// BusinessPartner — list + detail (CUSTOMER / SUPPLIER / BOTH;
+// confidential financial details — paymentTerms).
+//   GET /api/erp/masterdata/business-partners (?asOf=&active=&partnerType=&page=&size=)
+//   GET /api/erp/masterdata/business-partners/{id} (?asOf=)
+// ---------------------------------------------------------------------------
+
+export const BusinessPartnerSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    partnerType: z.string(),
+    // confidential — paymentTerms surfaced to the operator UI but
+    // NEVER logged. Tolerant-parser passthrough — the inner shape
+    // is producer-owned and may grow.
+    paymentTerms: z.unknown().optional(),
+    status: z.string(),
+    effectivePeriod: EffectivePeriodSchema,
+    audit: AuditSchema.optional(),
+  })
+  .passthrough();
+export type BusinessPartner = z.infer<typeof BusinessPartnerSchema>;
+
+export const BusinessPartnerListResponseSchema = z.object({
+  data: z.array(BusinessPartnerSchema),
+  meta: ErpMetaSchema,
+});
+export type BusinessPartnerListResponse = z.infer<
+  typeof BusinessPartnerListResponseSchema
+>;
+
+export const BusinessPartnerDetailResponseSchema = z.object({
+  data: BusinessPartnerSchema,
+  meta: ErpMetaSchema,
+});
+export type BusinessPartnerDetailResponse = z.infer<
+  typeof BusinessPartnerDetailResponseSchema
+>;
+
+// ---------------------------------------------------------------------------
+// query params
+// ---------------------------------------------------------------------------
+
+export const ERP_DEFAULT_PAGE_SIZE = 20;
+export const ERP_MAX_PAGE_SIZE = 100;
+
+/** Common query params for every erp list endpoint. `asOf` is the
+ *  E3 first-class point-in-time read — when supplied it threads
+ *  through to the producer verbatim and the producer returns the
+ *  state-at-that-instant (NOT the current state). */
+export interface ErpListQueryParams {
+  /** E3 — ISO-8601 DATE for point-in-time read. */
+  asOf?: string;
+  /** Optional producer filter — when omitted producer default
+   *  applies (typically active = true). The console exposes this
+   *  honestly so retired masters can be browsed. */
+  active?: boolean;
+  page?: number;
+  size?: number;
+  /** Master-specific filters — tolerated as a passthrough record
+   *  so per-master query params (`parentId` / `departmentId` /
+   *  `costCenterId` / `partnerType`) can be supplied without
+   *  proliferating per-master interfaces. */
+  filters?: Record<string, string>;
+}
+
+/** Detail query — only `asOf` is producer-defined. */
+export interface ErpDetailQueryParams {
+  asOf?: string;
+}
+
+// ---------------------------------------------------------------------------
+// labelForUnknown — tolerant rendering helper for master / employment
+// status enums (used by the components; co-located with the schemas
+// because the known-enum sets live here).
+// ---------------------------------------------------------------------------
+
+export function labelForUnknownEnum<T extends string>(
+  value: string | undefined | null,
+  known: readonly T[],
+): string {
+  if (!value) return '—';
+  return (known as readonly string[]).includes(value)
+    ? value
+    : `${value} (unknown)`;
+}
+
+/** True if `effectiveTo` is in the past relative to `now` (default
+ *  = `new Date()`). Used by E2 rendering to mark retired rows
+ *  visually distinct without HIDING them. */
+export function isRetired(
+  period: EffectivePeriod,
+  now: Date = new Date(),
+): boolean {
+  if (!period.effectiveTo) return false;
+  // String comparison on ISO-8601 DATEs is monotonic — no Date()
+  // parse needed when both sides are ISO-8601, but we keep Date()
+  // to be robust against partial-precision producer values.
+  try {
+    return new Date(period.effectiveTo).getTime() < now.getTime();
+  } catch {
+    return false;
+  }
+}
