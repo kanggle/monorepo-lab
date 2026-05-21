@@ -60,6 +60,18 @@ export interface OperatorProfileEditDialogProps {
   open: boolean;
   /** Human-friendly label for the target operator (email or operatorId). */
   operatorIdLabel: string;
+  /**
+   * TASK-PC-FE-018 — the target operator's current
+   * {@code finance_default_account_id} value (from the operators list
+   * response's {@code operatorContext?.defaultAccountId}, populated by
+   * TASK-BE-308). When present, the dialog opens with the input pre-filled
+   * + a hint "현재 값: {value}". When null/undefined, the dialog opens
+   * empty + a hint "현재 값: 미설정". The pre-population is informational
+   * only — the operator can type a new value, Clear, or Save unchanged
+   * (an unchanged Save is accepted by the producer and produces an audit
+   * row with the same value).
+   */
+  initialDefaultAccountId?: string | null;
   pending?: boolean;
   /** Inline actionable error from the last attempt (no crash). */
   errorMessage?: string | null;
@@ -71,6 +83,7 @@ export interface OperatorProfileEditDialogProps {
 export function OperatorProfileEditDialog({
   open,
   operatorIdLabel,
+  initialDefaultAccountId,
   pending = false,
   errorMessage,
   onConfirm,
@@ -88,18 +101,19 @@ export function OperatorProfileEditDialog({
   const [cleared, setCleared] = useState(false);
   const [reason, setReason] = useState('');
 
-  // Reset state on open (the v1 design opens empty — no current-value
-  // pre-population; § Decision authority "Why no current-value
-  // pre-population in v1").
+  // Reset state on open (TASK-PC-FE-018 — initialize input with the
+  // target operator's current value when supplied; null/undefined opens
+  // empty. Clear always starts OFF — empty initial ≠ clear-intent
+  // (§ Decision authority "Why pre-populate AND keep Clear toggle visible").
   useEffect(() => {
     if (open) {
-      setValue('');
+      setValue(initialDefaultAccountId ?? '');
       setCleared(false);
       setReason('');
       const t = setTimeout(() => valueRef.current?.focus(), 0);
       return () => clearTimeout(t);
     }
-  }, [open]);
+  }, [open, initialDefaultAccountId]);
 
   useEffect(() => {
     if (!open) return;
@@ -170,9 +184,9 @@ export function OperatorProfileEditDialog({
           data-testid="operator-profile-edit-hint"
           className="mt-2 text-sm text-muted-foreground"
         >
-          현재 값은 보이지 않습니다 — 입력값이 그대로 저장됩니다. 기본 계정을
-          비우려면 아래 Clear 토글을 사용하세요. 이 작업은 감사 사유와 함께
-          기록됩니다.
+          현재 값: {initialDefaultAccountId ? initialDefaultAccountId : '미설정'}.
+          입력값이 그대로 저장됩니다. 기본 계정을 비우려면 아래 Clear 토글을
+          사용하세요. 이 작업은 감사 사유와 함께 기록됩니다.
         </p>
 
         <div className="mt-4">

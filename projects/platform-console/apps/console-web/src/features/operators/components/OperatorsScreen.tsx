@@ -625,13 +625,17 @@ export function OperatorsScreen({
 
       {/* TASK-PC-FE-017 — admin-on-behalf-of profile edit dialog (sibling
           of OperatorConfirmDialog per § Decision authority "Why a
-          separate dialog component"). v1 opens empty — no current-value
-          pre-population (§ Decision authority). */}
+          separate dialog component"). TASK-PC-FE-018 — pre-populates the
+          input with the operator's current operatorContext.defaultAccountId
+          (read from the list response BE-308 extension). */}
       {profileEditFor && (
         <OperatorProfileEditDialog
           open
           operatorIdLabel={
             profileEditFor.email || profileEditFor.operatorId
+          }
+          initialDefaultAccountId={
+            profileEditFor.operatorContext?.defaultAccountId ?? null
           }
           pending={setProfile.isPending}
           errorMessage={setProfileError}

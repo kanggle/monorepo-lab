@@ -45,6 +45,23 @@ export type OperatorStatus = (typeof OPERATOR_STATUSES)[number];
 
 // --- list (GET /api/admin/operators) --------------------------------------
 
+/**
+ * Per-operator profile carrier (TASK-BE-308). Optional field on each list-
+ * response item — omitted by the producer when the operator's
+ * {@code finance_default_account_id} is NULL (field-level
+ * {@code @JsonInclude.NON_NULL}); present with
+ * {@code { defaultAccountId: "<uuid>" }} when set. The shape is byte-
+ * identical to the registry response item carrier and the
+ * {@code me/profile} + {@code admin/{operatorId}/profile} request bodies
+ * (admin-api.md § "carrier shape 대칭성"). Strict on the nested key set —
+ * a forward-compat new sibling key (e.g. wmsDefaultWarehouseId) is a
+ * fail-fast signal, not a silent acceptance.
+ */
+export const OperatorContextSchema = z.object({
+  defaultAccountId: z.string().optional(),
+});
+export type OperatorContext = z.infer<typeof OperatorContextSchema>;
+
 export const OperatorSummarySchema = z.object({
   operatorId: z.string(),
   email: z.string(),
@@ -57,6 +74,10 @@ export const OperatorSummarySchema = z.object({
   totpEnrolled: z.boolean().optional(),
   lastLoginAt: z.string().nullable().optional(),
   createdAt: z.string(),
+  // TASK-BE-308 — optional profile carrier; PC-FE-018 consumer reads
+  // operatorContext?.defaultAccountId to pre-populate the admin
+  // profile-edit dialog with the operator's current value.
+  operatorContext: OperatorContextSchema.optional(),
 });
 export type OperatorSummary = z.infer<typeof OperatorSummarySchema>;
 
