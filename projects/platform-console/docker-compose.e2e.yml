@@ -1,0 +1,391 @@
+# =============================================================================
+# platform-console — E2E Compose (TASK-PC-FE-019)
+# =============================================================================
+# Minimal full-stack overlay for the nightly Playwright e2e harness. Boots:
+#
+#   - GAP auth-service     (OIDC AS — `/oauth2/token`, JWKS)
+#   - GAP account-service  (account read; transitively reachable through
+#                           admin-service AdminLoginService dependencies)
+#   - GAP admin-service    (operator-token issuer; `/api/admin/console/registry`,
+#                           `/api/admin/me/profile`, `/api/admin/operators/**`,
+#                           `/api/admin/auth/token-exchange`)
+#   - finance-platform account-service
+#                           (`/api/finance/accounts/{id}/balances` consumed by
+#                           console-bff `FinanceBalanceReadAdapter`)
+#   - console-bff          (Spring Boot orchestrator — `GET /api/console/
+#                           dashboards/operator-overview` composition)
+#   - console-web          (Next.js — Playwright target)
+#   - MySQL 8.0            (shared — `auth_db`, `account_db`, `admin_db`,
+#                           `finance_db` schemas)
+#   - Redis 7              (shared — rate-limit / SAS authorization cache)
+#
+# Excluded (deliberately — mirrors ecommerce CI overlay scope discipline):
+#   - Kafka                (the 2 e2e specs do not exercise an event-publishing
+#                           code path; admin-service writes `admin_actions`
+#                           synchronously. Future spec needing event observation
+#                           can re-add Kafka.)
+#   - Traefik              (CI overlay uses host-port publish + service-DNS
+#                           hostnames; the dev path remains `pnpm traefik:up`
+#                           + `http://console.local/`.)
+#   - GAP security-service (cross-service bulk lock + account auto-lock — not
+#                           reached by the 2 e2e click sequences.)
+#   - GAP community / membership-service (not federated by the console v1.)
+#   - Observability stack  (Jaeger / Prometheus / Grafana / Loki / Promtail —
+#                           7 GB runner memory budget; OTEL exporter errors are
+#                           non-blocking.)
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml up -d --build
+#   docker compose -f docker-compose.e2e.yml exec -T mysql \
+#     mysql -uroot -prootpass < apps/console-web/tests/e2e/fixtures/seed.sql
+#   pnpm --filter console-web exec playwright test
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# Boot-jar prerequisite:
+#   ./gradlew \
+#     :projects:global-account-platform:apps:auth-service:bootJar \
+#     :projects:global-account-platform:apps:account-service:bootJar \
+#     :projects:global-account-platform:apps:admin-service:bootJar \
+#     :projects:finance-platform:apps:account-service:bootJar \
+#     :projects:platform-console:apps:console-bff:bootJar
+#
+# Each Dockerfile expects the boot jar at `<service-dir>/build/libs/*.jar`.
+# The CI nightly job below in .github/workflows/nightly-e2e.yml builds these
+# in a dedicated artifact-upload job (mirrors ecommerce-boot-jars-nightly).
+# =============================================================================
+
+name: platform-console-e2e
+
+x-gap-service-env: &gap-service-env
+  SPRING_PROFILES_ACTIVE: e2e
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ""
+  # No Kafka in this overlay — but GAP services still bind KAFKA_BOOTSTRAP_SERVERS
+  # at boot. Point at a non-routable host; the consumer pollers log warnings but
+  # do not crash the application context (the 2 e2e click sequences never
+  # exercise an event-producing code path).
+  KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+  # JDK DNS TTL = 0 — Docker embedded DNS occasionally returns NXDOMAIN for
+  # sibling services during partial restarts (TASK-BE-044 / GAP e2e overlay).
+  JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+  # The SAS issuer URL — every downstream validator (admin token-exchange,
+  # console-bff resource server, finance resource server) is configured to
+  # expect THIS URL as the `iss` claim. The auth-service itself derives its
+  # discovery document from `oidc.issuer-url` env var (default in
+  # apps/auth-service/src/main/resources/application.yml).
+  OIDC_ISSUER_URL: http://auth-service:8081
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL — single instance shared by 4 schemas (auth_db, account_db, admin_db,
+  # finance_db). The GAP init script creates 6 dbs by default; finance_db is
+  # created by the seed.sql command-line invocation below at first boot
+  # (cannot be wedged into GAP's init.sh — that's GAP-owned territory and
+  # AC-3 forbids byte diff there).
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      AUTH_DB_PASSWORD: auth_pass
+      ACCOUNT_DB_PASSWORD: account_pass
+      SECURITY_DB_PASSWORD: security_pass
+      ADMIN_DB_PASSWORD: admin_pass
+      COMMUNITY_DB_PASSWORD: community_pass
+      MEMBERSHIP_DB_PASSWORD: membership_pass
+    volumes:
+      # Reuse the GAP init script verbatim — it creates the 4 GAP databases +
+      # service users. finance_db is created at seed time (seed.sql first
+      # statement) since GAP's init.sh is GAP-owned (AC-3).
+      - ../global-account-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports: ["13306:3306"]
+    networks: [pc-e2e]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports: ["16379:6379"]
+    networks: [pc-e2e]
+
+  # ---------------------------------------------------------------------------
+  # GAP auth-service — SAS OIDC AS. Issues access tokens consumed by
+  # admin-service token-exchange + console-bff JWKS resource-server validation
+  # + finance account-service JWKS resource-server validation.
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build:
+      context: ../global-account-platform
+      dockerfile: apps/auth-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: auth_db
+      DB_USERNAME: auth_user
+      DB_PASSWORD: auth_pass
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      # SAS issuer claim — every JWT this service mints embeds this as `iss`.
+      OIDC_ISSUER_URL: http://auth-service:8081
+      # JWT signing keys — production application.yml defaults expect classpath
+      # resources, but bootJar packages only `src/main/resources`. Mount the
+      # dev test keys (same RSA keys used by IT slices) and point JWT_*_KEY_PATH
+      # at the mount (TASK-MONO-082 cycle 3 pattern from GAP docker-compose.e2e).
+      JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
+    volumes:
+      - ../global-account-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["18081:8081"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # GAP account-service — account read + ACTIVE-state lookup. Required by
+  # admin-service AdminLoginService at boot context init (constructor deps);
+  # the 2 e2e specs don't directly hit `/api/accounts/**`.
+  # ---------------------------------------------------------------------------
+  account-service:
+    build:
+      context: ../global-account-platform
+      dockerfile: apps/account-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: account_db
+      DB_USERNAME: account_user
+      DB_PASSWORD: account_pass
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_API_TOKEN: e2e-internal-token
+    depends_on:
+      mysql: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18082:8082"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # GAP admin-service — operator-token issuer. Console operator-token
+  # cookie comes from this service via `/api/admin/auth/token-exchange`. The
+  # me/profile + admin/{id}/profile + console/registry endpoints the 2 e2e
+  # specs exercise also live here.
+  # ---------------------------------------------------------------------------
+  admin-service:
+    build:
+      context: ../global-account-platform
+      dockerfile: apps/admin-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: admin_db
+      DB_USERNAME: admin_user
+      DB_PASSWORD: admin_pass
+      AUTH_SERVICE_URL: http://auth-service:8081
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      INTERNAL_API_TOKEN: e2e-internal-token
+      # GAP OIDC subject-token validator config — see
+      # admin-service/src/main/java/.../config/GapOidcProperties.java. The
+      # issuer must match auth-service's `iss` claim; the JWKS URL targets the
+      # auth-service container directly (no Traefik in this overlay).
+      ADMIN_OIDC_ISSUER: http://auth-service:8081
+      ADMIN_OIDC_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      ADMIN_OIDC_AUDIENCE: platform-console-web
+      # Fixed test keys (parity with GAP docker-compose.e2e.yml — same PEM
+      # admin-service unit tests use). DO NOT use in production.
+      ADMIN_JWT_V1_PEM: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwpwO4oW86ahUt
+        7qzFCSMA0fdzc6ehRRJgwsNekNaf9lcBC0kFmShJQQzoaWZXW9g/Qfdq8rIGpO0Q
+        +1I2s8U8xFlNunEdW/rzI0H1aKONIduiv/lN/u66+TZrRspeaH1vpuya7+YFEw1N
+        DMpjtEmuOwMi10RY5hMK/o7PJjRTq9EVacMErQOdchvrZOztlLugt3Y8K1BNxQ8B
+        ++fFSxGAstoI4QXWtnUpGpmaR0DUEj5wMAg9pr/doj22hR4WYjiC0Cixias/uLOu
+        XXTLQPk4Z/oM6Y783hpX+KDE0inwMhxj3uKD1+o9ceveIt4EyA0OqiNBlvFmTc82
+        xk5UmMQvAgMBAAECggEAG0y0NoQ8PDrIqyCHcqvGzQmlxCHLdhDGlk2DA8o+YNog
+        9/hWgJb6stdqt0ASoM2AzcXUBqMbAAvc1xL/0ZRWlt2BL5HwiSj9zzVTrClPnS/u
+        UWh5jqQnIJ4C2vFFtPFQ8UBKsGcClSYsmAux+1aRTGuyQGAkH9jueHR+fWTaEVPq
+        Zhmahubd62eATcPR5b5nTTAiEwWAV5AgpSkaD3vrQZEwud/lrbW4376xyVc3cJRK
+        inrjry4kBybeRIM9ElsOMI4EIfsyseLubG/bO5c/cSTnYeHLnPMyH8OA3CePx9a+
+        Oyp2FkKnwf/EgdWLJNolsSO3MYUXjIcH6/AowVzTgQKBgQDcnnycIxQy9B9ypKxm
+        JV1MUh6SagQ5oCHLZJWt3VBupYVUCMqvqgTQ9SiSQDddFSK5Kstpd6N049yiytyD
+        HBmigU0m8g2L94fJJ/M56a3xB2qzj4lkhTk1GSV5YBgT3XgGG3EexCiCM0MxfMlO
+        XDQPzqrmumIsPP2vgGZusmIujQKBgQDM+3ngGCiq/h1ixgKLZLiFQd9HOrT0x+nU
+        q07KEXvHuORDzLWw026+wbTsDWYDGARE/7HpVliLjLTjBk//Ih20C1BV3jzp+Mgp
+        oY4HomvtsRTrujYrTtPU/mEXOaUosRiRlXQ0KQTKMm9FdiA1nR7YKYQUwyeZcVYT
+        6Lkh661cqwKBgCRc8wkBNykW18AbqFbFvdUAjA1x7/RXknplv84CdmlmWs15DX9a
+        tKSEZAWHFBkBjNGcXh6qG4T+sbUbXrE1hnwkd8T9jIIPcJAVR5+6BnN913Z1KB4r
+        XzyDQov47L8Jd+j5yPFbP5oGPQMBIGUMCYC5fa299sR34RB2R2vjdw9ZAoGBAJfO
+        xnwIaFX6zJiSPOAvP9iw6ENAXzPJuoseM8PDHwDTFXqA6S6D58iufOc1JQ+1gbP4
+        CjLdF8aB9pUL38L76TOmDWEKreI5tUPfueg9ieEG/I934RZB0vAzVIR21LJGNgPb
+        w6u9lSaKI4415bTPIEDGvmMCBRnGrhEgkbtlZ4bxAoGAX7D0UjhAe2Md/uNxqdfY
+        UWRS9HKqjiVS8DFMw++9luj+rHaX6lhUarKb5vw1qf5T5HPPFHi2uDECXn7XMgxn
+        sGtyQkkPOviswzBjWzt6cGdi9D4SFrygtr0cpBOXM3UuHm7hfSwKg9O5UoWYs8JV
+        fOIvQyaNDTvxW+mx0Ds4Huo=
+        -----END PRIVATE KEY-----
+      ADMIN_TOTP_V1_KEY: REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      account-service: { condition: service_started }
+    ports: ["18085:8085"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # finance-platform account-service — `/api/finance/accounts/{id}/balances`.
+  # Consumed by console-bff FinanceBalanceReadAdapter when an operator's
+  # finance_default_account_id is set (Phase 4 PC-FE-016 click sequence: after
+  # Save, the overview's finance card flips from forbidden/MISSING_PREREQUISITE
+  # to ok with balance data).
+  # ---------------------------------------------------------------------------
+  finance-account-service:
+    build:
+      context: ../finance-platform/apps/account-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: e2e
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      # finance_db / finance / finance — created by seed.sql preamble before
+      # account-service first boot (CI workflow runs seed.sql AFTER MySQL
+      # healthy + BEFORE finance-account-service is started — see the workflow
+      # step ordering).
+      MYSQL_DB: finance_db
+      MYSQL_USER: finance
+      MYSQL_PASSWORD: finance
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      FINANCE_ACCOUNT_PII_KEY: finance-account-dev-pii-key-32bytes!!
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18086:8080"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # console-bff — Spring Boot Hexagonal orchestrator
+  # (TASK-PC-BE-001/002/003 + ADR-MONO-017 Phase 7).
+  # ---------------------------------------------------------------------------
+  console-bff:
+    build:
+      context: ./apps/console-bff
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      # GAP OIDC trust anchor — JWKS validation of inbound bearer tokens.
+      CONSOLE_BFF_GAP_ISSUER_URL: http://auth-service:8081
+      CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
+      # Per-domain outbound base URLs (ADR-MONO-017 D6 fan-out). Only the
+      # finance leg is exercised by the 2 e2e specs (PC-FE-016 finance card
+      # ok-after-save assertion); the other domain legs (gap registry / wms /
+      # scm / erp) are wired to non-routable hostnames so their adapters
+      # surface as `down`/`unreachable` on the overview rather than 502'ing
+      # the entire response.
+      CONSOLE_BFF_OUTBOUND_GAP_BASE_URL: http://admin-service:8085
+      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
+      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://127.0.0.1:9
+      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://127.0.0.1:9
+      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://127.0.0.1:9
+    depends_on:
+      auth-service: { condition: service_started }
+      admin-service: { condition: service_started }
+      finance-account-service: { condition: service_started }
+    ports: ["18090:8080"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # console-web — Next.js Playwright target.
+  # ---------------------------------------------------------------------------
+  console-web:
+    build:
+      context: ./apps/console-web
+      dockerfile: Dockerfile
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+      # GAP OIDC public client — the platform-console-web row is seeded by
+      # auth-service/V0015. The e2e seed.sql also UPDATEs it to additionally
+      # allow `client_credentials` grant (server-to-server auth used by the
+      # Playwright login fixture; the OIDC PKCE browser flow is not yet
+      # operable end-to-end because auth-service has no HTML login form — see
+      # fixtures/login.ts for the full discussion).
+      OIDC_ISSUER_URL: http://auth-service:8081
+      OIDC_CLIENT_ID: platform-console-web
+      # The redirect URI must match the V0015 seed exactly. Inside the docker
+      # network, the browser hits console-web at `http://localhost:3000`; the
+      # V0015 seed lists `http://localhost:3000/api/auth/callback` so it works
+      # without modification.
+      OIDC_REDIRECT_URI: http://localhost:3000/api/auth/callback
+      OIDC_SCOPE: "openid profile email tenant.read"
+      # Registry + operator-token-exchange — server-side calls from the
+      # console-web Next route handlers (NOT browser). Pointed at the admin-
+      # service container DNS hostname.
+      CONSOLE_REGISTRY_URL: http://admin-service:8085/api/admin/console/registry
+      REGISTRY_TIMEOUT_MS: "5000"
+      CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
+      TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
+      # console-bff orchestrator — server-side same-origin proxy.
+      CONSOLE_BFF_URL: http://console-bff:8080
+      # The browser-visible Next.js public origin. Playwright `baseURL` matches.
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      auth-service: { condition: service_started }
+      admin-service: { condition: service_started }
+      console-bff: { condition: service_started }
+    ports: ["3000:3000"]
+    networks: [pc-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+networks:
+  pc-e2e:
+    driver: bridge

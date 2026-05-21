@@ -581,3 +581,209 @@ jobs:
             projects/global-account-platform/tests/e2e/build/reports/tests/e2eFullTest/
             projects/global-account-platform/tests/e2e/build/test-results/e2eFullTest/
           retention-days: 7
+
+  # ===========================================================================
+  # platform-console-e2e-fullstack (TASK-PC-FE-019, ADR-MONO-017 Phase 7).
+  #
+  # Activates the 2 deferred Playwright specs (operators-profile +
+  # operators-admin-profile) for the platform-console operator-overview
+  # finance-card vertical slice. Standalone boot-jar artifact job +
+  # docker-compose.e2e.yml orchestration mirroring the ecommerce
+  # frontend-e2e-fullstack pattern (TASK-MONO-014 / TASK-MONO-024 /
+  # TASK-MONO-045 reference).
+  #
+  # Service set (within the 7 GB runner budget):
+  #   GAP auth-service + account-service + admin-service
+  #   finance-platform account-service
+  #   console-bff + console-web
+  #   MySQL 8.0 + Redis 7
+  #
+  # No Kafka, no Traefik, no observability stack — the 2 specs do not
+  # exercise an event-publishing code path and the dev Traefik hostname-
+  # routing path remains intact (host-port publish substitutes for CI).
+  # ===========================================================================
+  platform-console-boot-jars-nightly:
+    name: Package platform-console e2e boot jars (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build platform-console e2e boot jars
+        # 5 boot jars — GAP auth/account/admin + finance account + console-bff.
+        # console-web is a Next.js standalone build (handled in the e2e job).
+        run: >-
+          ./gradlew
+          :projects:global-account-platform:apps:auth-service:bootJar
+          :projects:global-account-platform:apps:account-service:bootJar
+          :projects:global-account-platform:apps:admin-service:bootJar
+          :projects:finance-platform:apps:account-service:bootJar
+          :projects:platform-console:apps:console-bff:bootJar
+          --no-daemon --stacktrace
+
+      - name: Upload platform-console e2e boot jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-console-e2e-boot-jars-nightly
+          # upload-artifact@v4 strips the longest common prefix; the
+          # download step restores canonical paths.
+          path: |
+            projects/global-account-platform/apps/auth-service/build/libs/auth-service.jar
+            projects/global-account-platform/apps/account-service/build/libs/account-service.jar
+            projects/global-account-platform/apps/admin-service/build/libs/admin-service.jar
+            projects/finance-platform/apps/account-service/build/libs/account-service.jar
+            projects/platform-console/apps/console-bff/build/libs/console-bff.jar
+          retention-days: 1
+
+  platform-console-e2e-fullstack:
+    name: Platform Console E2E full-stack (Playwright + docker compose)
+    runs-on: ubuntu-latest
+    needs: platform-console-boot-jars-nightly
+    timeout-minutes: 45
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.0'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install console-web dependencies
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm install --frozen-lockfile
+
+      - name: Download platform-console e2e boot jars
+        uses: actions/download-artifact@v4
+        with:
+          name: platform-console-e2e-boot-jars-nightly
+          path: projects/platform-console/artifact-staging
+
+      - name: Restore boot jar paths
+        # upload-artifact@v4 strips the common prefix (`projects/`) so the
+        # artifact contains <project>/apps/<service>/build/libs/<jar>. Move
+        # each file to the canonical path Dockerfiles expect.
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p projects/global-account-platform/apps/auth-service/build/libs/
+          mkdir -p projects/global-account-platform/apps/account-service/build/libs/
+          mkdir -p projects/global-account-platform/apps/admin-service/build/libs/
+          mkdir -p projects/finance-platform/apps/account-service/build/libs/
+          mkdir -p projects/platform-console/apps/console-bff/build/libs/
+          mv projects/platform-console/artifact-staging/global-account-platform/apps/auth-service/build/libs/auth-service.jar \
+             projects/global-account-platform/apps/auth-service/build/libs/auth-service.jar
+          mv projects/platform-console/artifact-staging/global-account-platform/apps/account-service/build/libs/account-service.jar \
+             projects/global-account-platform/apps/account-service/build/libs/account-service.jar
+          mv projects/platform-console/artifact-staging/global-account-platform/apps/admin-service/build/libs/admin-service.jar \
+             projects/global-account-platform/apps/admin-service/build/libs/admin-service.jar
+          mv projects/platform-console/artifact-staging/finance-platform/apps/account-service/build/libs/account-service.jar \
+             projects/finance-platform/apps/account-service/build/libs/account-service.jar
+          mv projects/platform-console/artifact-staging/platform-console/apps/console-bff/build/libs/console-bff.jar \
+             projects/platform-console/apps/console-bff/build/libs/console-bff.jar
+
+      - name: Build console-web (Next.js standalone production)
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm build
+
+      - name: Start docker compose stack (5 services + MySQL + Redis)
+        working-directory: projects/platform-console
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d --build \
+            mysql redis auth-service account-service admin-service
+
+      - name: Wait for admin-service health (gates seed.sql application)
+        # admin-service has Flyway dependencies on the rest of the GAP DBs
+        # being initialised. start_period=60s + healthcheck retries=12 ≈ 5 min.
+        working-directory: projects/platform-console
+        run: |
+          echo "Waiting for admin-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.e2e.yml ps admin-service \
+                | grep -q "healthy"; then
+              echo "admin-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "admin-service did not become healthy in time"
+          docker compose -f docker-compose.e2e.yml logs --tail=50 admin-service
+          exit 1
+
+      - name: Apply seed.sql (operators, finance accounts, OIDC client tweaks)
+        working-directory: projects/platform-console
+        run: |
+          docker compose -f docker-compose.e2e.yml exec -T mysql \
+            mysql -uroot -prootpass < apps/console-web/tests/e2e/fixtures/seed.sql
+
+      - name: Start remaining containers (finance + console-bff + console-web)
+        working-directory: projects/platform-console
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d --build \
+            finance-account-service console-bff console-web
+
+      - name: Wait for console-web health
+        working-directory: projects/platform-console
+        run: |
+          echo "Waiting for console-web health (up to ~3 min)..."
+          for i in $(seq 1 18); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "console-web healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "console-web did not become healthy in time"
+          docker compose -f docker-compose.e2e.yml logs --tail=80 console-web console-bff
+          exit 1
+
+      - name: Install Playwright chromium
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e (2 specs)
+        working-directory: projects/platform-console/apps/console-web
+        env:
+          CONSOLE_BASE_URL: http://localhost:3000
+          E2E_AUTH_BASE_URL: http://localhost:18081
+          E2E_ADMIN_BASE_URL: http://localhost:18085
+          E2E_CONSOLE_ORIGIN: http://localhost:3000
+        run: pnpm exec playwright test --project=chromium
+
+      - name: Dump docker compose logs on failure
+        if: failure()
+        working-directory: projects/platform-console
+        run: docker compose -f docker-compose.e2e.yml logs --tail=200
+
+      - name: Stop docker compose stack
+        if: always()
+        working-directory: projects/platform-console
+        run: docker compose -f docker-compose.e2e.yml down -v
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-console-playwright-report-nightly
+          path: |
+            projects/platform-console/apps/console-web/playwright-report/
+            projects/platform-console/apps/console-web/test-results/
+          retention-days: 7

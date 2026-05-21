@@ -1,20 +1,37 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
 
 /**
- * E2E config for console-web critical journeys (login → catalog → tenant
- * switch + multi-tenant isolation regression). CI is authoritative: the full
- * GAP OIDC + admin-service registry stack must be reachable at the
- * `*.local` hostnames. Locally these specs may be skipped if the stack is down
- * (see tests/e2e/*).
+ * E2E config for console-web critical journeys (operator profile self-set +
+ * SUPER_ADMIN admin-on-behalf-of profile edit). CI is authoritative — see
+ * `.github/workflows/nightly-e2e.yml` job `platform-console-e2e-fullstack`
+ * for the docker-compose orchestration + Playwright invocation.
+ *
+ * baseURL — local docker-compose.e2e.yml publishes console-web on host port
+ * 3000 (TASK-PC-FE-019). The dev `http://console.local/` Traefik path
+ * remains the human dev convention (override via `CONSOLE_BASE_URL` env).
+ *
+ * Global setup — fixtures/global-setup.ts mints the SUPER_ADMIN session ONCE
+ * and persists cookies to storageState (`fixtures/.storage-state.json`).
+ * Every spec inherits the storageState; specs that need a different identity
+ * override via `test.use({ storageState: ... })`.
  */
+const STORAGE_STATE = path.join(
+  __dirname,
+  'tests/e2e/fixtures/.storage-state.json',
+);
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
+  // Run global-setup before any spec; mint tokens once + persist cookies.
+  globalSetup: require.resolve('./tests/e2e/fixtures/global-setup.ts'),
   use: {
-    baseURL: process.env.CONSOLE_BASE_URL ?? 'http://console.local',
+    baseURL: process.env.CONSOLE_BASE_URL ?? 'http://localhost:3000',
+    storageState: STORAGE_STATE,
     trace: 'on-first-retry',
   },
   projects: [
