@@ -56,7 +56,8 @@ public class OperatorQueryService {
                     roles,
                     op.totpEnrolledAt() != null || enrolledIds.contains(op.internalId()),
                     op.lastLoginAt(),
-                    op.createdAt()));
+                    op.createdAt(),
+                    op.financeDefaultAccountId()));
         }
         return new OperatorPage(summaries, rows.totalElements(), rows.page(),
                 rows.size(), rows.totalPages());
@@ -74,9 +75,20 @@ public class OperatorQueryService {
                 roles,
                 totpEnrolled,
                 operator.lastLoginAt(),
-                operator.createdAt());
+                operator.createdAt(),
+                operator.financeDefaultAccountId());
     }
 
+    /**
+     * TASK-BE-308 — {@code financeDefaultAccountId} carries the
+     * {@code admin_operators.finance_default_account_id} column value so the
+     * {@code GET /api/admin/operators} list response can expose each operator's
+     * current {@code operatorContext.defaultAccountId}. {@code null} when the
+     * column is NULL. The controller maps {@code null} to absent
+     * {@code operatorContext} via field-level
+     * {@code @JsonInclude(Include.NON_NULL)} — the wire shape's
+     * {@code operatorContext} key is omitted, never literal null.
+     */
     public record OperatorSummary(
             String operatorId,
             String email,
@@ -85,7 +97,8 @@ public class OperatorQueryService {
             List<String> roles,
             boolean totpEnrolled,
             Instant lastLoginAt,
-            Instant createdAt
+            Instant createdAt,
+            String financeDefaultAccountId
     ) {}
 
     public record OperatorPage(

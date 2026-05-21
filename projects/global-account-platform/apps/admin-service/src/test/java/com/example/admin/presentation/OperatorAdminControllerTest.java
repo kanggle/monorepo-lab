@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -113,7 +114,8 @@ class OperatorAdminControllerTest {
                         "op-actor", "actor@example.com", "Actor",
                         "ACTIVE", List.of("SUPER_ADMIN"), true,
                         Instant.parse("2026-04-24T10:00:00Z"),
-                        Instant.parse("2026-01-01T00:00:00Z")));
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        null));
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()))
                 .andExpect(status().isOk())
@@ -146,7 +148,7 @@ class OperatorAdminControllerTest {
     void list_operators_returns_page() throws Exception {
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
-                false, null, Instant.parse("2026-01-01T00:00:00Z"));
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
         when(queryService.listOperators(any(), anyInt(), anyInt()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
@@ -154,6 +156,57 @@ class OperatorAdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].operatorId").value("op-1"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void list_operators_emits_operatorContext_when_finance_default_account_id_present() throws Exception {
+        // TASK-BE-308: operator with non-null financeDefaultAccountId → response item
+        // carries operatorContext.defaultAccountId.
+        OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
+                "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
+                false, null, Instant.parse("2026-01-01T00:00:00Z"),
+                "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000");
+        when(queryService.listOperators(any(), anyInt(), anyInt()))
+                .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
+
+        mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].operatorId").value("op-1"))
+                .andExpect(jsonPath("$.content[0].operatorContext.defaultAccountId")
+                        .value("01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"));
+    }
+
+    @Test
+    void list_operators_omits_operatorContext_when_finance_default_account_id_null() throws Exception {
+        // TASK-BE-308 AC-6: NULL column → @JsonInclude(Include.NON_NULL) omits the field.
+        // The whole "operatorContext" substring must NOT appear in the response item.
+        OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
+                "op-2", "two@example.com", "Two", "ACTIVE", List.of("SUPPORT_LOCK"),
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
+        when(queryService.listOperators(any(), anyInt(), anyInt()))
+                .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
+
+        String body = mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].operatorId").value("op-2"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("operatorContext");
+    }
+
+    @Test
+    void list_operators_omits_operatorContext_when_finance_default_account_id_blank() throws Exception {
+        // TASK-BE-308: defensive — legacy DB state with whitespace-only is treated
+        // as absent (mirrors BE-304 registry surface).
+        OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
+                "op-3", "three@example.com", "Three", "ACTIVE", List.of("SUPPORT_LOCK"),
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), "   ");
+        when(queryService.listOperators(any(), anyInt(), anyInt()))
+                .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
+
+        String body = mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("operatorContext");
     }
 
     @Test

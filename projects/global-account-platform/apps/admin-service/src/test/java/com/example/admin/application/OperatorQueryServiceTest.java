@@ -98,13 +98,34 @@ class OperatorQueryServiceTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-308: listOperators 는 operator 별 financeDefaultAccountId 를 summary 에 carrying 한다")
+    void listOperators_propagates_financeDefaultAccountId_per_operator() {
+        AdminOperatorPort.OperatorView opWithValue =
+                operator(1L, "op-1-uuid", "one@ex.com", "ACTIVE", "fan-platform", "acc-uuid-7");
+        AdminOperatorPort.OperatorView opNoValue =
+                operator(2L, "op-2-uuid", "two@ex.com", "ACTIVE", "fan-platform", null);
+        AdminOperatorPort.OperatorPage page = new AdminOperatorPort.OperatorPage(
+                List.of(opWithValue, opNoValue), 2L, 0, 20, 1);
+        when(operatorPort.findOperatorsPage(null, 0, 20)).thenReturn(page);
+        when(operatorPort.bulkLoadRoleNamesByOperator(anyCollection()))
+                .thenReturn(Map.of(1L, List.of("SUPER_ADMIN"), 2L, List.of("SUPPORT_LOCK")));
+        when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
+
+        OperatorQueryService.OperatorPage result = service.listOperators(null, 0, 20);
+
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.content().get(0).financeDefaultAccountId()).isEqualTo("acc-uuid-7");
+        assertThat(result.content().get(1).financeDefaultAccountId()).isNull();
+    }
+
+    @Test
     @DisplayName("TOTP enrolledAt 이 있는 operator 는 totpEnrolled=true")
     void getCurrentOperator_totp_enrolled_at_present() {
         Instant enrolled = Instant.parse("2026-05-01T00:00:00Z");
         AdminOperatorPort.OperatorView op = new AdminOperatorPort.OperatorView(
                 10L, "op-uuid", "fan-platform", "op@example.com", "hash", "Display", "ACTIVE",
                 enrolled, null, Instant.parse("2026-01-01T00:00:00Z"),
-                Instant.parse("2026-01-01T00:00:00Z"));
+                Instant.parse("2026-01-01T00:00:00Z"), null);
         when(operatorPort.findByOperatorId("op-uuid")).thenReturn(Optional.of(op));
         when(operatorPort.findRolesForOperator(10L)).thenReturn(List.of());
 

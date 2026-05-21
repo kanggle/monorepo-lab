@@ -49,9 +49,20 @@ final class OperatorUseCaseTestSupport {
     /** Same as {@link #operator(long, String, String, String)} with explicit tenantId. */
     static AdminOperatorPort.OperatorView operator(long id, String uuid, String email,
                                                    String status, String tenantId) {
+        return operator(id, uuid, email, status, tenantId, null);
+    }
+
+    /**
+     * TASK-BE-308 — overload accepting an explicit
+     * {@code financeDefaultAccountId} so list-projection tests can construct
+     * fixtures with the column populated. Default overloads pass {@code null}.
+     */
+    static AdminOperatorPort.OperatorView operator(long id, String uuid, String email,
+                                                   String status, String tenantId,
+                                                   String financeDefaultAccountId) {
         Instant created = Instant.parse("2026-01-01T00:00:00Z");
         return new AdminOperatorPort.OperatorView(
                 id, uuid, tenantId, email, "hash", "Display", status,
-                null, null, created, created);
+                null, null, created, created, financeDefaultAccountId);
     }
 }
