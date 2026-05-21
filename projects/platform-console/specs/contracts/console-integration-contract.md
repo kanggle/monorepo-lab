@@ -41,6 +41,7 @@
 | `available` | boolean | `false` → rendered as "coming soon" (e.g. `erp`/`finance` pre-bootstrap) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
+| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from GAP `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`global-account-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../global-account-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
 
 - Adding a product (e.g. finance) or flipping `available` is a **registry change only** — zero `console-web` code change (ADR-MONO-013 § 1.2 / D5).
 
@@ -1171,6 +1172,35 @@ carries `bff.domain` + `bff.route="operator-overview"` attributes.
   (b) is the **minimal MVP-correct path** — option (a) is a follow-up
   spec-first change in GAP `admin-api.md` registry surface, not in scope
   here. Pick (b) at MVP; (a) is a separately-tracked enhancement.
+
+##### Option (a) activation (Phase 2 — TASK-PC-FE-014)
+
+Both option (a) and option (b) paths are first-class behaviors. With **TASK-BE-304** merged (GAP producer Phase 1: `console-registry-api.md § Per-operator profile attributes` + `admin_operators.finance_default_account_id` column + emission rule), option (a) is activated end-to-end on the consumer side by **TASK-PC-FE-014**. The activation does **not** remove or weaken option (b) — operators whose `admin_operators.finance_default_account_id` is NULL continue to see `forbidden / MISSING_PREREQUISITE`, byte-identical to MVP behavior.
+
+Consumer wiring chain (top-down, all server-side; the browser never sees any of these headers or values):
+
+1. **console-web registry parser**: when the GAP registry response is fetched (at OIDC login `/api/auth/callback` and on every refresh `/api/auth/refresh`), the response is parsed with a zod schema extended to recognize `productItem.operatorContext?.defaultAccountId` (the `finance` product item is the only one populating it in v1; `operatorContext` on any other item parses to `undefined`). The parsed value is stored in the server-side session helper alongside the existing operator-token / GAP-OIDC-token / active-tenant slots.
+2. **console-web session helper**: a new server-only helper `getFinanceDefaultAccountId(): Promise<string | null>` (`import 'server-only'`) returns the stored value. Returns `null` when (i) the operator's row has NULL, (ii) the registry was not stored (e.g. registry fetch failed at login), or (iii) the value is an empty/whitespace string after trim.
+3. **console-web dashboard proxy route**: `(console)/api/console/dashboards/operator-overview/route.ts` (the same server route that already forwards `Authorization` + `X-Operator-Token` + `X-Tenant-Id`) calls `getFinanceDefaultAccountId()` server-side and, **only when the value is non-blank**, sets a new request header `X-Finance-Default-Account-Id: <value>` on the `fetch` to `console-bff`. **Never** sent from the browser. **Never** set with an empty value.
+4. **console-bff controller**: `OperatorOverviewController` accepts the optional header via `@RequestHeader(value = "X-Finance-Default-Account-Id", required = false)` and forwards it to `OperatorOverviewCompositionUseCase.compose(tenantId, financeDefaultAccountId)` (a new 2-arg overload; the 1-arg `compose(tenantId)` stays as a thin pass-through `compose(tenantId, null)` for any direct in-process caller).
+5. **console-bff use-case**: `callFinance(tenantId, cred, accountId)` — when `hasText(accountId)`, routes through `FinanceBalanceReadPort.readBalances(tenantId, bearer, accountId)` (a new port method; the existing `read(tenantId, credential)` stays for `DomainReadPort` contract conformance but remains `UnsupportedOperationException`-throwing — the marker that the active path is `readBalances`). When `accountId` is null/blank, the existing MVP option (b) path is preserved verbatim: `forbidden / MISSING_PREREQUISITE`, no outbound HTTP fired.
+6. **console-bff adapter**: `FinanceBalanceReadAdapter.readBalances(tenantId, credential, accountId)` is already present (since FE-011, in anticipation of this activation) — `GET /api/finance/accounts/{accountId}/balances` with GAP OIDC bearer (per § 2.4.7 verbatim).
+
+**Hard invariants preserved**:
+
+- **ADR-MONO-017 D4 HARD INVARIANT** (per-domain credential rule, sealed switch in `CredentialSelectionAdapter`): unchanged — `X-Finance-Default-Account-Id` is operator profile data flowing alongside credential, never credential itself. The `bearerFromCred(cred)` sealed switch in the use-case is unchanged.
+- **§ 2.4.4 D3 cross-leg 401 discipline**: unchanged — when the finance leg returns 401, composition still emits 401 `TOKEN_INVALID` (auth is not a per-card degrade); the header is irrelevant to the auth boundary.
+- **§ 3.3 zero retrofit (5th confirmation in this chain)**: 5 producer specs byte-unchanged in this Phase 2 (Phase 1 already merged GAP-side as TASK-BE-304; wms/scm/finance/erp/fan/ecommerce all byte-unchanged in both phases).
+- **No browser-visible header**: `X-Finance-Default-Account-Id` is set only on the server-side `fetch` from the console-web proxy route to console-bff. The browser never sees the inbound or outbound header (same discipline as the existing 3 headers).
+- **No logging of the value**: the header value (opaque finance account UUID) is `internal`-classified, not credential / not PII; nevertheless it must not appear in `log.info(...)` literals (finance F7 / `regulated.md` R7 transitive discipline).
+
+**Honest failure modes (no green-wash)**:
+
+- A **stale** `finance_default_account_id` (the finance account was deleted/migrated after the operator profile was set): finance returns `404 ACCOUNT_NOT_FOUND` → leg surfaces as `degraded / DOWNSTREAM_ERROR` (the existing `time()` classification). The console shows the leg failed, not a fabricated `ok`. Adding GAP-side validation against finance is out of scope (cross-service decoupling preserved).
+- The **registry response did not store** the value (e.g. login-time registry fetch failed): `getFinanceDefaultAccountId()` returns `null`, header is omitted, finance card → `MISSING_PREREQUISITE`. The console shell continues to render via § 2.5 degraded catalog handling.
+- The operator **switches tenants** mid-session: the `finance_default_account_id` is on the operator row (not per-tenant); the header continues to be sent across tenant switches.
+- The operator's **value is updated** mid-session: the cached session value is stale until the next registry refresh; same staleness window as `tenants` array changes (accepted).
+
 - **`asOf` field source**: server-side composition-request `Instant.now()`
   at request entry (NOT per-leg response timestamp); operators see the
   composition timestamp, not the slowest leg's freshness. wms's
@@ -1181,8 +1211,10 @@ carries `bff.domain` + `bff.route="operator-overview"` attributes.
 
 - Server route `(console)/api/console/dashboards/operator-overview` (Next.js
   App Router server route) forwards the 3 headers (Authorization /
-  X-Operator-Token / X-Tenant-Id) to `console-bff` server-side. Browser
-  never sees them.
+  X-Operator-Token / X-Tenant-Id) to `console-bff` server-side. **Plus** an
+  optional 4th header `X-Finance-Default-Account-Id` per § Option (a)
+  activation above (sourced from `getFinanceDefaultAccountId()` server-side
+  helper, set **only when non-blank**). Browser never sees any of them.
 - `features/operator-overview/` (`<OperatorOverviewScreen>` server
   component + `<DomainCard>` × 5 + `<OverviewDegradeBanner>` if all-down)
   renders the composed envelope. Per-card UI shape:
