@@ -8,7 +8,7 @@ Root `docs/project-overview.md` post-Phase-5/6/7 reality-alignment sweep — BE-
 
 # Status
 
-ready
+done
 
 # Owner
 
