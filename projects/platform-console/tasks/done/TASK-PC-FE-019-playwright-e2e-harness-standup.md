@@ -8,7 +8,7 @@ platform-console Playwright e2e harness standup — full-stack docker-compose CI
 
 # Status
 
-review
+done
 
 # Owner
 
