@@ -7,6 +7,17 @@ package com.example.admin.domain.rbac;
  * SUPER_ADMIN operators carry the platform-scope sentinel {@link #PLATFORM_TENANT_ID}
  * ({@code "*"}) which allows cross-tenant operations. All other operators must only
  * access resources within their own tenant.
+ *
+ * <p>TASK-BE-304: {@code financeDefaultAccountId} (nullable) carries the operator's
+ * chosen default finance-platform account UUID — emitted on the
+ * {@code GET /api/admin/console/registry} finance product item as
+ * {@code operatorContext.defaultAccountId}. {@code null} = not configured
+ * (Operator Overview finance card stays {@code forbidden / MISSING_PREREQUISITE}
+ * per MVP option (b) of {@code console-integration-contract.md § 2.4.9.1}).
+ *
+ * @param financeDefaultAccountId opaque foreign-system UUID; GAP does NOT
+ *                                verify against finance-platform — stale ids
+ *                                surface as finance 404 ACCOUNT_NOT_FOUND.
  */
 public record AdminOperator(
         String id,
@@ -14,7 +25,8 @@ public record AdminOperator(
         String displayName,
         Status status,
         long version,
-        String tenantId
+        String tenantId,
+        String financeDefaultAccountId
 ) {
     /**
      * Platform-scope sentinel value. An operator with this {@code tenantId} is

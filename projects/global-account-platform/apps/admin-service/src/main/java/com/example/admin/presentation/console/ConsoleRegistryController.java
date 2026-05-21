@@ -4,7 +4,9 @@ import com.example.admin.application.OperatorContext;
 import com.example.admin.application.console.ConsoleProduct;
 import com.example.admin.application.console.ConsoleRegistry;
 import com.example.admin.application.console.ConsoleRegistryUseCase;
+import com.example.admin.application.console.ProductOperatorContext;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,19 +51,41 @@ public class ConsoleRegistryController {
     /**
      * Wire shape — mirrors console-integration-contract § 2.2 exactly:
      * {@code productKey}, {@code displayName}, {@code available},
-     * {@code tenants}, {@code baseRoute}.
+     * {@code tenants}, {@code baseRoute}, {@code operatorContext}
+     * (TASK-BE-304, optional, omitted when {@code null}).
      */
     public record ProductResponse(
             String productKey,
             String displayName,
             boolean available,
             List<String> tenants,
-            String baseRoute
+            String baseRoute,
+            // TASK-BE-304: per-operator per-product profile attributes. Field-level
+            // @JsonInclude.NON_NULL — when the application returns null, the
+            // serializer omits the field entirely (the contract requires
+            // omission, NEVER literal "operatorContext":null — see
+            // console-registry-api.md § Per-operator profile attributes
+            // "Why omitted, not `null`"). Scope-narrow to this field; if a future
+            // field needs the same discipline, annotate it individually.
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            ProductOperatorContextResponse operatorContext
     ) {
         static ProductResponse from(ConsoleProduct p) {
             return new ProductResponse(
                     p.productKey(), p.displayName(), p.available(),
-                    p.tenants(), p.baseRoute());
+                    p.tenants(), p.baseRoute(),
+                    ProductOperatorContextResponse.from(p.operatorContext()));
+        }
+    }
+
+    /**
+     * TASK-BE-304: wire DTO for {@link ProductOperatorContext}. Sibling to
+     * {@link ProductResponse}. v1 carries only {@code defaultAccountId};
+     * future per-operator per-product attributes nest here.
+     */
+    public record ProductOperatorContextResponse(String defaultAccountId) {
+        static ProductOperatorContextResponse from(ProductOperatorContext ctx) {
+            return ctx == null ? null : new ProductOperatorContextResponse(ctx.defaultAccountId());
         }
     }
 

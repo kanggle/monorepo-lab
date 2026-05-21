@@ -51,7 +51,7 @@ class AdminOperatorTest {
     @DisplayName("ACTIVE operator isActive() returns true")
     void isActive_withActiveStatus_returnsTrue() {
         AdminOperator op = new AdminOperator("id-1", "a@ex.com", "Op",
-                AdminOperator.Status.ACTIVE, 0L, "fan-platform");
+                AdminOperator.Status.ACTIVE, 0L, "fan-platform", null);
         assertThat(op.isActive()).isTrue();
     }
 
@@ -59,7 +59,7 @@ class AdminOperatorTest {
     @DisplayName("DISABLED operator isActive() returns false")
     void isActive_withDisabledStatus_returnsFalse() {
         AdminOperator op = new AdminOperator("id-1", "a@ex.com", "Op",
-                AdminOperator.Status.DISABLED, 0L, "fan-platform");
+                AdminOperator.Status.DISABLED, 0L, "fan-platform", null);
         assertThat(op.isActive()).isFalse();
     }
 
@@ -67,6 +67,6 @@ class AdminOperatorTest {
 
     private static AdminOperator operator(String tenantId) {
         return new AdminOperator("id-1", "a@ex.com", "Op",
-                AdminOperator.Status.ACTIVE, 0L, tenantId);
+                AdminOperator.Status.ACTIVE, 0L, tenantId, null);
     }
 }

@@ -8,12 +8,14 @@ import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,9 +50,23 @@ class ConsoleRegistryUseCaseTest {
     }
 
     private void stubOperator(String operatorId, String tenantId) {
+        stubOperator(operatorId, tenantId, null);
+    }
+
+    /**
+     * TASK-BE-304: stub helper extended to inject {@code financeDefaultAccountId}.
+     * The factory does not expose this column (out-of-scope mutation surface);
+     * reflection-set is the test-only path used by other tests in this module
+     * (e.g. {@code TokenExchangeIntegrationTest} uses raw JDBC). For unit
+     * coverage we set the field directly on the in-memory entity.
+     */
+    private void stubOperator(String operatorId, String tenantId, String financeDefaultAccountId) {
         AdminOperatorJpaEntity entity = AdminOperatorJpaEntity.create(
                 operatorId, operatorId + "@example.com", "x", "Op",
                 "ACTIVE", tenantId, Instant.now());
+        if (financeDefaultAccountId != null) {
+            ReflectionTestUtils.setField(entity, "financeDefaultAccountId", financeDefaultAccountId);
+        }
         when(operatorRepository.findByOperatorId(operatorId)).thenReturn(Optional.of(entity));
     }
 
@@ -166,5 +182,85 @@ class ConsoleRegistryUseCaseTest {
 
         assertThatThrownBy(() -> useCase().execute(new OperatorContext("ghost", "jti")))
                 .isInstanceOf(OperatorUnauthorizedException.class);
+    }
+
+    /**
+     * TASK-BE-304: per-product per-operator profile attributes emission rule.
+     *
+     * <p>Authoritative spec:
+     * {@code specs/contracts/http/console-registry-api.md
+     * § Per-operator profile attributes (operatorContext)} — finance only in v1,
+     * other 4 products always {@code null}; finance emits when
+     * {@code admin_operators.finance_default_account_id} is non-null + non-empty
+     * after trim.
+     */
+    @Nested
+    @DisplayName("TASK-BE-304: operatorContext emission")
+    class OperatorContextEmission {
+
+        private static final String ACCOUNT_UUID =
+                "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
+
+        @Test
+        @DisplayName("(a) financeDefaultAccountId=null → finance.operatorContext == null")
+        void nullColumn_financeOperatorContextNull() {
+            stubOperator("op-1", "*", null);
+            stubTenants(tenant("fan-platform", "ACTIVE"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
+
+            assertThat(product(r, "finance").operatorContext())
+                    .as("AC-2: null column → operatorContext is null (omitted in JSON via @JsonInclude.NON_NULL)")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("(b) financeDefaultAccountId=<uuid> → finance.operatorContext.defaultAccountId == <uuid>")
+        void setColumn_financeOperatorContextPopulated() {
+            stubOperator("op-2", "*", ACCOUNT_UUID);
+            stubTenants(tenant("fan-platform", "ACTIVE"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("op-2", "jti"));
+
+            assertThat(product(r, "finance").operatorContext())
+                    .as("AC-3: set column → operatorContext populated on finance product item")
+                    .isNotNull();
+            assertThat(product(r, "finance").operatorContext().defaultAccountId())
+                    .isEqualTo(ACCOUNT_UUID);
+        }
+
+        @Test
+        @DisplayName("(c) regression guard: other 4 products always have operatorContext == null")
+        void otherProducts_operatorContextAlwaysNull() {
+            // Even when finance has a value set, the leak guard applies to the
+            // other 4 product items (gap / wms / scm / erp) — they NEVER
+            // receive operatorContext in v1 (AC-3 substring-count-1 invariant).
+            stubOperator("op-3", "*", ACCOUNT_UUID);
+            stubTenants(tenant("fan-platform", "ACTIVE"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("op-3", "jti"));
+
+            assertThat(r.products())
+                    .filteredOn(p -> !"finance".equals(p.productKey()))
+                    .as("regression guard: only finance populates operatorContext in v1")
+                    .allSatisfy(p -> assertThat(p.operatorContext())
+                            .as("product=%s must NOT carry operatorContext (v1 leak guard)", p.productKey())
+                            .isNull());
+        }
+
+        @Test
+        @DisplayName("(d) edge case: empty / whitespace-only value treated as null (StringUtils.hasText)")
+        void emptyOrWhitespace_treatedAsNull() {
+            // Edge Case "finance_default_account_id set to an empty string /
+            // whitespace-only → treated as NULL (StringUtils.hasText)".
+            stubOperator("op-4", "*", "   ");
+            stubTenants(tenant("fan-platform", "ACTIVE"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("op-4", "jti"));
+
+            assertThat(product(r, "finance").operatorContext())
+                    .as("whitespace-only column → operatorContext omitted (no empty defaultAccountId rendered)")
+                    .isNull();
+        }
     }
 }

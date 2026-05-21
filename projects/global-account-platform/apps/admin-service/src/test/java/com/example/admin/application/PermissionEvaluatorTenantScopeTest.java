@@ -108,6 +108,6 @@ class PermissionEvaluatorTenantScopeTest {
 
     private static AdminOperator operator(String tenantId) {
         return new AdminOperator("op-id", "op@ex.com", "Op",
-                AdminOperator.Status.ACTIVE, 0L, tenantId);
+                AdminOperator.Status.ACTIVE, 0L, tenantId, null);
     }
 }

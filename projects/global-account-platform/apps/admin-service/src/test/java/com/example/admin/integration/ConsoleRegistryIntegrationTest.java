@@ -27,6 +27,7 @@ import java.io.IOException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -69,6 +70,12 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
 
     private static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-000000000010";
     private static final String WMS_OP_UUID      = "00000000-0000-7000-8000-000000000011";
+    // TASK-BE-304: dedicated operator for the operatorContext set-case.
+    // Kept separate from SUPER_ADMIN_UUID so the other tests' assertions
+    // (which read a NULL finance_default_account_id) remain stable.
+    private static final String FINANCE_OP_UUID  = "00000000-0000-7000-8000-000000000012";
+    private static final String FINANCE_ACCOUNT_UUID =
+            "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -236,5 +243,77 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    // ── TASK-BE-304: operatorContext emission ────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-304 (a) null case: finance_default_account_id IS NULL → body has no 'operatorContext' substring (AC-2)")
+    void operatorContext_nullCase_omittedFromBody() throws Exception {
+        // SUPER_ADMIN_UUID is seeded by resetAndSeed() without
+        // finance_default_account_id (column defaults to NULL via V0028).
+        String body = mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(SUPER_ADMIN_UUID)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body)
+                .as("AC-2: null column → @JsonInclude.NON_NULL omits operatorContext entirely. body=%s", body)
+                .doesNotContain("operatorContext");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-304 (b) set case: finance_default_account_id=<uuid> → finance item carries operatorContext.defaultAccountId, other 4 items don't (AC-3)")
+    void operatorContext_setCase_emittedOnlyOnFinanceItem() throws Exception {
+        // Seed a dedicated operator with finance_default_account_id set via
+        // raw JDBC after Flyway runs (V0028 has provisioned the column).
+        seedOperatorWithFinanceAccount(FINANCE_OP_UUID, "*", FINANCE_ACCOUNT_UUID);
+
+        String body = mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(FINANCE_OP_UUID)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body)
+                .as("AC-3 (a): finance item present. body=%s", body)
+                .contains("\"productKey\":\"finance\"");
+        assertThat(body)
+                .as("AC-3 (a): operatorContext rendered with the exact UUID. body=%s", body)
+                .contains("\"operatorContext\":{\"defaultAccountId\":\"" + FINANCE_ACCOUNT_UUID + "\"}");
+        // Regression guard for non-finance leakage — substring count == 1.
+        int occurrences = (body.length() - body.replace("operatorContext", "").length())
+                / "operatorContext".length();
+        assertThat(occurrences)
+                .as("AC-3 (b) regression guard: substring 'operatorContext' MUST appear exactly once (only on finance). body=%s", body)
+                .isEqualTo(1);
+    }
+
+    /**
+     * TASK-BE-304: helper to seed an operator with a non-null
+     * {@code finance_default_account_id}. V0028 has already added the
+     * column; we set it via raw JDBC because there is no production
+     * mutation surface for this column in Phase 1 (operator-management
+     * mutation is out of scope per the task spec § Out of Scope).
+     */
+    private void seedOperatorWithFinanceAccount(String operatorId,
+                                                 String tenantId,
+                                                 String financeAccountId) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
+                Integer.class, operatorId);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
+                       finance_default_account_id, created_at, updated_at, version)
+                    VALUES (?, ?, ?, 'x', ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
+                    """, operatorId, tenantId, operatorId + "@example.com",
+                    "Op " + operatorId.substring(operatorId.length() - 2),
+                    financeAccountId);
+        } else {
+            jdbcTemplate.update(
+                    "UPDATE admin_operators SET finance_default_account_id = ? WHERE operator_id = ?",
+                    financeAccountId, operatorId);
+        }
     }
 }
