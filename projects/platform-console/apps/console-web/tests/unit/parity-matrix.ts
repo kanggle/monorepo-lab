@@ -358,6 +358,30 @@ export const PARITY_MATRIX: readonly ParityRow[] = [
       'Opaque to GAP (TASK-BE-304 § Decision authority — no finance verify).',
     verified: true,
   },
+  {
+    id: 18,
+    capability: 'operators: admin-set-profile',
+    featureModule: 'features/operators',
+    route: '/operators',
+    routeFile: 'src/app/(console)/operators/page.tsx',
+    contractSection: '2.4.3',
+    producerPath: '/api/admin/operators/',
+    producerSection: 'PATCH /api/admin/operators/{operatorId}/profile',
+    kind: 'mutation',
+    header: 'reason-only',
+    clientExport: 'setOperatorProfile',
+    notes:
+      'Admin-on-behalf-of: SUPER_ADMIN sets ANOTHER operator\'s ' +
+      'operatorContext.defaultAccountId. FE-004 per-endpoint header ' +
+      "NON-uniformity: reason ONLY, Idempotency-Key MUST NOT be sent " +
+      '(mirror rows 13 + 14 /roles + /status; full-replace PATCH is ' +
+      'idempotent). Self via this path → producer ' +
+      '400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH; UI gates the ' +
+      'per-row button when row is self (UX layer; producer is the authority). ' +
+      'Body shape on the GAP wire: ' +
+      '{ operatorContext: { defaultAccountId: string | null } }.',
+    verified: true,
+  },
 ] as const;
 
 /** The composed-overview fan-out legs (row 16) — the EXISTING reads it

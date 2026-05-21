@@ -426,3 +426,42 @@ export async function updateOwnProfile(
     () => undefined,
   );
 }
+
+// ---------------------------------------------------------------------------
+// 7. admin-set-profile — PATCH /api/admin/operators/{operatorId}/profile
+//    (TASK-BE-307 producer / TASK-PC-FE-017 consumer). Admin-on-behalf-of:
+//    SUPER_ADMIN sets ANOTHER operator's `operatorContext.defaultAccountId`
+//    with `operator.manage` permission + explicit `X-Operator-Reason`. Self
+//    via this path → producer `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH`
+//    (the UI gates the per-row button when the row is self — UX layer; this
+//    api fn forwards whatever the producer returns).
+//
+//    HEADERS: `X-Operator-Reason` required (producer rejects empty); NO
+//    `Idempotency-Key` per the producer matrix (mirror rows 13 + 14
+//    `{id}/roles` + `{id}/status` non-uniformity — full-replace PATCH on the
+//    column is idempotent; sending the key is a header-matrix-drift defect).
+//    204 No Content on success. The value is the target operator's chosen
+//    default finance-platform account UUID (opaque to GAP — TASK-BE-304
+//    § Decision authority); `null` clears the column.
+// ---------------------------------------------------------------------------
+
+export async function setOperatorProfile(
+  operatorId: string,
+  defaultAccountId: string | null,
+  reason: string,
+): Promise<void> {
+  await callGapOperators(
+    {
+      method: 'PATCH',
+      path: `${OPERATORS_PREFIX}/${encodeURIComponent(operatorId)}/profile`,
+      reason,
+      // NO idempotencyKey — per the producer header matrix (§ 2.4.3 row 7,
+      // mirror /roles + /status). Header-matrix-drift defense.
+      body: {
+        operatorContext: { defaultAccountId },
+      },
+      expectNoContent: true,
+    },
+    () => undefined,
+  );
+}

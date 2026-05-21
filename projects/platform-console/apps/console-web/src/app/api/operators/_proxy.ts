@@ -89,6 +89,37 @@ export const UpdateProfileBodySchema = z
   .strict();
 export type UpdateProfileBody = z.infer<typeof UpdateProfileBodySchema>;
 
+/**
+ * admin-set-profile: admin-on-behalf-of — defaultAccountId + reason
+ * (TASK-PC-FE-017 / TASK-BE-307 producer). NO `idempotencyKey` per the
+ * producer matrix (mirror `/roles` + `/status` non-uniformity — PATCH is
+ * naturally idempotent; sending the key would be a header-matrix-drift
+ * defect).
+ *
+ * `defaultAccountId` mirrors `UpdateProfileBodySchema.operatorContext.
+ * defaultAccountId` exactly (explicit `null` clears; a non-empty trimmed
+ * string ≤ 36 chars with no internal whitespace and no control chars /
+ * DEL — same regex as the self path). `reason` is the operator's audit
+ * reason (trimmed non-empty); the api layer forwards it as
+ * `X-Operator-Reason`. `.strict()` outer rejects unknown top-level keys
+ * mirroring the producer's `FAIL_ON_UNKNOWN_PROPERTIES = true`.
+ */
+export const AdminUpdateProfileBodySchema = z
+  .object({
+    defaultAccountId: z.union([
+      z.null(),
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(36)
+        .regex(/^[^\s\x00-\x1f\x7f]+$/),
+    ]),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+export type AdminUpdateProfileBody = z.infer<typeof AdminUpdateProfileBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(
