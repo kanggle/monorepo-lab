@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-021-playwright-e2e-smoke-pr-time-harness.md` — platform-console Playwright e2e PR-time smoke harness. Adds `apps/console-web/playwright.smoke.config.ts` (closed-loopback `127.0.0.1:1` env), `apps/console-web/e2e-smoke/` 3-spec suite (root redirect / `(console)` guard / `/login` render), `package.json` `e2e:smoke` script, and extends the existing `frontend-e2e-smoke` CI job with a platform-console-web build + smoke run stage (paths-filter `platform-console` 패턴에 `console-web/**` 추가 — pure-positive per MONO-074/075 rule). **Pattern reuse**: ecommerce web-store + fan-platform-web smoke harness 가 mature precedent — platform-console 는 3번째 frontend app 으로 같은 형판 채택. **PR-time complement** to TASK-PC-FE-019's nightly full-stack harness (ADR-MONO-010/011 e2e 3-phase strategy Phase 2 applied to platform-console; nightly = production-parity hard regression guard, smoke = author signal latency closure ~60-90 s budget). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (infrastructure-focused: smoke config + 3 spec + package.json + ci.yml job 확장 + paths-filter 1-line; pattern reuse 매우 높아 mechanical) / 리뷰=Opus 4.7.
 
 ## in-progress
 
