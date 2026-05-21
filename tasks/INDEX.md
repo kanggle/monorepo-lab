@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-128-project-overview-md-post-phase-5-6-7-reality-alignment.md` — **BE-302 reality-alignment pattern 5회째** (BE-302 architecture.md / BE-303 dead-code / BE-305 ProductCatalog flag / PC-FE-015 platform-console narrative / 본 task root portfolio-front-page). post-Phase-5/6/7 + Option (a) Phase 2 closure 시점 발견된 5 stale narrative drifts in **single root file** `docs/project-overview.md`: (1) L128 `console-bff: ... (Phase 7, deferred)` (lands 됨) / (2) L130 finance section header `(v1 부트스트랩 🚧)` (Phase 5 COMPLETE) / (3) L134 `finance 도메인 구현 = TASK-FIN-BE-001 (deferred)` (DONE) / (4) L147 erp section header `(v1 부트스트랩 🚧)` (Phase 6 COMPLETE) / (5) L151 `erp 도메인 구현 = TASK-ERP-BE-001 (deferred)` (DONE). doc-only spec sweep. spec-only 3-PR chain. No ADR (BE-302/305/PC-FE-015 reality-alignment, competing convention 부재, ADR-008/013/014/015/016/017 모두 ACCEPTED). AC-4 docs/adr/ byte-unchanged (HARDSTOP-04 ADR immutability — "future erp ADR" PROPOSED-time text는 frozen) · AC-5 projects/* byte-unchanged · AC-6 README/TEMPLATE/CLAUDE/docs/guides/platform/rules/libs byte-unchanged · AC-7 `🚧` scope-locked (finance + erp 만, 다른 section은 separately). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (BE-302/305/PC-FE-015 mechanical doc edits) — 또는 직접 실행 (5 edits in 1 file, scope 매우 좁음).
 
 ## in-progress
 
