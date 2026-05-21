@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getOperatorsListState, OperatorsScreen } from '@/features/operators';
+import { getSelfOperatorIdOrNull } from '@/features/operators/api/operators-api';
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants } from '@/features/tenant';
 
@@ -139,12 +140,20 @@ export default async function OperatorsPage() {
     initialDefaultAccountId = null;
   }
 
+  // TASK-PC-FE-020 — resolve the caller's own operatorId so OperatorsScreen
+  // can disable the per-row "프로파일 편집" button on the self row. The helper
+  // is fail-graceful (any failure → null) — the producer
+  // 400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH is the authoritative
+  // gate; this is the UX layer.
+  const selfOperatorId = await getSelfOperatorIdOrNull();
+
   return (
     <OperatorsScreen
       initial={state.page}
       tenantOptions={tenantOptions}
       isPlatformOperator={isPlatformOperator}
       initialDefaultAccountId={initialDefaultAccountId}
+      selfOperatorId={selfOperatorId}
     />
   );
 }

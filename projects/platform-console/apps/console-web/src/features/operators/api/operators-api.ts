@@ -4,6 +4,7 @@ import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError, OperatorsUnavailableError } from '@/shared/api/errors';
 import {
   OperatorPageSchema,
+  OperatorSummarySchema,
   type OperatorPage,
   type OperatorListParams,
   CreateOperatorResultSchema,
@@ -464,4 +465,34 @@ export async function setOperatorProfile(
     },
     () => undefined,
   );
+}
+
+// ---------------------------------------------------------------------------
+// 8. getSelfOperatorIdOrNull — GET /api/admin/me
+//    TASK-PC-FE-020 — server-side resolve the caller's own operatorId for the
+//    `OperatorsScreen` self-row UX gate (PC-FE-017 honest gap (b) closure).
+//    Fail-graceful: returns `null` on every observed failure mode (401, 403,
+//    503/timeout/network, schema parse, unexpected). Producer
+//    `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` is the authoritative
+//    gate; this is the UX layer that hides the disallowed button.
+//
+//    Read-only / no mutation headers; uses the same hardened `callGapOperators`
+//    site (operator token + active tenant + structured error logging).
+// ---------------------------------------------------------------------------
+
+export async function getSelfOperatorIdOrNull(): Promise<string | null> {
+  try {
+    const me = await callGapOperators(
+      { method: 'GET', path: '/api/admin/me' },
+      (json) => OperatorSummarySchema.parse(json),
+    );
+    return me.operatorId;
+  } catch {
+    // Every failure mode (ApiError 401/403/etc, OperatorsUnavailableError,
+    // network, schema parse, unexpected) → null. The page renders with the
+    // gate inactive; the next mutation surfaces the real error (e.g. list
+    // call's 401 → redirect-to-login). The producer 400 on self-via-admin
+    // remains the authoritative fail-safe — never a security regression.
+    return null;
+  }
 }
