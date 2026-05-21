@@ -68,14 +68,17 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     static OperatorJwtTestFixture jwt;
     static String signingKeyPem;
 
-    private static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-000000000010";
-    private static final String WMS_OP_UUID      = "00000000-0000-7000-8000-000000000011";
+    private static final String SUPER_ADMIN_UUID      = "00000000-0000-7000-8000-000000000010";
+    private static final String WMS_OP_UUID           = "00000000-0000-7000-8000-000000000011";
     // TASK-BE-304: dedicated operator for the operatorContext set-case.
     // Kept separate from SUPER_ADMIN_UUID so the other tests' assertions
     // (which read a NULL finance_default_account_id) remain stable.
-    private static final String FINANCE_OP_UUID  = "00000000-0000-7000-8000-000000000012";
-    private static final String FINANCE_ACCOUNT_UUID =
+    private static final String FINANCE_OP_UUID       = "00000000-0000-7000-8000-000000000012";
+    private static final String FINANCE_ACCOUNT_UUID  =
             "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
+    // TASK-BE-305: single-tenant operators for finance + erp isolation regression guard.
+    private static final String FINANCE_TENANT_OP_UUID = "00000000-0000-7000-8000-000000000013";
+    private static final String ERP_TENANT_OP_UUID     = "00000000-0000-7000-8000-000000000014";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -124,7 +127,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired JdbcTemplate jdbcTemplate;
 
-    /** All three portfolio tenants registered + ACTIVE. */
+    /** Three baseline portfolio tenants registered + ACTIVE (no finance/erp rows). */
     private static final String ALL_ACTIVE_TENANTS = """
             {
               "items": [
@@ -136,6 +139,29 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                  "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"}
               ],
               "page":0,"size":100,"totalElements":3,"totalPages":1
+            }
+            """;
+
+    /**
+     * TASK-BE-305: all five V1 portfolio tenants registered + ACTIVE.
+     * Used by the single-tenant finance/erp isolation IT cases to prove
+     * per-operator scoping works once the slugs are ACTIVE-registered.
+     */
+    private static final String ALL_FIVE_ACTIVE_TENANTS = """
+            {
+              "items": [
+                {"tenantId":"fan-platform","displayName":"Fan Platform","tenantType":"B2C_CONSUMER",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"wms","displayName":"Warehouse Management Platform","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"scm","displayName":"Supply Chain Management Platform","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"finance","displayName":"Finance Platform","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                {"tenantId":"erp","displayName":"Enterprise Resource Planning","tenantType":"B2B_ENTERPRISE",
+                 "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"}
+              ],
+              "page":0,"size":100,"totalElements":5,"totalPages":1
             }
             """;
 
@@ -173,8 +199,12 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("SUPER_ADMIN → 200, contract shape exact, gap binds all tenants, erp/finance available=false")
+    @DisplayName("SUPER_ADMIN → 200, contract shape exact, gap binds all tenants, erp/finance available=true (TASK-BE-305)")
     void superAdmin_returnsFullCatalog() throws Exception {
+        // ALL_ACTIVE_TENANTS stub has fan-platform/wms/scm only (no erp/finance rows).
+        // erp/finance available=true; tenants=[] because their slugs are not registered
+        // in the tenant list (tenant-selection rule: slug not in activeTenants → []).
+        // AC-4: wms-operator isolation test still holds (erp/finance tenants:[]).
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isOk())
@@ -192,12 +222,13 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.products[1].tenants[0]").value("wms"))
                 .andExpect(jsonPath("$.products[2].productKey").value("scm"))
                 .andExpect(jsonPath("$.products[2].tenants[0]").value("scm"))
-                // erp / finance — coming-soon placeholder
+                // erp / finance — V1 live (TASK-BE-305); slugs not yet in test tenant
+                // list so tenants:[] — available:true is the key assertion change.
                 .andExpect(jsonPath("$.products[3].productKey").value("erp"))
-                .andExpect(jsonPath("$.products[3].available").value(false))
+                .andExpect(jsonPath("$.products[3].available").value(true))
                 .andExpect(jsonPath("$.products[3].tenants.length()").value(0))
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
-                .andExpect(jsonPath("$.products[4].available").value(false))
+                .andExpect(jsonPath("$.products[4].available").value(true))
                 .andExpect(jsonPath("$.products[4].tenants.length()").value(0));
     }
 
@@ -286,6 +317,71 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         assertThat(occurrences)
                 .as("AC-3 (b) regression guard: substring 'operatorContext' MUST appear exactly once (only on finance). body=%s", body)
                 .isEqualTo(1);
+    }
+
+    // ── TASK-BE-305: single-tenant finance + erp isolation regression guard ──────
+
+    @Test
+    @DisplayName("TASK-BE-305: single-tenant finance operator → finance available=true tenants=[finance], erp available=true tenants=[] (no cross-tenant leak)")
+    void singleTenantFinanceOperator_seesFinanceInteractive_erpEmpty() throws Exception {
+        // Override the WireMock tenant stub for this test: all 5 slugs ACTIVE so
+        // the tenant-selection rule can populate finance.tenants and erp.tenants.
+        wireMock.resetAll();
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(ALL_FIVE_ACTIVE_TENANTS)));
+        seedOperator(FINANCE_TENANT_OP_UUID, "finance");
+
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(FINANCE_TENANT_OP_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(5))
+                // finance product: available=true, own tenant selectable
+                .andExpect(jsonPath("$.products[4].productKey").value("finance"))
+                .andExpect(jsonPath("$.products[4].available").value(true))
+                .andExpect(jsonPath("$.products[4].tenants.length()").value(1))
+                .andExpect(jsonPath("$.products[4].tenants[0]").value("finance"))
+                // erp product: available=true, but own tenant (finance) doesn't match erp binding
+                .andExpect(jsonPath("$.products[3].productKey").value("erp"))
+                .andExpect(jsonPath("$.products[3].available").value(true))
+                .andExpect(jsonPath("$.products[3].tenants.length()").value(0))
+                // hard isolation: no product leaks another tenant's slug
+                .andExpect(jsonPath(
+                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'erp')]")
+                        .doesNotExist());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-305: single-tenant erp operator → erp available=true tenants=[erp], finance available=true tenants=[] (no cross-tenant leak)")
+    void singleTenantErpOperator_seesErpInteractive_financeEmpty() throws Exception {
+        // Override the WireMock tenant stub for this test: all 5 slugs ACTIVE.
+        wireMock.resetAll();
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(ALL_FIVE_ACTIVE_TENANTS)));
+        seedOperator(ERP_TENANT_OP_UUID, "erp");
+
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(ERP_TENANT_OP_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(5))
+                // erp product: available=true, own tenant selectable
+                .andExpect(jsonPath("$.products[3].productKey").value("erp"))
+                .andExpect(jsonPath("$.products[3].available").value(true))
+                .andExpect(jsonPath("$.products[3].tenants.length()").value(1))
+                .andExpect(jsonPath("$.products[3].tenants[0]").value("erp"))
+                // finance product: available=true, but own tenant (erp) doesn't match finance binding
+                .andExpect(jsonPath("$.products[4].productKey").value("finance"))
+                .andExpect(jsonPath("$.products[4].available").value(true))
+                .andExpect(jsonPath("$.products[4].tenants.length()").value(0))
+                // hard isolation: no product leaks another tenant's slug
+                .andExpect(jsonPath(
+                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'finance')]")
+                        .doesNotExist());
     }
 
     /**
