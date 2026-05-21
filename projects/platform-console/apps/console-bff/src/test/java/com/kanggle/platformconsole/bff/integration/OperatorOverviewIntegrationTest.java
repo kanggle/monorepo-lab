@@ -197,6 +197,14 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(FINANCE, 200, "{\"balance\":0}");
         respond(ERP, 200, "{\"meta\":{\"totalElements\":9}}");
 
+        // FINANCE counter snapshot before invocation — MockWebServer.getRequestCount()
+        // is lifetime-accumulated, so other tests in this class that DO fire FINANCE
+        // (e.g. inbound_header_set_finance_ok_one_outbound — TASK-PC-FE-014 Phase 2
+        // option (a) activation path) leave the counter non-zero. Use delta == 0
+        // rather than absolute zero (TASK-PC-FE-013 cycle 1 lesson; mirrors the
+        // DomainHealthIntegrationTest snapshot-and-diff pattern).
+        int financeBefore = FINANCE.getRequestCount();
+
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
 
@@ -232,9 +240,13 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
             assertThat(r.getHeader("X-Tenant-Id")).isEqualTo("gap");
         }
 
-        // FINANCE — MVP option (b) short-circuits; no outbound call.
-        assertThat(FINANCE.getRequestCount())
-                .as("finance leg must not fire at MVP (option b — MISSING_PREREQUISITE)")
+        // FINANCE — option (b) short-circuit when X-Finance-Default-Account-Id
+        // header is absent (this test does not send it). The use case never fires
+        // the outbound HTTP call. Snapshot-and-diff: delta == 0, NOT absolute 0
+        // (counter is lifetime-accumulated across the JUnit class — see snapshot
+        // taken before callOverview above).
+        assertThat(FINANCE.getRequestCount() - financeBefore)
+                .as("finance leg must not fire when X-Finance-Default-Account-Id absent (option b — MISSING_PREREQUISITE)")
                 .isZero();
     }
 
