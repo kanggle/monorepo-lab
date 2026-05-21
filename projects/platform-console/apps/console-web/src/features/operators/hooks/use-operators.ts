@@ -200,3 +200,43 @@ export function useUpdateOwnProfile() {
     // `getCatalog()` (registry is read-side authoritative — fire-and-re-read).
   });
 }
+
+// --- mutation: admin-set-profile (admin-on-behalf-of; 204; reason ONLY) ---
+// TASK-PC-FE-017 / TASK-BE-307. SUPER_ADMIN sets ANOTHER operator's
+// `operatorContext.defaultAccountId`. The proxy attaches the operator token +
+// active tenant + `X-Operator-Reason` server-side; NO `Idempotency-Key` per
+// the producer matrix (mirror /roles + /status non-uniformity — § 2.4.3
+// row 7). Self via this path → producer `400 SELF_PROFILE_UPDATE_FORBIDDEN
+// _VIA_ADMIN_PATH` (UI gates the per-row button when the row is self).
+
+interface SetOperatorProfileArgs {
+  operatorId: string;
+  /** UUID-like opaque string OR `null` to clear (the producer rejects ""). */
+  defaultAccountId: string | null;
+  /** Operator audit reason — required, non-empty trimmed. */
+  reason: string;
+}
+
+export function useSetOperatorProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      operatorId,
+      defaultAccountId,
+      reason,
+    }: SetOperatorProfileArgs) => {
+      // 204 No Content — the proxy returns an empty 204. Body shape on the
+      // wire is `{ defaultAccountId, reason }` (the proxy reconstructs the
+      // GAP-side `{ operatorContext: { defaultAccountId } }` body).
+      await apiClient.post<unknown>(
+        `/api/operators/${encodeURIComponent(operatorId)}/profile`,
+        { defaultAccountId, reason },
+      );
+      return true;
+    },
+    // Invalidate the operators list so any cached value reflects the new
+    // baseline (in v1 the list does not expose `operatorContext` per item;
+    // when extended in a follow-up task, this invalidation is the read-back).
+    onSuccess: () => invalidateOperators(qc),
+  });
+}

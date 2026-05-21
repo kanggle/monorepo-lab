@@ -10,6 +10,7 @@ import {
   useChangeOperatorStatus,
   useChangeOwnPassword,
   useUpdateOwnProfile,
+  useSetOperatorProfile,
 } from '../hooks/use-operators';
 import {
   OPERATOR_STATUSES,
@@ -24,6 +25,7 @@ import { CreateOperatorForm } from './CreateOperatorForm';
 import { ChangePasswordForm } from './ChangePasswordForm';
 import { MyProfileForm } from './MyProfileForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
+import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 
 /**
  * GAP operators-management surface (TASK-PC-FE-004 — Phase 2 slice 3, the
@@ -81,6 +83,11 @@ export interface OperatorsScreenProps {
    *  profile form (`operatorContext.defaultAccountId` from the catalog
    *  registry; null when never set). Passed verbatim to {@link MyProfileForm}. */
   initialDefaultAccountId?: string | null;
+  /** TASK-PC-FE-017 — caller's own `operatorId` (when derivable). When set,
+   *  the per-row "Profile 편집" button is disabled on the self row (UX gate;
+   *  the producer's `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` is
+   *  the fail-safe). `null` ⇒ gate inactive — producer is still authoritative. */
+  selfOperatorId?: string | null;
 }
 
 export function OperatorsScreen({
@@ -88,6 +95,7 @@ export function OperatorsScreen({
   tenantOptions = [],
   isPlatformOperator = false,
   initialDefaultAccountId = null,
+  selfOperatorId = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
   const [query, setQuery] = useState<{
@@ -106,8 +114,13 @@ export function OperatorsScreen({
   const changeStatus = useChangeOperatorStatus();
   const changePw = useChangeOwnPassword();
   const updateProfile = useUpdateOwnProfile();
+  const setProfile = useSetOperatorProfile();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
+  /** TASK-PC-FE-017 — track which row's profile-edit dialog is open. */
+  const [profileEditFor, setProfileEditFor] = useState<OperatorSummary | null>(
+    null,
+  );
 
   const activeMutation = useMemo(() => {
     switch (pending?.kind) {
@@ -168,6 +181,16 @@ export function OperatorsScreen({
           updateProfile.error.message,
         )
       : updateProfile.error
+        ? '프로파일 저장에 실패했습니다.'
+        : null;
+
+  const setProfileError =
+    setProfile.error instanceof ApiError
+      ? messageForCode(
+          (setProfile.error as ApiError).code,
+          setProfile.error.message,
+        )
+      : setProfile.error
         ? '프로파일 저장에 실패했습니다.'
         : null;
 
@@ -457,6 +480,30 @@ export function OperatorsScreen({
                               ? '활성화'
                               : '정지'}
                           </Button>
+                          {/* TASK-PC-FE-017 — admin-on-behalf-of profile edit.
+                              Disabled on self row (producer-side rejection
+                              `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH`
+                              is the fail-safe; UX layer hides the always-400). */}
+                          <Button
+                            variant="secondary"
+                            disabled={
+                              selfOperatorId !== null &&
+                              selfOperatorId === op.operatorId
+                            }
+                            title={
+                              selfOperatorId !== null &&
+                              selfOperatorId === op.operatorId
+                                ? '자기 자신은 /operators 의 "내 프로파일" 영역에서 변경하세요.'
+                                : undefined
+                            }
+                            onClick={() => {
+                              setProfile.reset();
+                              setProfileEditFor(op);
+                            }}
+                            data-testid={`action-edit-profile-${op.operatorId}`}
+                          >
+                            프로파일 편집
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -573,6 +620,32 @@ export function OperatorsScreen({
           errorMessage={dialogError}
           onConfirm={onConfirm}
           onCancel={closeDialog}
+        />
+      )}
+
+      {/* TASK-PC-FE-017 — admin-on-behalf-of profile edit dialog (sibling
+          of OperatorConfirmDialog per § Decision authority "Why a
+          separate dialog component"). v1 opens empty — no current-value
+          pre-population (§ Decision authority). */}
+      {profileEditFor && (
+        <OperatorProfileEditDialog
+          open
+          operatorIdLabel={
+            profileEditFor.email || profileEditFor.operatorId
+          }
+          pending={setProfile.isPending}
+          errorMessage={setProfileError}
+          onConfirm={(defaultAccountId, reason) => {
+            setProfile.mutate(
+              {
+                operatorId: profileEditFor.operatorId,
+                defaultAccountId,
+                reason,
+              },
+              { onSuccess: () => setProfileEditFor(null) },
+            );
+          }}
+          onCancel={() => setProfileEditFor(null)}
         />
       )}
     </section>
