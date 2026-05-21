@@ -74,7 +74,16 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
     static OperatorJwtTestFixture jwt;
     static String signingKeyPem;
 
-    private static final String SELF_UUID = "00000000-0000-7000-8000-00000000be06";
+    // Each test uses a per-case unique operator UUID so we never need to
+    // DELETE rows out of admin_actions (which is append-only — V0010 trigger
+    // `trg_admin_actions_finalize_only` rejects DELETE/UPDATE by design;
+    // attempting one yields `SIGNAL SQLSTATE '45000' MESSAGE_TEXT 'DELETE on
+    // admin_actions is forbidden (append-only)'`). The per-case UUID gives
+    // hermetic audit-row queries without any teardown step.
+    private static final String SELF_UUID_IT1 = "00000000-0000-7000-8000-00000be06001";
+    private static final String SELF_UUID_IT2 = "00000000-0000-7000-8000-00000be06002";
+    private static final String SELF_UUID_IT3 = "00000000-0000-7000-8000-00000be06003";
+    private static final String SELF_UUID_IT4 = "00000000-0000-7000-8000-00000be06004";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -137,28 +146,44 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
             """;
 
     @BeforeEach
-    void resetAndSeed() {
+    void stubTenantList() {
         wireMock.resetAll();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(ACTIVE_TENANTS_WITH_FINANCE)));
-        // Clean column/audit state between cases.
-        jdbcTemplate.update(
-                "DELETE FROM admin_actions WHERE actor_id = ?", SELF_UUID);
-        jdbcTemplate.update(
-                "DELETE FROM admin_operators WHERE operator_id = ?", SELF_UUID);
-        jdbcTemplate.update("""
-                INSERT INTO admin_operators
-                  (operator_id, tenant_id, email, password_hash, display_name, status,
-                   created_at, updated_at, version)
-                VALUES (?, '*', ?, 'x', ?, 'ACTIVE', NOW(6), NOW(6), 0)
-                """, SELF_UUID, SELF_UUID + "@example.com", "Op be06");
     }
 
-    private String token() {
-        return "Bearer " + jwt.operatorToken(SELF_UUID);
+    /**
+     * Idempotent operator seed: INSERTs if absent, no-ops otherwise.
+     * {@code admin_actions} is append-only (V0010 trigger
+     * {@code trg_admin_actions_finalize_only} rejects DELETE) so we never try
+     * to teardown audit rows — instead each test uses its own operator UUID
+     * so audit-row queries are hermetic by construction.
+     */
+    private void seedOperator(String operatorUuid) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
+                Integer.class, operatorUuid);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
+                       created_at, updated_at, version)
+                    VALUES (?, '*', ?, 'x', ?, 'ACTIVE', NOW(6), NOW(6), 0)
+                    """, operatorUuid, operatorUuid + "@example.com",
+                    "Op " + operatorUuid.substring(operatorUuid.length() - 6));
+        } else {
+            // Reset the finance column to NULL so tests start from a known baseline.
+            jdbcTemplate.update(
+                    "UPDATE admin_operators SET finance_default_account_id = NULL WHERE operator_id = ?",
+                    operatorUuid);
+        }
+    }
+
+    private String token(String operatorUuid) {
+        return "Bearer " + jwt.operatorToken(operatorUuid);
     }
 
     // -----------------------------------------------------------------------
@@ -166,10 +191,11 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("IT-1 set: PATCH /me/profile with a UUID → 204; subsequent registry GET surfaces operatorContext on finance item; audit row written")
     void it1_set_writesColumnAndAuditRow_andSurfacesOnRegistry() throws Exception {
+        seedOperator(SELF_UUID_IT1);
         String newValue = "01928c4a-7e9f-7c00-9a40-d2b1f5e8a306";
 
         mockMvc.perform(patch("/api/admin/operators/me/profile")
-                        .header("Authorization", token())
+                        .header("Authorization", token(SELF_UUID_IT1))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"operatorContext":{"defaultAccountId":"%s"}}
@@ -179,12 +205,12 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
         // Column UPDATE landed
         String persisted = jdbcTemplate.queryForObject(
                 "SELECT finance_default_account_id FROM admin_operators WHERE operator_id = ?",
-                String.class, SELF_UUID);
+                String.class, SELF_UUID_IT1);
         assertThat(persisted).isEqualTo(newValue);
 
         // Registry GET reflects the new value AND only one operatorContext substring
         String body = mockMvc.perform(get("/api/admin/console/registry")
-                        .header("Authorization", token()))
+                        .header("Authorization", token(SELF_UUID_IT1)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(body)
@@ -196,18 +222,20 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
                 .as("regression guard: substring 'operatorContext' must appear exactly once on finance only. body=%s", body)
                 .isEqualTo(1);
 
-        // Audit row written with the canonical shape
+        // Audit row written with the canonical shape. Hermetic by operator UUID
+        // (each IT uses its own UUID, so the count is exact regardless of run
+        // order or the append-only admin_actions table state from prior tests).
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT action_code, target_type, target_id, outcome, downstream_detail, reason " +
                 "FROM admin_actions WHERE actor_id = ? AND action_code = 'OPERATOR_PROFILE_UPDATE'",
-                SELF_UUID);
+                SELF_UUID_IT1);
         assertThat(rows)
-                .as("exactly one OPERATOR_PROFILE_UPDATE row must exist for the calling operator")
+                .as("exactly one OPERATOR_PROFILE_UPDATE row must exist for the IT-1 operator")
                 .hasSize(1);
         Map<String, Object> row = rows.get(0);
         assertThat(row.get("action_code")).isEqualTo("OPERATOR_PROFILE_UPDATE");
         assertThat(row.get("target_type")).isEqualTo("OPERATOR");
-        assertThat(row.get("target_id")).isEqualTo(SELF_UUID);
+        assertThat(row.get("target_id")).isEqualTo(SELF_UUID_IT1);
         assertThat(row.get("outcome")).isEqualTo("SUCCESS");
         assertThat(row.get("downstream_detail"))
                 .as("audit detail MUST be null — the new value is NOT logged into the audit detail column (R4/A3)")
@@ -218,9 +246,11 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("IT-2 clear after set: PATCH /me/profile with null → 204; subsequent registry GET no longer contains operatorContext")
     void it2_clearAfterSet_omitsOperatorContextFromRegistry() throws Exception {
+        seedOperator(SELF_UUID_IT2);
+
         // First set a value
         mockMvc.perform(patch("/api/admin/operators/me/profile")
-                        .header("Authorization", token())
+                        .header("Authorization", token(SELF_UUID_IT2))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a306"}}
@@ -229,7 +259,7 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
 
         // Then explicit clear
         mockMvc.perform(patch("/api/admin/operators/me/profile")
-                        .header("Authorization", token())
+                        .header("Authorization", token(SELF_UUID_IT2))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"operatorContext":{"defaultAccountId":null}}
@@ -239,12 +269,12 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
         // Column should now be NULL
         String persisted = jdbcTemplate.queryForObject(
                 "SELECT finance_default_account_id FROM admin_operators WHERE operator_id = ?",
-                String.class, SELF_UUID);
+                String.class, SELF_UUID_IT2);
         assertThat(persisted).isNull();
 
         // Registry envelope no longer carries operatorContext anywhere
         String body = mockMvc.perform(get("/api/admin/console/registry")
-                        .header("Authorization", token()))
+                        .header("Authorization", token(SELF_UUID_IT2)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(body)
@@ -255,6 +285,7 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("IT-3 no auth: PATCH /me/profile without Authorization → 401 TOKEN_INVALID")
     void it3_noAuth_returns401() throws Exception {
+        // No operator seed needed — the Security filter rejects before any DB read.
         mockMvc.perform(patch("/api/admin/operators/me/profile")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -267,14 +298,15 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("IT-4 whitespace-only value → 400 INVALID_REQUEST; column unchanged")
     void it4_whitespaceOnly_returns400_columnUnchanged() throws Exception {
+        seedOperator(SELF_UUID_IT4);
         // Seed a known prior value so the unchanged invariant is testable
         String prior = "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
         jdbcTemplate.update(
                 "UPDATE admin_operators SET finance_default_account_id = ? WHERE operator_id = ?",
-                prior, SELF_UUID);
+                prior, SELF_UUID_IT4);
 
         mockMvc.perform(patch("/api/admin/operators/me/profile")
-                        .header("Authorization", token())
+                        .header("Authorization", token(SELF_UUID_IT4))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"operatorContext":{"defaultAccountId":"   "}}
@@ -285,16 +317,17 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
         // Column unchanged
         String persisted = jdbcTemplate.queryForObject(
                 "SELECT finance_default_account_id FROM admin_operators WHERE operator_id = ?",
-                String.class, SELF_UUID);
+                String.class, SELF_UUID_IT4);
         assertThat(persisted)
                 .as("column must remain at its prior value after a rejected request")
                 .isEqualTo(prior);
 
-        // No OPERATOR_PROFILE_UPDATE audit row should have been inserted
+        // No OPERATOR_PROFILE_UPDATE audit row should have been inserted for
+        // this IT's operator UUID (hermetic by per-IT UUID).
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM admin_actions WHERE actor_id = ? " +
                 "AND action_code = 'OPERATOR_PROFILE_UPDATE'",
-                Integer.class, SELF_UUID);
+                Integer.class, SELF_UUID_IT4);
         assertThat(count).isZero();
     }
 }
