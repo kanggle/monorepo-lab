@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-308-admin-operators-list-operator-context-extension.md` — GAP admin-service `GET /api/admin/operators` response per-item `operatorContext` extension — populate each operator's current `finance_default_account_id` so the console admin profile-edit dialog (PC-FE-017) can pre-populate the current value, closing its honest gap (c) "no current-value pre-population". Producer-only spec extension (3 files: this task + admin-api.md + INDEX); impl PR adds projection + DTO field + mapping + 2 IT cases. Reuses BE-304 V0029 column + BE-306 carrier shape + BE-304 `@JsonInclude(Include.NON_NULL)` field-level discipline. Sequential consumer follow-up = TASK-PC-FE-018. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical mapping + IT) / 리뷰=Opus 4.7.
 
 ## in-progress
 
