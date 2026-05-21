@@ -10,6 +10,7 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorRoleUseCase.PatchRolesResult;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase.PatchStatusResult;
+import com.example.admin.application.UpdateOperatorProfileUseCase;
 import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.InvalidRequestException;
 import com.example.admin.application.exception.ReasonRequiredException;
@@ -59,6 +60,7 @@ public class OperatorAdminController {
     private final PatchOperatorStatusUseCase patchOperatorStatusUseCase;
     private final ChangeMyPasswordUseCase changeMyPasswordUseCase;
     private final UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
+    private final UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
 
     @GetMapping("/me")
     public ResponseEntity<OperatorSummaryResponse> currentOperator() {
@@ -159,6 +161,46 @@ public class OperatorAdminController {
                 result.auditId()));
     }
 
+    /**
+     * TASK-BE-307 — admin-on-behalf-of operator profile mutation
+     * ({@code PATCH /api/admin/operators/{operatorId}/profile}).
+     *
+     * <p>Cross-operator counterpart of {@code /me/profile} (BE-306). SUPER_ADMIN
+     * sets another operator's {@code operatorContext.defaultAccountId} with
+     * {@code operator.manage} permission + {@code X-Operator-Reason} required
+     * + tenant-scoped (target must be in caller's tenant scope, or caller is
+     * platform-scope {@code tenant_id='*'}). Self via this path is forbidden
+     * (mirror of {@code SELF_SUSPEND_FORBIDDEN}); self-serve goes through
+     * {@code /me/profile}.
+     *
+     * <p>Returns {@code 204 No Content} on success. Audit row written in the
+     * same transaction with {@code permission_used="operator.manage"} and the
+     * caller-typed reason (distinguishable from BE-306's
+     * {@code <self_action>} + {@code <self_profile_update>} self-flow row).
+     *
+     * <p>Body validation mirrors {@code /me/profile} exactly — same DTO, same
+     * structural checks. The shared validation helper enforces key-presence,
+     * unknown-key rejection, value type, length, control chars, and internal
+     * whitespace.
+     */
+    @PatchMapping("/operators/{operatorId}/profile")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<Void> updateOperatorProfile(
+            @PathVariable String operatorId,
+            @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @RequestBody(required = false) UpdateOperatorProfileRequest body) {
+
+        String reason = requireReason(headerReason);
+        String normalizedValue = parseAndValidateBody(body);
+
+        updateOperatorProfileUseCase.update(
+                operatorId,
+                normalizedValue,
+                OperatorContextHolder.require(),
+                reason);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/operators/me/password")
     @SelfServiceEndpoint
     public ResponseEntity<Void> changeMyPassword(
@@ -188,25 +230,35 @@ public class OperatorAdminController {
     public ResponseEntity<Void> updateMyProfile(
             @RequestBody(required = false) UpdateOperatorProfileRequest body) {
 
+        String normalizedValue = parseAndValidateBody(body);
+        updateOwnOperatorProfileUseCase.update(
+                OperatorContextHolder.require(),
+                normalizedValue);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Shared body parser + validator for the {@code /me/profile} (BE-306)
+     * and {@code /{operatorId}/profile} (BE-307) endpoints. Returns the
+     * canonical persisted value: {@code null} when the caller explicitly
+     * sent {@code null} (clear intent), or the validated UUID-like string.
+     * Throws {@link InvalidRequestException} on any structural problem
+     * (missing body / missing carrier / unknown nested key / value type
+     * mismatch / empty string / whitespace / length / control chars).
+     */
+    private static String parseAndValidateBody(UpdateOperatorProfileRequest body) {
         if (body == null) {
-            // Empty/missing body — Spring would normally 400 with VALIDATION_ERROR;
-            // map to the canonical INVALID_REQUEST code.
             throw new InvalidRequestException("Request body is required");
         }
         UpdateOperatorProfileRequest.OperatorContextDto ctx = body.operatorContext();
         if (ctx == null) {
-            // Body present but `operatorContext` key absent (e.g. {}).
-            throw new InvalidRequestException(
-                    "operatorContext is required");
+            throw new InvalidRequestException("operatorContext is required");
         }
         if (ctx.hasUnknownKey()) {
             throw new InvalidRequestException(
                     "operatorContext contains unknown keys; only 'defaultAccountId' is accepted in v1");
         }
         if (!ctx.isDefaultAccountIdPresent()) {
-            // Empty carrier {"operatorContext":{}} — distinct from
-            // {"operatorContext":{"defaultAccountId":null}} which is the
-            // explicit clear-intent encoding.
             throw new InvalidRequestException(
                     "operatorContext.defaultAccountId key is required (use null to clear)");
         }
@@ -214,13 +266,7 @@ public class OperatorAdminController {
             throw new InvalidRequestException(
                     "operatorContext.defaultAccountId must be a JSON string or null");
         }
-        String rawValue = ctx.defaultAccountId();
-        String normalizedValue = validateOptionalAccountId(rawValue);
-
-        updateOwnOperatorProfileUseCase.update(
-                OperatorContextHolder.require(),
-                normalizedValue);
-        return ResponseEntity.noContent().build();
+        return validateOptionalAccountId(ctx.defaultAccountId());
     }
 
     /**

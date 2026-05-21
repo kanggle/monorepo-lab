@@ -8,7 +8,7 @@ GAP admin-service admin-on-behalf-of operator profile mutation endpoint (`PATCH 
 
 # Status
 
-ready
+review
 
 # Owner
 

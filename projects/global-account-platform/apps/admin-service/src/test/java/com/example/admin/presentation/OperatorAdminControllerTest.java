@@ -86,6 +86,7 @@ class OperatorAdminControllerTest {
     @MockBean PatchOperatorStatusUseCase patchOperatorStatusUseCase;
     @MockBean ChangeMyPasswordUseCase changeMyPasswordUseCase;
     @MockBean UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
+    @MockBean com.example.admin.application.UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
 
     @MockBean
     PermissionEvaluator permissionEvaluator;
@@ -588,5 +589,91 @@ class OperatorAdminControllerTest {
                                 """.formatted(tooLong)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    // -------------------------------------- PATCH /operators/{operatorId}/profile (TASK-BE-307)
+
+    @Test
+    void update_operator_profile_admin_returns_204() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/op-target/profile")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "onboarding bulk-provision")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void update_operator_profile_admin_missing_reason_returns_400_reason_required() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/op-target/profile")
+                        .header("Authorization", bearer())
+                        // NO X-Operator-Reason
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REASON_REQUIRED"));
+    }
+
+    @Test
+    void update_operator_profile_admin_without_permission_returns_403() throws Exception {
+        // RequiresPermissionAspect gates via permissionEvaluator; deny it.
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
+
+        mockMvc.perform(patch("/api/admin/operators/op-target/profile")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "any reason")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void update_operator_profile_admin_target_not_found_returns_404() throws Exception {
+        org.mockito.Mockito.doThrow(new com.example.admin.application.exception.OperatorNotFoundException(
+                        "Operator not found for operatorId=op-missing"))
+                .when(updateOperatorProfileUseCase)
+                .update(org.mockito.ArgumentMatchers.eq("op-missing"),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString());
+
+        mockMvc.perform(patch("/api/admin/operators/op-missing/profile")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "any reason")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("OPERATOR_NOT_FOUND"));
+    }
+
+    @Test
+    void update_operator_profile_admin_self_via_admin_path_returns_400() throws Exception {
+        org.mockito.Mockito.doThrow(new com.example.admin.application.exception.SelfProfileUpdateForbiddenException(
+                        "Self profile updates must go through /api/admin/operators/me/profile"))
+                .when(updateOperatorProfileUseCase)
+                .update(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString());
+
+        mockMvc.perform(patch("/api/admin/operators/op-actor/profile")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "any reason")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH"));
     }
 }
