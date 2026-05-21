@@ -19,7 +19,7 @@ taxonomy_version: 0.1
 
 - **Model B (단일 UI)**: 콘솔이 *유일한 프론트엔드*다. `wms`/`scm`/`erp`/`finance`는 백엔드-only이며, 콘솔이 각 도메인의 gateway/admin REST API를 호출해 운영 화면을 콘솔 안에서 렌더한다. 런처(각 제품 자체 사이트로 redirect) 모델이 아니다.
 - **GAP `admin-web` 흡수**: GAP의 운영자 콘솔(`admin-web`)은 콘솔이 GAP 운영자 표면 parity를 검증 달성한 뒤(ADR-MONO-013 Phase 3) **폐기**된다. 그 시점 GAP는 백엔드-only IdP로 회귀한다.
-- **data-driven 카탈로그**: 서비스 카탈로그는 GAP의 product/tenant 레지스트리에서 읽는다. `erp`/`finance`는 생성 전까지 `available:false` "coming soon" 타일이며, 생성 후 레지스트리 설정만으로 켜진다(콘솔 재작업 0).
+- **data-driven 카탈로그**: 서비스 카탈로그는 GAP의 product/tenant 레지스트리에서 읽는다. 5/5 federated domains (`gap` + `wms` + `scm` + `erp` + `finance`) 모두 V1 live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21 reality-alignment, ADR-MONO-013 § D6 Phase 5/6 COMPLETE). 향후 새 product 추가는 레지스트리 설정만으로 켜진다(콘솔 재작업 0); 미생성 product 가 등장하면 `available:false` "coming soon" 타일로 표현된다.
 
 부트스트랩은 monorepo direct-include 방식이다(Template-fork 아님 — ADR-MONO-013 § 1.5).
 
