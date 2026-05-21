@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-018-console-admin-profile-edit-current-value-prepopulation.md` — platform-console admin profile-edit dialog current-value pre-population. Consume TASK-BE-308's `GET /api/admin/operators` per-item `operatorContext` extension (already on main `b8e9c196`) to pre-populate the dialog input with the target operator's current `finance_default_account_id`, closing TASK-PC-FE-017 honest gap (c). 3-file spec PR (this task + console-integration-contract.md § 2.4.3 row 1 note + INDEX); impl PR adds zod schema extension + dialog `initialDefaultAccountId` prop + screen wiring + 5 vitest cases. Parity matrix count unchanged (18). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical prop wiring) / 리뷰=Opus 4.7.
 
 ## in-progress
 
