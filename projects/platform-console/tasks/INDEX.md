@@ -91,7 +91,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-015-post-phase-5-6-7-placeholder-narrative-sweep.md` — **BE-305 sister task** (consumer-side reality-alignment, BE-302/BE-305 pattern 4회째). post-Phase-5/6/7 + Option (a) closure 시점 발견된 5 active stale narrative drifts in 2 platform-console files: (1) `PROJECT.md:22` "erp/finance 생성 전까지 available:false 'coming soon'" (V1 live 됐음) / (2) `console-integration-contract.md:41` `available` field 예시 `e.g. erp/finance pre-bootstrap` (모두 bootstrap) / (3) `console-integration-contract.md:1243-1246` "Phase 7 = MVP-only at this commit" (Domain Health § 2.4.9.2 머지됨) / (4) `console-integration-contract.md:1519` "console-bff aggregation (added when the BFF lands)" Out of Scope (BFF lands + § 2.4.9.X 정의됨) / (5) `console-integration-contract.md:1520` "future erp ADR" (ADR-MONO-016 ACCEPTED). doc-only spec sweep (BE-305 가 GAP producer 만 처리, consumer-side missed). spec-only 3-PR chain. No ADR (BE-302/BE-305 reality-alignment, competing convention 부재). AC-4 ProductCatalog byte-unchanged · AC-5 5 producers + ADRs + libs byte-unchanged · AC-6 tasks/done byte-unchanged (append-only) · AC-7 console-web + console-bff byte-unchanged · AC-8 docs/adr byte-unchanged. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (BE-302/305 mechanical doc edits) — 또는 직접 실행 (scope 매우 좁음, 5 line edits).
 
 ## done
 
