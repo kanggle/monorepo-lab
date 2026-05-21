@@ -8,7 +8,7 @@ GAP admin-service self-serve operator profile mutation endpoint (`PATCH /api/adm
 
 # Status
 
-review
+done
 
 # Owner
 
