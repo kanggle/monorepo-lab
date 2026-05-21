@@ -3,3 +3,9 @@ node_modules
 .env.local
 .env*.local
 *.tsbuildinfo
+
+# Playwright e2e harness (TASK-PC-FE-019) — global-setup persists the
+# SUPER_ADMIN session here; never check in test tokens.
+tests/e2e/fixtures/.storage-state.json
+playwright-report/
+test-results/

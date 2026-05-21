@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-019-playwright-e2e-harness-standup.md` — platform-console Playwright e2e harness standup. Full-stack docker-compose CI overlay (GAP admin/auth + finance svc + console-bff + console-web — 6 services), seed SQL fixtures (SUPER_ADMIN caller + non-self target operator + 1 finance account), Playwright login fixture, nightly CI integration. 2 spec activation: PC-FE-016 operators-profile + PC-FE-017 operators-admin-profile (PC-FE-018 visibility 검증 통합). Closes PC-FE-016/017/018 honest gap (a) "e2e SKIPPED, harness not stood up". **Pattern reuse**: TASK-MONO-014 / TASK-MONO-024 frontend-e2e-fullstack (ecommerce nightly Playwright + docker-compose CI overlay). **Nightly only** — PR-time smoke 는 separate follow-up. No producer change; no console-bff change; ADR 불요. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (cross-stratum: docker-compose orchestration + seed SQL + Playwright fixture + 2 spec activation + CI workflow) / 리뷰=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-019-playwright-e2e-harness-standup.md` — **review** (impl PR open). Full-stack docker-compose CI overlay (6 services: GAP auth/account/admin + finance account + console-bff + console-web, sharing MySQL + Redis), seed SQL fixture (auth `oauth_clients` UPDATE to enable client_credentials on `platform-console-web` client + 2 seeded `admin_operators` rows + 1 finance account/balance row), Playwright login fixture (`fixtures/login.ts` — programmatic SAS `/oauth2/token` client_credentials → admin-service `/api/admin/auth/token-exchange` → cookie injection via `BrowserContext.addCookies`), global-setup persists `storageState`, 2 spec `test.skip(true, …)` guards removed (operators-profile + operators-admin-profile with PC-FE-018 re-open assertion), nightly CI job `platform-console-e2e-fullstack` (boot-jars artifact upstream + docker-compose orchestration + ordered seed.sql application between admin-service-healthy and finance-account-service start). **Honest gap** — the OIDC PKCE *browser-driven* login path is functionally incomplete because auth-service has no HTML form login surface (no `formLogin()` configured; `LoginUrlAuthenticationEntryPoint` points at a JSON-only POST endpoint). The fixture's client_credentials backdoor preserves every trust boundary (real SAS-issued JWT, real RFC 8693 token-exchange, no console-bff source change — AC-4 honored) and is the most-honest harness implementable today; replaced when auth-service ships an HTML login form (separate future task). AC verification: AC-1 N/A (impl PR, not spec PR) / AC-2 docker-compose.e2e.yml present / AC-3 0 byte diff `projects/global-account-platform/` (verified at commit time) / AC-4 0 byte diff `projects/platform-console/apps/console-bff/src/**` (verified) / AC-5 0 byte diff `projects/{wms,scm,erp,fan,ecommerce,finance}-platform/` (verified) / AC-6 both specs activated / AC-7 `loginAsSuperAdmin` + global-setup `storageState` / AC-8 nightly job added / AC-9 parity matrix unchanged (no contract change). 분석=Opus 4.7 / 구현=Opus 4.7 (cross-stratum: 6-service docker-compose orchestration + seed SQL across 3 schemas + Playwright global-setup + 2 spec activation + nightly CI job + ordered MySQL exec step) / 리뷰=Opus 4.7.
 
 ## done
 
