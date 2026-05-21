@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-019-playwright-e2e-harness-standup.md` — platform-console Playwright e2e harness standup. Full-stack docker-compose CI overlay (GAP admin/auth + finance svc + console-bff + console-web — 6 services), seed SQL fixtures (SUPER_ADMIN caller + non-self target operator + 1 finance account), Playwright login fixture, nightly CI integration. 2 spec activation: PC-FE-016 operators-profile + PC-FE-017 operators-admin-profile (PC-FE-018 visibility 검증 통합). Closes PC-FE-016/017/018 honest gap (a) "e2e SKIPPED, harness not stood up". **Pattern reuse**: TASK-MONO-014 / TASK-MONO-024 frontend-e2e-fullstack (ecommerce nightly Playwright + docker-compose CI overlay). **Nightly only** — PR-time smoke 는 separate follow-up. No producer change; no console-bff change; ADR 불요. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (cross-stratum: docker-compose orchestration + seed SQL + Playwright fixture + 2 spec activation + CI workflow) / 리뷰=Opus 4.7.
 
 ## in-progress
 
