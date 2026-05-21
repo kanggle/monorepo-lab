@@ -8,7 +8,7 @@ platform-console `selfOperatorId` page-handoff plumbing — server-side resolve 
 
 # Status
 
-ready
+done
 
 # Owner
 
