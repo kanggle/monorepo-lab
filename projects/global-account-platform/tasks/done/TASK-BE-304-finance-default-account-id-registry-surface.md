@@ -8,7 +8,7 @@ GAP registry-surface `operatorContext.defaultAccountId` emission — Phase 1 of 
 
 # Status
 
-ready
+done
 
 # Owner
 
