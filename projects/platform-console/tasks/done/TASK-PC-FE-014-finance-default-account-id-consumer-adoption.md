@@ -8,7 +8,7 @@ platform-console consumer adoption of GAP `operatorContext.defaultAccountId` —
 
 # Status
 
-ready
+done
 
 # Owner
 
