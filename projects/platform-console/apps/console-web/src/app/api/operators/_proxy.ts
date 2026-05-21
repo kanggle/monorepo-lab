@@ -53,6 +53,42 @@ export const ChangePasswordBodySchema = z.object({
 });
 export type ChangePasswordBody = z.infer<typeof ChangePasswordBodySchema>;
 
+/**
+ * update-profile: self — operator profile carrier (TASK-PC-FE-016).
+ * NO reason, NO key per producer (mirrors `me/password` exactly).
+ *
+ * Body shape mirrors the read shape on the registry verbatim
+ * (`operatorContext.defaultAccountId: string | null`). Explicit `null`
+ * means "clear the column"; a string must be non-empty after trim,
+ * ≤ 36 chars, with no internal whitespace and no control chars / DEL
+ * (regex `^[^\s\x00-\x1f\x7f]+$`). The producer is the final authority
+ * (the same validation lives on GAP `admin-service`); this zod is the
+ * UX fail-fast pre-check at the same-origin proxy boundary.
+ *
+ * `.strict()` on both the outer + nested objects mirrors the producer's
+ * `FAIL_ON_UNKNOWN_PROPERTIES = true` — unknown keys under
+ * `operatorContext` (or at the top level) → 422 VALIDATION_ERROR, never
+ * forwarded to GAP.
+ */
+export const UpdateProfileBodySchema = z
+  .object({
+    operatorContext: z
+      .object({
+        defaultAccountId: z.union([
+          z.null(),
+          z
+            .string()
+            .trim()
+            .min(1)
+            .max(36)
+            .regex(/^[^\s\x00-\x1f\x7f]+$/),
+        ]),
+      })
+      .strict(),
+  })
+  .strict();
+export type UpdateProfileBody = z.infer<typeof UpdateProfileBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(

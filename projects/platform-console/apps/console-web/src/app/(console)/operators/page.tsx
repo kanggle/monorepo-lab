@@ -111,19 +111,32 @@ export default async function OperatorsPage() {
   // `*` platform sentinel only appears for a platform-scope operator; we
   // pass it as the `isPlatformOperator` hint and keep it OUT of the normal
   // tenant dropdown (the form re-adds `*` only when platform-scope).
+  //
+  // TASK-PC-FE-016: additionally pluck the `operatorContext.defaultAccountId`
+  // off the `finance` product item (added by TASK-BE-304 producer / parsed by
+  // TASK-PC-FE-014 consumer). `null` when never set / when finance is absent
+  // from the catalog / when the registry call failed — MyProfileForm renders
+  // an empty input + active Save flow (NULL → set transition).
   let tenantOptions: string[] = [];
   let isPlatformOperator = false;
+  let initialDefaultAccountId: string | null = null;
   try {
     const catalog = await getCatalog();
     const tenants = selectableTenants(catalog.products);
     isPlatformOperator = tenants.includes('*');
     tenantOptions = tenants.filter((t) => t !== '*');
+    const financeItem = catalog.products.find(
+      (p) => p.productKey === 'finance',
+    );
+    initialDefaultAccountId =
+      financeItem?.operatorContext?.defaultAccountId ?? null;
   } catch {
     // Registry unavailable here does NOT block operators management — the
     // create form simply has no preset tenant options (the operator can
     // still manage existing operators; the producer is authoritative).
     tenantOptions = [];
     isPlatformOperator = false;
+    initialDefaultAccountId = null;
   }
 
   return (
@@ -131,6 +144,7 @@ export default async function OperatorsPage() {
       initial={state.page}
       tenantOptions={tenantOptions}
       isPlatformOperator={isPlatformOperator}
+      initialDefaultAccountId={initialDefaultAccountId}
     />
   );
 }

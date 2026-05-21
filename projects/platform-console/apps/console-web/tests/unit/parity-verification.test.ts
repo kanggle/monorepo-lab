@@ -158,6 +158,9 @@ function routedFetch() {
     if (u.includes('/api/admin/operators/me/password')) {
       return Promise.resolve(noContent());
     }
+    if (u.includes('/api/admin/operators/me/profile')) {
+      return Promise.resolve(noContent());
+    }
     if (u.includes('/api/admin/operators/') && u.includes('/roles')) {
       return Promise.resolve(
         jsonResponse({ operatorId: 'op-1', roles: ['SUPPORT_LOCK'], auditId: 'a' }),
@@ -327,6 +330,11 @@ async function invokeCapability(row: ParityRow): Promise<void> {
         newPassword: 'Sup3rSecret!pw',
       });
       return;
+    case 'updateOwnProfile':
+      await operatorsApi.updateOwnProfile({
+        defaultAccountId: '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
+      });
+      return;
     case 'getOperatorOverview':
       await dashboardsApi.getOperatorOverview();
       return;
@@ -355,10 +363,10 @@ beforeEach(() => {
 // ===========================================================================
 
 describe('parity matrix — single source, no matrix↔spec drift', () => {
-  it('the fixture has exactly the 16 § 3.1 rows with stable ids 1..16', () => {
-    expect(PARITY_MATRIX).toHaveLength(16);
+  it('the fixture has exactly the 17 § 3.1 rows with stable ids 1..17', () => {
+    expect(PARITY_MATRIX).toHaveLength(17);
     expect(PARITY_MATRIX.map((r) => r.id)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
     ]);
   });
 
@@ -379,9 +387,12 @@ describe('parity matrix — single source, no matrix↔spec drift', () => {
     expect(spec).toContain('NOT Grafana');
     expect(spec).toContain('Phase 3');
     expect(spec).toContain('retirement gate');
-    // Each line marked "verified by TASK-PC-FE-006" (task AC) — exactly one
-    // per matrix row (the §3.1 table's Verified column).
-    const verifiedMarks = spec.split('verified by TASK-PC-FE-006').length - 1;
+    // Each row carries a "verified by TASK-PC-FE-<NNN>" marker (task AC) —
+    // exactly one per matrix row (the §3.1 table's Verified column). Rows
+    // 1..16 are PC-FE-006 (the original capstone); row 17 carries
+    // PC-FE-016 (this task — change-profile) — the count must match.
+    const verifiedMarks = (spec.match(/verified by TASK-PC-FE-\d+/g) ?? [])
+      .length;
     expect(verifiedMarks).toBe(PARITY_MATRIX.length);
     // The real no-drift binding: every fixture row's capability AND its
     // producer path (the consumer-facing endpoint) appear in the spec §3

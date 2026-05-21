@@ -15,6 +15,7 @@ import {
   type ChangeStatusResult,
   type ChangePasswordInput,
   type OperatorStatus,
+  type UpdateProfileInput,
 } from './types';
 
 /**
@@ -392,6 +393,33 @@ export async function changeOwnPassword(
       body: {
         currentPassword: input.currentPassword,
         newPassword: input.newPassword,
+      },
+      expectNoContent: true,
+    },
+    () => undefined,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 6. update-profile — PATCH /api/admin/operators/me/profile (TASK-BE-306 /
+//    TASK-PC-FE-016). SELF only (no admin-set-other-profile). Valid operator
+//    token only — no X-Operator-Reason, no Idempotency-Key per the producer.
+//    204 No Content on success. The value is the operator's chosen
+//    finance-platform account UUID (opaque to GAP — TASK-BE-304 § Decision
+//    authority); `null` clears the column. Body shape mirrors the read shape
+//    on console-registry-api `operatorContext.defaultAccountId` verbatim.
+// ---------------------------------------------------------------------------
+
+export async function updateOwnProfile(
+  input: UpdateProfileInput,
+): Promise<void> {
+  await callGapOperators(
+    {
+      method: 'PATCH',
+      path: `${OPERATORS_PREFIX}/me/profile`,
+      // NO reason, NO idempotencyKey — self auth flow per the producer.
+      body: {
+        operatorContext: { defaultAccountId: input.defaultAccountId },
       },
       expectNoContent: true,
     },
