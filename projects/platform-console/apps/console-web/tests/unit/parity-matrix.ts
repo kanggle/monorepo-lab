@@ -339,6 +339,25 @@ export const PARITY_MATRIX: readonly ParityRow[] = [
       'a per-card degrade — no partial authed state).',
     verified: true,
   },
+  {
+    id: 17,
+    capability: 'operators: change-profile',
+    featureModule: 'features/operators',
+    route: '/operators',
+    routeFile: 'src/app/(console)/operators/page.tsx',
+    contractSection: '2.4.3',
+    producerPath: '/api/admin/operators/me/profile',
+    producerSection: 'PATCH /api/admin/operators/me/profile',
+    kind: 'mutation',
+    header: 'none',
+    clientExport: 'updateOwnProfile',
+    notes:
+      'SELF only (no admin-set-other-profile); valid operator token only — ' +
+      'no reason, no idem per the producer (204 No Content). Body shape ' +
+      'mirrors read: { operatorContext: { defaultAccountId: string | null } }. ' +
+      'Opaque to GAP (TASK-BE-304 § Decision authority — no finance verify).',
+    verified: true,
+  },
 ] as const;
 
 /** The composed-overview fan-out legs (row 16) — the EXISTING reads it

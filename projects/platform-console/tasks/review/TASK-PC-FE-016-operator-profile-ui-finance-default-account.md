@@ -8,7 +8,7 @@ platform-console operator-profile self-serve UI — `finance_default_account_id`
 
 # Status
 
-ready
+review
 
 # Owner
 

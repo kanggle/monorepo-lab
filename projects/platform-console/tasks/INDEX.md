@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-016-operator-profile-ui-finance-default-account.md` — spec PR (this). platform-console operator-profile self-serve UI — `finance_default_account_id` setter (`PATCH /api/admin/operators/me/profile` proxy + form). **Phase 3 of the `Operator Overview` finance card `MISSING_PREREQUISITE` resolution** (BE-304 read column → BE-306 write endpoint → PC-FE-014 read consumer → **this PC-FE-016** write consumer). Console-web direct proxy (no console-bff hop per ADR-MONO-017 D2 Option A + § 2.4.9 hard invariant + `me/password` precedent); **TASK-PC-BE-004 originally anticipated as a sequential BFF orchestrator follow-up is CANCELED here as architecturally redundant**. Spec PR scope = this task md + `console-integration-contract.md § 2.4.3` (operations + per-endpoint header matrix row 6) + `§ 3.1` parity matrix row 17 (`parity-verification.test.ts` fixture + expected count `16 → 17` deferred to impl PR as test code change). Impl PR scope = new `/api/operators/me/profile/route.ts` proxy + `_proxy.ts` `UpdateProfileBodySchema` + `operators-api.ts` `updateOwnProfile()` + new `MyProfileForm.tsx` + `OperatorsScreen.tsx` integration + 4 vitest tests + 1 Playwright e2e. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
+(empty — TASK-PC-FE-016 moved to review)
 
 ## in-progress
 
@@ -87,11 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
-
-## ready
-
-(empty)
+- `TASK-PC-FE-016-operator-profile-ui-finance-default-account.md` — **impl PR open (pending)**. platform-console operator-profile self-serve UI — `finance_default_account_id` setter (`PATCH /api/admin/operators/me/profile` proxy + form). **Phase 3 of the `Operator Overview` finance card `MISSING_PREREQUISITE` resolution** (BE-304 read column → BE-306 write endpoint → PC-FE-014 read consumer → **this PC-FE-016** write consumer). Console-web direct proxy (no console-bff hop per ADR-MONO-017 D2 Option A + § 2.4.9 hard invariant + `me/password` precedent); **TASK-PC-BE-004 originally anticipated as a sequential BFF orchestrator follow-up is CANCELED here as architecturally redundant**. **Spec PR #707** (squash `0827206b`) — task md ready + INDEX entry + `console-integration-contract.md § 2.4.3` ops row 6 + per-endpoint header matrix row 6 + `§ 3.1` parity matrix row 17 (verified by TASK-PC-FE-016 marker). **Impl PR <pending> ** — new `/api/operators/me/profile/route.ts` proxy (mirrors `me/password` line for line; runtime=nodejs, mapError flow) + `_proxy.ts` `UpdateProfileBodySchema` (`.strict()` outer + nested, `defaultAccountId: string|null`, trim+min(1)+max(36)+regex `^[^\s\x00-\x1f\x7f]+$`) + `operators-api.ts` `updateOwnProfile(input)` (PATCH `${OPERATORS_PREFIX}/me/profile`, no reason / no idem, 204) + `use-operators.ts` `useUpdateOwnProfile()` hook + new `MyProfileForm.tsx` (button-explicit Save + Clear → null, inline client/server error, success message) + `OperatorsScreen.tsx` integration (new prop `initialDefaultAccountId` + sibling of `<ChangePasswordForm />`) + `app/(console)/operators/page.tsx` (extract `operatorContext.defaultAccountId` from finance product item, default null) + 3 vitest test files (MyProfileForm 10 cases + me-profile-route 9 cases + operators-api-update-profile 2 cases) + parity-matrix row 17 + parity-verification count 16→17 + e2e spec (test.skip — harness not yet stood up, vertical coverage via unit+IT). **Local self-CI**: 694/694 vitest PASS (66 test files) / `pnpm build` GREEN / `pnpm lint` 0 warnings or errors. **AC verified**: AC-3 console-bff src/ diff empty / AC-4 GAP project diff empty / AC-5 other producers diff empty / AC-6 ADR-MONO-017 byte-unchanged / AC-7 parity count = 17 (test PASS). 분석=Opus 4.7 / 구현=Opus 4.7 (직접) / 리뷰=Opus 4.7.
 
 ## done
 

@@ -154,3 +154,21 @@ export function passwordPolicyError(password: string): string | null {
 export interface OperatorMutationReason {
   reason: string;
 }
+
+// --- update-profile (PATCH .../me/profile) — self, 204 No Content ---------
+
+/**
+ * Self update-profile input (TASK-PC-FE-016). v1 carries a single
+ * attribute under `operatorContext.defaultAccountId` — the operator's
+ * chosen default finance-platform account UUID (opaque to GAP — TASK-
+ * BE-304 § Decision authority). Explicit `null` clears the column;
+ * a string must be non-empty after trim, ≤ 36 chars, with no internal
+ * whitespace and no control chars (producer-authoritative). The body
+ * shape mirrors the READ shape on the registry (`operatorContext.
+ * defaultAccountId?: string`) verbatim — read → mutate → re-read on
+ * the same JSON path.
+ */
+export interface UpdateProfileInput {
+  /** UUID-like opaque string OR null to clear. */
+  readonly defaultAccountId: string | null;
+}

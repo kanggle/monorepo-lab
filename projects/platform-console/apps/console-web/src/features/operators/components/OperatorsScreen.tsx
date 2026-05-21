@@ -9,6 +9,7 @@ import {
   useEditOperatorRoles,
   useChangeOperatorStatus,
   useChangeOwnPassword,
+  useUpdateOwnProfile,
 } from '../hooks/use-operators';
 import {
   OPERATOR_STATUSES,
@@ -21,6 +22,7 @@ import {
 import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 import { CreateOperatorForm } from './CreateOperatorForm';
 import { ChangePasswordForm } from './ChangePasswordForm';
+import { MyProfileForm } from './MyProfileForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 
 /**
@@ -75,12 +77,17 @@ export interface OperatorsScreenProps {
   tenantOptions?: string[];
   /** True ⇒ this operator is platform-scope → may offer `*` on create. */
   isPlatformOperator?: boolean;
+  /** TASK-PC-FE-016 — server-rendered initial value for the self update-
+   *  profile form (`operatorContext.defaultAccountId` from the catalog
+   *  registry; null when never set). Passed verbatim to {@link MyProfileForm}. */
+  initialDefaultAccountId?: string | null;
 }
 
 export function OperatorsScreen({
   initial,
   tenantOptions = [],
   isPlatformOperator = false,
+  initialDefaultAccountId = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
   const [query, setQuery] = useState<{
@@ -98,6 +105,7 @@ export function OperatorsScreen({
   const editRoles = useEditOperatorRoles();
   const changeStatus = useChangeOperatorStatus();
   const changePw = useChangeOwnPassword();
+  const updateProfile = useUpdateOwnProfile();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
 
@@ -151,6 +159,16 @@ export function OperatorsScreen({
         )
       : changePw.error
         ? '비밀번호 변경에 실패했습니다.'
+        : null;
+
+  const updateProfileError =
+    updateProfile.error instanceof ApiError
+      ? messageForCode(
+          (updateProfile.error as ApiError).code,
+          updateProfile.error.message,
+        )
+      : updateProfile.error
+        ? '프로파일 저장에 실패했습니다.'
         : null;
 
   function resetMutations() {
@@ -302,6 +320,16 @@ export function OperatorsScreen({
             serverError={pwError}
             pending={changePw.isPending}
             succeeded={changePw.isSuccess}
+          />
+
+          <MyProfileForm
+            initial={initialDefaultAccountId}
+            onSubmit={(defaultAccountId) =>
+              updateProfile.mutate({ defaultAccountId })
+            }
+            serverError={updateProfileError}
+            pending={updateProfile.isPending}
+            succeeded={updateProfile.isSuccess}
           />
 
           <form

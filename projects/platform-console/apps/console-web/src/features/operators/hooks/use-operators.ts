@@ -19,6 +19,7 @@ import {
   type ChangeStatusResult,
   type ChangePasswordInput,
   type OperatorStatus,
+  type UpdateProfileInput,
 } from '../api/types';
 
 /**
@@ -178,5 +179,24 @@ export function useChangeOwnPassword() {
     },
     // No list invalidation — changing your own password does not alter the
     // operators table.
+  });
+}
+
+// --- mutation: update-profile (self; 204; no reason/key) — TASK-PC-FE-016 -
+
+export function useUpdateOwnProfile() {
+  return useMutation({
+    mutationFn: async (input: UpdateProfileInput) => {
+      // 204 No Content — the proxy returns an empty 204. The body shape
+      // mirrors the registry read shape verbatim:
+      // `{ operatorContext: { defaultAccountId: string | null } }`.
+      await apiClient.post<unknown>('/api/operators/me/profile', {
+        operatorContext: { defaultAccountId: input.defaultAccountId },
+      });
+      return true;
+    },
+    // No operators-list invalidation — the profile carrier lives on the
+    // registry response, not the operators table; consumers re-read via
+    // `getCatalog()` (registry is read-side authoritative — fire-and-re-read).
   });
 }
