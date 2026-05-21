@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-305-product-catalog-finance-erp-available-reality-alignment.md` — GAP `ProductCatalog` finance/erp `available: false → true` reality-alignment (BE-302 pattern). `projects/global-account-platform/apps/admin-service/src/main/java/com/example/admin/application/console/ProductCatalog.java:51-52` 가 `erp`/`finance` `available: false` 선언했으나 둘 다 V1 live (ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 finance + Phase 6 COMPLETE 2026-05-20 erp). console-web `ServiceTile.tsx` 가 `available:false` → non-interactive "coming soon" 렌더 → operator 가 catalog tile 클릭 못함 (FE-009 `/finance` + FE-010 `/erp` 머지됐는데 catalog 진입점 차단 broken UX). **Surgical 2-line boolean flip** + Javadoc/comment 갱신 + 1-2 unit/IT 단언 update + 2 new IT (single-tenant finance + single-tenant erp). No ADR (BE-302 reality-alignment — competing convention 부재, ADR-008/016/013 § D6 이미 governing). AC-5 ADR-MONO-017 D4 byte-unchanged · AC-6 console-bff + 5 producers + console-web byte-unchanged (consumer flip 불요 — `ServiceTile` 이미 양쪽 분기 handle). spec-first 3-PR chain. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (BE-302 mechanical).
 
 ## in-progress
 

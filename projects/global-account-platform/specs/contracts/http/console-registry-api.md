@@ -150,15 +150,15 @@ Returns the data-driven product/tenant catalog the console renders.
     {
       "productKey": "erp",
       "displayName": "Enterprise Resource Planning",
-      "available": false,
-      "tenants": [],
+      "available": true,
+      "tenants": ["erp"],
       "baseRoute": "/erp"
     },
     {
       "productKey": "finance",
       "displayName": "Finance Platform",
-      "available": false,
-      "tenants": [],
+      "available": true,
+      "tenants": ["finance"],
       "baseRoute": "/finance",
       "operatorContext": { "defaultAccountId": "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000" }
     }
@@ -246,22 +246,24 @@ The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
 | `gap` | Global Account Platform | always `true` (this platform is live) |
 | `wms` | Warehouse Management Platform | `true` (bootstrapped — V0010/V0016 seeds) |
 | `scm` | Supply Chain Management Platform | `true` (bootstrapped — V0013/V0015 seeds) |
-| `erp` | Enterprise Resource Planning | `false` (not bootstrapped — ADR-MONO-008 / future erp ADR) |
-| `finance` | Finance Platform | `false` (not bootstrapped) |
+| `erp` | Enterprise Resource Planning | `true` (V1 live per ADR-MONO-013 § D6 Phase 6 COMPLETE 2026-05-20 — ADR-MONO-016 ACCEPTED + ERP-BE-001 masterdata-service + ERP-BE-002 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
+| `finance` | Finance Platform | `true` (V1 live per ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 — ADR-MONO-008 ACCEPTED + FIN-BE-001 account-service + FIN-BE-005 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
 
 Adding a product or flipping `available` is a **registry change only** — zero
 `console-web` code change (console-integration-contract § 2.2 / ADR-MONO-013
-§ 1.2 / D5). erp/finance are representable today as `available:false`
-placeholders (task Edge Case + Out-of-Scope).
+§ 1.2 / D5). All 5 federated domains (`gap` + `wms` + `scm` + `erp` + `finance`)
+are now V1 live; the `available` flag is `true` across the catalog and the
+console renders each tile as interactive (subject to per-operator `tenants`
+selection per § Tenant selection rule).
 
 ### Tenant selection rule
 
 `tenants` per available product is the intersection of:
 
 1. the product's tenant binding — `gap` binds to **all** registered tenants
-   (the platform itself federates them); `wms` binds to the `wms` tenant
-   slug; `scm` binds to the `scm` tenant slug; `erp`/`finance` bind to none
-   (unavailable);
+   (the platform itself federates them); each of `wms` / `scm` / `erp` /
+   `finance` binds to its own tenant slug (the slug it registered at
+   bootstrap);
 2. the **operator's tenant scope** — `'*'` (platform) ⇒ all; a single
    tenant slug ⇒ only that slug;
 3. the tenant being **registered + ACTIVE** in `tenants` (account-service
