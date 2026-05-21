@@ -8,7 +8,7 @@ GAP admin-service `GET /api/admin/operators` response per-item `operatorContext`
 
 # Status
 
-ready
+done
 
 # Owner
 
