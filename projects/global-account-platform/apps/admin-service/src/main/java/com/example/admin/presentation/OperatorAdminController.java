@@ -315,7 +315,28 @@ public class OperatorAdminController {
                 summary.roles(),
                 summary.totpEnrolled(),
                 summary.lastLoginAt(),
-                summary.createdAt());
+                summary.createdAt(),
+                toOperatorContext(summary.financeDefaultAccountId()));
+    }
+
+    /**
+     * TASK-BE-308 — map the operator's {@code finance_default_account_id} column
+     * value to the wire shape carrier. Returns {@code null} for absent values
+     * (NULL column, empty string, or whitespace-only — defensive against legacy
+     * DB state) so the {@code @JsonInclude(Include.NON_NULL)} on
+     * {@code OperatorSummaryResponse.operatorContext} omits the field entirely.
+     *
+     * <p>Whitespace-treats-as-absent discipline mirrors BE-304's registry
+     * surface (write path validation rejects whitespace, but the read path is
+     * tolerant by design: a read endpoint reflects what's stored without
+     * imposing write-time invariants on legacy rows).
+     */
+    private static OperatorSummaryResponse.OperatorContextResponse toOperatorContext(
+            String financeDefaultAccountId) {
+        if (financeDefaultAccountId == null || financeDefaultAccountId.isBlank()) {
+            return null;
+        }
+        return new OperatorSummaryResponse.OperatorContextResponse(financeDefaultAccountId);
     }
 
     private static String requireReason(String headerReason) {

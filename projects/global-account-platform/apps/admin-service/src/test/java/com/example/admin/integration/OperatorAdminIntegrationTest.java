@@ -396,6 +396,92 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
         assertThat(storedHash).isEqualTo(originalHash);
     }
 
+    // -------------------------------- GET /operators operatorContext (TASK-BE-308)
+
+    @Test
+    @DisplayName("TASK-BE-308: GET /operators emits operatorContext.defaultAccountId for operators with non-null finance_default_account_id")
+    void listOperators_emitsOperatorContext_whenColumnSet() throws Exception {
+        // Hermetic per-test target UUIDs (mirror BE-306 cycle 2 lesson — append-only
+        // audit table tolerates by construction, but state-isolation via fresh UUIDs
+        // is robust against the shared-fixture row from @BeforeEach).
+        String withValueUuid = "00000000-0000-7000-8000-0000000000B1";
+        String noValueUuid = "00000000-0000-7000-8000-0000000000B2";
+        String accountId = "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
+        seedOperatorWithFinanceDefault(withValueUuid, "be308-with@example.com",
+                "BE308 With", accountId);
+        seedOperatorWithFinanceDefault(noValueUuid, "be308-without@example.com",
+                "BE308 Without", null);
+
+        String body = mockMvc.perform(get("/api/admin/operators?size=100")
+                        .header("Authorization", superAdminToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // The non-NULL operator's item carries the carrier; the NULL operator's
+        // item omits the entire operatorContext key.
+        int withItemStart = body.indexOf("\"operatorId\":\"" + withValueUuid + "\"");
+        assertThat(withItemStart).as("with-value item present").isGreaterThanOrEqualTo(0);
+        int withItemEnd = findItemEnd(body, withItemStart);
+        String withItem = body.substring(withItemStart, withItemEnd);
+        assertThat(withItem)
+                .as("with-value item carries operatorContext.defaultAccountId")
+                .contains("\"operatorContext\":{\"defaultAccountId\":\"" + accountId + "\"}");
+
+        int noValueStart = body.indexOf("\"operatorId\":\"" + noValueUuid + "\"");
+        assertThat(noValueStart).as("no-value item present").isGreaterThanOrEqualTo(0);
+        int noValueEnd = findItemEnd(body, noValueStart);
+        String noValueItem = body.substring(noValueStart, noValueEnd);
+        assertThat(noValueItem)
+                .as("no-value item omits operatorContext entirely (@JsonInclude.NON_NULL)")
+                .doesNotContain("operatorContext");
+    }
+
+    /**
+     * Walks forward from an item's {@code "operatorId":"..."} occurrence to the
+     * end of the enclosing JSON object so a substring assertion is scoped to
+     * the matching item only (the list response carries multiple items;
+     * {@code body.contains("operatorContext")} would otherwise match siblings).
+     */
+    private static int findItemEnd(String body, int itemStart) {
+        int depth = 0;
+        int cursor = body.lastIndexOf('{', itemStart);
+        for (int i = cursor; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) return i + 1;
+            }
+        }
+        return body.length();
+    }
+
+    /**
+     * Idempotent insert of a standalone operator with a caller-supplied
+     * {@code finance_default_account_id} value (nullable). Used by the
+     * TASK-BE-308 list-projection tests so each case owns its own fixture
+     * row and does not race with the shared {@code SUPER_ADMIN_UUID} seed.
+     */
+    private void seedOperatorWithFinanceDefault(String operatorUuid, String email,
+                                                 String displayName, String financeDefaultAccountId) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
+                Integer.class, operatorUuid);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
+                       finance_default_account_id, created_at, updated_at, version)
+                    VALUES (?, 'fan-platform', ?, 'x', ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
+                    """,
+                    operatorUuid, email, displayName, financeDefaultAccountId);
+        } else {
+            jdbcTemplate.update(
+                    "UPDATE admin_operators SET finance_default_account_id = ?, updated_at = NOW(6) WHERE operator_id = ?",
+                    financeDefaultAccountId, operatorUuid);
+        }
+    }
+
     /**
      * Idempotent insert of a standalone operator with a caller-supplied
      * password hash. Used by the TASK-BE-086 password-change tests so each

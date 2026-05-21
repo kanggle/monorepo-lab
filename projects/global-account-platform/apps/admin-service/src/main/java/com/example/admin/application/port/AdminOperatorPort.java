@@ -146,6 +146,13 @@ public interface AdminOperatorPort {
      * Immutable projection of an {@code admin_operators} row. Carries every
      * field the application layer needs across login / patch / query paths.
      * Never exposes JPA-only fields.
+     *
+     * <p>{@code financeDefaultAccountId} (TASK-BE-308) carries the
+     * {@code finance_default_account_id} column value so the
+     * {@code GET /api/admin/operators} list response can expose each operator's
+     * current {@code operatorContext.defaultAccountId} without an additional
+     * round-trip. {@code null} when the column is NULL; the SELECT already
+     * targets the full entity row so no N+1 risk is introduced.
      */
     record OperatorView(
             long internalId,
@@ -158,7 +165,8 @@ public interface AdminOperatorPort {
             Instant totpEnrolledAt,
             Instant lastLoginAt,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            String financeDefaultAccountId
     ) {}
 
     /** Value used to INSERT a new operator row. */
