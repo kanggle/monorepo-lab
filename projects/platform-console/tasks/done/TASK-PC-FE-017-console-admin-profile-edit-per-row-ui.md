@@ -8,7 +8,7 @@ platform-console admin profile-edit per-row UI — `PATCH /api/admin/operators/{
 
 # Status
 
-review
+done
 
 # Owner
 
