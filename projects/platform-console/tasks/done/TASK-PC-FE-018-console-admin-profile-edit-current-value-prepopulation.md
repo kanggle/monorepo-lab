@@ -8,7 +8,7 @@ platform-console admin profile-edit dialog current-value pre-population — cons
 
 # Status
 
-ready
+done
 
 # Owner
 
