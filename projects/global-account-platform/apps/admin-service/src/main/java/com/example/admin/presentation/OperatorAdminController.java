@@ -10,12 +10,15 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorRoleUseCase.PatchRolesResult;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase.PatchStatusResult;
+import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
+import com.example.admin.application.exception.InvalidRequestException;
 import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
 import com.example.admin.presentation.aspect.SelfServiceEndpoint;
 import com.example.admin.presentation.dto.ChangeMyPasswordRequest;
+import com.example.admin.presentation.dto.UpdateOperatorProfileRequest;
 import com.example.admin.presentation.dto.CreateOperatorRequest;
 import com.example.admin.presentation.dto.CreateOperatorResponse;
 import com.example.admin.presentation.dto.OperatorListResponse;
@@ -55,6 +58,7 @@ public class OperatorAdminController {
     private final PatchOperatorRoleUseCase patchOperatorRoleUseCase;
     private final PatchOperatorStatusUseCase patchOperatorStatusUseCase;
     private final ChangeMyPasswordUseCase changeMyPasswordUseCase;
+    private final UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
 
     @GetMapping("/me")
     public ResponseEntity<OperatorSummaryResponse> currentOperator() {
@@ -163,6 +167,97 @@ public class OperatorAdminController {
         String operatorId = OperatorContextHolder.require().operatorId();
         changeMyPasswordUseCase.changeMyPassword(operatorId, body.currentPassword(), body.newPassword());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * TASK-BE-306 — self-serve operator profile mutation
+     * ({@code PATCH /api/admin/operators/me/profile}).
+     *
+     * <p>Sibling of {@code me/password}: operator JWT only (no permission, no
+     * {@code X-Operator-Reason}), {@code 204 No Content}. Audit row written
+     * with {@code reason="<self_profile_update>"} in the same transaction as
+     * the column UPDATE (audit-heavy A3 invariant).
+     *
+     * <p>Structural validation (key presence on both nesting levels, unknown
+     * keys, value type, length, control chars, internal whitespace) is
+     * enforced here so the use case body sees an already-canonicalized
+     * (value, isClear) pair.
+     */
+    @PatchMapping("/operators/me/profile")
+    @SelfServiceEndpoint
+    public ResponseEntity<Void> updateMyProfile(
+            @RequestBody(required = false) UpdateOperatorProfileRequest body) {
+
+        if (body == null) {
+            // Empty/missing body — Spring would normally 400 with VALIDATION_ERROR;
+            // map to the canonical INVALID_REQUEST code.
+            throw new InvalidRequestException("Request body is required");
+        }
+        UpdateOperatorProfileRequest.OperatorContextDto ctx = body.operatorContext();
+        if (ctx == null) {
+            // Body present but `operatorContext` key absent (e.g. {}).
+            throw new InvalidRequestException(
+                    "operatorContext is required");
+        }
+        if (ctx.hasUnknownKey()) {
+            throw new InvalidRequestException(
+                    "operatorContext contains unknown keys; only 'defaultAccountId' is accepted in v1");
+        }
+        if (!ctx.isDefaultAccountIdPresent()) {
+            // Empty carrier {"operatorContext":{}} — distinct from
+            // {"operatorContext":{"defaultAccountId":null}} which is the
+            // explicit clear-intent encoding.
+            throw new InvalidRequestException(
+                    "operatorContext.defaultAccountId key is required (use null to clear)");
+        }
+        if (ctx.isValueTypeInvalid()) {
+            throw new InvalidRequestException(
+                    "operatorContext.defaultAccountId must be a JSON string or null");
+        }
+        String rawValue = ctx.defaultAccountId();
+        String normalizedValue = validateOptionalAccountId(rawValue);
+
+        updateOwnOperatorProfileUseCase.update(
+                OperatorContextHolder.require(),
+                normalizedValue);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Returns the canonical persisted value: {@code null} when the caller
+     * explicitly sent {@code null} (clear intent); the trimmed UUID string
+     * when the caller sent a structurally valid identifier. Throws
+     * {@link InvalidRequestException} on any structural problem (empty string,
+     * whitespace-only, length > 36, internal whitespace, control characters).
+     *
+     * <p>The empty string ({@code ""}) is treated identically to
+     * whitespace-only: rejected as 400 (TASK-BE-306 § Edge Cases — clear
+     * must be {@code null}, never empty string).
+     */
+    private static String validateOptionalAccountId(String value) {
+        if (value == null) {
+            return null;
+        }
+        // Reject anything that's empty, whitespace-only, too long, or has
+        // internal whitespace / control characters. The value is opaque
+        // (GAP does NOT verify against finance-platform — TASK-BE-304
+        // § Decision authority) but must be a single non-control token.
+        if (value.isEmpty() || value.trim().isEmpty()) {
+            throw new InvalidRequestException(
+                    "operatorContext.defaultAccountId must not be blank (use null to clear)");
+        }
+        if (value.length() > 36) {
+            throw new InvalidRequestException(
+                    "operatorContext.defaultAccountId must be at most 36 characters");
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isISOControl(c) || Character.isWhitespace(c)) {
+                throw new InvalidRequestException(
+                        "operatorContext.defaultAccountId must not contain whitespace or control characters");
+            }
+        }
+        return value;
     }
 
     private static OperatorSummaryResponse toResponse(OperatorSummary summary) {

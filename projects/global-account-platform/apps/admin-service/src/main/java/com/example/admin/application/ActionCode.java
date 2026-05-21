@@ -27,6 +27,14 @@ public enum ActionCode {
     OPERATOR_CREATE,
     OPERATOR_ROLE_CHANGE,
     OPERATOR_STATUS_CHANGE,
+    // TASK-BE-306: operator self-serve profile mutation (PATCH /api/admin/operators/me/profile).
+    // target_type=OPERATOR, target_id=self.operator_id (UUID v7),
+    // permission_used="<self_action>" (synthetic — no grantable permission;
+    // self-flow audit row per admin-api.md §X-Operator-Reason in Exceptions sub-tree),
+    // reason="<self_profile_update>", detail IS NULL (new value lives in the operator
+    // row, not the audit detail column — R4/A3 invariant: audit subject is *that the
+    // value changed*, not the value itself).
+    OPERATOR_PROFILE_UPDATE,
     // TASK-BE-250: tenant lifecycle management (SUPER_ADMIN only).
     // target_type=TENANT, target_id=tenantId, tenant_id='*' (platform scope),
     // target_tenant_id=affected tenantId, permission_used=tenant.manage.

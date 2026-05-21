@@ -49,4 +49,25 @@ public record AdminOperator(
     public boolean isPlatformScope() {
         return PLATFORM_TENANT_ID.equals(tenantId);
     }
+
+    /**
+     * TASK-BE-306: immutable-record factory that returns a new instance with
+     * {@link #financeDefaultAccountId} set to {@code newValue} (a UUID v7
+     * string to set, or {@code null} to clear). All other fields are
+     * byte-identical to this instance. The caller is responsible for
+     * persistence — this method does NOT touch the database.
+     *
+     * @param newValue the new value (opaque UUID string), or {@code null} to clear
+     * @return a new {@link AdminOperator} record with the field updated
+     */
+    public AdminOperator withFinanceDefaultAccountId(String newValue) {
+        return new AdminOperator(
+                id,
+                email,
+                displayName,
+                status,
+                version,
+                tenantId,
+                newValue);
+    }
 }

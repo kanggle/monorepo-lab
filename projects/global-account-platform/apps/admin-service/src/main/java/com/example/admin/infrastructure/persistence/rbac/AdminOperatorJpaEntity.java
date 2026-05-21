@@ -160,4 +160,15 @@ public class AdminOperatorJpaEntity {
         this.passwordHash = newPasswordHash;
         this.updatedAt = at;
     }
+
+    /**
+     * TASK-BE-306 — self-serve profile mutation invoked by
+     * {@code PATCH /api/admin/operators/me/profile}. {@code newValue == null}
+     * clears the column. Bumps {@code updated_at}; {@code @Version} drives
+     * optimistic-lock surface on a stale row.
+     */
+    public void changeFinanceDefaultAccountId(String newValue, Instant at) {
+        this.financeDefaultAccountId = newValue;
+        this.updatedAt = at;
+    }
 }

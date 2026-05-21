@@ -76,6 +76,22 @@ public interface AdminOperatorPort {
     /** Password change (PATCH /operators/me/password). Bumps {@code updated_at}. */
     void changePasswordHash(long operatorInternalId, String newPasswordHash, Instant at);
 
+    /**
+     * TASK-BE-306 — self-serve profile mutation
+     * (PATCH /api/admin/operators/me/profile).
+     *
+     * <p>Sets {@code admin_operators.finance_default_account_id} on the row
+     * identified by {@code operatorInternalId}. {@code newValue == null}
+     * clears the column; a non-null value must already have been validated
+     * upstream (length, control chars, whitespace).
+     *
+     * <p>Bumps {@code updated_at}. On {@code admin_operators.version} race
+     * the underlying JPA save surfaces
+     * {@link org.springframework.orm.ObjectOptimisticLockingFailureException}
+     * which the exception handler maps to {@code 409 OPTIMISTIC_LOCK_CONFLICT}.
+     */
+    void changeFinanceDefaultAccountId(long operatorInternalId, String newValue, Instant at);
+
     // ---------- Roles ----------
 
     /**

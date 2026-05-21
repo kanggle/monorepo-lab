@@ -11,6 +11,7 @@ import com.example.admin.application.exception.InvalidBootstrapTokenException;
 import com.example.admin.application.exception.InvalidCredentialsException;
 import com.example.admin.application.exception.InvalidLoginRequestException;
 import com.example.admin.application.exception.InvalidRecoveryCodeException;
+import com.example.admin.application.exception.InvalidRequestException;
 import com.example.admin.application.exception.InvalidRefreshTokenException;
 import com.example.admin.application.exception.InvalidTokenExchangeRequestException;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
@@ -35,6 +36,7 @@ import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -266,6 +268,29 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("PASSWORD_POLICY_VIOLATION", e.getMessage()));
     }
+
+    // TASK-BE-306 — request body shape / structural validation failed
+    // (PATCH /api/admin/operators/me/profile + future surfaces that want the
+    // canonical INVALID_REQUEST code instead of the generic VALIDATION_ERROR).
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("INVALID_REQUEST", e.getMessage()));
+    }
+
+    // TASK-BE-306 — optimistic-lock race on admin_operators.version. The
+    // parent CommonGlobalExceptionHandler maps this to 409 CONFLICT, but
+    // admin-api.md § PATCH /api/admin/operators/me/profile mandates the
+    // canonical OPTIMISTIC_LOCK_CONFLICT error code — override here so the
+    // contract is honored uniformly across the admin-service surface.
+    @Override
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("OPTIMISTIC_LOCK_CONFLICT",
+                        "Concurrent modification detected. Please retry."));
+    }
+
 
     /**
      * Overrides the base handler to apply X-Operator-Reason-specific error code when
