@@ -26,11 +26,13 @@ import { OperatorProfileEditDialog } from '@/features/operators/components/Opera
  *   per the task's Decision authority.
  */
 
-const HINT_TEXT =
-  /현재 값은 보이지 않습니다.*입력값이 그대로 저장됩니다/;
+// TASK-PC-FE-018 — hint matcher now reflects the current value (or "미설정"
+// when the operator has no value). "현재 값은 보이지 않습니다" replaced.
+const HINT_PREFIX = /현재 값:/;
+const HINT_UNSET = /현재 값:\s*미설정/;
 
 describe('OperatorProfileEditDialog (a) — initial render', () => {
-  it('opens empty with Clear OFF, Save disabled, and shows the "current value not visible" hint', () => {
+  it('opens empty with Clear OFF, Save disabled, and shows the "현재 값: 미설정" hint when no initial value', () => {
     render(
       <OperatorProfileEditDialog
         open
@@ -55,10 +57,10 @@ describe('OperatorProfileEditDialog (a) — initial render', () => {
     const save = screen.getByTestId('operator-profile-edit-save');
     expect(save).toBeDisabled();
 
-    // The v1 design hint is visible (no current-value pre-population).
+    // TASK-PC-FE-018 — when no initial value is supplied, hint shows "미설정".
     expect(
       screen.getByTestId('operator-profile-edit-hint'),
-    ).toHaveTextContent(HINT_TEXT);
+    ).toHaveTextContent(HINT_UNSET);
 
     // Title includes the operatorIdLabel for context.
     expect(
@@ -247,6 +249,159 @@ describe('OperatorProfileEditDialog (e) — Save disabled on whitespace-only + C
     ).toBeInTheDocument();
     expect(screen.getByTestId('operator-profile-edit-save')).toBeDisabled();
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('OperatorProfileEditDialog (PC-FE-018) — current-value pre-population', () => {
+  it('initialDefaultAccountId="acc-uuid-7" → input pre-filled + hint shows the value', () => {
+    render(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="target@example.com"
+        initialDefaultAccountId="acc-uuid-7"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    const input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('acc-uuid-7');
+    expect(input).not.toBeDisabled();
+
+    expect(
+      screen.getByTestId('operator-profile-edit-hint'),
+    ).toHaveTextContent(HINT_PREFIX);
+    expect(
+      screen.getByTestId('operator-profile-edit-hint'),
+    ).toHaveTextContent(/acc-uuid-7/);
+  });
+
+  it('initialDefaultAccountId=null → empty input + 미설정 hint (mirrors no-initial behaviour)', () => {
+    render(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="target@example.com"
+        initialDefaultAccountId={null}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    const input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('');
+    expect(
+      screen.getByTestId('operator-profile-edit-hint'),
+    ).toHaveTextContent(HINT_UNSET);
+  });
+
+  it('typing a new value over a pre-populated one → Save submits the NEW value', async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="target@example.com"
+        initialDefaultAccountId="acc-uuid-7"
+        onConfirm={onConfirm}
+        onCancel={() => undefined}
+      />,
+    );
+
+    const input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, 'acc-uuid-99');
+    const reason = screen.getByTestId('operator-profile-edit-reason');
+    await user.type(reason, 'rotate default');
+
+    await user.click(screen.getByTestId('operator-profile-edit-save'));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith('acc-uuid-99', 'rotate default');
+  });
+
+  it('Clear toggle ON over a pre-populated value → Save submits null (explicit clear over an existing value)', async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="target@example.com"
+        initialDefaultAccountId="acc-uuid-7"
+        onConfirm={onConfirm}
+        onCancel={() => undefined}
+      />,
+    );
+
+    const clear = screen.getByTestId(
+      'operator-profile-edit-clear',
+    ) as HTMLInputElement;
+    await user.click(clear);
+    expect(clear.checked).toBe(true);
+
+    // Input is disabled while Clear is ON — the pre-populated value is ignored.
+    const input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    expect(input).toBeDisabled();
+
+    const reason = screen.getByTestId('operator-profile-edit-reason');
+    await user.type(reason, 'remove default');
+
+    await user.click(screen.getByTestId('operator-profile-edit-save'));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith(null, 'remove default');
+  });
+
+  it('reset on re-open — opening for a different operator picks up the new initialDefaultAccountId', () => {
+    const { rerender } = render(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="op-A"
+        initialDefaultAccountId="acc-uuid-A"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    let input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('acc-uuid-A');
+
+    // Simulate close + re-open for a DIFFERENT operator.
+    rerender(
+      <OperatorProfileEditDialog
+        open={false}
+        operatorIdLabel="op-A"
+        initialDefaultAccountId="acc-uuid-A"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    rerender(
+      <OperatorProfileEditDialog
+        open
+        operatorIdLabel="op-B"
+        initialDefaultAccountId="acc-uuid-B"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    input = screen.getByTestId(
+      'operator-profile-edit-value',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('acc-uuid-B');
+    // Clear OFF for both opens — empty initial ≠ clear-intent (§ Decision authority).
+    const clear = screen.getByTestId(
+      'operator-profile-edit-clear',
+    ) as HTMLInputElement;
+    expect(clear.checked).toBe(false);
   });
 });
 
