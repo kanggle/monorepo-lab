@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-017-console-admin-profile-edit-per-row-ui.md` — spec PR (this). platform-console admin profile-edit per-row UI consuming TASK-BE-307 admin-on-behalf-of producer (DONE 2026-05-22 — spec #710 `6b4e5e15` / impl #711 `4f43e2c7` / close chore #712 `b830c17e`). New per-row "Profile 편집" button in `OperatorsScreen` (disabled when row is self — UX gate; producer `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` is the fail-safe) + new `OperatorProfileEditDialog` (sibling of `OperatorConfirmDialog`, reason-capture + Clear toggle + Save) + `/api/operators/[operatorId]/profile/route.ts` proxy + `_proxy.ts` `AdminUpdateProfileBodySchema` + `operators-api.ts` `setOperatorProfile(operatorId, defaultAccountId, reason)` (mirror `changeOperatorStatus`: PATCH, X-Operator-Reason required, **Idempotency-Key MUST NOT be sent** per producer matrix). Same per-domain proxy pattern as PC-FE-016 — NO console-bff hop (ADR-MONO-017 D2 Option A + § 2.4.9 hard invariant). Spec PR scope = this task md + `console-integration-contract.md § 2.4.3` ops row 7 + per-endpoint header matrix row 7 + § 3.1 parity matrix row 18 + INDEX. parity-matrix.ts + parity-verification.test.ts count `17 → 18` deferred to impl PR (test code). **v1 dialog opens without current-value pre-population** — producer-side `GET /api/admin/operators` does not expose `operatorContext` per item; extending the list response is a separate spec-first task. Dialog shows "현재 값은 보이지 않습니다" hint; Save unconditionally overwrites. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
 
 ## in-progress
 
