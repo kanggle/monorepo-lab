@@ -4,6 +4,7 @@ import {
   getOperatorToken,
   getActiveTenant,
 } from '@/shared/lib/session';
+import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -23,6 +24,18 @@ export const runtime = 'nodejs';
  * has no JS path to these — server-component first + HttpOnly cookie
  * boundary (frontend-app.md § Authentication; architecture.md
  * § Forbidden Dependencies).
+ *
+ * **4th (optional) header — Option (a) activation (TASK-PC-FE-014 /
+ * § 2.4.9.1 Implementation guidance)**:
+ *   - `X-Finance-Default-Account-Id: <finance-account-uuid>` (sourced
+ *     server-side from `getFinanceDefaultAccountId()` which reads the
+ *     GAP registry's `productItem[finance].operatorContext.defaultAccountId`).
+ *   - **Set only when non-blank**. Absent / whitespace / null ⇒ header
+ *     omitted entirely (NOT set to `""`). The BFF's `callFinance(...)`
+ *     gate then preserves the existing MISSING_PREREQUISITE path.
+ *   - Server-only (the value is `internal`-classified operator profile
+ *     data; finance F7 / `regulated.md` R7 transitive discipline). The
+ *     browser never sees the inbound or outbound header.
  *
  * READ-ONLY (§ 2.4.9 HARD INVARIANT): GET only, no body, no
  * `Idempotency-Key`, no `X-Operator-Reason`. The BFF route never
@@ -80,17 +93,29 @@ export async function GET() {
     );
   }
 
+  // Option (a) activation (TASK-PC-FE-014): forward the optional
+  // operator finance default account id when present. The helper itself
+  // returns null on absent / whitespace / registry-degraded — we set the
+  // header ONLY when truthy. Never `headers.set('X-Finance-Default-Account-Id', '')`
+  // (the BFF's `hasText` gate treats blank as absent, but transmitting a
+  // blank header would obscure the intent at the wire).
+  const financeDefaultAccountId = await getFinanceDefaultAccountId();
+  const outboundHeaders: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+    'X-Operator-Token': operatorToken,
+    'X-Tenant-Id': tenant,
+    'X-Request-Id': requestId,
+  };
+  if (financeDefaultAccountId) {
+    outboundHeaders['X-Finance-Default-Account-Id'] = financeDefaultAccountId;
+  }
+
   let res: Response;
   try {
     res = await fetch(bffUrl(), {
       method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        'X-Operator-Token': operatorToken,
-        'X-Tenant-Id': tenant,
-        'X-Request-Id': requestId,
-      },
+      headers: outboundHeaders,
       cache: 'no-store',
     });
   } catch {
