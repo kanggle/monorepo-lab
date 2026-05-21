@@ -213,17 +213,39 @@ public class AdminActionAuditor {
      */
     @Transactional
     public void record(AuditRecord record) {
+        recordWithPermission(record, null);
+    }
+
+    /**
+     * TASK-BE-307 — variant of {@link #record(AuditRecord)} for callers that
+     * need to override the action-code-derived permission string. Required
+     * when an action_code is shared by self-flow and admin-on-behalf-of paths
+     * (e.g. {@code OPERATOR_PROFILE_UPDATE}: BE-306 self-serve writes the
+     * synthetic {@code <self_action>} sentinel; BE-307 admin path writes the
+     * concrete grantable {@code operator.manage} permission key).
+     *
+     * <p>{@code permissionOverride == null} preserves the legacy behavior
+     * (resolve via {@link #permissionForActionCode(ActionCode)}); a non-null
+     * value is used for both the {@code admin_actions.permission_used} column
+     * and the outbox envelope. No other behavior differs from
+     * {@link #record(AuditRecord)}.
+     */
+    @Transactional
+    public void recordWithPermission(AuditRecord record, String permissionOverride) {
         try {
             OperatorResolved resolved = resolveOperator(record.operator().operatorId());
             String targetTenantId = record.targetTenantId() != null
                     ? record.targetTenantId() : resolved.tenantId();
+            String effectivePermission = permissionOverride != null
+                    ? permissionOverride
+                    : permissionForActionCode(record.actionCode());
             AdminActionJpaEntity entity = AdminActionJpaEntity.create(
                     record.auditId(),
                     record.actionCode().name(),
                     record.operator().operatorId(),
                     "UNKNOWN",
                     resolved.pk(),
-                    permissionForActionCode(record.actionCode()),
+                    effectivePermission,
                     record.targetType(),
                     record.targetId(),
                     record.reason(),
@@ -239,7 +261,7 @@ public class AdminActionAuditor {
             eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
                     record.operator().operatorId(),
                     record.operator().jti(),
-                    permissionForActionCode(record.actionCode()),
+                    effectivePermission,
                     currentEndpoint(),
                     currentMethod(),
                     normalizeTargetType(record.targetType(), record.actionCode()),

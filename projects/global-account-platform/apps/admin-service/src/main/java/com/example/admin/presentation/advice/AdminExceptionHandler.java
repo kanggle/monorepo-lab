@@ -226,6 +226,13 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("SELF_SUSPEND_FORBIDDEN", e.getMessage()));
     }
 
+    @ExceptionHandler(com.example.admin.application.exception.SelfProfileUpdateForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleSelfProfileUpdate(
+            com.example.admin.application.exception.SelfProfileUpdateForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH", e.getMessage()));
+    }
+
     @ExceptionHandler(StateTransitionInvalidException.class)
     public ResponseEntity<ErrorResponse> handleStateTransition(StateTransitionInvalidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
