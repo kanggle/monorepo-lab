@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-016-operator-profile-ui-finance-default-account.md` — spec PR (this). platform-console operator-profile self-serve UI — `finance_default_account_id` setter (`PATCH /api/admin/operators/me/profile` proxy + form). **Phase 3 of the `Operator Overview` finance card `MISSING_PREREQUISITE` resolution** (BE-304 read column → BE-306 write endpoint → PC-FE-014 read consumer → **this PC-FE-016** write consumer). Console-web direct proxy (no console-bff hop per ADR-MONO-017 D2 Option A + § 2.4.9 hard invariant + `me/password` precedent); **TASK-PC-BE-004 originally anticipated as a sequential BFF orchestrator follow-up is CANCELED here as architecturally redundant**. Spec PR scope = this task md + `console-integration-contract.md § 2.4.3` (operations + per-endpoint header matrix row 6) + `§ 3.1` parity matrix row 17 (`parity-verification.test.ts` fixture + expected count `16 → 17` deferred to impl PR as test code change). Impl PR scope = new `/api/operators/me/profile/route.ts` proxy + `_proxy.ts` `UpdateProfileBodySchema` + `operators-api.ts` `updateOwnProfile()` + new `MyProfileForm.tsx` + `OperatorsScreen.tsx` integration + 4 vitest tests + 1 Playwright e2e. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
 
 ## in-progress
 
