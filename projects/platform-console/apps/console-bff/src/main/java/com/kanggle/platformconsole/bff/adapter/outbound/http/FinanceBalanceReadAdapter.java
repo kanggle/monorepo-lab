@@ -22,22 +22,21 @@ import java.util.Map;
  *   <li>Tenant: {@code X-Tenant-Id} header forwarded verbatim (D6.A).</li>
  * </ul>
  *
- * <p><b>MVP option (b) — {@code operatorDefaultAccountId} resolution
- * (§ 2.4.9.1 Implementation guidance):</b> finance v1 has no list/search GET
- * (per § 2.4.7), so the BFF cannot synthesize an account id. The required
- * {@code operatorDefaultAccountId} is supposed to come from a GAP
- * registry/operator-profile claim (option a, deferred to a separate spec-first
- * GAP enhancement). At MVP the BFF surfaces this prerequisite gap as an
- * honest {@code forbidden / MISSING_PREREQUISITE} card — the composition use
- * case detects the absent prerequisite <b>before</b> calling
- * {@link #read(String, String)} and never fires the outbound HTTP call.
+ * <p><b>Both paths first-class (§ 2.4.9.1 Implementation guidance Option (a)
+ * activation, TASK-PC-FE-014):</b> the use-case routes to
+ * {@link #readBalances(String, String, String)} when the operator's
+ * {@code finance_default_account_id} was present in the GAP registry response
+ * (Phase 1 — TASK-BE-304) and forwarded as the
+ * {@code X-Finance-Default-Account-Id} header by console-web (Phase 2 —
+ * TASK-PC-FE-014); otherwise the use-case short-circuits with
+ * {@code forbidden / MISSING_PREREQUISITE} and never invokes this adapter
+ * (honest UX for operators whose {@code admin_operators.finance_default_account_id}
+ * column is {@code NULL} — the default post-V0028 migration).
  *
- * <p>This adapter is therefore reachable only when a future enhancement supplies
- * a non-blank account id; the use case threads it through as the
- * {@code accountId} parameter to {@link #readBalances(String, String, String)}.
- * The generic {@link #read(String, String)} method is retained for the
- * {@link DomainReadPort} contract but throws — callers MUST use the
- * id-aware overload.
+ * <p>The generic {@link #read(String, String)} method is retained for the
+ * {@link DomainReadPort} contract conformance but throws — it is the
+ * <b>marker that the active path is</b> {@link #readBalances(String, String, String)},
+ * not direct port use.
  */
 @Component
 public class FinanceBalanceReadAdapter implements OperatorOverviewCompositionUseCase.FinanceBalanceReadPort {
@@ -55,25 +54,38 @@ public class FinanceBalanceReadAdapter implements OperatorOverviewCompositionUse
 
     /**
      * Unsupported on this adapter — finance balance lookup requires an explicit
-     * {@code accountId}; the composition use-case routes through
-     * {@link #readBalances(String, String, String)} after validating
-     * MISSING_PREREQUISITE.
+     * {@code accountId}. The composition use-case ALWAYS routes through
+     * {@link #readBalances(String, String, String)} on the Option (a)
+     * happy path (TASK-PC-FE-014), and short-circuits to
+     * {@code forbidden / MISSING_PREREQUISITE} without invoking this adapter
+     * at all on the absent-id path. This method exists solely for
+     * {@link DomainReadPort} contract conformance — it is the marker that
+     * the active path is {@code readBalances}.
      */
     @Override
     public Map<String, Object> read(String tenantId, String credential) {
         throw new UnsupportedOperationException(
                 "FinanceBalanceReadAdapter requires an explicit operatorDefaultAccountId; "
                         + "use readBalances(tenantId, credential, accountId). "
-                        + "MVP option (b) — the composition use case renders "
-                        + "forbidden/MISSING_PREREQUISITE when the id is absent.");
+                        + "The composition use-case renders forbidden/MISSING_PREREQUISITE "
+                        + "when the id is absent and never reaches this adapter.");
     }
 
     /**
-     * Reads the operator's default account balances.
+     * Reads the operator's default account balances — the active Option (a)
+     * path activated by TASK-PC-FE-014. When the use-case supplies a
+     * non-blank {@code accountId} (the operator's
+     * {@code finance_default_account_id} from {@code admin_operators} via the
+     * GAP registry round-trip — Phase 1 TASK-BE-304 — forwarded by console-web
+     * as the {@code X-Finance-Default-Account-Id} request header — Phase 2
+     * TASK-PC-FE-014), this method fires the outbound HTTP call and returns
+     * the balances payload.
      *
-     * @param tenantId  forwarded verbatim (D6.A)
-     * @param credential the GAP OIDC access token bearer value
-     * @param accountId  the operator's default finance account id (non-blank guaranteed by caller)
+     * @param tenantId   forwarded verbatim (D6.A)
+     * @param credential the GAP OIDC access token bearer value (per § 2.4.9.1 row 4)
+     * @param accountId  the operator's default finance account id
+     *                   (non-blank guaranteed by caller via
+     *                   {@code StringUtils.hasText} gate in the use-case)
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> readBalances(String tenantId, String credential, String accountId) {

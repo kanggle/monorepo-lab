@@ -24,6 +24,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -72,7 +75,7 @@ class OperatorOverviewSliceTest {
     void happy_200_envelope() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
-        when(compositionUseCase.compose(anyString())).thenReturn(List.of(
+        when(compositionUseCase.compose(anyString(), nullable(String.class))).thenReturn(List.of(
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("page", Map.of("totalElements", 12))),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("snapshotTotal", 34)),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("nodeCount", 5)),
@@ -135,7 +138,7 @@ class OperatorOverviewSliceTest {
     void error_401_missing_credential() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
-        when(compositionUseCase.compose(anyString()))
+        when(compositionUseCase.compose(anyString(), nullable(String.class)))
                 .thenThrow(new MissingCredentialException("operator token absent"));
 
         MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
@@ -153,7 +156,7 @@ class OperatorOverviewSliceTest {
     void error_401_upstream_unauthorized() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
-        when(compositionUseCase.compose(anyString()))
+        when(compositionUseCase.compose(anyString(), nullable(String.class)))
                 .thenThrow(new UpstreamUnauthorizedException("upstream wms returned 401"));
 
         MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
@@ -171,7 +174,7 @@ class OperatorOverviewSliceTest {
     void error_500_generic() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
-        when(compositionUseCase.compose(anyString()))
+        when(compositionUseCase.compose(anyString(), nullable(String.class)))
                 .thenThrow(new RuntimeException("upstream"));
 
         MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
@@ -182,5 +185,69 @@ class OperatorOverviewSliceTest {
 
         assertThat(status).as("non-500 body:\n%s", body).isEqualTo(500);
         assertThat(body).as("body:\n%s", body).contains("\"code\":\"INTERNAL_ERROR\"");
+    }
+
+    // ------------------------------------------------------------------
+    // TASK-PC-FE-014 — X-Finance-Default-Account-Id header acceptance
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("header_omitted_finance_missing_prerequisite: no header → forwards null to use-case; finance card forbidden/MISSING_PREREQUISITE")
+    void header_omitted_finance_missing_prerequisite() throws Exception {
+        when(credentialContext.hasTenant()).thenReturn(true);
+        when(credentialContext.getTenantId()).thenReturn("test-tenant");
+        when(compositionUseCase.compose(eq("test-tenant"), nullable(String.class)))
+                .thenReturn(List.of(
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("ok", true)),
+                        CompositionLeg.outcomeOnly(LegOutcome.forbidden(DomainTarget.FINANCE, "MISSING_PREREQUISITE")),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("ok", true))
+                ));
+
+        MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andReturn();
+        String body = result.getResponse().getContentAsString();
+        int status = result.getResponse().getStatus();
+
+        assertThat(status).as("non-200 body:\n%s", body).isEqualTo(200);
+        assertThat(body).as("body:\n%s", body)
+                .contains("\"domain\":\"finance\"")
+                .contains("\"status\":\"forbidden\"")
+                .contains("\"reason\":\"MISSING_PREREQUISITE\"");
+        // Verify the 2-arg signature was invoked with null header (the controller
+        // threaded the absent header through verbatim — AC-2 regression guard).
+        verify(compositionUseCase).compose("test-tenant", null);
+    }
+
+    @Test
+    @DisplayName("header_set_finance_ok: X-Finance-Default-Account-Id forwarded verbatim to use-case; finance card ok with data")
+    void header_set_finance_ok() throws Exception {
+        when(credentialContext.hasTenant()).thenReturn(true);
+        when(credentialContext.getTenantId()).thenReturn("test-tenant");
+        when(compositionUseCase.compose(eq("test-tenant"), eq("acc-uuid-7")))
+                .thenReturn(List.of(
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("totalAmount", "1000")),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("ok", true))
+                ));
+
+        MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
+                        .header("X-Finance-Default-Account-Id", "acc-uuid-7")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andReturn();
+        String body = result.getResponse().getContentAsString();
+        int status = result.getResponse().getStatus();
+
+        assertThat(status).as("non-200 body:\n%s", body).isEqualTo(200);
+        assertThat(body).as("body:\n%s", body)
+                .contains("\"domain\":\"finance\"")
+                .contains("\"status\":\"ok\"")
+                .contains("\"totalAmount\":\"1000\"");
+        // Verify the 2-arg signature was invoked with the header value verbatim.
+        verify(compositionUseCase).compose("test-tenant", "acc-uuid-7");
     }
 }

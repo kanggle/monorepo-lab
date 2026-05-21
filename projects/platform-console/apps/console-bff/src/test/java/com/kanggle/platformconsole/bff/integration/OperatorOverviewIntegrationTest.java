@@ -197,6 +197,14 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(FINANCE, 200, "{\"balance\":0}");
         respond(ERP, 200, "{\"meta\":{\"totalElements\":9}}");
 
+        // FINANCE counter snapshot before invocation — MockWebServer.getRequestCount()
+        // is lifetime-accumulated, so other tests in this class that DO fire FINANCE
+        // (e.g. inbound_header_set_finance_ok_one_outbound — TASK-PC-FE-014 Phase 2
+        // option (a) activation path) leave the counter non-zero. Use delta == 0
+        // rather than absolute zero (TASK-PC-FE-013 cycle 1 lesson; mirrors the
+        // DomainHealthIntegrationTest snapshot-and-diff pattern).
+        int financeBefore = FINANCE.getRequestCount();
+
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
 
@@ -232,9 +240,13 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
             assertThat(r.getHeader("X-Tenant-Id")).isEqualTo("gap");
         }
 
-        // FINANCE — MVP option (b) short-circuits; no outbound call.
-        assertThat(FINANCE.getRequestCount())
-                .as("finance leg must not fire at MVP (option b — MISSING_PREREQUISITE)")
+        // FINANCE — option (b) short-circuit when X-Finance-Default-Account-Id
+        // header is absent (this test does not send it). The use case never fires
+        // the outbound HTTP call. Snapshot-and-diff: delta == 0, NOT absolute 0
+        // (counter is lifetime-accumulated across the JUnit class — see snapshot
+        // taken before callOverview above).
+        assertThat(FINANCE.getRequestCount() - financeBefore)
+                .as("finance leg must not fire when X-Finance-Default-Account-Id absent (option b — MISSING_PREREQUISITE)")
                 .isZero();
     }
 
@@ -460,6 +472,91 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     // ------------------------------------------------------------------
     // Parallel fan-out — one slow leg does not block others
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // TASK-PC-FE-014 — finance leg Option (a) activation IT
+    //
+    // Both paths first-class:
+    //   header-absent → finance card MISSING_PREREQUISITE, ZERO outbound on
+    //     the FINANCE MockWebServer (snapshot-and-diff request-count pattern).
+    //   header-set   → finance card ok; exactly 1 request fired against the
+    //     FINANCE leg with path /api/finance/accounts/{id}/balances and
+    //     Authorization: Bearer <gap-oidc-token>.
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("inbound_header_absent_finance_missing_prerequisite_no_outbound: no X-Finance-Default-Account-Id → finance MISSING_PREREQUISITE; 4 other legs fire; finance request-count delta == 0")
+    void inbound_header_absent_finance_missing_prerequisite_no_outbound() {
+        respond(GAP, 200, "{\"page\":{\"totalElements\":1}}");
+        respond(WMS, 200, "{\"snapshotTotal\":1}");
+        respond(SCM, 200, "{\"nodeCount\":1}");
+        // FINANCE intentionally NOT enqueued — assert below it never fires.
+        respond(ERP, 200, "{\"meta\":{\"totalElements\":1}}");
+
+        int financeBefore = FINANCE.getRequestCount();
+
+        ResponseEntity<String> response = callOverview(authHeaders());
+        String body = response.getBody();
+
+        assertThat(response.getStatusCode())
+                .as("non-200 body:\n%s", body)
+                .isEqualTo(HttpStatus.OK);
+        // Finance card forbidden/MISSING_PREREQUISITE (AC-2 regression guard).
+        assertThat(body).as("body:\n%s", body)
+                .contains("\"domain\":\"finance\"")
+                .contains("\"reason\":\"MISSING_PREREQUISITE\"");
+        // Snapshot-and-diff: zero outbound on FINANCE leg.
+        int financeAfter = FINANCE.getRequestCount();
+        assertThat(financeAfter - financeBefore)
+                .as("finance leg must NOT fire when X-Finance-Default-Account-Id is absent")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("inbound_header_set_finance_ok_one_outbound: X-Finance-Default-Account-Id → finance ok with data; exactly 1 outbound fired with /api/finance/accounts/{id}/balances + Bearer gap-oidc")
+    void inbound_header_set_finance_ok_one_outbound() throws Exception {
+        respond(GAP, 200, "{\"page\":{\"totalElements\":1}}");
+        respond(WMS, 200, "{\"snapshotTotal\":1}");
+        respond(SCM, 200, "{\"nodeCount\":1}");
+        respond(FINANCE, 200, "{\"totalAmount\":\"1000\"}");
+        respond(ERP, 200, "{\"meta\":{\"totalElements\":1}}");
+
+        int financeBefore = FINANCE.getRequestCount();
+
+        HttpHeaders headers = authHeaders();
+        headers.set("X-Finance-Default-Account-Id", "acc-uuid-7");
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/console/dashboards/operator-overview",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class);
+        String body = response.getBody();
+
+        assertThat(response.getStatusCode())
+                .as("non-200 body:\n%s", body)
+                .isEqualTo(HttpStatus.OK);
+        // Finance card ok with the stubbed balances payload (AC-3).
+        assertThat(body).as("body:\n%s", body)
+                .contains("\"domain\":\"finance\"")
+                .contains("\"status\":\"ok\"")
+                .contains("\"totalAmount\":\"1000\"");
+        // Exactly 1 outbound on FINANCE leg (snapshot-and-diff).
+        int financeAfter = FINANCE.getRequestCount();
+        assertThat(financeAfter - financeBefore)
+                .as("finance leg must fire exactly once when X-Finance-Default-Account-Id is set")
+                .isEqualTo(1);
+        // Path template + bearer assertions on the recorded request.
+        RecordedRequest finReq = FINANCE.takeRequest(2, TimeUnit.SECONDS);
+        assertThat(finReq).as("expected FINANCE outbound request").isNotNull();
+        assertThat(finReq.getPath())
+                .as("path must be /api/finance/accounts/{accountId}/balances")
+                .isEqualTo("/api/finance/accounts/acc-uuid-7/balances");
+        assertThat(finReq.getHeader(HttpHeaders.AUTHORIZATION))
+                .as("finance leg must dispatch GAP OIDC access token bearer (§ 2.4.9.1 row 4)")
+                .isEqualTo("Bearer " + gapOidcJwt);
+        assertThat(finReq.getHeader("X-Tenant-Id")).isEqualTo("gap");
+    }
 
     @Test
     @DisplayName("parallel_fan_out: one slow leg (1.5s) does not serialise the others; total < 3s")

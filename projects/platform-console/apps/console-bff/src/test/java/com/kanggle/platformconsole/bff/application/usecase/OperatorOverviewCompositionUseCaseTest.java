@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -32,7 +33,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -129,7 +134,7 @@ class OperatorOverviewCompositionUseCaseTest {
         // actually fire.
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("meta", Map.of("totalElements", 9)));
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         assertThat(legs).hasSize(5);
         // Fixed order invariant
@@ -162,7 +167,7 @@ class OperatorOverviewCompositionUseCaseTest {
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         CompositionLeg wms = legs.get(1);
         assertThat(wms.outcome().isDegraded()).isTrue();
@@ -187,7 +192,7 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenThrow(HttpClientErrorException.create(HttpStatus.FORBIDDEN, "no", null, null, null));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         CompositionLeg scm = legs.get(2);
         assertThat(scm.outcome().isForbidden()).isTrue();
@@ -209,7 +214,7 @@ class OperatorOverviewCompositionUseCaseTest {
         // MUST short-circuit before invoking it. Any invocation would fail the test
         // via UnnecessaryStubbing (if stubbed) or NPE (if not stubbed and called).
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         CompositionLeg fin = legs.get(3);
         assertThat(fin.outcome().domain()).isEqualTo(DomainTarget.FINANCE);
@@ -229,7 +234,7 @@ class OperatorOverviewCompositionUseCaseTest {
         // finance is MISSING_PREREQUISITE (forbidden) by MVP pin
         when(erpPort.read(anyString(), anyString())).thenThrow(boom);
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         assertThat(legs).hasSize(5);
         assertThat(legs.get(0).outcome().isDegraded()).isTrue();
@@ -267,7 +272,7 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenThrow(HttpClientErrorException.create(HttpStatus.BAD_GATEWAY,
                         "bad", null, null, null));
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         assertThat(legs.get(0).outcome().isOk()).isTrue();
         assertThat(legs.get(1).outcome().isDegraded()).isTrue();
@@ -297,7 +302,7 @@ class OperatorOverviewCompositionUseCaseTest {
         lenient().when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
 
-        assertThatThrownBy(() -> useCase.compose(TENANT))
+        assertThatThrownBy(() -> useCase.compose(TENANT, null))
                 .isInstanceOf(UpstreamUnauthorizedException.class)
                 .hasMessageContaining("Upstream leg returned 401");
     }
@@ -322,7 +327,7 @@ class OperatorOverviewCompositionUseCaseTest {
         // The use case maps MissingCredentialException to per-card
         // forbidden/MISSING_PREREQUISITE (per the time() handler) — it does NOT
         // bubble the exception out of compose(). Verify the gap card surface.
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         CompositionLeg gap = legs.get(0);
         assertThat(gap.outcome().domain()).isEqualTo(DomainTarget.GAP);
@@ -343,7 +348,7 @@ class OperatorOverviewCompositionUseCaseTest {
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
 
-        List<CompositionLeg> legs = useCase.compose(TENANT);
+        List<CompositionLeg> legs = useCase.compose(TENANT, null);
         assertThat(legs).hasSize(5);
 
         // Per-leg latency timer registered for the 4 legs that actually fire.
@@ -380,5 +385,100 @@ class OperatorOverviewCompositionUseCaseTest {
                 .tag("degraded_domain", "finance")
                 .counter())
                 .isNotNull();
+    }
+
+    // ------------------------------------------------------------------
+    // TASK-PC-FE-014 — finance leg Option (a) activation
+    //
+    // The new 2-arg compose(tenantId, financeDefaultAccountId) overload threads
+    // the operator's finance default account id from the controller's
+    // X-Finance-Default-Account-Id header. Both paths first-class:
+    //   header-absent / blank / whitespace → MISSING_PREREQUISITE (regression
+    //     guard for AC-2; financePort.read AND readBalances NEVER invoked).
+    //   header non-blank → readBalances(...) invoked exactly once with the
+    //     trimmed account id; finance card ok with data payload (AC-3).
+    // ------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("FinanceOptionAActivation (TASK-PC-FE-014)")
+    class FinanceOptionAActivation {
+
+        @Test
+        @DisplayName("(a) header_absent_null: finance leg forbidden/MISSING_PREREQUISITE; readBalances NEVER invoked")
+        void header_absent_null_yields_missing_prerequisite() {
+            stubAllCredentialsHappy();
+            when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+
+            List<CompositionLeg> legs = useCase.compose(TENANT, null);
+
+            CompositionLeg fin = legs.get(3);
+            assertThat(fin.outcome().domain()).isEqualTo(DomainTarget.FINANCE);
+            assertThat(fin.outcome().isForbidden()).isTrue();
+            assertThat(fin.outcome().reason()).isEqualTo("MISSING_PREREQUISITE");
+            // Neither port surface invoked — short-circuit BEFORE any outbound.
+            verify(financePort, never()).read(anyString(), anyString());
+            verify(financePort, never()).readBalances(anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("(b) header_empty_string: empty string treated as absent (hasText false)")
+        void header_empty_string_yields_missing_prerequisite() {
+            stubAllCredentialsHappy();
+            when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+
+            List<CompositionLeg> legs = useCase.compose(TENANT, "");
+
+            CompositionLeg fin = legs.get(3);
+            assertThat(fin.outcome().isForbidden()).isTrue();
+            assertThat(fin.outcome().reason()).isEqualTo("MISSING_PREREQUISITE");
+            verify(financePort, never()).read(anyString(), anyString());
+            verify(financePort, never()).readBalances(anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("(c) header_whitespace_only: whitespace treated as absent (hasText false)")
+        void header_whitespace_only_yields_missing_prerequisite() {
+            stubAllCredentialsHappy();
+            when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+
+            List<CompositionLeg> legs = useCase.compose(TENANT, "   ");
+
+            CompositionLeg fin = legs.get(3);
+            assertThat(fin.outcome().isForbidden()).isTrue();
+            assertThat(fin.outcome().reason()).isEqualTo("MISSING_PREREQUISITE");
+            verify(financePort, never()).read(anyString(), anyString());
+            verify(financePort, never()).readBalances(anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("(d) header_non_blank: finance leg ok with data; readBalances invoked exactly once")
+        void header_non_blank_yields_finance_ok() {
+            stubAllCredentialsHappy();
+            when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(financePort.readBalances(eq(TENANT), anyString(), eq("acc-uuid-7")))
+                    .thenReturn(Map.of("totalAmount", "1000"));
+
+            List<CompositionLeg> legs = useCase.compose(TENANT, "acc-uuid-7");
+
+            CompositionLeg fin = legs.get(3);
+            assertThat(fin.outcome().domain()).isEqualTo(DomainTarget.FINANCE);
+            assertThat(fin.outcome().isOk()).isTrue();
+            assertThat(fin.data()).isEqualTo(Map.of("totalAmount", "1000"));
+            // Active path = readBalances; legacy port read() must NOT be invoked.
+            verify(financePort, times(1)).readBalances(eq(TENANT), anyString(), eq("acc-uuid-7"));
+            verify(financePort, never()).read(anyString(), anyString());
+        }
     }
 }
