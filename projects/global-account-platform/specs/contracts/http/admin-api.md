@@ -52,6 +52,14 @@ base path: `/api/admin`
 
 본 서브트리의 요청은 "다른 대상에 대한 운영 명령"이 아니라 **요청자 본인의 인증 플로우**이므로 `X-Operator-Reason` 헤더를 요구하지 않는다. `admin_actions` 기록이 발생하는 경우(예: enroll/verify)는 reason 필드에 상수 `"<self_enrollment>"`로 기록한다.
 
+**Self-serve `me/*` mutation 경로의 동일 면제 (TASK-BE-306)**: 위 sub-tree 외에도, 운영자가 **자기 자신의 프로파일/자격증명을 변경**하는 self-serve `me/*` mutation 경로는 동일한 self-flow 면제를 따른다 — operator JWT 는 필수이지만 `X-Operator-Reason` 은 요구하지 않으며, `admin_actions` row 의 reason 필드에 self-flow 상수를 기록한다. 현재 해당 경로:
+
+| Method | Path | reason 상수 | 비고 |
+|---|---|---|---|
+| `PATCH` | `/api/admin/operators/me/password` | `<self_password_change>` | TASK-BE-013 |
+| `PATCH` | `/api/admin/operators/me/profile` | `<self_profile_update>` | **신규 (TASK-BE-306)** — operator 프로파일 carrier (`operatorContext.defaultAccountId` 등) 자가 설정 |
+
+
 ---
 
 ## Authorization Model
@@ -1089,6 +1097,64 @@ Content-Type: application/json
 | 400 | `CURRENT_PASSWORD_MISMATCH` | 현재 비밀번호 불일치 |
 | 400 | `PASSWORD_POLICY_VIOLATION` | 새 비밀번호가 정책 미충족 |
 | 401 | `TOKEN_INVALID` | JWT 없음 또는 만료 |
+
+---
+
+## PATCH /api/admin/operators/me/profile
+
+운영자 자신의 프로파일 carrier (`operatorContext`) 를 변경한다. v1 은 **`finance_default_account_id` 단일 필드**만 수용한다 — Platform Console `Operator Overview` 의 finance 카드 기본 조회 계정 자가 설정 (TASK-BE-304 § Goal). 자가-프로비저닝 self-serve 경로로, `me/password` 와 형제 (자기 자신만 변경 가능, 다른 operator 의 프로파일 수정은 v1 범위 외).
+
+**Auth**: Operator JWT (유효한 토큰만 필요, 별도 permission 없음)
+**X-Operator-Reason**: 요구하지 않음 (§ Authentication > X-Operator-Reason in Exceptions sub-tree 의 self-flow 면제 적용; audit row 는 `<self_profile_update>` 상수로 기록)
+
+**Request**
+
+```
+PATCH /api/admin/operators/me/profile
+Content-Type: application/json
+```
+
+```json
+{
+  "operatorContext": {
+    "defaultAccountId": "acc-uuid-7"
+  }
+}
+```
+
+값을 **clear** 하려면 `defaultAccountId` 에 `null` 을 명시:
+
+```json
+{
+  "operatorContext": {
+    "defaultAccountId": null
+  }
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `operatorContext` | object | ✅ | 프로파일 attribute carrier. v1 은 `defaultAccountId` 단일 키만 수용 (그 외 키 → 400 `INVALID_REQUEST`, `FAIL_ON_UNKNOWN_PROPERTIES`). 본 키 자체가 누락된 빈 body (`{}`) 또는 빈 객체 (`{"operatorContext":{}}`) → 400 |
+| `operatorContext.defaultAccountId` | string \| null | ✅ | finance-platform 계정 UUID (`VARCHAR(36)`, opaque — GAP 는 finance 에 verify 하지 않음, TASK-BE-304 § Decision authority). `null` = clear. 빈 문자열 / whitespace-only / 36자 초과 / 내부 공백·control char → 400 `INVALID_REQUEST` (clear 의도는 반드시 `null` 명시) |
+
+> **Request 와 Response 의 carrier 대칭성**: 본 PATCH 의 request body 는 `GET /api/admin/console/registry` 응답의 finance product item 에 나오는 `operatorContext: { defaultAccountId?: string }` 와 **동일한 shape** 이다 ([console-registry-api.md § Item shape](./console-registry-api.md)). UI 는 동일 JSON path 로 read → mutate → re-read 한다.
+
+**Response**
+
+`204 No Content` — 변경 성공, 본문 없음. 변경된 effective state 는 `GET /api/admin/console/registry` 로 재조회한다 (등록부가 read-side 권위; PATCH 는 fire-and-re-read).
+
+**Errors**
+
+| HTTP | code | 설명 |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | body shape mismatch (`operatorContext` 키 누락, 빈 객체, 알 수 없는 nested key) / `defaultAccountId` 가 빈 문자열, whitespace-only, 36 자 초과, 내부 control char 포함 |
+| 401 | `TOKEN_INVALID` | JWT 없음 / 만료 / `OperatorAuthenticationFilter` 거부 / operator row soft-delete 됨 |
+| 409 | `OPTIMISTIC_LOCK_CONFLICT` | `admin_operators.version` race (두 브라우저 탭 동시 PATCH). 재시도 권장 |
+
+**Side effects**
+
+- `admin_operators.finance_default_account_id` UPDATE — 단일 transaction
+- `admin_actions` row INSERT (동일 transaction) — `action_code = "OPERATOR_PROFILE_UPDATE"`, `operator_id = self`, `target_type = "OPERATOR"`, `target_id = self.operator_id`, `permission_used = "<self_action>"`, `outcome = "SUCCESS"`, `detail IS NULL` (new value 자체는 audit `detail` 에 기록하지 않음 — registry GET 가 audit evidence). 두 write 중 하나라도 실패 시 transaction 전체 rollback (audit-heavy A3 invariant)
 
 ---
 

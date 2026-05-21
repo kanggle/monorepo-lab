@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-306-operator-profile-self-serve-mutation-endpoint.md` — spec PR (this). GAP admin-service self-serve operator profile mutation endpoint (`PATCH /api/admin/operators/me/profile`) — Phase 1 write-path sister of TASK-BE-304 read-path; activates `finance_default_account_id` setter so the BE-304 column has a UI-reachable provisioning path. Self-serve only (mirrors `me/password`), `204 No Content`, audit row written with `<self_profile_update>` reason. Prerequisite for TASK-PC-BE-004 (console-bff orchestrator) + TASK-PC-FE-016 (console-web UI). spec PR scope = this task md + `admin-api.md` new section (exactly 2 files). Impl PR follows after spec PR merges. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
 
 ## in-progress
 
