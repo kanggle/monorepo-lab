@@ -113,7 +113,7 @@ The third concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 3 / 
 
   | # | Operation | Producer endpoint (`admin-api.md` §) | Kind | Required permission |
   |---|---|---|---|---|
-  | 1 | list | `GET /api/admin/operators` (`status` filter, `page`/`size`) | read | `operator.manage` |
+  | 1 | list | `GET /api/admin/operators` (`status` filter, `page`/`size`); response items optionally carry `operatorContext.defaultAccountId` per item (producer-side `@JsonInclude.NON_NULL` — omitted when the operator has no value) — **TASK-PC-FE-018** consumes this to pre-populate the admin profile-edit dialog | read | `operator.manage` |
   | 2 | create | `POST /api/admin/operators` (body `tenantId`; `*`=platform-scope) | mutation | `operator.manage` |
   | 3 | edit-roles | `PATCH /api/admin/operators/{operatorId}/roles` (full-replace; `[]` allowed) | mutation | `operator.manage` |
   | 4 | change-status | `PATCH /api/admin/operators/{operatorId}/status` (ACTIVE↔SUSPENDED) | mutation | `operator.manage` |
