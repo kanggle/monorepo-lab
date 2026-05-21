@@ -69,6 +69,11 @@ public class AdminOperatorJpaEntity {
     // VARCHAR(36) opaque UUID; GAP does not verify against finance-platform —
     // stale ids surface as finance 404 ACCOUNT_NOT_FOUND. Classification:
     // internal (data-model.md § Data Classification Summary).
+    //
+    // Flyway: V0029 (spec PR authored V0028, mechanically bumped to V0029 here
+    // because db/migration-dev/V0028__seed_dev_operator_oidc_subject.sql was
+    // already in the resolved location set; the column shape is byte-identical
+    // to the spec).
     @Column(name = "finance_default_account_id", length = 36)
     private String financeDefaultAccountId;
 

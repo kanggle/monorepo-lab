@@ -254,7 +254,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   idempotency 가드는 NULL-safe(`INFORMATION_SCHEMA` count = 0 비교). 비-Docker
   shape-pin 테스트가 본 구조 불변식을 고정한다 (text-substring/`@var` 회귀
   fast-fail).
-- **TASK-BE-304 (Flyway `V0028__add_finance_default_account_id_to_admin_operators.sql`)**:
+- **TASK-BE-304 (Flyway `V0029__add_finance_default_account_id_to_admin_operators.sql`)**:
   `admin_operators.finance_default_account_id VARCHAR(36) NULL` 단일 컬럼
   추가. **forward-only**(down 금지), **idempotent**(`INFORMATION_SCHEMA`
   기반 컬럼 존재 가드 — V0027 패턴 verbatim 재사용, NULL-safe `count = 0`
@@ -267,7 +267,12 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   `internal`); 값 변경은 별 admin-api / operator-management mutation
   surface 의 책임(out-of-scope here). 비-Docker shape-pin 테스트가 본
   구조 불변식을 고정한다 (단일 컬럼·NULL 허용·인덱스 부재 회귀
-  fast-fail).
+  fast-fail). **버전 노트**: TASK-BE-304 spec PR(#689, main 머지)
+  은 `V0028` 로 authored 되었으나 `db/migration-dev/V0028__seed_dev_operator_oidc_subject.sql`
+  이 이미 점유 중이라 Flyway CompositeMigrationResolver duplicate-version
+  fast-fail 을 일으켰다. 구현 PR 에서 다음 빈 버전 `V0029` 로 기계적
+  rename — migration 의 컬럼/내용 shape 은 spec 과 byte-identical, version
+  은 sequencing token 에 불과하므로 ADR 불요.
 
 ---
 

@@ -7,6 +7,22 @@
 -- behavior preserved until an operator's row is explicitly populated).
 --
 -- ------------------------------------------------------------------------
+-- Version note (V0028 -> V0029)
+-- ------------------------------------------------------------------------
+-- The TASK-BE-304 spec PR (#689, merged on main 7a531a7d) authored this as
+-- V0028. However V0028 was already taken by
+-- `db/migration-dev/V0028__seed_dev_operator_oidc_subject.sql` (a
+-- non-prod-profile dev seed migration loaded alongside `db/migration` via
+-- `spring.flyway.locations` in dev/test profiles). Flyway's
+-- CompositeMigrationResolver fails fast on duplicate version numbers
+-- ("Found more than one migration with version 28"). Mechanical rename to
+-- V0029 (next free version) preserves the original intent — the migration
+-- version is a sequencing token, not a semantic identifier. The spec note
+-- in data-model.md § Migration Strategy is amended in the same PR. The
+-- migration content (single ALTER TABLE … ADD COLUMN, the V0027 discipline,
+-- the column shape) is byte-identical to what the spec authored.
+--
+-- ------------------------------------------------------------------------
 -- Shape contract (TASK-BE-298 V0027 verbatim discipline reuse)
 -- ------------------------------------------------------------------------
 -- This is a STRUCTURAL DDL migration (ALTER TABLE ... ADD COLUMN), NOT a
