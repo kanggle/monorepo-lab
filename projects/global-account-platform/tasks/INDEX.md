@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-306-operator-profile-self-serve-mutation-endpoint.md` — spec PR (this). GAP admin-service self-serve operator profile mutation endpoint (`PATCH /api/admin/operators/me/profile`) — Phase 1 write-path sister of TASK-BE-304 read-path; activates `finance_default_account_id` setter so the BE-304 column has a UI-reachable provisioning path. Self-serve only (mirrors `me/password`), `204 No Content`, audit row written with `<self_profile_update>` reason. Prerequisite for TASK-PC-BE-004 (console-bff orchestrator) + TASK-PC-FE-016 (console-web UI). spec PR scope = this task md + `admin-api.md` new section (exactly 2 files). Impl PR follows after spec PR merges. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
+(empty)
 
 ## in-progress
 
@@ -82,7 +82,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-306-operator-profile-self-serve-mutation-endpoint.md` — **impl PR open**. spec PR #704 merged on main `bae27cff` 2026-05-21. impl PR adds `UpdateOwnOperatorProfileUseCase` + `OperatorAdminController.updateMyProfile` (`PATCH /api/admin/operators/me/profile`) + `UpdateOperatorProfileRequest` DTO (custom `@JsonCreator(Map)` for key-presence detection — distinguishes empty carrier `{"operatorContext":{}}` from explicit clear `{"operatorContext":{"defaultAccountId":null}}`) + `AdminOperator.withFinanceDefaultAccountId` factory + `AdminOperatorPort.changeFinanceDefaultAccountId` port method + adapter + `AdminOperatorJpaEntity.changeFinanceDefaultAccountId` setter + new `ActionCode.OPERATOR_PROFILE_UPDATE` + `AdminActionAuditor.REASON_SELF_PROFILE_UPDATE = "<self_profile_update>"` + `PERMISSION_SELF_ACTION = "<self_action>"` constants + `InvalidRequestException` mapping to 400 INVALID_REQUEST + `ObjectOptimisticLockingFailureException` override to 409 OPTIMISTIC_LOCK_CONFLICT. Single `@Transactional` wraps column UPDATE + audit row INSERT (audit-heavy A3). Tests: unit (4/4 PASS — set/clear/unauthorized/optimistic-lock branches) + slice (8 new me/profile cases, OperatorAdminControllerTest 23 → 31, all PASS — 204/204-null/401/whitespace/empty-body/empty-context/unknown-key/over-36) + IT (4 cases — set+audit-row / clear / no-auth / whitespace-unchanged; IT deferred to CI Linux runner — Docker daemon unavailable on dispatcher Windows host). Hard invariants: AC-5 `git diff --stat origin/main -- 'projects/{wms,scm,finance,erp,fan,ecommerce}-platform/'` = empty / AC-6 `git diff --stat origin/main -- 'projects/platform-console/apps/console-bff/src/'` = empty / specs byte-unchanged in impl PR. 분석=Opus 4.7 / 구현=Opus 4.7 / 리뷰=Opus 4.7.
 
 ## done
 

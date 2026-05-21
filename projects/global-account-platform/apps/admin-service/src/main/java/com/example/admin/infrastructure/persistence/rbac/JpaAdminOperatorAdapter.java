@@ -104,6 +104,15 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
         operatorRepository.save(entity);
     }
 
+    @Override
+    public void changeFinanceDefaultAccountId(long operatorInternalId, String newValue, Instant at) {
+        AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
+                .orElseThrow(() -> new OperatorNotFoundException(
+                        "admin_operators row not found for internalId=" + operatorInternalId));
+        entity.changeFinanceDefaultAccountId(newValue, at);
+        operatorRepository.save(entity);
+    }
+
     // ---------- Roles ----------
 
     @Override

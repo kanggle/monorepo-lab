@@ -76,6 +76,8 @@ public class AdminActionAuditor {
         map.put(ActionCode.TENANT_SUSPEND, "TENANT");
         map.put(ActionCode.TENANT_REACTIVATE, "TENANT");
         map.put(ActionCode.TENANT_UPDATE, "TENANT");
+        // TASK-BE-306 — self-serve operator profile mutation
+        map.put(ActionCode.OPERATOR_PROFILE_UPDATE, "OPERATOR");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -98,6 +100,13 @@ public class AdminActionAuditor {
     public static final String PERMISSION_2FA_RECOVERY_REGENERATE = "auth.2fa_recovery_regenerate";
     /** Reason constant stamped on recovery-code regeneration audit rows (no X-Operator-Reason). */
     public static final String REASON_SELF_RECOVERY_REGENERATE = "<self_recovery_regenerate>";
+    /** TASK-BE-306: synthetic permission stamped on self-serve profile mutation audit rows
+     *  (no grantable permission; mirror of the {@code &lt;self_*&gt;} reason family on the
+     *  permission_used column for symmetry with the other self-flow audit rows). */
+    public static final String PERMISSION_SELF_ACTION = "<self_action>";
+    /** TASK-BE-306: reason constant stamped on self-serve profile mutation audit rows
+     *  (no X-Operator-Reason header — admin-api.md §X-Operator-Reason in Exceptions sub-tree). */
+    public static final String REASON_SELF_PROFILE_UPDATE = "<self_profile_update>";
 
     private final AdminActionJpaRepository repository;
     private final OperatorLookupPort operatorLookupPort;
@@ -494,6 +503,9 @@ public class AdminActionAuditor {
             case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
+            // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
+            // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
+            case OPERATOR_PROFILE_UPDATE -> PERMISSION_SELF_ACTION;
         };
     }
 

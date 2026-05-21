@@ -6,6 +6,7 @@ import com.example.admin.application.CreateOperatorUseCase;
 import com.example.admin.application.OperatorQueryService;
 import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase;
+import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.CurrentPasswordMismatchException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.OperatorNotFoundException;
@@ -84,6 +85,7 @@ class OperatorAdminControllerTest {
     @MockBean PatchOperatorRoleUseCase patchOperatorRoleUseCase;
     @MockBean PatchOperatorStatusUseCase patchOperatorStatusUseCase;
     @MockBean ChangeMyPasswordUseCase changeMyPasswordUseCase;
+    @MockBean UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
 
     @MockBean
     PermissionEvaluator permissionEvaluator;
@@ -491,5 +493,100 @@ class OperatorAdminControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PASSWORD_POLICY_VIOLATION"));
+    }
+
+    // -------------------------------------- PATCH /operators/me/profile (TASK-BE-306)
+
+    @Test
+    void update_my_profile_set_uuid_returns_204() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"01928c4a-7e9f-7c00-9a40-d2b1f5e8a000"}}
+                                """))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void update_my_profile_clear_with_null_returns_204() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":null}}
+                                """))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void update_my_profile_without_jwt_returns_401() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"x"}}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
+    @Test
+    void update_my_profile_whitespace_only_returns_400_invalid_request() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"   "}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void update_my_profile_empty_body_returns_400_invalid_request() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void update_my_profile_empty_operator_context_returns_400_invalid_request() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void update_my_profile_unknown_nested_key_returns_400_invalid_request() throws Exception {
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"wmsDefaultWarehouseId":"x"}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void update_my_profile_over_36_chars_returns_400_invalid_request() throws Exception {
+        // 37-character value (one over the column length cap)
+        String tooLong = "a".repeat(37);
+        mockMvc.perform(patch("/api/admin/operators/me/profile")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"operatorContext":{"defaultAccountId":"%s"}}
+                                """.formatted(tooLong)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 }
