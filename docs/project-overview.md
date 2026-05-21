@@ -125,13 +125,13 @@
 | Service | Type | 책임 |
 |---|---|---|
 | `console-web` | frontend-app | 단일 콘솔 UI (GAP OIDC public client · data-driven 카탈로그 · 테넌트 스위처 · 도메인 운영 화면) |
-| `console-bff` | rest-api | 교차 도메인 집약 API (ADR-MONO-013 Phase 7, deferred) |
+| `console-bff` | rest-api | 교차 도메인 집약 API (ADR-MONO-013 Phase 7 LIVE — TASK-PC-BE-001 skeleton + § 2.4.9.1 Operator Overview + § 2.4.9.2 Domain Health) |
 
-### 2.7 [finance-platform](../projects/finance-platform/PROJECT.md) — 비은행 금융 서비스 (v1 부트스트랩 🚧)
+### 2.7 [finance-platform](../projects/finance-platform/PROJECT.md) — 비은행 금융 서비스 (v1 live — Phase 5 COMPLETE 2026-05-19/20)
 
 - **domain**: `fintech` · **traits**: `transactional`, `regulated`, `audit-heavy` · **service_types**: `rest-api`, `event-consumer`
 - **포지션**: monorepo Phase 6 **첫 Template 다운스트림 부트스트랩** ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md), ACCEPTED 2026-05-18, Option C). 6번째 도메인 프로젝트, `regulated + audit-heavy` fintech 표면 동시 첫 사용 (`kanggle/finance-platform` standalone Template fork + monorepo direct-include 병존).
-- **상태**: v1 부트스트랩 (TASK-MONO-114) — `projects/finance-platform/` tree + account-service 부트 가능 skeleton (비즈니스 로직 0) + PROJECT.md/specs/GAP V0017 시드 + monorepo wiring. 도메인 구현 = TASK-FIN-BE-001 (deferred).
+- **상태**: v1 live — 부트스트랩 (TASK-MONO-114, 2026-05-19) + account-service 도메인 구현 chain (TASK-FIN-BE-001 + 002/003/004 honest green-wash TRUE TERMINAL + FIN-BE-005 platform-console operator read consumer reconciliation, 2026-05-19~20) + platform-console federation live (FE-009 `/finance` console section + `console-integration-contract.md § 2.4.7` per-domain credential). ADR-MONO-013 § D6 Phase 5 COMPLETE.
 - **service map (v1)**:
 
 | Service | Type | 책임 |
@@ -144,11 +144,11 @@
 - **ID provider**: GAP OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
 - **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
 
-### 2.8 [erp-platform](../projects/erp-platform/PROJECT.md) — 전사 기간계 (v1 부트스트랩 🚧)
+### 2.8 [erp-platform](../projects/erp-platform/PROJECT.md) — 전사 기간계 (v1 live — Phase 6 COMPLETE 2026-05-20)
 
 - **domain**: `erp` · **traits**: `internal-system`, `transactional`, `audit-heavy` · **service_types**: `rest-api`
 - **포지션**: monorepo Phase 6 **두 번째 Template 다운스트림 부트스트랩** ([ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md), ACCEPTED 2026-05-19, Option C). 7번째 도메인 프로젝트, `internal-system`-primary 첫 사용 (`kanggle/erp-platform` standalone Template fork + monorepo direct-include 병존; standalone fork = 사용자 셸 hand-off PENDING).
-- **상태**: v1 부트스트랩 (TASK-MONO-119) — `projects/erp-platform/` tree + masterdata-service 부트 가능 skeleton (비즈니스 로직 0) + PROJECT.md/specs/GAP V0018 시드 + monorepo wiring. 도메인 구현 = TASK-ERP-BE-001 (deferred).
+- **상태**: v1 live — 부트스트랩 (TASK-MONO-119, 2026-05-19) + masterdata-service 도메인 구현 chain (TASK-ERP-BE-001 99-file Hexagonal + MONO-124 erp-integration CI job 5/5 IT PASS + ERP-BE-002 platform-console operator read consumer reconciliation, 2026-05-20) + platform-console federation live (FE-010 `/erp` console section + `console-integration-contract.md § 2.4.8` per-domain credential). ADR-MONO-013 § D6 Phase 6 COMPLETE.
 - **service map (v1)**:
 
 | Service | Type | 책임 |
