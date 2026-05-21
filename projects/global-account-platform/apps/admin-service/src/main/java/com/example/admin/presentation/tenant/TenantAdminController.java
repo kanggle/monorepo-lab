@@ -163,7 +163,10 @@ public class TenantAdminController {
                         e.getDisplayName(),
                         AdminOperator.Status.valueOf(e.getStatus()),
                         e.getVersion(),
-                        e.getTenantId()))
+                        e.getTenantId(),
+                        // TASK-BE-304: not read here (tenant admin path); pass through
+                        // so the domain record stays internally consistent.
+                        e.getFinanceDefaultAccountId()))
                 .orElseThrow(() -> new com.example.admin.application.exception.OperatorUnauthorizedException(
                         "Operator not found: " + operator.operatorId()));
     }

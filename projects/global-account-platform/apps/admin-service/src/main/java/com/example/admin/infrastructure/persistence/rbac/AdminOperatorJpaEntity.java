@@ -60,6 +60,18 @@ public class AdminOperatorJpaEntity {
     @Column(name = "oidc_subject", length = 255)
     private String oidcSubject;
 
+    // TASK-BE-304: Operator's chosen default finance-platform account UUID,
+    // emitted on console-registry-api § Per-operator profile attributes as the
+    // finance product item's operatorContext.defaultAccountId. NULL = not
+    // configured (Operator Overview finance card stays forbidden/MISSING_PREREQUISITE
+    // per MVP option (b) per console-integration-contract.md § 2.4.9.1).
+    // Set via a separate operator provisioning surface (out of scope here).
+    // VARCHAR(36) opaque UUID; GAP does not verify against finance-platform —
+    // stale ids surface as finance 404 ACCOUNT_NOT_FOUND. Classification:
+    // internal (data-model.md § Data Classification Summary).
+    @Column(name = "finance_default_account_id", length = 36)
+    private String financeDefaultAccountId;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 

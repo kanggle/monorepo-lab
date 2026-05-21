@@ -9,6 +9,7 @@ import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -68,9 +69,36 @@ public class ConsoleRegistryUseCase {
                     entry.displayName(),
                     entry.available(),
                     tenants,
-                    entry.baseRoute()));
+                    entry.baseRoute(),
+                    operatorContextFor(entry, adminOperator)));
         }
         return new ConsoleRegistry(products);
+    }
+
+    /**
+     * TASK-BE-304: per-product per-operator profile attributes emission rule.
+     *
+     * <p>v1: only the {@code finance} product item populates
+     * {@code operatorContext}, using
+     * {@code admin_operators.finance_default_account_id} when the column is
+     * non-null and non-empty after trim. All other 4 products always return
+     * {@code null} (the response DTO omits {@code operatorContext} via
+     * {@code @JsonInclude(Include.NON_NULL)}).
+     *
+     * <p>Authoritative emission rule:
+     * {@code specs/contracts/http/console-registry-api.md
+     * § Per-operator profile attributes (operatorContext)} per-product table.
+     */
+    private ProductOperatorContext operatorContextFor(ProductCatalog.Entry entry,
+                                                       AdminOperator adminOperator) {
+        if (!"finance".equals(entry.productKey())) {
+            return null;
+        }
+        String accountId = adminOperator.financeDefaultAccountId();
+        if (!StringUtils.hasText(accountId)) {
+            return null;
+        }
+        return new ProductOperatorContext(accountId);
     }
 
     /**
@@ -136,7 +164,8 @@ public class ConsoleRegistryUseCase {
                         e.getDisplayName(),
                         AdminOperator.Status.valueOf(e.getStatus()),
                         e.getVersion(),
-                        e.getTenantId()))
+                        e.getTenantId(),
+                        e.getFinanceDefaultAccountId()))
                 .orElseThrow(() -> new OperatorUnauthorizedException(
                         "Operator not found: " + operator.operatorId()));
     }
