@@ -288,9 +288,12 @@ GAP 는 두 가지 producer-side 선행물을 제공한다.
   운영자는 자신의 테넌트 1개만 (`tenants` length ≤ 1). 다른 테넌트의 slug 는
   어떤 product 의 `tenants` 에도 노출되지 않는다 (cross-tenant 격리 회귀 테스트
   필수, 본 문서 [격리 회귀 방지](#격리-회귀-방지) + M6).
-- `erp`/`finance` 는 bootstrap 전이므로 `available:false` + `tenants:[]`
-  placeholder 로 표현 (콘솔이 "coming soon" 렌더). product catalog 변경은
-  registry 변경만으로 console-web 코드 변경 0.
+- 5 federated domains (`gap` + `wms` + `scm` + `erp` + `finance`) 는 모두 V1
+  live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
+  reality-alignment — finance Phase 5 COMPLETE 2026-05-19/20 + erp Phase 6
+  COMPLETE 2026-05-20 per ADR-MONO-013 § D6). product catalog 변경은
+  registry 변경만으로 console-web 코드 변경 0 — `available` flag flip 자체가
+  `ServiceTile` 의 interactive/non-interactive 분기를 결정한다.
 - tenant 목록은 account-service 가 owns (`tenants` 테이블) 하며 admin-service
   `ListTenantsUseCase` 의 read-through proxy 로 조회. account-service 불가
   시 부분 catalog 가 아니라 503 (degradation 은 콘솔 섹션 한정).
