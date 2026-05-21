@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -21,7 +22,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,10 +54,19 @@ import java.util.function.Supplier;
  *   <li><b>Tenant pass-through verbatim</b> (D6.A).</li>
  *   <li><b>Composition timeout</b> 5s total; per-leg 2s — a slow leg degrades
  *       with {@code TIMEOUT}.</li>
- *   <li><b>Finance MVP option (b)</b> — when no
- *       {@code operatorDefaultAccountId} is resolvable from request context,
- *       finance leg is {@code forbidden / MISSING_PREREQUISITE} and the
- *       outbound HTTP call is NEVER fired (Javadoc-asserted; unit-tested).</li>
+ *   <li><b>Finance leg — Option (a) activation (TASK-PC-FE-014, both paths
+ *       first-class)</b> — when the caller supplies a non-blank
+ *       {@code financeDefaultAccountId} (sourced from the GAP registry
+ *       {@code productItem.operatorContext.defaultAccountId} per Phase 1
+ *       TASK-BE-304 and forwarded by console-web as the
+ *       {@code X-Finance-Default-Account-Id} request header per § 2.4.9.1
+ *       Implementation guidance Option (a) activation), the leg fires
+ *       {@code FinanceBalanceReadPort.readBalances(...)} and renders the
+ *       balances payload. When the id is absent/blank (operator profile has
+ *       no {@code admin_operators.finance_default_account_id}), the leg
+ *       short-circuits to {@code forbidden / MISSING_PREREQUISITE} and the
+ *       outbound HTTP call is NEVER fired. Both branches are first-class
+ *       honest UX (per task md § Decision authority).</li>
  * </ul>
  *
  * <p><b>Application-layer purity</b>: depends only on outbound ports
@@ -96,7 +105,7 @@ public class OperatorOverviewCompositionUseCase {
     private final DomainReadPort<Map<String, Object>> gapPort;
     private final DomainReadPort<Map<String, Object>> wmsPort;
     private final DomainReadPort<Map<String, Object>> scmPort;
-    private final DomainReadPort<Map<String, Object>> financePort;
+    private final FinanceBalanceReadPort financePort;
     private final DomainReadPort<Map<String, Object>> erpPort;
 
     /**
@@ -122,9 +131,31 @@ public class OperatorOverviewCompositionUseCase {
     }
 
     /**
+     * Backward-compatible 1-arg overload — equivalent to
+     * {@code compose(tenantId, null)} (finance leg follows the
+     * {@code MISSING_PREREQUISITE} branch). Retained as a thin pass-through
+     * for any in-process direct callers; the production inbound path
+     * ({@code OperatorOverviewController}) uses the 2-arg overload to thread
+     * the optional {@code X-Finance-Default-Account-Id} request header
+     * (TASK-PC-FE-014).
+     */
+    public List<CompositionLeg> compose(String tenantId) {
+        return compose(tenantId, null);
+    }
+
+    /**
      * Composes the operator overview by firing 5 parallel outbound legs.
      *
-     * @param tenantId active tenant forwarded verbatim on every leg (D6.A)
+     * @param tenantId                 active tenant forwarded verbatim on every leg (D6.A)
+     * @param financeDefaultAccountId  optional operator finance default account id
+     *                                 (sourced from the GAP registry
+     *                                 {@code productItem.operatorContext.defaultAccountId}
+     *                                 and forwarded as the
+     *                                 {@code X-Finance-Default-Account-Id} request header
+     *                                 per § 2.4.9.1 Option (a) activation; nullable/blank
+     *                                 → finance leg renders
+     *                                 {@code forbidden / MISSING_PREREQUISITE}
+     *                                 without any outbound HTTP call)
      * @return the fixed-order 5-leg composition result (gap, wms, scm,
      *         finance, erp); each leg carries its {@link LegOutcome} and the
      *         optional ok-payload
@@ -134,7 +165,7 @@ public class OperatorOverviewCompositionUseCase {
      *                                       absence cases are turned into
      *                                       per-leg outcomes)
      */
-    public List<CompositionLeg> compose(String tenantId) {
+    public List<CompositionLeg> compose(String tenantId, String financeDefaultAccountId) {
         // (0) Pre-resolve credentials on the SERVLET THREAD where the request
         //     scope is active. Each virtual thread spawned by fanOut() runs in
         //     its OWN thread context — Spring's RequestContextHolder is thread-
@@ -162,7 +193,8 @@ public class OperatorOverviewCompositionUseCase {
             }
         }
 
-        Map<DomainTarget, CompositionLeg> results = fanOut(tenantId, preResolved, earlyDecided);
+        Map<DomainTarget, CompositionLeg> results = fanOut(
+                tenantId, preResolved, earlyDecided, financeDefaultAccountId);
 
         // (1) Cross-leg 401: collapse to composition-level 401
         //     (§ 2.4.4 D3 / § 2.4.9.1 — auth is not a per-card degrade).
@@ -201,7 +233,8 @@ public class OperatorOverviewCompositionUseCase {
     private Map<DomainTarget, CompositionLeg> fanOut(
             String tenantId,
             Map<DomainTarget, OutboundCredential> preResolved,
-            Map<DomainTarget, CompositionLeg> earlyDecided) {
+            Map<DomainTarget, CompositionLeg> earlyDecided,
+            String financeDefaultAccountId) {
         // Java 21 virtual-thread executor: each leg gets its own VT.
         // Each leg receives its credential as a PLAIN VALUE (record) — no
         // request-scoped bean is dereferenced inside the virtual thread.
@@ -217,7 +250,7 @@ public class OperatorOverviewCompositionUseCase {
                     cred -> callScm(tenantId, cred), preResolved);
             CompletableFuture<CompositionLeg> financeFuture = legFuture(executor,
                     DomainTarget.FINANCE, earlyDecided,
-                    cred -> callFinance(tenantId, cred), preResolved);
+                    cred -> callFinance(tenantId, cred, financeDefaultAccountId), preResolved);
             CompletableFuture<CompositionLeg> erpFuture = legFuture(executor,
                     DomainTarget.ERP, earlyDecided,
                     cred -> callErp(tenantId, cred), preResolved);
@@ -324,28 +357,41 @@ public class OperatorOverviewCompositionUseCase {
     }
 
     /**
-     * Finance MVP option (b) per § 2.4.9.1 Implementation guidance: when no
-     * {@code operatorDefaultAccountId} is resolvable from request context,
-     * surface {@code forbidden / MISSING_PREREQUISITE} <b>without</b> firing
-     * the outbound HTTP call. Finance v1 has no list/search GET, so no
-     * account list to summarize. Option (a) (GAP registry per-operator
-     * {@code finance.defaultAccountId} claim) is a separately-tracked
-     * spec-first GAP enhancement, deferred.
+     * Finance leg — Option (a) activation (TASK-PC-FE-014, both paths first-class
+     * per § 2.4.9.1 Implementation guidance):
      *
-     * <p>The unit test asserts this branch.
+     * <ul>
+     *   <li><b>Header-present (non-blank {@code accountId}):</b> routes through
+     *       {@link FinanceBalanceReadPort#readBalances(String, String, String)} —
+     *       outbound {@code GET /api/finance/accounts/{accountId}/balances} with the
+     *       GAP OIDC access token as bearer (per § 2.4.9.1 row 4 / § 2.4.7). The leg
+     *       renders the balances payload on the {@code ok} card.</li>
+     *   <li><b>Header-absent/blank:</b> surfaces
+     *       {@code forbidden / MISSING_PREREQUISITE} <b>without</b> firing any
+     *       outbound HTTP call. This is the honest UX for operators whose
+     *       {@code admin_operators.finance_default_account_id} column is
+     *       {@code NULL} (the default post-V0028 migration).</li>
+     * </ul>
+     *
+     * <p>Both branches are first-class — neither is a transient or deprecated
+     * state. The unit / slice / IT tests cover both.
+     *
+     * @param tenantId  active tenant forwarded verbatim (D6.A)
+     * @param cred      pre-resolved finance credential (GAP OIDC access token
+     *                  per § 2.4.9.1 row 4)
+     * @param accountId the operator's {@code finance_default_account_id} as
+     *                  forwarded by console-web; null/blank/whitespace-only ⇒
+     *                  short-circuit to {@code MISSING_PREREQUISITE}
      */
-    private CompositionLeg callFinance(String tenantId, OutboundCredential cred) {
-        Optional<String> accountId = resolveOperatorDefaultAccountId();
-        if (accountId.isEmpty()) {
+    private CompositionLeg callFinance(String tenantId, OutboundCredential cred, String accountId) {
+        if (!StringUtils.hasText(accountId)) {
             emitErrorCounter(DomainTarget.FINANCE, "missing_prerequisite");
             return CompositionLeg.outcomeOnly(
                     LegOutcome.forbidden(DomainTarget.FINANCE, "MISSING_PREREQUISITE"));
         }
         return time(DomainTarget.FINANCE, () -> {
             String bearer = bearerFromCred(cred);
-            // The narrow port adapter for finance dispatches to /balances when an
-            // id is supplied; the underlying adapter wires the path template.
-            Map<String, Object> data = financePort.read(tenantId, bearer);
+            Map<String, Object> data = financePort.readBalances(tenantId, bearer, accountId.trim());
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), data);
         });
     }
@@ -370,16 +416,6 @@ public class OperatorOverviewCompositionUseCase {
             case OutboundCredential.OperatorToken t -> t.token();
             case OutboundCredential.GapOidcAccessToken t -> t.token();
         };
-    }
-
-    /**
-     * MVP: no inbound mechanism for the operator's default finance account id
-     * exists (option a — GAP registry surface — is deferred). Always returns
-     * {@link Optional#empty()} which the caller maps to
-     * {@code MISSING_PREREQUISITE}.
-     */
-    private Optional<String> resolveOperatorDefaultAccountId() {
-        return Optional.empty();
     }
 
     // ------------------------------------------------------------------
@@ -512,8 +548,44 @@ public class OperatorOverviewCompositionUseCase {
     /** Narrow port: scm inventory visibility read. */
     public interface ScmInventoryReadPort extends DomainReadPort<Map<String, Object>> {}
 
-    /** Narrow port: finance balance read (operator default account id resolved upstream). */
-    public interface FinanceBalanceReadPort extends DomainReadPort<Map<String, Object>> {}
+    /**
+     * Narrow port: finance balance read (operator default account id resolved upstream).
+     *
+     * <p>The {@link #read(String, String)} inherited from
+     * {@link DomainReadPort} remains for contract conformance but is the
+     * <b>marker for the inactive path</b> — the finance leg never uses it
+     * (the adapter throws {@link UnsupportedOperationException}). The active
+     * path is {@link #readBalances(String, String, String)}, which the
+     * use-case invokes once Option (a) is satisfied (TASK-PC-FE-014).
+     */
+    public interface FinanceBalanceReadPort extends DomainReadPort<Map<String, Object>> {
+
+        /**
+         * TASK-PC-FE-014 Option (a) activation: reads the operator's default
+         * finance account balances. The caller (use-case) guarantees
+         * {@code accountId} is non-blank — the use-case applies
+         * {@link StringUtils#hasText(CharSequence)} before invoking; blank or
+         * null short-circuits to {@code MISSING_PREREQUISITE} on the use-case
+         * side and this method is never reached. The {@link #read(String, String)}
+         * default remains the {@link DomainReadPort} contract conformance
+         * point but is {@code UnsupportedOperationException}-throwing on the
+         * concrete adapter — the marker that the active path is
+         * {@code readBalances}.
+         *
+         * @param tenantId   active tenant forwarded verbatim (D6.A)
+         * @param credential GAP OIDC access token bearer value
+         *                   (per § 2.4.9.1 row 4 / § 2.4.7)
+         * @param accountId  operator's finance default account id (non-blank;
+         *                   sourced from GAP registry
+         *                   {@code productItem.operatorContext.defaultAccountId}
+         *                   per TASK-BE-304, threaded through the
+         *                   {@code X-Finance-Default-Account-Id} request header
+         *                   per § 2.4.9.1 Option (a) activation)
+         * @return the balances payload (domain-shaped {@code Map}); never
+         *         {@code null}
+         */
+        Map<String, Object> readBalances(String tenantId, String credential, String accountId);
+    }
 
     /** Narrow port: erp departments snapshot read. */
     public interface ErpDepartmentsReadPort extends DomainReadPort<Map<String, Object>> {}

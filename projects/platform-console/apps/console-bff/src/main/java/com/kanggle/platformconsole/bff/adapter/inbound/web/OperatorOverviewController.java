@@ -7,6 +7,7 @@ import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompo
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -31,6 +32,14 @@ import java.util.List;
  *   <li>{@code X-Operator-Token} — required for the GAP leg; absent token on
  *       a GAP-targeted dispatch fails closed inside the credential selector
  *       (per-card {@code forbidden / MISSING_PREREQUISITE}).</li>
+ *   <li>{@code X-Finance-Default-Account-Id} — <b>optional</b>; threaded
+ *       through to {@link OperatorOverviewCompositionUseCase#compose(String, String)}
+ *       per § 2.4.9.1 Option (a) activation (TASK-PC-FE-014). When present
+ *       and non-blank, the finance leg fires the balance read for the supplied
+ *       account; when absent/blank, the finance leg short-circuits to
+ *       {@code forbidden / MISSING_PREREQUISITE} (honest UX for operators
+ *       whose {@code admin_operators.finance_default_account_id} is NULL).
+ *       Both paths are first-class.</li>
  * </ul>
  *
  * <p>Output: HTTP 200 with the composed envelope. <b>All-down still emits
@@ -55,7 +64,9 @@ public class OperatorOverviewController {
     }
 
     @GetMapping("/api/console/dashboards/operator-overview")
-    public ResponseEntity<OperatorOverviewResponse> operatorOverview() {
+    public ResponseEntity<OperatorOverviewResponse> operatorOverview(
+            @RequestHeader(value = "X-Finance-Default-Account-Id", required = false)
+            String financeDefaultAccountId) {
         // (1) Fail-closed: X-Tenant-Id required before any outbound (D6.A).
         if (!credentialContext.hasTenant()) {
             throw new MissingTenantException();
@@ -67,9 +78,17 @@ public class OperatorOverviewController {
 
         // (3) Compose — use case fires 5 parallel legs, maps outcomes, emits
         //     per-leg + degrade metrics, and returns the fixed-order 5 legs.
+        //     The optional X-Finance-Default-Account-Id header is forwarded
+        //     verbatim to enable § 2.4.9.1 Option (a) activation on the
+        //     finance leg (TASK-PC-FE-014); a null/blank value preserves the
+        //     existing MISSING_PREREQUISITE short-circuit (AC-2 regression
+        //     guard). The header value is operator profile data flowing on
+        //     the request — never credential — so it is NOT logged at INFO
+        //     (AC-8 / finance F7 / regulated.md R7 transitive discipline).
         //     Cross-leg 401 escapes as UpstreamUnauthorizedException →
         //     handled by GlobalExceptionHandler (401 TOKEN_INVALID).
-        List<CompositionLeg> legs = compositionUseCase.compose(credentialContext.getTenantId());
+        List<CompositionLeg> legs = compositionUseCase.compose(
+                credentialContext.getTenantId(), financeDefaultAccountId);
 
         // (4) Map to wire envelope (§ 2.4.9.1 response schema).
         List<OperatorOverviewResponse.Card> cards = new ArrayList<>(legs.size());
