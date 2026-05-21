@@ -18,8 +18,9 @@ import java.util.List;
  *   <li>{@code gap} federates ALL registered tenants
  *       ({@link Entry#bindsAllTenants()} = true).</li>
  *   <li>{@code wms}/{@code scm} bind to their own tenant slug.</li>
- *   <li>{@code erp}/{@code finance} are not bootstrapped — {@code available
- *       = false}, no tenant binding.</li>
+ *   <li>{@code erp}/{@code finance} are V1 live (ADR-MONO-013 § D6 Phase 5/6
+ *       COMPLETE 2026-05-19/20); both bind to their own tenant slug — same
+ *       shape as wms/scm.</li>
  * </ul>
  */
 public final class ProductCatalog {
@@ -46,10 +47,8 @@ public final class ProductCatalog {
             new Entry("gap", "Global Account Platform", true, true, null, "/gap"),
             new Entry("wms", "Warehouse Management Platform", true, false, "wms", "/wms"),
             new Entry("scm", "Supply Chain Management Platform", true, false, "scm", "/scm"),
-            // Not bootstrapped — ADR-MONO-008 / future erp ADR. Rendered as
-            // "coming soon" by the console (available:false, tenants:[]).
-            new Entry("erp", "Enterprise Resource Planning", false, false, "erp", "/erp"),
-            new Entry("finance", "Finance Platform", false, false, "finance", "/finance")
+            new Entry("erp", "Enterprise Resource Planning", true, false, "erp", "/erp"),
+            new Entry("finance", "Finance Platform", true, false, "finance", "/finance")
     );
 
     public static List<Entry> entries() {

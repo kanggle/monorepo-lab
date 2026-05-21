@@ -88,8 +88,11 @@ class ConsoleRegistryUseCaseTest {
     }
 
     @Test
-    @DisplayName("catalog: exactly 5 products; erp/finance available=false + tenants=[]")
-    void catalog_five_products_erp_finance_unavailable() {
+    @DisplayName("catalog: exactly 5 products; erp/finance available=true + tenants=[] when their slugs not registered (TASK-BE-305)")
+    void catalog_five_products_erp_finance_available_noRegisteredTenants() {
+        // Seeds only fan-platform (no erp/finance tenant rows) — the tenant-selection
+        // rule returns tenants:[] for erp/finance (slug not in activeTenants), but
+        // available stays true (AC-1 / TASK-BE-305 reality-alignment).
         stubOperator("op-1", "*");
         stubTenants(tenant("fan-platform", "ACTIVE"));
 
@@ -97,9 +100,9 @@ class ConsoleRegistryUseCaseTest {
 
         assertThat(r.products()).extracting(ConsoleProduct::productKey)
                 .containsExactly("gap", "wms", "scm", "erp", "finance");
-        assertThat(product(r, "erp").available()).isFalse();
+        assertThat(product(r, "erp").available()).isTrue();
         assertThat(product(r, "erp").tenants()).isEmpty();
-        assertThat(product(r, "finance").available()).isFalse();
+        assertThat(product(r, "finance").available()).isTrue();
         assertThat(product(r, "finance").tenants()).isEmpty();
         assertThat(product(r, "gap").baseRoute()).isEqualTo("/gap");
     }
