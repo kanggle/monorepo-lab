@@ -38,7 +38,7 @@
 |---|---|---|
 | `productKey` | string | `gap` \| `wms` \| `scm` \| `erp` \| `finance` |
 | `displayName` | string | Catalog tile label |
-| `available` | boolean | `false` → rendered as "coming soon" (e.g. `erp`/`finance` pre-bootstrap) |
+| `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 5 federated v1 domains — `gap` + `wms` + `scm` + `erp` + `finance` — are `available:true` as of TASK-BE-305 2026-05-21) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
 | `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from GAP `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`global-account-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../global-account-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
@@ -1240,10 +1240,12 @@ Consumer wiring chain (top-down, all server-side; the browser never sees any of 
 - **§ 3 parity matrix byte-unchanged** (attestation-marker count = exactly **16** — `parity-verification.test.ts` no-drift guard).
 - **ADR-MONO-017 D1-D8 byte-unchanged** (no ADR amendment in this PR — this is execution under the ACCEPTED frame).
 
-> **Phase 7 = MVP-only at this commit**. Subsequent Phase 7 dashboards
-> (e.g. domain health, throughput) are separate future tasks (ADR-MONO-017
-> § D8); they will be added as `§ 2.4.9.2`, `§ 2.4.9.3`, … sub-sections,
-> each inheriting the hard invariants above.
+> **Phase 7 dashboard catalog (current)**: § 2.4.9.1 MVP "Operator Overview"
+> (TASK-PC-FE-011 DONE 2026-05-20) + § 2.4.9.2 "Domain Health Overview"
+> (TASK-PC-FE-013 DONE 2026-05-21) are merged. Subsequent Phase 7 dashboards
+> (e.g. throughput per ADR-MONO-017 § 3.3 #4) remain separate future tasks
+> following the same `§ 2.4.9.X` additive pattern, each inheriting the hard
+> invariants above.
 
 > **Not a § 3 parity row**: composition routes are additive to the operator
 > surface, never replace a § 3 row. § 3 count remains **16** post-merge.
@@ -1516,8 +1518,7 @@ authorizing `admin-web` removal — that is a distinct GAP-internal change.
 ## 4. Out of Scope (this contract)
 
 - Domain business logic / domain event contracts (each domain owns these).
-- `console-bff` aggregation endpoint shapes (ADR-MONO-013 Phase 7 — added when the BFF lands).
-- finance/erp domain contracts (governed by ADR-MONO-008 / future erp ADR).
+- finance/erp domain contracts (governed by ADR-MONO-008 / ADR-MONO-016 — both ACCEPTED 2026-05-19).
 
 ---
 
