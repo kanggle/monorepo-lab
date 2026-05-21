@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-020-self-operator-id-page-handoff-plumbing.md` — platform-console `selfOperatorId` page-handoff plumbing. Closes TASK-PC-FE-017 honest gap (b). Server-side `getSelfOperatorIdOrNull()` helper (calls `GET /api/admin/me`, fail-graceful → null on any failure) + `(console)/operators/page.tsx` 가 `<OperatorsScreen selfOperatorId={...} />` 전달. UX gate (self row 의 "프로파일 편집" 버튼 disabled) 가 활성화 — 현재 producer 400 fail-safe 만 작동. ≤ 5 file impl. No contract change; no parity matrix row; no ADR; no `jose` dep. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical helper + 1-2 line page change + vitest) / 리뷰=Opus 4.7.
 
 ## in-progress
 
