@@ -159,11 +159,19 @@ Returns the data-driven product/tenant catalog the console renders.
       "displayName": "Finance Platform",
       "available": false,
       "tenants": [],
-      "baseRoute": "/finance"
+      "baseRoute": "/finance",
+      "operatorContext": { "defaultAccountId": "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000" }
     }
   ]
 }
 ```
+
+> The `operatorContext` example above shows the **set case** — when the
+> calling operator's `admin_operators.finance_default_account_id` is non-null
+> (per TASK-BE-304). When the operator has not configured a default finance
+> account, the `operatorContext` field is **omitted** from the finance item
+> entirely (Jackson `@JsonInclude(NON_NULL)`); see § Per-operator profile
+> attributes below.
 
 ### Item shape (normative — mirrors console-integration-contract § 2.2)
 
@@ -174,6 +182,59 @@ Returns the data-driven product/tenant catalog the console renders.
 | `available` | boolean | `false` → console renders "coming soon" |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
+| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304** — optional extensible carrier for per-operator per-product profile attributes; **omitted entirely** when no attribute is set (never rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from `admin_operators.finance_default_account_id`); the other 4 items always omit it. See § Per-operator profile attributes. |
+
+### Per-operator profile attributes (`operatorContext`) — TASK-BE-304
+
+The `operatorContext` nested object is the **extensible carrier** for
+per-operator per-product profile attributes the GAP `admin_operators` row owns
+on behalf of a federated product. It is scoped per-operator-row (never
+per-tenant, never cross-tenant) and is read only on the operator's own row in
+`ConsoleRegistryUseCase.resolveOperator(operator)` — the same row that
+already authorizes the registry call (no scope-widening JPA query).
+
+Design rationale (recorded inline so consumer + producer agree without an ADR):
+
+- **Why nested, not top-level**: a top-level `defaultAccountId` on the finance
+  item would be polymorphic — every future per-operator per-product attribute
+  (e.g. wms `defaultWarehouseId`, scm `defaultNodeId`, erp
+  `defaultDepartmentId`) would need its own top-level field. The nested
+  `operatorContext` object scales without per-product item shape divergence:
+  each product item carries the same field name with a per-product attribute
+  shape.
+- **Why omitted, not `null`**: the consumer-side contract
+  ([`console-integration-contract.md § 2.2`](../../../../platform-console/specs/contracts/console-integration-contract.md))
+  reads each item as a typed shape; an absent field is unambiguously "no
+  attribute set", while a literal `null` would force every consumer to treat
+  the field as `null \| {…}` explicitly. Jackson
+  `@JsonInclude(JsonInclude.Include.NON_NULL)` enforces omission at the
+  serializer.
+- **Why GAP-side storage (not finance-side)**: this is operator profile
+  data, not finance domain data. `admin_operators` is the existing operator
+  profile authority (`tenant_id` is already there per ADR-002). A new column
+  `finance_default_account_id VARCHAR(36) NULL` extends the same row with a
+  single nullable scalar — minimal blast radius, no cross-service call.
+- **Why no validation against finance-platform**: GAP carries the value as
+  opaque (`VARCHAR(36)`, non-empty when set). A stale account id surfaces
+  honestly on the eventual cross-domain BFF call as a finance `404
+  ACCOUNT_NOT_FOUND` — the console then renders the affected card as
+  `degraded` with the producer error, preserving the GAP↔finance
+  non-coupling invariant.
+
+Per-product emission rule (v1):
+
+| product | emits `operatorContext` | source | when |
+|---|---|---|---|
+| `gap` | no | — | always omitted |
+| `wms` | no | — | always omitted |
+| `scm` | no | — | always omitted |
+| `erp` | no | — | always omitted |
+| `finance` | yes (`{ defaultAccountId }`) | `admin_operators.finance_default_account_id` | when the column is non-null + non-empty after trim; omitted otherwise |
+
+The schema reserves `operatorContext` for future per-operator per-product
+attributes; the v1 producer surface populates only the `finance` product item.
+The other 4 products may begin populating it in future tasks without breaking
+the v1 consumer.
 
 ### Product catalog (static, registry-driven)
 
@@ -240,6 +301,13 @@ Error envelope: the standard
   M6; task Failure Scenario "Registry leaks cross-tenant products").
 - `gap` product's `tenants` for a single-tenant operator is `["<own>"]`
   (length ≤ 1) — it is **not** the full tenant list.
+- **`operatorContext` (TASK-BE-304) carries no cross-tenant data**: the
+  `admin_operators.finance_default_account_id` column is read from the
+  calling operator's own row via `resolveOperator(operator.operatorId())` —
+  the same per-operator lookup that already authorizes the registry call. No
+  scope-widening JPA query is introduced; another operator's
+  `finance_default_account_id` is never reachable on any response. (Asserted
+  in `ConsoleRegistryIntegrationTest`.)
 
 ---
 
@@ -248,10 +316,15 @@ Error envelope: the standard
 1. Endpoint path / auth / response envelope changes update **this file**
    before implementation.
 2. The item shape (`productKey` / `displayName` / `available` / `tenants` /
-   `baseRoute`) is governed by the consumer contract
+   `baseRoute` / `operatorContext`) is governed by the consumer contract
    (`platform-console/specs/contracts/console-integration-contract.md § 2.2`)
    — a shape change requires updating that file first and an ADR if it alters
    a deployed integration (console-integration-contract § 5).
 3. Product catalog membership / `available` rules are documented here and in
    [multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console
    Registry" — keep both in sync in the same PR.
+4. Adding a new `operatorContext.*` attribute (TASK-BE-304 extensible carrier)
+   is **additive** when (a) it is optional + omitted-by-default and (b) the
+   attribute is per-operator + scoped via `resolveOperator(operator.operatorId())`
+   (no scope widening). Cross-tenant or cross-operator carriers require a
+   separate spec PR and an ADR.
