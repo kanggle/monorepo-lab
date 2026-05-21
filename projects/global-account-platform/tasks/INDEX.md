@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-307-operator-profile-admin-on-behalf-of-mutation-endpoint.md` — spec PR (this). GAP admin-service admin-on-behalf-of operator profile mutation endpoint (`PATCH /api/admin/operators/{operatorId}/profile`) — SUPER_ADMIN can provision another operator's `operatorContext.defaultAccountId`. Cross-operator counterpart of TASK-BE-306 self-serve (DONE 2026-05-21 — bae27cff/22952bfd/e958e4d4). Mirrors `{operatorId}/roles` + `{operatorId}/status` admin-family pattern: `operator.manage` permission + `X-Operator-Reason` required + tenant-scoped + new `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` (mirror SELF_SUSPEND_FORBIDDEN precedent — self-flow goes through `/me/profile` for clean audit separation). **Reuse from BE-306**: column V0029 / `OPERATOR_PROFILE_UPDATE` action_code (actor differentiation = `(operator_id, target_id)` tuple) / `AdminOperator.withFinanceDefaultAccountId` factory / `AdminOperatorPort.changeFinanceDefaultAccountId` port + adapter / request DTO shape (or refactor BE-306's into shared). New: `UpdateOperatorProfileUseCase` + `SelfProfileUpdateForbiddenException` + admin controller handler + cross-tenant guard + 5 unit/IT cases. Prerequisite for TASK-PC-FE-017 (console-web admin profile-edit per-row UI). spec PR scope = this task md + `admin-api.md` new section (exactly 2 files). Impl PR follows after spec PR merges. 분석=Opus 4.7 / 구현 권장=Opus 4.7 / 리뷰=Opus 4.7.
 
 ## in-progress
 
