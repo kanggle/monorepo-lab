@@ -36,11 +36,13 @@ const ITEM_C: CheckoutCartItem = {
   quantity: 3,
 };
 
+type RemoveItem = (productId: string, variantId: string) => void;
+
 describe('useCheckoutItems', () => {
-  let mockRemoveItem: ReturnType<typeof vi.fn>;
+  let mockRemoveItem: ReturnType<typeof vi.fn<RemoveItem>>;
 
   beforeEach(() => {
-    mockRemoveItem = vi.fn();
+    mockRemoveItem = vi.fn<RemoveItem>();
     mockSearchParams = new URLSearchParams();
   });
 

@@ -145,7 +145,7 @@ describe('CartSummary', () => {
     // 선택 상태가 비동기 초기화로 비어있을 수 있으므로 전체선택 후 삭제
     const allCheckboxes = screen.getAllByRole('checkbox');
     // 전체선택(첫 번째 체크박스)이 체크되지 않은 경우 클릭해서 전체 선택
-    if (!allCheckboxes[0].checked) {
+    if (!(allCheckboxes[0] as HTMLInputElement).checked) {
       await user.click(allCheckboxes[0]);
     }
     await user.click(screen.getByText('선택 삭제'));

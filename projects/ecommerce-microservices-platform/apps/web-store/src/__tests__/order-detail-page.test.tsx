@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { OrderDetail, ApiErrorResponse, PaymentResponse } from '@repo/types';
+import type {
+  OrderDetail,
+  ApiErrorResponse,
+  PaymentResponse,
+  CancelOrderResponse,
+} from '@repo/types';
 import { TestQueryProvider } from './test-utils';
 
 const mockReplace = vi.fn();
@@ -216,9 +221,12 @@ describe('OrderDetailPage', () => {
   it('취소 처리 중 버튼이 비활성화된다', async () => {
     mockGetOrder.mockResolvedValueOnce(MOCK_ORDER);
 
-    let resolveCancelOrder: (value: { orderId: string; status: string }) => void;
+    let resolveCancelOrder: (value: CancelOrderResponse) => void;
     mockCancelOrder.mockImplementationOnce(
-      () => new Promise((resolve) => { resolveCancelOrder = resolve; }),
+      () =>
+        new Promise<CancelOrderResponse>((resolve) => {
+          resolveCancelOrder = resolve;
+        }),
     );
 
     const user = userEvent.setup();
