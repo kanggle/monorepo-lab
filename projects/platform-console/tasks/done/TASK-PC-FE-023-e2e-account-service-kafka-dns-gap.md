@@ -8,7 +8,7 @@ platform-console e2e — finalize TASK-PC-FE-019 nightly first-fire `kafka` DNS 
 
 # Status
 
-ready
+done
 
 # Owner
 
