@@ -42,6 +42,16 @@ subprojects {
     // DOCKER_API_VERSION + system property 'api.version' force docker-java to skip
     // the stale default. DOCKER_HOST forwarding handles Windows named-pipe / WSL2
     // socket override scenarios.
+    // Defensive future-proof — when `-Xlint:all` or `-Xlint:serial` is ever
+    // enabled (currently neither is set), silently skip the cosmetic `[serial]`
+    // warning category. This codebase uses exceptions only for control flow
+    // (Spring `@RestControllerAdvice` converts to JSON ErrorResponse before
+    // serialization), so the missing `serialVersionUID` warnings on ~200
+    // exception classes are pure noise. Per TASK-MONO-131.
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs.add('-Xlint:-serial')
+    }
+
     tasks.withType(Test).configureEach {
         def dockerHost = System.getenv('DOCKER_HOST') ?: System.getProperty('docker.host')
         if (dockerHost) {
