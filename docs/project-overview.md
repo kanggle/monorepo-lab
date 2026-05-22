@@ -82,7 +82,7 @@
 - **stack**: Java 21 / Spring Boot 3.4 / Postgres / Kafka / Redis / Elasticsearch / MinIO
 - **GAP migration**: 향후 (TASK-MONO-020) — 현재 자체 auth-service.
 
-### 2.4 [scm-platform](../projects/scm-platform/PROJECT.md) — 공급망 통합 (v1 진행 중 🚧)
+### 2.4 [scm-platform](../projects/scm-platform/PROJECT.md) — 공급망 통합 (v1 ✅)
 
 - **domain**: `scm` · **traits**: `transactional`, `integration-heavy`, `batch-heavy`
 - **포지션**: **Phase 4 catalyst 도메인** ([ADR-MONO-002](adr/ADR-MONO-002-phase-4-template-extraction-trigger.md)). `batch-heavy` trait 의 첫 사용 사례.
@@ -114,12 +114,12 @@
 
 - **v2 deferred**: `membership-service` (PG 통합), `notification-service` (FCM/APNs), `admin-service` (모더레이션)
 
-### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 부트스트랩 🚧, 도메인 축 아님)
+### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 ✅ Phase 7 LIVE — 5/5 federated domains, 도메인 축 아님)
 
 - **domain**: `saas` · **traits**: `multi-tenant`, `integration-heavy`, `audit-heavy` · **service_types**: `frontend-app`
 - **포지션**: 포트폴리오 엔터프라이즈 스위트(gap·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
 - **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → GAP 백엔드-only IdP 회귀.
-- **상태**: Phase 1 부트스트랩 (TASK-MONO-108) — `console-web` 부트 가능 skeleton + PROJECT.md/specs/contract/first task. SSO·data-driven 카탈로그·도메인 화면은 TASK-PC-FE-001 (Phase 2). GAP 측 선행 = TASK-BE-296.
+- **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — 5/5 federated backend domains (`gap` + `wms` + `scm` + `finance` + `erp`) `available:true`. console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
 - **service map**:
 
 | Service | Type | 책임 |
