@@ -40,12 +40,12 @@ taxonomy_version: 0.1
 
 ## Service Map
 
-### v1 (ADR-MONO-013 Phase 1~2 + Phase 7 skeleton)
+### v1 (ADR-MONO-013 Phase 1~6 COMPLETE + Phase 7 LIVE)
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
 | `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. Phase 4~6 = 4개 non-GAP 도메인(wms/scm/finance/erp) 운영 화면 federation 완료. |
-| `console-bff` | rest-api | 교차 도메인 집약 BFF (Backend-for-Frontend). 5 도메인(GAP + wms + scm + finance + erp)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드(MVP = "Operator Overview") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 = skeleton + `GET /actuator/health`; MVP "Operator Overview" cross-domain dashboard 는 후속 task (`TASK-PC-FE-011`). |
+| `console-bff` | rest-api | 교차 도메인 집약 BFF (Backend-for-Frontend). 5 도메인(GAP + wms + scm + finance + erp)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드 ("Operator Overview" / "Domain Health") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 LIVE = `/actuator/health` (PC-BE-001) + Operator Overview MVP (PC-FE-011) + Domain Health (PC-BE-002) + finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration). |
 
 상세 아키텍처는 각 service의 `specs/services/<service>/architecture.md`에서 선언.
 
