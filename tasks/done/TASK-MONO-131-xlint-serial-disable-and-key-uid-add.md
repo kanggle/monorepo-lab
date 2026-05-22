@@ -8,7 +8,7 @@ Root `build.gradle` `-Xlint:-serial` defensive future-proof + libs/ shared base 
 
 # Status
 
-ready
+done
 
 # Owner
 
