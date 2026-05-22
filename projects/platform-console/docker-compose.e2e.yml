@@ -20,10 +20,15 @@
 #   - Redis 7              (shared — rate-limit / SAS authorization cache)
 #
 # Excluded (deliberately — mirrors ecommerce CI overlay scope discipline):
-#   - Kafka                (the 2 e2e specs do not exercise an event-publishing
+#   - Kafka broker         (the 2 e2e specs do not exercise an event-publishing
 #                           code path; admin-service writes `admin_actions`
 #                           synchronously. Future spec needing event observation
-#                           can re-add Kafka.)
+#                           can promote the placeholder below to a real broker.
+#                           NOTE: a minimal DNS-only `kafka` placeholder service
+#                           IS provided below — required to satisfy the three
+#                           GAP service Dockerfiles' BE-048 `getent hosts kafka`
+#                           ENTRYPOINT pre-flight (no broker semantics; see the
+#                           `kafka` service block + TASK-PC-FE-023 rationale).)
 #   - Traefik              (CI overlay uses host-port publish + service-DNS
 #                           hostnames; the dev path remains `pnpm traefik:up`
 #                           + `http://console.local/`.)
@@ -121,6 +126,43 @@ services:
       retries: 5
       start_period: 10s
     ports: ["16379:6379"]
+    networks: [pc-e2e]
+
+  # ---------------------------------------------------------------------------
+  # kafka — DNS-only placeholder (TASK-PC-FE-023).
+  #
+  # NOT a Kafka broker. This service exists solely to occupy the `kafka` DNS
+  # name in the `pc-e2e` Docker embedded-DNS namespace so that the BE-048
+  # ENTRYPOINT pre-flight in the three GAP service Dockerfiles
+  # (`apps/{auth,account,admin}-service/Dockerfile` — `until getent hosts mysql
+  # >/dev/null && getent hosts kafka >/dev/null …`) returns success and the JVM
+  # is allowed to start.
+  #
+  # At the application layer, every GAP service in this overlay carries
+  # `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999` (see `x-gap-service-env` above) —
+  # non-routable by design. The Kafka client logs the expected warnings but does
+  # not crash the Spring application context, exactly as the overlay author
+  # intended (the 2 e2e click sequences never exercise an event-producing path).
+  # So *both* layers stay disciplined: DNS layer resolves to this placeholder
+  # IP (BE-048 satisfied), application layer cannot reach a broker (no-Kafka
+  # scope preserved).
+  #
+  # The cheap "fix" would have been to bring up a real Kafka KRaft broker
+  # (mirroring the GAP project's own `docker-compose.e2e.yml`, which is the
+  # canonical reference for image + env wiring).
+  # We chose against that to honor the overlay's documented scope discipline
+  # (the comment block at the top of this file: `Excluded (deliberately —
+  # mirrors ecommerce CI overlay scope discipline)`) and the 7 GB runner memory
+  # budget — paying ~256 MB RAM + ~30–60 s boot for an unused broker on every
+  # nightly is dead weight. The day an e2e spec needs event observation, swap
+  # the `image:` + `command:` lines below for the GAP KRaft config and flip
+  # `KAFKA_BOOTSTRAP_SERVERS` from `127.0.0.1:9999` to `kafka:9092`. One file,
+  # ~30 lines.
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: alpine:3.19
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
     networks: [pc-e2e]
 
   # ---------------------------------------------------------------------------
