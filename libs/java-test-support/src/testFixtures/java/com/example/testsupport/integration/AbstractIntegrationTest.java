@@ -7,9 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -19,7 +18,7 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Each integration test class previously declared its own
  * {@code @Container static MySQLContainer} + {@code @Container static
- * KafkaContainer} and its own {@code @DynamicPropertySource}. Spring's test
+ * ConfluentKafkaContainer} and its own {@code @DynamicPropertySource}. Spring's test
  * {@code ContextCache} is keyed by the full context configuration; when a
  * second integration test requested a new cache entry, the Spring context
  * (and therefore the Hikari pool) was rebuilt. The rebuilt pool pointed at
@@ -72,7 +71,7 @@ import org.testcontainers.utility.DockerImageName;
 public abstract class AbstractIntegrationTest {
 
     protected static final MySQLContainer<?> MYSQL;
-    protected static final KafkaContainer KAFKA;
+    protected static final ConfluentKafkaContainer KAFKA;
 
     static {
         if (isDockerAvailable()) {
@@ -83,8 +82,11 @@ public abstract class AbstractIntegrationTest {
                     .withCommand("mysqld", "--log-bin-trust-function-creators=1")
                     .withStartupTimeout(Duration.ofMinutes(3));
 
-            KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"))
-                    .waitingFor(Wait.forLogMessage(".*\\[KafkaServer id=\\d+\\] started.*", 1))
+            // KRaft mode (cp-kafka 7.4+) emits `[RaftManager id=N] Completed transition to Leader(...)`
+            // instead of the legacy `[KafkaServer id=N] started` line, so the old log-message
+            // waiting strategy timed out. ConfluentKafkaContainer ships its own internal wait
+            // strategy that handles KRaft-mode startup correctly — defer to it.
+            KAFKA = new ConfluentKafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"))
                     .withStartupTimeout(Duration.ofMinutes(3));
 
             MYSQL.start();
