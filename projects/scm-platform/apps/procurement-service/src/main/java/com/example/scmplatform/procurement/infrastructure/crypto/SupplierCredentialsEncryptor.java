@@ -27,8 +27,13 @@ import java.security.SecureRandom;
  * round-trip encrypt/decrypt to fail-fast if the key is missing or the
  * wrong length.
  */
+// `final` so the self-test calls to `encrypt(...)` + `decrypt(...)` in the
+// constructor cannot be observed by an unfinished subclass — silences the
+// {@code [this-escape]} warning from {@code javac -Xlint:all}.
+// SupplierCredentialsEncryptor is a crypto component; subclassing is not part
+// of its design contract.
 @Component
-public class SupplierCredentialsEncryptor {
+public final class SupplierCredentialsEncryptor {
 
     public static final String ACTIVE_KEY_ID = "v1";
     private static final int IV_LENGTH = 12;

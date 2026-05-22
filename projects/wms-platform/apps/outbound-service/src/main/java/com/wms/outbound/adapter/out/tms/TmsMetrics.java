@@ -28,9 +28,14 @@ import org.springframework.stereotype.Component;
  *   <li>{@code outbound.tms.dedupe.cache_hit.count} — counter</li>
  * </ul>
  */
+// `final` so the `meterRegistry.gauge(..., this, ::circuitStateValue)`
+// registration in the constructor cannot be observed by an unfinished
+// subclass — silences the {@code [this-escape]} warning from
+// {@code javac -Xlint:all}. Spring CGLib subclassing for AOP is not in use
+// for this @Component (no @Transactional / @Cacheable / etc.).
 @Component
 @Profile("!standalone")
-public class TmsMetrics {
+public final class TmsMetrics {
 
     static final String CIRCUIT_NAME = "tms-client";
 

@@ -58,8 +58,14 @@ public class ActorContextJwtAuthenticationConverter
         return out;
     }
 
-    /** Token whose principal is the {@link ActorContext} value. */
-    public static class ActorContextJwtAuthenticationToken extends JwtAuthenticationToken {
+    /**
+     * Token whose principal is the {@link ActorContext} value.
+     *
+     * <p>{@code final} so that {@code setAuthenticated(true)} in the constructor
+     * cannot be observed by an unfinished subclass — silences the
+     * {@code [this-escape]} warning from {@code javac -Xlint:all}.
+     */
+    public static final class ActorContextJwtAuthenticationToken extends JwtAuthenticationToken {
         private final ActorContext actor;
 
         public ActorContextJwtAuthenticationToken(Jwt jwt,

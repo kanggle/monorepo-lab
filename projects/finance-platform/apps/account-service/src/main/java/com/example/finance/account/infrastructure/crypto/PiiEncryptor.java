@@ -27,8 +27,12 @@ import java.util.Base64;
  * <b>Boot self-test (Failure Mode #15)</b>: the constructor round-trips a
  * probe; a missing/wrong-length key fails the context fast.
  */
+// `final` so the self-test calls to `encrypt(...)` + `decrypt(...)` in the
+// constructor cannot be observed by an unfinished subclass — silences the
+// {@code [this-escape]} warning from {@code javac -Xlint:all}. PiiEncryptor
+// is a crypto component; subclassing is not part of its design contract.
 @Component
-public class PiiEncryptor {
+public final class PiiEncryptor {
 
     public static final String ACTIVE_KEY_ID = "v1";
     private static final int IV_LENGTH = 12;
