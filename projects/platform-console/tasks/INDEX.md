@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-022-fixture-oidc-pkce-form-fill-migration.md` — platform-console e2e fixture migration: replace `client_credentials backdoor` with true OIDC PKCE browser-driven form-fill flow now that auth-service ships `/login` HTML form (TASK-BE-309). Closes TASK-PC-FE-019 honest gap (b) "fixture programmatic-token path is NOT the production OIDC PKCE authorization_code flow". depends on TASK-BE-309 (DONE), origin TASK-PC-FE-019 § Honest gaps (b). spec-first chain (spec PR → impl PR → close chore). no ADR (HARDSTOP-09 not triggered — infrastructure parity, no architectural decision). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (multi-file scope across fixture/seed/optional docker-compose; cross-stratum browser-network + DB + production-parity reasoning).
 
 ## in-progress
 
