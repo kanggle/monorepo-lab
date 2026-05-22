@@ -188,12 +188,16 @@ jobs:
               - '!projects/erp-platform/**/*.md'
             # TASK-PC-BE-001: pure-positive filter for platform-console backend
             # (console-bff). No negation patterns (MONO-074/075 quirk rule).
-            # console-web (Next.js, no Gradle) is not gated by this filter —
-            # its changes still flow through the existing `libs` or `workflows`
-            # fallback paths since it has no dedicated backend job.
+            # TASK-PC-FE-021: also covers console-web so the new
+            # `frontend-e2e-smoke` platform-console-web stage activates when the
+            # FE app or its docker-compose surface changes. Pure-positive +
+            # AND-combined with `code-changed` upstream so markdown-only PRs
+            # under console-web still skip (TS/JSON/YAML changes do trigger).
             platform-console:
               - 'projects/platform-console/apps/console-bff/**'
+              - 'projects/platform-console/apps/console-web/**'
               - 'projects/platform-console/docker-compose.yml'
+              - 'projects/platform-console/docker-compose.e2e.yml'
             contracts:
               - 'projects/*/specs/contracts/**'
             observability:
@@ -661,24 +665,26 @@ jobs:
         run: pnpm test
 
   frontend-e2e-smoke:
-    name: Frontend E2E smoke (web-store + fan-platform-web, Playwright)
+    name: Frontend E2E smoke (web-store + fan-platform-web + console-web, Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
     # Frontend CI Phase 3 (TASK-MONO-013) extended for fan-platform-web
-    # (TASK-FAN-FE-001).
-    # Smoke-level E2E only — both apps' playwright.smoke.config.ts force SSR
-    # fetch / OIDC discovery to a closed loopback host so each page exercises
+    # (TASK-FAN-FE-001) + platform-console-web (TASK-PC-FE-021).
+    # Smoke-level E2E only — all three apps' playwright.smoke.config.ts force
+    # SSR fetch / OIDC discovery to a closed loopback host so each page exercises
     # its fallback path / middleware redirect. No backend stack needed; runs
     # in extracted portfolio repos as well as monorepo-lab.
-    # Activate for ecommerce or fan-platform frontend changes, cross-project,
-    # or any project's contract change (cross-service consumer gate, MONO-074).
+    # Activate for ecommerce / fan-platform / platform-console FE changes,
+    # cross-project, or any project's contract change (cross-service consumer
+    # gate, MONO-074).
     if: >-
       github.event_name == 'push' ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
       needs.changes.outputs.fan == 'true' ||
+      needs.changes.outputs.platform-console == 'true' ||
       needs.changes.outputs.contracts == 'true'
 
     steps:
@@ -698,6 +704,7 @@ jobs:
           cache-dependency-path: |
             projects/ecommerce-microservices-platform/pnpm-lock.yaml
             projects/fan-platform/pnpm-lock.yaml
+            projects/platform-console/apps/console-web/pnpm-lock.yaml
 
       - name: Install dependencies (ecommerce)
         working-directory: projects/ecommerce-microservices-platform
@@ -730,6 +737,28 @@ jobs:
         working-directory: projects/fan-platform
         run: pnpm e2e:smoke
 
+      # TASK-PC-FE-021 — platform-console-web smoke stage. console-web is a
+      # standalone pnpm package (no workspace at platform-console root) — install
+      # + run happen from `apps/console-web/` directly. The smoke config's
+      # closed-loopback env makes OIDC discovery / registry / token-exchange /
+      # BFF all fail-fast so root redirect / (console) guard / /login render
+      # smoke specs exercise the public-path fallback paths deterministically.
+      - name: Install dependencies (platform-console-web)
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build platform-console-web (Next.js prod build for smoke)
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm build
+
+      - name: Install Playwright browsers (platform-console-web)
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run smoke E2E (platform-console-web)
+        working-directory: projects/platform-console/apps/console-web
+        run: pnpm e2e:smoke
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -740,6 +769,8 @@ jobs:
             projects/ecommerce-microservices-platform/apps/web-store/test-results-smoke/
             projects/fan-platform/web/fan-platform-web/playwright-report-smoke/
             projects/fan-platform/web/fan-platform-web/test-results-smoke/
+            projects/platform-console/apps/console-web/playwright-report-smoke/
+            projects/platform-console/apps/console-web/test-results-smoke/
           retention-days: 7
 
   integration-tests:
