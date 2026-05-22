@@ -8,7 +8,7 @@ import com.example.community.support.SliceTestSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,7 +33,7 @@ class FeedControllerTest {
     }
 
     @Autowired MockMvc mockMvc;
-    @MockBean GetFeedUseCase useCase;
+    @MockitoBean GetFeedUseCase useCase;
 
     @Test
     void feed_returns_200_with_pagination() throws Exception {

@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
@@ -64,9 +64,9 @@ class AuditDeniedCrossPermissionTest {
     }
 
     @Autowired MockMvc mockMvc;
-    @MockBean AuditQueryUseCase useCase;
-    @MockBean PermissionEvaluator permissionEvaluator;
-    @MockBean AdminActionAuditor auditor;
+    @MockitoBean AuditQueryUseCase useCase;
+    @MockitoBean PermissionEvaluator permissionEvaluator;
+    @MockitoBean AdminActionAuditor auditor;
 
     @BeforeEach
     void stubs() {

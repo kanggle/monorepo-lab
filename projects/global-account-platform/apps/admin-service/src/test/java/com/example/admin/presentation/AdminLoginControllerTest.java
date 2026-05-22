@@ -18,7 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -55,16 +55,16 @@ class AdminLoginControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean AdminLoginService loginService;
-    @MockBean AdminActionAuditor auditor;
+    @MockitoBean AdminLoginService loginService;
+    @MockitoBean AdminActionAuditor auditor;
     // Referenced by AdminAuthController (enroll/verify paths) — unused in login tests.
-    @MockBean TotpEnrollmentService totpService;
-    @MockBean BootstrapTokenService bootstrapTokenService;
-    @MockBean com.example.admin.application.AdminRefreshTokenService refreshService;
-    @MockBean com.example.admin.application.AdminLogoutService logoutService;
+    @MockitoBean TotpEnrollmentService totpService;
+    @MockitoBean BootstrapTokenService bootstrapTokenService;
+    @MockitoBean com.example.admin.application.AdminRefreshTokenService refreshService;
+    @MockitoBean com.example.admin.application.AdminLogoutService logoutService;
     // TASK-BE-298: AdminAuthController now also wires the token-exchange
     // service (POST /api/admin/auth/token-exchange) — unused in login tests.
-    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
+    @MockitoBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     @BeforeEach
     void setup() {

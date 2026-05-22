@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
@@ -55,14 +55,14 @@ class TotpRecoveryCodeRegenerateControllerTest {
     private static final String OPERATOR_ID = "00000000-0000-7000-8000-000000000099";
 
     @Autowired MockMvc mockMvc;
-    @MockBean TotpEnrollmentService totpService;
-    @MockBean AdminLoginService loginService;
-    @MockBean AdminActionAuditor auditor;
-    @MockBean BootstrapTokenService bootstrapTokenService;
-    @MockBean AdminRefreshTokenService refreshService;
-    @MockBean AdminLogoutService logoutService;
+    @MockitoBean TotpEnrollmentService totpService;
+    @MockitoBean AdminLoginService loginService;
+    @MockitoBean AdminActionAuditor auditor;
+    @MockitoBean BootstrapTokenService bootstrapTokenService;
+    @MockitoBean AdminRefreshTokenService refreshService;
+    @MockitoBean AdminLogoutService logoutService;
     // TASK-BE-298: token-exchange dependency of AdminAuthController.
-    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
+    @MockitoBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     private String bearer() {
         return "Bearer " + jwt.operatorToken(OPERATOR_ID);

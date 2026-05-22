@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -64,11 +64,11 @@ class RequiresPermissionAspectTest {
     }
 
     @Autowired MockMvc mockMvc;
-    @MockBean AccountAdminUseCase useCase;
-    @MockBean BulkLockAccountUseCase bulkLockUseCase;
-    @MockBean AccountServiceClient accountServiceClient;
-    @MockBean PermissionEvaluator permissionEvaluator;
-    @MockBean AdminActionAuditor auditor;
+    @MockitoBean AccountAdminUseCase useCase;
+    @MockitoBean BulkLockAccountUseCase bulkLockUseCase;
+    @MockitoBean AccountServiceClient accountServiceClient;
+    @MockitoBean PermissionEvaluator permissionEvaluator;
+    @MockitoBean AdminActionAuditor auditor;
 
     private String tokenFor(String operatorId) {
         return "Bearer " + jwt.operatorToken(operatorId);

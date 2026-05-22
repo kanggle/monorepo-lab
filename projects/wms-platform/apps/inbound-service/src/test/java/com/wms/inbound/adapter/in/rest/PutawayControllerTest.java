@@ -25,7 +25,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -41,10 +41,10 @@ class PutawayControllerTest {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean InstructPutawayUseCase instructPutaway;
-    @MockBean ConfirmPutawayLineUseCase confirmPutawayLine;
-    @MockBean SkipPutawayLineUseCase skipPutawayLine;
-    @MockBean GetPutawayInstructionUseCase queryPutaway;
+    @MockitoBean InstructPutawayUseCase instructPutaway;
+    @MockitoBean ConfirmPutawayLineUseCase confirmPutawayLine;
+    @MockitoBean SkipPutawayLineUseCase skipPutawayLine;
+    @MockitoBean GetPutawayInstructionUseCase queryPutaway;
 
     private static final UUID ASN_ID = UUID.randomUUID();
     private static final UUID INSTRUCTION_ID = UUID.randomUUID();

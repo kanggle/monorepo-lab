@@ -27,7 +27,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -40,10 +40,10 @@ class ReservationControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private ReserveStockUseCase reserveStock;
-    @MockBean private ConfirmReservationUseCase confirmReservation;
-    @MockBean private ReleaseReservationUseCase releaseReservation;
-    @MockBean private QueryReservationUseCase queryReservation;
+    @MockitoBean private ReserveStockUseCase reserveStock;
+    @MockitoBean private ConfirmReservationUseCase confirmReservation;
+    @MockitoBean private ReleaseReservationUseCase releaseReservation;
+    @MockitoBean private QueryReservationUseCase queryReservation;
 
     private static final UUID RES_ID = UUID.randomUUID();
     private static final UUID PICKING_REQ = UUID.randomUUID();

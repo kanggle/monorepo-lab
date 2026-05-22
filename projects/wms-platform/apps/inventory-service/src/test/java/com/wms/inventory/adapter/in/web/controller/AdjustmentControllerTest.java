@@ -22,7 +22,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -34,8 +34,8 @@ class AdjustmentControllerTest {
 
     @Autowired private MockMvc mockMvc;
 
-    @MockBean private AdjustStockUseCase adjustStock;
-    @MockBean private QueryAdjustmentUseCase queryAdjustment;
+    @MockitoBean private AdjustStockUseCase adjustStock;
+    @MockitoBean private QueryAdjustmentUseCase queryAdjustment;
 
     private static final UUID INV = UUID.randomUUID();
     private static final UUID ADJ = UUID.randomUUID();

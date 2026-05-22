@@ -25,7 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -75,13 +75,13 @@ class TenantAdminControllerTest {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean CreateTenantUseCase createTenantUseCase;
-    @MockBean UpdateTenantUseCase updateTenantUseCase;
-    @MockBean GetTenantUseCase getTenantUseCase;
-    @MockBean ListTenantsUseCase listTenantsUseCase;
-    @MockBean PermissionEvaluator permissionEvaluator;
-    @MockBean AdminOperatorJpaRepository operatorRepository;
-    @MockBean AdminActionAuditor adminActionAuditor; // required by RequiresPermissionAspect
+    @MockitoBean CreateTenantUseCase createTenantUseCase;
+    @MockitoBean UpdateTenantUseCase updateTenantUseCase;
+    @MockitoBean GetTenantUseCase getTenantUseCase;
+    @MockitoBean ListTenantsUseCase listTenantsUseCase;
+    @MockitoBean PermissionEvaluator permissionEvaluator;
+    @MockitoBean AdminOperatorJpaRepository operatorRepository;
+    @MockitoBean AdminActionAuditor adminActionAuditor; // required by RequiresPermissionAspect
 
     // Pre-created mocks — stubs are set in @BeforeEach to avoid interleaving
     // with when(...).thenReturn(Optional.of(helperMethod())) call chains.
