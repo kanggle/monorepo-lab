@@ -8,7 +8,7 @@ Portfolio-wide `KafkaContainer` → `ConfluentKafkaContainer` migration — Test
 
 # Status
 
-ready
+done
 
 # Owner
 
