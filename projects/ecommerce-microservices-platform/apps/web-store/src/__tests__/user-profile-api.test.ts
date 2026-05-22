@@ -81,7 +81,9 @@ describe('user-profile-api', () => {
 
   describe('updateMyProfile', () => {
     it('API를 통해 프로필을 정상적으로 업데이트한다', async () => {
-      const updateData = { nickname: '새닉네임', phone: '010-9999-8888', profileImageUrl: null };
+      // The PATCH contract is omit-to-skip (Request fields are `string`, not `string | null`).
+      // To "keep the existing value", omit the field; we test only fields actually being updated.
+      const updateData = { nickname: '새닉네임', phone: '010-9999-8888' };
       const response = {
         userId: 'user-1',
         email: 'user@example.com',
@@ -112,7 +114,8 @@ describe('user-profile-api', () => {
     });
 
     it('업데이트 응답의 userId는 mock-user가 아니다', async () => {
-      const updateData = { nickname: '새닉네임', phone: null, profileImageUrl: null };
+      // PATCH omit-to-skip semantics — only set nickname.
+      const updateData = { nickname: '새닉네임' };
       const response = {
         userId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         email: 'user@example.com',
