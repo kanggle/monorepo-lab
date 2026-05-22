@@ -8,7 +8,7 @@ auth-service UuidV7 shim 제거 — `@Deprecated(forRemoval=true, since="TASK-BE
 
 # Status
 
-ready
+done
 
 # Owner
 
