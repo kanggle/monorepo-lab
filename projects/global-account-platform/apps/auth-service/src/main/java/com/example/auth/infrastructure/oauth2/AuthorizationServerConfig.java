@@ -215,8 +215,13 @@ public class AuthorizationServerConfig {
                 // (no Authorization header, no session) get a 302 redirect instead of
                 // reaching the SAS token endpoint filter.
                 .exceptionHandling(exceptions ->
+                        // TASK-BE-309: redirect unauthenticated browser GETs to the new
+                        // HTML form-login surface (WebLoginSecurityConfig @Order(0))
+                        // instead of the JSON-only POST endpoint at /api/auth/login.
+                        // The HTML-only request matcher (text/html only) below leaves
+                        // programmatic API requests untouched.
                         exceptions.defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/api/auth/login"),
+                                new LoginUrlAuthenticationEntryPoint("/login"),
                                 buildHtmlOnlyRequestMatcher()))
                 // TASK-MONO-046-1 (Cluster B): the OIDC userinfo endpoint requires the
                 // bearer access token to be authenticated as a JWT. Without an
