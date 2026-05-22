@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -67,19 +67,19 @@ class AccountAdminControllerTest {
     @Autowired
     MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     AccountAdminUseCase useCase;
 
-    @MockBean
+    @MockitoBean
     BulkLockAccountUseCase bulkLockUseCase;
 
-    @MockBean
+    @MockitoBean
     AccountServiceClient accountServiceClient;
 
-    @MockBean
+    @MockitoBean
     PermissionEvaluator permissionEvaluator;
 
-    @MockBean
+    @MockitoBean
     AdminActionAuditor auditor;
 
     @BeforeEach

@@ -29,7 +29,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -81,18 +81,18 @@ class OperatorAdminControllerTest {
     @Autowired
     MockMvc mockMvc;
 
-    @MockBean OperatorQueryService queryService;
-    @MockBean CreateOperatorUseCase createOperatorUseCase;
-    @MockBean PatchOperatorRoleUseCase patchOperatorRoleUseCase;
-    @MockBean PatchOperatorStatusUseCase patchOperatorStatusUseCase;
-    @MockBean ChangeMyPasswordUseCase changeMyPasswordUseCase;
-    @MockBean UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
-    @MockBean com.example.admin.application.UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
+    @MockitoBean OperatorQueryService queryService;
+    @MockitoBean CreateOperatorUseCase createOperatorUseCase;
+    @MockitoBean PatchOperatorRoleUseCase patchOperatorRoleUseCase;
+    @MockitoBean PatchOperatorStatusUseCase patchOperatorStatusUseCase;
+    @MockitoBean ChangeMyPasswordUseCase changeMyPasswordUseCase;
+    @MockitoBean UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
+    @MockitoBean com.example.admin.application.UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
 
-    @MockBean
+    @MockitoBean
     PermissionEvaluator permissionEvaluator;
 
-    @MockBean
+    @MockitoBean
     AdminActionAuditor auditor;
 
     @BeforeEach

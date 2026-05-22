@@ -27,7 +27,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -43,10 +43,10 @@ class AsnControllerTest {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean ReceiveAsnUseCase receiveAsnUseCase;
-    @MockBean CancelAsnUseCase cancelAsnUseCase;
-    @MockBean CloseAsnUseCase closeAsnUseCase;
-    @MockBean QueryAsnUseCase queryAsnUseCase;
+    @MockitoBean ReceiveAsnUseCase receiveAsnUseCase;
+    @MockitoBean CancelAsnUseCase cancelAsnUseCase;
+    @MockitoBean CloseAsnUseCase closeAsnUseCase;
+    @MockitoBean QueryAsnUseCase queryAsnUseCase;
 
     private static final UUID ASN_ID = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-04-29T10:00:00Z");

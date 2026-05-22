@@ -20,7 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -54,14 +54,14 @@ class AdminLogoutControllerTest {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired OperatorJwtTestFixture jwtFixture;
-    @MockBean AdminLogoutService logoutService;
-    @MockBean AdminRefreshTokenService refreshService;
-    @MockBean AdminLoginService loginService;
-    @MockBean TotpEnrollmentService totpService;
-    @MockBean BootstrapTokenService bootstrapTokenService;
-    @MockBean AdminActionAuditor auditor;
+    @MockitoBean AdminLogoutService logoutService;
+    @MockitoBean AdminRefreshTokenService refreshService;
+    @MockitoBean AdminLoginService loginService;
+    @MockitoBean TotpEnrollmentService totpService;
+    @MockitoBean BootstrapTokenService bootstrapTokenService;
+    @MockitoBean AdminActionAuditor auditor;
     // TASK-BE-298: token-exchange dependency of AdminAuthController.
-    @MockBean com.example.admin.application.TokenExchangeService tokenExchangeService;
+    @MockitoBean com.example.admin.application.TokenExchangeService tokenExchangeService;
 
     @BeforeEach
     void setup() {
