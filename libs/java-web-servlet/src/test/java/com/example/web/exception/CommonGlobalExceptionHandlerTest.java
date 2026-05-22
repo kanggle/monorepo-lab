@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,7 +65,8 @@ class CommonGlobalExceptionHandlerTest {
     @Test
     @DisplayName("HttpMessageNotReadableException — 400, VALIDATION_ERROR, 고정 메시지")
     void handleMalformedRequest_returns400() {
-        HttpMessageNotReadableException e = new HttpMessageNotReadableException("malformed JSON");
+        HttpMessageNotReadableException e = new HttpMessageNotReadableException(
+                "malformed JSON", mock(HttpInputMessage.class));
 
         ResponseEntity<ErrorResponse> response = handler.handleMalformedRequest(e);
 
