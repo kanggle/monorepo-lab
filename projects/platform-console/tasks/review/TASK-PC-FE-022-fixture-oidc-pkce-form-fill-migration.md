@@ -8,7 +8,7 @@ platform-console e2e fixture migration — replace `client_credentials backdoor`
 
 # Status
 
-ready
+review
 
 # Owner
 

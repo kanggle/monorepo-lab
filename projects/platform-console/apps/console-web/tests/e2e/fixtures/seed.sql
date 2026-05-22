@@ -1,5 +1,6 @@
 -- =============================================================================
--- TASK-PC-FE-019 — platform-console e2e harness seed
+-- TASK-PC-FE-019 (initial) / TASK-PC-FE-022 (fixture migration to OIDC PKCE)
+-- platform-console e2e harness seed
 -- =============================================================================
 -- Runtime data fixture (NOT a Flyway migration). Executed against the docker-
 -- compose.e2e.yml MySQL container AFTER all services have run their Flyway
@@ -10,30 +11,30 @@
 -- schemas. Neither `projects/global-account-platform/` nor
 -- `projects/finance-platform/` is touched on disk.
 --
--- Strategy (mirrors GAP TASK-BE-029-3 dev-only seed pattern):
+-- Strategy:
 --   1. finance_db database / user — created here since GAP's init.sh only
 --      knows about the 4 GAP schemas. finance-account-service expects
 --      finance_db on first boot (Hibernate validates against Flyway-applied
 --      V1__init.sql); this must complete before the finance container starts.
---   2. auth_db.oauth_clients — UPDATE the existing `platform-console-web`
---      client row to ALSO allow `grant_type=client_credentials` with a known
---      client secret. The Playwright login fixture uses this credential to
---      mint a real OIDC access token via `/oauth2/token`. The OIDC
---      authorization_code + PKCE browser flow remains the production path
---      (V0015 seed unchanged); the test-only grant extension is an additive
---      e2e affordance — see fixtures/login.ts for the full rationale.
+--   2. auth_db.credentials — INSERT the SUPER_ADMIN credential row keyed by
+--      `e2e-super-admin@example.com` with a fixed Argon2id hash of the
+--      plaintext `devpassword123!` (reused from GAP V0014 dev seed and the
+--      admin_operators password_hash below). This row is the AuthN source the
+--      auth-service `/login` form (TASK-BE-309 `CredentialAuthenticationProvider`)
+--      verifies during the e2e OIDC PKCE flow. The production V0015 PUBLIC
+--      OAuth client definition is untouched (no `client_credentials` grant
+--      extension; TASK-PC-FE-022 migrated the fixture to true browser-driven
+--      form-fill — see fixtures/login.ts).
 --   3. admin_db.admin_operators — 2 rows:
 --        (a) `e2e-super-admin`  — SUPER_ADMIN, tenant_id='*', no
 --            finance_default_account_id (so the PC-FE-016 self-set spec can
 --            assert the post-Save flip from MISSING_PREREQUISITE → ok).
+--            `oidc_subject='e2e-super-admin@example.com'` so the admin
+--            token-exchange resolves the user-based authorization_code JWT
+--            (sub=email) to THIS row.
 --        (b) `e2e-target-operator` — vanilla operator, tenant_id='fan-platform',
 --            no finance_default_account_id (so the PC-FE-017 + PC-FE-018
 --            admin-on-behalf-of spec can set + later verify the value).
---      Both rows have oidc_subject='platform-console-web' so the admin
---      token-exchange resolves the client-credentials JWT (sub=client_id) to
---      the SUPER_ADMIN row — only ONE admin_operators row matches the OIDC
---      subject for the SUPER_ADMIN; the target operator has a DIFFERENT
---      oidc_subject so it does NOT collide on `findByOidcSubject`.
 --   4. admin_db.admin_operator_roles — bind e2e-super-admin to the
 --      SUPER_ADMIN role row (V0006 seeded), copying tenant_id='*'.
 --   5. admin_db.admin_roles — relax `require_2fa` on SUPER_ADMIN to FALSE so
@@ -68,32 +69,37 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES,
 FLUSH PRIVILEGES;
 
 -- ---------------------------------------------------------------------------
--- 2. auth_db — extend platform-console-web OIDC client to also allow
---    client_credentials grant. The hash is the same bcrypt(secret) value that
---    V0008 uses for `test-internal-client` (verified by GAP's BcryptHashPinTest
---    so this hash will not drift). Extending grant + secret on the existing
---    row keeps `client_id='platform-console-web'` unchanged so:
---      - The SAS-issued token's `aud=platform-console-web` continues to match
---        admin-service's expected audience (`ADMIN_OIDC_AUDIENCE` env).
---      - The OIDC authorization_code + PKCE production flow (V0015) still
---        works — the `authorization_code` + `none` entries are PRESERVED.
---
---    `client_name` is also rewritten to `gap|B2B_ENTERPRISE` so
---    `TenantClaimTokenCustomizer.customizeForClientCredentials` resolves
---    tenant_id='gap' / tenant_type='B2B_ENTERPRISE' from the legacy clientName
---    fallback (the V0015 row has no `custom.tenant_id` in client_settings,
---    so the clientName split is the only path). The display string is
---    cosmetic — no production user sees it.
+-- 2. auth_db — insert the SUPER_ADMIN credential row that the auth-service
+--    `/login` form (BE-309) authenticates against. The Argon2id hash encodes
+--    the plaintext `devpassword123!` — same value GAP V0014 dev seed uses
+--    (so the hash is BcryptHashPinTest-equivalent stable; no drift). The
+--    tenant_id='gap' matches the V0015 platform-console-web OAuth client's
+--    tenant scope. account_id is a fresh UUID — auth-service does not back-
+--    reference the account-service row for this e2e environment because
+--    LoginUseCase's account-status call is bypassed by the BE-309 form-login
+--    path (architectural divergence documented in BE-309 spec).
 -- ---------------------------------------------------------------------------
 USE `auth_db`;
 
-UPDATE oauth_clients
-   SET authorization_grant_types     = '["authorization_code","refresh_token","client_credentials"]',
-       client_authentication_methods = '["none","client_secret_basic"]',
-       client_secret_hash            = '$2a$10$0r6LHGsIgq6d5fkXCHwqQOHcuCA6ds8c8o9bSa25ucakM13V6VpsS',
-       client_name                   = 'gap|B2B_ENTERPRISE',
-       updated_at                    = NOW()
- WHERE client_id = 'platform-console-web';
+INSERT IGNORE INTO credentials (
+    tenant_id,
+    account_id,
+    email,
+    credential_hash,
+    hash_algorithm,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'gap',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
+    'e2e-super-admin@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id',
+    NOW(6),
+    NOW(6),
+    0
+);
 
 -- ---------------------------------------------------------------------------
 -- 3 + 4 + 5. admin_db — operators + role binding + 2FA relaxation.
@@ -111,8 +117,9 @@ UPDATE admin_roles
 -- 3. Operator (a) — SUPER_ADMIN caller. tenant_id='*' (ADR-002 platform-scope
 --    sentinel). password_hash is a fixed Argon2id hash of 'devpassword123!'
 --    (same value V0014 dev seed uses) so any password-based path still works
---    if a test ever needs it. oidc_subject='platform-console-web' matches the
---    JWT `sub` claim issued by the client_credentials grant — so
+--    if a test ever needs it. oidc_subject='e2e-super-admin@example.com'
+--    matches the JWT `sub` claim issued by the authorization_code grant
+--    (CredentialAuthenticationProvider sets principal=email) — so
 --    TokenExchangeService.findByOidcSubject resolves THIS row.
 INSERT INTO admin_operators (
     operator_id,
@@ -133,7 +140,7 @@ INSERT INTO admin_operators (
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'E2E Super Admin',
     'ACTIVE',
-    'platform-console-web',
+    'e2e-super-admin@example.com',
     NULL,
     NOW(6),
     NOW(6),

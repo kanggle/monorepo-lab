@@ -1,148 +1,188 @@
 import type { BrowserContext, Page } from '@playwright/test';
 
 /**
- * TASK-PC-FE-019 — Playwright login fixture for the platform-console e2e
+ * TASK-PC-FE-022 — Playwright login fixture for the platform-console e2e
  * harness. Returns a browser context already authenticated as the seeded
- * SUPER_ADMIN operator.
+ * SUPER_ADMIN operator via the **production** OIDC Authorization Code + PKCE
+ * flow.
  *
- * Strategy — programmatic token mint, NOT a browser-driven OIDC PKCE round
- * trip. Rationale:
+ * Replaces the TASK-PC-FE-019 first-cut fixture which used a
+ * `client_credentials backdoor` (seed-extended grant on the platform-console-
+ * web OAuth client + cookie injection via `fetch`). TASK-BE-309 shipped the
+ * auth-service `/login` HTML form (Spring Security
+ * `DefaultLoginPageGeneratingFilter`) which lets a headless browser drive the
+ * full OIDC PKCE path end-to-end.
  *
- *   - The auth-service (Spring Authorization Server) does not ship an HTML
- *     login form. The SAS `LoginUrlAuthenticationEntryPoint` redirects
- *     unauthenticated browser requests to `/api/auth/login`, but that endpoint
- *     is a JSON-only POST (returns access/refresh JWT directly) — there is
- *     no `formLogin()` HTML page to drive with Playwright `.fill()` /
- *     `.click()`. The OIDC PKCE *authorization_code* path is operationally
- *     incomplete for a headless browser today.
+ * Flow (step-by-step):
  *
- *   - Workaround that preserves every BFF / admin-service trust boundary:
- *     extend the existing `platform-console-web` OAuth client to ALSO allow
- *     `grant_type=client_credentials` with a known client secret (seed.sql
- *     applies this UPDATE at runtime, NOT to GAP source — AC-3 byte-diff
- *     invariant preserved). The fixture POSTs to `/oauth2/token` to obtain
- *     a real SAS-issued JWT with `iss=auth-service URL`, `aud=platform-
- *     console-web`, `sub=platform-console-web`. The admin token-exchange
- *     resolves that subject to the seeded `e2e-super-admin` row
- *     (oidc_subject='platform-console-web') and mints an operator token.
+ *   1. `page.goto('http://localhost:3000/api/auth/login?redirect=/')` —
+ *      console-web Next.js route generates the PKCE verifier + state, stores
+ *      them in HttpOnly cookies, 302s to SAS `/oauth2/authorize?...`.
  *
- *   - The browser context is then primed with the same 3 cookies that the
- *     production `/api/auth/callback` handler would set after a successful
- *     OIDC + token-exchange round trip:
- *       `console_access_token`   ← SAS access token (Bearer used by
- *                                  console-bff resource server)
- *       `console_operator_token` ← admin-service operator token (the
- *                                  `/api/admin/**` credential)
- *       `console_active_tenant`  ← initial tenant slug ('fan-platform' so
- *                                  the finance read leg can resolve the
- *                                  seeded account row).
+ *   2. SAS finds no authenticated session, 302s to its `/login` HTML form
+ *      (BE-309 `WebLoginSecurityConfig.webLoginFilterChain`).
  *
- *   - Replaced when auth-service ships an HTML form (future task — see
- *     `tasks/ready/` for a candidate follow-up to add a SAS HTML login
- *     surface so the OIDC PKCE flow is fully browser-drivable). At that
- *     point this fixture is rewritten to drive `/login → /oauth2/authorize
- *     → /login form → /api/auth/callback` end-to-end.
+ *   3. Playwright `page.fill('input[name="username"]', email)` +
+ *      `page.fill('input[name="password"]', password)` +
+ *      `page.click('button[type="submit"]')` against the
+ *      `DefaultLoginPageGeneratingFilter` stock HTML form. CSRF token is the
+ *      hidden `_csrf` input the framework emits — `form` submission picks it
+ *      up automatically.
  *
- * Inside docker-compose.e2e.yml the targets are reachable on the host via
- * the published ports (18081 for auth-service, 18085 for admin-service).
- * Playwright runs on the host (CI: ubuntu-latest job); console-web is also
- * published on host:3000 (Playwright baseURL).
+ *   4. SAS authenticates via the BE-309 `CredentialAuthenticationProvider`
+ *      (looks up `auth_db.credentials` by email, verifies Argon2id hash,
+ *      sets `Authentication.details = { tenant_id, tenant_type, account_id }`
+ *      as a HashMap so the Jackson SecurityJackson2Modules allowlist accepts
+ *      it when SAS persists the OAuth2Authorization to DB). Session-fixation
+ *      migration rotates JSESSIONID; the browser cookie store auto-tracks.
+ *
+ *   5. SAS 302s back to `/oauth2/authorize?...` (re-drive). This time the
+ *      session is authenticated, so SAS issues the authorization code and
+ *      302s to the registered redirect URI
+ *      `http://localhost:3000/api/auth/callback?code=...&state=...`.
+ *
+ *   6. The console-web callback route exchanges the code (with PKCE verifier)
+ *      at SAS `/oauth2/token`, then exchanges the resulting access token at
+ *      admin-service `/api/admin/auth/token-exchange` (RFC 8693). The route
+ *      sets the production 3 HttpOnly cookies (`console_access_token`,
+ *      `console_refresh_token`, `console_operator_token`) — `console_active_
+ *      tenant` is set by a subsequent client-side write.
+ *
+ *   7. Final redirect to the post-login path (`/`).
+ *
+ * Host / docker-network bridge — `OIDC_ISSUER_URL=http://auth-service:8081`
+ * is set inside the docker network for JWT iss-claim and server-side fetches
+ * (console-web container reaches auth-service via docker DNS). The browser
+ * runs on the host (Playwright) and cannot resolve `auth-service`. To bridge
+ * without changing production env, we use Playwright `context.route` to
+ * intercept ANY navigation/subresource to `http://auth-service:8081/**`,
+ * `route.fetch({ url: rewrittenLocalhost18081 })` the request against the
+ * host-published port (`18081:8081`), then `route.fulfill({ response })`
+ * with the upstream response. The browser's URL bar continues to show
+ * `auth-service:8081`, so SAS's *relative* `/login` Location header
+ * resolves naturally to `http://auth-service:8081/login` — also intercepted.
+ * The JWT `iss=http://auth-service:8081` matches the console-web
+ * `OIDC_ISSUER_URL` expectation (verified path-byte-identical).
+ *
+ * Replaces the TASK-PC-FE-019 backdoor entirely — `oauth_clients.platform-
+ * console-web` is byte-identical to production V0015 (PKCE-mandatory PUBLIC
+ * client, no client secret). The only e2e-environment-specific runtime data
+ * lives in `auth_db.credentials` (a test-only e2e-super-admin user) and
+ * `admin_db.admin_operators` (operator rows with `oidc_subject=email`).
  */
 
 const DEFAULTS = {
-  authBaseUrl: process.env.E2E_AUTH_BASE_URL ?? 'http://localhost:18081',
-  adminBaseUrl: process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085',
+  // Browser-facing OIDC issuer URL inside the docker network. The browser
+  // can't resolve this hostname on the host; `context.route` rewrites the
+  // network call to `localhostAuthBaseUrl` while the URL bar keeps the
+  // issuer-identical value. The string MUST equal `OIDC_ISSUER_URL` env on
+  // console-web for JWT `iss` validation to pass.
+  oidcIssuerUrl:
+    process.env.E2E_OIDC_ISSUER_URL ?? 'http://auth-service:8081',
+  // Host-published port for the auth-service container
+  // (docker-compose.e2e.yml: `ports: ["18081:8081"]`). The route handler
+  // rewrites issuer-URL requests to this URL.
+  localhostAuthBaseUrl:
+    process.env.E2E_LOCALHOST_AUTH_URL ?? 'http://localhost:18081',
   consoleOrigin: process.env.E2E_CONSOLE_ORIGIN ?? 'http://localhost:3000',
-  oidcClientId: 'platform-console-web',
-  oidcClientSecret: 'secret',
+  // SUPER_ADMIN credential — matches the row inserted by tests/e2e/fixtures/
+  // seed.sql (auth_db.credentials + admin_db.admin_operators where
+  // oidc_subject=email). password is the fixed dev/test Argon2id-hashed
+  // plaintext also used by GAP V0014 dev seed — value is hardcoded test data,
+  // no production credential.
+  superAdminEmail: 'e2e-super-admin@example.com',
+  superAdminPassword: 'devpassword123!',
   defaultTenant: 'fan-platform',
 };
 
-interface MintedTokens {
-  accessToken: string;
-  operatorToken: string;
-  operatorTtlSeconds: number;
-}
-
-async function mintTokens(): Promise<MintedTokens> {
-  // 1. SAS /oauth2/token — client_credentials grant against the seeded
-  //    `platform-console-web` client (seed.sql extends grant_types).
-  const tokenBody = new URLSearchParams();
-  tokenBody.set('grant_type', 'client_credentials');
-  tokenBody.set('scope', 'openid');
-
-  const basic = Buffer.from(
-    `${DEFAULTS.oidcClientId}:${DEFAULTS.oidcClientSecret}`,
-    'utf8',
-  ).toString('base64');
-
-  const tokenRes = await fetch(`${DEFAULTS.authBaseUrl}/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basic}`,
-      Accept: 'application/json',
-    },
-    body: tokenBody.toString(),
+/**
+ * Wires the per-context route handler that rewrites any browser request to
+ * the docker-internal `OIDC_ISSUER_URL` hostname to the host-published port.
+ * Without this bridge the browser cannot resolve `auth-service` on the host.
+ *
+ * `route.fetch({ url })` makes the actual network call from Node.js (which
+ * CAN reach `localhost:18081`), then `route.fulfill({ response })` returns
+ * the upstream response to the browser. The browser's URL bar keeps the
+ * original `http://auth-service:8081/...` so subsequent relative Location
+ * redirects resolve naturally against the same hostname and get intercepted
+ * again — the chain works seamlessly through `/oauth2/authorize → /login →
+ * /login (POST) → /oauth2/authorize → redirect_uri`.
+ */
+async function bridgeAuthServiceHostname(
+  context: BrowserContext,
+): Promise<void> {
+  const issuerUrl = new URL(DEFAULTS.oidcIssuerUrl);
+  const localhostUrl = new URL(DEFAULTS.localhostAuthBaseUrl);
+  const pattern = `${issuerUrl.protocol}//${issuerUrl.host}/**`;
+  await context.route(pattern, async (route) => {
+    const originalUrl = new URL(route.request().url());
+    const rewritten = new URL(
+      `${originalUrl.pathname}${originalUrl.search}${originalUrl.hash}`,
+      `${localhostUrl.protocol}//${localhostUrl.host}`,
+    );
+    const response = await route.fetch({ url: rewritten.toString() });
+    await route.fulfill({ response });
   });
-  if (!tokenRes.ok) {
-    const text = await tokenRes.text();
-    throw new Error(
-      `SAS /oauth2/token failed (${tokenRes.status}): ${text.slice(0, 500)}`,
-    );
-  }
-  const tokenPayload = (await tokenRes.json()) as { access_token?: string };
-  if (!tokenPayload.access_token) {
-    throw new Error('SAS /oauth2/token returned no access_token');
-  }
-
-  // 2. admin-service /api/admin/auth/token-exchange — RFC 8693. Validates
-  //    iss/aud against `ADMIN_OIDC_*` env (set in docker-compose.e2e.yml),
-  //    resolves admin_operators by oidc_subject, mints the operator token.
-  const exchangeRes = await fetch(
-    `${DEFAULTS.adminBaseUrl}/api/admin/auth/token-exchange`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-        subject_token: tokenPayload.access_token,
-        subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
-      }).toString(),
-    },
-  );
-  if (!exchangeRes.ok) {
-    const text = await exchangeRes.text();
-    throw new Error(
-      `admin /token-exchange failed (${exchangeRes.status}): ${text.slice(0, 500)}`,
-    );
-  }
-  const exchangePayload = (await exchangeRes.json()) as {
-    access_token?: string;
-    expires_in?: number;
-  };
-  if (!exchangePayload.access_token) {
-    throw new Error('admin /token-exchange returned no access_token');
-  }
-
-  return {
-    accessToken: tokenPayload.access_token,
-    operatorToken: exchangePayload.access_token,
-    operatorTtlSeconds: exchangePayload.expires_in ?? 1800,
-  };
-}
-
-function cookieDomain(): string {
-  // Cookies set on a Playwright BrowserContext are matched by domain. We
-  // strip the scheme/port from `consoleOrigin` to derive the cookie host.
-  return new URL(DEFAULTS.consoleOrigin).hostname;
 }
 
 /**
- * Programmatically authenticates a context as the seeded SUPER_ADMIN.
+ * Drives the full OIDC PKCE login flow against the running stack and returns
+ * once the post-login final redirect has settled. Production-identical path:
+ * no programmatic token mint, no cookie injection — purely browser
+ * navigation + form submission.
+ */
+async function driveOidcPkceLogin(
+  context: BrowserContext,
+  email: string,
+  password: string,
+): Promise<void> {
+  await bridgeAuthServiceHostname(context);
+  const page = await context.newPage();
+  try {
+    // Step 1 — kick the OIDC flow. `redirect=/` is the post-login target.
+    await page.goto(`${DEFAULTS.consoleOrigin}/api/auth/login?redirect=/`);
+
+    // Steps 2-3 — the browser follows the chain
+    //   console-web 302 → SAS /oauth2/authorize 302 → auth-service /login.
+    // Wait for the form to render. The `DefaultLoginPageGeneratingFilter`
+    // emits inputs named exactly `username` + `password`.
+    await page.waitForSelector('input[name="username"]');
+    await page.fill('input[name="username"]', email);
+    await page.fill('input[name="password"]', password);
+
+    // Step 4 — submit. The form posts to /login (auth-service). SAS migrates
+    // session, 302s back to /oauth2/authorize, which then 302s to the
+    // redirect_uri (console-web /api/auth/callback). The callback handler
+    // does the token + operator-token-exchange and sets the production
+    // cookies, then 302s to `/`. Wait for the final destination.
+    await Promise.all([
+      page.waitForURL(`${DEFAULTS.consoleOrigin}/`, { timeout: 30_000 }),
+      page.click('button[type="submit"]'),
+    ]);
+
+    // Step 7 — seed the `console_active_tenant` cookie. In production this
+    // is set by the client-side tenant-switcher write that happens on first
+    // page load. The harness primes it here so the 2 e2e specs land in the
+    // expected tenant without an extra UI click.
+    await context.addCookies([
+      {
+        name: 'console_active_tenant',
+        value: DEFAULTS.defaultTenant,
+        domain: new URL(DEFAULTS.consoleOrigin).hostname,
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Strict',
+      },
+    ]);
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Programmatically authenticates a context as the seeded SUPER_ADMIN via the
+ * production OIDC Authorization Code + PKCE flow.
  *
  * Idempotent: call once per Playwright `test.use({ storageState })` setup
  * (e.g. from `global-setup.ts`) and reuse the persisted state across spec
@@ -151,42 +191,11 @@ function cookieDomain(): string {
 export async function loginAsSuperAdmin(
   context: BrowserContext,
 ): Promise<void> {
-  const tokens = await mintTokens();
-  // Match the production cookie shape (`shared/lib/session.ts` constants):
-  //   - httpOnly true (server-side only — never read by client JS).
-  //   - secure false (Playwright tests run over http://localhost — the
-  //     production `secure: true` is only viable behind TLS termination).
-  //   - sameSite 'Strict' (production parity).
-  //   - path '/'.
-  await context.addCookies([
-    {
-      name: 'console_access_token',
-      value: tokens.accessToken,
-      domain: cookieDomain(),
-      path: '/',
-      httpOnly: true,
-      secure: false,
-      sameSite: 'Strict',
-    },
-    {
-      name: 'console_operator_token',
-      value: tokens.operatorToken,
-      domain: cookieDomain(),
-      path: '/',
-      httpOnly: true,
-      secure: false,
-      sameSite: 'Strict',
-    },
-    {
-      name: 'console_active_tenant',
-      value: DEFAULTS.defaultTenant,
-      domain: cookieDomain(),
-      path: '/',
-      httpOnly: true,
-      secure: false,
-      sameSite: 'Strict',
-    },
-  ]);
+  await driveOidcPkceLogin(
+    context,
+    DEFAULTS.superAdminEmail,
+    DEFAULTS.superAdminPassword,
+  );
 }
 
 /**
