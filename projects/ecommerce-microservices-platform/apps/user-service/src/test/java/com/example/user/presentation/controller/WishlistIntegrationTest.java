@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -49,7 +49,7 @@ class WishlistIntegrationTest {
 
     @SuppressWarnings("resource")
     @Container
-    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
+    static ConfluentKafkaContainer kafka = new ConfluentKafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
