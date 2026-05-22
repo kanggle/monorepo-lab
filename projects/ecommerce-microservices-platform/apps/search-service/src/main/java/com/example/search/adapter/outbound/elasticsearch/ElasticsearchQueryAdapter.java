@@ -25,6 +25,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * The Elasticsearch Java Client's {@code SearchResponse<T>} requires a
+ * {@code Class<T>} reference at call time; the only way to express
+ * "deserialize each document as {@code Map<String, Object>}" is to pass
+ * {@code Map.class}, which yields raw {@code Map} typing in the response
+ * chain ({@code SearchResponse<Map>}, {@code HitsMetadata<Map>},
+ * {@code Hit<Map>}). The class-level {@code rawtypes} suppression covers
+ * this constraint; {@code unchecked} is already declared per-method where
+ * a narrowing assignment ({@code Map -> Map<String, Object>}) happens.
+ */
+@SuppressWarnings("rawtypes")
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -98,7 +98,10 @@ public class ElasticsearchIndexAdapter implements SearchIndexPort {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    // `Map.class` is the only handle the Elasticsearch Java Client accepts
+    // for "deserialize as Map<String, Object>" — the response chain is raw
+    // `GetResponse<Map>` regardless of the source().toMap() narrowing below.
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Optional<SearchDocument> findById(String productId) {
         try {
             GetResponse<Map> response = elasticsearchClient.get(g -> g
