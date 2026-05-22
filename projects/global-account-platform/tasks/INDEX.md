@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-309-auth-service-form-login-html-surface.md` — auth-service formLogin() HTML 로그인 surface 추가 (Spring Authorization Server `/oauth2/authorize` 가 browser-driven OIDC PKCE 경로 실제 작동하도록). minimal viable: 신규 `@Order(0)` `WebLoginSecurityConfig` + `CredentialAuthenticationProvider` (reuse `PasswordHasher` + `CredentialRepository`; multi-tenant ambiguity v1 fail-closed) + `TenantAwarePrincipal` record + `AuthorizationServerConfig` entry-point 1-line edit (`/api/auth/login` → `/login`) + `TenantClaimTokenCustomizer` `customizeForAuthorizationCode` 1-line record path 추가 + 6-case `FormLoginIntegrationTest` (happy / invalid creds / session / logout / CSRF / deprecated JSON regression). **Closes TASK-PC-FE-019 honest gap (architectural)** — auth-service 가 HTML login form 부재라 OIDC PKCE browser-driven 경로 실현 불가였던 portfolio gap closure. 향후 PC-FE-019 fixture migration (true OIDC PKCE Playwright form-fill) 가 단일 fixture file 1 commit 으로 가능해짐. Producer-only — `projects/{wms,scm,erp,fan,ecommerce,finance,platform-console}-platform/` zero byte diff. Spring Authorization Server framework feature 활성화 (architectural decision 아님; ADR amendment 불요). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (substantial cross-cutting Spring Security multi-chain filter + AuthenticationProvider + tenant-aware principal + SAS framework feature interaction 깊은 이해 필요) / 리뷰=Opus 4.7.
 
 ## in-progress
 
