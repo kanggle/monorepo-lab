@@ -9,3 +9,9 @@ node_modules
 tests/e2e/fixtures/.storage-state.json
 playwright-report/
 test-results/
+
+# Playwright PR-time smoke harness (TASK-PC-FE-021) — outputs distinct from
+# the nightly full-stack outputs above so both can coexist on the same dev
+# machine.
+playwright-report-smoke/
+test-results-smoke/
