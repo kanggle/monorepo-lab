@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRef, useCallback, useState } from 'react';
 import { useProductImages } from '../hooks/use-product-images';
 import { ImageItem } from './ImageItem';
@@ -105,13 +106,14 @@ const styles = {
     border: '1px solid #e5e7eb',
   } as const,
   uploadingImgWrapper: {
+    // `position: relative` required so the child `<Image fill>` fills this box.
+    position: 'relative',
     width: '100%',
     aspectRatio: '1',
     overflow: 'hidden',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   } as const,
   uploadingImg: {
     width: '100%',
@@ -151,7 +153,15 @@ function UploadingCard({ uploading, onRemove }: { uploading: UploadingImage; onR
   return (
     <div style={styles.uploadingCard}>
       <div style={styles.uploadingImgWrapper as React.CSSProperties}>
-        <img src={uploading.previewUrl} alt="" style={styles.uploadingImg as React.CSSProperties} />
+        <Image
+          src={uploading.previewUrl}
+          alt=""
+          fill
+          // Local FileReader data: URL preview — skip Next.js optimizer.
+          unoptimized
+          sizes="200px"
+          style={styles.uploadingImg as React.CSSProperties}
+        />
         {uploading.status === 'error' ? (
           <div style={{ ...styles.uploadingOverlay, backgroundColor: 'rgba(220,38,38,0.5)' } as React.CSSProperties}>
             <span style={{ fontSize: '0.7rem', marginBottom: 4 }}>{uploading.error}</span>
@@ -293,8 +303,21 @@ export function ProductImageSection({ productId, thumbnailUrl }: Props) {
             )}
           </div>
         ) : thumbnailUrl ? (
-          <div onClick={openFilePicker} style={{ cursor: 'pointer' }}>
-            <img src={thumbnailUrl} alt="현재 이미지" style={styles.fallbackImg as React.CSSProperties} />
+          <div
+            onClick={openFilePicker}
+            style={{ cursor: 'pointer', position: 'relative' }}
+          >
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
+              <Image
+                src={thumbnailUrl}
+                alt="현재 이미지"
+                fill
+                // Arbitrary product image host — skip Next.js optimizer.
+                unoptimized
+                sizes="200px"
+                style={styles.fallbackImg as React.CSSProperties}
+              />
+            </div>
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
               <p style={styles.emptyText}>클릭하여 이미지 추가</p>
               <p style={styles.subText}>JPEG, PNG, WebP / 최대 5MB</p>

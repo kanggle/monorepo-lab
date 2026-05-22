@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRef, useState, useCallback } from 'react';
 import type { ProductImage } from '../types/product-image';
 
@@ -252,14 +253,32 @@ export function ImageUploader({
         {hasImages ? (
           <div style={styles.bgGrid}>
             {existingImages.map((img) => (
-              <img key={img.imageId} src={img.url} alt="" style={styles.bgImage} />
+              <div
+                key={img.imageId}
+                style={{ position: 'relative', width: '100%', aspectRatio: '1' }}
+              >
+                <Image
+                  src={img.url}
+                  alt=""
+                  fill
+                  // Arbitrary product image host — skip Next.js optimizer.
+                  unoptimized
+                  sizes="60px"
+                  style={styles.bgImage}
+                />
+              </div>
             ))}
           </div>
         ) : (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
-            <img
-              src={fallbackThumbnailUrl}
+            <Image
+              // `hasFallback` (L194) already guarantees `fallbackThumbnailUrl`
+              // is a string in this branch.
+              src={fallbackThumbnailUrl as string}
               alt=""
+              width={120}
+              height={120}
+              unoptimized
               style={{ ...styles.bgImage, width: 120, height: 120, borderRadius: 8 }}
             />
           </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/shared/ui';
 import type { ProductImage } from '../types/product-image';
@@ -30,6 +31,8 @@ const styles = {
     backgroundColor: '#fff',
   } as const,
   imageWrapper: {
+    // `position: relative` required so the child `<Image fill>` fills this box.
+    position: 'relative',
     width: '100%',
     aspectRatio: '1',
     overflow: 'hidden',
@@ -103,9 +106,14 @@ export function ImageItem({
           <span style={styles.primaryBadge}>대표</span>
         )}
         <div style={styles.imageWrapper}>
-          <img
+          <Image
             src={image.url}
             alt={`상품 이미지 ${image.sortOrder + 1}`}
+            fill
+            // Arbitrary product image URLs (any CDN / object storage host) —
+            // skip the Next.js optimizer to avoid per-host remotePatterns config.
+            unoptimized
+            sizes="120px"
             style={styles.image}
           />
         </div>

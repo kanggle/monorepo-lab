@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { PageLayout, StatusBadge, DescriptionList, Section } from '@/shared/ui';
 import { ErrorMessage } from '@repo/ui';
@@ -101,18 +102,25 @@ export function ProductDetail({ productId }: Props) {
           <div style={imageColumnStyle}>
             {images.length > 0 && selectedImage ? (
               <>
-                <img
+                <Image
                   src={selectedImage.url}
                   alt={product.name}
+                  width={280}
+                  height={280}
+                  // Arbitrary product image host — skip Next.js optimizer.
+                  unoptimized
                   style={mainImageStyle}
                 />
                 {images.length > 1 && (
                   <div style={thumbnailRowStyle}>
                     {images.map((img, idx) => (
-                      <img
+                      <Image
                         key={img.imageId}
                         src={img.url}
                         alt={`${product.name} ${idx + 1}`}
+                        width={52}
+                        height={52}
+                        unoptimized
                         style={idx === selectedImageIndex ? thumbActiveStyle : thumbStyle}
                         onClick={() => setSelectedImageIndex(idx)}
                       />
@@ -121,9 +129,12 @@ export function ProductDetail({ productId }: Props) {
                 )}
               </>
             ) : product.thumbnailUrl ? (
-              <img
+              <Image
                 src={product.thumbnailUrl}
                 alt={product.name}
+                width={280}
+                height={280}
+                unoptimized
                 style={mainImageStyle}
               />
             ) : (

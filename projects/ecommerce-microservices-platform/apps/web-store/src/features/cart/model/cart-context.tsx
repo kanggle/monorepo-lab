@@ -133,7 +133,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     clearStoredCart();
   }, []);
 
-  const visibleItems = isAuthenticated ? items : [];
+  const visibleItems = useMemo(
+    () => (isAuthenticated ? items : []),
+    [isAuthenticated, items],
+  );
   const totalAmount = calculateTotal(visibleItems);
   const itemCount = calculateItemCount(visibleItems);
 
