@@ -8,7 +8,7 @@ platform-console Playwright e2e PR-time smoke harness — backend-less `playwrig
 
 # Status
 
-ready
+done
 
 # Owner
 
