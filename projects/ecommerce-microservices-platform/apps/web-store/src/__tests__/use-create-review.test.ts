@@ -36,7 +36,7 @@ describe('useCreateReview', () => {
 
     const { result } = renderHook(() => useCreateReview(), { wrapper });
 
-    const payload = { productId: 'prod-1', orderId: 'o-1', rating: 5, content: '좋아요' };
+    const payload = { productId: 'prod-1', rating: 5, title: '좋아요', content: '좋아요' };
     result.current.mutate(payload);
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -51,7 +51,7 @@ describe('useCreateReview', () => {
 
     const { result } = renderHook(() => useCreateReview(), { wrapper });
 
-    result.current.mutate({ productId: 'prod-1', orderId: 'o-1', rating: 5, content: 'x' });
+    result.current.mutate({ productId: 'prod-1', rating: 5, title: 't', content: 'x' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
