@@ -349,11 +349,14 @@ services:
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
       # GAP OIDC public client — the platform-console-web row is seeded by
-      # auth-service/V0015. The e2e seed.sql also UPDATEs it to additionally
-      # allow `client_credentials` grant (server-to-server auth used by the
-      # Playwright login fixture; the OIDC PKCE browser flow is not yet
-      # operable end-to-end because auth-service has no HTML login form — see
-      # fixtures/login.ts for the full discussion).
+      # auth-service/V0015 with PKCE-mandatory PUBLIC-client semantics
+      # (no client secret, no client_credentials grant). The e2e Playwright
+      # login fixture drives the production OIDC authorization_code + PKCE
+      # path end-to-end via auth-service /login HTML form (TASK-BE-309 +
+      # TASK-PC-FE-022) — see fixtures/login.ts. The Playwright route handler
+      # uses `context.route` to bridge `auth-service:8081` (docker DNS) to
+      # `localhost:18081` (host-published port) without altering the issuer
+      # URL the JWT carries.
       OIDC_ISSUER_URL: http://auth-service:8081
       OIDC_CLIENT_ID: platform-console-web
       # The redirect URI must match the V0015 seed exactly. Inside the docker
