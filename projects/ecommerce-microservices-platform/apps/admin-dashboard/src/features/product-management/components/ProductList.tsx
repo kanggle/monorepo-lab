@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { DataTable, StatusBadge, FilterBar, ListError } from '@/shared/ui';
 import type { ColumnDef } from '@/shared/ui';
@@ -30,7 +31,16 @@ const columns: ColumnDef<ProductSummary>[] = [
     header: '',
     render: (product: ProductSummary) =>
       product.thumbnailUrl ? (
-        <img src={product.thumbnailUrl} alt={product.name} style={thumbnailStyle} />
+        <Image
+          src={product.thumbnailUrl}
+          alt={product.name}
+          width={40}
+          height={40}
+          // Arbitrary catalog thumbnail URLs (any CDN / object storage host) —
+          // skip the Next.js optimizer to avoid per-host remotePatterns config.
+          unoptimized
+          style={thumbnailStyle}
+        />
       ) : (
         <div style={placeholderStyle}>-</div>
       ),

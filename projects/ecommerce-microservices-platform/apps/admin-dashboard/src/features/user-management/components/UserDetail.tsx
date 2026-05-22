@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { PageLayout, StatusBadge, DescriptionList, Section } from '@/shared/ui';
 import { ErrorMessage } from '@repo/ui';
 import { useUser } from '../hooks/use-user';
@@ -40,9 +41,14 @@ export function UserDetail({ userId }: Props) {
             {
               label: '프로필 이미지',
               value: user.profileImageUrl ? (
-                <img
+                <Image
                   src={user.profileImageUrl}
                   alt={`${user.name} 프로필`}
+                  width={64}
+                  height={64}
+                  // Arbitrary user-uploaded profile URL — skip the Next.js
+                  // optimizer to avoid per-host remotePatterns config.
+                  unoptimized
                   style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover' }}
                 />
               ) : (

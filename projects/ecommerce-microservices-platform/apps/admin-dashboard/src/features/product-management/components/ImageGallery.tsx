@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import type { ProductImage, UploadingImage } from '../types/product-image';
 import { ImageItem } from './ImageItem';
 
@@ -32,13 +33,14 @@ const styles = {
     backgroundColor: '#f9fafb',
   } as const,
   uploadingImageWrapper: {
+    // `position: relative` required so the child `<Image fill>` fills this box.
+    position: 'relative',
     width: '100%',
     aspectRatio: '1',
     overflow: 'hidden',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   } as const,
   uploadingOverlay: {
     position: 'absolute',
@@ -162,9 +164,13 @@ export function ImageGallery({
           data-testid={`uploading-${uploading.id}`}
         >
           <div style={styles.uploadingImageWrapper as React.CSSProperties}>
-            <img
+            <Image
               src={uploading.previewUrl}
               alt={uploading.file.name}
+              fill
+              // Local FileReader data: URL preview — Next.js optimizer is bypassed.
+              unoptimized
+              sizes="200px"
               style={styles.uploadingImg as React.CSSProperties}
             />
             {uploading.status === 'error' ? (

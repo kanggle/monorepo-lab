@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { useRef } from 'react';
 import type { UserProfile } from '@repo/types';
 
@@ -27,9 +28,15 @@ export function ProfileImageSection({
   return (
     <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
       {profileImageUrl ? (
-        <img
+        <Image
           src={profileImageUrl}
           alt="프로필"
+          width={80}
+          height={80}
+          // Arbitrary user-uploaded URLs (incl. data: URLs from FileReader) —
+          // bypass the Next.js optimizer/loader since the source domain is
+          // not known ahead of time.
+          unoptimized
           style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', objectFit: 'cover', border: '1px solid var(--color-border-light)' }}
         />
       ) : (
