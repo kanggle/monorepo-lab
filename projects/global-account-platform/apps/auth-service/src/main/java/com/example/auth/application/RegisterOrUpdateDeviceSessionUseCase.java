@@ -4,7 +4,7 @@ import com.example.auth.application.result.RegisterDeviceSessionResult;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.SessionContext;
-import com.example.auth.domain.session.UuidV7;
+import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
