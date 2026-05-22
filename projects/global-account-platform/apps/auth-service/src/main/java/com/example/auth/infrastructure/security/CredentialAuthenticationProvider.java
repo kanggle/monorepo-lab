@@ -14,6 +14,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,15 +94,26 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // flows). Tenant context is published via `details` so that
         // TenantClaimTokenCustomizer picks it up via its existing
         // `principal.getDetails() map` path (NO customizer change required).
+        //
+        // The details map MUST be a `HashMap` (not `Map.of(...)`) because SAS's
+        // JdbcOAuth2AuthorizationService serializes the Authentication via
+        // Jackson with a strict allowlist (SecurityJackson2Modules) when it
+        // persists the OAuth2Authorization to the DB at /oauth2/authorize time.
+        // `Map.of(...)` returns `java.util.ImmutableCollections$MapN`, which is
+        // NOT on the allowlist, and the subsequent /oauth2/token round-trip
+        // fails with `IllegalArgumentException: not in the allowlist`.
+        // `HashMap` is on the allowlist via Spring Security's stock mixins.
+        Map<String, Object> details = new HashMap<>();
+        details.put("tenant_id", tenantId);
+        details.put("tenant_type", tenantType);
+        details.put("account_id", credential.getAccountId());
+
         UsernamePasswordAuthenticationToken authenticated =
                 new UsernamePasswordAuthenticationToken(
                         credential.getEmail(),
                         null,
                         List.of(new SimpleGrantedAuthority("ROLE_USER")));
-        authenticated.setDetails(Map.of(
-                "tenant_id", tenantId,
-                "tenant_type", tenantType,
-                "account_id", credential.getAccountId()));
+        authenticated.setDetails(details);
         return authenticated;
     }
 
