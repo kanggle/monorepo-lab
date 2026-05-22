@@ -6,6 +6,8 @@ package com.example.security.jwt;
  */
 public class JwtVerificationException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     public JwtVerificationException(String message) {
         super(message);
     }
