@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-310-auth-service-uuidv7-shim-removal.md` — **READY** (3-PR sequence per GAP INDEX lifecycle). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (단순 mechanical sweep — 1-line import + 2 file delete). **Origin**: ① TASK-BE-028c-fix § Fix 2 가 약속한 후속 cleanup — "`RegisterOrUpdateDeviceSessionUseCase` 이관" 미실행 상태로 main DONE 후 잔류. ② backend `-Xlint:all` audit (PR #743 this-escape sweep 직후) 잔여 `[removal]` warning 1건 = 본 shim 의 `@Deprecated(forRemoval=true)`. **Migration**: `com.example.auth.domain.session.UuidV7` (forwarding shim) → `com.example.common.id.UuidV7` (canonical, libs/java-common 승격됨). API surface byte-identical (`randomUuid()`, `randomString()`, `timestampMs(UUID)`); 호출 사이트 변경 0. **In Scope**: (a) `RegisterOrUpdateDeviceSessionUseCase.java` import 1줄 교체, (b) shim `UuidV7.java` DELETE, (c) shim test `UuidV7ShimTest.java` DELETE (shim javadoc 명시: "expected to be deleted alongside it"). **Out of Scope**: 다른 9개 `@Deprecated` non-removal warning (per-call-site audit 필요). **AC**: AC-1 import 교체 / AC-2~3 두 파일 DELETE / AC-4 repo-wide grep 0 production match / AC-5 LOCAL `[removal]` warning 0 / AC-6 CI Testcontainers GREEN / AC-7 zero retrofit 다른 6 projects + libs/. **No spec/contract change** (auth-service internal cleanup); **No ADR** (HARDSTOP-09 not triggered, shared-library-policy.md 의 v1 promoted utility 이후 shim sunset 정상 lifecycle). **spec-first**: spec PR (this) → impl PR (3 file changes) → close chore PR.
 
 ## in-progress
 
