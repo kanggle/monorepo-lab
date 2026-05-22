@@ -72,7 +72,7 @@ function gapThenExchangeFetch(
     tokenType: 'admin',
   },
 ) {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     if (String(url).includes('/api/admin/auth/token-exchange')) {
       return Promise.resolve(
         new Response(JSON.stringify(exchangeBody), {

@@ -88,7 +88,7 @@ const STALE_ENV = {
 };
 
 function routed() {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     const u = String(url);
     if (u.includes('/procurement/po'))
       return Promise.resolve(jsonResponse(PO_ENV));

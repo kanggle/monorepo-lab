@@ -104,7 +104,9 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
 
   it('eligible → seeds inventory + alerts (GAP OIDC token, server-side)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(INV)));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(INV)),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const state = await getWmsSectionState(true);

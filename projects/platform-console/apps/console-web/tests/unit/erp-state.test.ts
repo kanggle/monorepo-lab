@@ -131,7 +131,9 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     // Each call must return a FRESH Response (Response bodies are
     // one-shot; the 5 parallel legs would otherwise share a
     // consumed body and the second leg onward would throw).
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(listEnv())));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const state = await getErpSectionState(true);
@@ -154,7 +156,9 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
   it('eligible + asOf → asOf threads through to EVERY leg verbatim (E3 CORE invariant)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Fresh Response per call (one-shot body).
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(listEnv())));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await getErpSectionState(true, '2025-01-01');

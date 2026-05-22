@@ -80,7 +80,7 @@ const OPERATORS_PAGE = {
 function routedFetch(
   overrides: Partial<{ accounts: Response; audit: Response; operators: Response }> = {},
 ) {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     const u = String(url);
     if (u.includes('/api/admin/accounts'))
       return Promise.resolve(overrides.accounts ?? jsonResponse(ACCOUNTS_PAGE));

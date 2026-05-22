@@ -253,7 +253,7 @@ describe('wms-api — read vs mutation discipline (§ 2.4.5)', () => {
   });
 
   it('alert-ack idempotency is stable per a passed key and fresh per a new one', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
       Promise.resolve(
         jsonResponse({ ...ALERT_PAGE.content[0], acknowledged: true }),
       ),

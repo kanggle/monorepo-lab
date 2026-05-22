@@ -209,7 +209,9 @@ describe('audit-api — filter / source / pagination serialization + size cap', 
 
   it('omits tenantId unless explicitly supplied (SUPER_ADMIN cross-tenant only)', async () => {
     // Fresh Response per call — a Response body can only be read once.
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(PAGE_200)));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(PAGE_200)),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await queryAudit({ source: 'admin' });
