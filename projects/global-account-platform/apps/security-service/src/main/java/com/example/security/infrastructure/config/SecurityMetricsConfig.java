@@ -12,6 +12,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import jakarta.annotation.PostConstruct;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -61,14 +62,25 @@ public class SecurityMetricsConfig {
         this.consumerGroup = groupId != null ? groupId : "security-service";
         this.dlqConsumerGroup = this.consumerGroup + ".dlq";
 
-        Gauge.builder("security_dlq_depth", this, config -> (double) config.dlqDepthCache.get())
-                .description("Total DLQ depth across all DLQ topics (latestOffset - committedOffset per partition)")
-                .register(meterRegistry);
-
         // NOTE: `security_consumer_lag` has been removed. Dashboards must aggregate the
         // per-partition `kafka_consumer_lag` gauge instead, e.g.
         //   sum(kafka_consumer_lag{service="security-service"})
         // See platform/observability.md for the migration note.
+    }
+
+    /**
+     * Registers the {@code security_dlq_depth} gauge after the bean is fully
+     * initialised. Extracted out of the constructor so {@code Gauge.builder(...,
+     * this, ...)} no longer escapes a partially-constructed instance — silences
+     * the {@code [this-escape]} warning from {@code javac -Xlint:all}.
+     * {@code @Configuration} classes are CGLib-subclassed by Spring; making the
+     * class {@code final} is therefore not an option.
+     */
+    @PostConstruct
+    void registerDlqDepthGauge() {
+        Gauge.builder("security_dlq_depth", this, config -> (double) config.dlqDepthCache.get())
+                .description("Total DLQ depth across all DLQ topics (latestOffset - committedOffset per partition)")
+                .register(meterRegistry);
     }
 
     /**

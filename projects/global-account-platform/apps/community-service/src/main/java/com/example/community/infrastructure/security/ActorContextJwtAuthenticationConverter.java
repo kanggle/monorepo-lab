@@ -66,8 +66,12 @@ public class ActorContextJwtAuthenticationConverter
     /**
      * {@link JwtAuthenticationToken} subclass that exposes {@link ActorContext} as the
      * principal — preserves source compatibility with {@link ActorContextResolver}.
+     *
+     * <p>{@code final} so that {@code setAuthenticated(true)} in the constructor
+     * cannot be observed by an unfinished subclass — silences the
+     * {@code [this-escape]} warning from {@code javac -Xlint:all}.
      */
-    public static class ActorContextJwtAuthenticationToken extends JwtAuthenticationToken {
+    public static final class ActorContextJwtAuthenticationToken extends JwtAuthenticationToken {
         private final ActorContext actor;
 
         public ActorContextJwtAuthenticationToken(Jwt jwt,

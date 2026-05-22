@@ -13,8 +13,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Micrometer metrics for the master-service outbox.
  * <p>
  * Names match {@code specs/contracts/events/master-events.md} § Producer Guarantees.
+ *
+ * <p>{@code final} so the {@code Gauge.builder(..., this, ::pendingCount)}
+ * registration in the constructor cannot be observed by an unfinished
+ * subclass — silences the {@code [this-escape]} warning from
+ * {@code javac -Xlint:all}.
  */
-public class OutboxMetrics {
+public final class OutboxMetrics {
 
     public static final String PENDING_COUNT = "master.outbox.pending.count";
     public static final String PUBLISH_FAILURE_TOTAL = "master.outbox.publish.failure.total";
