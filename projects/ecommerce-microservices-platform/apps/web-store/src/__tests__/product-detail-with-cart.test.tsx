@@ -61,7 +61,7 @@ const product: ProductDetail = {
   status: 'ON_SALE',
   price: 10000,
   categoryId: 'cat-1',
-  images: ['/img/1.jpg'],
+  images: [{ imageId: 'img-1', url: '/img/1.jpg', sortOrder: 0, isPrimary: true }],
   variants: [
     { id: 'v1', optionName: '빨강', stock: 10, additionalPrice: 1000 },
     { id: 'v2', optionName: '파랑', stock: 5, additionalPrice: 0 },

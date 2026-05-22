@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileForm } from '@/features/user/ui/ProfileForm';
-import type { UserProfile, ApiErrorResponse } from '@repo/types';
+import type {
+  UserProfile,
+  ApiErrorResponse,
+  UpdateUserProfileResponse,
+} from '@repo/types';
 import { TestQueryProvider } from './test-utils';
 
 vi.mock('@/features/user/api/user-profile-api', () => ({
@@ -169,10 +173,10 @@ describe('ProfileForm', () => {
   });
 
   it('수정 처리 중 중복 클릭을 방지한다', async () => {
-    let resolveUpdate: (value: unknown) => void;
+    let resolveUpdate: (value: UpdateUserProfileResponse) => void;
     mockUpdateMyProfile.mockImplementationOnce(
       () =>
-        new Promise((resolve) => {
+        new Promise<UpdateUserProfileResponse>((resolve) => {
           resolveUpdate = resolve;
         }),
     );

@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { SearchBar } from '@/features/search/ui/SearchBar';
 
 const mockPush = vi.fn();
-const mockGet = vi.fn(() => null);
+// `URLSearchParams.get` returns `string | null` — preserve the union here
+// so individual tests can override with a string via `mockReturnValue(...)`.
+const mockGet = vi.fn<() => string | null>(() => null);
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),

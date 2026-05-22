@@ -30,7 +30,7 @@ vi.mock('@/shared/ui', () => ({
 const baseResult: SearchResponse = {
   query: '노트북',
   content: [
-    { id: 'p1', name: '노트북 A', price: 1000000, status: 'ON_SALE', thumbnailUrl: '/img.jpg', categoryId: 'cat-1', score: 1.0 },
+    { productId: 'p1', name: '노트북 A', price: 1000000, status: 'ON_SALE', thumbnailUrl: '/img.jpg', categoryId: 'cat-1', score: 1.0 },
   ],
   facets: {
     categories: [],

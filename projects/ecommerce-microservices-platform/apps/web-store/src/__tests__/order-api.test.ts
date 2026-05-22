@@ -30,7 +30,15 @@ describe('order-api', () => {
   describe('placeOrder', () => {
     it('주문 데이터를 전달하여 주문을 생성한다', async () => {
       const request = {
-        items: [{ productId: 'p1', variantId: 'v1', quantity: 2 }],
+        items: [
+          {
+            productId: 'p1',
+            variantId: 'v1',
+            productName: '상품A',
+            quantity: 2,
+            unitPrice: 10000,
+          },
+        ],
         shippingAddress: {
           recipient: '홍길동',
           phone: '010-1234-5678',

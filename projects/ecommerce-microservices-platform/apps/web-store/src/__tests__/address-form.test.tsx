@@ -164,10 +164,10 @@ describe('AddressForm', () => {
     });
 
     it('제출 중 중복 클릭을 방지한다', async () => {
-      let resolveCreate: (value: unknown) => void;
+      let resolveCreate: (value: { id: string }) => void;
       mockCreateAddress.mockImplementationOnce(
         () =>
-          new Promise((resolve) => {
+          new Promise<{ id: string }>((resolve) => {
             resolveCreate = resolve;
           }),
       );

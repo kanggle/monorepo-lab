@@ -3,13 +3,20 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReviewForm } from '@/features/review/ui/ReviewForm';
 
+type OnSubmit = (data: {
+  rating: number;
+  title: string;
+  content: string;
+}) => Promise<void>;
+type OnCancel = () => void;
+
 describe('ReviewForm', () => {
-  let onSubmit: ReturnType<typeof vi.fn>;
-  let onCancel: ReturnType<typeof vi.fn>;
+  let onSubmit: ReturnType<typeof vi.fn<OnSubmit>>;
+  let onCancel: ReturnType<typeof vi.fn<OnCancel>>;
 
   beforeEach(() => {
-    onSubmit = vi.fn().mockResolvedValue(undefined);
-    onCancel = vi.fn();
+    onSubmit = vi.fn<OnSubmit>().mockResolvedValue(undefined);
+    onCancel = vi.fn<OnCancel>();
   });
 
   it('별점, 제목, 내용 입력 필드를 렌더링한다', () => {
