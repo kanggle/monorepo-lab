@@ -435,7 +435,9 @@ describe('erp-api — E3 `?asOf=` thread-through (§ 2.4.8 CORE invariant)', () 
       meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
     };
     // Fresh Response per call (Response bodies are one-shot).
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(EMPTY_LIST)));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(EMPTY_LIST)),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await listDepartments({ asOf: '2025-01-01' });
@@ -469,7 +471,9 @@ describe('erp-api — E3 `?asOf=` thread-through (§ 2.4.8 CORE invariant)', () 
       meta: { timestamp: 'x' },
     };
     // Fresh Response per call (Response bodies are one-shot).
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(DETAIL_BODY)));
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(DETAIL_BODY)),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await getDepartmentById('dept-1', { asOf: '2025-01-01' });

@@ -153,7 +153,7 @@ const OPERATORS_PAGE = {
 
 /** Routes the mocked fetch to a parser-valid body by URL. */
 function routedFetch() {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     const u = String(url);
     if (u.includes('/api/admin/operators/me/password')) {
       return Promise.resolve(noContent());
@@ -728,7 +728,7 @@ describe('parity matrix — dashboards (#16) = ADR-MONO-015 composed overview, N
     // accounts 503 → accounts card degraded; audit + operators ok.
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => {
+      vi.fn((url: string, _init?: RequestInit) => {
         const u = String(url);
         if (u.includes('/api/admin/accounts'))
           return Promise.resolve(jsonResponse({ code: 'CIRCUIT_OPEN' }, 503));
@@ -748,7 +748,7 @@ describe('parity matrix — dashboards (#16) = ADR-MONO-015 composed overview, N
     // no partial authed state; the operator token is shared).
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => {
+      vi.fn((url: string, _init?: RequestInit) => {
         const u = String(url);
         if (u.includes('/api/admin/operators') && !u.includes('?'))
           return Promise.resolve(jsonResponse(OPERATORS_PAGE));

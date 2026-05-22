@@ -107,7 +107,7 @@ const TXNS_ENV = {
 };
 
 function routed() {
-  return vi.fn((url: string) => {
+  return vi.fn((url: string, _init?: RequestInit) => {
     const u = String(url);
     if (u.includes('/balances'))
       return Promise.resolve(jsonResponse(BALANCES_ENV));

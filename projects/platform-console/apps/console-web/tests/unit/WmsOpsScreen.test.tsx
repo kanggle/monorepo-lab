@@ -236,7 +236,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
   });
 
   it('confirms the ack → posts with an Idempotency-Key + empty body', async () => {
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).includes('/acknowledge')
           ? jsonResponse({ ...ALERTS.content[0], acknowledged: true })
@@ -279,7 +279,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
     // Route by URL: ack POST → updated row; the post-success alerts
     // invalidation refetch → a valid AlertPage (so the section keeps
     // rendering — the refetch is CORRECT behaviour, not asserted-against).
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/acknowledge')) {
         return Promise.resolve(
           jsonResponse({ ...ALERTS.content[0], acknowledged: true }),
