@@ -8,7 +8,7 @@ auth-service formLogin() HTML 로그인 surface — Spring Authorization Server 
 
 # Status
 
-ready
+done
 
 # Owner
 
