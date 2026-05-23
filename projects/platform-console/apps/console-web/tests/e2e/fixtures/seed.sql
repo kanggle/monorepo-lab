@@ -42,10 +42,10 @@
 --      §GAP OIDC subject-token flow) can mint operator tokens without TOTP
 --      enrollment. This is a per-environment runtime tweak; the production
 --      profile keeps require_2fa=TRUE (V0013 default).
---   6. finance_db.accounts + balances — 1 finance account row for tenant
---      `fan-platform` (matching the PC-FE-016 click sequence: SUPER_ADMIN
---      operating in fan-platform tenant). The PC-FE-016 spec's Save step
---      uses the same UUID as `admin_operators.finance_default_account_id`.
+--   6. (moved to seed-finance.sql per TASK-MONO-132) — the finance schema
+--      row for tenant `fan-platform` (PC-FE-016 click sequence target) is
+--      now applied at workflow phase 2.5 after finance-account-service
+--      Flyway runs. See sibling fixture seed-finance.sql.
 --
 -- Re-runnable: every statement is idempotent (INSERT IGNORE / ON DUPLICATE
 -- KEY UPDATE / UPDATE-with-WHERE). The CI workflow runs seed.sql exactly
@@ -195,39 +195,15 @@ ON DUPLICATE KEY UPDATE
     updated_at   = NOW(6);
 
 -- ---------------------------------------------------------------------------
--- 6. finance_db — single account + balance row. Tenant 'fan-platform' so
---    the SUPER_ADMIN operating in fan-platform tenant (TENANT_COOKIE) can
---    read it via the finance ActorContext tenant gate. UUID matches the
---    value the 2 specs Save into MyProfileForm / OperatorProfileEditDialog.
+-- (section 6 moved to seed-finance.sql by TASK-MONO-132)
 --
---    Note: account-service Flyway V1__init.sql runs at finance container
---    boot, which depends on finance_db existing — section 1 above creates
---    it BEFORE finance-account-service is started (see workflow ordering).
+-- Earlier versions of this fixture also INSERTed into the finance schema
+-- tables here. Those statements require the finance Flyway V1__init.sql
+-- to have run, which only happens at finance-account-service boot
+-- (workflow phase 2). Applying them at phase 1.5 produced
+-- `Table doesn't exist` errors (run 26319887335 step `Apply seed.sql`).
+-- The data now lives in seed-finance.sql, applied by the workflow's new
+-- phase 2.5 step `Apply seed-finance.sql` after finance-account-service is
+-- healthy. Section 1 above still creates the finance_db database +
+-- service user at phase 1.5 — that part of the contract is unchanged.
 -- ---------------------------------------------------------------------------
-USE `finance_db`;
-
-INSERT IGNORE INTO accounts (
-    id, tenant_id, owner_ref, status, kyc_level, currency,
-    created_at, updated_at, version
-) VALUES (
-    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
-    'fan-platform',
-    'e2e-test-owner-ref',
-    'ACTIVE',
-    'FULL',
-    'KRW',
-    NOW(6), NOW(6), 0
-);
-
-INSERT IGNORE INTO balances (
-    id, account_id, tenant_id, currency,
-    ledger_minor, held_minor,
-    created_at, updated_at, version
-) VALUES (
-    '01928c4a-7e9f-7c00-9a40-d2b1f5e8b001',
-    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
-    'fan-platform',
-    'KRW',
-    1000000, 0,
-    NOW(6), NOW(6), 0
-);

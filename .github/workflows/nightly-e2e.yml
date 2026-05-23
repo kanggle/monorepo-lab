@@ -728,7 +728,13 @@ jobs:
           docker compose -f docker-compose.e2e.yml logs --tail=50 admin-service
           exit 1
 
-      - name: Apply seed.sql (operators, finance accounts, OIDC client tweaks)
+      - name: Apply seed.sql (GAP operators + OIDC tweaks + finance_db preamble)
+        # Phase 1.5 — runs AFTER admin-service healthy (GAP Flyway done) and
+        # BEFORE finance-account-service is started. Contents: finance_db
+        # database + service user CREATE (section 1) + auth_db.credentials +
+        # admin_db.admin_operators / operator_roles / admin_roles (sections
+        # 2-5). The finance schema data (accounts + balances) is split into
+        # seed-finance.sql per TASK-MONO-132 and applied at phase 2.5.
         working-directory: projects/platform-console
         run: |
           docker compose -f docker-compose.e2e.yml exec -T mysql \
@@ -739,6 +745,37 @@ jobs:
         run: |
           docker compose -f docker-compose.e2e.yml up -d --build \
             finance-account-service console-bff console-web
+
+      - name: Wait for finance-account-service health (gates seed-finance.sql application)
+        # Phase 2.5 gate (TASK-MONO-132) — finance-account-service Flyway
+        # V1__init.sql creates finance_db.accounts + balances tables on first
+        # boot. The compose healthcheck returns UP only after Flyway has
+        # applied all pending migrations. start_period=60s +
+        # healthcheck retries=12 * interval=15s ≈ 4 min compose budget,
+        # workflow gives 30 * 10s = 5 min grace.
+        working-directory: projects/platform-console
+        run: |
+          echo "Waiting for finance-account-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.e2e.yml ps finance-account-service \
+                | grep -q "healthy"; then
+              echo "finance-account-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "finance-account-service did not become healthy in time"
+          docker compose -f docker-compose.e2e.yml logs --tail=50 finance-account-service
+          exit 1
+
+      - name: Apply seed-finance.sql (finance accounts + balances, post-Flyway)
+        # Phase 2.5 (TASK-MONO-132) — the finance schema data moved out of
+        # seed.sql so it can be INSERTed AFTER the finance Flyway runs. Mirror
+        # shape of `Apply seed.sql` above; only the fixture path differs.
+        working-directory: projects/platform-console
+        run: |
+          docker compose -f docker-compose.e2e.yml exec -T mysql \
+            mysql -uroot -prootpass < apps/console-web/tests/e2e/fixtures/seed-finance.sql
 
       - name: Wait for console-web health
         working-directory: projects/platform-console

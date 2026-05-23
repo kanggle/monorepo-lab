@@ -8,7 +8,7 @@ platform-console e2e — split `seed.sql` section 6 (`finance_db.accounts` + `ba
 
 # Status
 
-ready
+review
 
 # Owner
 
