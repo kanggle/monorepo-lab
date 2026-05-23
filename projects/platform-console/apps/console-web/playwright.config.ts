@@ -37,36 +37,31 @@ export default defineConfig({
     // Playwright skips retry on globalSetup errors). Dev: keep retry-only
     // tracing for normal iteration speed.
     trace: process.env.CI ? 'on' : 'on-first-retry',
-    // TASK-PC-FE-028 — CI: map docker-internal OIDC issuer hostname to the
-    // host-published port at the Chromium DNS resolver layer. Required because
-    // `context.route` bridges (PC-FE-022) intercept resource subrequests but
-    // NOT top-level navigation DNS resolution (PC-FE-027 trace evidence:
-    // Network panel captured `http://auth-service:8081/oauth2/authorize?...`
-    // as the second-and-final URL — browser DNS resolve failed BEFORE the
-    // route handler was invoked). DNS-layer fix for DNS-layer cause. Dev runs
-    // use the traefik path (console.local) and don't need this.
-    ...(process.env.CI ? {
-      launchOptions: {
-        args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081'],
-      },
-    } : {}),
   },
   projects: [
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // TASK-PC-FE-028 — CI: explicit project-level repeat of launchOptions
-        // (devices['Desktop Chrome'] spread can shadow global). Use the full
-        // Chrome for Testing channel instead of the default chromium-headless-
-        // shell variant, which Playwright downloads alongside but is stripped
-        // and does NOT honor `--host-resolver-rules` net-stack flag
-        // (dispatch runs 26325955313 + 26326164850 verify headless-shell
-        // ignored the flag — same 2 URLs captured both times).
+        // TASK-PC-FE-028 (iter 4 — Option G pivot) — CI: port-agnostic DNS
+        // mapping at the Chromium resolver layer paired with docker-compose
+        // host-port 1:1 publishing (`8081:8081`). The earlier port-specific
+        // form (`MAP auth-service:8081 127.0.0.1:18081`) was ignored across
+        // 3 iterations (dispatch runs 26325955313 + 26326164850 + 26326373649,
+        // both headless-shell + full Chrome for Testing channel) — trace's
+        // Network panel kept capturing the SAME 2 URLs (localhost:3000 +
+        // unresolved auth-service:8081). PC-FE-022 spec § Decision authority
+        // Option B specified the port-agnostic form combined with host-port
+        // alignment; PC-FE-028 originally adopted only half. Iter 4 adopts
+        // both halves. The port-agnostic form is the documented Chromium
+        // syntax (`MAP <hostname> <target>`). Full Chrome for Testing channel
+        // retained — chromium-headless-shell variant is stripped and may
+        // ignore net-stack flags. Dev runs (CI=false) use the traefik path
+        // (console.local) and don't need this; conditional preserves dev.
         ...(process.env.CI ? {
           channel: 'chromium',
           launchOptions: {
-            args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081'],
+            args: ['--host-resolver-rules=MAP auth-service 127.0.0.1'],
           },
         } : {}),
       },
