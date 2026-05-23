@@ -24,10 +24,27 @@
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- finance_db — single account + balance row. Tenant 'fan-platform' so
---    the SUPER_ADMIN operating in fan-platform tenant (TENANT_COOKIE) can
---    read it via the finance ActorContext tenant gate. UUID matches the
---    value the 2 specs Save into MyProfileForm / OperatorProfileEditDialog.
+-- finance_db — single account + balance row.
+--
+--    TASK-BE-312: tenant_id='*' (platform-scope sentinel). The SUPER_ADMIN
+--    operator's JWT carries tenant_id='*' (from auth_db.credentials row in
+--    seed.sql + admin_db.admin_operators row — all aligned on the
+--    platform-scope sentinel). finance-account-service applies the JWT
+--    claim verbatim to BOTH layers:
+--      1. TenantClaimValidator — accepts '*' (wildcard) OR 'finance';
+--      2. data-layer (`AccountJpaRepository.findByIdAndTenantId` +
+--         `BalanceJpaRepository.findByAccountIdAndTenantId`) — filters
+--         literally by the JWT claim. Hence the row's tenant_id must also
+--         be '*' for the wildcard JWT to read it.
+--
+--    The console-web TENANT_COOKIE ('fan-platform') drives only the
+--    OUTBOUND `X-Tenant-Id` header (D6.A forward-verbatim). It does NOT
+--    modify the JWT claim, so the finance leg evaluates JWT-claim='*' on
+--    both validator + data-layer axes.
+--
+--    UUID matches the value the 2 specs Save into MyProfileForm /
+--    OperatorProfileEditDialog (operators-profile.spec.ts +
+--    operators-admin-profile.spec.ts).
 -- ---------------------------------------------------------------------------
 USE `finance_db`;
 
@@ -36,7 +53,7 @@ INSERT IGNORE INTO accounts (
     created_at, updated_at, version
 ) VALUES (
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
-    'fan-platform',
+    '*',
     'e2e-test-owner-ref',
     'ACTIVE',
     'FULL',
@@ -51,7 +68,7 @@ INSERT IGNORE INTO balances (
 ) VALUES (
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8b001',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
-    'fan-platform',
+    '*',
     'KRW',
     1000000, 0,
     NOW(6), NOW(6), 0
