@@ -1,4 +1,5 @@
 import { fetchRegistry } from '@/shared/api/registry-client';
+import { logger } from '@/shared/lib/logger';
 
 /**
  * Server-only helper that resolves the calling operator's finance default
@@ -51,7 +52,11 @@ export async function getFinanceDefaultAccountId(): Promise<string | null> {
   let registry;
   try {
     registry = await fetchRegistry();
-  } catch {
+  } catch (err) {
+    // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+    logger.warn('be_312_helper_registry_threw', {
+      err: err instanceof Error ? err.message : String(err),
+    });
     // Registry unreachable (401 / 503 / timeout). The session can still
     // be authenticated — the finance leg merely falls through to the
     // existing MISSING_PREREQUISITE path (header omitted is identical
@@ -63,6 +68,14 @@ export async function getFinanceDefaultAccountId(): Promise<string | null> {
 
   const financeItem = registry.products.find((p) => p.productKey === 'finance');
   const raw = financeItem?.operatorContext?.defaultAccountId;
+  // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8). Logs presence+length only.
+  logger.info('be_312_helper_extract', {
+    productCount: registry.products.length,
+    financeItemFound: financeItem != null,
+    operatorContextPresent: financeItem?.operatorContext != null,
+    rawType: typeof raw,
+    rawLength: typeof raw === 'string' ? raw.length : 0,
+  });
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;

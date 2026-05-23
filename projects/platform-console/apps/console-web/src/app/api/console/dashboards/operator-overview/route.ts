@@ -100,6 +100,13 @@ export async function GET() {
   // (the BFF's `hasText` gate treats blank as absent, but transmitting a
   // blank header would obscure the intent at the wire).
   const financeDefaultAccountId = await getFinanceDefaultAccountId();
+  // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+  // Logs presence + length only (NEVER the value — finance F7 / R7 internal-classified).
+  logger.info('be_312_finance_header', {
+    requestId,
+    headerWillBeSent: financeDefaultAccountId != null && financeDefaultAccountId.length > 0,
+    valueLength: financeDefaultAccountId == null ? 0 : financeDefaultAccountId.length,
+  });
   const outboundHeaders: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${accessToken}`,
