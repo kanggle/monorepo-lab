@@ -430,6 +430,16 @@ services:
       REGISTRY_TIMEOUT_MS: "5000"
       CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
       TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
+      # TASK-PC-FE-029 iter 2 — GAP admin-service base for the 7 operator
+      # endpoints (operators list/create/edit-roles/change-status/change-
+      # password/update-profile/admin-set-profile) AND the audit + accounts
+      # surfaces (TASK-PC-FE-002/003/004). console-web's `env.ts` defaults
+      # this to `http://gap.local` (the dev Traefik path); the e2e overlay
+      # has no Traefik, so the default would resolve nowhere → 5s timeout
+      # on `/api/admin/operators?page=0&size=20` → server `operators-state`
+      # falls into `degraded: true` branch → MyProfileForm never mounts →
+      # spec `my-profile-default-account-id` testid 5s timeout.
+      GAP_ADMIN_API_BASE: http://admin-service:8085
       # console-bff orchestrator — server-side same-origin proxy.
       CONSOLE_BFF_URL: http://console-bff:8080
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.
