@@ -45,6 +45,18 @@ public class SecurityConfig {
                         .requestMatchers("/api/accounts/me/sessions/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/internal/**").permitAll()
+                        // TASK-BE-311 — Spring Security's
+                        // DefaultLoginPageGeneratingFilter (registered by
+                        // WebLoginSecurityConfig's formLogin block) emits HTML
+                        // that references `default-ui.css` as a same-origin
+                        // subresource. That URL falls outside chain[0]'s
+                        // /login + /logout securityMatcher, so it lands on
+                        // this chain. Without an explicit permit, the
+                        // `.anyRequest().denyAll()` below rejects it with
+                        // 403 — the form renders without styling AND the
+                        // 403 surfaces in browser dev tools / Playwright
+                        // trace as a confusing red herring.
+                        .requestMatchers("/default-ui.css").permitAll()
                         .anyRequest().denyAll()
                 );
 

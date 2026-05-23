@@ -90,17 +90,14 @@ const TRACE_PATH = path.join(TRACE_DIR, 'trace.zip');
 
 const DEFAULTS = {
   // Browser-facing OIDC issuer URL inside the docker network. The browser
-  // can't resolve this hostname on the host; `context.route` rewrites the
-  // network call to `localhostAuthBaseUrl` while the URL bar keeps the
-  // issuer-identical value. The string MUST equal `OIDC_ISSUER_URL` env on
-  // console-web for JWT `iss` validation to pass.
+  // resolves `auth-service` natively via the runner's `/etc/hosts` entry
+  // (`127.0.0.1 auth-service`, added by the workflow at TASK-PC-FE-028
+  // iter 7) — paired with docker-compose's `["8081:8081"]` (iter 4
+  // realignment), the host port matches the container port so the URL bar
+  // keeps the issuer-identical value end-to-end. The string MUST equal
+  // `OIDC_ISSUER_URL` env on console-web for JWT `iss` validation to pass.
   oidcIssuerUrl:
     process.env.E2E_OIDC_ISSUER_URL ?? 'http://auth-service:8081',
-  // Host-published port for the auth-service container
-  // (docker-compose.e2e.yml: `ports: ["18081:8081"]`). The route handler
-  // rewrites issuer-URL requests to this URL.
-  localhostAuthBaseUrl:
-    process.env.E2E_LOCALHOST_AUTH_URL ?? 'http://localhost:18081',
   consoleOrigin: process.env.E2E_CONSOLE_ORIGIN ?? 'http://localhost:3000',
   // SUPER_ADMIN credential — matches the row inserted by tests/e2e/fixtures/
   // seed.sql (auth_db.credentials + admin_db.admin_operators where
@@ -113,40 +110,19 @@ const DEFAULTS = {
 };
 
 /**
- * Wires the per-context route handler that rewrites any browser request to
- * the docker-internal `OIDC_ISSUER_URL` hostname to the host-published port.
- * Without this bridge the browser cannot resolve `auth-service` on the host.
- *
- * `route.fetch({ url })` makes the actual network call from Node.js (which
- * CAN reach `localhost:18081`), then `route.fulfill({ response })` returns
- * the upstream response to the browser. The browser's URL bar keeps the
- * original `http://auth-service:8081/...` so subsequent relative Location
- * redirects resolve naturally against the same hostname and get intercepted
- * again — the chain works seamlessly through `/oauth2/authorize → /login →
- * /login (POST) → /oauth2/authorize → redirect_uri`.
- */
-async function bridgeAuthServiceHostname(
-  context: BrowserContext,
-): Promise<void> {
-  const issuerUrl = new URL(DEFAULTS.oidcIssuerUrl);
-  const localhostUrl = new URL(DEFAULTS.localhostAuthBaseUrl);
-  const pattern = `${issuerUrl.protocol}//${issuerUrl.host}/**`;
-  await context.route(pattern, async (route) => {
-    const originalUrl = new URL(route.request().url());
-    const rewritten = new URL(
-      `${originalUrl.pathname}${originalUrl.search}${originalUrl.hash}`,
-      `${localhostUrl.protocol}//${localhostUrl.host}`,
-    );
-    const response = await route.fetch({ url: rewritten.toString() });
-    await route.fulfill({ response });
-  });
-}
-
-/**
  * Drives the full OIDC PKCE login flow against the running stack and returns
  * once the post-login final redirect has settled. Production-identical path:
  * no programmatic token mint, no cookie injection — purely browser
  * navigation + form submission.
+ *
+ * <p>TASK-BE-311 iter 4 — the previous `bridgeAuthServiceHostname` (PC-FE-022)
+ * was removed once the runner-side DNS path landed. PC-FE-028 iter 7 added a
+ * `127.0.0.1 auth-service` entry to the runner's `/etc/hosts` and realigned
+ * docker-compose to publish auth-service on host port 8081, so the browser
+ * now resolves `auth-service:8081` natively to the host-published container
+ * port. The bridge's `route.fetch`-based indirection had been breaking
+ * session-fixation cookie continuity (see PC-FE-028 close chore + BE-311
+ * iter 3 trace evidence).
  */
 async function driveOidcPkceLogin(
   context: BrowserContext,
@@ -165,7 +141,17 @@ async function driveOidcPkceLogin(
       sources: true,
     });
   }
-  await bridgeAuthServiceHostname(context);
+  // TASK-BE-311 iter 4 — bridgeAuthServiceHostname removed. PC-FE-028 iter 7
+  // added `127.0.0.1 auth-service` to the runner's /etc/hosts + realigned
+  // docker-compose to `["8081:8081"]`, so the browser resolves
+  // `auth-service:8081` natively to the host-published auth-service port
+  // without Playwright interception. The bridge's `route.fetch` indirection
+  // was breaking session-fixation cookie continuity (trace iter 3 showed
+  // POST /login succeeding but the subsequent /oauth2/authorize?...&continue
+  // redirected BACK to /login — Spring saw no SecurityContext on the
+  // rotated JSESSIONID because the bridge's separate fetch instance is
+  // not the same network identity as the browser). Removing the bridge
+  // lets the browser drive every request natively.
   const page = await context.newPage();
   try {
     // Step 1 — kick the OIDC flow. `redirect=/` is the post-login target.
@@ -183,9 +169,16 @@ async function driveOidcPkceLogin(
     // session, 302s back to /oauth2/authorize, which then 302s to the
     // redirect_uri (console-web /api/auth/callback). The callback handler
     // does the token + operator-token-exchange and sets the production
-    // cookies, then 302s to `/`. Wait for the final destination.
+    // cookies, then 302s to `/`. `/` page.tsx then `redirect()`s to
+    // `/dashboards` (the `(console)` shell's canonical landing — see
+    // `src/app/page.tsx`); Playwright `waitForURL` matches the FINAL URL
+    // after all redirects, so we wait for the dashboards landing rather
+    // than the intermediate `/`. TASK-BE-311 iter 7 — corrected from the
+    // original `${consoleOrigin}/` assertion which would never match
+    // because Next.js dispatches the / → /dashboards redirect before any
+    // observable state in the browser.
     await Promise.all([
-      page.waitForURL(`${DEFAULTS.consoleOrigin}/`, { timeout: 30_000 }),
+      page.waitForURL(`${DEFAULTS.consoleOrigin}/dashboards`, { timeout: 30_000 }),
       page.click('button[type="submit"]'),
     ]);
 
