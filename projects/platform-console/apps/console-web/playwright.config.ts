@@ -43,25 +43,25 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // TASK-PC-FE-028 (iter 4 — Option G pivot) — CI: port-agnostic DNS
-        // mapping at the Chromium resolver layer paired with docker-compose
-        // host-port 1:1 publishing (`8081:8081`). The earlier port-specific
-        // form (`MAP auth-service:8081 127.0.0.1:18081`) was ignored across
-        // 3 iterations (dispatch runs 26325955313 + 26326164850 + 26326373649,
-        // both headless-shell + full Chrome for Testing channel) — trace's
-        // Network panel kept capturing the SAME 2 URLs (localhost:3000 +
-        // unresolved auth-service:8081). PC-FE-022 spec § Decision authority
-        // Option B specified the port-agnostic form combined with host-port
-        // alignment; PC-FE-028 originally adopted only half. Iter 4 adopts
-        // both halves. The port-agnostic form is the documented Chromium
-        // syntax (`MAP <hostname> <target>`). Full Chrome for Testing channel
-        // retained — chromium-headless-shell variant is stripped and may
-        // ignore net-stack flags. Dev runs (CI=false) use the traefik path
-        // (console.local) and don't need this; conditional preserves dev.
+        // TASK-PC-FE-028 (iter 5) — CI: port-SPECIFIC DNS mapping at the
+        // Chromium resolver layer paired with docker-compose host-port 1:1
+        // publishing (`8081:8081`). Iter 4 (port-agnostic
+        // `MAP auth-service 127.0.0.1`) confirmed the flag IS now applied
+        // (single project-level launchOptions, no global-use override) but
+        // the port-agnostic form over-matched into localhost resolution —
+        // dispatch run 26327356967 failed with
+        // `ERR_NAME_NOT_RESOLVED at http://localhost:3000/api/auth/login`
+        // (the FIRST URL, never reached in iter 1-3). Iter 5 narrows the
+        // rule with explicit port specificity: `MAP <hostname>:<src_port>
+        // <target>:<dst_port>` matches only `auth-service:8081` hostport,
+        // leaving localhost lookups to the default resolver. Combined with
+        // docker-compose `["8081:8081"]` (TASK-PC-FE-028 iter 4 change),
+        // the target `127.0.0.1:8081` lands on the published host port.
+        // Full Chrome for Testing channel retained.
         ...(process.env.CI ? {
           channel: 'chromium',
           launchOptions: {
-            args: ['--host-resolver-rules=MAP auth-service 127.0.0.1'],
+            args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:8081'],
           },
         } : {}),
       },
