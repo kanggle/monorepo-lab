@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-026-console-web-public-dir.md` — commit `projects/platform-console/apps/console-web/public/.gitkeep` (new zero-byte file) to make git track the directory the Dockerfile's runner-stage `COPY /app/public ./public` (line 54) needs. Discovered by TASK-MONO-132 workflow_dispatch retry (run `26321066672` step 12: `failed to calculate checksum of ref ...: "/app/public": not found`). Latent missing-directory bug unmasked by PC-FE-025's pnpm pin cache invalidation. Prerequisite of MONO-132 AC-1 full verification (2nd retry). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (trivial 1-file new; Option A choice already in spec).
 
 ## in-progress
 
