@@ -8,7 +8,7 @@ platform-console e2e — wire diagnostic instrumentation so the 6th-cycle-layer 
 
 # Status
 
-review
+done
 
 # Owner
 
