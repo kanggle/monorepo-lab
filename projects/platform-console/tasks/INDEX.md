@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-029-operators-page-e2e-rendering.md` — spec PR (this PR) — task md + INDEX ready entry, no contract change. **Closes 10th cycle layer in TASK-MONO-014 chain** (PC-FE-023 → 024 → MONO-132 → 025 → 026 → MONO-133 → PC-FE-027 → PC-FE-028 → BE-311 → **this**). BE-311 iter 7 trace evidence: `operators-profile.spec.ts:44` `getByTestId('my-profile-default-account-id')` not visible 5s. OIDC PKCE login chain complete end-to-end (BE-311 closure verified); failure is INSIDE the authenticated spec body. `/operators` server component renders 1 of 4 mutually-exclusive states (`noTenant` excluded by fixture's `console_active_tenant=fan-platform` seed); 3 candidates remain (PERMISSION_DENIED / TENANT_SCOPE_DENIED / degraded). **Investigation-first cycle pattern**: spec does NOT pre-select option; impl PR's first commit adds server-component diagnostic log (mirrors BE-311 iter 1 SecurityFilterChainDiagnosticListener pattern), subsequent commits apply targeted fix (likely seed.sql operator row roles/tenants OR admin-service operator-token-claim mapping OR features/operators zod schema drift). AC scope = 10 (AC-1 functional GREEN + AC-2 spec 5 assertions + AC-3 sibling spec status + AC-4-7 byte-unchanged hard invariants 25회째 zero-retrofit + AC-8 diagnostic cleanup + AC-9 unit/slice regression + AC-10 BE-303 3-dim). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (diagnostic-first impl pattern).
 
 ## in-progress
 
