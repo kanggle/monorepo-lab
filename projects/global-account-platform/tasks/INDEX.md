@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-312-admin-service-operator-context-refresh-after-save.md` — spec PR (this PR) — task md + INDEX ready entry, no contract change. **Closes 12th cycle layer in TASK-MONO-014 chain** (PC-FE-023 → 024 → MONO-132 → 025 → 026 → MONO-133 → PC-FE-027 → PC-FE-028 → BE-311 → PC-FE-029 → PC-FE-030 → **this**). PC-FE-030 iter 3 trace evidence: `operators-profile.spec.ts:59` `getByTestId('operator-overview-card-finance').toHaveAttribute('data-status', 'ok')` — element resolves 14× but receives `data-status='forbidden'` instead of `'ok'`. Matches the spec's documented Failure mode #2: GAP registry's `productItem[finance].operatorContext.defaultAccountId` not refreshed after `MyProfileForm` save. **Investigation-first cycle pattern** (mirrors PC-FE-029/030 3-iter floor): impl PR's first commit adds diagnostic logging at admin-service save handler + registry endpoint + (optionally) console-bff fan-out. Hypothesis pool (5 candidates): admin-service cache no-invalidation / save-read column divergence / console-bff cache / eventual-consistency outbox / finance-account-service authz check. AC scope = 10 (AC-1 functional GREEN + AC-2 spec line 59 PASS + AC-3 sibling status + AC-4-7 byte-unchanged hard invariants 27회째 zero-retrofit + AC-8 diagnostic cleanup + AC-9 IT regression + AC-10 BE-303 3-dim). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (diagnostic-first impl pattern).
 
 ## in-progress
 
