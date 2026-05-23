@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-311-auth-service-e2e-login-form-rendering.md` — spec PR (this PR) — task md + INDEX ready entry, no contract change. **Closes TASK-PC-FE-028 AC-2 deferred** (8th cycle layer in TASK-MONO-014 chain — PC-FE-028 close chore PR #782 명시 next-cycle pointer). PC-FE-028 iter 7 trace evidence (dispatch run `26327957129`): auth-service `e2e` profile `GET /login` returns 500 `NoResourceFoundException: No static resource login` — `WebLoginSecurityConfig.webLoginFilterChain` (BE-309, `@Order(0)` chain with `formLogin(loginPage = "/login")`) NOT intercepting; request falls through to `ResourceHttpRequestHandler`. `FormLoginIntegrationTest` (5/5 in test profile) is the green-path reference; profile divergence smoking-gun. **Investigation-first cycle pattern**: spec does NOT pre-select an option (mirrors PC-FE-027 → PC-FE-028 diagnostic→fix chain shape); impl PR's first commit narrows hypothesis pool (1: bean not loaded / 2: constructor injection fails / 3: filter chain order regression / 4: MVC handler precedence / 5: profile divergence), subsequent commits apply targeted fix. AC scope = 9 (AC-1 functional GREEN + AC-2 auth log 200 OK + AC-3-6 byte-unchanged hard invariants + AC-7 FormLoginIntegrationTest regression check + AC-8 diagnostic cleanup + AC-9 BE-303 3-dim). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (diagnostic-first impl pattern).
 
 ## in-progress
 
