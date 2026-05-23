@@ -806,17 +806,27 @@ jobs:
         run: pnpm exec playwright test --project=chromium
 
       - name: Dump docker compose logs on failure
+        # TASK-MONO-133 — 7 containers (5 GAP + finance + console-bff +
+        # console-web + mysql/redis/kafka placeholder) ⇒ --tail=500 gives
+        # ~70 lines per container which covers boot sequence + first request
+        # access log. Prior --tail=200 truncated the post-boot access path.
         if: failure()
         working-directory: projects/platform-console
-        run: docker compose -f docker-compose.e2e.yml logs --tail=200
+        run: docker compose -f docker-compose.e2e.yml logs --tail=500
 
       - name: Stop docker compose stack
         if: always()
         working-directory: projects/platform-console
         run: docker compose -f docker-compose.e2e.yml down -v
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report + trace
+        # TASK-MONO-133 — `if: always()` (was `if: failure()`) so a successful
+        # run also uploads an artifact (small baseline). Combined with
+        # `trace: 'on'` in CI, every run now produces inspectable evidence.
+        # `if-no-files-found: warn` is the default but stated explicitly so
+        # future maintainers see the choice (vs silent skip in the prior
+        # `if: failure()` shape, which masked the empty-report case).
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: platform-console-playwright-report-nightly
@@ -824,3 +834,4 @@ jobs:
             projects/platform-console/apps/console-web/playwright-report/
             projects/platform-console/apps/console-web/test-results/
           retention-days: 7
+          if-no-files-found: warn

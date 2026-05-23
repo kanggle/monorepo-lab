@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-133-pc-e2e-playwright-diagnostic-instrumentation.md` — diagnostic-first instrumentation for the 6th-cycle-layer Playwright failure (deterministic step 17 `Run Playwright e2e (2 specs)` ERR_NAME_NOT_RESOLVED, surfaced by MONO-132 retry + main push run `26321891810`). No Playwright trace generated (`trace: 'on-first-retry'` + globalSetup-error no-retry) + no artifact uploaded (silent `if-no-files-found: warn`). Fix: `trace: process.env.CI ? 'on' : 'on-first-retry'` (covers globalSetup virtual test wrapper) + `if: failure()` → `if: always()` + `--tail=200` → `--tail=500`. Root cause fix = next cycle (PC-FE-027 or MONO-134) after trace captured. Root MONO (workflow + project config composite scope). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (Decision-Authority 3-option choice).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-133-pc-e2e-playwright-diagnostic-instrumentation.md` — impl PR (this PR) — 3 file mods (`playwright.config.ts` trace conditional + workflow `Upload Playwright report + trace` always + `Dump docker compose logs` tail=500). AC-1 verification via workflow_dispatch on impl branch.
 
 ## done
 

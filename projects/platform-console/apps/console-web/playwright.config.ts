@@ -32,7 +32,11 @@ export default defineConfig({
   use: {
     baseURL: process.env.CONSOLE_BASE_URL ?? 'http://localhost:3000',
     storageState: STORAGE_STATE,
-    trace: 'on-first-retry',
+    // TASK-MONO-133 — CI: trace every test (including the globalSetup
+    // virtual test wrapper, which `'on-first-retry'` cannot reach because
+    // Playwright skips retry on globalSetup errors). Dev: keep retry-only
+    // tracing for normal iteration speed.
+    trace: process.env.CI ? 'on' : 'on-first-retry',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
