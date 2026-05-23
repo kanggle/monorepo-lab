@@ -33,9 +33,24 @@ export const tokenCookieOpts = {
   path: '/',
 };
 
-/** PKCE/state cookies: HttpOnly, short maxAge (auth flow window only). */
+/**
+ * PKCE/state cookies: HttpOnly, short maxAge (auth flow window only).
+ *
+ * <p>TASK-BE-311 — must use `SameSite=Lax`, NOT `Strict`. The OAuth callback
+ * URL (`/api/auth/callback`) is reached via a top-level cross-origin redirect
+ * from the SAS issuer (`http://auth-service:8081/...`); `SameSite=Strict`
+ * cookies are NOT sent on top-level navigations originating from another
+ * site, so the callback handler reads `undefined` for both
+ * {@link PKCE_VERIFIER_COOKIE} and {@link OAUTH_STATE_COOKIE} and bails
+ * with `invalid_state`. `Lax` is the OAuth/OIDC-recommended default: it
+ * permits cookies on top-level GET navigations (which OAuth callbacks
+ * always are) while still blocking CSRF-style cross-site POSTs. Session
+ * cookies (`tokenCookieOpts` above) stay `Strict` — they aren't expected
+ * to survive cross-origin redirects.
+ */
 export const transientCookieOpts = {
   ...tokenCookieOpts,
+  sameSite: 'lax' as const,
   maxAge: 600, // 10 min — bounded login round-trip
 };
 
