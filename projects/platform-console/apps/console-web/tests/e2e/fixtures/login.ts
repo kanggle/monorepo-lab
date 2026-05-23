@@ -1,4 +1,21 @@
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+
 import type { BrowserContext, Page } from '@playwright/test';
+
+/**
+ * TASK-PC-FE-027 — CI-only Playwright trace path. Captures the
+ * `driveOidcPkceLogin` chain (which runs inside `globalSetup`, where
+ * `trace: 'on'` config-level setting does not reach because Playwright's
+ * reporter + test-results writer abort before booting when globalSetup
+ * errors). Path matches the workflow's `Upload Playwright report + trace`
+ * step's `test-results/` glob (TASK-MONO-133).
+ */
+const TRACE_DIR = path.resolve(
+  __dirname,
+  '../../../test-results/global-setup-driveOidcPkceLogin',
+);
+const TRACE_PATH = path.join(TRACE_DIR, 'trace.zip');
 
 /**
  * TASK-PC-FE-022 — Playwright login fixture for the platform-console e2e
@@ -136,6 +153,18 @@ async function driveOidcPkceLogin(
   email: string,
   password: string,
 ): Promise<void> {
+  // TASK-PC-FE-027 — start tracing BEFORE bridgeAuthServiceHostname so the
+  // `context.route` handler invocations are captured. CI-only to avoid dev
+  // iteration overhead.
+  const tracingEnabled = !!process.env.CI;
+  if (tracingEnabled) {
+    await mkdir(TRACE_DIR, { recursive: true });
+    await context.tracing.start({
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    });
+  }
   await bridgeAuthServiceHostname(context);
   const page = await context.newPage();
   try {
@@ -176,6 +205,17 @@ async function driveOidcPkceLogin(
       },
     ]);
   } finally {
+    // TASK-PC-FE-027 — stop tracing FIRST so the trace.zip lands even if
+    // the browser/page close throws. The MONO-133 workflow's `if: always()`
+    // upload step then captures the artifact (whether the test passed or
+    // failed in globalSetup).
+    if (tracingEnabled) {
+      try {
+        await context.tracing.stop({ path: TRACE_PATH });
+      } catch {
+        // Tracing stop failure must not mask the original error.
+      }
+    }
     await page.close();
   }
 }
