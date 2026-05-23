@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-025-console-web-dockerfile-pnpm-pin.md` — pin console-web Dockerfile `corepack prepare pnpm@latest --activate` → `pnpm@9.15.0` (host workflow's pinned version). Surfaced by TASK-MONO-132 workflow_dispatch verification (run `26320586292` step 12 fail with `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite` — `pnpm@latest` resolved to `11.2.2` which requires Node v22.13+, but base image is `node:20-alpine`). Horizontal regression independent of MONO-132 cycle; portfolio scope = single Dockerfile (web-store + admin-dashboard use `corepack enable pnpm` pattern). Prerequisite of MONO-132 AC-1 full verification (post-merge, MONO-132 impl branch rebases + dispatches workflow_dispatch again). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (surgical 2-line Dockerfile pin — Option A choice already made in spec; no decision authority remaining for impl).
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-025-console-web-dockerfile-pnpm-pin.md` — impl PR (this PR) — Dockerfile 2-line `pnpm@latest → pnpm@9.15.0` pin + inline comment cross-ref'ing host workflow pin. Single-file surgical edit. AC-1 verification via this impl PR's own push CI (`platform-console-e2e-smoke` job rebuilds console-web). Awaiting merge + close chore.
 
 ## done
 
