@@ -3,6 +3,8 @@ package com.example.admin.application;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class UpdateOwnOperatorProfileUseCase {
+
+    // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+    private static final Logger BE_312 = LoggerFactory.getLogger("TASK-BE-312");
 
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
@@ -67,7 +72,16 @@ public class UpdateOwnOperatorProfileUseCase {
                         "Operator not found for operatorId=" + caller.operatorId()));
 
         Instant now = Instant.now();
+        // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+        BE_312.info("save:before operatorId={} internalId={} oldFinanceDefaultAccountId={} newFinanceDefaultAccountId={}",
+                caller.operatorId(), operator.internalId(), operator.financeDefaultAccountId(), defaultAccountId);
         operatorPort.changeFinanceDefaultAccountId(operator.internalId(), defaultAccountId, now);
+        // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+        AdminOperatorPort.OperatorView reread = operatorPort.findByOperatorId(caller.operatorId()).orElse(null);
+        BE_312.info("save:after operatorId={} reread.financeDefaultAccountId={} reread.updatedAt={}",
+                caller.operatorId(),
+                reread == null ? "<not-found>" : reread.financeDefaultAccountId(),
+                reread == null ? "<not-found>" : reread.updatedAt());
 
         // Audit row written in the SAME transaction. detail IS NULL by design —
         // the audit subject is *that the value changed*, not the value itself
