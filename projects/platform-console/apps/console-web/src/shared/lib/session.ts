@@ -26,31 +26,39 @@ export const TENANT_COOKIE = 'console_active_tenant';
 export const PKCE_VERIFIER_COOKIE = 'console_pkce_verifier';
 export const OAUTH_STATE_COOKIE = 'console_oauth_state';
 
+/**
+ * Token / session cookies (access / refresh / operator-token / active-tenant).
+ *
+ * <p>TASK-BE-311 — uses `SameSite=Lax`. The OAuth callback (`/api/auth/callback`)
+ * sets these cookies via Set-Cookie + 302 to the post-login path; the
+ * subsequent navigation chain (`/ → /dashboards`) inherits its
+ * cross-site initiator from the SAS issuer (auth-service:8081 → callback),
+ * so `SameSite=Strict` cookies are NOT sent on that first post-callback
+ * page load and the `(console)` layout guard reads `isAuthenticated() ==
+ * false`, redirecting to `/login`. `Lax` permits top-level GET
+ * navigations (the only context these cookies need to traverse) while
+ * still blocking cross-site iframe / fetch / POST contexts where CSRF
+ * concerns apply. HttpOnly + Secure already prevent JavaScript and
+ * insecure-transport attacks; CSRF for state-changing operations is
+ * separately handled via dedicated tokens.
+ */
 export const tokenCookieOpts = {
   httpOnly: true,
   secure: true,
-  sameSite: 'strict' as const,
+  sameSite: 'lax' as const,
   path: '/',
 };
 
 /**
- * PKCE/state cookies: HttpOnly, short maxAge (auth flow window only).
- *
- * <p>TASK-BE-311 — must use `SameSite=Lax`, NOT `Strict`. The OAuth callback
- * URL (`/api/auth/callback`) is reached via a top-level cross-origin redirect
- * from the SAS issuer (`http://auth-service:8081/...`); `SameSite=Strict`
- * cookies are NOT sent on top-level navigations originating from another
- * site, so the callback handler reads `undefined` for both
- * {@link PKCE_VERIFIER_COOKIE} and {@link OAUTH_STATE_COOKIE} and bails
- * with `invalid_state`. `Lax` is the OAuth/OIDC-recommended default: it
- * permits cookies on top-level GET navigations (which OAuth callbacks
- * always are) while still blocking CSRF-style cross-site POSTs. Session
- * cookies (`tokenCookieOpts` above) stay `Strict` — they aren't expected
- * to survive cross-origin redirects.
+ * PKCE/state cookies: HttpOnly + Secure + Lax, short maxAge (auth flow window
+ * only). Inherits `sameSite: 'lax'` from {@link tokenCookieOpts}; both the
+ * transient cookies (read by `/api/auth/callback` after the cross-origin
+ * SAS redirect) and the session cookies (read by `(console)` layout after
+ * the post-callback redirect chain) need Lax to survive top-level
+ * cross-site GET navigations. See `tokenCookieOpts` JSDoc.
  */
 export const transientCookieOpts = {
   ...tokenCookieOpts,
-  sameSite: 'lax' as const,
   maxAge: 600, // 10 min — bounded login round-trip
 };
 
