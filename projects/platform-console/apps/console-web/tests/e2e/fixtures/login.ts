@@ -96,11 +96,18 @@ const DEFAULTS = {
   // console-web for JWT `iss` validation to pass.
   oidcIssuerUrl:
     process.env.E2E_OIDC_ISSUER_URL ?? 'http://auth-service:8081',
-  // Host-published port for the auth-service container
-  // (docker-compose.e2e.yml: `ports: ["18081:8081"]`). The route handler
-  // rewrites issuer-URL requests to this URL.
+  // Host-published port for the auth-service container. TASK-PC-FE-028
+  // iter 4 realigned docker-compose to `ports: ["8081:8081"]` (host port
+  // == container port) so the runner's `/etc/hosts` entry
+  // (`127.0.0.1 auth-service`, added by the workflow at the same iter)
+  // can resolve `auth-service:8081` natively. The default below tracks the
+  // new host-published port. TASK-BE-311 iter 3 — PC-FE-028 close chore's
+  // "bridge becomes harmless dead code" assumption was wrong for
+  // subresources: once the GET /login form renders (post-BE-311 iter 2),
+  // Spring Security's `default-ui.css` subresource fires the bridge, which
+  // previously routed to the unpublished 18081 port → ECONNREFUSED.
   localhostAuthBaseUrl:
-    process.env.E2E_LOCALHOST_AUTH_URL ?? 'http://localhost:18081',
+    process.env.E2E_LOCALHOST_AUTH_URL ?? 'http://localhost:8081',
   consoleOrigin: process.env.E2E_CONSOLE_ORIGIN ?? 'http://localhost:3000',
   // SUPER_ADMIN credential — matches the row inserted by tests/e2e/fixtures/
   // seed.sql (auth_db.credentials + admin_db.admin_operators where
