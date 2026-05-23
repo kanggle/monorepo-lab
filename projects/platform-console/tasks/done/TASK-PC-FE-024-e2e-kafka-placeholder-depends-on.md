@@ -8,7 +8,7 @@ platform-console e2e — wire the TASK-PC-FE-023 `kafka` DNS placeholder into th
 
 # Status
 
-ready
+done
 
 # Owner
 
