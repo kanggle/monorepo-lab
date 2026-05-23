@@ -796,11 +796,24 @@ jobs:
         working-directory: projects/platform-console/apps/console-web
         run: pnpm exec playwright install --with-deps chromium
 
+      # TASK-PC-FE-028 iter 7 — runner /etc/hosts entry for the docker-internal
+      # OIDC issuer hostname. Iter 1-6 attempted Chromium
+      # `--host-resolver-rules` launch flag variants (port-specific, port-
+      # agnostic, comma-separated with explicit localhost MAP) across 6
+      # dispatch runs; the flag empirically blocked localhost resolution on
+      # this runner image even with explicit `MAP localhost 127.0.0.1` rule.
+      # /etc/hosts entry sidesteps the broken flag interaction: Chromium uses
+      # default OS DNS path which reads /etc/hosts. Paired with docker-compose
+      # `auth-service.ports: ["8081:8081"]` (iter 4 change) so the resolved
+      # IP:port lands on the host-published auth-service container.
+      - name: Add auth-service to /etc/hosts (PC-FE-028)
+        run: echo "127.0.0.1 auth-service" | sudo tee -a /etc/hosts
+
       - name: Run Playwright e2e (2 specs)
         working-directory: projects/platform-console/apps/console-web
         env:
           CONSOLE_BASE_URL: http://localhost:3000
-          E2E_AUTH_BASE_URL: http://localhost:18081
+          E2E_AUTH_BASE_URL: http://localhost:8081
           E2E_ADMIN_BASE_URL: http://localhost:18085
           E2E_CONSOLE_ORIGIN: http://localhost:3000
         run: pnpm exec playwright test --project=chromium
