@@ -8,7 +8,7 @@ TASK-PC-FE-030
 
 # Status
 
-ready
+done
 
 # Owner
 
