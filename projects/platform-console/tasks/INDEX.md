@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-028-chromium-host-resolver-rules.md` — TASK-PC-FE-027 trace evidence-based root-cause fix: Playwright `use.launchOptions.args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081']` (CI-only conditional). `context.route` bridge 가 top-level navigation 의 native DNS resolution 우회 못 함 (PC-FE-027 trace 의 2 URL Network panel evidence — third URL 부재 = browser DNS fail before route handler invocation). DNS-layer fix matches DNS-layer cause. PC-FE-022 spec § Decision authority 의 Option B (host-resolver-rules) 가 PR-time smoke 한정 elegance 비교에서 reject 됐지만, full-stack 환경에서는 정답 — environmental context-dependent option choice. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (Option A 결정 spec, playwright.config.ts 1-line conditional).
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-028-chromium-host-resolver-rules.md` — impl PR (this PR) — playwright.config.ts +13/-1 (CI-conditional launchOptions.args + 7-line cross-ref comment). AC-1 verify via workflow_dispatch on impl branch.
 
 ## done
 

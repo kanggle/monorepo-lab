@@ -198,7 +198,14 @@ services:
       # selective `up <names>` command skips the placeholder, and this service's
       # BE-048 Dockerfile ENTRYPOINT `getent hosts kafka` loops forever.
       kafka: { condition: service_started }
-    ports: ["18081:8081"]
+    # TASK-PC-FE-028 iter 4 — host-port 1:1 with the container's 8081. The
+    # browser-side Playwright Chromium uses `--host-resolver-rules=MAP
+    # auth-service 127.0.0.1` (DNS layer, port-agnostic), so the browser
+    # resolves `auth-service:8081` → `127.0.0.1:8081`. Aligning host port
+    # with container port is what makes the port-agnostic mapping land on
+    # the right TCP listener. Replaces the earlier `["18081:8081"]` which
+    # served the now-removed `context.route` bridge target.
+    ports: ["8081:8081"]
     networks: [pc-e2e]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
