@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-132-pc-e2e-seed-finance-phase-split.md` — platform-console e2e nightly job's `Apply seed.sql` step fails with `ERROR 1146 at line 209: Table 'finance_db.accounts' doesn't exist` (run `26319887335` job `77486781283`, 2026-05-23). PC-FE-024's predicted next-layer surface (schema-readiness variant). Split `seed.sql` section 6 → new `seed-finance.sql`; insert workflow phase-2.5 steps `Wait for finance-account-service health` + `Apply seed-finance.sql` between current step 12 (`Start remaining containers`) and step 13 (`Wait for console-web health`). Honors documented design intent (section 1 creates finance_db pre-finance-boot, section 6 INSERT data post-finance-Flyway). Root MONO because `.github/workflows/` touched. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (Decision-Authority — Option A split+workflow vs B Phase 1 promotion vs C polling shim vs D drop selective up).
 
 ## in-progress
 
