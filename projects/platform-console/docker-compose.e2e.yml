@@ -193,6 +193,11 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
+      # TASK-PC-FE-024: pull the kafka DNS-only placeholder (TASK-PC-FE-023) into
+      # any `docker compose up auth-service` graph. Without this, the workflow's
+      # selective `up <names>` command skips the placeholder, and this service's
+      # BE-048 Dockerfile ENTRYPOINT `getent hosts kafka` loops forever.
+      kafka: { condition: service_started }
     ports: ["18081:8081"]
     networks: [pc-e2e]
     healthcheck:
@@ -221,6 +226,8 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       auth-service: { condition: service_started }
+      # TASK-PC-FE-024: see auth-service depends_on comment above.
+      kafka: { condition: service_started }
     ports: ["18082:8082"]
     networks: [pc-e2e]
     healthcheck:
@@ -292,6 +299,8 @@ services:
       redis: { condition: service_healthy }
       auth-service: { condition: service_started }
       account-service: { condition: service_started }
+      # TASK-PC-FE-024: see auth-service depends_on comment above.
+      kafka: { condition: service_started }
     ports: ["18085:8085"]
     networks: [pc-e2e]
     healthcheck:
