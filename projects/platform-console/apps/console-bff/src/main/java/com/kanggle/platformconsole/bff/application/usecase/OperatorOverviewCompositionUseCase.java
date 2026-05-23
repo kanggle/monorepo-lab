@@ -81,6 +81,8 @@ import java.util.function.Supplier;
 public class OperatorOverviewCompositionUseCase {
 
     private static final Logger LOG = LoggerFactory.getLogger(OperatorOverviewCompositionUseCase.class);
+    // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+    private static final Logger BE_312_LOG = LoggerFactory.getLogger("TASK-BE-312");
 
     /** Composition total timeout (per § 2.4.9.1 Implementation guidance). */
     static final Duration COMPOSITION_TIMEOUT = Duration.ofSeconds(5);
@@ -384,6 +386,12 @@ public class OperatorOverviewCompositionUseCase {
      *                  short-circuit to {@code MISSING_PREREQUISITE}
      */
     private CompositionLeg callFinance(String tenantId, OutboundCredential cred, String accountId) {
+        // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8). presence+length only (F7/R7).
+        BE_312_LOG.info("callFinance entry: accountIdPresent={} accountIdLength={} hasText={} credentialType={}",
+                accountId != null,
+                accountId == null ? 0 : accountId.length(),
+                StringUtils.hasText(accountId),
+                cred == null ? "null" : cred.getClass().getSimpleName());
         if (!StringUtils.hasText(accountId)) {
             emitErrorCounter(DomainTarget.FINANCE, "missing_prerequisite");
             return CompositionLeg.outcomeOnly(
@@ -391,7 +399,13 @@ public class OperatorOverviewCompositionUseCase {
         }
         return time(DomainTarget.FINANCE, () -> {
             String bearer = bearerFromCred(cred);
+            // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+            BE_312_LOG.info("callFinance about to call readBalances: tenantId={} accountIdLength={}",
+                    tenantId, accountId.trim().length());
             Map<String, Object> data = financePort.readBalances(tenantId, bearer, accountId.trim());
+            // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+            BE_312_LOG.info("callFinance readBalances returned: tenantId={} accountIdLength={}",
+                    tenantId, accountId.trim().length());
             return CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), data);
         });
     }
@@ -451,11 +465,19 @@ public class OperatorOverviewCompositionUseCase {
         } catch (HttpClientErrorException.Forbidden fe) {
             sample.stop(timer);
             String reason = classifyForbidden(fe);
+            // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+            BE_312_LOG.info("time:caught 403 domain={} reason={} statusText={} bodyLen={}",
+                    domain, reason, fe.getStatusText(),
+                    fe.getResponseBodyAsString() == null ? 0 : fe.getResponseBodyAsString().length());
             emitErrorCounter(domain,
                     "TENANT_FORBIDDEN".equals(reason) ? "tenant_forbidden" : "permission_denied");
             return CompositionLeg.outcomeOnly(LegOutcome.forbidden(domain, reason));
         } catch (HttpClientErrorException ce) {
             sample.stop(timer);
+            // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
+            BE_312_LOG.info("time:caught 4xx domain={} status={} statusText={} bodyLen={}",
+                    domain, ce.getStatusCode().value(), ce.getStatusText(),
+                    ce.getResponseBodyAsString() == null ? 0 : ce.getResponseBodyAsString().length());
             emitErrorCounter(domain, "5xx");
             return CompositionLeg.outcomeOnly(LegOutcome.degraded(domain, "DOWNSTREAM_ERROR"));
         } catch (ResourceAccessException rae) {
