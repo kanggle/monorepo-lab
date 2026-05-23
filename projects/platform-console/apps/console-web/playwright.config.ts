@@ -43,25 +43,25 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // TASK-PC-FE-028 (iter 5) — CI: port-SPECIFIC DNS mapping at the
-        // Chromium resolver layer paired with docker-compose host-port 1:1
-        // publishing (`8081:8081`). Iter 4 (port-agnostic
-        // `MAP auth-service 127.0.0.1`) confirmed the flag IS now applied
-        // (single project-level launchOptions, no global-use override) but
-        // the port-agnostic form over-matched into localhost resolution —
-        // dispatch run 26327356967 failed with
-        // `ERR_NAME_NOT_RESOLVED at http://localhost:3000/api/auth/login`
-        // (the FIRST URL, never reached in iter 1-3). Iter 5 narrows the
-        // rule with explicit port specificity: `MAP <hostname>:<src_port>
-        // <target>:<dst_port>` matches only `auth-service:8081` hostport,
-        // leaving localhost lookups to the default resolver. Combined with
-        // docker-compose `["8081:8081"]` (TASK-PC-FE-028 iter 4 change),
-        // the target `127.0.0.1:8081` lands on the published host port.
-        // Full Chrome for Testing channel retained.
+        // TASK-PC-FE-028 (iter 6) — CI: comma-separated host-resolver rules
+        // with BOTH auth-service mapping AND explicit localhost mapping.
+        // Iter 4 (port-agnostic) and iter 5 (port-specific narrow) both
+        // failed with `ERR_NAME_NOT_RESOLVED at http://localhost:3000/...`
+        // (URL #1 — never previously failed in iter 1-3 where the flag was
+        // not applied due to duplicated global+project launchOptions).
+        // Theory: enabling `--host-resolver-rules` switches Chromium to its
+        // built-in DNS resolver, which bypasses the runner's /etc/hosts
+        // (where `localhost → 127.0.0.1` lives by default). Per Chromium
+        // HostMappingRules syntax, multiple comma-separated rules add to
+        // the rewrite table; explicit `MAP localhost 127.0.0.1` makes the
+        // built-in resolver land localhost on the loopback IP without
+        // depending on /etc/hosts. The auth-service port-specific rule
+        // remains for the SAS hostname-port mapping. Full Chrome for
+        // Testing channel retained.
         ...(process.env.CI ? {
           channel: 'chromium',
           launchOptions: {
-            args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:8081'],
+            args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:8081, MAP localhost 127.0.0.1'],
           },
         } : {}),
       },
