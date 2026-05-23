@@ -98,7 +98,27 @@ public class WebLoginSecurityConfig {
                 .formLogin(form -> form
                         // Use Spring Security's default-generated HTML form. Custom
                         // Thymeleaf UI is a separate future task.
-                        .loginPage("/login").permitAll()
+                        //
+                        // TASK-BE-311 — do NOT call `.loginPage("/login")`. In Spring
+                        // Security 6, that setter flips `customLoginPage=true` on the
+                        // FormLoginConfigurer, which SUPPRESSES the registration of
+                        // `DefaultLoginPageGeneratingFilter` (Spring assumes the caller
+                        // provides a controller-mapped /login view). Both the default
+                        // form-login URL and the default login URL are `/login`
+                        // already, so omitting the setter loses nothing functionally
+                        // while keeping the auto-generated form active. The SAS
+                        // chain's `LoginUrlAuthenticationEntryPoint("/login")` in
+                        // AuthorizationServerConfig is independent of this setter and
+                        // continues to drive unauth `/oauth2/authorize` → `/login`.
+                        // BE-309's `FormLoginIntegrationTest` happened to pass without
+                        // catching this regression because it only exercises POST /login
+                        // (handled by UsernamePasswordAuthenticationFilter, present in
+                        // both configurations) and the unauth entry-point redirect (a
+                        // separate concern); it never asserted that GET /login renders
+                        // HTML. PC-FE-028 iter 7 trace evidence + BE-311 iter 1
+                        // diagnostic confirmed the missing
+                        // DefaultLoginPageGeneratingFilter in chain[0].
+                        .permitAll()
                         // No custom successHandler — the default
                         // SavedRequestAwareAuthenticationSuccessHandler reads
                         // HttpSessionRequestCache and redirects back to the original
