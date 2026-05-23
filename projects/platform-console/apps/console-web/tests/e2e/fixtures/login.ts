@@ -169,9 +169,16 @@ async function driveOidcPkceLogin(
     // session, 302s back to /oauth2/authorize, which then 302s to the
     // redirect_uri (console-web /api/auth/callback). The callback handler
     // does the token + operator-token-exchange and sets the production
-    // cookies, then 302s to `/`. Wait for the final destination.
+    // cookies, then 302s to `/`. `/` page.tsx then `redirect()`s to
+    // `/dashboards` (the `(console)` shell's canonical landing — see
+    // `src/app/page.tsx`); Playwright `waitForURL` matches the FINAL URL
+    // after all redirects, so we wait for the dashboards landing rather
+    // than the intermediate `/`. TASK-BE-311 iter 7 — corrected from the
+    // original `${consoleOrigin}/` assertion which would never match
+    // because Next.js dispatches the / → /dashboards redirect before any
+    // observable state in the browser.
     await Promise.all([
-      page.waitForURL(`${DEFAULTS.consoleOrigin}/`, { timeout: 30_000 }),
+      page.waitForURL(`${DEFAULTS.consoleOrigin}/dashboards`, { timeout: 30_000 }),
       page.click('button[type="submit"]'),
     ]);
 
