@@ -8,7 +8,7 @@ console-web e2e Playwright config — wire Chromium `--host-resolver-rules="MAP 
 
 # Status
 
-ready
+review
 
 # Owner
 

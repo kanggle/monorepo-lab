@@ -37,6 +37,19 @@ export default defineConfig({
     // Playwright skips retry on globalSetup errors). Dev: keep retry-only
     // tracing for normal iteration speed.
     trace: process.env.CI ? 'on' : 'on-first-retry',
+    // TASK-PC-FE-028 — CI: map docker-internal OIDC issuer hostname to the
+    // host-published port at the Chromium DNS resolver layer. Required because
+    // `context.route` bridges (PC-FE-022) intercept resource subrequests but
+    // NOT top-level navigation DNS resolution (PC-FE-027 trace evidence:
+    // Network panel captured `http://auth-service:8081/oauth2/authorize?...`
+    // as the second-and-final URL — browser DNS resolve failed BEFORE the
+    // route handler was invoked). DNS-layer fix for DNS-layer cause. Dev runs
+    // use the traefik path (console.local) and don't need this.
+    ...(process.env.CI ? {
+      launchOptions: {
+        args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081'],
+      },
+    } : {}),
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
