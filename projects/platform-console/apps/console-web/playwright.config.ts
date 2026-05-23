@@ -56,12 +56,15 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // TASK-PC-FE-028 — explicit project-level repeat so the global
-        // `use.launchOptions` is not lost during Playwright's project-level
-        // merge (devices['Desktop Chrome'] spread overrides launchOptions
-        // when the spread's resulting object omits the key; cf. dispatch
-        // run 26325955313 showed global-only setting had no effect).
+        // TASK-PC-FE-028 — CI: explicit project-level repeat of launchOptions
+        // (devices['Desktop Chrome'] spread can shadow global). Use the full
+        // Chrome for Testing channel instead of the default chromium-headless-
+        // shell variant, which Playwright downloads alongside but is stripped
+        // and does NOT honor `--host-resolver-rules` net-stack flag
+        // (dispatch runs 26325955313 + 26326164850 verify headless-shell
+        // ignored the flag — same 2 URLs captured both times).
         ...(process.env.CI ? {
+          channel: 'chromium',
           launchOptions: {
             args: ['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081'],
           },
