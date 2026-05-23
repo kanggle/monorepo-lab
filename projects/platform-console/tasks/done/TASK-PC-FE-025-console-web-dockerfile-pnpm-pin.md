@@ -8,7 +8,7 @@ console-web Dockerfile — pin `corepack prepare pnpm@latest --activate` to `pnp
 
 # Status
 
-review
+done
 
 # Owner
 
