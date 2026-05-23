@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-030-overview-page-finance-card-rendering.md` — spec PR (this PR) — task md + INDEX ready entry, no contract change. **Closes 11th cycle layer in TASK-MONO-014 chain** (PC-FE-023 → 024 → MONO-132 → 025 → 026 → MONO-133 → PC-FE-027 → PC-FE-028 → BE-311 → PC-FE-029 → **this**). PC-FE-029 iter 2 trace evidence: `operators-profile.spec.ts:54` `getByTestId('domain-card-finance')` not found within timeout. `/operators` page now renders correctly (PC-FE-029 closure verified); failure is on the NEXT page (`/dashboards/overview`). `OperatorOverviewPage` server component branches on state; DomainCard component owns the `domain-card-<domain>` testid and is mounted only when the overview composition includes a card entry for `finance`. **Investigation-first cycle pattern**: mirrors PC-FE-029's 3-iter floor (diagnostic + fix + cleanup) — impl PR's first commit adds server-component diagnostic log; subsequent commits apply targeted fix. Hypothesis pool (4 candidates): degraded/error state + DomainCard mount gate + console-bff composition missing finance + DOM-level rendering issue. **PC-FE-029 lesson applied** — "infrastructure env var missing" included as hypothesis class. AC scope = 10 (AC-1 functional GREEN + AC-2-3 spec pass + AC-4-7 byte-unchanged hard invariants 26회째 zero-retrofit + AC-8 diagnostic cleanup + AC-9 unit/integration regression + AC-10 BE-303 3-dim). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (diagnostic-first impl pattern).
 
 ## in-progress
 
