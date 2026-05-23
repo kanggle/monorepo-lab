@@ -48,13 +48,23 @@
 -- ---------------------------------------------------------------------------
 USE `finance_db`;
 
+-- TASK-BE-312: `owner_ref` is AES-256-GCM-encrypted (F7 / regulated.md R7 —
+--   PII-at-rest column). `AccountRepositoryAdapter.decrypt(...)` runs on every
+--   read; a plaintext value here would throw on Base64 decode and surface as
+--   422 AMOUNT_INVALID via GlobalExceptionHandler.handleIllegalArgument.
+--   The envelope below is a one-shot AES-256-GCM(IV‖ct‖tag) of plaintext
+--   "e2e-test-owner-ref" using the e2e overlay key
+--   (`FINANCE_ACCOUNT_PII_KEY=finance-account-dev-pii-key-32bytes!!` per
+--   docker-compose.e2e.yml). The IV is random per encrypt-call so the
+--   ciphertext bytes differ each generation, but the envelope is stable
+--   under the same key — the decrypt round-trip is what matters.
 INSERT IGNORE INTO accounts (
     id, tenant_id, owner_ref, status, kyc_level, currency,
     created_at, updated_at, version
 ) VALUES (
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
     '*',
-    'e2e-test-owner-ref',
+    'v1:Al7AbOFq84oJ2wYqG+RB7CulHFYrnpNnNjp55iEWoJqqvscRZPN9mW46xrgq4w==',
     'ACTIVE',
     'FULL',
     'KRW',
