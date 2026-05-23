@@ -50,7 +50,12 @@ test.describe('@e2e operators profile — finance default account self-serve', (
     // The finance card on overview must render `ok` with balance data
     // (NOT `forbidden / MISSING_PREREQUISITE`). The data-status attribute
     // is owned by features/operator-overview/components/DomainCard.tsx.
-    const financeCard = page.getByTestId('domain-card-finance');
+    // TASK-PC-FE-030 — testid uses the `operator-overview-card-<domain>`
+    // convention the component established (sibling internal testids
+    // `operator-overview-card-finance-status` / `-currency` follow the
+    // same prefix). The original `domain-card-finance` name was the
+    // `aria-labelledby` id, not the testid.
+    const financeCard = page.getByTestId('operator-overview-card-finance');
     await expect(financeCard).toHaveAttribute('data-status', 'ok');
   });
 });

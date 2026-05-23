@@ -37,24 +37,6 @@ export const dynamic = 'force-dynamic';
 export default async function OperatorOverviewPage() {
   const state = await getOperatorOverviewState();
 
-  // TASK-PC-FE-030 iter 1 — diagnostic: which of the 4 branches does
-  // the e2e deployment hit, and if the OK branch, what's the card
-  // composition? PC-FE-029 closure narrowed failure to here:
-  // `operators-profile.spec.ts:54` `getByTestId('domain-card-finance')`
-  // not found in /dashboards/overview. Single-cycle diagnostic — slated
-  // for removal in cleanup iter (AC-8).
-  console.log(
-    'TASK-PC-FE-030 diagnostic — OperatorOverviewPage state',
-    JSON.stringify({
-      unauthorized: state.unauthorized ?? false,
-      noTenant: state.noTenant ?? false,
-      bffUnavailable: state.bffUnavailable ?? false,
-      hasOverview: !!state.overview,
-      cardCount: state.overview?.cards?.length ?? 0,
-      cardDomains: state.overview?.cards?.map((c) => c.domain) ?? [],
-    }),
-  );
-
   if (state.unauthorized) {
     redirect('/login');
   }
