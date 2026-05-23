@@ -8,7 +8,7 @@ console-web e2e fixture — wire fixture-level explicit `context.tracing.start/s
 
 # Status
 
-review
+done
 
 # Owner
 
