@@ -30,7 +30,11 @@ const OPERATOR_OVERVIEW_KEY = ['operator-overview'] as const;
 export function useOperatorOverview(initial?: OperatorOverview) {
   return useQuery({
     queryKey: OPERATOR_OVERVIEW_KEY,
-    queryFn: fetchOperatorOverview,
+    // TASK-PC-FE-030 — `fetchOperatorOverview` now takes an optional
+    // server-only `cookieHeader`. React Query passes its context object
+    // to `queryFn`; wrap so the client path calls with no args (the
+    // browser supplies cookies natively via `credentials: 'include'`).
+    queryFn: () => fetchOperatorOverview(),
     initialData: initial,
     // Seeded from the SSR render ⇒ fresh; the operator decides when
     // to re-fetch via the explicit retry button. The audit-respecting

@@ -78,11 +78,31 @@ async function readErrorEnvelope(
  * uses {@link getOperatorOverviewState} which can react to ApiError
  * for redirects.
  */
-export async function fetchOperatorOverview(): Promise<OperatorOverview> {
+export async function fetchOperatorOverview(
+  /**
+   * Optional Cookie header for server-side callers (the SSR
+   * `getOperatorOverviewState` wrapper passes the page's request cookies
+   * verbatim here). On the client, `credentials: 'include'` lets the
+   * browser attach HttpOnly cookies natively, so this stays undefined.
+   *
+   * <p>TASK-PC-FE-030 — Node `fetch` in a server component has no cookie
+   * jar, and `credentials: 'include'` is a browser-only directive. Without
+   * this explicit forward, the in-process proxy route's `cookies()` read
+   * returns empty → the proxy bails with `400 NO_ACTIVE_TENANT` → the
+   * page sees `noTenant: true` even when the browser HAS the cookie.
+   */
+  cookieHeader?: string,
+): Promise<OperatorOverview> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (cookieHeader) {
+    headers.Cookie = cookieHeader;
+  }
   const res = await fetch(operatorOverviewUrl(), {
     method: 'GET',
-    headers: { Accept: 'application/json' },
-    // Same-origin HttpOnly session cookies ride through the proxy.
+    headers,
+    // Same-origin HttpOnly session cookies ride through the proxy on the
+    // browser path; on the server path the `Cookie` header above carries
+    // them explicitly (Node fetch has no implicit cookie jar).
     credentials: 'include',
     cache: 'no-store',
   });
@@ -126,7 +146,17 @@ export interface OperatorOverviewState {
  */
 export async function getOperatorOverviewState(): Promise<OperatorOverviewState> {
   try {
-    const overview = await fetchOperatorOverview();
+    // TASK-PC-FE-030 — forward the page's request cookies to the
+    // in-process proxy fetch. Next.js Node `fetch` does NOT auto-forward
+    // cookies on internal calls (`credentials: 'include'` is browser-only),
+    // so without this explicit header the proxy's `cookies()` reads empty
+    // → 400 NO_ACTIVE_TENANT → `noTenant: true` even when the browser
+    // session has the active-tenant cookie. Lazy-imported to keep this
+    // module callable from the browser path (the React Query hook uses
+    // `fetchOperatorOverview` directly with no cookie arg).
+    const { cookies } = await import('next/headers');
+    const cookieHeader = (await cookies()).toString();
+    const overview = await fetchOperatorOverview(cookieHeader);
     return {
       overview,
       noTenant: false,
