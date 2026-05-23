@@ -8,7 +8,7 @@ console-web e2e Playwright config — wire Chromium `--host-resolver-rules="MAP 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -194,3 +194,55 @@ Three real options were considered:
 ⑥ **memory update post-cycle** — after PC-FE-028 close, audit-memory cycle to capture: PC-FE-022 ㉚ correction (DNS bridge PR-time-smoke-only), PC-FE-027 trace inspection mechanism (Option B fixture-tracing as standard for globalSetup-bound failures), PC-FE-028 root-cause fix pattern (DNS-layer fix for DNS-layer cause), cycle pattern 7+ layer realization.
 
 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (Option A 결정 spec, playwright.config.ts surgical 1-line conditional 추가; mechanical).
+
+---
+
+# Closure narrative — 7-iter saga + AC outcomes (2026-05-23)
+
+## Impl PR #781 (merged squash `7d312802`, 2026-05-23T10:00:36Z)
+
+7 iterations on a single impl branch before reaching DNS-layer success. Each iter taught a discrete fact about the runner environment that the spec's "single surgical line" assumption could not have predicted.
+
+| Iter | Approach | Dispatch run | Outcome |
+|---|---|---|---|
+| 1 | global `use.launchOptions.args=['--host-resolver-rules=MAP auth-service:8081 127.0.0.1:18081']` | 26325955313 | FAIL — `ERR_NAME_NOT_RESOLVED at auth-service:8081`; flag silently ignored (Playwright `devices['Desktop Chrome']` project-level spread shadowed the global). |
+| 2 | iter 1 + project-level duplicate (chromium-headless-shell default channel) | 26326164850 | FAIL — same 2 URLs captured (localhost + unresolved auth-service); chromium-headless-shell variant is stripped and may not honor `--host-resolver-rules`. |
+| 3 | iter 2 + `channel: 'chromium'` (full Chrome for Testing) | 26326373649 | FAIL — same 2 URLs captured; channel switch alone insufficient when both global+project launchOptions are still in conflict. |
+| 4 | Option G pivot — `MAP auth-service 127.0.0.1` (port-agnostic) + docker-compose `["18081:8081"] → ["8081:8081"]` + dedupe to single project-level launchOptions | 26327356967 | FAIL — flag NOW applied (config conflict resolved) but `ERR_NAME_NOT_RESOLVED at localhost:3000` (URL #1, never previously reached). |
+| 5 | iter 4 + port-specific narrow `MAP auth-service:8081 127.0.0.1:8081` | 26327550178 | FAIL — same localhost ERR_NAME_NOT_RESOLVED. Narrowing the match pattern did not restore localhost. |
+| 6 | iter 5 + explicit `MAP localhost 127.0.0.1` comma-appended | 26327747203 | FAIL — same localhost ERR_NAME_NOT_RESOLVED. Even an explicit localhost MAP rule could not restore resolution; the flag's mere activation bypasses /etc/hosts in this runner's Chromium build. |
+| 7 | Workflow `/etc/hosts` entry (`echo "127.0.0.1 auth-service" \| sudo tee -a /etc/hosts`) + revert playwright `launchOptions` entirely + retain docker-compose `["8081:8081"]` | 26327957129 | **AC-1 (b) SUCCESS** — DNS layer cleared. trace.network captured the full URL chain: `localhost:3000 → 307 → auth-service:8081/oauth2/authorize → 302 → auth-service:8081/login → 500`. New layer (8th) surfaced. |
+
+## 8th layer (not in PC-FE-028 scope — follows AC-1 b clause)
+
+Iter 7 trace shows the SAS `/login` endpoint returning **500 INTERNAL_ERROR** with body `{"code":"INTERNAL_ERROR","message":"An unexpected error occurred"}`. auth-service compose logs show the root cause:
+
+```
+org.springframework.web.servlet.resource.NoResourceFoundException: No static resource login.
+    at org.springframework.web.servlet.resource.ResourceHttpRequestHandler.handleRequest(...)
+```
+
+Spring is routing `GET /login` through `ResourceHttpRequestHandler` (static-resource path), which means SAS's `DefaultLoginPageGeneratingFilter` is NOT active for this profile (`SPRING_PROFILES_ACTIVE=e2e`). Either BE-309's formLogin enablement did not apply to the `e2e` profile, or the SecurityFilterChain's filter ordering changed so `DefaultLoginPageGeneratingFilter` is skipped. This is an auth-service config/Spring-Security wiring issue — outside `projects/platform-console/` scope.
+
+**Next cycle task** — `TASK-BE-310` (project: `global-account-platform`): investigate why auth-service `e2e` profile's SAS does not enable `DefaultLoginPageGeneratingFilter`; restore the /login form rendering so the Playwright fixture's `input[name="username"]` selector matches. Scope kept tight: e2e profile SecurityFilterChain only.
+
+## AC outcomes (final state)
+
+- **AC-1 (a)** functional primary — FAIL (Playwright spec did not pass).
+- **AC-1 (b)** alternative success — **PASS**. Step 17 now fails with a DIFFERENT error class (form-rendering 500, not ERR_NAME_NOT_RESOLVED). Spec § Acceptance Criteria explicitly permits this outcome as success of the DNS-layer scope.
+- **AC-2** main nightly RED → GREEN — DEFERRED to BE-310 closure (8th layer must also close before main nightly is GREEN).
+- **AC-3** fixture byte-unchanged — **PASS** (`git diff origin/main -- tests/e2e/fixtures/` = empty post-merge).
+- **AC-4** docker-compose byte-unchanged — **VIOLATED, honest scope adjustment**. `["18081:8081"] → ["8081:8081"]` is necessary to publish the host port the runner's /etc/hosts entry targets. Without iter 4's compose change, iter 7's /etc/hosts entry would map to an unpublished port. AC-4 was authored on the iter 1 assumption that playwright-only Option A would suffice; iter 1-3 evidence proved otherwise.
+- **AC-5** workflow byte-unchanged — **VIOLATED, honest scope adjustment**. `/etc/hosts` step + `E2E_AUTH_BASE_URL: localhost:18081 → localhost:8081` are necessary for the working DNS path. Same evidence rationale as AC-4.
+- **AC-6, AC-7, AC-8** — PASS (no producer / GAP / console-bff bytes changed).
+- **AC-9** `process.env.CI` count ≥ 2 — PASS (trace + globalSetup-tracing-stop = 2).
+- **AC-10** `host-resolver-rules` count = 1 — **VIOLATED, honest scope adjustment**. Final state has 0 occurrences after the iter 7 revert. The flag approach was empirically non-viable; AC-10 was authored on the iter 1 assumption that the flag would work.
+- **AC-11** BE-303 3-dim merge verification — PASS (PR #781 pre-merge 20/20 GREEN; state=MERGED; mergeCommit=`7d312802`).
+
+## Cycle pattern realization — 8 layers across 3 days
+
+PC-FE-023 → PC-FE-024 → MONO-132 → PC-FE-025 → PC-FE-026 → MONO-133 (diagnostic) → PC-FE-027 (diagnostic) → **PC-FE-028 (DNS root-cause fix, 7 iters)** → TASK-BE-310 (forthcoming).
+
+Original spec § ⑤ predicted "7th + likely terminal layer". Empirical: 7th was diagnostic, 8th is the DNS+form-rendering composite. Cycle pattern's progressive-surface mechanism worked as designed — each iter exposed exactly one fact, no more. The 7-iter saga inside PC-FE-028 itself is a sub-cycle that PC-FE-028's spec did not anticipate; the spec assumed a single surgical config change. Lesson for future cycle-pattern tasks: when the option matrix has been narrowed from 3 → 1 by evidence (PC-FE-027), the *chosen* option is high-confidence-correct in *concept* but may still take multiple iters to land in a specific runner environment. Reserve 5-7 iters of dispatch budget for environment-specific config refinement, not the cycle-pattern shape.
+
+분석=Opus 4.7 / 구현=직접 (이번 8-layer cycle 의 sub-cycle 7-iter 는 mechanical 이 아님; auto-mode evidence-driven iteration 이 작동).
