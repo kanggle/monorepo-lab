@@ -33,31 +33,6 @@ export const dynamic = 'force-dynamic';
 export default async function OperatorsPage() {
   const state = await getOperatorsListState({ page: 0, size: 20 });
 
-  // TASK-PC-FE-029 iter 1 — diagnostic: which of the 4 branches does the
-  // e2e deployment hit? BE-311 iter 7 trace evidence narrowed the failing
-  // assertion to `my-profile-default-account-id` not visible 5s; the
-  // fixture's `console_active_tenant=fan-platform` seed excludes
-  // `noTenant`, so 3 candidates remain (PERMISSION_DENIED /
-  // TENANT_SCOPE_DENIED / degraded). Single console.log emission via
-  // logger.info so it lands in the docker compose log dump captured by
-  // .github/workflows/nightly-e2e.yml on Playwright failure. Slated for
-  // removal in the cleanup iter (AC-8).
-  console.log(
-    'TASK-PC-FE-029 diagnostic — OperatorsPage state',
-    JSON.stringify({
-      noTenant: state.noTenant ?? false,
-      permissionErrorCode: state.permissionError?.code ?? null,
-      degraded: state.degraded ?? false,
-      hasPage: !!state.page,
-      pageContent: state.page
-        ? {
-            items: state.page.content?.length ?? 0,
-            total: state.page.totalElements ?? 0,
-          }
-        : null,
-    }),
-  );
-
   if (state.noTenant) {
     return (
       <section aria-labelledby="operators-heading">
