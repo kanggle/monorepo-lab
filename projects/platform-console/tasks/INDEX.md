@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-027-fixture-context-tracing.md` — TASK-MONO-133 spec § Failure Scenarios escalation path: Option B fixture-level `context.tracing.start/stop` in `bridgeAuthServiceHostname()` (login.ts mutation, CI-only conditional, trace path `test-results/global-setup-driveOidcPkceLogin/trace.zip`). MONO-133 의 secondary value (workflow `if: always()` upload + `test-results/` path) 가 본 task 의 trace.zip 을 자연 capture. 다음 dispatch 가 redirect chain Network panel surface → 별 root-cause fix-task (PC-FE-028/MONO-134) 가 evidence-based spec. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (Option B 이미 spec 단계 결정, login.ts surgical).
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-027-fixture-context-tracing.md` — impl PR (this PR) — login.ts mutation (CI-only `context.tracing.start/stop` in `driveOidcPkceLogin` body around `bridgeAuthServiceHostname` + page.goto chain). AC-1 verify via workflow_dispatch on impl branch.
 
 ## done
 
