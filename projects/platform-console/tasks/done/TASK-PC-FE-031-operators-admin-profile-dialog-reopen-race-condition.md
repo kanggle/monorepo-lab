@@ -8,7 +8,7 @@ operators-admin-profile.spec.ts intermittent failure — `OperatorProfileEditDia
 
 # Status
 
-ready
+done
 
 # Owner
 
