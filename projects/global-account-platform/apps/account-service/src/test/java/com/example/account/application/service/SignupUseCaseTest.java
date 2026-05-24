@@ -65,7 +65,7 @@ class SignupUseCaseTest {
         SignupResult result = signupUseCase.execute(sampleCommand());
 
         assertThat(result.accountId()).isEqualTo("acc-1");
-        verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"));
+        verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"), any());
         verify(profileRepository).save(any(Profile.class));
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
     }
@@ -76,7 +76,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.CredentialAlreadyExistsConflict("acc-1"))
-                .given(authServicePort).createCredential(any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
@@ -90,7 +90,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.AuthServiceUnavailable("down", new RuntimeException()))
-                .given(authServicePort).createCredential(any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
@@ -108,6 +108,6 @@ class SignupUseCaseTest {
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
 
-        verify(authServicePort, never()).createCredential(any(), any(), any());
+        verify(authServicePort, never()).createCredential(any(), any(), any(), any());
     }
 }

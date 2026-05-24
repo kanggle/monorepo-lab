@@ -52,8 +52,13 @@ public class SignupUseCase {
             // TASK-BE-063: persist credential in auth-service via /internal/auth/credentials.
             // Any failure (409 from a racing signup, 5xx, timeout) propagates and rolls back
             // the account + profile rows above — signup is atomic end-to-end.
+            //   TASK-BE-313: pass the account's tenantId (signup public-flow may have
+            //   the default tenant; pass-through preserves the existing fallback semantics
+            //   in auth-service's CreateCredentialUseCase when tenantId is null).
             try {
-                authServicePort.createCredential(account.getId(), account.getEmail(), command.password());
+                authServicePort.createCredential(
+                        account.getId(), account.getEmail(), command.password(),
+                        account.getTenantId().value());
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }

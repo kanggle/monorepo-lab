@@ -128,6 +128,16 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         assertThat(outboxPayloads).hasSize(1);
         JsonNode payload = objectMapper.readTree(outboxPayloads.get(0));
         assertThat(payload.get("tenantId").asText()).isEqualTo(WMS_TENANT_ID);
+
+        // TASK-BE-313: authServicePort.createCredential must receive the
+        // tenantId so the credential row in auth_db matches the account row's
+        // tenant scope (regression guard — without this, credentials always
+        // fell back to "fan-platform" and TenantProvisioningE2ETest 401'd).
+        org.mockito.Mockito.verify(authServicePort).createCredential(
+                org.mockito.ArgumentMatchers.eq(accountId),
+                org.mockito.ArgumentMatchers.eq(email),
+                org.mockito.ArgumentMatchers.eq("Password1!"),
+                org.mockito.ArgumentMatchers.eq(WMS_TENANT_ID));
     }
 
     @Test
