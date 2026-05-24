@@ -6,6 +6,7 @@ import com.example.erp.masterdata.application.command.Commands.RetireDepartmentC
 import com.example.erp.masterdata.application.event.MasterdataEventPublisher;
 import com.example.erp.masterdata.application.port.outbound.AuthorizationPort;
 import com.example.erp.masterdata.application.port.outbound.ClockPort;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.erp.masterdata.domain.audit.AuditLog;
 import com.example.erp.masterdata.domain.audit.AuditLogRepository;
 import com.example.erp.masterdata.domain.authorization.AuthorizationDecision;
@@ -69,6 +70,7 @@ class MasterdataApplicationServiceTest {
     @Mock AuthorizationPort authorizationPort;
     @Mock ClockPort clock;
     @Mock MasterdataEventPublisher eventPublisher;
+    @Mock ObjectMapper objectMapper;
 
     @InjectMocks
     MasterdataApplicationService service;

@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class CostCenterRepositoryAdapter implements CostCenterRepository {
+public class CostCenterRepositoryImpl implements CostCenterRepository {
 
     private final CostCenterJpaRepository jpa;
 

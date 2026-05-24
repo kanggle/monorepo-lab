@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class AuditLogRepositoryAdapter implements AuditLogRepository {
+public class AuditLogRepositoryImpl implements AuditLogRepository {
 
     private final AuditLogJpaRepository jpa;
 
