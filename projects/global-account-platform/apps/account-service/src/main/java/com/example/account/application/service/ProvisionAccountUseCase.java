@@ -90,8 +90,13 @@ public class ProvisionAccountUseCase {
             }
 
             // 6. Persist credential in auth-service
+            //    TASK-BE-313: pass tenantId so the credential row in auth_db
+            //    inherits the same tenant scope as the account row. Without
+            //    this, auth-service defaults to "fan-platform" and login fails
+            //    the tenant scope check (TenantProvisioningE2ETest 401 surface).
             try {
-                authServicePort.createCredential(account.getId(), account.getEmail(), command.password());
+                authServicePort.createCredential(
+                        account.getId(), account.getEmail(), command.password(), command.tenantId());
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }

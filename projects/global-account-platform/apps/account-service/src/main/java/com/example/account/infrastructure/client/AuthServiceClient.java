@@ -65,8 +65,8 @@ public class AuthServiceClient implements AuthServicePort {
     }
 
     @Override
-    public void createCredential(String accountId, String email, String password) {
-        Runnable op = () -> doCreateCredential(accountId, email, password);
+    public void createCredential(String accountId, String email, String password, String tenantId) {
+        Runnable op = () -> doCreateCredential(accountId, email, password, tenantId);
         Runnable retrying = Retry.decorateRunnable(retry, op);
         Runnable resilient = CircuitBreaker.decorateRunnable(circuitBreaker, retrying);
 
@@ -86,12 +86,20 @@ public class AuthServiceClient implements AuthServicePort {
         }
     }
 
-    private void doCreateCredential(String accountId, String email, String password) {
-        Map<String, String> body = Map.of(
-                "accountId", accountId,
-                "email", email,
-                "password", password
-        );
+    private void doCreateCredential(String accountId, String email, String password, String tenantId) {
+        // TASK-BE-313: omit tenantId from body when null so auth-service applies its
+        // own fallback ("fan-platform"); when non-null, include it so the credential
+        // row matches the account row's tenant scope.
+        Map<String, String> body = tenantId != null
+                ? Map.of(
+                        "accountId", accountId,
+                        "email", email,
+                        "password", password,
+                        "tenantId", tenantId)
+                : Map.of(
+                        "accountId", accountId,
+                        "email", email,
+                        "password", password);
         restClient.post()
                 .uri(CREDENTIALS_PATH)
                 .contentType(MediaType.APPLICATION_JSON)

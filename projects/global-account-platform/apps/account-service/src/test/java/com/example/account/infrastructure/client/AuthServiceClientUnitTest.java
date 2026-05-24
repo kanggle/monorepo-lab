@@ -43,7 +43,7 @@ class AuthServiceClientUnitTest {
                 .willReturn(aResponse().withStatus(200)));
 
         assertThatNoException().isThrownBy(() ->
-                client.createCredential("acc-1", "user@example.com", "pass123"));
+                client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform"));
     }
 
     @Test
@@ -52,7 +52,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(409)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123"))
+        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.CredentialAlreadyExistsConflict.class);
     }
 
@@ -62,7 +62,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(422)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123"))
+        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 
@@ -72,7 +72,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123"))
+        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 }
