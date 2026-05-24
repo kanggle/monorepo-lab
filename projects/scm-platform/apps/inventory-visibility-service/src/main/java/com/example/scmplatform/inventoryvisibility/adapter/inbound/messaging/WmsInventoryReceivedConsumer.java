@@ -50,13 +50,13 @@ public class WmsInventoryReceivedConsumer {
                 log.error("Invalid wms envelope on topic={} partition={} offset={}; sending to DLT",
                         record.topic(), record.partition(), record.offset());
                 ack.acknowledge();
-                throw new InvalidEnvelopeException("Invalid envelope: missing required fields");
+                throw new WmsEnvelopeParser.InvalidEnvelopeException("Invalid envelope: missing required fields");
             }
 
             // Edge Case 8: cross-tenant event filtering
             // wms v1 is single-tenant, but add safety guard
             Map<String, Object> payload = envelope.payload();
-            String warehouseId = getStringField(payload, "warehouseId");
+            String warehouseId = WmsEnvelopeParser.getStringField(payload, "warehouseId");
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> lines = (List<Map<String, Object>>) payload.get("lines");
@@ -69,8 +69,8 @@ public class WmsInventoryReceivedConsumer {
 
             // Each line represents a separate SKU at the warehouse location
             for (Map<String, Object> line : lines) {
-                String skuId = getStringField(line, "skuId");
-                long qtyReceived = getLongField(line, "qtyReceived");
+                String skuId = WmsEnvelopeParser.getStringField(line, "skuId");
+                long qtyReceived = WmsEnvelopeParser.getLongField(line, "qtyReceived");
 
                 applicationService.applyInventoryReceived(
                         warehouseId, skuId, qtyReceived,
@@ -79,30 +79,12 @@ public class WmsInventoryReceivedConsumer {
             }
 
             ack.acknowledge();
-        } catch (InvalidEnvelopeException e) {
+        } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {
             throw e; // propagate to DLT without retry
         } catch (Exception e) {
             log.error("Failed to process wms.inventory.received: topic={} partition={} offset={} error={}",
                     record.topic(), record.partition(), record.offset(), e.getMessage(), e);
             throw new RuntimeException("Failed to process wms.inventory.received event", e);
         }
-    }
-
-    private String getStringField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) throw new InvalidEnvelopeException("Missing field: " + key);
-        return val.toString();
-    }
-
-    private long getLongField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) return 0L;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
-    }
-
-    /** Signals an envelope validation failure — should go to DLT without retries. */
-    static class InvalidEnvelopeException extends RuntimeException {
-        InvalidEnvelopeException(String msg) { super(msg); }
     }
 }

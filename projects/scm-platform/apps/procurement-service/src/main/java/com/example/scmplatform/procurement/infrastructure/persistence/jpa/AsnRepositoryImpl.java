@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class AsnRepositoryAdapter implements AsnRepository {
+public class AsnRepositoryImpl implements AsnRepository {
 
     private final AsnJpaRepository asnJpa;
     private final AsnLineJpaRepository lineJpa;

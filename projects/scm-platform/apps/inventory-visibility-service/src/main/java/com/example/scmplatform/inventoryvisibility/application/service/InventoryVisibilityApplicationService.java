@@ -72,22 +72,10 @@ public class InventoryVisibilityApplicationService {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-
         InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId);
-        Sku sku = Sku.of(skuId);
-        Quantity quantity = Quantity.of(BigDecimal.valueOf(qtyReceived));
-
-        Optional<InventorySnapshot> existing =
-                snapshotRepository.findByNodeIdAndSku(node.getId(), sku, tenantId);
-        if (existing.isPresent()) {
-            existing.get().applyDelta(quantity, true, eventId, occurredAt);
-            snapshotRepository.save(existing.get());
-        } else {
-            InventorySnapshot snapshot =
-                    InventorySnapshot.create(node.getId(), sku, tenantId, quantity, eventId, occurredAt);
-            snapshotRepository.save(snapshot);
-        }
-
+        applySnapshotDelta(node.getId(), Sku.of(skuId),
+                Quantity.of(BigDecimal.valueOf(qtyReceived)), true,
+                eventId, occurredAt, tenantId);
         updateStaleness(node.getId(), tenantId, eventId, occurredAt);
         eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.received: node={} sku={} qty={} eventId={}",
@@ -106,26 +94,14 @@ public class InventoryVisibilityApplicationService {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-
         InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId);
-        Sku sku = Sku.of(skuId);
-
-        Optional<InventorySnapshot> existing =
-                snapshotRepository.findByNodeIdAndSku(node.getId(), sku, tenantId);
         Quantity absDelta = Quantity.of(BigDecimal.valueOf(Math.abs(delta)));
         boolean isAddition = delta >= 0;
 
-        if (existing.isPresent()) {
-            existing.get().applyDelta(absDelta, isAddition, eventId, occurredAt);
-            snapshotRepository.save(existing.get());
-        } else {
-            // Node exists in wms but we have no snapshot yet — create with zero base
-            Quantity initial = isAddition ? absDelta : Quantity.ZERO;
-            InventorySnapshot snapshot =
-                    InventorySnapshot.create(node.getId(), sku, tenantId, initial, eventId, occurredAt);
-            snapshotRepository.save(snapshot);
-        }
-
+        // When no snapshot exists yet and the adjustment is a subtraction, start at ZERO
+        // (no negative inventory: applySnapshotDelta will create with zero base for subtraction)
+        applySnapshotDelta(node.getId(), Sku.of(skuId), absDelta, isAddition,
+                eventId, occurredAt, tenantId);
         updateStaleness(node.getId(), tenantId, eventId, occurredAt);
         eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.adjusted: node={} sku={} delta={} eventId={}",
@@ -145,33 +121,14 @@ public class InventoryVisibilityApplicationService {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-
         InventoryNode srcNode = resolveOrCreateNode(sourceWarehouseId, NodeType.WMS_WAREHOUSE, tenantId);
         InventoryNode dstNode = resolveOrCreateNode(destWarehouseId, NodeType.WMS_WAREHOUSE, tenantId);
-        Sku sku = Sku.of(skuId);
         Quantity qty = Quantity.of(BigDecimal.valueOf(quantity));
+        Sku sku = Sku.of(skuId);
 
-        // Decrement source
-        Optional<InventorySnapshot> srcSnap =
-                snapshotRepository.findByNodeIdAndSku(srcNode.getId(), sku, tenantId);
-        if (srcSnap.isPresent()) {
-            srcSnap.get().applyDelta(qty, false, eventId, occurredAt);
-            snapshotRepository.save(srcSnap.get());
-        } else {
-            snapshotRepository.save(
-                    InventorySnapshot.create(srcNode.getId(), sku, tenantId, Quantity.ZERO, eventId, occurredAt));
-        }
-
-        // Increment destination
-        Optional<InventorySnapshot> dstSnap =
-                snapshotRepository.findByNodeIdAndSku(dstNode.getId(), sku, tenantId);
-        if (dstSnap.isPresent()) {
-            dstSnap.get().applyDelta(qty, true, eventId, occurredAt);
-            snapshotRepository.save(dstSnap.get());
-        } else {
-            snapshotRepository.save(
-                    InventorySnapshot.create(dstNode.getId(), sku, tenantId, qty, eventId, occurredAt));
-        }
+        // Decrement source, increment destination — both in the same @Transactional scope
+        applySnapshotDelta(srcNode.getId(), sku, qty, false, eventId, occurredAt, tenantId);
+        applySnapshotDelta(dstNode.getId(), sku, qty, true, eventId, occurredAt, tenantId);
 
         updateStaleness(srcNode.getId(), tenantId, eventId, occurredAt);
         updateStaleness(dstNode.getId(), tenantId, eventId, occurredAt);
@@ -251,6 +208,33 @@ public class InventoryVisibilityApplicationService {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Applies a quantity delta to the inventory snapshot for the given node/SKU pair.
+     * If no snapshot exists yet, a new one is created:
+     * <ul>
+     *   <li>For an addition: initialised with the given quantity.</li>
+     *   <li>For a subtraction: initialised at zero (no negative inventory).</li>
+     * </ul>
+     * Extracted from three duplicated 5-step blocks in {@code applyInventoryReceived},
+     * {@code applyInventoryAdjusted}, and {@code applyInventoryTransferred}
+     * (TASK-SCM-BE-016 L5+L6).
+     */
+    private void applySnapshotDelta(NodeId nodeId, Sku sku, Quantity delta,
+                                    boolean isAddition, UUID eventId,
+                                    Instant occurredAt, String tenantId) {
+        Optional<InventorySnapshot> existing =
+                snapshotRepository.findByNodeIdAndSku(nodeId, sku, tenantId);
+        if (existing.isPresent()) {
+            existing.get().applyDelta(delta, isAddition, eventId, occurredAt);
+            snapshotRepository.save(existing.get());
+        } else {
+            Quantity initial = isAddition ? delta : Quantity.ZERO;
+            InventorySnapshot snapshot =
+                    InventorySnapshot.create(nodeId, sku, tenantId, initial, eventId, occurredAt);
+            snapshotRepository.save(snapshot);
+        }
+    }
 
     private InventoryNode resolveOrCreateNode(String externalId, NodeType type, String tenantId) {
         return nodeRepository.findByTenantIdAndExternalId(tenantId, externalId)

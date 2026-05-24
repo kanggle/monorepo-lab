@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class EventDedupeRepositoryAdapter implements EventDedupeRepository, EventDedupePort {
+public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDedupePort {
 
     private final EventDedupeJpaRepository jpaRepository;
 
