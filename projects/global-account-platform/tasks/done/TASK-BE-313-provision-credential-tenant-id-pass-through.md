@@ -8,7 +8,7 @@ account-service `ProvisionAccountUseCase` → `AuthServiceClient.createCredentia
 
 # Status
 
-ready
+done
 
 # Owner
 
