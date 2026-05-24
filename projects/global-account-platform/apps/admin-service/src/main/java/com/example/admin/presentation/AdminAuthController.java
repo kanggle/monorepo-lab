@@ -162,18 +162,18 @@ public class AdminAuthController {
             AdminRefreshTokenService.RefreshResult result = refreshService.refresh(body.refreshToken());
             // The operator UUID on `result` was read from the verified registry
             // row inside the service — never from the raw JWT payload.
-            safeRecordSession(auditId, ActionCode.OPERATOR_REFRESH, result.operatorId(),
-                    Outcome.SUCCESS, null, AdminActionAuditor.REASON_SELF_REFRESH,
-                    "refresh:" + auditId, startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_REFRESH, result.operatorId(), null,
+                    AdminActionAuditor.REASON_SELF_REFRESH, "refresh:" + auditId,
+                    Outcome.SUCCESS, null, startedAt);
             return ResponseEntity.ok(new AdminRefreshResponse(
                     result.accessToken(), result.expiresIn(),
                     result.refreshToken(), result.refreshExpiresIn()));
         } catch (RefreshTokenReuseDetectedException ex) {
             // `ex.operatorId()` is taken from the verified registry row; the
             // presented JWT signature was valid for that row.
-            safeRecordSession(auditId, ActionCode.OPERATOR_REFRESH, ex.operatorId(),
-                    Outcome.FAILURE, "REUSE_DETECTED", AdminActionAuditor.REASON_SELF_REFRESH,
-                    "refresh:" + auditId + ":reuse", startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_REFRESH, ex.operatorId(), null,
+                    AdminActionAuditor.REASON_SELF_REFRESH, "refresh:" + auditId + ":reuse",
+                    Outcome.FAILURE, "REUSE_DETECTED", startedAt);
             throw ex;
         } catch (InvalidRefreshTokenException ex) {
             // Signature / decode / registry lookup failed: the operator UUID
@@ -181,9 +181,9 @@ public class AdminAuthController {
             // Overrides (audit-heavy A2 relaxation for /refresh), the audit row
             // is emitted without an operator id — the security log already
             // captures the raw failure.
-            safeRecordSession(auditId, ActionCode.OPERATOR_REFRESH, null,
-                    Outcome.FAILURE, "INVALID_REFRESH_TOKEN", AdminActionAuditor.REASON_SELF_REFRESH,
-                    "refresh:" + auditId + ":invalid", startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_REFRESH, null, null,
+                    AdminActionAuditor.REASON_SELF_REFRESH, "refresh:" + auditId + ":invalid",
+                    Outcome.FAILURE, "INVALID_REFRESH_TOKEN", startedAt);
             throw ex;
         }
     }
@@ -206,14 +206,14 @@ public class AdminAuthController {
         String refreshToken = body != null ? body.refreshToken() : null;
         try {
             logoutService.logout(op.operatorId(), op.jti(), accessExp, refreshToken);
-            safeRecordSession(auditId, ActionCode.OPERATOR_LOGOUT, op.operatorId(),
-                    Outcome.SUCCESS, null, AdminActionAuditor.REASON_SELF_LOGOUT,
-                    "logout:" + auditId, startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_LOGOUT, op.operatorId(), null,
+                    AdminActionAuditor.REASON_SELF_LOGOUT, "logout:" + auditId,
+                    Outcome.SUCCESS, null, startedAt);
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         } catch (RuntimeException ex) {
-            safeRecordSession(auditId, ActionCode.OPERATOR_LOGOUT, op.operatorId(),
-                    Outcome.FAILURE, ex.getClass().getSimpleName(), AdminActionAuditor.REASON_SELF_LOGOUT,
-                    "logout:" + auditId + ":failed", startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_LOGOUT, op.operatorId(), null,
+                    AdminActionAuditor.REASON_SELF_LOGOUT, "logout:" + auditId + ":failed",
+                    Outcome.FAILURE, ex.getClass().getSimpleName(), startedAt);
             throw ex;
         }
     }
@@ -231,25 +231,26 @@ public class AdminAuthController {
     }
 
     /**
-     * Single-shot audit write for /refresh and /logout. Mirrors
-     * {@link #safeRecordLogin} fail-closed semantics: SUCCESS path propagates
-     * audit failures (A10), FAILURE path swallows secondary audit errors so
-     * the original 401/500 user-visible status is preserved (architecture.md
-     * Overrides A10).
+     * Single-shot audit write helper used by refresh / logout / recovery-codes /
+     * 2fa-enroll / 2fa-verify paths. Mirrors {@link #safeRecordLogin} fail-closed
+     * semantics: SUCCESS path propagates audit failures (A10), FAILURE path
+     * swallows secondary audit errors so the original 401/500 user-visible
+     * status is preserved (architecture.md Overrides A10).
      */
-    private void safeRecordSession(String auditId,
-                                   ActionCode actionCode,
-                                   String operatorId,
-                                   Outcome outcome,
-                                   String detail,
-                                   String reason,
-                                   String idempotencyKey,
-                                   Instant startedAt) {
+    private void safeRecord(String auditId,
+                            ActionCode actionCode,
+                            String operatorId,
+                            String operatorJti,
+                            String reason,
+                            String idempotencyKey,
+                            Outcome outcome,
+                            String detail,
+                            Instant startedAt) {
         try {
             auditor.record(new AdminActionAuditor.AuditRecord(
                     auditId,
                     actionCode,
-                    new OperatorContext(operatorId, null),
+                    new OperatorContext(operatorId, operatorJti),
                     "OPERATOR",
                     operatorId,
                     reason,
@@ -303,34 +304,19 @@ public class AdminAuthController {
             // Plain-text codes are intentionally NOT logged (R4 compliance).
             return ResponseEntity.ok(new RegenerateRecoveryCodesResponse(codes));
         } catch (TotpNotEnrolledException ex) {
-            safeRecordRecoveryRegenerateFailure(auditId, op, "TOTP_NOT_ENROLLED", startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_RECOVERY_REGENERATE,
+                    op.operatorId(), op.jti(),
+                    AdminActionAuditor.REASON_SELF_RECOVERY_REGENERATE,
+                    "regenerate:" + auditId + ":failed",
+                    Outcome.FAILURE, "TOTP_NOT_ENROLLED", startedAt);
             throw ex;
         } catch (RuntimeException ex) {
-            safeRecordRecoveryRegenerateFailure(auditId, op, ex.getClass().getSimpleName(), startedAt);
-            throw ex;
-        }
-    }
-
-    private void safeRecordRecoveryRegenerateFailure(String auditId,
-                                                     OperatorContext op,
-                                                     String detail,
-                                                     Instant startedAt) {
-        try {
-            auditor.record(new AdminActionAuditor.AuditRecord(
-                    auditId,
-                    ActionCode.OPERATOR_2FA_RECOVERY_REGENERATE,
-                    op,
-                    "OPERATOR",
-                    op.operatorId(),
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_RECOVERY_REGENERATE,
+                    op.operatorId(), op.jti(),
                     AdminActionAuditor.REASON_SELF_RECOVERY_REGENERATE,
-                    null,
                     "regenerate:" + auditId + ":failed",
-                    Outcome.FAILURE,
-                    detail,
-                    startedAt,
-                    Instant.now()));
-        } catch (RuntimeException ignored) {
-            // Best-effort on failure path — do not mask the original exception.
+                    Outcome.FAILURE, ex.getClass().getSimpleName(), startedAt);
+            throw ex;
         }
     }
 
@@ -364,8 +350,10 @@ public class AdminAuthController {
                     result.otpauthUri(), result.recoveryCodes(), result.enrolledAt(),
                     verifyToken.token(), ttl));
         } catch (RuntimeException ex) {
-            safeRecordFailure(auditId, ActionCode.OPERATOR_2FA_ENROLL, operatorId, bootstrap.jti(),
-                    ex.getClass().getSimpleName(), startedAt);
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_ENROLL, operatorId, bootstrap.jti(),
+                    AdminActionAuditor.REASON_SELF_ENROLLMENT,
+                    "bootstrap:" + bootstrap.jti() + ":failed",
+                    Outcome.FAILURE, ex.getClass().getSimpleName(), startedAt);
             throw ex;
         }
     }
@@ -395,34 +383,11 @@ public class AdminAuthController {
                     Instant.now()));
             return ResponseEntity.ok(new TotpVerifyResponse(true));
         } catch (InvalidTwoFaCodeException ex) {
-            safeRecordFailure(auditId, ActionCode.OPERATOR_2FA_VERIFY, operatorId, bootstrap.jti(),
-                    "INVALID_2FA_CODE", startedAt);
-            throw ex;
-        }
-    }
-
-    private void safeRecordFailure(String auditId,
-                                   ActionCode actionCode,
-                                   String operatorId,
-                                   String jti,
-                                   String detail,
-                                   Instant startedAt) {
-        try {
-            auditor.record(new AdminActionAuditor.AuditRecord(
-                    auditId,
-                    actionCode,
-                    new OperatorContext(operatorId, jti),
-                    "OPERATOR",
-                    operatorId,
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_VERIFY, operatorId, bootstrap.jti(),
                     AdminActionAuditor.REASON_SELF_ENROLLMENT,
-                    null,
-                    "bootstrap:" + jti + ":failed",
-                    Outcome.FAILURE,
-                    detail,
-                    startedAt,
-                    Instant.now()));
-        } catch (RuntimeException ignored) {
-            // Best-effort on failure path — do not mask the original exception.
+                    "bootstrap:" + bootstrap.jti() + ":failed",
+                    Outcome.FAILURE, "INVALID_2FA_CODE", startedAt);
+            throw ex;
         }
     }
 
