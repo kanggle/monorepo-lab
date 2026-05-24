@@ -49,15 +49,6 @@ public class AuthEventPublisher extends BaseEventPublisher {
         write("auth.login.attempted", accountId != null ? accountId : emailHash, payload);
     }
 
-    /**
-     * @deprecated Use {@link #publishLoginAttempted(String, String, String, SessionContext)}.
-     *             Retained for backwards compatibility; omits tenantId from payload.
-     */
-    @Deprecated(forRemoval = true)
-    public void publishLoginAttempted(String accountId, String emailHash, SessionContext ctx) {
-        publishLoginAttempted(accountId, emailHash, null, ctx);
-    }
-
     public void publishLoginFailed(String accountId, String emailHash, String tenantId,
                                     String failureReason, int failCount, SessionContext ctx) {
         requireTenantId(tenantId);
@@ -74,16 +65,6 @@ public class AuthEventPublisher extends BaseEventPublisher {
         payload.put("timestamp", Instant.now().toString());
 
         write("auth.login.failed", accountId != null ? accountId : emailHash, payload);
-    }
-
-    /**
-     * @deprecated Use {@link #publishLoginFailed(String, String, String, String, int, SessionContext)}.
-     *             Retained for backwards compatibility; omits tenantId from payload.
-     */
-    @Deprecated(forRemoval = true)
-    public void publishLoginFailed(String accountId, String emailHash, String failureReason,
-                                    int failCount, SessionContext ctx) {
-        publishLoginFailed(accountId, emailHash, null, failureReason, failCount, ctx);
     }
 
     /**
@@ -205,16 +186,6 @@ public class AuthEventPublisher extends BaseEventPublisher {
         payload.put("timestamp", Instant.now().toString());
 
         write("auth.token.refreshed", accountId, payload);
-    }
-
-    /**
-     * @deprecated Use {@link #publishTokenRefreshed(String, String, String, String, SessionContext)}.
-     *             Retained for backwards compatibility; omits tenantId.
-     */
-    @Deprecated
-    public void publishTokenRefreshed(String accountId, String previousJti, String newJti,
-                                       SessionContext ctx) {
-        publishTokenRefreshed(accountId, null, previousJti, newJti, ctx);
     }
 
     /**
