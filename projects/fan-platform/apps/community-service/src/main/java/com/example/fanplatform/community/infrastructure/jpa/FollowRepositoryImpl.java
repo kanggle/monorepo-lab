@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class FollowRepositoryAdapter implements FollowRepository {
+public class FollowRepositoryImpl implements FollowRepository {
 
     private final FollowJpaRepository jpa;
 

@@ -1,13 +1,11 @@
 package com.example.fanplatform.artist.adapter.out.persistence;
 
-import com.example.fanplatform.artist.application.exception.StageNameConflictException;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
 import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistProfile;
 import com.example.fanplatform.artist.domain.artist.ArtistStatus;
 import com.example.fanplatform.artist.domain.artist.ArtistType;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -22,28 +20,19 @@ import java.util.Optional;
  * {@code DataIntegrityViolationException} for the unique-constraint guard.
  */
 @Repository
-class ArtistRepositoryAdapter implements ArtistRepository {
-
-    private static final String STAGE_NAME_CONSTRAINT = "uq_artists_tenant_stage_name";
+class ArtistRepositoryImpl implements ArtistRepository {
 
     private final ArtistJpaRepository jpa;
 
-    ArtistRepositoryAdapter(ArtistJpaRepository jpa) {
+    ArtistRepositoryImpl(ArtistJpaRepository jpa) {
         this.jpa = jpa;
     }
 
     @Override
     public Artist insert(Artist artist) {
         ArtistJpaEntity entity = toInsertEntity(artist);
-        try {
-            ArtistJpaEntity saved = jpa.saveAndFlush(entity);
-            return toDomain(saved);
-        } catch (DataIntegrityViolationException e) {
-            if (mentionsStageNameConstraint(e)) {
-                throw new StageNameConflictException(artist.getProfile().stageName());
-            }
-            throw e;
-        }
+        ArtistJpaEntity saved = jpa.saveAndFlush(entity);
+        return toDomain(saved);
     }
 
     @Override
@@ -58,15 +47,8 @@ class ArtistRepositoryAdapter implements ArtistRepository {
                 artist.getUpdatedAt(),
                 artist.getPublishedAt(),
                 artist.getArchivedAt());
-        try {
-            ArtistJpaEntity saved = jpa.saveAndFlush(managed);
-            return toDomain(saved);
-        } catch (DataIntegrityViolationException e) {
-            if (mentionsStageNameConstraint(e)) {
-                throw new StageNameConflictException(p.stageName());
-            }
-            throw e;
-        }
+        ArtistJpaEntity saved = jpa.saveAndFlush(managed);
+        return toDomain(saved);
     }
 
     @Override
@@ -128,15 +110,4 @@ class ArtistRepositoryAdapter implements ArtistRepository {
         );
     }
 
-    private static boolean mentionsStageNameConstraint(Throwable t) {
-        Throwable cur = t;
-        while (cur != null) {
-            String msg = cur.getMessage();
-            if (msg != null && msg.toLowerCase().contains(STAGE_NAME_CONSTRAINT)) {
-                return true;
-            }
-            cur = cur.getCause();
-        }
-        return false;
-    }
 }

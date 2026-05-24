@@ -5,8 +5,8 @@ import com.example.fanplatform.community.domain.membership.MembershipChecker;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostVisibility;
+import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
-import com.example.fanplatform.community.infrastructure.cache.FeedCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,7 +32,7 @@ import java.util.Optional;
  * </ol>
  *
  * <p><strong>Invalidation</strong> is TTL-only (5 minutes — see
- * {@link FeedCacheRepository}). A new post or follow/unfollow becomes visible
+ * {@link FeedCache}). A new post or follow/unfollow becomes visible
  * to the fan after at most that window. v2 may add explicit invalidation by
  * subscribing to {@code community.post.published} / a future
  * {@code community.follow.changed} topic if sub-minute freshness becomes a
@@ -50,7 +50,7 @@ public class GetFeedUseCase {
     private final CommentRepository commentRepository;
     private final ReactionRepository reactionRepository;
     private final MembershipChecker membershipChecker;
-    private final FeedCacheRepository feedCache;
+    private final FeedCache feedCache;
 
     @Transactional(readOnly = true)
     public FeedPage execute(ActorContext actor, int page, int size) {

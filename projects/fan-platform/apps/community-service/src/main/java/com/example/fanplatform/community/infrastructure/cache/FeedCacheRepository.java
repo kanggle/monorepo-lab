@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.infrastructure.cache;
 
 import com.example.fanplatform.community.application.FeedPage;
+import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
@@ -31,7 +32,7 @@ import java.util.Optional;
  */
 @Slf4j
 @Component
-public class FeedCacheRepository {
+public class FeedCacheRepository implements FeedCache {
 
     static final long TTL_MINUTES = 5;
     private static final Duration TTL = Duration.ofMinutes(TTL_MINUTES);
