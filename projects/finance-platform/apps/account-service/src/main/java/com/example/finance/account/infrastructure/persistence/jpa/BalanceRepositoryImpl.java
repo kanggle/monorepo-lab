@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class BalanceRepositoryAdapter implements BalanceRepository {
+public class BalanceRepositoryImpl implements BalanceRepository {
 
     private final BalanceJpaRepository balanceJpa;
     private final HoldJpaRepository holdJpa;

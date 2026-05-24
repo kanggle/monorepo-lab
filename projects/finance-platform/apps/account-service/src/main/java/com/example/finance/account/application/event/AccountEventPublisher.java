@@ -122,6 +122,16 @@ public class AccountEventPublisher extends BaseEventPublisher {
         return p;
     }
 
+    /**
+     * Convenience helper that publishes both the SETTLED and COMPLETED events for
+     * a single transaction — the invariant pair emitted by every successful
+     * fund-movement use case (transactional T2, fintech F1).
+     */
+    public void publishSettledAndCompleted(Transaction t) {
+        publishTransactionSettled(t);
+        publishTransactionCompleted(t);
+    }
+
     public void publishTransactionSettled(Transaction t) {
         writeEvent(AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_SETTLED, SOURCE, txnPayload(t));
     }

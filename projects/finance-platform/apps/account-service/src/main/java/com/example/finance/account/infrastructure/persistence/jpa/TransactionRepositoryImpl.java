@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class TransactionRepositoryAdapter implements TransactionRepository {
+public class TransactionRepositoryImpl implements TransactionRepository {
 
     private final TransactionJpaRepository jpa;
 

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /** Append-only — only {@code save}; no update/delete path exists (F6). */
 @Component
 @RequiredArgsConstructor
-public class AuditLogRepositoryAdapter implements AuditLogRepository {
+public class AuditLogRepositoryImpl implements AuditLogRepository {
 
     private final AuditLogJpaRepository jpa;
 
