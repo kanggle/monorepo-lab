@@ -72,12 +72,22 @@ FLUSH PRIVILEGES;
 -- 2. auth_db — insert the SUPER_ADMIN credential row that the auth-service
 --    `/login` form (BE-309) authenticates against. The Argon2id hash encodes
 --    the plaintext `devpassword123!` — same value GAP V0014 dev seed uses
---    (so the hash is BcryptHashPinTest-equivalent stable; no drift). The
---    tenant_id='gap' matches the V0015 platform-console-web OAuth client's
---    tenant scope. account_id is a fresh UUID — auth-service does not back-
---    reference the account-service row for this e2e environment because
---    LoginUseCase's account-status call is bypassed by the BE-309 form-login
---    path (architectural divergence documented in BE-309 spec).
+--    (so the hash is BcryptHashPinTest-equivalent stable; no drift).
+--
+--    TASK-BE-312: tenant_id='*' (platform-scope sentinel — matches the
+--    admin_operators row below). `CredentialAuthenticationProvider` (BE-309)
+--    propagates this onto the JWT `tenant_id` claim during the
+--    authorization_code grant. finance-account-service `TenantClaimValidator`
+--    accepts only `tenant_id='*'` (wildcard) OR `tenant_id='finance'` on
+--    inbound JWTs (multi-tenancy.md §Tenant Model + finance-platform
+--    architecture.md §Service-level OAuth2 tenant gate); seeding 'gap' here
+--    surfaced as a 403 TENANT_FORBIDDEN on the Operator Overview finance leg.
+--    The wildcard preserves the OIDC client/registration scope ('gap')
+--    independently — those are V0015 PUBLIC client artifacts and unrelated to
+--    the runtime tenant claim. account_id is a fresh UUID — auth-service does
+--    not back-reference the account-service row for this e2e environment
+--    because LoginUseCase's account-status call is bypassed by the BE-309
+--    form-login path (architectural divergence documented in BE-309 spec).
 -- ---------------------------------------------------------------------------
 USE `auth_db`;
 
@@ -91,7 +101,7 @@ INSERT IGNORE INTO credentials (
     updated_at,
     version
 ) VALUES (
-    'gap',
+    '*',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
     'e2e-super-admin@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
