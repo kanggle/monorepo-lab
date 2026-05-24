@@ -1,19 +1,15 @@
 package com.example.account.domain.account;
 
-import com.example.account.domain.event.AccountDomainEvent;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.AccountStatusMachine;
 import com.example.account.domain.status.StatusChangeReason;
 import com.example.account.domain.status.StatusTransition;
 import com.example.account.domain.tenant.TenantId;
-import com.example.common.id.UuidV7;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Aggregate root for account domain.
@@ -163,116 +159,5 @@ public class Account {
         }
 
         return transition;
-    }
-
-    public AccountDomainEvent buildCreatedEvent(String emailHash, String locale) {
-        return new AccountDomainEvent("account.created", Map.of(
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "emailHash", emailHash,
-                "status", status.name(),
-                "locale", locale,
-                "createdAt", createdAt.toString()
-        ));
-    }
-
-    public AccountDomainEvent buildStatusChangedEvent(String previousStatus, String reasonCode,
-                                                       String actorType, String actorId,
-                                                       Instant occurredAt) {
-        Map<String, Object> payload = new HashMap<>(Map.of(
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "previousStatus", previousStatus,
-                "currentStatus", status.name(),
-                "reasonCode", reasonCode,
-                "actorType", actorType,
-                "occurredAt", occurredAt.toString()
-        ));
-        if (actorId != null) {
-            payload.put("actorId", actorId);
-        }
-        return new AccountDomainEvent("account.status.changed", payload);
-    }
-
-    public AccountDomainEvent buildLockedEvent(String reasonCode, String actorType,
-                                                String actorId, Instant lockedAt) {
-        // TASK-BE-118: account.locked.eventId must be UUID v7 per
-        // specs/contracts/events/account-events.md so security-service can use it
-        // as a time-ordered idempotency key (account_lock_history.event_id).
-        Map<String, Object> payload = new HashMap<>(Map.of(
-                "eventId", UuidV7.randomString(),
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "reasonCode", reasonCode,
-                "actorType", actorType,
-                "lockedAt", lockedAt.toString()
-        ));
-        if (actorId != null) {
-            payload.put("actorId", actorId);
-        }
-        return new AccountDomainEvent("account.locked", payload);
-    }
-
-    public AccountDomainEvent buildUnlockedEvent(String reasonCode, String actorType,
-                                                  String actorId, Instant unlockedAt) {
-        Map<String, Object> payload = new HashMap<>(Map.of(
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "reasonCode", reasonCode,
-                "actorType", actorType,
-                "unlockedAt", unlockedAt.toString()
-        ));
-        if (actorId != null) {
-            payload.put("actorId", actorId);
-        }
-        return new AccountDomainEvent("account.unlocked", payload);
-    }
-
-    /**
-     * TASK-BE-231: Event emitted when the provisioning API mutates an account's role set.
-     *
-     * <p>TASK-BE-255: Schema bumped to v3. Adds {@code beforeRoles}, {@code afterRoles}
-     * and {@code changedBy} fields so downstream consumers can compute the diff
-     * directly without a separate snapshot store. The legacy {@code roles} field
-     * is preserved as an alias for {@code afterRoles} (forward-compat).
-     */
-    public AccountDomainEvent buildRolesChangedEvent(java.util.List<String> beforeRoles,
-                                                      java.util.List<String> afterRoles,
-                                                      String changedBy,
-                                                      String actorType, String actorId,
-                                                      Instant occurredAt) {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("accountId", id);
-        payload.put("tenantId", tenantId.value());
-        payload.put("roles", afterRoles);            // legacy alias (v2 consumers)
-        payload.put("beforeRoles", beforeRoles);     // TASK-BE-255 (v3)
-        payload.put("afterRoles", afterRoles);       // TASK-BE-255 (v3)
-        payload.put("actorType", actorType);
-        payload.put("occurredAt", occurredAt.toString());
-        if (actorId != null) {
-            payload.put("actorId", actorId);
-        }
-        if (changedBy != null) {
-            payload.put("changedBy", changedBy);     // TASK-BE-255 (v3)
-        }
-        return new AccountDomainEvent("account.roles.changed", payload);
-    }
-
-    public AccountDomainEvent buildDeletedEvent(String reasonCode, String actorType,
-                                                 String actorId, Instant deletedAt,
-                                                 Instant gracePeriodEndsAt, boolean anonymized) {
-        Map<String, Object> payload = new HashMap<>(Map.of(
-                "accountId", id,
-                "tenantId", tenantId.value(),
-                "reasonCode", reasonCode,
-                "actorType", actorType,
-                "deletedAt", deletedAt.toString(),
-                "gracePeriodEndsAt", gracePeriodEndsAt.toString(),
-                "anonymized", anonymized
-        ));
-        if (actorId != null) {
-            payload.put("actorId", actorId);
-        }
-        return new AccountDomainEvent("account.deleted", payload);
     }
 }

@@ -46,6 +46,9 @@ class AccountEventPublisherTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    @Spy
+    private AccountEventFactory factory = new AccountEventFactory();
+
     @InjectMocks
     private AccountEventPublisher publisher;
 
