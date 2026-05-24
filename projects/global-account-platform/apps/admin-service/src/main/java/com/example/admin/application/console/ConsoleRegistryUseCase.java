@@ -8,8 +8,6 @@ import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -48,20 +46,11 @@ public class ConsoleRegistryUseCase {
     private static final int MAX_TENANT_PAGES = 50;
     private static final String ACTIVE = "ACTIVE";
 
-    // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
-    private static final Logger BE_312 = LoggerFactory.getLogger("TASK-BE-312");
-
     private final AdminOperatorJpaRepository operatorRepository;
     private final ListTenantsUseCase listTenantsUseCase;
 
     public ConsoleRegistry execute(OperatorContext operator) {
         AdminOperator adminOperator = resolveOperator(operator);
-        // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
-        BE_312.info("registry:read operatorId={} financeDefaultAccountId={} status={} tenantId={}",
-                adminOperator.id(),
-                adminOperator.financeDefaultAccountId(),
-                adminOperator.status(),
-                adminOperator.tenantId());
 
         // Registered, ACTIVE tenant slugs (account-service owned). A SUSPENDED
         // or unregistered tenant is excluded by construction.
@@ -107,14 +96,8 @@ public class ConsoleRegistryUseCase {
         }
         String accountId = adminOperator.financeDefaultAccountId();
         if (!StringUtils.hasText(accountId)) {
-            // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
-            BE_312.info("registry:operatorContext operatorId={} emit=null reason=missing-or-blank-finance-default-account-id",
-                    adminOperator.id());
             return null;
         }
-        // TASK-BE-312 diagnostic — REMOVE before close chore (AC-8).
-        BE_312.info("registry:operatorContext operatorId={} emit.defaultAccountId={}",
-                adminOperator.id(), accountId);
         return new ProductOperatorContext(accountId);
     }
 
