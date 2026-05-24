@@ -82,114 +82,204 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String key = request.getHeader(HEADER);
-        if (key == null || key.isBlank()) {
-            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
-                    "Idempotency-Key header is required on mutating endpoints");
-            return;
-        }
-        if (key.length() > 64 || !UUID_PATTERN.matcher(key).matches()) {
-            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
-                    "Idempotency-Key must be a UUID");
+        if (!validateKey(key, response)) {
             return;
         }
 
         CachedBodyHttpServletRequest cachedRequest = new CachedBodyHttpServletRequest(request);
-        String method = cachedRequest.getMethod();
-        String path = cachedRequest.getRequestURI();
         String requestHash = sha256Hex(canonicalizer.canonicalize(cachedRequest.getBody()));
-        String storageKey = sha256Hex(key + ":" + method + ":" + path);
+        String storageKey = sha256Hex(key + ":" + cachedRequest.getMethod() + ":" + cachedRequest.getRequestURI());
 
-        // Entry lookup — fail closed on store errors
-        Optional<StoredResponse> existing;
+        Optional<StoredResponse> existing = lookupSafe(storageKey, response);
+        if (existing == null) {
+            return; // store error already written
+        }
+        if (existing.isPresent() && replayOrConflict(response, existing.get(), requestHash)) {
+            return;
+        }
+
+        if (!lockAndProceed(storageKey, requestHash, cachedRequest, response, chain)) {
+            return;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Key validation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Validates the Idempotency-Key header. Returns {@code true} if valid,
+     * {@code false} (and writes an error response) if invalid.
+     */
+    private boolean validateKey(String key, HttpServletResponse response) throws IOException {
+        if (key == null || key.isBlank()) {
+            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
+                    "Idempotency-Key header is required on mutating endpoints");
+            return false;
+        }
+        if (key.length() > 64 || !UUID_PATTERN.matcher(key).matches()) {
+            writeError(response, HttpServletResponse.SC_BAD_REQUEST, "VALIDATION_ERROR",
+                    "Idempotency-Key must be a UUID");
+            return false;
+        }
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Store lookup
+    // -------------------------------------------------------------------------
+
+    /**
+     * Looks up the store and returns the result. Returns {@code null} and writes
+     * an error response if the store is unavailable.
+     */
+    private Optional<StoredResponse> lookupSafe(String storageKey, HttpServletResponse response)
+            throws IOException {
         try {
-            existing = store.lookup(storageKey);
+            return store.lookup(storageKey);
         } catch (RuntimeException e) {
             log.error("Idempotency store unavailable on lookup", e);
             writeError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                     "Idempotency store is unavailable");
-            return;
+            return null;
         }
-        if (existing.isPresent()) {
-            if (replayOrConflict(response, existing.get(), requestHash)) {
-                return;
-            }
-        }
+    }
 
-        // Acquire processing lock (with bounded wait)
+    // -------------------------------------------------------------------------
+    // Lock acquisition + request execution
+    // -------------------------------------------------------------------------
+
+    /**
+     * Acquires the processing lock (with bounded wait), then executes the filter
+     * chain and persists the response. Returns {@code true} if the request
+     * completed normally, {@code false} if a response was already written (lock
+     * timeout, store error, or replay/conflict detected after lock).
+     */
+    private boolean lockAndProceed(String storageKey,
+                                   String requestHash,
+                                   CachedBodyHttpServletRequest cachedRequest,
+                                   HttpServletResponse response,
+                                   FilterChain chain) throws ServletException, IOException {
         boolean acquired;
         try {
-            acquired = store.tryAcquireLock(storageKey, lockTtl);
-            long deadline = System.currentTimeMillis() + lockWaitMax.toMillis();
-            while (!acquired && System.currentTimeMillis() < deadline) {
-                try {
-                    Thread.sleep(lockPoll.toMillis());
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-                Optional<StoredResponse> raced = store.lookup(storageKey);
-                if (raced.isPresent()) {
-                    if (replayOrConflict(response, raced.get(), requestHash)) {
-                        return;
-                    }
-                }
-                acquired = store.tryAcquireLock(storageKey, lockTtl);
-            }
+            acquired = acquireLockWithWait(storageKey, requestHash, response);
         } catch (RuntimeException e) {
             log.error("Idempotency store unavailable on lock", e);
             writeError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                     "Idempotency store is unavailable");
-            return;
+            return false;
         }
         if (!acquired) {
-            writeError(response, HttpServletResponse.SC_CONFLICT, "CONFLICT",
-                    "Idempotent retry in progress, please retry later");
-            return;
+            // Either a replay/conflict was already written, or timeout.
+            return false;
         }
 
         try {
             // Re-check after acquiring the lock to close the race window
             Optional<StoredResponse> recheck = store.lookup(storageKey);
-            if (recheck.isPresent()) {
-                if (replayOrConflict(response, recheck.get(), requestHash)) {
-                    return;
-                }
+            if (recheck.isPresent() && replayOrConflict(response, recheck.get(), requestHash)) {
+                return false;
             }
-
-            ContentCachingResponseWrapper cachedResponse = new ContentCachingResponseWrapper(response);
-            Throwable failure = null;
-            try {
-                chain.doFilter(cachedRequest, cachedResponse);
-            } catch (IOException | ServletException | RuntimeException ex) {
-                failure = ex;
-                throw ex;
-            } finally {
-                int status = cachedResponse.getStatus();
-                byte[] body = cachedResponse.getContentAsByteArray();
-                // Persist cached response on 2xx/4xx (not 5xx, not unhandled exceptions)
-                if (failure == null && status < 500) {
-                    try {
-                        store.put(storageKey, new StoredResponse(
-                                requestHash,
-                                status,
-                                new String(body, StandardCharsets.UTF_8),
-                                cachedResponse.getContentType(),
-                                Instant.now()
-                        ), ttl);
-                    } catch (RuntimeException ex) {
-                        log.warn("Idempotency store failed after commit (key hash={})", storageKey, ex);
-                    }
-                }
-                cachedResponse.copyBodyToResponse();
-            }
+            executeAndPersist(storageKey, requestHash, cachedRequest, response, chain);
+            return true;
         } finally {
-            try {
-                store.releaseLock(storageKey);
-            } catch (RuntimeException ex) {
-                log.warn("Failed to release idempotency lock (key hash={})", storageKey, ex);
-            }
+            releaseLockSafe(storageKey);
         }
     }
+
+    /**
+     * Attempts to acquire the lock within the configured wait window. During the
+     * wait, intermediate lookups may shortcut via replay/conflict. Returns
+     * {@code true} when the lock is held, {@code false} if timed out (and a
+     * CONFLICT response has already been written) or a replay/conflict was handled.
+     *
+     * <p>Callers must propagate any {@link RuntimeException} from the store.
+     */
+    private boolean acquireLockWithWait(String storageKey,
+                                        String requestHash,
+                                        HttpServletResponse response) throws IOException {
+        boolean acquired = store.tryAcquireLock(storageKey, lockTtl);
+        long deadline = System.currentTimeMillis() + lockWaitMax.toMillis();
+        while (!acquired && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(lockPoll.toMillis());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            Optional<StoredResponse> raced = store.lookup(storageKey);
+            if (raced.isPresent() && replayOrConflict(response, raced.get(), requestHash)) {
+                return false; // replay/conflict written — stop polling
+            }
+            acquired = store.tryAcquireLock(storageKey, lockTtl);
+        }
+        if (!acquired) {
+            writeError(response, HttpServletResponse.SC_CONFLICT, "CONFLICT",
+                    "Idempotent retry in progress, please retry later");
+            return false;
+        }
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Chain execution and response persistence
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executes the downstream filter chain, capturing the response body, and
+     * persists a successful (non-5xx, no exception) response into the idempotency
+     * store.
+     */
+    private void executeAndPersist(String storageKey,
+                                   String requestHash,
+                                   CachedBodyHttpServletRequest cachedRequest,
+                                   HttpServletResponse response,
+                                   FilterChain chain) throws ServletException, IOException {
+        ContentCachingResponseWrapper cachedResponse = new ContentCachingResponseWrapper(response);
+        Throwable failure = null;
+        try {
+            chain.doFilter(cachedRequest, cachedResponse);
+        } catch (IOException | ServletException | RuntimeException ex) {
+            failure = ex;
+            throw ex;
+        } finally {
+            int status = cachedResponse.getStatus();
+            byte[] body = cachedResponse.getContentAsByteArray();
+            // Persist cached response on 2xx/4xx (not 5xx, not unhandled exceptions)
+            if (failure == null && status < 500) {
+                persistResponseSafe(storageKey, requestHash, status, body,
+                        cachedResponse.getContentType());
+            }
+            cachedResponse.copyBodyToResponse();
+        }
+    }
+
+    private void persistResponseSafe(String storageKey, String requestHash,
+                                     int status, byte[] body, String contentType) {
+        try {
+            store.put(storageKey, new StoredResponse(
+                    requestHash,
+                    status,
+                    new String(body, StandardCharsets.UTF_8),
+                    contentType,
+                    Instant.now()
+            ), ttl);
+        } catch (RuntimeException ex) {
+            log.warn("Idempotency store failed after commit (key hash={})", storageKey, ex);
+        }
+    }
+
+    private void releaseLockSafe(String storageKey) {
+        try {
+            store.releaseLock(storageKey);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to release idempotency lock (key hash={})", storageKey, ex);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Replay / conflict resolution
+    // -------------------------------------------------------------------------
 
     /**
      * Writes a replay or a DUPLICATE_REQUEST error based on the stored hash.
@@ -219,6 +309,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Error writing
+    // -------------------------------------------------------------------------
+
     private void writeError(HttpServletResponse response, int status, String code, String message)
             throws IOException {
         response.setStatus(status);
@@ -228,6 +322,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.getOutputStream().write(body);
         response.getOutputStream().flush();
     }
+
+    // -------------------------------------------------------------------------
+    // Hashing utilities
+    // -------------------------------------------------------------------------
 
     private static String sha256Hex(String input) {
         try {

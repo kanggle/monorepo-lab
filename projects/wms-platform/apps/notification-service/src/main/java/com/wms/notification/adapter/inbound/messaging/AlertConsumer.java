@@ -1,6 +1,6 @@
 package com.wms.notification.adapter.inbound.messaging;
 
-import com.wms.notification.application.port.inbound.ProcessInboundEventUseCase;
+import com.wms.notification.application.port.in.ProcessInboundEventUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;

@@ -1,6 +1,6 @@
 package com.wms.notification.application.service.fakes;
 
-import com.wms.notification.application.port.outbound.RoutingRuleRepository;
+import com.wms.notification.application.port.out.RoutingRuleRepository;
 import com.wms.notification.domain.routing.RoutingRule;
 import java.util.ArrayList;
 import java.util.List;

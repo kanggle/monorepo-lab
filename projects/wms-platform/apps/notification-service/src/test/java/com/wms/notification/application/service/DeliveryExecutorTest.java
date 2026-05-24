@@ -2,8 +2,8 @@ package com.wms.notification.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.notification.application.port.outbound.ChannelPort;
-import com.wms.notification.application.port.outbound.SlackChannelPort;
+import com.wms.notification.application.port.out.ChannelPort;
+import com.wms.notification.application.port.out.SlackChannelPort;
 import com.wms.notification.application.service.fakes.InMemoryDeliveryRepository;
 import com.wms.notification.application.service.fakes.RecordingOutboxPort;
 import com.wms.notification.domain.delivery.DeliveryStatus;

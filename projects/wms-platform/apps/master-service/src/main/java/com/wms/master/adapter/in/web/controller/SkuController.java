@@ -2,6 +2,7 @@ package com.wms.master.adapter.in.web.controller;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.wms.master.adapter.in.web.controller.support.ControllerSupport;
 import com.wms.master.adapter.in.web.dto.request.CreateSkuRequest;
 import com.wms.master.adapter.in.web.dto.request.DeactivateSkuRequest;
 import com.wms.master.adapter.in.web.dto.request.ReactivateSkuRequest;
@@ -13,7 +14,6 @@ import com.wms.master.application.port.in.SkuQueryUseCase;
 import com.wms.master.application.query.ListSkusCriteria;
 import com.wms.master.application.query.ListSkusQuery;
 import com.wms.master.application.result.SkuResult;
-import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.model.BaseUom;
 import com.wms.master.domain.model.TrackingType;
 import com.wms.master.domain.model.WarehouseStatus;
@@ -53,7 +53,7 @@ public class SkuController {
         SkuResult result = crudUseCase.create(request.toCommand(actorId));
         return ResponseEntity
                 .created(URI.create("/api/v1/master/skus/" + result.id()))
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -61,7 +61,7 @@ public class SkuController {
     public ResponseEntity<SkuResponse> getById(@PathVariable UUID id) {
         SkuResult result = queryUseCase.findById(id);
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -70,7 +70,7 @@ public class SkuController {
         // Service uppercases internally; controller forwards raw input.
         SkuResult result = queryUseCase.findBySkuCode(skuCode);
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -78,7 +78,7 @@ public class SkuController {
     public ResponseEntity<SkuResponse> getByBarcode(@PathVariable String barcode) {
         SkuResult result = queryUseCase.findByBarcode(barcode);
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -93,12 +93,16 @@ public class SkuController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         ListSkusCriteria criteria = new ListSkusCriteria(
-                parseStatus(status),
+                ControllerSupport.parseEnum(status, WarehouseStatus.class,
+                        "status must be ACTIVE or INACTIVE"),
                 q,
-                parseTrackingType(trackingType),
-                parseBaseUom(baseUom),
+                ControllerSupport.parseEnum(trackingType, TrackingType.class,
+                        "trackingType must be one of NONE|LOT"),
+                ControllerSupport.parseEnum(baseUom, BaseUom.class,
+                        "baseUom must be one of EA|BOX|PLT|KG|L"),
                 barcode);
-        PageQuery pageQuery = PageQuery.of(page, size, sortField(sort), sortDirection(sort));
+        PageQuery pageQuery = PageQuery.of(page, size,
+                ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
         PageResult<SkuResult> result = queryUseCase.list(new ListSkusQuery(criteria, pageQuery));
         return PageResponse.from(result, sort, SkuResponse::from);
     }
@@ -110,7 +114,7 @@ public class SkuController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         SkuResult result = crudUseCase.update(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -121,7 +125,7 @@ public class SkuController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         SkuResult result = crudUseCase.deactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
     }
 
@@ -132,54 +136,7 @@ public class SkuController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         SkuResult result = crudUseCase.reactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(SkuResponse.from(result));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
-    }
-
-    private static WarehouseStatus parseStatus(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return WarehouseStatus.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("status must be ACTIVE or INACTIVE");
-        }
-    }
-
-    private static TrackingType parseTrackingType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return TrackingType.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("trackingType must be one of NONE|LOT");
-        }
-    }
-
-    private static BaseUom parseBaseUom(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return BaseUom.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("baseUom must be one of EA|BOX|PLT|KG|L");
-        }
-    }
-
-    private static String sortField(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? sort : sort.substring(0, comma);
-    }
-
-    private static String sortDirection(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? "asc" : sort.substring(comma + 1);
     }
 }

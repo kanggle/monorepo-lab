@@ -1,4 +1,4 @@
-package com.wms.notification.application.port.inbound;
+package com.wms.notification.application.port.in;
 
 import com.wms.notification.domain.alert.AlertEnvelope;
 

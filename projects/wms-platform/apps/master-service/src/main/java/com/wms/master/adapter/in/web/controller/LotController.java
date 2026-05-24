@@ -2,6 +2,7 @@ package com.wms.master.adapter.in.web.controller;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.wms.master.adapter.in.web.controller.support.ControllerSupport;
 import com.wms.master.adapter.in.web.dto.request.CreateLotRequest;
 import com.wms.master.adapter.in.web.dto.request.DeactivateLotRequest;
 import com.wms.master.adapter.in.web.dto.request.ReactivateLotRequest;
@@ -71,7 +72,7 @@ public class LotController {
         LotResult result = crudUseCase.create(request.toCommand(skuId, actorId));
         return ResponseEntity
                 .created(URI.create("/api/v1/master/lots/" + result.id()))
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LotResponse.from(result));
     }
 
@@ -79,7 +80,7 @@ public class LotController {
     public ResponseEntity<LotResponse> getById(@PathVariable UUID id) {
         LotResult result = queryUseCase.findById(id);
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LotResponse.from(result));
     }
 
@@ -93,10 +94,12 @@ public class LotController {
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         ListLotsCriteria criteria = new ListLotsCriteria(
                 skuId,
-                parseStatus(status),
+                ControllerSupport.parseEnum(status, LotStatus.class,
+                        "status must be one of ACTIVE|INACTIVE|EXPIRED"),
                 parseDate(expiryBefore, "expiryBefore"),
                 null);
-        PageQuery pageQuery = PageQuery.of(page, size, sortField(sort), sortDirection(sort));
+        PageQuery pageQuery = PageQuery.of(page, size,
+                ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
         PageResult<LotResult> result = queryUseCase.list(new ListLotsQuery(criteria, pageQuery));
         return PageResponse.from(result, sort, LotResponse::from);
     }
@@ -112,10 +115,12 @@ public class LotController {
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         ListLotsCriteria criteria = new ListLotsCriteria(
                 skuId,
-                parseStatus(status),
+                ControllerSupport.parseEnum(status, LotStatus.class,
+                        "status must be one of ACTIVE|INACTIVE|EXPIRED"),
                 parseDate(expiryBefore, "expiryBefore"),
                 parseDate(expiryAfter, "expiryAfter"));
-        PageQuery pageQuery = PageQuery.of(page, size, sortField(sort), sortDirection(sort));
+        PageQuery pageQuery = PageQuery.of(page, size,
+                ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
         PageResult<LotResult> result = queryUseCase.list(new ListLotsQuery(criteria, pageQuery));
         return PageResponse.from(result, sort, LotResponse::from);
     }
@@ -127,7 +132,7 @@ public class LotController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LotResult result = crudUseCase.update(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LotResponse.from(result));
     }
 
@@ -138,7 +143,7 @@ public class LotController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LotResult result = crudUseCase.deactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LotResponse.from(result));
     }
 
@@ -149,23 +154,8 @@ public class LotController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LotResult result = crudUseCase.reactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LotResponse.from(result));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
-    }
-
-    private static LotStatus parseStatus(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return LotStatus.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("status must be one of ACTIVE|INACTIVE|EXPIRED");
-        }
     }
 
     private static LocalDate parseDate(String raw, String fieldName) {
@@ -177,15 +167,5 @@ public class LotController {
         } catch (DateTimeParseException ex) {
             throw new ValidationException(fieldName + " must be ISO-8601 date (YYYY-MM-DD)");
         }
-    }
-
-    private static String sortField(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? sort : sort.substring(0, comma);
-    }
-
-    private static String sortDirection(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? "asc" : sort.substring(comma + 1);
     }
 }

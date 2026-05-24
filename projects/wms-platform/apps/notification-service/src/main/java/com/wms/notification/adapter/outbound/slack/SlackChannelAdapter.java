@@ -1,7 +1,7 @@
 package com.wms.notification.adapter.outbound.slack;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.notification.application.port.outbound.SlackChannelPort;
+import com.wms.notification.application.port.out.SlackChannelPort;
 import com.wms.notification.domain.error.ChannelNotConfiguredException;
 import com.wms.notification.domain.error.ChannelPermanentFailureException;
 import com.wms.notification.domain.routing.ChannelType;

@@ -1,6 +1,6 @@
 package com.wms.notification.application.service.fakes;
 
-import com.wms.notification.application.port.outbound.DeliveryRepository;
+import com.wms.notification.application.port.out.DeliveryRepository;
 import com.wms.notification.domain.delivery.DeliveryStatus;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import com.wms.notification.domain.error.IdempotencyKeyDuplicateException;

@@ -1,9 +1,9 @@
 package com.wms.notification.application.service;
 
-import com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase;
-import com.wms.notification.application.port.outbound.ChannelPort;
-import com.wms.notification.application.port.outbound.DeliveryRepository;
-import com.wms.notification.application.port.outbound.OutboxPort;
+import com.wms.notification.application.port.in.RetryFailedDeliveryUseCase;
+import com.wms.notification.application.port.out.ChannelPort;
+import com.wms.notification.application.port.out.DeliveryRepository;
+import com.wms.notification.application.port.out.OutboxPort;
 import com.wms.notification.domain.delivery.DeliveryStatus;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import io.micrometer.core.instrument.MeterRegistry;
