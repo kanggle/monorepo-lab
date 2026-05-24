@@ -57,12 +57,10 @@ public class LoginUseCase {
         String emailHash = hashEmail(command.email());
         SessionContext ctx = command.sessionContext();
 
-        // Determine tenant for rate-limiting key.
-        // If tenantId is specified, use it; otherwise fall back to "fan-platform" for key lookup.
+        // Tenant key for rate-limit lookup. tenantId absent -> "fan-platform" default.
         String tenantIdForRateLimit = command.tenantId() != null ? command.tenantId()
                 : TenantContext.DEFAULT_TENANT_ID;
 
-        // Check rate limit using tenant-aware key (TASK-BE-229).
         int failCount = loginAttemptCounter.getFailureCount(tenantIdForRateLimit, emailHash);
         if (failCount >= maxFailureCount) {
             authEventPublisher.publishLoginAttempted(null, emailHash, tenantIdForRateLimit, ctx);
@@ -71,75 +69,83 @@ public class LoginUseCase {
             throw new LoginRateLimitedException();
         }
 
-        // Publish login attempted event
         authEventPublisher.publishLoginAttempted(null, emailHash, tenantIdForRateLimit, ctx);
 
-        // TASK-BE-229: tenant-aware credential lookup.
-        // If tenantId is specified → single-tenant lookup.
-        // If tenantId is absent → cross-tenant lookup for ambiguity detection.
-        final Credential credential;
-        final String resolvedTenantId;
-
-        if (command.tenantId() != null && !command.tenantId().isBlank()) {
-            // Tenant-specific lookup
-            Optional<Credential> credentialOpt =
-                    credentialRepository.findByTenantIdAndEmail(command.tenantId(), command.email());
-            if (credentialOpt.isEmpty()) {
-                recordCredentialFailureAndThrow(null, emailHash, tenantIdForRateLimit, ctx);
-            }
-            credential = credentialOpt.get();
-            resolvedTenantId = command.tenantId();
-        } else {
-            // Cross-tenant lookup for ambiguity detection
-            List<Credential> credentials = credentialRepository.findAllByEmail(command.email());
-            if (credentials.isEmpty()) {
-                recordCredentialFailureAndThrow(null, emailHash, tenantIdForRateLimit, ctx);
-                // unreachable — recordCredentialFailureAndThrow always throws
-                throw new CredentialsInvalidException();
-            }
-            if (credentials.size() > 1) {
-                // Multiple tenants have the same email — require explicit tenantId
-                log.info("LOGIN_TENANT_AMBIGUOUS: email matches {} tenants; emailHash={}",
-                        credentials.size(), emailHash);
-                authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
-                        "LOGIN_TENANT_AMBIGUOUS", 0, ctx);
-                throw new LoginTenantAmbiguousException();
-            }
-            credential = credentials.get(0);
-            resolvedTenantId = credential.getTenantId();
-        }
-
+        CredentialResolution resolution =
+                resolveCredential(command, emailHash, tenantIdForRateLimit, ctx);
+        Credential credential = resolution.credential();
+        String resolvedTenantId = resolution.resolvedTenantId();
         String accountId = credential.getAccountId();
 
-        // Short-lived null-guard: if a credential row somehow carries a null hash, treat as invalid.
         if (credential.getCredentialHash() == null) {
             log.warn("Credential row has null hash for accountId={}; treating as invalid", accountId);
             recordCredentialFailureAndThrow(accountId, emailHash, resolvedTenantId, ctx);
         }
 
-        // Account status is still owned by account-service.
         Optional<AccountStatusLookupResult> statusOpt = accountServicePort.getAccountStatus(accountId);
         if (statusOpt.isEmpty()) {
             recordCredentialFailureAndThrow(accountId, emailHash, resolvedTenantId, ctx);
         }
-        AccountStatusLookupResult status = statusOpt.get();
+        checkAccountStatus(statusOpt.get().accountStatus(), accountId, emailHash, resolvedTenantId, ctx);
 
-        checkAccountStatus(status.accountStatus(), accountId, emailHash, resolvedTenantId, ctx);
-
-        // Verify password
-        boolean passwordValid = passwordHasher.verify(command.password(), credential.getCredentialHash());
-        if (!passwordValid) {
+        if (!passwordHasher.verify(command.password(), credential.getCredentialHash())) {
             recordCredentialFailureAndThrow(accountId, emailHash, resolvedTenantId, ctx);
         }
 
-        // Build tenant context for token issuance — tenantType is embedded in the credential.
-        // Currently credentials don't carry tenantType so we use the default mapping.
-        // TODO: when account-service exposes tenantType in credential lookup, use that value.
+        TokenPair tokenPair =
+                issueTokensAndPublishSuccess(accountId, resolvedTenantId, emailHash, ctx);
+        return LoginResult.of(tokenPair.accessToken(), tokenPair.refreshToken(), tokenPair.expiresIn());
+    }
+
+    /**
+     * TASK-BE-229: tenant-aware credential lookup. tenantId specified -> single-tenant
+     * findByTenantIdAndEmail; absent -> cross-tenant findAllByEmail with ambiguity detection.
+     *
+     * <p>Records failure side-effects (counter increment, event publish) and throws on every
+     * unsuccessful path. Returns the matched credential paired with the resolved tenantId.
+     */
+    private CredentialResolution resolveCredential(LoginCommand command, String emailHash,
+                                                    String tenantIdForRateLimit, SessionContext ctx) {
+        if (command.tenantId() != null && !command.tenantId().isBlank()) {
+            Optional<Credential> credentialOpt =
+                    credentialRepository.findByTenantIdAndEmail(command.tenantId(), command.email());
+            if (credentialOpt.isEmpty()) {
+                recordCredentialFailureAndThrow(null, emailHash, tenantIdForRateLimit, ctx);
+            }
+            return new CredentialResolution(credentialOpt.get(), command.tenantId());
+        }
+        List<Credential> credentials = credentialRepository.findAllByEmail(command.email());
+        if (credentials.isEmpty()) {
+            recordCredentialFailureAndThrow(null, emailHash, tenantIdForRateLimit, ctx);
+            // unreachable — recordCredentialFailureAndThrow always throws
+            throw new CredentialsInvalidException();
+        }
+        if (credentials.size() > 1) {
+            log.info("LOGIN_TENANT_AMBIGUOUS: email matches {} tenants; emailHash={}",
+                    credentials.size(), emailHash);
+            authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
+                    "LOGIN_TENANT_AMBIGUOUS", 0, ctx);
+            throw new LoginTenantAmbiguousException();
+        }
+        Credential credential = credentials.get(0);
+        return new CredentialResolution(credential, credential.getTenantId());
+    }
+
+    /**
+     * Login success path: register device_session, issue token pair, persist the refresh
+     * row with tenant_id, reset the failure counter, and publish auth.login.succeeded
+     * (+ auth.session.created when a new device_session was created).
+     *
+     * <p>Device session is touched BEFORE token issuance so the deviceId is available as a
+     * JWT claim and as a refresh_tokens.device_id stamp.
+     */
+    private TokenPair issueTokensAndPublishSuccess(String accountId, String resolvedTenantId,
+                                                    String emailHash, SessionContext ctx) {
+        // tenantType currently derives from the default mapping — when account-service
+        // exposes tenantType in credential lookup, use that value instead.
         String tenantType = TenantContext.resolveTenantType(resolvedTenantId);
         TenantContext tenantContext = new TenantContext(resolvedTenantId, tenantType);
 
-        // Login success — register/touch the device_session BEFORE issuing tokens so the
-        // device_id is available as a JWT claim and as a refresh_tokens.device_id stamp.
         RegisterDeviceSessionResult sessionResult =
                 registerOrUpdateDeviceSessionUseCase.execute(accountId, resolvedTenantId, ctx);
         String deviceId = sessionResult.deviceId();
@@ -147,7 +153,6 @@ public class LoginUseCase {
         TokenPair tokenPair = tokenGeneratorPort.generateTokenPair(accountId, "user", deviceId,
                 tenantContext);
 
-        // Extract JTI from refresh token and persist with tenant_id
         String refreshJti = tokenGeneratorPort.extractJti(tokenPair.refreshToken());
         Instant now = Instant.now();
         RefreshToken refreshTokenEntity = RefreshToken.create(
@@ -156,14 +161,11 @@ public class LoginUseCase {
                 now.plusSeconds(tokenGeneratorPort.refreshTokenTtlSeconds()),
                 null,
                 ctx.deviceFingerprint(),
-                deviceId
-        );
+                deviceId);
         refreshTokenRepository.save(refreshTokenEntity);
 
-        // Reset failure counter (tenant-aware key)
         loginAttemptCounter.resetFailureCount(resolvedTenantId, emailHash);
 
-        // Publish success events
         authEventPublisher.publishLoginSucceeded(accountId, refreshJti, resolvedTenantId,
                 ctx, deviceId, sessionResult.newSession());
         if (sessionResult.newSession()) {
@@ -177,8 +179,10 @@ public class LoginUseCase {
                     sessionResult.evictedDeviceIds());
         }
 
-        return LoginResult.of(tokenPair.accessToken(), tokenPair.refreshToken(), tokenPair.expiresIn());
+        return tokenPair;
     }
+
+    private record CredentialResolution(Credential credential, String resolvedTenantId) {}
 
     /**
      * SHA-256 of the raw fingerprint, hex-encoded. Used for {@code auth.session.created}
