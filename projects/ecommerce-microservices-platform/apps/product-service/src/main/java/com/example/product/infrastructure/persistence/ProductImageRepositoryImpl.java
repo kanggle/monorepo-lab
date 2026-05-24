@@ -10,11 +10,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class ProductImageRepositoryAdapter implements ProductImageRepository {
+class ProductImageRepositoryImpl implements ProductImageRepository {
 
     private final ProductImageJpaRepository jpaRepository;
 
-    ProductImageRepositoryAdapter(ProductImageJpaRepository jpaRepository) {
+    ProductImageRepositoryImpl(ProductImageJpaRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
     }
 

@@ -1,11 +1,11 @@
 package com.example.order.application.service;
 
 import com.example.order.application.dto.AdminOrderStatusChangeResult;
+import com.example.order.application.exception.InvalidOrderStatusException;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.repository.OrderRepository;
-import com.example.order.presentation.exception.InvalidOrderStatusException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,7 +43,7 @@ public class AdminOrderStatusService {
         return new AdminOrderStatusChangeResult(order.getOrderId(), order.getStatus().name());
     }
 
-    private OrderStatus parseStatus(String raw) {
+    private static OrderStatus parseStatus(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new InvalidOrderStatusException(raw);
         }

@@ -2,7 +2,7 @@ package com.example.order.presentation;
 
 import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
-import com.example.order.presentation.exception.InvalidOrderStatusException;
+import com.example.order.application.exception.InvalidOrderStatusException;
 
 public final class OrderControllerUtils {
 

@@ -1,4 +1,4 @@
-package com.example.order.presentation.exception;
+package com.example.order.application.exception;
 
 public class InvalidOrderStatusException extends RuntimeException {
 

@@ -15,8 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -126,7 +126,7 @@ class NotificationIntegrationTest {
         orderPlacedEventConsumer.onMessage(eventJson);
 
         // 3. 알림 이력 조회
-        PageResult<Notification> notifications = notificationRepository.findByUserId(userId, PageQuery.of(0, 20));
+        PageResult<Notification> notifications = notificationRepository.findByUserId(userId, new PageQuery(0, 20, null, null));
         assertThat(notifications.content()).hasSize(1);
         assertThat(notifications.content().get(0).getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notifications.content().get(0).getSubject()).contains(orderId);
@@ -167,7 +167,7 @@ class NotificationIntegrationTest {
         orderPlacedEventConsumer.onMessage(orderEventJson);
         orderPlacedEventConsumer.onMessage(orderEventJson);
 
-        PageResult<Notification> notifications = notificationRepository.findByUserId(userId, PageQuery.of(0, 100));
+        PageResult<Notification> notifications = notificationRepository.findByUserId(userId, new PageQuery(0, 100, null, null));
         long orderPlacedCount = notifications.content().stream()
                 .filter(n -> n.getEventId().equals(orderEventId))
                 .count();

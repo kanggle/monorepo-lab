@@ -16,11 +16,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class ProductRepositoryAdapter implements ProductRepository, ProductQueryPort {
+class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
 
     private final ProductJpaRepository jpaRepository;
 
-    ProductRepositoryAdapter(ProductJpaRepository jpaRepository) {
+    ProductRepositoryImpl(ProductJpaRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
     }
 

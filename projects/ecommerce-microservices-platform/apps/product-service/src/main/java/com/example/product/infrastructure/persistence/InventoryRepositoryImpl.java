@@ -12,11 +12,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class InventoryRepositoryAdapter implements InventoryRepository {
+class InventoryRepositoryImpl implements InventoryRepository {
 
     private final ProductVariantJpaRepository jpaRepository;
 
-    InventoryRepositoryAdapter(ProductVariantJpaRepository jpaRepository) {
+    InventoryRepositoryImpl(ProductVariantJpaRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
     }
 

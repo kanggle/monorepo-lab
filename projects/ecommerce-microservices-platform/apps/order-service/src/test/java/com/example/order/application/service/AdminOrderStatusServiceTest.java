@@ -9,7 +9,7 @@ import com.example.order.domain.model.OrderItem;
 import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.model.ShippingAddress;
 import com.example.order.domain.repository.OrderRepository;
-import com.example.order.presentation.exception.InvalidOrderStatusException;
+import com.example.order.application.exception.InvalidOrderStatusException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

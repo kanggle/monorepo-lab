@@ -1,8 +1,8 @@
 package com.example.notification.adapter.out.persistence.repository;
 
 import com.example.notification.adapter.out.persistence.mapper.TemplatePersistenceMapper;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.port.out.TemplateRepository;
 import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationTemplate;
@@ -47,12 +47,12 @@ public class TemplateRepositoryImpl implements TemplateRepository {
     public PageResult<NotificationTemplate> findAll(PageQuery pageQuery) {
         PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
         Page<NotificationTemplate> page = jpaRepository.findAll(pageable).map(mapper::toDomain);
-        return PageResult.of(
+        return new PageResult<>(
                 page.getContent(),
-                page.getTotalElements(),
-                page.getTotalPages(),
                 page.getNumber(),
-                page.getSize()
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages()
         );
     }
 }

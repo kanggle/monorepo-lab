@@ -1,6 +1,6 @@
 package com.example.notification.adapter.in.rest.dto.response;
 
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageResult;
 import com.example.notification.application.result.ListNotificationsResult;
 
 import java.util.List;

@@ -5,8 +5,8 @@ import com.example.notification.adapter.in.rest.dto.response.NotificationDetailR
 import com.example.notification.adapter.in.rest.dto.response.NotificationListResponse;
 import com.example.notification.adapter.in.rest.dto.response.PreferenceResponse;
 import com.example.notification.application.command.UpdatePreferenceCommand;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.result.GetNotificationResult;
 import com.example.notification.application.result.GetPreferenceResult;
 import com.example.notification.application.result.ListNotificationsResult;
@@ -35,7 +35,7 @@ public class NotificationController {
             @RequestParam(defaultValue = "20") int size
     ) {
         PageResult<ListNotificationsResult.NotificationSummary> notifications = notificationQueryService.getNotifications(
-                userId, PageQuery.of(page, size));
+                userId, new PageQuery(Math.max(page, 0), size < 1 ? 20 : Math.min(size, PageQuery.MAX_SIZE), null, null));
         return ResponseEntity.ok(NotificationListResponse.from(notifications));
     }
 

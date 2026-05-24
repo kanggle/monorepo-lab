@@ -1,8 +1,8 @@
 package com.example.notification.adapter.out.persistence.repository;
 
 import com.example.notification.adapter.out.persistence.mapper.NotificationPersistenceMapper;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.domain.model.Notification;
 import lombok.RequiredArgsConstructor;
@@ -36,12 +36,12 @@ public class NotificationRepositoryImpl implements NotificationRepository {
         PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
         Page<Notification> page = jpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
                 .map(mapper::toDomain);
-        return PageResult.of(
+        return new PageResult<>(
                 page.getContent(),
-                page.getTotalElements(),
-                page.getTotalPages(),
                 page.getNumber(),
-                page.getSize()
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages()
         );
     }
 

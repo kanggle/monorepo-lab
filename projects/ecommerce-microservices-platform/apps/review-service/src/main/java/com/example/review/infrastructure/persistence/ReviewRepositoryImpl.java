@@ -16,11 +16,11 @@ import org.springframework.stereotype.Repository;
 import java.util.*;
 
 @Repository
-class ReviewRepositoryAdapter implements ReviewRepository, ReviewQueryPort {
+class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
 
     private final ReviewJpaRepository jpaRepository;
 
-    ReviewRepositoryAdapter(ReviewJpaRepository jpaRepository) {
+    ReviewRepositoryImpl(ReviewJpaRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
     }
 

@@ -1,7 +1,7 @@
 package com.example.notification.application.service;
 
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.port.in.QueryNotificationUseCase;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.result.GetNotificationResult;
@@ -22,12 +22,12 @@ public class NotificationQueryService implements QueryNotificationUseCase {
 
     public PageResult<ListNotificationsResult.NotificationSummary> getNotifications(String userId, PageQuery pageQuery) {
         PageResult<Notification> pageResult = notificationRepository.findByUserId(userId, pageQuery);
-        return PageResult.of(
+        return new PageResult<>(
                 pageResult.content().stream().map(ListNotificationsResult.NotificationSummary::from).toList(),
-                pageResult.totalElements(),
-                pageResult.totalPages(),
                 pageResult.page(),
-                pageResult.size()
+                pageResult.size(),
+                pageResult.totalElements(),
+                pageResult.totalPages()
         );
     }
 

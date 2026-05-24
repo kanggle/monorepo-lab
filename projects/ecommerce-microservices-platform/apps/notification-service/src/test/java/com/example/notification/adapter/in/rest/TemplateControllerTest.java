@@ -1,6 +1,6 @@
 package com.example.notification.adapter.in.rest;
 
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageResult;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.domain.exception.TemplateAlreadyExistsException;
@@ -44,7 +44,7 @@ class TemplateControllerTest {
                 TemplateType.ORDER_PLACED, NotificationChannel.EMAIL,
                 "Subject", "Body");
 
-        PageResult<NotificationTemplate> pageResult = PageResult.of(List.of(template), 1L, 1, 0, 20);
+        PageResult<NotificationTemplate> pageResult = new PageResult<>(List.of(template), 0, 20, 1L, 1);
         given(templateService.getTemplates(any()))
                 .willReturn(pageResult);
 

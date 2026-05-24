@@ -13,10 +13,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -134,5 +136,20 @@ class NotificationSendServiceTest {
 
         verify(notificationRepository).save(argThat(n ->
                 n.getStatus() == NotificationStatus.FAILED && n.getRetryCount() == 1));
+    }
+
+    @Test
+    @DisplayName("senderMap은 생성자에서 한 번만 빌드되며 매 호출마다 동일 인스턴스를 반환한다")
+    void senderMap_cachedInConstructor_sameInstanceOnEveryCall() throws Exception {
+        given(emailSender.supportedChannel()).willReturn(NotificationChannel.EMAIL);
+        NotificationSendService service = new NotificationSendService(
+                notificationRepository, templateRepository, managePreferenceUseCase, List.of(emailSender));
+
+        Field field = NotificationSendService.class.getDeclaredField("senderMap");
+        field.setAccessible(true);
+        Object firstRef = field.get(service);
+        Object secondRef = field.get(service);
+
+        assertThat(firstRef).isSameAs(secondRef);
     }
 }
