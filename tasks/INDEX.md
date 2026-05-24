@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-134-dev-setup-hosts-drift-cleanup.md` — `scripts/dev-setup.{ps1,sh}` + `TEMPLATE.md § Hostname allocation` drift cleanup: finance/console/console-bff 3건 누락 추가 + mes 잔존 1건 제거 + 사용자 stray `scripts/add-console-hosts.ps1` 정리. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical 4-line script + 4-line doc + 1 파일 삭제).
 
 ## in-progress
 
