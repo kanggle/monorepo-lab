@@ -17,12 +17,4 @@ public record LoginCommand(
         String tenantId,
         SessionContext sessionContext
 ) {
-    /**
-     * @deprecated Use {@link #LoginCommand(String, String, String, SessionContext)}.
-     *             Retained for backwards compatibility; defaults tenantId to null (auto-detect).
-     */
-    @Deprecated
-    public LoginCommand(String email, String password, SessionContext sessionContext) {
-        this(email, password, null, sessionContext);
-    }
 }
