@@ -8,7 +8,7 @@ Platform-wide coding standards for all services and libraries.
 
 - Backend services: Java 21
 - Frontend: TypeScript (strict mode)
-- Build system: Gradle (JVM), pnpm + Turborepo (Node)
+- Build system: Gradle (JVM), pnpm (Node)
 
 ---
 

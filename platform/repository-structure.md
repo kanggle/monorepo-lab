@@ -1,47 +1,112 @@
 # Repository Structure
 
-Defines the top-level directory layout and ownership rules for the monorepo.
+Defines per-directory ownership and placement rules. **Canonical directory layout** is in [`../CLAUDE.md`](../CLAUDE.md) § Repository Layout (single source of truth); this file adds ownership notes and shape distinction on top.
 
 ---
 
-# Directory Layout
+# Repository Shapes
+
+This repository may be used either as a single-project repository or as a multi-project monorepo. The current shape is the **monorepo** (see `projects/` at repo root and `PROJECT.md` inside each).
+
+## Single-project shape
+
+Used when one project owns the entire repository.
 
 ```
 /
-├── apps/                    # Deployable services (owner: service team)
-├── libs/                    # Shared Java libraries (owner: platform team)
-├── packages/                # Shared TypeScript packages (owner: frontend team)
-├── specs/                   # Specifications — source of truth (owner: architecture team)
-│   ├── platform/
-│   ├── contracts/ (http/, events/, schemas/)
-│   ├── services/
-│   └── features/
-├── tasks/                   # Task lifecycle (owner: all teams)
-├── .claude/skills/          # AI implementation guidance (owner: platform team)
-├── knowledge/               # Design references (owner: all teams)
-├── docs/                    # Human-readable documentation (owner: all teams)
-├── infra/                   # Infrastructure monitoring configuration (alertmanager, grafana, prometheus)
-├── k8s/                     # Kubernetes manifests and deployment overlays
-├── load-tests/              # Load testing scenarios and scripts
-├── scripts/                 # Build, deploy, and utility scripts
-├── CLAUDE.md
-├── pnpm-workspace.yaml
-└── turbo.json
+├── apps/                    # Deployable services (owned by service teams)
+├── libs/                    # Shared Java libraries
+├── packages/                # Shared TypeScript packages (when frontend present)
+├── specs/                   # Specifications — source of truth
+├── tasks/                   # Implementation task lifecycle
+├── knowledge/               # Design references (non-authoritative)
+├── docs/                    # Human-oriented documentation
+├── infra/                   # Infrastructure configuration
+├── scripts/                 # Build / deploy / utility scripts
+├── .claude/                 # AI agent guidance
+├── platform/                # Platform specifications (this layer)
+├── rules/                   # Rule library (common + domain + traits)
+├── PROJECT.md               # Project classification (domain + traits)
+└── CLAUDE.md                # AI operating rules
 ```
 
-For the list of services under `apps/` and shared libraries under `libs/` and `packages/`, see `architecture.md`.
+## Multi-project monorepo shape
+
+Used when the repository hosts multiple projects sharing a library layer at the root.
+
+```
+/
+├── .claude/                 # Shared agent config (always)
+├── platform/                # Shared platform specs (always)
+├── rules/                   # Shared rule library (always)
+├── libs/                    # Shared Java libraries (always)
+├── packages/                # Shared TypeScript packages (when ≥ 2 frontend apps share)
+├── tasks/                   # Monorepo-level task lifecycle + tasks/templates/
+├── docs/                    # Shared human docs (adr/, guides/, project-overview.md)
+├── infra/                   # Shared infrastructure (observability stack, etc.)
+├── scripts/                 # Shared build / deploy / utility scripts
+├── build.gradle             # Root Gradle build
+├── settings.gradle          # Root Gradle settings (includes each project)
+├── CLAUDE.md                # AI operating rules
+├── TEMPLATE.md              # Template extraction guide
+├── README.md                # Portfolio hub
+└── projects/                # Project instances
+    ├── <project-a>/
+    │   ├── PROJECT.md       # Project classification (domain + traits)
+    │   ├── apps/            # Deployable services for this project
+    │   ├── specs/           # Project-internal specs
+    │   ├── tasks/           # Project-internal task lifecycle
+    │   ├── knowledge/       # Project design references
+    │   ├── docs/            # Project human docs (non-guides)
+    │   └── infra/           # Project-specific infrastructure
+    └── <project-b>/
+        └── ...
+```
+
+In the monorepo shape, the **library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `packages/` if present, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`) is shared across all projects and must remain project-agnostic.
+
+---
+
+# Ownership
+
+| Directory | Owner | Notes |
+|---|---|---|
+| `apps/` (single) or `projects/<p>/apps/` (mono) | Service team | One sub-dir per deployable service |
+| `libs/` | Platform team | Shared Java libs; technical reuse only — domain logic forbidden (`shared-library-policy.md`) |
+| `packages/` | Frontend team | Shared TypeScript packages; only when ≥ 2 apps share |
+| `specs/` (single) or `projects/<p>/specs/` (mono) | Architecture team | Source of truth: `contracts/`, `services/`, `features/`, `use-cases/` |
+| `tasks/` | All teams | Lifecycle: `backlog/` → `ready/` → `in-progress/` → `review/` → `done/`. Templates under `tasks/templates/` (shared) |
+| `.claude/skills/` | Platform team | AI implementation guidance — `SKILL.md` per skill folder, indexed in `INDEX.md` |
+| `.claude/agents/` | Platform team | Agent definitions — `common/` (always) + `domain/<d>/` (when domain-specific) |
+| `.claude/commands/` | Platform team | Slash command definitions |
+| `.claude/config/` | Platform team | Dispatch catalogs (`domains.md`, `traits.md`, `activation-rules.md`) |
+| `knowledge/` (single) or `projects/<p>/knowledge/` (mono) | All teams | Non-authoritative design references |
+| `docs/` | All teams | `adr/` (decisions), `guides/` (human-only, shared in monorepo), `project-overview.md` (monorepo only) |
+| `infra/` | Platform / DevOps | Observability stack, shared infrastructure configs |
+| `platform/` | Platform team | Platform specifications (this layer) |
+| `rules/` | Platform team | Rule library — `common.md`, `domains/<d>.md`, `traits/<t>.md`, `taxonomy.md` |
 
 ---
 
 # Rules
 
-- Do not create top-level directories without updating this document.
-- Service directories under `apps/` must correspond to services declared in `architecture.md`.
-- Shared libraries must pass the shared-library policy before being added to `libs/` or `packages/`.
-- Each service under `specs/services/` must have an `architecture.md`.
+- Do not create top-level directories without updating this document and `CLAUDE.md § Repository Layout`.
+- In monorepo shape, service directories MUST live under `projects/<p>/apps/`. Root-level `apps/` is reserved for single-project shape.
+- Each service under `<specs-scope>/services/` must have an `architecture.md` declaring its `Service Type`.
+- Shared libraries must pass `shared-library-policy.md` before being added to `libs/` or `packages/`.
+- Project-specific content (service names, paths, domain entities) MUST NOT appear in the shared library layer — Hard-Stop-enforced (HARDSTOP-03).
+
+---
+
+# Cross-references
+
+- [`../CLAUDE.md`](../CLAUDE.md) § Repository Layout — canonical layout
+- [`architecture.md`](architecture.md) § Repository Structure — shape summary
+- [`shared-library-policy.md`](shared-library-policy.md) — what may live in shared libraries
+- [`../TEMPLATE.md`](../TEMPLATE.md) — template extraction strategy (monorepo → standalone fork)
 
 ---
 
 # Change Rule
 
-Changes to the repository structure must be documented here before implementation.
+Changes to the directory layout (adding/removing top-level shared directories, changing the monorepo `projects/<name>/` shape) must be updated here AND in `CLAUDE.md § Repository Layout` in the same PR.

@@ -30,7 +30,7 @@
 | [deployment-policy.md](deployment-policy.md) | k8s 배포 환경 정책 |
 | [refactoring-policy.md](refactoring-policy.md) | 리팩토링 작업 기준 |
 | [glossary.md](glossary.md) | 플랫폼 공통 용어집 |
-| [service-types/](service-types/) | service-type별 파일 (rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app) |
+| [service-types/](service-types/) | service-type별 파일 (rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app, identity-platform). canonical 카탈로그는 [service-types/INDEX.md](service-types/INDEX.md) |
 | [contracts/](contracts/) | 플랫폼 전반에서 공유되는 cross-cutting 계약 (모든 프로젝트에 동일 적용) |
 | [contracts/jwt-standard-claims.md](contracts/jwt-standard-claims.md) | JWT 표준 클레임·서명·검증 계약 — 모든 identity-platform 서비스와 게이트웨이가 따르는 토큰 구조 |
 
