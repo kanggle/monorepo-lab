@@ -91,16 +91,17 @@ Default scaffolding (concrete libraries exist if the project chose to include th
 | `java-security` | Security helpers (JWT validation, role extraction) |
 | `java-test-support` | Test utilities (fixtures, Testcontainers wiring) |
 
-## TypeScript (`packages/`, when a frontend project is present)
+## TypeScript (`packages/`, when frontend shared packages are present)
 
-| Package | Purpose |
-|---|---|
-| `api-client` | HTTP client for frontend services |
-| `types` | Shared TypeScript types |
-| `ui` | Shared UI components (accessibility, design tokens) |
-| `utils` | Common utility functions |
-| `eslint-config` | Shared ESLint rules |
-| `tsconfig` | Shared TypeScript config |
+Root-level `packages/` may host TypeScript libraries shared across multiple frontend apps. Typical candidates (only added when ≥ 2 frontend apps need them, per `shared-library-policy.md`):
+
+- `api-client` — shared HTTP client
+- `types` — cross-app TypeScript types
+- `ui` — shared component primitives (a11y, design tokens)
+- `utils` — common utility functions
+- `eslint-config` / `tsconfig` — shared lint/compile config
+
+This catalog is illustrative — actual `packages/*` content is project-history-dependent. Frontend apps that don't need shared packages keep their dependencies internal to `<app>/`.
 
 Shared library placement rules: `shared-library-policy.md`
 
@@ -108,46 +109,9 @@ Shared library placement rules: `shared-library-policy.md`
 
 # Repository Structure
 
-This repository may be used either as a single-project repository or as a multi-project monorepo. The structure is:
+This repository may be used either as a single-project repository or as a multi-project monorepo. **Canonical layout** is defined in [`../CLAUDE.md`](../CLAUDE.md) § Repository Layout (single source of truth); per-directory ownership notes live in [`repository-structure.md`](repository-structure.md).
 
-## Single-project shape
-
-```
-apps/        # Services (deployable units) for this project
-libs/        # Shared Java libraries (truly generic)
-packages/    # Shared TypeScript packages (if frontend present)
-specs/       # Official specifications (source of truth)
-tasks/       # Implementation task lifecycle
-.claude/     # AI agent guidance
-platform/    # Platform specifications (this layer)
-rules/       # Rule library (common + domain + traits)
-knowledge/   # Design references (design-only, non-authoritative)
-docs/        # Human-oriented documentation
-PROJECT.md   # Project classification (domain + traits)
-CLAUDE.md    # AI operating rules
-```
-
-## Multi-project monorepo shape
-
-```
-.claude/, platform/, rules/, libs/, packages/    # Shared library layer at root
-tasks/templates/                                  # Task templates (shared)
-docs/guides/                                      # Human guides (shared)
-projects/                                         # Project instances
-├── <project-a>/
-│   ├── PROJECT.md
-│   ├── apps/
-│   ├── specs/
-│   ├── tasks/
-│   ├── knowledge/
-│   └── docs/
-└── <project-b>/
-    └── ...
-```
-
-In the monorepo shape, the **library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `packages/`, `tasks/templates/`, `docs/guides/`) is shared across all projects. Each project owns its own `apps/`, `specs/`, `tasks/`, `knowledge/`, `docs/` (non-guides).
-
-Full structure rules: `repository-structure.md`
+Key invariant for both shapes — the **shared library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`) is project-agnostic and must not contain project-specific content (service names, API paths, domain entities). Hard-Stop-enforced (HARDSTOP-03). In monorepo shape, project-specific content lives under `projects/<name>/` (`PROJECT.md`, `apps/`, `specs/`, `tasks/`, `knowledge/`, `docs/` non-guides, `infra/`).
 
 ---
 

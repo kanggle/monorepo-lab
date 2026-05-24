@@ -15,7 +15,9 @@ Defines how services are built, packaged, and deployed.
 
 # Build
 
-- All services are built via Gradle: `./gradlew :apps:{service}:bootJar`.
+- All services are built via Gradle. Path syntax depends on repository shape:
+  - Single-project: `./gradlew :apps:{service}:bootJar`
+  - Monorepo: `./gradlew :projects:{project}:apps:{service}:bootJar`
 - Build must succeed before any deployment.
 - Tests must pass before building a production image.
 

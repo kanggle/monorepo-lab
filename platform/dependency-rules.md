@@ -34,8 +34,8 @@ Decision rules for shared library placement: `shared-library-policy.md`
 # Frontend-to-Backend Dependencies
 
 ## Allowed
-- Frontend applications call backend services only through `gateway-service`.
-- Frontend uses `packages/api-client` for HTTP communication.
+- Frontend applications call backend services only through the project's gateway service (declared in `PROJECT.md`).
+- Frontend uses a shared HTTP client abstraction. If a root-level `packages/api-client` exists, it is the canonical client; otherwise each frontend app maintains its own client module under its own directory.
 
 ## Forbidden
 - Frontend calling service endpoints directly, bypassing the gateway.
@@ -45,13 +45,20 @@ Decision rules for shared library placement: `shared-library-policy.md`
 
 # Build and Module Dependencies
 
+Path syntax depends on repository shape (single-project vs monorepo — see `repository-structure.md`):
+
+| Shape | App location | Shared library location |
+|---|---|---|
+| Single-project | `apps/<service>` | `libs/<name>`, `packages/<name>` (if frontend present) |
+| Monorepo | `projects/<project>/apps/<service>` | `libs/<name>` at repo root, `packages/<name>` at repo root (when present) |
+
 ## Allowed
-- `apps/*` depends on `libs/*` and `packages/*`.
+- Apps depend on shared libraries (`libs/*`, `packages/*`).
 - `packages/*` depends on other `packages/*` if clearly scoped and non-circular.
 
 ## Forbidden
-- `libs/*` or `packages/*` depends on `apps/*`.
-- Circular module dependencies within the monorepo.
+- `libs/*` or `packages/*` depends on apps.
+- Circular module dependencies within the repository.
 
 ---
 
