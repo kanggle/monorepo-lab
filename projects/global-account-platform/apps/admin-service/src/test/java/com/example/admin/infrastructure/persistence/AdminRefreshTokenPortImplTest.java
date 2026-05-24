@@ -33,11 +33,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(AdminRefreshTokenJpaAdapter.class)
+@Import(AdminRefreshTokenPortImpl.class)
 @Testcontainers
 @ExtendWith(DockerAvailableCondition.class)
-@DisplayName("AdminRefreshTokenJpaAdapter — clearAutomatically regression")
-class AdminRefreshTokenJpaAdapterTest {
+@DisplayName("AdminRefreshTokenPortImpl — clearAutomatically regression")
+class AdminRefreshTokenPortImplTest {
 
     @Container
     @SuppressWarnings("resource")
@@ -57,7 +57,7 @@ class AdminRefreshTokenJpaAdapterTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
-    @Autowired AdminRefreshTokenJpaAdapter adapter;
+    @Autowired AdminRefreshTokenPortImpl adapter;
     @Autowired AdminOperatorRefreshTokenJpaRepository repository;
     @Autowired JdbcTemplate jdbc;
 

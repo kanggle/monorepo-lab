@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
+public class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
     private final SubscriptionJpaRepository jpa;
 

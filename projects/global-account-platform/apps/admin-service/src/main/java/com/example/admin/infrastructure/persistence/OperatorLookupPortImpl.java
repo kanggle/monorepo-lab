@@ -9,14 +9,14 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * JPA-backed adapter for {@link OperatorLookupPort}. Keeps the admin_operators
+ * JPA-backed implementation of {@link OperatorLookupPort}. Keeps the admin_operators
  * repository out of the application layer's import graph.
  *
  * <p>TASK-BE-249: {@code tenantId} is now included in {@link OperatorSummary}.
  */
 @Component
 @RequiredArgsConstructor
-public class OperatorLookupJpaAdapter implements OperatorLookupPort {
+public class OperatorLookupPortImpl implements OperatorLookupPort {
 
     private final AdminOperatorJpaRepository repository;
 

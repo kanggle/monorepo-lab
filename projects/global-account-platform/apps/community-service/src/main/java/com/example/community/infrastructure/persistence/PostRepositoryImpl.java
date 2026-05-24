@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class PostRepositoryAdapter implements PostRepository {
+public class PostRepositoryImpl implements PostRepository {
 
     private final PostJpaRepository postJpaRepository;
 

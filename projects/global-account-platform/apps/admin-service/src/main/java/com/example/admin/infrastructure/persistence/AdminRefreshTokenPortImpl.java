@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * JPA-backed adapter for {@link AdminRefreshTokenPort}. Delegates to
+ * JPA-backed implementation of {@link AdminRefreshTokenPort}. Delegates to
  * {@link AdminOperatorRefreshTokenJpaRepository}; introduced by
  * TASK-BE-040-fix to remove the application→infrastructure import path
  * previously present in {@code AdminRefreshTokenService},
@@ -16,13 +16,13 @@ import java.util.Optional;
  */
 @Component
 @RequiredArgsConstructor
-public class AdminRefreshTokenJpaAdapter implements AdminRefreshTokenPort {
+public class AdminRefreshTokenPortImpl implements AdminRefreshTokenPort {
 
     private final AdminOperatorRefreshTokenJpaRepository repository;
 
     @Override
     public Optional<TokenRecord> findByJti(String jti) {
-        return repository.findById(jti).map(AdminRefreshTokenJpaAdapter::toRecord);
+        return repository.findById(jti).map(AdminRefreshTokenPortImpl::toRecord);
     }
 
     @Override

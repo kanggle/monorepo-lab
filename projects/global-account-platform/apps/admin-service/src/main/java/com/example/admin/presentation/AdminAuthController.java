@@ -288,19 +288,11 @@ public class AdminAuthController {
 
         try {
             java.util.List<String> codes = totpService.regenerateRecoveryCodes(operatorId);
-            auditor.record(new AdminActionAuditor.AuditRecord(
-                    auditId,
-                    ActionCode.OPERATOR_2FA_RECOVERY_REGENERATE,
-                    op,
-                    "OPERATOR",
-                    operatorId,
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_RECOVERY_REGENERATE,
+                    op.operatorId(), op.jti(),
                     AdminActionAuditor.REASON_SELF_RECOVERY_REGENERATE,
-                    null,
                     "regenerate:" + auditId,
-                    Outcome.SUCCESS,
-                    null,
-                    startedAt,
-                    Instant.now()));
+                    Outcome.SUCCESS, null, startedAt);
             // Plain-text codes are intentionally NOT logged (R4 compliance).
             return ResponseEntity.ok(new RegenerateRecoveryCodesResponse(codes));
         } catch (TotpNotEnrolledException ex) {
@@ -329,19 +321,10 @@ public class AdminAuthController {
 
         try {
             TotpEnrollmentService.EnrollmentResult result = totpService.enroll(operatorId);
-            auditor.record(new AdminActionAuditor.AuditRecord(
-                    auditId,
-                    ActionCode.OPERATOR_2FA_ENROLL,
-                    new OperatorContext(operatorId, bootstrap.jti()),
-                    "OPERATOR",
-                    operatorId,
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_ENROLL, operatorId, bootstrap.jti(),
                     AdminActionAuditor.REASON_SELF_ENROLLMENT,
-                    null,
                     "bootstrap:" + bootstrap.jti(),
-                    Outcome.SUCCESS,
-                    null,
-                    startedAt,
-                    Instant.now()));
+                    Outcome.SUCCESS, null, startedAt);
             BootstrapTokenService.Issued verifyToken = bootstrapTokenService.issue(
                     operatorId, java.util.Set.of(BootstrapTokenService.SCOPE_VERIFY));
             long ttl = java.time.Duration.between(Instant.now(), verifyToken.expiresAt()).getSeconds();
@@ -368,19 +351,10 @@ public class AdminAuthController {
 
         try {
             totpService.verify(operatorId, body.totpCode());
-            auditor.record(new AdminActionAuditor.AuditRecord(
-                    auditId,
-                    ActionCode.OPERATOR_2FA_VERIFY,
-                    new OperatorContext(operatorId, bootstrap.jti()),
-                    "OPERATOR",
-                    operatorId,
+            safeRecord(auditId, ActionCode.OPERATOR_2FA_VERIFY, operatorId, bootstrap.jti(),
                     AdminActionAuditor.REASON_SELF_ENROLLMENT,
-                    null,
                     "bootstrap:" + bootstrap.jti(),
-                    Outcome.SUCCESS,
-                    null,
-                    startedAt,
-                    Instant.now()));
+                    Outcome.SUCCESS, null, startedAt);
             return ResponseEntity.ok(new TotpVerifyResponse(true));
         } catch (InvalidTwoFaCodeException ex) {
             safeRecord(auditId, ActionCode.OPERATOR_2FA_VERIFY, operatorId, bootstrap.jti(),

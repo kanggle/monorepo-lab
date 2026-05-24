@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class ContentAccessPolicyRepositoryAdapter implements ContentAccessPolicyRepository {
+public class ContentAccessPolicyRepositoryImpl implements ContentAccessPolicyRepository {
 
     private final ContentAccessPolicyJpaRepository jpa;
 

@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class FeedSubscriptionRepositoryAdapter implements FeedSubscriptionRepository {
+public class FeedSubscriptionRepositoryImpl implements FeedSubscriptionRepository {
 
     private final FeedSubscriptionJpaRepository jpaRepository;
 

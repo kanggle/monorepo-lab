@@ -12,9 +12,9 @@ import com.example.auth.application.exception.EmailSendException;
  * unrelated email surface area to the application layer.</p>
  *
  * <p>Implementations live in {@code infrastructure/email/}. During development
- * the {@code Slf4jEmailSender} stub is registered automatically; a real
- * implementation should be marked {@code @Component} and named
- * {@code "realEmailSender"} so the stub backs off (see TASK-BE-108).</p>
+ * the {@code LoggingEmailSender} stub is active via {@code @Profile("!prod")};
+ * a real implementation should be annotated with {@code @Profile("prod")} so
+ * the profiles are disjoint (see TASK-BE-242).</p>
  */
 public interface EmailSenderPort {
 

@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class CommentRepositoryAdapter implements CommentRepository {
+public class CommentRepositoryImpl implements CommentRepository {
 
     private final CommentJpaRepository commentJpaRepository;
 
