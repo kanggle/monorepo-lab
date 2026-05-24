@@ -4,8 +4,6 @@ import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
 import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -42,19 +40,16 @@ public class ErpDepartmentsReadAdapter implements OperatorOverviewCompositionUse
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Map<String, Object> read(String tenantId, String credential) {
-        return (Map<String, Object>) client.get()
-                .uri(uriBuilder -> uriBuilder
+        return RestClientHelper.authenticatedGet(
+                client,
+                uriBuilder -> uriBuilder
                         .path("/api/erp/masterdata/departments")
                         .queryParam("active", true)
                         .queryParam("page", 0)
                         .queryParam("size", 1)
-                        .build())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential)
-                .header("X-Tenant-Id", tenantId)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(Map.class);
+                        .build(),
+                tenantId,
+                credential);
     }
 }

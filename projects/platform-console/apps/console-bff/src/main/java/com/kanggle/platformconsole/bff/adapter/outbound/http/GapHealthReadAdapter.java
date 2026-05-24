@@ -2,11 +2,8 @@ package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.util.Map;
 
 /**
  * GAP /actuator/health outbound leg for the Domain Health Overview composition.
@@ -25,21 +22,10 @@ import java.util.Map;
  * </ul>
  */
 @Component
-public class GapHealthReadAdapter implements DomainHealthCompositionUseCase.GapHealthReadPort {
-
-    private final RestClient client;
+public class GapHealthReadAdapter extends AbstractHealthReadAdapter
+        implements DomainHealthCompositionUseCase.GapHealthReadPort {
 
     public GapHealthReadAdapter(@Qualifier("gapRestClient") RestClient client) {
-        this.client = client;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> read() {
-        return (Map<String, Object>) client.get()
-                .uri("/actuator/health")
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(Map.class);
+        super(client);
     }
 }

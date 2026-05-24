@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { ApiError, FinanceUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { FinanceUnavailableError } from '@/shared/api/errors';
+import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
+import { newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the finance-ops same-origin proxy
@@ -33,47 +33,6 @@ import { logger, newRequestId } from '@/shared/lib/logger';
  *
  * No token / finance data is ever logged (confidential + F7).
  */
-export function mapFinanceError(
-  err: unknown,
-  requestId: string,
-): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code || 'UNAUTHORIZED', message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return NextResponse.json(
-      { code: err.code || 'TENANT_FORBIDDEN', message: 'not permitted' },
-      { status: 403 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 400/422 VALIDATION_ERROR / 404 ACCOUNT_NOT_FOUND / any unexpected
-    // status (incl. a stray 429 — finance has no documented 429, no
-    // Retry-After branch; the 429 falls through here as a passthrough,
-    // NOT into a fabricated backoff) → inline actionable.
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof FinanceUnavailableError) {
-    logger.warn('finance_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'finance unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('finance_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'SERVICE_UNAVAILABLE', message: 'finance unavailable' },
-    { status: 503 },
-  );
-}
+export const mapFinanceError = makeProxyErrorMapper('finance', FinanceUnavailableError);
 
 export { newRequestId };
