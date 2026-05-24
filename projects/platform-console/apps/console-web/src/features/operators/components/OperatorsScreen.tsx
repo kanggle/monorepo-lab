@@ -117,9 +117,27 @@ export function OperatorsScreen({
   const setProfile = useSetOperatorProfile();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
-  /** TASK-PC-FE-017 — track which row's profile-edit dialog is open. */
-  const [profileEditFor, setProfileEditFor] = useState<OperatorSummary | null>(
-    null,
+  /** TASK-PC-FE-017 — track which row's profile-edit dialog is open by
+   *  operatorId. TASK-PC-FE-031 — store the id (NOT the snapshot of the
+   *  row) so the dialog's `initialDefaultAccountId` prop tracks the live
+   *  list-query data. Snapshotting the row at click time captured the
+   *  cached `operatorContext.defaultAccountId` from BEFORE the most recent
+   *  setProfile mutation's invalidation refetch settled, which is what
+   *  surfaced as the operators-admin-profile.spec.ts:89 race (re-opened
+   *  dialog input empty). Deriving the row from the current list query
+   *  result via useMemo makes the prop reactive — the dialog re-fires its
+   *  useEffect on the next render and pre-populates with the fresh value. */
+  const [profileEditOperatorId, setProfileEditOperatorId] = useState<
+    string | null
+  >(null);
+  const profileEditFor = useMemo<OperatorSummary | null>(
+    () =>
+      profileEditOperatorId === null
+        ? null
+        : (page?.content.find(
+            (o: OperatorSummary) => o.operatorId === profileEditOperatorId,
+          ) ?? null),
+    [page, profileEditOperatorId],
   );
 
   const activeMutation = useMemo(() => {
@@ -498,7 +516,7 @@ export function OperatorsScreen({
                             }
                             onClick={() => {
                               setProfile.reset();
-                              setProfileEditFor(op);
+                              setProfileEditOperatorId(op.operatorId);
                             }}
                             data-testid={`action-edit-profile-${op.operatorId}`}
                           >
@@ -646,10 +664,10 @@ export function OperatorsScreen({
                 defaultAccountId,
                 reason,
               },
-              { onSuccess: () => setProfileEditFor(null) },
+              { onSuccess: () => setProfileEditOperatorId(null) },
             );
           }}
-          onCancel={() => setProfileEditFor(null)}
+          onCancel={() => setProfileEditOperatorId(null)}
         />
       )}
     </section>
