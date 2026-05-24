@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
-public class CredentialRepositoryAdapter implements CredentialRepository {
+public class CredentialRepositoryImpl implements CredentialRepository {
 
     private final CredentialJpaRepository credentialJpaRepository;
 

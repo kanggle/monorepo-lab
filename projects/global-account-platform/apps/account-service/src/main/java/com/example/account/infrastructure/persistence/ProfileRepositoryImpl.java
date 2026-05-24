@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class ProfileRepositoryAdapter implements ProfileRepository {
+public class ProfileRepositoryImpl implements ProfileRepository {
 
     private final ProfileJpaRepository jpaRepository;
 

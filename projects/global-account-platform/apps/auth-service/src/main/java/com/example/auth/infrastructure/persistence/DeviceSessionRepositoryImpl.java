@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class DeviceSessionRepositoryAdapter implements DeviceSessionRepository {
+public class DeviceSessionRepositoryImpl implements DeviceSessionRepository {
 
     private final DeviceSessionJpaRepository jpa;
 
