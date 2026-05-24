@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-313-provision-credential-tenant-id-pass-through.md` — spec PR (this PR) — task md + INDEX ready entry, no code change. **First "non-cycle-pattern" backlog drain post-TASK-MONO-014 cycle chain TERMINAL**. Root cause static-evident: `ProvisionAccountUseCase.execute` line 94 calls `authServicePort.createCredential(accountId, email, password)` — **omits tenantId**. `AuthServiceClient.doCreateCredential` line 89-94 body = `{accountId, email, password}` (no tenantId field). `CreateCredentialUseCase.execute` line 52 falls back null tenantId → `"fan-platform"`. Result: account row `tenant_id="wms"` but credential row `tenant_id="fan-platform"` → login back-call tenant scope check fails → 401. Surfaces as `TenantProvisioningE2ETest` 4 of 8 failures (step2_wms_login 401 + steps 3-5 cascade) — has been failing for **100+ consecutive nightlies** (`@Tag("full")` so PR CI never caught it). Confident-fix (PC-FE-031 ㉛ pattern carry-over): thread tenantId from ProvisionAccountCommand → AuthServicePort → AuthServiceClient body. AC scope = 8 (AC-1 nightly PASS + AC-2 DB tenant_id match + AC-3 SignupUseCase regression + AC-4-6 byte-unchanged hard invariants **29회째 zero-retrofit** + AC-7 push CI regression + AC-8 BE-303 3-dim). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical 1-arg pass-through across 4 files + 1 new IT case).
 
 ## in-progress
 
