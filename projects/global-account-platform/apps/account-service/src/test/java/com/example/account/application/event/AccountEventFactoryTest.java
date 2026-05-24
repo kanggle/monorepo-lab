@@ -1,5 +1,6 @@
-package com.example.account.domain.account;
+package com.example.account.application.event;
 
+import com.example.account.domain.account.Account;
 import com.example.account.domain.event.AccountDomainEvent;
 import com.example.account.domain.tenant.TenantId;
 import org.junit.jupiter.api.DisplayName;
@@ -11,8 +12,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("Account 도메인 이벤트 팩토리 메서드 단위 테스트")
-class AccountDomainEventTest {
+@DisplayName("AccountEventFactory — 이벤트 payload 빌더 단위 테스트")
+class AccountEventFactoryTest {
+
+    private final AccountEventFactory factory = new AccountEventFactory();
 
     private static final String EMAIL = "user@example.com";
     private static final String EMAIL_HASH = "abc1234567";
@@ -30,7 +33,7 @@ class AccountDomainEventTest {
     void buildCreatedEvent_containsAllContractFields() {
         Account account = newActiveAccount();
 
-        AccountDomainEvent event = account.buildCreatedEvent(EMAIL_HASH, LOCALE);
+        AccountDomainEvent event = factory.createdEvent(account,EMAIL_HASH, LOCALE);
 
         assertThat(event.eventType()).isEqualTo("account.created");
         Map<String, Object> p = event.payload();
@@ -48,7 +51,7 @@ class AccountDomainEventTest {
         Account account = newActiveAccount();
         Instant now = Instant.now();
 
-        AccountDomainEvent event = account.buildStatusChangedEvent(
+        AccountDomainEvent event = factory.statusChangedEvent(account,
                 "ACTIVE", "ADMIN_LOCK", ACTOR_TYPE, null, now);
 
         assertThat(event.eventType()).isEqualTo("account.status.changed");
@@ -65,7 +68,7 @@ class AccountDomainEventTest {
     void buildStatusChangedEvent_withActorId_inPayload() {
         Account account = newActiveAccount();
 
-        AccountDomainEvent event = account.buildStatusChangedEvent(
+        AccountDomainEvent event = factory.statusChangedEvent(account,
                 "ACTIVE", REASON_CODE, ACTOR_TYPE, ACTOR_ID, Instant.now());
 
         assertThat(event.payload().get("actorId")).isEqualTo(ACTOR_ID);
@@ -77,7 +80,7 @@ class AccountDomainEventTest {
         Account account = newActiveAccount();
         Instant lockedAt = Instant.now();
 
-        AccountDomainEvent event = account.buildLockedEvent(REASON_CODE, ACTOR_TYPE, null, lockedAt);
+        AccountDomainEvent event = factory.lockedEvent(account,REASON_CODE, ACTOR_TYPE, null, lockedAt);
 
         assertThat(event.eventType()).isEqualTo("account.locked");
         Map<String, Object> p = event.payload();
@@ -100,8 +103,8 @@ class AccountDomainEventTest {
     void buildLockedEvent_eachCallProducesUniqueEventId() {
         Account account = newActiveAccount();
 
-        String id1 = (String) account.buildLockedEvent(REASON_CODE, ACTOR_TYPE, null, Instant.now()).payload().get("eventId");
-        String id2 = (String) account.buildLockedEvent(REASON_CODE, ACTOR_TYPE, null, Instant.now()).payload().get("eventId");
+        String id1 = (String) factory.lockedEvent(account,REASON_CODE, ACTOR_TYPE, null, Instant.now()).payload().get("eventId");
+        String id2 = (String) factory.lockedEvent(account,REASON_CODE, ACTOR_TYPE, null, Instant.now()).payload().get("eventId");
 
         assertThat(id1).isNotEqualTo(id2);
         // TASK-BE-118: both eventIds must be UUID v7.
@@ -115,7 +118,7 @@ class AccountDomainEventTest {
         Account account = newActiveAccount();
         Instant unlockedAt = Instant.now();
 
-        AccountDomainEvent event = account.buildUnlockedEvent("ADMIN_UNLOCK", ACTOR_TYPE, ACTOR_ID, unlockedAt);
+        AccountDomainEvent event = factory.unlockedEvent(account,"ADMIN_UNLOCK", ACTOR_TYPE, ACTOR_ID, unlockedAt);
 
         assertThat(event.eventType()).isEqualTo("account.unlocked");
         assertThat(event.payload().get("accountId")).isEqualTo(account.getId());
@@ -131,7 +134,7 @@ class AccountDomainEventTest {
         Instant deletedAt = Instant.now();
         Instant gracePeriodEndsAt = deletedAt.plusSeconds(30L * 24 * 3600);
 
-        AccountDomainEvent event = account.buildDeletedEvent(
+        AccountDomainEvent event = factory.deletedEvent(account,
                 "USER_REQUEST", "user", ACTOR_ID, deletedAt, gracePeriodEndsAt, false);
 
         assertThat(event.eventType()).isEqualTo("account.deleted");
@@ -147,7 +150,7 @@ class AccountDomainEventTest {
         Account account = newActiveAccount();
         Instant deletedAt = Instant.now();
 
-        AccountDomainEvent event = account.buildDeletedEvent(
+        AccountDomainEvent event = factory.deletedEvent(account,
                 "USER_REQUEST", "system", null, deletedAt, deletedAt.plusSeconds(100), true);
 
         assertThat(event.payload().get("anonymized")).isEqualTo(true);

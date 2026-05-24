@@ -19,17 +19,20 @@ import java.time.Instant;
  * thanks to the signature change, fails to compile if a caller does not supply
  * the argument at all).
  *
- * <p>The tenantId value is validated here at the publisher boundary; the actual
- * payload injection happens inside {@link Account#buildCreatedEvent} and sibling
- * methods, which read {@code account.getTenantId()} directly. The explicit
- * parameter serves as a compile-time contract — callers must consciously supply
- * the tenant context.
+ * <p>The tenantId value is validated here at the publisher boundary; payload
+ * composition (event field names, optional-actor handling, UUID v7 stamping)
+ * lives in {@link AccountEventFactory}. The explicit parameter serves as a
+ * compile-time contract — callers must consciously supply the tenant context.
  */
 @Component
 public class AccountEventPublisher extends BaseEventPublisher {
 
-    public AccountEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
+    private final AccountEventFactory factory;
+
+    public AccountEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper,
+                                 AccountEventFactory factory) {
         super(outboxWriter, objectMapper);
+        this.factory = factory;
     }
 
     /**
@@ -46,7 +49,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
     public void publishAccountCreated(Account account, String tenantId, String locale) {
         requireTenantId(tenantId);
         String emailHash = DigestUtils.sha256Short(account.getEmail(), 10);
-        save(account.getId(), account.buildCreatedEvent(emailHash, locale));
+        save(account.getId(), factory.createdEvent(account, emailHash, locale));
     }
 
     /** @see #publishAccountCreated for transaction rationale. */
@@ -55,7 +58,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
                                      String reasonCode, String actorType, String actorId,
                                      Instant occurredAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildStatusChangedEvent(previousStatus, reasonCode,
+        save(account.getId(), factory.statusChangedEvent(account, previousStatus, reasonCode,
                 actorType, actorId, occurredAt));
     }
 
@@ -64,7 +67,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
     public void publishAccountLocked(Account account, String tenantId, String reasonCode,
                                      String actorType, String actorId, Instant lockedAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildLockedEvent(reasonCode, actorType, actorId, lockedAt));
+        save(account.getId(), factory.lockedEvent(account, reasonCode, actorType, actorId, lockedAt));
     }
 
     /** @see #publishAccountCreated for transaction rationale. */
@@ -72,7 +75,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
     public void publishAccountUnlocked(Account account, String tenantId, String reasonCode,
                                        String actorType, String actorId, Instant unlockedAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildUnlockedEvent(reasonCode, actorType, actorId, unlockedAt));
+        save(account.getId(), factory.unlockedEvent(account, reasonCode, actorType, actorId, unlockedAt));
     }
 
     /** @see #publishAccountCreated for transaction rationale. */
@@ -81,7 +84,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
                                       String actorType, String actorId,
                                       Instant deletedAt, Instant gracePeriodEndsAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildDeletedEvent(reasonCode, actorType, actorId,
+        save(account.getId(), factory.deletedEvent(account, reasonCode, actorType, actorId,
                 deletedAt, gracePeriodEndsAt, false));
     }
 
@@ -93,8 +96,9 @@ public class AccountEventPublisher extends BaseEventPublisher {
      * {@code roles} payload field is now an alias for {@code afterRoles} so
      * existing v2 consumers keep working unchanged. Add/remove use cases pass the
      * pre-mutation snapshot as {@code beforeRoles}; replace-all does the same.
+     *
+     * @see #publishAccountCreated for transaction rationale.
      */
-    /** @see #publishAccountCreated for transaction rationale. */
     @Transactional
     public void publishRolesChanged(Account account, String tenantId,
                                     java.util.List<String> beforeRoles,
@@ -103,7 +107,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
                                     String actorType, String actorId,
                                     java.time.Instant occurredAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildRolesChangedEvent(
+        save(account.getId(), factory.rolesChangedEvent(account,
                 beforeRoles, afterRoles, changedBy, actorType, actorId, occurredAt));
     }
 
@@ -113,7 +117,7 @@ public class AccountEventPublisher extends BaseEventPublisher {
                                                 String actorType, String actorId,
                                                 Instant deletedAt, Instant gracePeriodEndsAt) {
         requireTenantId(tenantId);
-        save(account.getId(), account.buildDeletedEvent(reasonCode, actorType, actorId,
+        save(account.getId(), factory.deletedEvent(account, reasonCode, actorType, actorId,
                 deletedAt, gracePeriodEndsAt, true));
     }
 
