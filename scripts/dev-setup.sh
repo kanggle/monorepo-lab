@@ -22,7 +22,9 @@ HOSTS=(
     "fan-platform.local"
     "scm.local"
     "erp.local"
-    "mes.local"
+    "finance.local"
+    "console.local"
+    "console-bff.local"
 )
 
 if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then

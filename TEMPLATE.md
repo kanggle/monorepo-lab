@@ -483,7 +483,9 @@ A monorepo-root `infra/traefik/docker-compose.yml` runs Traefik once, on host po
 | `fan-platform.local` | fan-platform | hostname routing |
 | `scm.local` | scm-platform | hostname routing from bootstrap |
 | `erp.local` | erp-platform | hostname routing from bootstrap |
-| `mes.local` | mes-platform | hostname routing from bootstrap |
+| `finance.local` | finance-platform | hostname routing |
+| `console.local` | platform-console (web) | hostname routing |
+| `console-bff.local` | platform-console (BFF) | hostname routing |
 
 New projects pick an unused `*.local` hostname and register it in this table in the bootstrap PR.
 
@@ -492,7 +494,7 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
 
 ```
-127.0.0.1  ecommerce.local wms.local gap.local fan-platform.local scm.local erp.local mes.local
+127.0.0.1  ecommerce.local wms.local gap.local fan-platform.local scm.local erp.local finance.local console.local console-bff.local
 ```
 
 (Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)

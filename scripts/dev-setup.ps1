@@ -21,7 +21,9 @@ $Hosts = @(
     'fan-platform.local',
     'scm.local',
     'erp.local',
-    'mes.local'
+    'finance.local',
+    'console.local',
+    'console-bff.local'
 )
 
 # Confirm running as Administrator
