@@ -13,7 +13,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class AccountRepositoryAdapter implements AccountRepository {
+public class AccountRepositoryImpl implements AccountRepository {
 
     private final AccountJpaRepository jpaRepository;
 

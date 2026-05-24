@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class AccountStatusHistoryRepositoryAdapter implements AccountStatusHistoryRepository {
+public class AccountStatusHistoryRepositoryImpl implements AccountStatusHistoryRepository {
 
     private final AccountStatusHistoryJpaRepository jpaRepository;
 

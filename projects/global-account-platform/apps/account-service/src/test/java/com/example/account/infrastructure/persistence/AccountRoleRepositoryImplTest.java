@@ -20,15 +20,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
- * TASK-BE-265: Unit tests for {@link AccountRoleRepositoryAdapter#addIfAbsent}
+ * TASK-BE-265: Unit tests for {@link AccountRoleRepositoryImpl#addIfAbsent}
  * concurrent-duplicate handling. The adapter must convert
  * {@link DataIntegrityViolationException} caused by MySQL {@code ER_DUP_ENTRY}
  * (1062) into an idempotent {@code false} (no-op) return, while re-throwing
  * other integrity violations (e.g. FK 1452) so callers still see them.
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AccountRoleRepositoryAdapter — TASK-BE-265")
-class AccountRoleRepositoryAdapterTest {
+@DisplayName("AccountRoleRepositoryImpl — TASK-BE-265")
+class AccountRoleRepositoryImplTest {
 
     private static final TenantId TENANT_ID = new TenantId("wms");
     private static final String ACCOUNT_ID = "acc-uuid-001";
@@ -41,7 +41,7 @@ class AccountRoleRepositoryAdapterTest {
     private AccountRoleJpaRepository jpaRepository;
 
     @InjectMocks
-    private AccountRoleRepositoryAdapter adapter;
+    private AccountRoleRepositoryImpl adapter;
 
     @Test
     @DisplayName("기존 row 가 없고 save 성공 → true")

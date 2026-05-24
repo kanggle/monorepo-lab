@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
+public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
 
     private final RefreshTokenJpaRepository refreshTokenJpaRepository;
 

@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class SocialIdentityRepositoryAdapter implements SocialIdentityRepository {
+public class SocialIdentityRepositoryImpl implements SocialIdentityRepository {
 
     private final SocialIdentityJpaRepository socialIdentityJpaRepository;
 

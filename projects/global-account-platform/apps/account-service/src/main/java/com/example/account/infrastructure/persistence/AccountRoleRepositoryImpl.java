@@ -13,7 +13,7 @@ import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class AccountRoleRepositoryAdapter implements AccountRoleRepository {
+public class AccountRoleRepositoryImpl implements AccountRoleRepository {
 
     /**
      * MySQL vendor error code for {@code ER_DUP_ENTRY} (duplicate key for a
