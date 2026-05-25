@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class BusinessPartnerRepositoryAdapter implements BusinessPartnerRepository {
+public class BusinessPartnerRepositoryImpl implements BusinessPartnerRepository {
 
     private final BusinessPartnerJpaRepository jpa;
 

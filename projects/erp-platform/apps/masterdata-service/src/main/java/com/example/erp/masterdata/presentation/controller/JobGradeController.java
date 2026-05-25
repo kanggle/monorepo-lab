@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/erp/masterdata/job-grades")
@@ -59,9 +58,7 @@ public class JobGradeController {
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         List<JobGradeView> data = service.listJobGrades(actor, page, size);
-        Map<String, Object> meta = Map.of("page", page, "size", size,
-                "totalElements", data.size());
-        return ResponseEntity.ok(ApiEnvelope.of(data, new java.util.LinkedHashMap<>(meta)));
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
     }
 
     @GetMapping("/{id}")

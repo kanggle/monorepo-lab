@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class JobGradeRepositoryAdapter implements JobGradeRepository {
+public class JobGradeRepositoryImpl implements JobGradeRepository {
 
     private final JobGradeJpaRepository jpa;
 

@@ -15,7 +15,7 @@ import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
-public class DepartmentRepositoryAdapter implements DepartmentRepository {
+public class DepartmentRepositoryImpl implements DepartmentRepository {
 
     private final DepartmentJpaRepository jpa;
 

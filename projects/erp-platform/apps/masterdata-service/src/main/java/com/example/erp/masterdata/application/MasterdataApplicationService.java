@@ -49,6 +49,7 @@ import com.example.erp.masterdata.domain.error.DomainErrors.MasterdataReferenceV
 import com.example.erp.masterdata.domain.error.DomainErrors.PermissionDeniedException;
 import com.example.erp.masterdata.domain.jobgrade.JobGrade;
 import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,9 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 /**
  * masterdata-service application service — the SINGLE {@code @Transactional}
@@ -77,12 +81,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MasterdataApplicationService {
 
-    private static final String AGG_DEPARTMENT = "department";
-    private static final String AGG_EMPLOYEE = "employee";
-    private static final String AGG_JOBGRADE = "jobgrade";
-    private static final String AGG_COSTCENTER = "costcenter";
-    private static final String AGG_BUSINESSPARTNER = "businesspartner";
-
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
     private final JobGradeRepository jobGradeRepository;
@@ -92,6 +90,7 @@ public class MasterdataApplicationService {
     private final AuthorizationPort authorizationPort;
     private final ClockPort clock;
     private final MasterdataEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     // ====================================================================
     // Department
@@ -122,7 +121,7 @@ public class MasterdataApplicationService {
         Department saved = departmentRepository.save(department);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_DEPARTMENT, saved.getId(), "CREATE_DEPARTMENT", null, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_DEPARTMENT, saved.getId(), "CREATE_DEPARTMENT", null, after, null, now);
         eventPublisher.publishDepartmentChanged(saved, ChangeKind.CREATED,
                 actor.actorId(), null, after, null);
         return DepartmentView.from(saved);
@@ -142,7 +141,7 @@ public class MasterdataApplicationService {
         Department saved = departmentRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_DEPARTMENT, saved.getId(), "UPDATE_DEPARTMENT", before, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_DEPARTMENT, saved.getId(), "UPDATE_DEPARTMENT", before, after, null, now);
         eventPublisher.publishDepartmentChanged(saved, ChangeKind.UPDATED,
                 actor.actorId(), before, after, null);
         return DepartmentView.from(saved);
@@ -177,7 +176,7 @@ public class MasterdataApplicationService {
         Department saved = departmentRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_DEPARTMENT, saved.getId(), "RETIRE_DEPARTMENT", before, after, cmd.reason(), now);
+        audit(actor, MasterdataEventPublisher.AGG_DEPARTMENT, saved.getId(), "RETIRE_DEPARTMENT", before, after, cmd.reason(), now);
         eventPublisher.publishDepartmentChanged(saved, ChangeKind.RETIRED,
                 actor.actorId(), before, null, cmd.reason());
         return DepartmentView.from(saved);
@@ -215,7 +214,7 @@ public class MasterdataApplicationService {
         Department saved = departmentRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_DEPARTMENT, saved.getId(), "MOVE_PARENT", before, after, cmd.reason(), now);
+        audit(actor, MasterdataEventPublisher.AGG_DEPARTMENT, saved.getId(), "MOVE_PARENT", before, after, cmd.reason(), now);
         eventPublisher.publishDepartmentChanged(saved, ChangeKind.PARENT_MOVED,
                 actor.actorId(), before, after, cmd.reason());
         return DepartmentView.from(saved);
@@ -257,9 +256,9 @@ public class MasterdataApplicationService {
                             "Employee number already in use: " + cmd.employeeNumber());
                 });
 
-        ensureActiveDepartment(cmd.departmentId(), actor.tenantId());
-        ensureActiveCostCenter(cmd.costCenterId(), actor.tenantId());
-        ensureActiveJobGrade(cmd.jobGradeId(), actor.tenantId());
+        ensureActive(departmentRepository::findById, Department::isActive, cmd.departmentId(), actor.tenantId(), "Department");
+        ensureActive(costCenterRepository::findById, CostCenter::isActive, cmd.costCenterId(), actor.tenantId(), "CostCenter");
+        ensureActive(jobGradeRepository::findById, JobGrade::isActive, cmd.jobGradeId(), actor.tenantId(), "JobGrade");
 
         LocalDate from = effectiveFrom(cmd.effectiveFrom(), now);
         Employee e = Employee.create(UuidV7.randomString(), actor.tenantId(),
@@ -268,7 +267,7 @@ public class MasterdataApplicationService {
         Employee saved = employeeRepository.save(e);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_EMPLOYEE, saved.getId(), "CREATE_EMPLOYEE", null, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_EMPLOYEE, saved.getId(), "CREATE_EMPLOYEE", null, after, null, now);
         eventPublisher.publishEmployeeChanged(saved, ChangeKind.CREATED,
                 actor.actorId(), null, after, null);
         return EmployeeView.from(saved);
@@ -282,13 +281,13 @@ public class MasterdataApplicationService {
         Instant now = clock.now();
 
         if (cmd.departmentId() != null) {
-            ensureActiveDepartment(cmd.departmentId(), actor.tenantId());
+            ensureActive(departmentRepository::findById, Department::isActive, cmd.departmentId(), actor.tenantId(), "Department");
         }
         if (cmd.costCenterId() != null) {
-            ensureActiveCostCenter(cmd.costCenterId(), actor.tenantId());
+            ensureActive(costCenterRepository::findById, CostCenter::isActive, cmd.costCenterId(), actor.tenantId(), "CostCenter");
         }
         if (cmd.jobGradeId() != null) {
-            ensureActiveJobGrade(cmd.jobGradeId(), actor.tenantId());
+            ensureActive(jobGradeRepository::findById, JobGrade::isActive, cmd.jobGradeId(), actor.tenantId(), "JobGrade");
         }
 
         Map<String, Object> before = snapshot(existing);
@@ -297,7 +296,7 @@ public class MasterdataApplicationService {
         Employee saved = employeeRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_EMPLOYEE, saved.getId(), "UPDATE_EMPLOYEE", before, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_EMPLOYEE, saved.getId(), "UPDATE_EMPLOYEE", before, after, null, now);
         eventPublisher.publishEmployeeChanged(saved, ChangeKind.UPDATED,
                 actor.actorId(), before, after, null);
         return EmployeeView.from(saved);
@@ -315,7 +314,7 @@ public class MasterdataApplicationService {
         Employee saved = employeeRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_EMPLOYEE, saved.getId(), "RETIRE_EMPLOYEE", before, after, cmd.reason(), now);
+        audit(actor, MasterdataEventPublisher.AGG_EMPLOYEE, saved.getId(), "RETIRE_EMPLOYEE", before, after, cmd.reason(), now);
         eventPublisher.publishEmployeeChanged(saved, ChangeKind.RETIRED,
                 actor.actorId(), before, null, cmd.reason());
         return EmployeeView.from(saved);
@@ -361,7 +360,7 @@ public class MasterdataApplicationService {
         JobGrade saved = jobGradeRepository.save(g);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_JOBGRADE, saved.getId(), "CREATE_JOBGRADE", null, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_JOBGRADE, saved.getId(), "CREATE_JOBGRADE", null, after, null, now);
         eventPublisher.publishJobGradeChanged(saved, ChangeKind.CREATED,
                 actor.actorId(), null, after, null);
         return JobGradeView.from(saved);
@@ -379,7 +378,7 @@ public class MasterdataApplicationService {
         JobGrade saved = jobGradeRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_JOBGRADE, saved.getId(), "UPDATE_JOBGRADE", before, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_JOBGRADE, saved.getId(), "UPDATE_JOBGRADE", before, after, null, now);
         eventPublisher.publishJobGradeChanged(saved, ChangeKind.UPDATED,
                 actor.actorId(), before, after, null);
         return JobGradeView.from(saved);
@@ -403,7 +402,7 @@ public class MasterdataApplicationService {
         JobGrade saved = jobGradeRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_JOBGRADE, saved.getId(), "RETIRE_JOBGRADE", before, after, cmd.reason(), now);
+        audit(actor, MasterdataEventPublisher.AGG_JOBGRADE, saved.getId(), "RETIRE_JOBGRADE", before, after, cmd.reason(), now);
         eventPublisher.publishJobGradeChanged(saved, ChangeKind.RETIRED,
                 actor.actorId(), before, null, cmd.reason());
         return JobGradeView.from(saved);
@@ -441,7 +440,7 @@ public class MasterdataApplicationService {
             throw new MasterdataDuplicateKeyException(
                     "CostCenter code already in use: " + cmd.code());
         });
-        ensureActiveDepartment(cmd.departmentId(), actor.tenantId());
+        ensureActive(departmentRepository::findById, Department::isActive, cmd.departmentId(), actor.tenantId(), "Department");
 
         LocalDate from = effectiveFrom(cmd.effectiveFrom(), now);
         CostCenter c = CostCenter.create(UuidV7.randomString(), actor.tenantId(),
@@ -450,7 +449,7 @@ public class MasterdataApplicationService {
         CostCenter saved = costCenterRepository.save(c);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_COSTCENTER, saved.getId(), "CREATE_COSTCENTER", null, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_COSTCENTER, saved.getId(), "CREATE_COSTCENTER", null, after, null, now);
         eventPublisher.publishCostCenterChanged(saved, ChangeKind.CREATED,
                 actor.actorId(), null, after, null);
         return CostCenterView.from(saved);
@@ -464,7 +463,7 @@ public class MasterdataApplicationService {
         Instant now = clock.now();
 
         if (cmd.departmentId() != null) {
-            ensureActiveDepartment(cmd.departmentId(), actor.tenantId());
+            ensureActive(departmentRepository::findById, Department::isActive, cmd.departmentId(), actor.tenantId(), "Department");
         }
 
         Map<String, Object> before = snapshot(existing);
@@ -472,7 +471,7 @@ public class MasterdataApplicationService {
         CostCenter saved = costCenterRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_COSTCENTER, saved.getId(), "UPDATE_COSTCENTER", before, after, null, now);
+        audit(actor, MasterdataEventPublisher.AGG_COSTCENTER, saved.getId(), "UPDATE_COSTCENTER", before, after, null, now);
         eventPublisher.publishCostCenterChanged(saved, ChangeKind.UPDATED,
                 actor.actorId(), before, after, null);
         return CostCenterView.from(saved);
@@ -496,7 +495,7 @@ public class MasterdataApplicationService {
         CostCenter saved = costCenterRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_COSTCENTER, saved.getId(), "RETIRE_COSTCENTER", before, after, cmd.reason(), now);
+        audit(actor, MasterdataEventPublisher.AGG_COSTCENTER, saved.getId(), "RETIRE_COSTCENTER", before, after, cmd.reason(), now);
         eventPublisher.publishCostCenterChanged(saved, ChangeKind.RETIRED,
                 actor.actorId(), before, null, cmd.reason());
         return CostCenterView.from(saved);
@@ -545,7 +544,7 @@ public class MasterdataApplicationService {
         BusinessPartner saved = businessPartnerRepository.save(b);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_BUSINESSPARTNER, saved.getId(), "CREATE_BUSINESSPARTNER",
+        audit(actor, MasterdataEventPublisher.AGG_BUSINESSPARTNER, saved.getId(), "CREATE_BUSINESSPARTNER",
                 null, after, null, now);
         eventPublisher.publishBusinessPartnerChanged(saved, ChangeKind.CREATED,
                 actor.actorId(), null, after, null);
@@ -571,7 +570,7 @@ public class MasterdataApplicationService {
         BusinessPartner saved = businessPartnerRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_BUSINESSPARTNER, saved.getId(), "UPDATE_BUSINESSPARTNER",
+        audit(actor, MasterdataEventPublisher.AGG_BUSINESSPARTNER, saved.getId(), "UPDATE_BUSINESSPARTNER",
                 before, after, null, now);
         eventPublisher.publishBusinessPartnerChanged(saved, ChangeKind.UPDATED,
                 actor.actorId(), before, after, null);
@@ -590,7 +589,7 @@ public class MasterdataApplicationService {
         BusinessPartner saved = businessPartnerRepository.save(existing);
 
         Map<String, Object> after = snapshot(saved);
-        audit(actor, AGG_BUSINESSPARTNER, saved.getId(), "RETIRE_BUSINESSPARTNER",
+        audit(actor, MasterdataEventPublisher.AGG_BUSINESSPARTNER, saved.getId(), "RETIRE_BUSINESSPARTNER",
                 before, after, cmd.reason(), now);
         eventPublisher.publishBusinessPartnerChanged(saved, ChangeKind.RETIRED,
                 actor.actorId(), before, null, cmd.reason());
@@ -665,33 +664,15 @@ public class MasterdataApplicationService {
                         "BusinessPartner not found: " + id));
     }
 
-    private void ensureActiveDepartment(String id, String tenantId) {
-        Department d = departmentRepository.findById(id, tenantId)
+    private <T> void ensureActive(BiFunction<String, String, Optional<T>> finder,
+                                   Predicate<T> activeCheck,
+                                   String id, String tenantId, String label) {
+        T entity = finder.apply(id, tenantId)
                 .orElseThrow(() -> new MasterdataNotFoundException(
-                        "Department not found: " + id));
-        if (!d.isActive()) {
+                        label + " not found: " + id));
+        if (!activeCheck.test(entity)) {
             throw new MasterdataNotFoundException(
-                    "Department " + id + " is not ACTIVE — cannot reference");
-        }
-    }
-
-    private void ensureActiveCostCenter(String id, String tenantId) {
-        CostCenter c = costCenterRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "CostCenter not found: " + id));
-        if (!c.isActive()) {
-            throw new MasterdataNotFoundException(
-                    "CostCenter " + id + " is not ACTIVE — cannot reference");
-        }
-    }
-
-    private void ensureActiveJobGrade(String id, String tenantId) {
-        JobGrade g = jobGradeRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "JobGrade not found: " + id));
-        if (!g.isActive()) {
-            throw new MasterdataNotFoundException(
-                    "JobGrade " + id + " is not ACTIVE — cannot reference");
+                    label + " " + id + " is not ACTIVE — cannot reference");
         }
     }
 
@@ -705,7 +686,7 @@ public class MasterdataApplicationService {
     private String toJson(Map<String, Object> m) {
         if (m == null) return null;
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(m);
+            return objectMapper.writeValueAsString(m);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize audit snapshot", e);
         }

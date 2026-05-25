@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +24,20 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
         if (meta != null && !meta.containsKey("timestamp")) {
             meta.put("timestamp", Instant.now().toString());
         }
+        return new ApiEnvelope<>(data, meta);
+    }
+
+    /**
+     * Convenience factory for paginated list responses. Produces the standard
+     * {@code { data, meta: { page, size, totalElements, timestamp } }} envelope
+     * used by all five master-data list endpoints.
+     */
+    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("page", page);
+        meta.put("size", size);
+        meta.put("totalElements", data.size());
+        meta.put("timestamp", Instant.now().toString());
         return new ApiEnvelope<>(data, meta);
     }
 }

@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class EmployeeRepositoryAdapter implements EmployeeRepository {
+public class EmployeeRepositoryImpl implements EmployeeRepository {
 
     private final EmployeeJpaRepository jpa;
 
