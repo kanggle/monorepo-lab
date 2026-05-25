@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class NodeStalenessRepositoryAdapter implements NodeStalenessRepository {
+public class NodeStalenessRepositoryImpl implements NodeStalenessRepository {
 
     private final NodeStalenessJpaRepository jpaRepository;
 

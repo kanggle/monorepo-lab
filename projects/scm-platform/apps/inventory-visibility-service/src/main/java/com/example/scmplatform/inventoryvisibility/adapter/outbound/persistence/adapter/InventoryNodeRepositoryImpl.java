@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class InventoryNodeRepositoryAdapter implements InventoryNodeRepository {
+public class InventoryNodeRepositoryImpl implements InventoryNodeRepository {
 
     private final InventoryNodeJpaRepository jpaRepository;
 

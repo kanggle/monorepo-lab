@@ -4,6 +4,7 @@ import com.example.scmplatform.procurement.application.AsnView;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.domain.error.AsnOverreceiptException;
 import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
+import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -37,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(AsnWebhookController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, WebhookSignatureVerifier.class})
 class AsnWebhookControllerSliceTest {
 
     private static final String URL = "/api/procurement/webhooks/asn";

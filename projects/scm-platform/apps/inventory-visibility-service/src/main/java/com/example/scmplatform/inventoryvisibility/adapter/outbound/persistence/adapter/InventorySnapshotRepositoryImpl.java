@@ -18,7 +18,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class InventorySnapshotRepositoryAdapter implements InventorySnapshotRepository {
+public class InventorySnapshotRepositoryImpl implements InventorySnapshotRepository {
 
     private final InventorySnapshotJpaRepository jpaRepository;
 

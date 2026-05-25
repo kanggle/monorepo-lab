@@ -1,6 +1,8 @@
 package com.example.scmplatform.procurement.application;
 
 import com.example.common.id.UuidV7;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.application.command.AcknowledgePurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.CancelPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.ConfirmPurchaseOrderCommand;
@@ -25,16 +27,17 @@ import com.example.scmplatform.procurement.domain.po.status.PoStatusHistory;
 import com.example.scmplatform.procurement.domain.po.status.PoStatusHistoryRepository;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
 import com.example.scmplatform.procurement.domain.supplier.repository.SupplierRepository;
-import com.example.common.page.PageQuery;
-import com.example.common.page.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Procurement application service — orchestrates PO lifecycle use cases on
@@ -55,6 +58,16 @@ import java.util.Optional;
 public class PurchaseOrderApplicationService {
 
     private static final String AGGREGATE_PO = "purchase_order";
+
+    /**
+     * Statuses where a duplicate supplier-ack webhook is a no-op (idempotent).
+     * The PO has already moved past SUBMITTED and another ack for the same PO
+     * must not re-apply the transition.
+     */
+    private static final Set<PoStatus> ALREADY_PAST_SUBMITTED = EnumSet.of(
+            PoStatus.ACKNOWLEDGED, PoStatus.CONFIRMED,
+            PoStatus.PARTIALLY_RECEIVED, PoStatus.RECEIVED,
+            PoStatus.SETTLED, PoStatus.CLOSED);
 
     private final PurchaseOrderRepository poRepository;
     private final PoStatusHistoryRepository historyRepository;
@@ -128,11 +141,8 @@ public class PurchaseOrderApplicationService {
         // 2) Apply state transition + history + outbox in this same transaction
         PoStatus previous = po.submit(actor.actorType());
         PurchaseOrder saved = poRepository.save(po);
-        historyRepository.save(PoStatusHistory.record(
-                saved.getId(), saved.getTenantId(),
-                previous, PoStatus.SUBMITTED,
-                actor.actorType(), actor.accountId(),
-                "supplier ref=" + result.supplierReceiptRef()));
+        recordTransition(saved, previous, PoStatus.SUBMITTED, actor.actorType(), actor.accountId(),
+                "supplier ref=" + result.supplierReceiptRef());
         auditLogRepository.save(AuditLog.of(
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(),
                 "SUBMIT", actor.accountId(), actor.actorType(),
@@ -148,10 +158,8 @@ public class PurchaseOrderApplicationService {
     @Transactional
     public PurchaseOrderView acknowledge(AcknowledgePurchaseOrderCommand cmd) {
         PurchaseOrder po = loadPo(cmd.poId(), cmd.tenantId());
-        // Idempotency: already-ACKNOWLEDGED PO with same supplier_ack_ref → no-op
-        if (po.getStatus() == PoStatus.ACKNOWLEDGED || po.getStatus() == PoStatus.CONFIRMED
-                || po.getStatus() == PoStatus.PARTIALLY_RECEIVED || po.getStatus() == PoStatus.RECEIVED
-                || po.getStatus() == PoStatus.SETTLED || po.getStatus() == PoStatus.CLOSED) {
+        // Idempotency: already past SUBMITTED PO with same supplier_ack_ref → no-op
+        if (ALREADY_PAST_SUBMITTED.contains(po.getStatus())) {
             log.info("Supplier ack received for PO {} already in status {} — treating as idempotent no-op",
                     po.getId(), po.getStatus());
             return PurchaseOrderView.from(po);
@@ -159,10 +167,8 @@ public class PurchaseOrderApplicationService {
 
         PoStatus previous = po.acknowledge(ActorType.SUPPLIER);
         PurchaseOrder saved = poRepository.save(po);
-        historyRepository.save(PoStatusHistory.record(
-                saved.getId(), saved.getTenantId(),
-                previous, PoStatus.ACKNOWLEDGED,
-                ActorType.SUPPLIER, null, "ack ref=" + cmd.supplierAckRef()));
+        recordTransition(saved, previous, PoStatus.ACKNOWLEDGED, ActorType.SUPPLIER, null,
+                "ack ref=" + cmd.supplierAckRef());
         auditLogRepository.save(AuditLog.of(
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(),
                 "ACKNOWLEDGE", null, ActorType.SUPPLIER,
@@ -180,10 +186,7 @@ public class PurchaseOrderApplicationService {
         PurchaseOrder po = loadPo(cmd.poId(), actor.tenantId());
         PoStatus previous = po.confirm(actor.actorType());
         PurchaseOrder saved = poRepository.save(po);
-        historyRepository.save(PoStatusHistory.record(
-                saved.getId(), saved.getTenantId(),
-                previous, PoStatus.CONFIRMED,
-                actor.actorType(), actor.accountId(), null));
+        recordTransition(saved, previous, PoStatus.CONFIRMED, actor.actorType(), actor.accountId(), null);
         auditLogRepository.save(AuditLog.of(
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(),
                 "CONFIRM", actor.accountId(), actor.actorType(),
@@ -201,10 +204,7 @@ public class PurchaseOrderApplicationService {
         PurchaseOrder po = loadPo(cmd.poId(), actor.tenantId());
         PoStatus previous = po.cancel(actor.actorType(), cmd.reason());
         PurchaseOrder saved = poRepository.save(po);
-        historyRepository.save(PoStatusHistory.record(
-                saved.getId(), saved.getTenantId(),
-                previous, PoStatus.CANCELED,
-                actor.actorType(), actor.accountId(), cmd.reason()));
+        recordTransition(saved, previous, PoStatus.CANCELED, actor.actorType(), actor.accountId(), cmd.reason());
         auditLogRepository.save(AuditLog.of(
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(),
                 "CANCEL", actor.accountId(), actor.actorType(),
@@ -247,11 +247,8 @@ public class PurchaseOrderApplicationService {
             // Apply to the PO aggregate — may transition PARTIALLY_RECEIVED / RECEIVED
             PoStatus previous = po.applyAsnLine(line.poLineId(), line.quantityShipped());
             if (previous != null && previous != po.getStatus()) {
-                historyRepository.save(PoStatusHistory.record(
-                        po.getId(), po.getTenantId(),
-                        previous, po.getStatus(),
-                        ActorType.SYSTEM, null,
-                        "ASN " + cmd.supplierAsnRef()));
+                recordTransition(po, previous, po.getStatus(), ActorType.SYSTEM, null,
+                        "ASN " + cmd.supplierAsnRef());
             }
         }
         asn.markReceivedNow();
@@ -286,7 +283,7 @@ public class PurchaseOrderApplicationService {
                                                 PoStatus status,
                                                 String supplierId,
                                                 PageQuery pageQuery) {
-        PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
+        PageRequest pageable = toPageable(pageQuery);
         Page<PurchaseOrder> page = poRepository.search(actor.tenantId(), status, supplierId, pageable);
         return new PageResult<>(
                 page.getContent().stream().map(PurchaseOrderView::from).toList(),
@@ -302,5 +299,34 @@ public class PurchaseOrderApplicationService {
     private PurchaseOrder loadPo(String poId, String tenantId) {
         return poRepository.findById(poId, tenantId)
                 .orElseThrow(() -> new PoNotFoundException("PO not found: " + poId));
+    }
+
+    /**
+     * Saves a {@code po_status_history} row for a single state transition.
+     * Consolidates the duplicated {@code historyRepository.save(PoStatusHistory.record(...))}
+     * calls across all 6 use-case methods (S7 audit-trail invariant).
+     */
+    private void recordTransition(PurchaseOrder po, PoStatus previous, PoStatus next,
+                                  ActorType actorType, String actorAccountId, String note) {
+        historyRepository.save(PoStatusHistory.record(
+                po.getId(), po.getTenantId(),
+                previous, next,
+                actorType, actorAccountId, note));
+    }
+
+    /**
+     * Converts a {@link PageQuery} to a Spring Data {@link PageRequest} preserving
+     * sort/direction information. Without this, the sort fields were silently
+     * discarded (bug fix — TASK-SCM-BE-016 L5).
+     */
+    private static PageRequest toPageable(PageQuery pageQuery) {
+        if (pageQuery.sortBy() == null || pageQuery.sortBy().isBlank()) {
+            return PageRequest.of(pageQuery.page(), pageQuery.size());
+        }
+        Sort.Direction direction = "desc".equalsIgnoreCase(pageQuery.sortDirection())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return PageRequest.of(pageQuery.page(), pageQuery.size(),
+                Sort.by(direction, pageQuery.sortBy()));
     }
 }

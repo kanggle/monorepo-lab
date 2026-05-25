@@ -2,7 +2,6 @@ package com.example.scmplatform.gateway.filter;
 
 import com.example.scmplatform.gateway.security.TenantClaimValidator;
 import java.util.Collection;
-import java.util.stream.Collectors;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -133,7 +132,7 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
     private String resolveRole(Jwt jwt) {
         Collection<String> multi = jwt.getClaimAsStringList("roles");
         if (multi != null && !multi.isEmpty()) {
-            return multi.stream().collect(Collectors.joining(","));
+            return String.join(",", multi);
         }
         Object single = jwt.getClaim("role");
         if (single instanceof String s && !s.isBlank()) {

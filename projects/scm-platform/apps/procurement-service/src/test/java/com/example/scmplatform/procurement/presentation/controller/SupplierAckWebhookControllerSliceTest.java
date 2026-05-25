@@ -5,6 +5,7 @@ import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
+import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(SupplierAckWebhookController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, WebhookSignatureVerifier.class})
 class SupplierAckWebhookControllerSliceTest {
 
     private static final String URL = "/api/procurement/webhooks/supplier-ack";

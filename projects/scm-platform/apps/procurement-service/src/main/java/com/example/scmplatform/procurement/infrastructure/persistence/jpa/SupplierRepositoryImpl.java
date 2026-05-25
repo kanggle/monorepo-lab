@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class SupplierRepositoryAdapter implements SupplierRepository {
+public class SupplierRepositoryImpl implements SupplierRepository {
 
     private final SupplierJpaRepository jpa;
 

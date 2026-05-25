@@ -44,14 +44,14 @@ public class WmsInventoryAdjustedConsumer {
                 log.error("Invalid wms envelope on topic={} offset={}; sending to DLT",
                         record.topic(), record.offset());
                 ack.acknowledge();
-                throw new WmsInventoryReceivedConsumer.InvalidEnvelopeException(
+                throw new WmsEnvelopeParser.InvalidEnvelopeException(
                         "Invalid envelope: missing required fields");
             }
 
             Map<String, Object> payload = envelope.payload();
-            String locationId = getStringField(payload, "locationId");
-            String skuId = getStringField(payload, "skuId");
-            long delta = getLongField(payload, "delta");
+            String locationId = WmsEnvelopeParser.getStringField(payload, "locationId");
+            String skuId = WmsEnvelopeParser.getStringField(payload, "skuId");
+            long delta = WmsEnvelopeParser.getLongField(payload, "delta");
 
             applicationService.applyInventoryAdjusted(
                     locationId, skuId, delta,
@@ -59,25 +59,12 @@ public class WmsInventoryAdjustedConsumer {
                     TENANT_ID, TOPIC);
 
             ack.acknowledge();
-        } catch (WmsInventoryReceivedConsumer.InvalidEnvelopeException e) {
+        } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to process wms.inventory.adjusted: partition={} offset={} error={}",
                     record.partition(), record.offset(), e.getMessage(), e);
             throw new RuntimeException("Failed to process wms.inventory.adjusted event", e);
         }
-    }
-
-    private String getStringField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) throw new WmsInventoryReceivedConsumer.InvalidEnvelopeException("Missing field: " + key);
-        return val.toString();
-    }
-
-    private long getLongField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) return 0L;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
     }
 }

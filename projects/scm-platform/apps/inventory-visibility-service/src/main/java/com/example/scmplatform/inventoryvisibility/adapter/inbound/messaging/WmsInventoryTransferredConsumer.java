@@ -45,13 +45,13 @@ public class WmsInventoryTransferredConsumer {
                 log.error("Invalid wms envelope on topic={} offset={}; sending to DLT",
                         record.topic(), record.offset());
                 ack.acknowledge();
-                throw new WmsInventoryReceivedConsumer.InvalidEnvelopeException(
+                throw new WmsEnvelopeParser.InvalidEnvelopeException(
                         "Invalid envelope: missing required fields");
             }
 
             Map<String, Object> payload = envelope.payload();
-            String skuId = getStringField(payload, "skuId");
-            long quantity = getLongField(payload, "quantity");
+            String skuId = WmsEnvelopeParser.getStringField(payload, "skuId");
+            long quantity = WmsEnvelopeParser.getLongField(payload, "quantity");
 
             @SuppressWarnings("unchecked")
             Map<String, Object> source = (Map<String, Object>) payload.get("source");
@@ -59,12 +59,12 @@ public class WmsInventoryTransferredConsumer {
             Map<String, Object> target = (Map<String, Object>) payload.get("target");
 
             if (source == null || target == null) {
-                throw new WmsInventoryReceivedConsumer.InvalidEnvelopeException(
+                throw new WmsEnvelopeParser.InvalidEnvelopeException(
                         "Missing source or target in transfer payload");
             }
 
-            String sourceLocationId = getStringFieldFromMap(source, "locationId");
-            String targetLocationId = getStringFieldFromMap(target, "locationId");
+            String sourceLocationId = WmsEnvelopeParser.getStringField(source, "locationId");
+            String targetLocationId = WmsEnvelopeParser.getStringField(target, "locationId");
 
             applicationService.applyInventoryTransferred(
                     sourceLocationId, targetLocationId,
@@ -73,29 +73,12 @@ public class WmsInventoryTransferredConsumer {
                     TENANT_ID, TOPIC);
 
             ack.acknowledge();
-        } catch (WmsInventoryReceivedConsumer.InvalidEnvelopeException e) {
+        } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to process wms.inventory.transferred: partition={} offset={} error={}",
                     record.partition(), record.offset(), e.getMessage(), e);
             throw new RuntimeException("Failed to process wms.inventory.transferred event", e);
         }
-    }
-
-    private String getStringField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) throw new WmsInventoryReceivedConsumer.InvalidEnvelopeException("Missing field: " + key);
-        return val.toString();
-    }
-
-    private String getStringFieldFromMap(Map<String, Object> map, String key) {
-        return getStringField(map, key);
-    }
-
-    private long getLongField(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val == null) return 0L;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
     }
 }

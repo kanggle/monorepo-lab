@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class PurchaseOrderRepositoryAdapter implements PurchaseOrderRepository {
+public class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
 
     private final PurchaseOrderJpaRepository poJpa;
     private final PurchaseOrderLineJpaRepository lineJpa;
