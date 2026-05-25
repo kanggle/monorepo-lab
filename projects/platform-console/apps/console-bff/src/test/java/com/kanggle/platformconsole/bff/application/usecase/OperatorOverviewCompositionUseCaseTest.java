@@ -1,11 +1,11 @@
 package com.kanggle.platformconsole.bff.application.usecase;
 
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.CompositionLeg;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.ErpDepartmentsReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.FinanceBalanceReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.GapAccountsReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.ScmInventoryReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.WmsInventoryReadPort;
+import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.GapAccountsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.WmsInventoryReadPort;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;

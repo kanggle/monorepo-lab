@@ -1,7 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
-import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
+import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -26,7 +25,7 @@ import java.util.Map;
  * {@code asOf} so the producer applies "now" semantics).
  */
 @Component
-public class ErpDepartmentsReadAdapter implements OperatorOverviewCompositionUseCase.ErpDepartmentsReadPort {
+public class ErpDepartmentsReadAdapter implements ErpDepartmentsReadPort {
 
     private final RestClient client;
 

@@ -1,11 +1,11 @@
 package com.kanggle.platformconsole.bff.application.usecase;
 
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.CompositionLeg;
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.ErpHealthReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.FinanceHealthReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.GapHealthReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.ScmHealthReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase.WmsHealthReadPort;
+import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.GapHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.ScmHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import io.micrometer.core.instrument.Counter;
