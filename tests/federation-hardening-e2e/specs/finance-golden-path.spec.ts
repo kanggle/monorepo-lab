@@ -23,7 +23,7 @@ test.describe('Finance golden-path (account detail + balance)', () => {
   test('navigates to finance account detail and renders balance data', async ({
     page,
   }) => {
-    await page.goto(`/console/finance/accounts/${FINANCE_ACCOUNT_ID}`);
+    await page.goto('/finance');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/.+/);

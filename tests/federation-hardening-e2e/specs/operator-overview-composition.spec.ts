@@ -21,7 +21,7 @@ test.describe('Operator Overview composition (5-domain fan-out)', () => {
   test('renders 5-card grid with all 5 domains showing ok status', async ({
     page,
   }) => {
-    await page.goto('/console/dashboards/operator-overview');
+    await page.goto('/dashboards/overview');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/.+/);

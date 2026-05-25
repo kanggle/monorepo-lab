@@ -27,7 +27,7 @@ test.describe('ERP golden-path (employee list + effectivePeriod)', () => {
   test('navigates to ERP employees page and renders seed employee with effectivePeriod', async ({
     page,
   }) => {
-    await page.goto('/console/erp/employees');
+    await page.goto('/erp');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/.+/);

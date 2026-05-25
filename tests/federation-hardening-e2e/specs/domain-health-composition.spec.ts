@@ -20,7 +20,7 @@ test.describe('Domain Health composition (5-domain health attribution)', () => {
   test('renders 5-domain health attribution with all 5 domains UP', async ({
     page,
   }) => {
-    await page.goto('/console/dashboards/domain-health');
+    await page.goto('/dashboards/health');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/.+/);

@@ -20,7 +20,7 @@ test.describe('WMS golden-path (warehouse list)', () => {
   test('navigates to WMS warehouses page and renders seed warehouse row', async ({
     page,
   }) => {
-    await page.goto('/console/wms/warehouses');
+    await page.goto('/wms');
     await page.waitForLoadState('networkidle');
 
     // Assert page is not a blank shell or error page.

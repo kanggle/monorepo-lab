@@ -20,7 +20,7 @@ test.describe('SCM golden-path (purchase order list)', () => {
   test('navigates to SCM purchase orders page and renders seed PO row', async ({
     page,
   }) => {
-    await page.goto('/console/scm/purchase-orders');
+    await page.goto('/scm');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/.+/);
