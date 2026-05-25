@@ -8,11 +8,11 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-class FandomRepositoryAdapter implements FandomRepository {
+class FandomRepositoryImpl implements FandomRepository {
 
     private final FandomJpaRepository jpa;
 
-    FandomRepositoryAdapter(FandomJpaRepository jpa) {
+    FandomRepositoryImpl(FandomJpaRepository jpa) {
         this.jpa = jpa;
     }
 

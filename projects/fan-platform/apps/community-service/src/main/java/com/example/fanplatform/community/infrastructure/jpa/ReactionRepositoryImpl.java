@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class ReactionRepositoryAdapter implements ReactionRepository {
+public class ReactionRepositoryImpl implements ReactionRepository {
 
     private final ReactionJpaRepository jpa;
 

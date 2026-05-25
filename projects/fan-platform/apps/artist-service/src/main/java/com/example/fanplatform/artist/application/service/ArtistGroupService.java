@@ -2,7 +2,6 @@ package com.example.fanplatform.artist.application.service;
 
 import com.example.common.id.UuidV7;
 import com.example.fanplatform.artist.application.ActorContext;
-import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
 import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
 import com.example.fanplatform.artist.application.exception.ArtistGroupNotFoundException;
@@ -46,7 +45,7 @@ public class ArtistGroupService implements
     @Override
     @Transactional
     public ArtistGroupView create(CreateArtistGroupCommand cmd) {
-        requireAdmin(cmd.actor());
+        ActorGuard.requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
         if (groupRepository.existsByTenantIdAndName(tenantId, cmd.name())) {
             throw new GroupNameConflictException(cmd.name());
@@ -75,10 +74,10 @@ public class ArtistGroupService implements
     @Transactional
     public ArtistGroupView addMember(ActorContext actor, String groupId, String artistId,
                                      GroupRole role) {
-        requireAdmin(actor);
+        ActorGuard.requireAdmin(actor);
         String tenantId = actor.tenantId();
         ArtistGroup group = loadGroupOrThrow(groupId, tenantId);
-        ArtistId aid = parseArtistId(artistId);
+        ArtistId aid = ActorGuard.parseArtistId(artistId);
         if (artistRepository.existsInStatus(aid, tenantId, ArtistStatus.ARCHIVED)) {
             throw new ArtistArchivedException(artistId);
         }
@@ -99,10 +98,10 @@ public class ArtistGroupService implements
     @Override
     @Transactional
     public void removeMember(ActorContext actor, String groupId, String artistId) {
-        requireAdmin(actor);
+        ActorGuard.requireAdmin(actor);
         String tenantId = actor.tenantId();
         ArtistGroup group = loadGroupOrThrow(groupId, tenantId);
-        ArtistId aid = parseArtistId(artistId);
+        ArtistId aid = ActorGuard.parseArtistId(artistId);
         if (!groupRepository.existsActiveMembership(group.getId(), aid, tenantId)) {
             throw new ArtistNotFoundException(artistId);
         }
@@ -131,17 +130,4 @@ public class ArtistGroupService implements
         return found.orElseThrow(() -> new ArtistGroupNotFoundException(rawId));
     }
 
-    private static ArtistId parseArtistId(String rawId) {
-        try {
-            return ArtistId.of(rawId);
-        } catch (IllegalArgumentException e) {
-            throw new ArtistNotFoundException(rawId);
-        }
-    }
-
-    private static void requireAdmin(ActorContext actor) {
-        if (actor == null || !actor.isAdmin()) {
-            throw new AdminRoleRequiredException();
-        }
-    }
 }

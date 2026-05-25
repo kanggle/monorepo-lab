@@ -2,7 +2,6 @@ package com.example.fanplatform.artist.application.service;
 
 import com.example.common.id.UuidV7;
 import com.example.fanplatform.artist.application.ActorContext;
-import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.StageNameConflictException;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
@@ -19,6 +18,7 @@ import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistProfile;
 import com.example.fanplatform.artist.domain.artist.ArtistStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,7 +50,7 @@ public class ArtistManagementService implements
     @Override
     @Transactional
     public ArtistView register(RegisterArtistCommand cmd) {
-        requireAdmin(cmd.actor());
+        ActorGuard.requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
         // Pre-check stage_name uniqueness so we can return a clean 409 envelope
         // before the unique constraint fires (the constraint is the canonical
@@ -66,7 +66,15 @@ public class ArtistManagementService implements
                 tenantId,
                 cmd.artistType(),
                 profile);
-        Artist saved = artistRepository.insert(artist);
+        Artist saved;
+        try {
+            saved = artistRepository.insert(artist);
+        } catch (DataIntegrityViolationException e) {
+            if (mentionsStageNameConstraint(e)) {
+                throw new StageNameConflictException(cmd.stageName());
+            }
+            throw e;
+        }
         eventPublisher.publishArtistRegistered(saved, cmd.actor().accountId());
         // DRAFT artists do not appear in the public directory, so cache
         // invalidation is unnecessary on register. Publish/update/archive
@@ -77,7 +85,7 @@ public class ArtistManagementService implements
     @Override
     @Transactional
     public ArtistView update(UpdateArtistCommand cmd) {
-        requireAdmin(cmd.actor());
+        ActorGuard.requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
         Artist artist = loadOrThrow(cmd.artistId(), tenantId);
 
@@ -96,7 +104,15 @@ public class ArtistManagementService implements
         if (cmd.profileImageRef() != null) next = next.withProfileImageRef(cmd.profileImageRef());
 
         artist.updateProfile(next);
-        Artist saved = artistRepository.update(artist);
+        Artist saved;
+        try {
+            saved = artistRepository.update(artist);
+        } catch (DataIntegrityViolationException e) {
+            if (mentionsStageNameConstraint(e)) {
+                throw new StageNameConflictException(next.stageName());
+            }
+            throw e;
+        }
 
         List<String> changedFields = cmd.changedFields();
         if (!changedFields.isEmpty()) {
@@ -113,7 +129,7 @@ public class ArtistManagementService implements
     @Override
     @Transactional
     public ArtistView publish(ActorContext actor, String artistId) {
-        requireAdmin(actor);
+        ActorGuard.requireAdmin(actor);
         Artist artist = loadOrThrow(artistId, actor.tenantId());
         artist.publish();
         Artist saved = artistRepository.update(artist);
@@ -125,7 +141,7 @@ public class ArtistManagementService implements
     @Override
     @Transactional
     public ArtistView archive(ActorContext actor, String artistId, String reason) {
-        requireAdmin(actor);
+        ActorGuard.requireAdmin(actor);
         Artist artist = loadOrThrow(artistId, actor.tenantId());
         boolean wasPublished = artist.isPublished();
         artist.archive();
@@ -150,19 +166,22 @@ public class ArtistManagementService implements
     }
 
     private Artist loadOrThrow(String rawId, String tenantId) {
-        ArtistId id;
-        try {
-            id = ArtistId.of(rawId);
-        } catch (IllegalArgumentException e) {
-            throw new ArtistNotFoundException(rawId);
-        }
+        ArtistId id = ActorGuard.parseArtistId(rawId);
         Optional<Artist> found = artistRepository.findById(id, tenantId);
         return found.orElseThrow(() -> new ArtistNotFoundException(rawId));
     }
 
-    private static void requireAdmin(ActorContext actor) {
-        if (actor == null || !actor.isAdmin()) {
-            throw new AdminRoleRequiredException();
+    private static final String STAGE_NAME_CONSTRAINT = "uq_artists_tenant_stage_name";
+
+    private static boolean mentionsStageNameConstraint(Throwable t) {
+        Throwable cur = t;
+        while (cur != null) {
+            String msg = cur.getMessage();
+            if (msg != null && msg.toLowerCase().contains(STAGE_NAME_CONSTRAINT)) {
+                return true;
+            }
+            cur = cur.getCause();
         }
+        return false;
     }
 }

@@ -1,7 +1,6 @@
 package com.example.fanplatform.artist.application.service;
 
 import com.example.fanplatform.artist.application.ActorContext;
-import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotPublishedException;
 import com.example.fanplatform.artist.application.exception.FandomAlreadyExistsException;
@@ -40,9 +39,9 @@ public class FandomService implements CreateFandomUseCase, UpdateFandomUseCase, 
     @Override
     @Transactional
     public FandomView create(CreateFandomCommand cmd) {
-        requireAdmin(cmd.actor());
+        ActorGuard.requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
-        ArtistId aid = parseArtistId(cmd.artistId());
+        ArtistId aid = ActorGuard.parseArtistId(cmd.artistId());
 
         Artist artist = artistRepository.findById(aid, tenantId)
                 .orElseThrow(() -> new ArtistNotFoundException(cmd.artistId()));
@@ -61,9 +60,9 @@ public class FandomService implements CreateFandomUseCase, UpdateFandomUseCase, 
     @Override
     @Transactional
     public FandomView update(UpdateFandomCommand cmd) {
-        requireAdmin(cmd.actor());
+        ActorGuard.requireAdmin(cmd.actor());
         String tenantId = cmd.actor().tenantId();
-        ArtistId aid = parseArtistId(cmd.artistId());
+        ArtistId aid = ActorGuard.parseArtistId(cmd.artistId());
 
         Artist artist = artistRepository.findById(aid, tenantId)
                 .orElseThrow(() -> new ArtistNotFoundException(cmd.artistId()));
@@ -81,23 +80,10 @@ public class FandomService implements CreateFandomUseCase, UpdateFandomUseCase, 
     @Transactional(readOnly = true)
     public FandomView getByArtistId(ActorContext actor, String artistId) {
         String tenantId = actor.tenantId();
-        ArtistId aid = parseArtistId(artistId);
+        ArtistId aid = ActorGuard.parseArtistId(artistId);
         Fandom fandom = fandomRepository.findByArtistId(aid, tenantId)
                 .orElseThrow(() -> new FandomNotFoundException(artistId));
         return FandomView.from(fandom);
     }
 
-    private static ArtistId parseArtistId(String rawId) {
-        try {
-            return ArtistId.of(rawId);
-        } catch (IllegalArgumentException e) {
-            throw new ArtistNotFoundException(rawId);
-        }
-    }
-
-    private static void requireAdmin(ActorContext actor) {
-        if (actor == null || !actor.isAdmin()) {
-            throw new AdminRoleRequiredException();
-        }
-    }
 }

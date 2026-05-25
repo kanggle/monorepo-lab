@@ -15,15 +15,15 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-class ArtistGroupRepositoryAdapter implements ArtistGroupRepository {
+class ArtistGroupRepositoryImpl implements ArtistGroupRepository {
 
     private static final String GROUP_NAME_CONSTRAINT = "uq_artist_groups_tenant_name";
 
     private final ArtistGroupJpaRepository groupJpa;
     private final GroupMembershipJpaRepository memberJpa;
 
-    ArtistGroupRepositoryAdapter(ArtistGroupJpaRepository groupJpa,
-                                 GroupMembershipJpaRepository memberJpa) {
+    ArtistGroupRepositoryImpl(ArtistGroupJpaRepository groupJpa,
+                               GroupMembershipJpaRepository memberJpa) {
         this.groupJpa = groupJpa;
         this.memberJpa = memberJpa;
     }
