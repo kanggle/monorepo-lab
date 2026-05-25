@@ -67,7 +67,7 @@ INSERT IGNORE INTO balances (
 USE `erp_db`;
 
 INSERT IGNORE INTO departments (
-    id, tenant_id, code, name, parent_id,
+    id, tenant_id, code, name, parent_id, status,
     effective_from, effective_to,
     created_at, updated_at, version
 ) VALUES (
@@ -76,13 +76,14 @@ INSERT IGNORE INTO departments (
     'ROOT',
     'E2E Root Department',
     NULL,
+    'ACTIVE',
     '2020-01-01',
     NULL,
     NOW(6), NOW(6), 0
 );
 
 INSERT IGNORE INTO cost_centers (
-    id, tenant_id, code, name, department_id,
+    id, tenant_id, code, name, department_id, status,
     effective_from, effective_to,
     created_at, updated_at, version
 ) VALUES (
@@ -91,13 +92,14 @@ INSERT IGNORE INTO cost_centers (
     'CC-ROOT',
     'E2E Root Cost Center',
     'e2e-dept-001',
+    'ACTIVE',
     '2020-01-01',
     NULL,
     NOW(6), NOW(6), 0
 );
 
 INSERT IGNORE INTO job_grades (
-    id, tenant_id, code, name, display_order,
+    id, tenant_id, code, name, display_order, status,
     effective_from, effective_to,
     created_at, updated_at, version
 ) VALUES (
@@ -106,14 +108,20 @@ INSERT IGNORE INTO job_grades (
     'JG-L1',
     'E2E Job Grade L1',
     1,
+    'ACTIVE',
     '2020-01-01',
     NULL,
     NOW(6), NOW(6), 0
 );
 
+-- Per V1__init.sql line 38-55: employees columns are
+--   id, tenant_id, employee_number, name, department_id, cost_center_id,
+--   job_grade_id, status, effective_from, effective_to, created_at,
+--   updated_at, version
+-- (NOT full_name; cycle 3 fix corrects column name + adds required status).
 INSERT IGNORE INTO employees (
-    id, tenant_id, employee_number, full_name,
-    department_id, job_grade_id, cost_center_id,
+    id, tenant_id, employee_number, name,
+    department_id, cost_center_id, job_grade_id, status,
     effective_from, effective_to,
     created_at, updated_at, version
 ) VALUES (
@@ -122,8 +130,9 @@ INSERT IGNORE INTO employees (
     'EMP-0001',
     'E2E Test Employee',
     'e2e-dept-001',
-    'e2e-jg-001',
     'e2e-cc-001',
+    'e2e-jg-001',
+    'ACTIVE',
     '2020-01-01',
     NULL,
     NOW(6), NOW(6), 0
