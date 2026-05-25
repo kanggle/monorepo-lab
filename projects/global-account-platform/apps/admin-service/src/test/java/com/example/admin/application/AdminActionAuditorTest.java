@@ -1,14 +1,7 @@
 package com.example.admin.application;
 
-import com.example.admin.application.event.AdminEventPublisher;
-import com.example.admin.application.exception.AuditFailureException;
-import com.example.admin.application.port.OperatorLookupPort;
-import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
-import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -16,32 +9,30 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+/**
+ * Facade-level test for {@link AdminActionAuditor} after the TASK-BE-314 split.
+ * The auditor is now a thin delegator over {@link AdminActionAuditWriter};
+ * full write-path behavior (DB persistence, outbox publish, meta-audit
+ * fail-closed) is covered by {@link AdminActionAuditWriterTest}.
+ *
+ * <p>These cases assert ONLY that the facade forwards each public API call to
+ * the writer 1:1 with the same arguments — preserving the Spring AOP
+ * cross-bean call boundary that activates {@code @Transactional(REQUIRES_NEW)}.
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class AdminActionAuditorTest {
 
     @Mock
-    AdminActionJpaRepository repo;
+    AdminActionAuditWriter writer;
 
     @Mock
-    OperatorLookupPort operatorLookupPort;
-
-    @Mock
-    AdminEventPublisher publisher;
-
-    @Mock
-    MeterRegistry meterRegistry;
+    AdminActionDenyWriter denyWriter;
 
     @InjectMocks
     AdminActionAuditor auditor;
@@ -50,31 +41,24 @@ class AdminActionAuditorTest {
         return new OperatorContext("op-1", "jti-1");
     }
 
-    private void stubOperatorResolution() {
-        when(operatorLookupPort.findByOperatorId("op-1"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(42L, "op-1", "fan-platform")));
+    @Test
+    void newAuditId_returns_unique_uuid_v4_strings() {
+        String a = auditor.newAuditId();
+        String b = auditor.newAuditId();
+        assertThat(a).isNotBlank().isNotEqualTo(b);
+        verifyNoInteractions(writer, denyWriter);
     }
 
     @Test
-    void recordStart_propagates_db_failure_as_audit_failure_and_skips_event() {
-        stubOperatorResolution();
-        doThrow(new RuntimeException("db down")).when(repo).save(any());
-
-        AdminActionAuditor.StartRecord start = new AdminActionAuditor.StartRecord(
-                "audit-1", ActionCode.ACCOUNT_LOCK, op(),
-                "ACCOUNT", "acc-1", "fraud", null, "idemp",
-                Instant.now());
-
-        assertThatThrownBy(() -> auditor.recordStart(start))
-                .isInstanceOf(AuditFailureException.class);
-
-        verify(publisher, never()).publishAdminActionPerformed(any());
+    @SuppressWarnings("deprecation") // intentional: verifies the @Deprecated backcompat shim
+    void reserveAuditId_delegates_to_newAuditId_for_backcompat() {
+        String reserved = auditor.reserveAuditId();
+        assertThat(reserved).isNotBlank();
+        verifyNoInteractions(writer, denyWriter);
     }
 
     @Test
-    void recordStart_persists_in_progress_row_with_resolved_operator_fk() {
-        stubOperatorResolution();
-
+    void recordStart_forwards_to_writer_unchanged() {
         AdminActionAuditor.StartRecord start = new AdminActionAuditor.StartRecord(
                 "audit-1", ActionCode.ACCOUNT_LOCK, op(),
                 "ACCOUNT", "acc-1", "fraud", null, "idemp",
@@ -82,38 +66,11 @@ class AdminActionAuditorTest {
 
         auditor.recordStart(start);
 
-        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
-        verify(repo).save(captor.capture());
-        assertThat(captor.getValue().getOutcome()).isEqualTo("IN_PROGRESS");
-        assertThat(captor.getValue().getCompletedAt()).isNull();
-        assertThat(captor.getValue().getOperatorId()).isEqualTo(42L);
-        verify(publisher, never()).publishAdminActionPerformed(any());
+        verify(writer).recordStart(start);
     }
 
     @Test
-    void recordStart_throws_audit_failure_when_operator_row_missing() {
-        when(operatorLookupPort.findByOperatorId("op-1")).thenReturn(Optional.empty());
-
-        AdminActionAuditor.StartRecord start = new AdminActionAuditor.StartRecord(
-                "audit-1", ActionCode.ACCOUNT_LOCK, op(),
-                "ACCOUNT", "acc-1", "fraud", null, "idemp",
-                Instant.now());
-
-        assertThatThrownBy(() -> auditor.recordStart(start))
-                .isInstanceOf(AuditFailureException.class);
-
-        verify(repo, never()).save(any());
-        verify(publisher, never()).publishAdminActionPerformed(any());
-    }
-
-    @Test
-    void recordCompletion_finalizes_and_publishes_event() {
-        AdminActionJpaEntity entity = AdminActionJpaEntity.create(
-                "audit-1", "ACCOUNT_LOCK", "op-1", "UNKNOWN",
-                "ACCOUNT", "acc-1", "fraud", null, "idemp",
-                "IN_PROGRESS", null, Instant.now(), null);
-        when(repo.findByLegacyAuditId("audit-1")).thenReturn(Optional.of(entity));
-
+    void recordCompletion_forwards_to_writer_unchanged() {
         AdminActionAuditor.CompletionRecord done = new AdminActionAuditor.CompletionRecord(
                 "audit-1", ActionCode.ACCOUNT_LOCK, op(),
                 "ACCOUNT", "acc-1", "fraud", null, "idemp",
@@ -121,93 +78,65 @@ class AdminActionAuditorTest {
 
         auditor.recordCompletion(done);
 
-        assertThat(entity.getOutcome()).isEqualTo("SUCCESS");
-        assertThat(entity.getCompletedAt()).isNotNull();
-        verify(repo).save(entity);
-        verify(publisher).publishAdminActionPerformed(any());
+        verify(writer).recordCompletion(done);
     }
 
     @Test
-    void recordDenied_inserts_row_and_emits_event() {
-        // In unit scope SecurityContext is absent → operator UUID resolves to "unknown".
-        when(operatorLookupPort.findByOperatorId("unknown"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(7L, "unknown", "fan-platform")));
+    void record_delegates_to_writer_with_null_permission_override() {
+        AdminActionAuditor.AuditRecord rec = new AdminActionAuditor.AuditRecord(
+                "audit-1", ActionCode.AUDIT_QUERY, op(),
+                "AUDIT_QUERY", "-", "<meta>", null, "idemp",
+                Outcome.SUCCESS, null, Instant.now(), Instant.now());
 
+        auditor.record(rec);
+
+        verify(writer).recordWithPermission(rec, null);
+    }
+
+    @Test
+    void recordWithPermission_forwards_explicit_override_to_writer() {
+        AdminActionAuditor.AuditRecord rec = new AdminActionAuditor.AuditRecord(
+                "audit-2", ActionCode.OPERATOR_PROFILE_UPDATE, op(),
+                "OPERATOR", "op-9", "fraud", null, "idemp",
+                Outcome.SUCCESS, null, Instant.now(), Instant.now());
+
+        auditor.recordWithPermission(rec, "operator.manage");
+
+        verify(writer).recordWithPermission(rec, "operator.manage");
+    }
+
+    @Test
+    void recordDenied_forwards_every_arg_to_deny_writer_unchanged() {
         auditor.recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock",
                 "/api/admin/accounts/acc-1/lock", "POST", "acc-1");
 
-        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
-        verify(repo).save(captor.capture());
-        AdminActionJpaEntity saved = captor.getValue();
-        assertThat(saved.getOutcome()).isEqualTo("DENIED");
-        assertThat(saved.getPermissionUsed()).isEqualTo("account.lock");
-        assertThat(saved.getTargetType()).isEqualTo("ACCOUNT");
-        assertThat(saved.getTargetId()).isEqualTo("acc-1");
-        assertThat(saved.getOperatorId()).isEqualTo(7L);
-        assertThat(saved.getCompletedAt()).isNotNull();
-        verify(publisher).publishAdminActionPerformed(any());
+        verify(denyWriter).recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock",
+                "/api/admin/accounts/acc-1/lock", "POST", "acc-1");
     }
 
     @Test
-    void recordDenied_fail_closed_when_operator_row_missing() {
-        when(operatorLookupPort.findByOperatorId("unknown")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> auditor.recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock",
-                "/api/admin/accounts/acc-1/lock", "POST", "acc-1"))
-                .isInstanceOf(AuditFailureException.class);
-
-        verify(repo, never()).save(any());
-        verify(publisher, never()).publishAdminActionPerformed(any());
-    }
-
-    @Test
-    void recordCompletion_missing_in_progress_row_throws_audit_failure() {
-        when(repo.findByLegacyAuditId("audit-missing")).thenReturn(Optional.empty());
-
-        AdminActionAuditor.CompletionRecord done = new AdminActionAuditor.CompletionRecord(
-                "audit-missing", ActionCode.ACCOUNT_LOCK, op(),
-                "ACCOUNT", "acc-1", "fraud", null, "idemp",
-                Outcome.SUCCESS, null, Instant.now(), Instant.now());
-
-        assertThatThrownBy(() -> auditor.recordCompletion(done))
-                .isInstanceOf(AuditFailureException.class);
-
-        verify(publisher, never()).publishAdminActionPerformed(any());
-    }
-
-    // ── TASK-BE-262: recordCrossTenantDenied ─────────────────────────────────
-
-    @Test
-    void recordCrossTenantDenied_inserts_denied_row_with_own_tenant_and_emits_event() {
-        stubOperatorResolution();
-
+    void recordCrossTenantDenied_forwards_every_arg_to_deny_writer_unchanged() {
         OperatorContext actor = op();
-        auditor.recordCrossTenantDenied(
-                actor, "fan-platform", ActionCode.AUDIT_QUERY, "audit.read", "other-tenant");
 
-        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
-        verify(repo).save(captor.capture());
-        AdminActionJpaEntity saved = captor.getValue();
-        assertThat(saved.getOutcome()).isEqualTo("DENIED");
-        assertThat(saved.getPermissionUsed()).isEqualTo("audit.read");
-        assertThat(saved.getTenantId()).isEqualTo("fan-platform");
-        assertThat(saved.getTargetTenantId()).isEqualTo("fan-platform"); // both = operator's own tenant per spec
-        assertThat(saved.getDownstreamDetail()).contains("other-tenant");
-        verify(publisher).publishAdminActionPerformed(any());
+        auditor.recordCrossTenantDenied(actor, "fan-platform",
+                ActionCode.AUDIT_QUERY, "audit.read", "other-tenant");
+
+        verify(denyWriter).recordCrossTenantDenied(actor, "fan-platform",
+                ActionCode.AUDIT_QUERY, "audit.read", "other-tenant");
     }
 
     @Test
-    void recordCrossTenantDenied_bestEffort_swallows_db_failure_and_does_not_throw() {
-        stubOperatorResolution();
-        doThrow(new RuntimeException("db down")).when(repo).save(any());
+    void recordLogin_forwards_login_record_to_writer_unchanged() {
+        AdminActionAuditor.LoginAuditRecord rec = new AdminActionAuditor.LoginAuditRecord(
+                "audit-login", op(),
+                "OPERATOR", "op-1",
+                AdminActionAuditor.REASON_SELF_LOGIN,
+                "login:audit-login",
+                Outcome.SUCCESS, null, true,
+                Instant.now(), Instant.now());
 
-        // Must NOT throw — best-effort swallows the exception
-        OperatorContext actor = op();
-        assertThatCode(() ->
-                auditor.recordCrossTenantDenied(
-                        actor, "fan-platform", ActionCode.OPERATOR_CREATE, "operator.create", "*")
-        ).doesNotThrowAnyException();
+        auditor.recordLogin(rec);
 
-        verify(publisher, never()).publishAdminActionPerformed(any());
+        verify(writer).recordLogin(rec);
     }
 }

@@ -73,7 +73,11 @@ apps/admin-service/src/main/java/com/example/admin/
 │   ├── QueryAuditCommand.java
 │   ├── OperatorContext.java             ← 현재 실행 중인 운영자 + 사유 + 티켓 ID
 │   ├── AuditReasons.java                ← (TASK-BE-288) reason 정규화 유틸 (구 TASK-BE-121 use-case 헬퍼의 normalizeReason 이관)
-│   ├── AdminActionAuditor.java          ← 모든 command 전·후 감사 기록
+│   ├── AdminActionAuditor.java          ← 감사 facade (public API + audit record types + REASON_*/PERMISSION_* 상수). TASK-BE-314 에서 god-class split: 실제 INSERT/UPDATE+outbox 발행은 별도 @Component 두 개로 위임되어 REQUIRES_NEW AOP 경계를 보존
+│   ├── AdminActionAuditWriter.java      ← (TASK-BE-314) A10 fail-closed mutation flow. recordStart/recordCompletion/recordWithPermission/recordLogin 의 @Transactional(REQUIRES_NEW) 실 INSERT/UPDATE + AdminEventPublisher outbox 발행
+│   ├── AdminActionDenyWriter.java       ← (TASK-BE-314) DENIED row 변종. recordDenied(fail-closed aspect deny) + recordCrossTenantDenied(best-effort, MeterRegistry `admin.audit.cross_tenant_deny_failure` counter)
+│   ├── AdminActionPermissionRegistry.java ← (TASK-BE-314) ActionCode → target.type 매핑 + ActionCode → 권한 키 (Permission.* 또는 self-flow 합성 상수) resolution
+│   ├── AdminAuditRequestContext.java    ← (TASK-BE-314, package-private) request-scoped HTTP endpoint/method + SecurityContext OperatorContext 조회 helper
 │   ├── port/                            ← application 포트 (AdminOperatorPort / AdminOperatorTotpPort / OperatorLookupPort / AdminRefreshTokenPort / … — operator·totp·role 영속성 격리, TASK-BE-288). 구 TASK-BE-121 use-case 헬퍼의 role-name·actor-id 해석은 AdminOperatorPort 로 흡수
 │   └── event/
 │       └── AdminEventPublisher.java     ← admin.action.performed outbox
@@ -106,7 +110,7 @@ presentation → application → infrastructure/client
             infrastructure/security (인증 필터)
 ```
 
-- `application/AdminActionAuditor`는 모든 command의 **before/after**를 `AdminActionJpaEntity`로 기록 + outbox 이벤트 발행
+- `application/AdminActionAuditor` 는 thin facade — 호출자(controller / aspect / use-case)가 보는 공개 API + record types + `REASON_*`/`PERMISSION_*` 상수 만 보유하고, 실 write 는 `AdminActionAuditWriter` (별도 `@Component`) 로 위임. cross-bean 호출 경계 덕분에 Spring AOP 가 `@Transactional(REQUIRES_NEW)` 를 가로채 outer command transaction 과 독립 커밋 보장. permission/target-type 카탈로그는 `AdminActionPermissionRegistry` 로 분리되어 audit row + outbox event payload 가 byte-equal 로 유지된다 (TASK-BE-314)
 - `infrastructure/client/*`는 다른 서비스의 내부 HTTP 엔드포인트만 호출 ([specs/contracts/http/internal/](../../contracts/http/internal/))
 
 ## Forbidden Dependencies
