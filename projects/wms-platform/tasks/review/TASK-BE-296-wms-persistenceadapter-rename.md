@@ -8,7 +8,7 @@ wms `*PersistenceAdapter` → `*RepositoryImpl` rename (30 file mechanical sweep
 
 # Status
 
-ready
+review
 
 # Owner
 
