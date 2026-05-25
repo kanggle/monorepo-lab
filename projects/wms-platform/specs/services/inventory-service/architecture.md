@@ -128,7 +128,7 @@ com.wms.inventory/
 │       │   ├── entity/          # JPA entities — package-private
 │       │   ├── repository/      # Spring Data JPA repositories
 │       │   ├── mapper/          # Domain <-> JPA mappers
-│       │   └── adapter/         # *PersistenceAdapter implementing out ports
+│       │   └── adapter/         # *RepositoryImpl implementing out ports (TASK-BE-295)
 │       ├── event/
 │       │   ├── outbox/          # OutboxEntity, OutboxWriter
 │       │   └── publisher/       # Kafka publisher reading outbox
