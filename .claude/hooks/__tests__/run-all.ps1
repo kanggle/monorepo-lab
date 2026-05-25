@@ -17,7 +17,8 @@ $fixtures = @(
     'hardstop-10-service-type-missing.ps1',
     'hardstop-10-crlf-lf-simulation.ps1',
     'hardstop-body-canonical-sync.ps1',
-    'format-alignment.ps1'
+    'format-alignment.ps1',
+    'protect-main-branch.ps1'
 )
 
 $failed = @()
