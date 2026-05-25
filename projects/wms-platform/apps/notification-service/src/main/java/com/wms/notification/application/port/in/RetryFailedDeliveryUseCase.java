@@ -1,4 +1,4 @@
-package com.wms.notification.application.port.inbound;
+package com.wms.notification.application.port.in;
 
 /**
  * Inbound port for the retry scheduler — picks PENDING deliveries whose

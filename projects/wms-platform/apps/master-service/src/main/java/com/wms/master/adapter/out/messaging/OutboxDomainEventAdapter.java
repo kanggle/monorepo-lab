@@ -9,14 +9,18 @@ import java.util.List;
  * {@link DomainEventPort} implementation that serializes each event into the
  * contract envelope and writes one outbox row per event. Invoked inside the
  * domain transaction so the state change and outbox row commit atomically.
+ *
+ * <p>Renamed from {@code OutboxDomainEventPortAdapter} to
+ * {@code OutboxDomainEventAdapter} to align with {@code naming-conventions.md}
+ * (TASK-BE-294 L1).
  */
-public class OutboxDomainEventPortAdapter implements DomainEventPort {
+public class OutboxDomainEventAdapter implements DomainEventPort {
 
     private final OutboxWriter outboxWriter;
     private final EventEnvelopeSerializer envelopeSerializer;
 
-    public OutboxDomainEventPortAdapter(OutboxWriter outboxWriter,
-                                        EventEnvelopeSerializer envelopeSerializer) {
+    public OutboxDomainEventAdapter(OutboxWriter outboxWriter,
+                                    EventEnvelopeSerializer envelopeSerializer) {
         this.outboxWriter = outboxWriter;
         this.envelopeSerializer = envelopeSerializer;
     }

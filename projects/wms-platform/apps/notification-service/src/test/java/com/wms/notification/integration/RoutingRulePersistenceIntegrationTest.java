@@ -2,7 +2,7 @@ package com.wms.notification.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.notification.application.port.outbound.RoutingRuleRepository;
+import com.wms.notification.application.port.out.RoutingRuleRepository;
 import com.wms.notification.domain.routing.RoutingMatcher;
 import com.wms.notification.domain.routing.RoutingRule;
 import java.util.List;

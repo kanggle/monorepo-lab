@@ -1,6 +1,6 @@
 package com.wms.notification.application.service.fakes;
 
-import com.wms.notification.application.port.outbound.OutboxPort;
+import com.wms.notification.application.port.out.OutboxPort;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import java.util.ArrayList;
 import java.util.List;

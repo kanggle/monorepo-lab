@@ -2,6 +2,7 @@ package com.wms.master.adapter.in.web.controller;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.wms.master.adapter.in.web.controller.support.ControllerSupport;
 import com.wms.master.adapter.in.web.dto.request.CreateZoneRequest;
 import com.wms.master.adapter.in.web.dto.request.DeactivateZoneRequest;
 import com.wms.master.adapter.in.web.dto.request.ReactivateZoneRequest;
@@ -13,7 +14,6 @@ import com.wms.master.application.port.in.ZoneQueryUseCase;
 import com.wms.master.application.query.ListZonesCriteria;
 import com.wms.master.application.query.ListZonesQuery;
 import com.wms.master.application.result.ZoneResult;
-import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.model.WarehouseStatus;
 import com.wms.master.domain.model.ZoneType;
 import jakarta.validation.Valid;
@@ -54,7 +54,7 @@ public class ZoneController {
         return ResponseEntity
                 .created(URI.create(
                         "/api/v1/master/warehouses/" + warehouseId + "/zones/" + result.id()))
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(ZoneResponse.from(result));
     }
 
@@ -69,7 +69,7 @@ public class ZoneController {
             throw new com.wms.master.domain.exception.ZoneNotFoundException(zoneId.toString());
         }
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(ZoneResponse.from(result));
     }
 
@@ -82,8 +82,13 @@ public class ZoneController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
         ListZonesCriteria criteria = new ListZonesCriteria(
-                warehouseId, parseStatus(status), parseZoneType(zoneType));
-        PageQuery pageQuery = PageQuery.of(page, size, sortField(sort), sortDirection(sort));
+                warehouseId,
+                ControllerSupport.parseEnum(status, WarehouseStatus.class,
+                        "status must be ACTIVE or INACTIVE"),
+                ControllerSupport.parseEnum(zoneType, ZoneType.class,
+                        "zoneType must be one of AMBIENT|CHILLED|FROZEN|RETURNS|BULK|PICK"));
+        PageQuery pageQuery = PageQuery.of(page, size,
+                ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
         PageResult<ZoneResult> result = queryUseCase.list(new ListZonesQuery(criteria, pageQuery));
         return PageResponse.from(result, sort, ZoneResponse::from);
     }
@@ -99,7 +104,7 @@ public class ZoneController {
             throw new com.wms.master.domain.exception.ZoneNotFoundException(zoneId.toString());
         }
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(ZoneResponse.from(result));
     }
 
@@ -114,7 +119,7 @@ public class ZoneController {
             throw new com.wms.master.domain.exception.ZoneNotFoundException(zoneId.toString());
         }
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(ZoneResponse.from(result));
     }
 
@@ -129,44 +134,7 @@ public class ZoneController {
             throw new com.wms.master.domain.exception.ZoneNotFoundException(zoneId.toString());
         }
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(ZoneResponse.from(result));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
-    }
-
-    private static WarehouseStatus parseStatus(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return WarehouseStatus.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("status must be ACTIVE or INACTIVE");
-        }
-    }
-
-    private static ZoneType parseZoneType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return ZoneType.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException(
-                    "zoneType must be one of AMBIENT|CHILLED|FROZEN|RETURNS|BULK|PICK");
-        }
-    }
-
-    private static String sortField(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? sort : sort.substring(0, comma);
-    }
-
-    private static String sortDirection(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? "asc" : sort.substring(comma + 1);
     }
 }

@@ -5,7 +5,7 @@ import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.out.messaging.EventEnvelopeSerializer;
 import com.wms.master.adapter.out.messaging.MasterOutboxPollingScheduler;
-import com.wms.master.adapter.out.messaging.OutboxDomainEventPortAdapter;
+import com.wms.master.adapter.out.messaging.OutboxDomainEventAdapter;
 import com.wms.master.adapter.out.messaging.OutboxMetrics;
 import com.wms.master.application.port.out.DomainEventPort;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -28,7 +28,7 @@ public class OutboxConfig {
     @Bean
     DomainEventPort domainEventPort(OutboxWriter outboxWriter,
                                     EventEnvelopeSerializer envelopeSerializer) {
-        return new OutboxDomainEventPortAdapter(outboxWriter, envelopeSerializer);
+        return new OutboxDomainEventAdapter(outboxWriter, envelopeSerializer);
     }
 
     @Bean

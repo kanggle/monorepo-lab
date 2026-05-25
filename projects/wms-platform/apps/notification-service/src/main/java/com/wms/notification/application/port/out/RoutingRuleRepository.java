@@ -1,4 +1,4 @@
-package com.wms.notification.application.port.outbound;
+package com.wms.notification.application.port.out;
 
 import com.wms.notification.domain.routing.RoutingRule;
 import java.util.List;

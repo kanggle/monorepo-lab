@@ -1,6 +1,6 @@
 package com.wms.notification.adapter.outbound.persistence.jpa.dedupe;
 
-import com.wms.notification.application.port.outbound.AlertDedupePort;
+import com.wms.notification.application.port.out.AlertDedupePort;
 import com.wms.notification.domain.delivery.DedupeOutcome;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;

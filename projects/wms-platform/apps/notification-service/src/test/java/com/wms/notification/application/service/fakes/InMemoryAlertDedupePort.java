@@ -1,6 +1,6 @@
 package com.wms.notification.application.service.fakes;
 
-import com.wms.notification.application.port.outbound.AlertDedupePort;
+import com.wms.notification.application.port.out.AlertDedupePort;
 import com.wms.notification.domain.delivery.DedupeOutcome;
 import java.util.HashMap;
 import java.util.Map;

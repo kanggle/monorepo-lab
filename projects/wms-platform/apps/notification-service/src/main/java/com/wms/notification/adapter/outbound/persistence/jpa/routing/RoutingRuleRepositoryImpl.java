@@ -1,6 +1,6 @@
 package com.wms.notification.adapter.outbound.persistence.jpa.routing;
 
-import com.wms.notification.application.port.outbound.RoutingRuleRepository;
+import com.wms.notification.application.port.out.RoutingRuleRepository;
 import com.wms.notification.domain.alert.AlertSeverity;
 import com.wms.notification.domain.routing.RoutingRule;
 import java.util.List;

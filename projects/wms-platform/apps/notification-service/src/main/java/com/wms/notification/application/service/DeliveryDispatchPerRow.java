@@ -1,8 +1,8 @@
 package com.wms.notification.application.service;
 
-import com.wms.notification.application.port.outbound.ChannelPort;
-import com.wms.notification.application.port.outbound.DeliveryRepository;
-import com.wms.notification.application.port.outbound.OutboxPort;
+import com.wms.notification.application.port.out.ChannelPort;
+import com.wms.notification.application.port.out.DeliveryRepository;
+import com.wms.notification.application.port.out.OutboxPort;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import com.wms.notification.domain.error.ChannelNotConfiguredException;
 import com.wms.notification.domain.error.ChannelPermanentFailureException;
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Package-private — only {@link DeliveryExecutor} should call it; all
  * external callers go through {@link
- * com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase}.
+ * com.wms.notification.application.port.in.RetryFailedDeliveryUseCase}.
  */
 @Component
 class DeliveryDispatchPerRow {

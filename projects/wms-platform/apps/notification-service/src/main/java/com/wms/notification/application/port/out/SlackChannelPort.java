@@ -1,4 +1,4 @@
-package com.wms.notification.application.port.outbound;
+package com.wms.notification.application.port.out;
 
 /**
  * Marker for the Slack-specific {@link ChannelPort} — kept as a separate

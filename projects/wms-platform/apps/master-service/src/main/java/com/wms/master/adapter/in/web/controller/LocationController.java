@@ -2,6 +2,7 @@ package com.wms.master.adapter.in.web.controller;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.wms.master.adapter.in.web.controller.support.ControllerSupport;
 import com.wms.master.adapter.in.web.dto.request.DeactivateLocationRequest;
 import com.wms.master.adapter.in.web.dto.request.ReactivateLocationRequest;
 import com.wms.master.adapter.in.web.dto.request.UpdateLocationRequest;
@@ -12,7 +13,6 @@ import com.wms.master.application.port.in.LocationQueryUseCase;
 import com.wms.master.application.query.ListLocationsCriteria;
 import com.wms.master.application.query.ListLocationsQuery;
 import com.wms.master.application.result.LocationResult;
-import com.wms.master.domain.exception.ValidationException;
 import com.wms.master.domain.model.LocationType;
 import com.wms.master.domain.model.WarehouseStatus;
 import jakarta.validation.Valid;
@@ -54,7 +54,7 @@ public class LocationController {
     public ResponseEntity<LocationResponse> getById(@PathVariable UUID id) {
         LocationResult result = queryUseCase.findById(id);
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
     }
 
@@ -71,10 +71,14 @@ public class LocationController {
         ListLocationsCriteria criteria = new ListLocationsCriteria(
                 warehouseId,
                 zoneId,
-                parseLocationType(locationType),
+                ControllerSupport.parseEnum(locationType, LocationType.class,
+                        "locationType must be one of "
+                                + "STORAGE|STAGING_INBOUND|STAGING_OUTBOUND|DAMAGED|QUARANTINE"),
                 nullIfBlank(code),
-                parseStatus(status));
-        PageQuery pageQuery = PageQuery.of(page, size, sortField(sort), sortDirection(sort));
+                ControllerSupport.parseEnum(status, WarehouseStatus.class,
+                        "status must be ACTIVE or INACTIVE"));
+        PageQuery pageQuery = PageQuery.of(page, size,
+                ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
         PageResult<LocationResult> result =
                 queryUseCase.list(new ListLocationsQuery(criteria, pageQuery));
         return PageResponse.from(result, sort, LocationResponse::from);
@@ -87,7 +91,7 @@ public class LocationController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LocationResult result = crudUseCase.update(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
     }
 
@@ -98,7 +102,7 @@ public class LocationController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LocationResult result = crudUseCase.deactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
     }
 
@@ -109,49 +113,11 @@ public class LocationController {
             @RequestHeader(value = ACTOR_HEADER, required = false) String actorId) {
         LocationResult result = crudUseCase.reactivate(request.toCommand(id, actorId));
         return ResponseEntity.ok()
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
-    }
-
-    private static WarehouseStatus parseStatus(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return WarehouseStatus.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException("status must be ACTIVE or INACTIVE");
-        }
-    }
-
-    private static LocationType parseLocationType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return LocationType.valueOf(raw.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ValidationException(
-                    "locationType must be one of "
-                            + "STORAGE|STAGING_INBOUND|STAGING_OUTBOUND|DAMAGED|QUARANTINE");
-        }
     }
 
     private static String nullIfBlank(String raw) {
         return (raw == null || raw.isBlank()) ? null : raw;
-    }
-
-    private static String sortField(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? sort : sort.substring(0, comma);
-    }
-
-    private static String sortDirection(String sort) {
-        int comma = sort.indexOf(',');
-        return comma < 0 ? "asc" : sort.substring(comma + 1);
     }
 }

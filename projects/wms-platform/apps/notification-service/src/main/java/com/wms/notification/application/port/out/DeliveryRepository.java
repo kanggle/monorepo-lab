@@ -1,4 +1,4 @@
-package com.wms.notification.application.port.outbound;
+package com.wms.notification.application.port.out;
 
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import java.time.Instant;

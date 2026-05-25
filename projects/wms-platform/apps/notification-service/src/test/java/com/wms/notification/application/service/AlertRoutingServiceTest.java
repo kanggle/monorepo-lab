@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wms.notification.application.port.inbound.ProcessInboundEventUseCase;
+import com.wms.notification.application.port.in.ProcessInboundEventUseCase;
 import com.wms.notification.application.service.fakes.InMemoryAlertDedupePort;
 import com.wms.notification.application.service.fakes.InMemoryDeliveryRepository;
 import com.wms.notification.application.service.fakes.InMemoryRoutingRuleRepository;

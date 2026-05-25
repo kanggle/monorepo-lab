@@ -1,6 +1,6 @@
 package com.wms.notification.application.service;
 
-import com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase;
+import com.wms.notification.application.port.in.RetryFailedDeliveryUseCase;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import java.util.UUID;
 import org.slf4j.Logger;

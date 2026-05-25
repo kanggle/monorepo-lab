@@ -1,6 +1,6 @@
 package com.wms.notification.adapter.outbound.scheduling;
 
-import com.wms.notification.application.port.inbound.RetryFailedDeliveryUseCase;
+import com.wms.notification.application.port.in.RetryFailedDeliveryUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;

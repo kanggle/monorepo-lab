@@ -5,7 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.notification.adapter.outbound.persistence.jpa.outbox.NotificationOutboxJpaEntity;
 import com.wms.notification.adapter.outbound.persistence.jpa.outbox.NotificationOutboxJpaRepository;
-import com.wms.notification.application.port.outbound.OutboxPort;
+import com.wms.notification.application.port.out.OutboxPort;
 import com.wms.notification.domain.delivery.NotificationDelivery;
 import java.time.Clock;
 import java.util.LinkedHashMap;

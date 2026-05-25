@@ -1,5 +1,6 @@
 package com.wms.master.adapter.in.web.controller;
 
+import com.wms.master.adapter.in.web.controller.support.ControllerSupport;
 import com.wms.master.adapter.in.web.dto.request.CreateLocationRequest;
 import com.wms.master.adapter.in.web.dto.response.LocationResponse;
 import com.wms.master.application.port.in.LocationCrudUseCase;
@@ -46,11 +47,7 @@ public class LocationCreateController {
         LocationResult result = crudUseCase.create(request.toCommand(warehouseId, zoneId, actorId));
         return ResponseEntity
                 .created(URI.create("/api/v1/master/locations/" + result.id()))
-                .eTag(etag(result.version()))
+                .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
-    }
-
-    private static String etag(long version) {
-        return "\"v" + version + "\"";
     }
 }

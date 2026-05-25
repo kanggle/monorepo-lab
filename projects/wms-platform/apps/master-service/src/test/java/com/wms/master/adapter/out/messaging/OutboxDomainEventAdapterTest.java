@@ -14,12 +14,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-class OutboxDomainEventPortAdapterTest {
+class OutboxDomainEventAdapterTest {
 
     private final OutboxWriter writer = mock(OutboxWriter.class);
     private final EventEnvelopeSerializer serializer = mock(EventEnvelopeSerializer.class);
-    private final OutboxDomainEventPortAdapter adapter =
-            new OutboxDomainEventPortAdapter(writer, serializer);
+    private final OutboxDomainEventAdapter adapter =
+            new OutboxDomainEventAdapter(writer, serializer);
 
     @Test
     void publish_writesOneOutboxRowPerEvent_withEnvelopePayload() {
