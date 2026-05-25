@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-139-federation-hardening-cross-product-e2e-cohort.md` — **Phase 8 Federation Hardening cross-product e2e cohort (MVP)**: root `.github/workflows/federation-hardening-e2e.yml` 신설 (nightly cron + `workflow_dispatch`) + `tests/federation-hardening-e2e/` 신설 (~16 new files: playwright.config + global-setup + login + seed.sql + seed-domains.sql + 7 spec files (5 golden-path + Operator Overview composition + Domain Health composition) + docker-compose.federation-e2e.yml 9+ services) + boot-jars artifact extension (5 → 8 boot jars). ADR-MONO-018 § 3.3 Future-self **step 2** (3 execution task series 중 자연 sequencing leader; step 3 observability federation impl 가 본 cohort 의 trace tree baseline 위에서 진행). D1-D3 finalised byte-unchanged from PROPOSED. **Hard invariants 유지** (HARDSTOP-04 + zero-retrofit sixth confirmation): per-domain producer / `console-integration-contract.md` § 2.4.5/6/7/8 / 모든 ADR byte-unchanged; 본 cohort 가 existing read endpoints 만 호출, 새 producer endpoint 0. 분석=Opus 4.7 / 구현 권장=**Sonnet 4.6** (ADR-013 § D6 row 8 + ADR-018 D7 explicit prescription).
 
 ## in-progress
 
