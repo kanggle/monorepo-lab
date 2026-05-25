@@ -8,7 +8,7 @@ console-bff composition fan-out engine 공통 추출 + `OperatorOverviewComposit
 
 # Status
 
-ready
+done
 
 # Owner
 
