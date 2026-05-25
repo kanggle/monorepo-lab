@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-138-adr-mono-018-accepted-transition.md` — **`ADR-MONO-018 PROPOSED → ACCEPTED transition`** (doc-only governance flip; sibling ADR-014/MONO-110 + ADR-015/MONO-112 + ADR-017/MONO-126 staged-child ACCEPTED 패턴 정확 답습). User-explicit intent = first-message direct request 2026-05-26 (*"ADR-MONO-018 ACCEPTED 로 승격 진행해줘"* + § D8.1 acceptable form *"ADR-018 ACCEPTED"* 첫 form 직접 인용 + sibling 패턴 explicit 인용; ambiguous form 아닌 명시 confirm form). 후속 = 3 execution task series (cross-product e2e cohort + observability federation impl + multi-tenant isolation regression IT cohort, § 3.3 Future-self step 2/3/4) — 각 root + project-internal future tasks, dependency-correct base = 본 task ACCEPTED 머지된 main. 분석=Opus 4.7 / 구현 권장=Opus 4.7 (governance precision, dispatcher-direct).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-138-adr-mono-018-accepted-transition.md` — **`ADR-MONO-018 PROPOSED → ACCEPTED transition`** (doc-only governance flip; sibling ADR-014/MONO-110 + ADR-015/MONO-112 + ADR-017/MONO-126 staged-child ACCEPTED 패턴 정확 답습). User-explicit intent = first-message direct request 2026-05-26 (*"ADR-MONO-018 ACCEPTED 로 승격 진행해줘"* + § D8.1 acceptable form *"ADR-018 ACCEPTED"* 첫 form 직접 인용 + sibling 패턴 explicit 인용; ambiguous form 아닌 명시 confirm form). impl PR (this PR) flips ADR-MONO-018 Status `PROPOSED → ACCEPTED` + History ACCEPTED 줄 append + § 6 ACCEPTED row append + § 1.3 minimal past-tense; ADR-MONO-013 § History "Additive note (2026-05-26, ADR-MONO-018 ACCEPTED)" 1 row append (count 6 → 7). D1-D8 byte-unchanged (HARDSTOP-04); ADR-006/007/014/015/016/017/002 + 모든 다른 ADR byte-unchanged. 후속 = 3 execution task series (cross-product e2e cohort + observability federation impl + multi-tenant isolation regression IT cohort, § 3.3 Future-self step 2/3/4). 분석=Opus 4.7 / 구현=Opus 4.7 (governance precision, dispatcher-direct).
 
 ## done
 
