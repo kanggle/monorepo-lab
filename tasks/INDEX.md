@@ -113,6 +113,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-136-worktree-path-leak-defensive-hook.md` — new `.claude/hooks/verify-worktree-isolation.ps1` blocks PreToolUse Edit/Write when `cwd` is a linked git worktree (Agent isolation) but `tool_input.file_path` resolves outside that worktree's toplevel. Defensive layer for the 2026-05-25 PC-BE-005 dispatch leak (≈2.8% rate, 4 leaks / 144 tool_uses, agent self-recovered) — MONO-135 mirror (4 positive + 5 negative fixture, settings.json PreToolUse Edit+Write matcher wire, README inventory + safety-rail 4-block exemption). Root cause investigation deferred to a separate task.
 
+- `TASK-MONO-137-adr-mono-018-phase-8-federation-hardening-proposed.md` — author `ADR-MONO-018 PROPOSED` (Phase 8 federation hardening architecture) following the ADR-MONO-014/015/017 staged-child pattern. Decomposes ADR-MONO-013 § D6 row 8's 3 sub-axes (cross-product e2e + observability federation + multi-tenant isolation regression) into D1-D8 with CHOSEN-PROPOSED direction + Rejected option rationale + Finalised-at-ACCEPTED notes. Additive amendments only to ADR-013 (§ D5 line 76 parenthetical + § History blockquote — HARDSTOP-04 D1-D8 byte-unchanged). Spec-only PR; ACCEPTED transition + execution task series (cross-product e2e cohort / observability federation impl / isolation regression IT cohort) are post-ACCEPTED future tasks.
+
 ## in-progress
 
 (empty)
