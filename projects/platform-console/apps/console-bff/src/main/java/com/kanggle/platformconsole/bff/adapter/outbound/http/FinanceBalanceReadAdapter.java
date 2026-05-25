@@ -1,7 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
+import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -37,7 +37,7 @@ import java.util.Map;
  * not direct port use.
  */
 @Component
-public class FinanceBalanceReadAdapter implements OperatorOverviewCompositionUseCase.FinanceBalanceReadPort {
+public class FinanceBalanceReadAdapter implements FinanceBalanceReadPort {
 
     private final RestClient client;
 

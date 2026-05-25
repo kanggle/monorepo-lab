@@ -1,6 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase;
+import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,7 +20,7 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 public class ErpHealthReadAdapter extends AbstractHealthReadAdapter
-        implements DomainHealthCompositionUseCase.ErpHealthReadPort {
+        implements ErpHealthReadPort {
 
     public ErpHealthReadAdapter(@Qualifier("erpRestClient") RestClient client) {
         super(client);

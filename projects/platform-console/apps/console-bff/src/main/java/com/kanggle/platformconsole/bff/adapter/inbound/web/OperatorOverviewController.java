@@ -2,8 +2,8 @@ package com.kanggle.platformconsole.bff.adapter.inbound.web;
 
 import com.kanggle.platformconsole.bff.adapter.outbound.http.MissingTenantException;
 import com.kanggle.platformconsole.bff.adapter.outbound.http.OperatorCredentialContext;
+import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.CompositionLeg;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

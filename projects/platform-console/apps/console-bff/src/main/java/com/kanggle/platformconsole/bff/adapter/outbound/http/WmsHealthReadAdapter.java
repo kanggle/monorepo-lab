@@ -1,6 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
-import com.kanggle.platformconsole.bff.application.usecase.DomainHealthCompositionUseCase;
+import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 public class WmsHealthReadAdapter extends AbstractHealthReadAdapter
-        implements DomainHealthCompositionUseCase.WmsHealthReadPort {
+        implements WmsHealthReadPort {
 
     public WmsHealthReadAdapter(@Qualifier("wmsRestClient") RestClient client) {
         super(client);

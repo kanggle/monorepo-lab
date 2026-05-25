@@ -1,6 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.GapAccountsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.GapAccountsReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;

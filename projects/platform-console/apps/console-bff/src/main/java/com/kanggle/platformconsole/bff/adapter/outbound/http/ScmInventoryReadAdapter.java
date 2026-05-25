@@ -1,6 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
-import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase;
+import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -26,7 +26,7 @@ import java.util.Map;
  * FE concern (per § 2.4.9.1 row 3 and the FE-half spec).
  */
 @Component
-public class ScmInventoryReadAdapter implements OperatorOverviewCompositionUseCase.ScmInventoryReadPort {
+public class ScmInventoryReadAdapter implements ScmInventoryReadPort {
 
     private final RestClient client;
 
