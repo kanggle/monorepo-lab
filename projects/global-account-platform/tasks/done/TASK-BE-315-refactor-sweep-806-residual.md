@@ -8,7 +8,7 @@ Refactor sweep — PR #806 residual cleanup (PortAdapter/JpaAdapter/RepositoryAd
 
 # Status
 
-ready
+done
 
 # Owner
 
