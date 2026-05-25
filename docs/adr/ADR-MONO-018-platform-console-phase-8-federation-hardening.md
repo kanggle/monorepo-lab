@@ -1,0 +1,199 @@
+# ADR-MONO-018 — platform-console Phase 8 Federation Hardening Architecture (Cross-Product E2E + Observability Federation + Multi-Tenant Isolation Regression)
+
+**Status:** PROPOSED
+**Date:** 2026-05-25
+**History:** PROPOSED 2026-05-25 (TASK-MONO-137, PR #<this> — resolves the architecture-decision dimension of ADR-MONO-013 § D6 Phase 8 ahead of any federation-hardening implementation, mirroring the ADR-MONO-014 (Phase 2 operator-auth) + ADR-MONO-015 (Phase 2 dashboards) + ADR-MONO-017 (Phase 7 console-bff) staged-child pattern; decision direction **CHOSEN-PROPOSED** per the dispatcher reasoning recorded below, **finalised at ACCEPTED**).
+**Decision driver:** ADR-MONO-013 § D6 Phase 8 (*"Federation hardening — cross-product e2e, observability, multi-tenant isolation regression / root `tasks/` / all domains integrated / Sonnet; isolation → Opus"*) requires *"all domains integrated"* as its gate. The gate was satisfied **2026-05-20** when ADR-MONO-017 ACCEPTED authorised the Phase 7 `console-bff` skeleton + Operator Overview MVP, and is **objectively confirmed 2026-05-25** by `projects/platform-console/PROJECT.md` self-declaration ("Phase 1~6 COMPLETE + Phase 7 LIVE", `service_types: [frontend-app, rest-api]`) + `console-bff` D7 per-domain fan-out attribution baseline ON (Operator Overview + Domain Health both live). ADR-013 § D6 row 8 prescribes the Phase 8 *what-axis* (cross-product e2e / observability / multi-tenant isolation regression) at a single-row resolution but DEFERS the architectural mechanics — what location/trigger the cross-product e2e suite runs from, what harness drives it, what scope counts as MVP, what observability federation pattern is reused vs introduced, how the multi-tenant isolation regression cohort is shaped, how the 3 sub-axes are bundled or split, what the gate + ownership model is, and how the ACCEPTED transition is executed. Authoring any federation-hardening execution task without resolving these eight axes silently bakes architecture (HARDSTOP-09). This ADR is that decision record; the cross-product e2e cohort + observability federation impl + isolation regression IT cohort are all **PAUSED** until this is ACCEPTED.
+**Supersedes:** none. **Amends:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) § D5 (line 76: sibling parenthetical scope-pointer added next to ADR-MONO-017's — additive, no D1-D8 decision change; HARDSTOP-04 discipline preserved) + § History (one new "Additive note" blockquote referencing this PROPOSED + the all-domains-integrated gate satisfaction, identical shape to the Phase 4/5/6/7 backfill + PROPOSED notes — count 5 → 6). **Reconciles:** none yet (PROPOSED scopes the architecture; per-domain producer specs + `console-integration-contract.md` § 2.4.5/6/7/8/2.5/2.6 are byte-unchanged at PROPOSED and remain byte-unchanged at ACCEPTED — D3 + D5 explicitly preserve them; reconciliation in the IT/observability sense lands at the post-ACCEPTED execution tasks, never inside this ADR).
+**Related:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) (console foundation, Model B, parent; § D5 + § D6 Phase 8), [ADR-MONO-014](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (operator token exchange — the credential rule the D5 isolation regression cohort attests preserves; staged-child precedent for ACCEPTED transition mechanics), [ADR-MONO-015](ADR-MONO-015-platform-console-dashboards-model.md) (Composed-overview pattern — the D3 e2e scope MVP attests across 5 domains via Operator Overview / Domain Health; staged-child precedent), [ADR-MONO-017](ADR-MONO-017-platform-console-bff-architecture.md) (Phase 7 `console-bff` architecture — D6 tenant pass-through + D7 per-domain fan-out attribution are the directly-extended invariants Phase 8 verifies; immediate-prior staged-child sibling), [ADR-MONO-006](ADR-MONO-006-observability-stack.md) (Vector + VictoriaMetrics — the D4 observability federation reuse base; NOT amended by this ADR), `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.5/6/7/8 + § 2.5 + § 2.6 (per-domain credential rule + resilience patterns Phase 8 verifies / regresses byte-unchanged), `projects/platform-console/PROJECT.md` (Phase 7 LIVE self-declaration + 5/5 federation count).
+
+---
+
+## 1. Context
+
+### 1.1 The gate just satisfied
+
+- **ADR-MONO-013 § D6 row 8** prescribes Phase 8 as *"Federation hardening — cross-product e2e, observability, multi-tenant isolation regression / root `tasks/` / all domains integrated / Sonnet; isolation → Opus"*. The gate ("all domains integrated") is implicit but unambiguous: every backend domain rendered by the console + the `console-bff` aggregation tier must be live in main before federation hardening makes sense as a verification target.
+- **Objective gate satisfaction**:
+  - **ADR-MONO-017 ACCEPTED 2026-05-20** (TASK-MONO-126, PR #666 squash `5c711e3b`) authorised Phase 7 `console-bff` skeleton + Operator Overview MVP. D1-D8 finalised byte-unchanged from PROPOSED.
+  - **5/5 backend domains live**: GAP (admin-service operator boundary + `platform-console-web` OIDC client) + wms + scm + finance + erp — all integrated by FE-001..010 (Phase 2/4/5/6) + `console-integration-contract.md` § 2.4.1..§ 2.4.8 normative bindings.
+  - **`console-bff` D7 per-domain attribution live**: TASK-PC-BE-001 (skeleton + `/actuator/health`) + TASK-PC-BE-002 (Domain Health endpoint) + TASK-PC-FE-011 (Operator Overview MVP) + the 12-task vertical-slice finance card chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration), all merged before this PROPOSED (`projects/platform-console/PROJECT.md` Service Map records the chain).
+  - **`platform-console/PROJECT.md` self-declaration**: "ADR-MONO-013 Phase 1~6 COMPLETE + Phase 7 LIVE", `service_types: [frontend-app, rest-api]` (post-Phase-7 mutation per ADR-013 § D5 / ADR-017 § 3.2).
+- **What that means**: every architectural prerequisite ADR-013 § D6 row 8 names as a Phase 8 input is *already in main*. The remaining work is **verification / regression / observability federation** *on top of* the live federation, not new federation primitives.
+
+### 1.2 What § D6 row 8 prescribed vs deferred
+
+- **Prescribed**:
+  - 3 sub-axis scope: cross-product e2e + observability + multi-tenant isolation regression.
+  - Ownership location: root `tasks/` (cross-product scope is no single project's natural owner).
+  - Model recommendation: Sonnet for the cohort, **Opus for the isolation regression dimension**.
+  - Gate: all domains integrated (satisfied per § 1.1).
+- **Deferred (this ADR resolves the DIRECTION; ACCEPTED finalises)**:
+  1. **D1 — Cross-product e2e suite location & trigger**.
+  2. **D2 — Cross-product e2e harness**.
+  3. **D3 — E2e scope (MVP)**.
+  4. **D4 — Observability federation pattern** (reuse vs replace ADR-MONO-006 stack).
+  5. **D5 — Multi-tenant isolation regression cohort** (per-domain vs central BFF gate).
+  6. **D6 — Phasing** (3-sub-axis bundling vs separate ADRs).
+  7. **D7 — Gate & ownership** (root vs project boundaries for the 3 axes).
+  8. **D8 — ACCEPTED transition mechanics**.
+
+### 1.3 Why an ADR (HARDSTOP-09) + staged PROPOSED → ACCEPTED
+
+Per [`platform/hardstop-rules.md`](../../platform/hardstop-rules.md) HARDSTOP-09 #2: starting any of the 3 sub-axis execution tasks without resolving D1-D8 bakes architecture silently — e.g. picking a Testcontainers fan-out harness implicitly would commit Phase 8 verification to server-side-only assertions, defeating the operator-UI cross-product surface the harness is meant to attest; reusing the existing platform-console nightly e2e as the cross-product driver would mix per-project scope with cross-product scope and obscure regression attribution; introducing a new observability stack would invalidate the `console-bff` D7 per-domain attribution baseline that already exists in main. These are the exact prevention roles ADR-MONO-014/015 played for Phase 2 and ADR-MONO-017 played for Phase 7; ADR-MONO-018 is the Phase 8 analog.
+
+**Staged pattern (sibling: ADR-014/015/017)**: the PROPOSED stage records the **decision direction** + **D1-D8 frame** + **downstream sequencing** + **the hard invariants the chosen direction must inherit** (the per-domain credential rule `console-integration-contract.md` § 2.4.5/6/7/8 + ADR-017 D4 — MUST NOT be retroactively redefined; the ADR-006 observability stack — MUST NOT be replaced; ADR-013 D1-D8 + ADR-017 D1-D8 — byte-unchanged). The ACCEPTED transition will be executed as a separate post-PROPOSED task (the next available `TASK-MONO-1xx`, doc-only) on user-explicit intent; D1-D8 finalised **byte-unchanged** from PROPOSED (ACCEPTED = *finalise*, not re-decide; HARDSTOP-04 + sibling ADR-014/015/017 ACCEPTED-flip discipline). The cross-product e2e cohort + observability federation impl + multi-tenant isolation regression IT cohort remain **further future tasks** (post-ACCEPTED), exactly as ADR-014's TASK-BE-298 + ADR-015's TASK-PC-FE-005 + ADR-017's TASK-PC-BE-001 + TASK-PC-FE-011 were future of their ACCEPTED.
+
+---
+
+## 2. Decision
+
+### D1 — Cross-product e2e suite location & trigger
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Root `tasks/` + new `.github/workflows/federation-hardening-e2e.yml`** | A new workflow file at the monorepo root drives the cross-product e2e suite. Trigger model: **nightly cron** (off-business-hours, baseline regression channel) + **`workflow_dispatch`** (on-demand from any branch for diagnosis or release-gate verification). Suite location matches ADR-013 § D6 row 8's explicit "root `tasks/`" prescription. The workflow runs against the docker-compose-orchestrated 5-domain + console-web + console-bff stack (extending the existing platform-console-e2e-fullstack compose pattern, not the GAP-only or per-domain compose). | **CHOSEN (PROPOSED direction)** — affirms ADR-013 § D6 row 8 location prescription verbatim; nightly cron + dispatch matches the existing `nightly-e2e.yml` cadence (operational symmetry); separates cross-product regression signal from per-project nightly noise. **Finalised at ACCEPTED.** |
+| B. Extend `projects/platform-console/.../nightly-e2e.yml` (platform-console-owned) | Add cross-product suites as new jobs inside the existing platform-console nightly workflow | Rejected (PROPOSED) — mixes per-project scope (single-project regression) with cross-product scope (federation regression); attribution becomes ambiguous when a job fails (is it a platform-console drift or a cross-domain drift?); contradicts § D6 row 8's "root `tasks/`" prescription which expresses scope ownership, not just file location. |
+| C. Per-domain distributed (each domain's CI adds a cross-product slice) | Five workflow files (one per non-GAP domain + one in GAP) each run their own cross-product e2e slice | Rejected — defeats the cross-product intent (cross-product = single point that exercises all 5 federations together, not 5 sliced views); 5× docker-compose stack build cost; impossible to author a "cross-domain composition" assertion (e.g. Operator Overview fan-out across 5 domains) from inside one domain's CI. |
+
+### D2 — Cross-product e2e harness
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Playwright extended on top of the platform-console PC-FE-019..031 harness** | The existing platform-console Playwright harness (login.ts fixture, OIDC PKCE bridge, docker-compose orchestration, trace artifact wiring) is **elevated** from a project-internal driver into the cross-product driver. New cross-product scenarios are authored as additional Playwright spec files under a root-scoped tests directory (location finalised at ACCEPTED execution); the platform-console-internal scenarios stay project-internal. Same Playwright dependency, same fixture pattern, same `bridgeAuthServiceHostname()` discipline. | **CHOSEN (PROPOSED direction)** — reuses a proven harness (PC-FE-019..031 + MONO-132 phase split + MONO-133 trace instrumentation + PC-FE-025/026 cache-mask resolutions are all in main); zero new harness primitives; preserves end-to-end UI assertion (the operator's actual cross-product experience), which is the only signal that catches a contract drift visible only in composition. **Finalised at ACCEPTED.** |
+| B. Testcontainers fan-out (Spring Boot IT harness) | Each cross-product scenario is a JVM-side Testcontainers integration test that spins up the 5 domain stacks + console-bff and asserts via REST clients | Rejected — server-side-only; misses the console-web composition layer (Operator Overview / Domain Health fan-out rendering, the operator's actual surface); duplicates the docker-compose orchestration the Playwright harness already does; would require authoring a new cross-product IT base in `libs/java-test-support` (retrofit cost) just to skip the UI dimension. |
+| C. New stack (Cypress / WebdriverIO / k6) | Introduce a second e2e framework alongside Playwright | Rejected — over-engineering for MVP; doubles the harness maintenance surface; introduces a second trace/screenshot artifact convention; PC-FE-019..031 already proves Playwright is the right tool for this codebase. |
+
+### D3 — E2e scope (MVP)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Golden path per domain × 1 + core cross-domain composition checks** | MVP = **(i) 5 golden-path scenarios**, one per domain (operator login → that domain's primary read screen → asserts the canonical envelope/credential rule); **(ii) 2 cross-domain composition scenarios** — Operator Overview MVP (5-domain fan-out card grid renders, per-card degrade visible when one domain is paused, no shell blank); Domain Health (5-domain health attribution surfaces correctly when one downstream is forced 503). Total = 7 spec files at MVP. Per-domain producer specs are NOT modified; reads use the existing § 2.4.5/6/7/8 endpoints; tenant + credential rules are exercised end-to-end, not redefined. | **CHOSEN (PROPOSED direction)** — § 3.3 "zero retrofit" sixth confirmation (Phase 2/4/5/6/7 → Phase 8); MVP that covers the 3 sub-axes' minimum verification (cross-product = (i); composition = (ii); isolation regression input = passes through both via the per-domain `tenant_id` credential discipline); iterates after first nightly clean run. **Finalised at ACCEPTED.** |
+| B. Full surface (every console screen × every domain) | Author Playwright specs for the full Phase 2/4/5/6 operator screen inventory across 5 domains | Rejected (PROPOSED) — over-scopes the MVP; the per-domain Playwright coverage already lives in the platform-console-internal harness (or is its responsibility); cross-product Phase 8 verification value is in the **composition** + **golden path** signal, not full surface duplication. May expand after MVP runs prove stable. |
+| C. Composition only (no golden paths) | Skip per-domain golden paths; assert only Operator Overview + Domain Health composition | Rejected — a domain whose golden path is broken can still render in a composition card (degrade path masks it); golden path per domain is the regression-attribution anchor when composition fails. |
+
+### D4 — Observability federation pattern
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Reuse ADR-MONO-006 Vector + VictoriaMetrics + ADR-MONO-017 D7 per-domain attribution + add OTel `trace_id` propagation strengthening** | The Phase 8 observability federation is **NOT a new stack** — it reuses the [ADR-MONO-006](ADR-MONO-006-observability-stack.md) Vector + VictoriaMetrics (+ VictoriaLogs / VictoriaTraces per the ADR-006 topology) ephemeral-per-worktree stack baseline + the [ADR-MONO-017](ADR-MONO-017-platform-console-bff-architecture.md) D7 per-domain fan-out attribution metrics (`bff_fanout_latency{domain="…"}` / `bff_fanout_errors_total{…}` / `bff_aggregation_degrade_count{…}`) already emitted by `console-bff`. The federation hardening ADDS one capability: **strengthened OTel `trace_id` propagation** across `console-web → console-bff → per-domain producer` so a single dashboard fan-out (Operator Overview / Domain Health) is traceable end-to-end as one trace tree spanning 7 spans (console-web SSR + console-bff aggregation + 5 per-domain spans). No producer spec change; producers already emit traceId headers per `libs/java-web` baseline. The cross-product e2e suite (D1/D2/D3) asserts the trace tree assembles in VictoriaTraces. | **CHOSEN (PROPOSED direction)** — zero stack-replacement risk; affirms the existing observability investment; the strengthening is propagation-discipline-only (each layer must NOT drop / regenerate `trace_id`), which is a verification target Phase 8 cohort delivers. **Finalised at ACCEPTED.** |
+| B. New observability stack (Grafana stack / cloud-hosted) | Replace or sidecar the ADR-MONO-006 stack | Rejected — invalidates ADR-MONO-006 ACCEPTED 2026-05-12 + ADR-MONO-007 worktree-ephemeral topology; would force a portfolio-wide migration tax; not a Phase 8 problem. |
+| C. BFF-only aggregate metrics (drop per-domain attribution) | Phase 8 standardises on a single `bff_request_latency` / `bff_errors_total` view | Rejected — defeats ADR-017 D7's per-domain attribution invariant; operator can't diagnose which domain caused a degrade; same critique as ADR-017 D7 Option B. |
+
+### D5 — Multi-tenant isolation regression cohort
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Per-domain `TenantClaimValidator` IT regression × 5 domains + console-bff D6 tenant pass-through cross-tenant deny IT** | The isolation regression cohort = **5 producer-side IT regressions** (one per domain), each asserting `tenant_id ∈ {<domain>,*}` is enforced by the producer's `TenantClaimValidator` (or equivalent gate) when called with a foreign-tenant JWT — **the producer rejects, never the BFF**. Plus **1 console-bff IT** (ADR-017 D6 — `tenant_id` pass-through) asserting that a cross-tenant call originating from a forged tenant claim through the BFF reaches each downstream domain unchanged and is denied at each producer. No new tenant gate; no central BFF tenant interceptor; producer-side authority is the invariant Phase 8 attests preserves. **Per-domain ITs land in each project's `tasks/` (project-internal — `tenant-id ∈ {<domain>,*}` is a per-project boundary)**; the console-bff cross-tenant pass-through IT lands in platform-console `tasks/`. Together they exhaust the 6-point isolation regression surface. | **CHOSEN (PROPOSED direction)** — preserves ADR-017 D6 producer-side authority verbatim; per-domain ownership matches each project's existing `TenantClaimValidator` IT cohort; zero retrofit on producer code or specs. **Finalised at ACCEPTED.** |
+| B. Central BFF tenant gate (pre-fan-out rejection) | console-bff rejects cross-tenant requests in-process before fanning out | Rejected — duplicates per-domain enforcement (DRY violation); creates divergence risk if a domain's tenant rule evolves; same critique as ADR-017 D6 Option B (already rejected at Phase 7); revisiting it at Phase 8 would silently weaken producer-side authority. |
+| C. Defer isolation regression to a future ADR | Drop D5 from this PROPOSED; address isolation later | Rejected — ADR-013 § D6 row 8 explicitly bundles isolation regression into Phase 8; deferring leaves the gate row partially-implementable indefinitely; the gate is satisfied, the cohort should land. |
+
+### D6 — Phasing (3 sub-axis bundling vs separate ADRs)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Single PROPOSED bundling the 3 sub-axes for governance; execution tasks split per axis** | This ADR is **ONE** PROPOSED that covers cross-product e2e (D1/D2/D3) + observability federation (D4) + multi-tenant isolation regression (D5) under one governance umbrella. The execution after ACCEPTED splits into **three independent task series**: (a) cross-product e2e cohort (root `tasks/`, Sonnet model per ADR-013 § D6 row 8); (b) observability federation impl — OTel trace_id propagation hardening (root `tasks/`, Sonnet); (c) multi-tenant isolation regression IT cohort (per-domain project-internal `tasks/` × 5 + 1 console-bff IT, **Opus model per ADR-013 § D6 row 8 "isolation → Opus"**). Mirrors the FE-001..010 / BE-001..005 family pattern (one architecture decision, multiple execution tasks). | **CHOSEN (PROPOSED direction)** — operational symmetry with ADR-013 § D6 row 8's single-row Phase 8 scope; one governance ADR + three execution chains keeps the architectural coupling visible while letting each axis land at its own cadence; matches ADR-017's operational shape (one ADR, multiple execution tasks). **Finalised at ACCEPTED.** |
+| B. Three separate ADRs (one per sub-axis) | Author ADR-MONO-018 (e2e) + ADR-MONO-019 (observability) + ADR-MONO-020 (isolation) as three independent PROPOSED docs | Rejected (PROPOSED) — over-fragments a single Phase decision; § D6 row 8 explicitly groups them as one phase; the 3 axes share invariants (zero-retrofit, per-domain credential rule, ADR-006 reuse) that would force cross-ADR consistency anyway — better to record them once. Revisitable only if an axis grows enough scope to warrant its own ADR. |
+| C. Defer 2 of the 3 axes | PROPOSED only cross-product e2e (D1/D2/D3); defer observability + isolation | Rejected — leaves § D6 row 8 partially-decided indefinitely; the 3 axes' invariants are tightly coupled (observability attribution depends on the e2e suite emitting traces; isolation regression depends on the cross-product harness being in place). |
+
+### D7 — Gate & ownership
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Gate = Phase 7 LIVE (already satisfied); ownership split (root cross-product / project-internal isolation IT)** | The Phase 8 ACCEPTED + execution gate is **Phase 7 LIVE**, already satisfied per § 1.1 (ADR-017 ACCEPTED 2026-05-20 + Operator Overview + Domain Health live + `service_types: [frontend-app, rest-api]`). Ownership: cross-product e2e cohort (D1/D2/D3) + observability federation impl (D4) live in **root `tasks/`** (cross-product scope, no single project owner). Multi-tenant isolation regression IT cohort (D5) lives in **per-domain project-internal `tasks/`** (the `TenantClaimValidator` invariant per domain is each project's authority — § 3.1 producer-side authority invariant). Models per ADR-013 § D6 row 8: **Sonnet** for the cross-product e2e cohort + observability federation execution; **Opus** for the isolation regression dimension (explicitly elevated by § D6 row 8). | **CHOSEN (PROPOSED direction)** — gate is objectively met; ownership matches scope authority (cross-product = root, per-domain enforcement = per-project); model recommendation tracks § D6 row 8 verbatim. **Finalised at ACCEPTED.** |
+| B. Gate = await further hardening of Phase 7 (e.g. 30-day production-burn-in) | Delay ACCEPTED until console-bff has accumulated operational data | Rejected — Phase 8 IS the hardening; gating Phase 8 ACCEPTED on prior hardening is circular; ADR-013 § D6 row 8 names "all domains integrated" as the gate, not "all domains burned-in". |
+| C. Single-owner concentration (all in root `tasks/`) | All 3 axes' execution tasks live in root tasks/, including the isolation IT cohort | Rejected — per-domain `TenantClaimValidator` is each project's invariant + lives in each project's IT base; relocating those ITs to root would force a shared-library retrofit on the IT base (HARDSTOP-03 risk) and lose per-project ownership of the tenant rule. |
+
+### D8 — ACCEPTED transition mechanics
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. User-explicit intent forms + 2-PR commit pattern (PR-A doc-only ACCEPTED + PR-B execution task series)** | The ACCEPTED transition is executed by a **separate post-PROPOSED task** (the next available `TASK-MONO-1xx`, doc-only) on **user-explicit intent**. Acceptable intent forms: *"ADR-018 ACCEPTED"*, *"Phase 8 federation hardening 시작"*, *"federation hardening ACCEPTED 승격"*, or AskUserQuestion-option selection whose description records ADR-018 ACCEPTED as the chosen action (sibling: ADR-017 ACCEPTED via TASK-MONO-126 AskUserQuestion option A 2026-05-20). Ambiguous statements ("Phase 8 는 언제?") do NOT satisfy. **Commit pattern**: typically **PR-A** doc-only (this ADR PROPOSED → ACCEPTED flip + § 6 audit row + `ADR-MONO-003a § 3` audit-row append per staged-child ADR ACCEPTED convention — sibling: TASK-MONO-110/112/126) + **PR-B** (or a series of PR-Bs) execution task spec authoring (cross-product e2e cohort task + observability federation impl task + 6 isolation regression IT cohort tasks — one root MONO + five project-internal per-domain + one platform-console-internal). PR-A merges before any execution PR-B can begin. | **CHOSEN (PROPOSED direction)** — verbatim sibling of ADR-014 D6 / ADR-015 D6 / ADR-017 D6.1 ACCEPTED-flip mechanics; user-explicit intent gate matches CLAUDE.md HARDSTOP-09 + the AskUserQuestion option-description-as-intent precedent established by TASK-MONO-126. **Finalised at ACCEPTED.** |
+| B. ACCEPTED on PROPOSED merge (skip the doc-only ACCEPTED PR) | Author this ADR as ACCEPTED directly | Rejected — breaks the staged-child pattern (ADR-014/015/017 all used PROPOSED → ACCEPTED in 2 PRs); collapses the decision-direction review window; same reasoning as ADR-017 PROPOSED reasoning rejected its own combined-ACCEPTED option. |
+| C. Self-executing ACCEPTED (the cross-product e2e cohort PR itself flips ADR-018 to ACCEPTED) | Bundle ACCEPTED flip + execution into a single PR | Rejected — violates PR Separation Rule (lifecycle ↔ PR boundary); the architecture decision and the execution must not share a PR; also collapses the review window for the decision dimension. |
+
+---
+
+## 3. Consequences
+
+### 3.1 Hard invariants this ADR carries
+
+- **§ 3.3 "zero retrofit" — sixth confirmation** (Phase 2/4/5/6/7 → Phase 8): D3 + D5 jointly preserve it. The cross-product e2e MVP (D3 Option A) calls existing per-domain read endpoints (§ 2.4.1/2/3/4/5/6/7/8) — no new producer endpoints; the isolation regression cohort (D5 Option A) attests existing per-domain `TenantClaimValidator` gates — no new tenant gate; D4 observability federation reuses ADR-MONO-006 + ADR-017 D7 — no producer observability change. No per-domain producer spec or implementation change is required for Phase 8. (Sixth confirmation accumulates over Phase 2 GAP, Phase 4 wms+scm, Phase 5 finance, Phase 6 erp, Phase 7 BFF dispatcher — each a separate "verified" event in ADR-013 § History — and now Phase 8 verification cohort.)
+- **Per-domain credential rule (`console-integration-contract.md` § 2.4.5/6/7/8 + ADR-MONO-017 D4) — byte-unchanged**: Phase 8 verifies / regresses it via the cross-product golden-path scenarios (D3) and the isolation regression cohort (D5). The BFF remains the *credential dispatcher* (ADR-017 D4), never the rewriter. Phase 8 cohort failing on a credential drift means a domain or the BFF regressed away from § 2.4.5/6/7/8 + ADR-017 D4, not that Phase 8 rewrites the rule.
+- **ADR-MONO-013 D1-D8 — byte-unchanged** (additive amendments only, HARDSTOP-04): the two ADR-013 amendments in this PR are additive only (§ D5 line 76 sibling parenthetical scope-pointer next to ADR-017's + § History additive blockquote, count 5 → 6). § D6 row 8 body line + § D7/D8 + D1-D7 bodies are byte-unchanged.
+- **ADR-MONO-017 D1-D8 — byte-unchanged**: Phase 8 sits **on top of** the Phase 7 BFF architecture; it does not redirect any of ADR-017's decisions. D6 (tenant pass-through) + D7 (per-domain fan-out attribution) are the directly-extended invariants this ADR's D5 + D4 verify; ADR-017's own decision body is not amended by this ADR (no additive § History note on ADR-017 is added — ADR-017 § History remains as the ACCEPTED 2026-05-20 record).
+- **ADR-MONO-006 observability stack — NOT amended by this ADR**: D4 explicitly reuses Vector + VictoriaMetrics + the worktree-ephemeral topology (ADR-MONO-007); the OTel `trace_id` propagation strengthening is a propagation-discipline assertion target, not a stack mutation. No ADR-006 § History note is added by this ADR (ADR-006/007 reuse is verified at the Phase 8 execution cohort, not declared at this PROPOSED).
+- **Producer-side tenant gate (`tenant_id ∈ {<domain>,*}`) — authoritative**: D5 records the per-domain `TenantClaimValidator` cohort as the authoritative regression surface; the BFF (ADR-017 D6) pass-through remains never re-derivation.
+
+### 3.2 What this ADR does NOT do (deferred to ACCEPTED + post-ACCEPTED execution tasks)
+
+- It does NOT author the cross-product e2e cohort. No `.github/workflows/federation-hardening-e2e.yml`, no new Playwright spec files, no root `tests/` directory. That is the post-ACCEPTED root `tasks/` cross-product e2e cohort task.
+- It does NOT implement the observability federation. No OTel `trace_id` propagation code change, no Vector pipeline change, no VictoriaMetrics dashboard authoring, no per-layer propagation discipline code. That is the post-ACCEPTED observability federation impl task.
+- It does NOT author any multi-tenant isolation regression IT. No per-domain `TenantClaimValidator` IT cohort code, no console-bff cross-tenant pass-through IT code, no test fixture extension. That is the post-ACCEPTED 6-task IT cohort (5 project-internal + 1 platform-console-internal).
+- It does NOT modify [ADR-MONO-006](ADR-MONO-006-observability-stack.md) — D4 explicitly **reuses** the Vector + VictoriaMetrics stack, never amends it. No ADR-006 § History note is added by this PR.
+- It does NOT modify any per-domain producer spec — GAP `admin-api.md` / wms / scm / finance / erp gateway / admin specs are all byte-unchanged at PROPOSED and remain byte-unchanged at ACCEPTED (D3 + D5 explicitly preserve them).
+- It does NOT modify `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.5/6/7/8 / § 2.5 / § 2.6 — Phase 8 verifies them, never rewrites them.
+- It does NOT modify [ADR-MONO-014](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) / [ADR-MONO-015](ADR-MONO-015-platform-console-dashboards-model.md) / [ADR-MONO-017](ADR-MONO-017-platform-console-bff-architecture.md) — all three staged-child siblings are byte-unchanged by this PR.
+- It does NOT execute the ACCEPTED transition. The PROPOSED → ACCEPTED flip is a separate post-PROPOSED doc-only task (sibling: ADR-014 → TASK-MONO-110; ADR-015 → TASK-MONO-112; ADR-017 → TASK-MONO-126).
+- It does NOT mutate `projects/platform-console/PROJECT.md` — `service_types: [frontend-app, rest-api]` is the post-Phase-7 state; Phase 8 adds no new service type.
+
+### 3.3 Future-self
+
+ACCEPTED execution chain (sketch, finalised at ACCEPTED):
+
+1. **`TASK-MONO-1xx`** (sibling of MONO-110 / MONO-112 / MONO-126) — ADR-MONO-018 PROPOSED → ACCEPTED transition (doc-only, user-explicit-intent gated per D8); § 6 ACCEPTED row appended; `ADR-MONO-003a § 3` audit-row append (staged-child ADR ACCEPTED convention); D1-D8 finalised byte-unchanged from PROPOSED.
+2. **`TASK-MONO-1xx`** (root `tasks/`, post-ACCEPTED) — cross-product e2e cohort: `.github/workflows/federation-hardening-e2e.yml` + 7 Playwright spec files (5 golden-path + Operator Overview composition + Domain Health composition) + docker-compose stack wiring + nightly cron + workflow_dispatch + trace artifact upload. Model = **Sonnet** (per ADR-013 § D6 row 8). Reuses the platform-console PC-FE-019..031 Playwright harness foundation.
+3. **`TASK-MONO-1xx`** (root `tasks/`, post-ACCEPTED) — observability federation impl: OTel `trace_id` propagation strengthening at console-web SSR boundary + console-bff fan-out + per-domain downstream call layers; reuses ADR-MONO-006 stack (no stack mutation); cross-product e2e suite (step 2) asserts the 7-span trace tree assembles. Model = **Sonnet**.
+4. **`TASK-XXX-BE-NNN` × 5 + `TASK-PC-BE-00x` × 1** (per-domain project-internal `tasks/` × 5 + platform-console-internal `tasks/` × 1, post-ACCEPTED) — multi-tenant isolation regression IT cohort: per-domain `TenantClaimValidator` IT regression (GAP admin-service + wms + scm + finance + erp) + console-bff D6 tenant pass-through cross-tenant deny IT. Model = **Opus** (per ADR-013 § D6 row 8 "isolation → Opus" explicit elevation).
+
+Phase 9 (and beyond) — no ADR-013 § D6 row beyond 8 exists; ADR-013's Phase roadmap terminates at Phase 8. If post-Phase-8 hardening surfaces a new architectural axis (e.g. multi-region federation, federated audit query), it will be a new ADR, not an extension of this one.
+
+---
+
+## 4. Alternatives Considered
+
+The D1-D8 tables above each enumerate alternatives. The cross-cutting alternatives that span multiple decisions:
+
+- **Make federation hardening a separate project (`projects/federation-hardening/`)**. Rejected — federation hardening is a *verification axis* over the existing portfolio, not a new domain/product; creating a project for it would force a fresh PROJECT.md + domain/trait declaration + service_types declaration with no actual service in it; ADR-013 § D6 row 8 names "root `tasks/`" exactly to keep the scope as a monorepo-level verification cohort, not a project. The cross-product axis is the *integration* of existing projects, not its own boundary.
+- **Defer Phase 8 indefinitely until a real federation regression surfaces**. Rejected — § D6 row 8's gate is satisfied (5/5 + Phase 7 LIVE); deferring Phase 8 indefinitely means executing the 3 sub-axes ad-hoc (one cross-product e2e job here, one OTel propagation patch there, one tenant IT regression elsewhere) without the architectural frame, which silently re-bakes D1-D8 implicitly — the exact HARDSTOP-09 failure mode this ADR exists to prevent. ADR-014/015/017 each rejected the same alternative for their phase.
+- **Pre-build a generic federation harness (one harness covering e2e + observability + isolation)**. Rejected — generic-harness premature optimization; the 3 sub-axes share invariants but their primitives differ (Playwright vs OTel propagation vs JVM IT); iterating per-axis after MVP is more maintainable than one monolith.
+- **Defer the observability federation strengthening to ADR-MONO-006 / ADR-MONO-007 amendments**. Rejected — D4 reuses ADR-006, but the *propagation discipline assertion* (OTel `trace_id` end-to-end across the 7-span tree) is a federation-hardening verification, not an observability-stack architectural change. ADR-006/007 stay byte-unchanged; the assertion lives in the Phase 8 execution cohort.
+
+---
+
+## 5. Relationship to ADR-MONO-013 / 014 / 015 / 017
+
+| | ADR-MONO-013 | ADR-MONO-014 | ADR-MONO-015 | ADR-MONO-017 | **ADR-MONO-018 (this)** |
+|---|---|---|---|---|---|
+| Role | Console foundation (Model B, phases 0-8) | Operator-auth bridge (Phase 2 PREREQ) | Dashboards model (Phase 2 dashboards PREREQ) | Phase 7 BFF architecture (PREREQ for `console-bff` skeleton) | **Phase 8 federation hardening (PREREQ for cross-product e2e cohort + observability federation impl + multi-tenant isolation regression IT cohort)** |
+| Phase | All | 2 | 2 | 7 | **8** |
+| Pattern | Parent ADR (PROPOSED→ACCEPTED in 2 stages) | Staged child (PROPOSED→ACCEPTED) | Staged child (PROPOSED→ACCEPTED) | Staged child (PROPOSED→ACCEPTED) | **Staged child (PROPOSED here; ACCEPTED follow-up task)** |
+| Scope | Multi-phase roadmap | 1 decision axis (token exchange B vs A/C/D) | 1 decision axis (composition B vs Grafana A vs defer C) | 8 decision axes (D1-D8 — BFF architecture) | **8 decision axes (D1-D8 — federation hardening across 3 sub-axes: cross-product e2e + observability + isolation regression)** |
+
+This ADR amends ADR-MONO-013 § D5 (additive sibling parenthetical scope-pointer next to ADR-017's) + § History (additive note, count 5 → 6) and is a prerequisite for ADR-MONO-013 Phase 8 § D6 deliverable execution. ADR-MONO-006 / 007 / 014 / 015 / 017 are all byte-unchanged by this PR.
+
+---
+
+## 6. Status Transition History
+
+Append-only.
+
+| Date | Transition | Decision direction | User intent quote | PR(s) |
+|---|---|---|---|---|
+| 2026-05-25 | created PROPOSED | D1 = root `tasks/` + new `federation-hardening-e2e.yml` (nightly cron + workflow_dispatch); D2 = Playwright extended on PC-FE-019..031 harness; D3 = golden path × 5 + Operator Overview + Domain Health composition (MVP = 7 spec files); D4 = reuse ADR-006 Vector+VictoriaMetrics + ADR-017 D7 attribution + OTel `trace_id` propagation strengthening; D5 = per-domain `TenantClaimValidator` IT regression × 5 + console-bff D6 tenant pass-through cross-tenant deny IT; D6 = single PROPOSED bundling 3 sub-axes / execution split per axis; D7 = gate satisfied (Phase 7 LIVE) / ownership = root cross-product + project-internal isolation IT (Sonnet cohort + Opus isolation per ADR-013 § D6 row 8); D8 = user-explicit intent forms + 2-PR commit pattern (PR-A doc-only ACCEPTED + PR-B execution series) | "Phase 8 federation hardening PROPOSED authoring" (TASK-MONO-137 dispatcher trigger — `tasks/INDEX.md` ready entry sourced from the `/audit-memory` post-MONO-136 backlog scan recommending Phase 8 as the next architecture-decision-class candidate after console-bff TRUE 0 and refactor-sweep TRUE 0) | #<this> (TASK-MONO-137) |
+
+ACCEPTED execution (post-ACCEPTED, sketch): `TASK-MONO-1xx` (cross-product e2e cohort) + `TASK-MONO-1xx` (observability federation impl) + `TASK-XXX-BE-NNN` × 5 + `TASK-PC-BE-00x` × 1 (multi-tenant isolation regression IT cohort) — all **future** tasks; Phase 8 cross-product e2e cohort stays unstarted until ACCEPTED.
+
+---
+
+## 7. Provenance
+
+- HARDSTOP-09 #2 (`platform/hardstop-rules.md`) — mandate for an ADR + PAUSE-until-ACCEPTED on an undocumented cross-cutting architecture decision (8 axes here, across 3 sub-axes).
+- HARDSTOP-04 (`platform/hardstop-rules.md`) — the two ADR-MONO-013 amendments in this PR are additive only; D1-D8 byte-unchanged.
+- ADR-MONO-003a § D1.1 / § D2.1 — staged-PROPOSED + new child-ADR audit-row sanctioning (one-off § 3 row at ACCEPTED, § D1 untouched).
+- ADR-MONO-013 § D5 / § D6 Phase 8 (row 8) / § 3.3 — the parent prescriptions this ADR honors.
+- ADR-MONO-014 / ADR-MONO-015 / ADR-MONO-017 — staged-child PROPOSED-then-ACCEPTED frame this ADR mirrors verbatim.
+- ADR-MONO-006 / ADR-MONO-007 — the observability stack + worktree-ephemeral topology D4 reuses; not amended.
+- Phase 8 gate satisfaction (all domains integrated) objectively recorded at 2026-05-20 (ADR-MONO-017 ACCEPTED, TASK-MONO-126 mergeCommit `5c711e3b`) + `platform-console/PROJECT.md` Phase 7 LIVE self-declaration + 5/5 backend domains live (`projects/platform-console/PROJECT.md` Service Map).
+
+분석=Opus 4.7 / 구현=Opus 4.7 (staged-ADR governance precision; D1-D8 PROPOSED-direction reasoning under HARDSTOP-04/09 discipline; dispatcher-direct per ADR-008/013/014/015/016/017 PROPOSED authoring pattern; 8-decision frame mirrors ADR-017's operational symmetry across 3 sub-axes).
