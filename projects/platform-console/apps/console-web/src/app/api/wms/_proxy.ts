@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { WmsUnavailableError } from '@/shared/api/errors';
+import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
+import { newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the wms-ops same-origin proxy routes
@@ -29,41 +30,7 @@ export const AckBodySchema = z.object({
 });
 export type AckBody = z.infer<typeof AckBodySchema>;
 
-export function mapWmsError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code || 'UNAUTHORIZED', message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return NextResponse.json(
-      { code: err.code || 'FORBIDDEN', message: 'not permitted' },
-      { status: 403 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 400 VALIDATION_ERROR / 404 NOT_FOUND /
-    // 422 STATE_TRANSITION_INVALID / 409 DUPLICATE_REQUEST → inline
-    // actionable (passthrough, no crash).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof WmsUnavailableError) {
-    logger.warn('wms_proxy_degraded', { requestId, reason: err.reason });
-    return NextResponse.json(
-      { code: err.code, message: 'wms unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('wms_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'SERVICE_UNAVAILABLE', message: 'wms unavailable' },
-    { status: 503 },
-  );
-}
+export const mapWmsError = makeProxyErrorMapper('wms', WmsUnavailableError);
 
 export function badRequest(): NextResponse {
   return NextResponse.json(

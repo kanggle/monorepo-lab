@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { ErpUnavailableError } from '@/shared/api/errors';
+import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
+import { newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the erp-ops same-origin proxy
@@ -39,46 +39,7 @@ import { logger, newRequestId } from '@/shared/lib/logger';
  *
  * No token / erp data is ever logged (confidential + audit-heavy).
  */
-export function mapErpError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code || 'UNAUTHORIZED', message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return NextResponse.json(
-      { code: err.code || 'TENANT_FORBIDDEN', message: 'not permitted' },
-      { status: 403 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 400/422 VALIDATION_ERROR / 404 MASTERDATA_NOT_FOUND / any
-    // unexpected status (incl. a stray 429 — erp has no documented
-    // 429, no Retry-After branch; the 429 falls through here as a
-    // passthrough, NOT into a fabricated backoff) → inline
-    // actionable.
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof ErpUnavailableError) {
-    logger.warn('erp_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'erp unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('erp_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'SERVICE_UNAVAILABLE', message: 'erp unavailable' },
-    { status: 503 },
-  );
-}
+export const mapErpError = makeProxyErrorMapper('erp', ErpUnavailableError);
 
 /** Builds an `ErpListQueryParams` from the incoming `Request`'s
  *  URL search-params. CORE E3: `asOf` is threaded through

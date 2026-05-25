@@ -3,11 +3,7 @@ package com.kanggle.platformconsole.bff.adapter.outbound.http;
 import com.kanggle.platformconsole.bff.application.usecase.OperatorOverviewCompositionUseCase.GapAccountsReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.Map;
@@ -29,8 +25,9 @@ import java.util.Map;
  * </ul>
  *
  * <p>Errors are propagated as {@link org.springframework.web.client.RestClientException}
- * subtypes (notably {@link HttpClientErrorException}) — the composition use-case
- * maps them to {@code LegOutcome} per the degrade-policy classification (D5.A).
+ * subtypes (notably {@link org.springframework.web.client.HttpClientErrorException}) —
+ * the composition use-case maps them to {@code LegOutcome} per the
+ * degrade-policy classification (D5.A).
  */
 @Component
 public class GapAccountsReadAdapter implements GapAccountsReadPort {
@@ -47,18 +44,15 @@ public class GapAccountsReadAdapter implements GapAccountsReadPort {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Map<String, Object> read(String tenantId, String credential) {
-        return (Map<String, Object>) client.get()
-                .uri(uriBuilder -> uriBuilder
+        return RestClientHelper.authenticatedGet(
+                client,
+                uriBuilder -> uriBuilder
                         .path("/api/admin/accounts")
                         .queryParam("page", 0)
                         .queryParam("size", 1)
-                        .build())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential)
-                .header("X-Tenant-Id", tenantId)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(Map.class);
+                        .build(),
+                tenantId,
+                credential);
     }
 }

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
-  ApiError,
   ScmUnavailableError,
   ScmRateLimitedError,
 } from '@/shared/api/errors';
+import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 /**
@@ -31,52 +31,29 @@ import { logger, newRequestId } from '@/shared/lib/logger';
  *
  * No token / scm data is ever logged.
  */
-export function mapScmError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code || 'UNAUTHORIZED', message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return NextResponse.json(
-      { code: err.code || 'TENANT_FORBIDDEN', message: 'not permitted' },
-      { status: 403 },
-    );
-  }
-  if (err instanceof ScmRateLimitedError) {
-    logger.warn('scm_proxy_rate_limited', {
-      requestId,
-      retryAfterSeconds: err.retryAfterSeconds,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'scm gateway rate-limited' },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(err.retryAfterSeconds) },
-      },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 400/422 VALIDATION_ERROR / 404 PO_NOT_FOUND|NODE_NOT_FOUND /
-    // 409 CONFLICT → inline actionable (passthrough, no crash).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof ScmUnavailableError) {
-    logger.warn('scm_proxy_degraded', { requestId, reason: err.reason });
-    return NextResponse.json(
-      { code: err.code, message: 'scm unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('scm_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'SERVICE_UNAVAILABLE', message: 'scm unavailable' },
-    { status: 503 },
-  );
-}
+
+export const mapScmError = makeProxyErrorMapper(
+  'scm',
+  ScmUnavailableError,
+  [
+    // 429 ScmRateLimitedError — ONE bounded backoff, no re-storm (§ 2.4.6 Edge Case).
+    (err, requestId) => {
+      if (err instanceof ScmRateLimitedError) {
+        logger.warn('scm_proxy_rate_limited', {
+          requestId,
+          retryAfterSeconds: err.retryAfterSeconds,
+        });
+        return NextResponse.json(
+          { code: err.code, message: 'scm gateway rate-limited' },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(err.retryAfterSeconds) },
+          },
+        );
+      }
+      return null;
+    },
+  ],
+);
 
 export { newRequestId };

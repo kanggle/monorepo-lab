@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ApiError, AccountsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
+import { newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the accounts mutation proxy routes
@@ -32,44 +33,22 @@ export const BulkLockBodySchema = z.object({
 });
 export type BulkLockBody = z.infer<typeof BulkLockBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: err.status },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 400 STATE_TRANSITION_INVALID / REASON_REQUIRED / VALIDATION_ERROR,
-    // 404 ACCOUNT_NOT_FOUND, 409 IDEMPOTENCY_KEY_CONFLICT,
-    // 422 BATCH_SIZE_EXCEEDED → inline actionable (passthrough, no crash).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof AccountsUnavailableError) {
-    logger.warn('accounts_mutation_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'accounts unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('accounts_mutation_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'accounts unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeProxyErrorMapper(
+  'accounts',
+  AccountsUnavailableError,
+  [
+    // NO_ACTIVE_TENANT: tenant gate — fail-closed before any upstream call.
+    (err) => {
+      if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
+        return NextResponse.json(
+          { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+          { status: 400 },
+        );
+      }
+      return null;
+    },
+  ],
+);
 
 export function badRequest(): NextResponse {
   return NextResponse.json(
