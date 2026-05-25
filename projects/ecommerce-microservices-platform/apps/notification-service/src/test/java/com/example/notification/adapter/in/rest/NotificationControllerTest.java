@@ -1,6 +1,6 @@
 package com.example.notification.adapter.in.rest;
 
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageResult;
 import com.example.notification.application.result.GetNotificationResult;
 import com.example.notification.application.result.GetPreferenceResult;
 import com.example.notification.application.result.ListNotificationsResult;
@@ -50,7 +50,7 @@ class NotificationControllerTest {
                 "noti-1", "EMAIL", "Test Subject", "SENT", now, now);
 
         PageResult<ListNotificationsResult.NotificationSummary> pageResult =
-                PageResult.of(List.of(summary), 1L, 1, 0, 20);
+                new PageResult<>(List.of(summary), 0, 20, 1L, 1);
         given(notificationQueryService.getNotifications(eq("user-1"), any()))
                 .willReturn(pageResult);
 

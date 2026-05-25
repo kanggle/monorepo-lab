@@ -69,7 +69,7 @@ public class PromotionController {
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = size < 1 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
-        PromotionStatus promotionStatus = parsePromotionStatus(status);
+        PromotionStatus promotionStatus = PromotionControllerUtils.parsePromotionStatus(status);
 
         PageResult<PromotionSummary> result = promotionQueryService.getPromotions(safePage, safeSize, promotionStatus, role);
         return ResponseEntity.ok(PromotionListResponse.from(result));
@@ -119,16 +119,5 @@ public class PromotionController {
         IssueCouponsCommand command = new IssueCouponsCommand(promotionId, request.userIds(), role);
         IssueCouponsResult result = couponCommandService.issueCoupons(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(IssueCouponsResponse.from(result));
-    }
-
-    private PromotionStatus parsePromotionStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return null;
-        }
-        try {
-            return PromotionStatus.valueOf(status);
-        } catch (IllegalArgumentException e) {
-            throw new InvalidPromotionStatusException(status);
-        }
     }
 }

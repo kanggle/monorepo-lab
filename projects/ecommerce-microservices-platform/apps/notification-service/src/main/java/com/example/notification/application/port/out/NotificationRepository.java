@@ -1,7 +1,7 @@
 package com.example.notification.application.port.out;
 
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.domain.model.Notification;
 
 import java.util.Optional;

@@ -11,11 +11,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class CategoryRepositoryAdapter implements CategoryRepository {
+class CategoryRepositoryImpl implements CategoryRepository {
 
     private final CategoryJpaRepository jpaRepository;
 
-    CategoryRepositoryAdapter(CategoryJpaRepository jpaRepository) {
+    CategoryRepositoryImpl(CategoryJpaRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
     }
 

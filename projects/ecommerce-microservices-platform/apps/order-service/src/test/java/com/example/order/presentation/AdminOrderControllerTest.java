@@ -178,7 +178,7 @@ class AdminOrderControllerTest {
     @DisplayName("유효하지 않은 상태 값 INVALID로 변경 요청 시 400 반환")
     void changeStatus_invalidStatus_returns400() throws Exception {
         given(adminOrderStatusService.changeStatus(any(), eq("INVALID")))
-                .willThrow(new com.example.order.presentation.exception.InvalidOrderStatusException("INVALID"));
+                .willThrow(new com.example.order.application.exception.InvalidOrderStatusException("INVALID"));
 
         mockMvc.perform(post("/api/admin/orders/order-1/status")
                         .header("X-User-Role", "ADMIN")

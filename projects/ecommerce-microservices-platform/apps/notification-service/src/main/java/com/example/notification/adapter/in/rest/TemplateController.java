@@ -6,8 +6,8 @@ import com.example.notification.adapter.in.rest.dto.response.TemplateIdResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateListResponse;
 import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.domain.exception.AdminAccessDeniedException;
@@ -36,7 +36,7 @@ public class TemplateController {
             @RequestParam(defaultValue = "20") int size
     ) {
         validateAdminRole(userRole);
-        PageResult<NotificationTemplate> templates = templateService.getTemplates(PageQuery.of(page, size));
+        PageResult<NotificationTemplate> templates = templateService.getTemplates(new PageQuery(Math.max(page, 0), size < 1 ? 20 : Math.min(size, PageQuery.MAX_SIZE), null, null));
         return ResponseEntity.ok(TemplateListResponse.from(templates));
     }
 

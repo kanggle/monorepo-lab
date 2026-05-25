@@ -1,4 +1,4 @@
-package com.example.promotion.interfaces.rest.controller;
+package com.example.promotion.application.exception;
 
 public class InvalidPromotionStatusException extends RuntimeException {
 

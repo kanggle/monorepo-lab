@@ -1,7 +1,7 @@
 package com.example.notification.application.service;
 
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.result.GetNotificationResult;
 import com.example.notification.application.result.ListNotificationsResult;
@@ -41,8 +41,8 @@ class NotificationQueryServiceTest {
                 "noti-1", "user-1", NotificationChannel.EMAIL,
                 "Subject", "Body", NotificationStatus.SENT,
                 "event-1", 0, null, null);
-        PageQuery pageQuery = PageQuery.of(0, 20);
-        PageResult<Notification> pageResult = PageResult.of(List.of(notification), 1L, 1, 0, 20);
+        PageQuery pageQuery = new PageQuery(0, 20, null, null);
+        PageResult<Notification> pageResult = new PageResult<>(List.of(notification), 0, 20, 1L, 1);
         given(notificationRepository.findByUserId("user-1", pageQuery))
                 .willReturn(pageResult);
 

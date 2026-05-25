@@ -2,8 +2,8 @@ package com.example.notification.application.service;
 
 import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.application.port.out.TemplateRepository;
 import com.example.notification.application.result.TemplateResult;

@@ -10,7 +10,6 @@ import com.example.notification.domain.model.Notification;
 import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationTemplate;
 import com.example.notification.domain.model.UserNotificationPreference;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,16 +21,22 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class NotificationSendService implements SendNotificationUseCase {
 
     private final NotificationRepository notificationRepository;
     private final TemplateRepository templateRepository;
     private final ManagePreferenceUseCase managePreferenceUseCase;
-    private final List<NotificationSender> notificationSenders;
+    private final Map<NotificationChannel, NotificationSender> senderMap;
 
-    private Map<NotificationChannel, NotificationSender> getSenderMap() {
-        return notificationSenders.stream()
+    public NotificationSendService(NotificationRepository notificationRepository,
+                                   TemplateRepository templateRepository,
+                                   ManagePreferenceUseCase managePreferenceUseCase,
+                                   List<NotificationSender> notificationSenders) {
+        this.notificationRepository = notificationRepository;
+        this.templateRepository = templateRepository;
+        this.managePreferenceUseCase = managePreferenceUseCase;
+        List<NotificationSender> senders = notificationSenders != null ? notificationSenders : List.of();
+        this.senderMap = senders.stream()
                 .collect(Collectors.toMap(
                         NotificationSender::supportedChannel,
                         Function.identity(),
@@ -46,8 +51,6 @@ public class NotificationSendService implements SendNotificationUseCase {
         }
 
         UserNotificationPreference preference = managePreferenceUseCase.getOrCreatePreference(command.userId());
-
-        Map<NotificationChannel, NotificationSender> senderMap = getSenderMap();
 
         for (NotificationChannel channel : NotificationChannel.values()) {
             sendViaChannel(command, channel, preference, senderMap);

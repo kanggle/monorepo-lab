@@ -2,8 +2,8 @@ package com.example.notification.adapter.out.persistence.repository;
 
 import com.example.notification.adapter.out.persistence.entity.NotificationJpaEntity;
 import com.example.notification.adapter.out.persistence.mapper.NotificationPersistenceMapper;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.domain.model.Notification;
 import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationStatus;
@@ -54,7 +54,7 @@ class NotificationRepositoryImplTest {
                 .willReturn(jpaPage);
         given(mapper.toDomain(entity)).willReturn(notification);
 
-        PageQuery pageQuery = PageQuery.of(0, 20);
+        PageQuery pageQuery = new PageQuery(0, 20, null, null);
         PageResult<Notification> result = repositoryImpl.findByUserId("user-1", pageQuery);
 
         assertThat(result.content()).hasSize(1);
@@ -73,7 +73,7 @@ class NotificationRepositoryImplTest {
         given(jpaRepository.findByUserIdOrderByCreatedAtDesc(eq("user-1"), any()))
                 .willReturn(emptyPage);
 
-        PageQuery pageQuery = PageQuery.of(0, 20);
+        PageQuery pageQuery = new PageQuery(0, 20, null, null);
         PageResult<Notification> result = repositoryImpl.findByUserId("user-1", pageQuery);
 
         assertThat(result.content()).isEmpty();

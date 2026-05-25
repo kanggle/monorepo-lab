@@ -7,6 +7,9 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Common utilities (PageQuery, PageResult, etc.)
+    implementation project(':libs:java-common')
+
     // API Documentation
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 

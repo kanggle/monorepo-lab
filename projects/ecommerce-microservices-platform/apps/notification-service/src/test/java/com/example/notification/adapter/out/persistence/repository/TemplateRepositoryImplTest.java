@@ -2,8 +2,8 @@ package com.example.notification.adapter.out.persistence.repository;
 
 import com.example.notification.adapter.out.persistence.entity.NotificationTemplateJpaEntity;
 import com.example.notification.adapter.out.persistence.mapper.TemplatePersistenceMapper;
-import com.example.notification.application.page.PageQuery;
-import com.example.notification.application.page.PageResult;
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationTemplate;
 import com.example.notification.domain.model.TemplateType;
@@ -50,7 +50,7 @@ class TemplateRepositoryImplTest {
         given(jpaRepository.findAll(any(PageRequest.class))).willReturn(jpaPage);
         given(mapper.toDomain(entity)).willReturn(template);
 
-        PageQuery pageQuery = PageQuery.of(0, 20);
+        PageQuery pageQuery = new PageQuery(0, 20, null, null);
         PageResult<NotificationTemplate> result = repositoryImpl.findAll(pageQuery);
 
         assertThat(result.content()).hasSize(1);
@@ -68,7 +68,7 @@ class TemplateRepositoryImplTest {
 
         given(jpaRepository.findAll(any(PageRequest.class))).willReturn(emptyPage);
 
-        PageQuery pageQuery = PageQuery.of(0, 20);
+        PageQuery pageQuery = new PageQuery(0, 20, null, null);
         PageResult<NotificationTemplate> result = repositoryImpl.findAll(pageQuery);
 
         assertThat(result.content()).isEmpty();

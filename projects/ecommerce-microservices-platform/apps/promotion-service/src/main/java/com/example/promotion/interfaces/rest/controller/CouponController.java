@@ -38,7 +38,7 @@ public class CouponController {
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = size < 1 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
-        CouponStatus couponStatus = parseCouponStatus(status);
+        CouponStatus couponStatus = PromotionControllerUtils.parseCouponStatus(status);
 
         PageResult<CouponDetail> result = couponQueryService.getMyCoupons(userId, safePage, safeSize, couponStatus);
         return ResponseEntity.ok(CouponListResponse.from(result));
@@ -55,16 +55,5 @@ public class CouponController {
         );
         ApplyCouponResult result = couponCommandService.applyCoupon(command);
         return ResponseEntity.ok(ApplyCouponResponse.from(result));
-    }
-
-    private CouponStatus parseCouponStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return null;
-        }
-        try {
-            return CouponStatus.valueOf(status);
-        } catch (IllegalArgumentException e) {
-            throw new InvalidCouponStatusException(status);
-        }
     }
 }
