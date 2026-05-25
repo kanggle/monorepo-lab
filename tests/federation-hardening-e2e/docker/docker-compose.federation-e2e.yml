@@ -1,0 +1,485 @@
+# =============================================================================
+# TASK-MONO-139 — Phase 8 Federation Hardening E2E Compose
+# =============================================================================
+# Cross-product e2e overlay. Boots 11+ services across all 5 backend domains.
+# ADR-MONO-018 D1/D2/D3. HARDSTOP-04: producer specs / ADR byte-unchanged.
+#
+# Phase 1 (started first via `docker compose up -d ...`):
+#   - mysql:8.0 (shared: auth_db / account_db / admin_db / finance_db / erp_db)
+#   - redis:7-alpine
+#   - kafka (DNS-only placeholder — TASK-PC-FE-023 pattern)
+#   - auth-service (GAP OIDC AS)
+#   - account-service (GAP account read)
+#   - admin-service (GAP operator-token issuer + registry)
+#
+# Phase 1.5 (seed.sql applied via `docker compose exec -T mysql mysql ...`):
+#   - auth_db.credentials + admin_db.admin_operators/roles
+#   - finance_db + erp_db CREATE DATABASE
+#
+# Phase 2 (started after phase 1.5):
+#   - wms-postgres (PostgreSQL for master-service)
+#   - scm-postgres  (PostgreSQL for procurement-service)
+#   - wms-master-service (wms domain read endpoint /api/v1/master/warehouses)
+#   - scm-procurement-service (scm domain read endpoint /api/scm/purchase-orders)
+#   - finance-account-service (finance read endpoint /api/finance/accounts/{id})
+#   - erp-masterdata-service (erp read endpoint /api/erp/masterdata/employees)
+#   - console-bff (Spring Boot orchestrator — operator-overview + domain-health)
+#   - console-web (Next.js Playwright target)
+#
+# Phase 2.5 (seed-domains.sql + seed-wms.sql + seed-scm.sql applied):
+#   - finance_db.accounts + balances (via mysql exec)
+#   - erp_db.departments + employees (via mysql exec)
+#   - wms warehouses (via psql exec against wms-postgres)
+#   - scm purchase_orders (via psql exec against scm-postgres)
+#
+# console-bff outbound wiring (replaces 127.0.0.1:9 placeholder):
+#   CONSOLE_BFF_OUTBOUND_WMS_BASE_URL=http://wms-master-service:8081
+#   CONSOLE_BFF_OUTBOUND_SCM_BASE_URL=http://scm-procurement-service:8080
+#   CONSOLE_BFF_OUTBOUND_ERP_BASE_URL=http://erp-masterdata-service:8080
+#
+# Usage (local dev):
+#   ./gradlew :projects:global-account-platform:apps:auth-service:bootJar ...
+#   docker compose -f docker-compose.federation-e2e.yml up -d --build mysql redis kafka auth-service account-service admin-service
+#   # wait for admin-service healthy
+#   docker compose -f docker-compose.federation-e2e.yml exec -T mysql mysql -uroot -prootpass < ../fixtures/seed.sql
+#   docker compose -f docker-compose.federation-e2e.yml up -d --build wms-postgres scm-postgres wms-master-service scm-procurement-service finance-account-service erp-masterdata-service console-bff console-web
+#   # wait for all healthy, then apply seed-domains.sql + seed-wms.sql + seed-scm.sql
+# =============================================================================
+
+name: federation-hardening-e2e
+
+x-gap-service-env: &gap-service-env
+  SPRING_PROFILES_ACTIVE: e2e
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ""
+  # Kafka is DNS-only placeholder (TASK-PC-FE-023 pattern). GAP services bind
+  # KAFKA_BOOTSTRAP_SERVERS at boot but e2e specs never exercise event paths.
+  KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+  JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+  OIDC_ISSUER_URL: http://auth-service:8081
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL — shared instance for GAP + finance + erp schemas.
+  # Reuses the GAP init.sh verbatim (creates auth_db / account_db /
+  # security_db / admin_db / community_db / membership_db).
+  # finance_db + erp_db are created at phase 1.5 via seed.sql.
+  # wms and scm use separate PostgreSQL sidecars (below).
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      AUTH_DB_PASSWORD: auth_pass
+      ACCOUNT_DB_PASSWORD: account_pass
+      SECURITY_DB_PASSWORD: security_pass
+      ADMIN_DB_PASSWORD: admin_pass
+      COMMUNITY_DB_PASSWORD: community_pass
+      MEMBERSHIP_DB_PASSWORD: membership_pass
+    volumes:
+      - ../../../../projects/global-account-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports: ["13307:3306"]
+    networks: [fed-e2e]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports: ["16380:6379"]
+    networks: [fed-e2e]
+
+  # DNS-only Kafka placeholder — satisfies GAP Dockerfile BE-048 ENTRYPOINT
+  # `getent hosts kafka` pre-flight without booting a real broker.
+  kafka:
+    image: alpine:3.19
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
+    networks: [fed-e2e]
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL sidecars — wms and scm use PostgreSQL, not MySQL.
+  # Two separate instances to avoid cross-domain schema collision.
+  # ---------------------------------------------------------------------------
+  wms-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: master_db
+      POSTGRES_USER: master
+      POSTGRES_PASSWORD: master
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U master -d master_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15432:5432"]
+    networks: [fed-e2e]
+
+  scm-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scm_procurement
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scm -d scm_procurement"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15433:5432"]
+    networks: [fed-e2e]
+
+  # ---------------------------------------------------------------------------
+  # GAP auth-service — SAS OIDC AS.
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build:
+      context: ../../../../projects/global-account-platform
+      dockerfile: apps/auth-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: auth_db
+      DB_USERNAME: auth_user
+      DB_PASSWORD: auth_pass
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
+    volumes:
+      - ../../../../projects/global-account-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_started }
+    ports: ["8081:8081"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # GAP account-service.
+  # ---------------------------------------------------------------------------
+  account-service:
+    build:
+      context: ../../../../projects/global-account-platform
+      dockerfile: apps/account-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: account_db
+      DB_USERNAME: account_user
+      DB_PASSWORD: account_pass
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_API_TOKEN: e2e-internal-token
+    depends_on:
+      mysql: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      kafka: { condition: service_started }
+    ports: ["18082:8082"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # GAP admin-service — operator-token issuer + operator registry.
+  # ---------------------------------------------------------------------------
+  admin-service:
+    build:
+      context: ../../../../projects/global-account-platform
+      dockerfile: apps/admin-service/Dockerfile
+    environment:
+      <<: *gap-service-env
+      DB_NAME: admin_db
+      DB_USERNAME: admin_user
+      DB_PASSWORD: admin_pass
+      AUTH_SERVICE_URL: http://auth-service:8081
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      INTERNAL_API_TOKEN: e2e-internal-token
+      ADMIN_OIDC_ISSUER: http://auth-service:8081
+      ADMIN_OIDC_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      ADMIN_OIDC_AUDIENCE: platform-console-web
+      ADMIN_JWT_V1_PEM: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwpwO4oW86ahUt
+        7qzFCSMA0fdzc6ehRRJgwsNekNaf9lcBC0kFmShJQQzoaWZXW9g/Qfdq8rIGpO0Q
+        +1I2s8U8xFlNunEdW/rzI0H1aKONIduiv/lN/u66+TZrRspeaH1vpuya7+YFEw1N
+        DMpjtEmuOwMi10RY5hMK/o7PJjRTq9EVacMErQOdchvrZOztlLugt3Y8K1BNxQ8B
+        ++fFSxGAstoI4QXWtnUpGpmaR0DUEj5wMAg9pr/doj22hR4WYjiC0Cixias/uLOu
+        XXTLQPk4Z/oM6Y783hpX+KDE0inwMhxj3uKD1+o9ceveIt4EyA0OqiNBlvFmTc82
+        xk5UmMQvAgMBAAECggEAG0y0NoQ8PDrIqyCHcqvGzQmlxCHLdhDGlk2DA8o+YNog
+        9/hWgJb6stdqt0ASoM2AzcXUBqMbAAvc1xL/0ZRWlt2BL5HwiSj9zzVTrClPnS/u
+        UWh5jqQnIJ4C2vFFtPFQ8UBKsGcClSYsmAux+1aRTGuyQGAkH9jueHR+fWTaEVPq
+        Zhmahubd62eATcPR5b5nTTAiEwWAV5AgpSkaD3vrQZEwud/lrbW4376xyVc3cJRK
+        inrjry4kBybeRIM9ElsOMI4EIfsyseLubG/bO5c/cSTnYeHLnPMyH8OA3CePx9a+
+        Oyp2FkKnwf/EgdWLJNolsSO3MYUXjIcH6/AowVzTgQKBgQDcnnycIxQy9B9ypKxm
+        JV1MUh6SagQ5oCHLZJWt3VBupYVUCMqvqgTQ9SiSQDddFSK5Kstpd6N049yiytyD
+        HBmigU0m8g2L94fJJ/M56a3xB2qzj4lkhTk1GSV5YBgT3XgGG3EexCiCM0MxfMlO
+        XDQPzqrmumIsPP2vgGZusmIujQKBgQDM+3ngGCiq/h1ixgKLZLiFQd9HOrT0x+nU
+        q07KEXvHuORDzLWw026+wbTsDWYDGARE/7HpVliLjLTjBk//Ih20C1BV3jzp+Mgp
+        oY4HomvtsRTrujYrTtPU/mEXOaUosRiRlXQ0KQTKMm9FdiA1nR7YKYQUwyeZcVYT
+        6Lkh661cqwKBgCRc8wkBNykW18AbqFbFvdUAjA1x7/RXknplv84CdmlmWs15DX9a
+        tKSEZAWHFBkBjNGcXh6qG4T+sbUbXrE1hnwkd8T9jIIPcJAVR5+6BnN913Z1KB4r
+        XzyDQov47L8Jd+j5yPFbP5oGPQMBIGUMCYC5fa299sR34RB2R2vjdw9ZAoGBAJfO
+        xnwIaFX6zJiSPOAvP9iw6ENAXzPJuoseM8PDHwDTFXqA6S6D58iufOc1JQ+1gbP4
+        CjLdF8aB9pUL38L76TOmDWEKreI5tUPfueg9ieEG/I934RZB0vAzVIR21LJGNgPb
+        w6u9lSaKI4415bTPIEDGvmMCBRnGrhEgkbtlZ4bxAoGAX7D0UjhAe2Md/uNxqdfY
+        UWRS9HKqjiVS8DFMw++9luj+rHaX6lhUarKb5vw1qf5T5HPPFHi2uDECXn7XMgxn
+        sGtyQkkPOviswzBjWzt6cGdi9D4SFrygtr0cpBOXM3UuHm7hfSwKg9O5UoWYs8JV
+        fOIvQyaNDTvxW+mx0Ds4Huo=
+        -----END PRIVATE KEY-----
+      ADMIN_TOTP_V1_KEY: REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      account-service: { condition: service_started }
+      kafka: { condition: service_started }
+    ports: ["18085:8085"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # wms-master-service — wms domain read endpoint.
+  # Exposes /api/v1/master/warehouses (warehouse list).
+  # Uses wms-postgres sidecar (PostgreSQL).
+  # Port 8081 internally (application.yml default SERVER_PORT).
+  # ---------------------------------------------------------------------------
+  wms-master-service:
+    build:
+      context: ../../../../projects/wms-platform/apps/master-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8081"
+      DB_URL: jdbc:postgresql://wms-postgres:5432/master_db
+      DB_USERNAME: master
+      DB_PASSWORD: master
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      wms-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18091:8081"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # scm-procurement-service — scm domain read endpoint.
+  # Exposes /api/scm/purchase-orders (PO list).
+  # Uses scm-postgres sidecar (PostgreSQL).
+  # Port 8080 internally (application.yml SERVER_PORT default).
+  # ---------------------------------------------------------------------------
+  scm-procurement-service:
+    build:
+      context: ../../../../projects/scm-platform/apps/procurement-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      POSTGRES_HOST: scm-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB_PROCUREMENT: scm_procurement
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      scm-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18092:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # finance-account-service — finance domain read endpoint.
+  # Reuse from platform-console docker-compose.e2e.yml verbatim.
+  # ---------------------------------------------------------------------------
+  finance-account-service:
+    build:
+      context: ../../../../projects/finance-platform/apps/account-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: e2e
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: finance_db
+      MYSQL_USER: finance
+      MYSQL_PASSWORD: finance
+      REDIS_HOST: redis
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      FINANCE_ACCOUNT_PII_KEY: finance-account-dev-pii-key-32bytes!!
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18086:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # erp-masterdata-service — erp domain read endpoint.
+  # Exposes /api/erp/masterdata/employees (employee list).
+  # Uses MySQL (erp_db created at phase 1.5 seed.sql).
+  # ---------------------------------------------------------------------------
+  erp-masterdata-service:
+    build:
+      context: ../../../../projects/erp-platform/apps/masterdata-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: erp_db
+      MYSQL_USER: erp
+      MYSQL_PASSWORD: erp
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+    ports: ["18093:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # console-bff — Spring Boot orchestrator.
+  # ADR-MONO-018 phase 2 outbound wiring: replaces 127.0.0.1:9 placeholders
+  # with real producer hostnames (wms / scm / erp).
+  # ---------------------------------------------------------------------------
+  console-bff:
+    build:
+      context: ../../../../projects/platform-console/apps/console-bff
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      CONSOLE_BFF_GAP_ISSUER_URL: http://auth-service:8081
+      CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
+      # Per-domain outbound base URLs — ALL 5 live for this cohort.
+      # ADR-MONO-018 D1: replaces the 127.0.0.1:9 non-routable placeholders
+      # in platform-console docker-compose.e2e.yml (wms/scm/erp were placeholder).
+      CONSOLE_BFF_OUTBOUND_GAP_BASE_URL: http://admin-service:8085
+      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://wms-master-service:8081
+      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://scm-procurement-service:8080
+      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
+      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://erp-masterdata-service:8080
+    depends_on:
+      auth-service: { condition: service_started }
+      admin-service: { condition: service_started }
+      finance-account-service: { condition: service_started }
+      wms-master-service: { condition: service_started }
+      scm-procurement-service: { condition: service_started }
+      erp-masterdata-service: { condition: service_started }
+    ports: ["18090:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # console-web — Next.js Playwright target.
+  # Reuse from platform-console docker-compose.e2e.yml verbatim.
+  # ---------------------------------------------------------------------------
+  console-web:
+    build:
+      context: ../../../../projects/platform-console/apps/console-web
+      dockerfile: Dockerfile
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+      OIDC_ISSUER_URL: http://auth-service:8081
+      OIDC_CLIENT_ID: platform-console-web
+      OIDC_REDIRECT_URI: http://localhost:3000/api/auth/callback
+      OIDC_SCOPE: "openid profile email tenant.read"
+      CONSOLE_REGISTRY_URL: http://admin-service:8085/api/admin/console/registry
+      REGISTRY_TIMEOUT_MS: "5000"
+      CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
+      TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
+      GAP_ADMIN_API_BASE: http://admin-service:8085
+      CONSOLE_BFF_URL: http://console-bff:8080
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      auth-service: { condition: service_started }
+      admin-service: { condition: service_started }
+      console-bff: { condition: service_started }
+    ports: ["3000:3000"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+networks:
+  fed-e2e:
+    driver: bridge
