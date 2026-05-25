@@ -51,5 +51,47 @@ try {
         $result | ConvertTo-Json -Compress
         exit 0
     }
+
+    # TASK-MONO-135: HEAD-based implicit-target push gap.
+    #
+    # The 4 patterns above all rely on the command STRING containing literal
+    # "main"/"master". They miss the case where the agent's cwd (typically a
+    # worktree) has HEAD pointing at main/master and the command is bare
+    # `git push` / `git push origin` / `git push [-u] origin HEAD` — git's
+    # default `push.default = simple/current` then pushes the local branch
+    # to its same-name upstream (origin/main).
+    #
+    # The 2026-05-25 fan-platform 8-project sweep had exactly this leak:
+    # one agent's worktree ended up on main HEAD, `git push -u origin HEAD`
+    # passed the regex, and origin/main was force-rolled back to 11a3d9b0
+    # to recover. This block prevents recurrence.
+    #
+    # Allow rule: if the command has an EXPLICIT non-main target (contains `:`
+    # for refspec, or `origin <branch>` for non-HEAD positional), let the
+    # earlier regex's verdict stand. Only intercept implicit-default forms.
+    if ($command -match 'git\s+push\b' -and $cwd) {
+        $isImplicitTarget =
+            $command -match '^\s*git\s+push\s*$' -or
+            $command -match '^\s*git\s+push\s+(?:--?\S+(?:[=\s]\S+)?\s+)*origin\s*$' -or
+            $command -match '^\s*git\s+push\s+(?:--?\S+(?:[=\s]\S+)?\s+)*origin\s+HEAD\s*$' -or
+            $command -match '^\s*git\s+push\s+(?:--?\S+(?:[=\s]\S+)?\s+)*HEAD\s*$'
+
+        if ($isImplicitTarget) {
+            $branch = $null
+            try {
+                $branch = (& git -C $cwd symbolic-ref --short HEAD 2>$null)
+                if ($branch) { $branch = "$branch".Trim() }
+            } catch {}
+
+            if ($branch -eq 'main' -or $branch -eq 'master') {
+                $result = @{
+                    decision = "block"
+                    reason   = "main/master branch protection: cwd HEAD is '$branch' and the bare/implicit `git push` would default to origin/$branch. Switch to a feature branch first (git checkout -b task/<id>-<short>) or use an explicit target (git push origin HEAD:<feature-branch>)."
+                }
+                $result | ConvertTo-Json -Compress
+                exit 0
+            }
+        }
+    }
 }
 catch {}
