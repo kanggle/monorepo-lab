@@ -10,7 +10,7 @@ import java.util.Optional;
  * Port for account search/query operations that require pagination or join queries
  * not supported by the domain repository interfaces.
  *
- * <p>Implemented by infrastructure layer ({@code AccountQueryPortAdapter}).</p>
+ * <p>Implemented by infrastructure layer ({@code AccountQueryPortImpl}).</p>
  */
 public interface AccountQueryPort {
 

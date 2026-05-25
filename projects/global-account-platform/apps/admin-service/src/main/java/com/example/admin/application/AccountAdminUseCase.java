@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.function.Function;
 
 /**
  * Orchestrates lock/unlock operator commands. Authorization is enforced
@@ -29,103 +30,113 @@ public class AccountAdminUseCase {
 
     public LockAccountResult lock(LockAccountCommand cmd) {
         requireReason(cmd.reason());
+        AccountActionOutcome outcome = executeAccountAction(
+                ActionCode.ACCOUNT_LOCK,
+                cmd.operator(), cmd.accountId(),
+                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
+                ik -> accountServiceClient.lock(
+                        cmd.accountId(),
+                        cmd.operator().operatorId(),
+                        cmd.reason(),
+                        cmd.ticketId(),
+                        ik));
+        return new LockAccountResult(
+                outcome.downstream.accountId(),
+                outcome.downstream.previousStatus(),
+                outcome.downstream.currentStatus(),
+                cmd.operator().operatorId(),
+                outcome.downstream.lockedAt() != null ? outcome.downstream.lockedAt() : outcome.completedAt,
+                outcome.auditId);
+    }
+
+    public UnlockAccountResult unlock(UnlockAccountCommand cmd) {
+        requireReason(cmd.reason());
+        AccountActionOutcome outcome = executeAccountAction(
+                ActionCode.ACCOUNT_UNLOCK,
+                cmd.operator(), cmd.accountId(),
+                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
+                ik -> accountServiceClient.unlock(
+                        cmd.accountId(),
+                        cmd.operator().operatorId(),
+                        cmd.reason(),
+                        cmd.ticketId(),
+                        ik));
+        return new UnlockAccountResult(
+                outcome.downstream.accountId(),
+                outcome.downstream.previousStatus(),
+                outcome.downstream.currentStatus(),
+                cmd.operator().operatorId(),
+                outcome.downstream.unlockedAt() != null ? outcome.downstream.unlockedAt() : outcome.completedAt,
+                outcome.auditId);
+    }
+
+    /**
+     * Common flow shared by {@link #lock} and {@link #unlock}:
+     * <ol>
+     *   <li>INSERT IN_PROGRESS audit row (A10 fail-closed).</li>
+     *   <li>Call account-service downstream with the supplied {@code downstreamCall}.</li>
+     *   <li>On success: finalize audit row to SUCCESS.</li>
+     *   <li>On circuit-breaker open or downstream failure: finalize to FAILURE and rethrow.</li>
+     * </ol>
+     *
+     * @param actionCode     the audit action code (ACCOUNT_LOCK or ACCOUNT_UNLOCK)
+     * @param operator       the acting operator context
+     * @param accountId      the target account
+     * @param reason         mandatory operator reason
+     * @param ticketId       optional ticket reference
+     * @param idempotencyKey caller-supplied idempotency key
+     * @param downstreamCall function from the effective idempotency key to the downstream response
+     * @return outcome carrying the auditId, completedAt timestamp, and downstream response
+     */
+    private AccountActionOutcome executeAccountAction(
+            ActionCode actionCode,
+            OperatorContext operator,
+            String accountId,
+            String reason,
+            String ticketId,
+            String idempotencyKey,
+            Function<String, AccountServiceClient.LockResponse> downstreamCall) {
 
         String auditId = auditor.newAuditId();
         Instant startedAt = Instant.now();
 
         auditor.recordStart(new AdminActionAuditor.StartRecord(
-                auditId, ActionCode.ACCOUNT_LOCK, cmd.operator(),
-                "ACCOUNT", cmd.accountId(),
-                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
+                auditId, actionCode, operator,
+                "ACCOUNT", accountId,
+                reason, ticketId, idempotencyKey,
                 startedAt));
 
-        AccountServiceClient.LockResponse downstream;
         try {
-            downstream = accountServiceClient.lock(
-                    cmd.accountId(),
-                    cmd.operator().operatorId(),
-                    cmd.reason(),
-                    cmd.ticketId(),
-                    cmd.idempotencyKey());
+            AccountServiceClient.LockResponse downstream = downstreamCall.apply(idempotencyKey);
+            Instant completedAt = Instant.now();
+            auditor.recordCompletion(new AdminActionAuditor.CompletionRecord(
+                    auditId, actionCode, operator,
+                    "ACCOUNT", accountId,
+                    reason, ticketId, idempotencyKey,
+                    Outcome.SUCCESS, null, startedAt, completedAt));
+            return new AccountActionOutcome(auditId, completedAt, downstream);
         } catch (CallNotPermittedException ex) {
             // Circuit breaker OPEN: downstream call was rejected. Record FAILURE
             // audit row before re-throwing so AdminExceptionHandler maps to 503
             // CIRCUIT_OPEN. A10 fail-closed requires a completion row for every
             // started action, including CB-rejected ones.
-            recordAuditFailure(auditId, ActionCode.ACCOUNT_LOCK, cmd.operator(),
-                    cmd.accountId(), cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                    startedAt, "CIRCUIT_OPEN: " + ex.getMessage());
+            recordAuditFailure(auditId, actionCode, operator, accountId,
+                    reason, ticketId, idempotencyKey, startedAt,
+                    "CIRCUIT_OPEN: " + ex.getMessage());
             throw ex;
         } catch (DownstreamFailureException ex) {
-            recordAuditFailure(auditId, ActionCode.ACCOUNT_LOCK, cmd.operator(),
-                    cmd.accountId(), cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                    startedAt, ex.getMessage());
+            recordAuditFailure(auditId, actionCode, operator, accountId,
+                    reason, ticketId, idempotencyKey, startedAt, ex.getMessage());
             throw ex;
         }
-
-        Instant completedAt = Instant.now();
-        auditor.recordCompletion(new AdminActionAuditor.CompletionRecord(
-                auditId, ActionCode.ACCOUNT_LOCK, cmd.operator(),
-                "ACCOUNT", cmd.accountId(),
-                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                Outcome.SUCCESS, null, startedAt, completedAt));
-
-        return new LockAccountResult(
-                downstream.accountId(),
-                downstream.previousStatus(),
-                downstream.currentStatus(),
-                cmd.operator().operatorId(),
-                downstream.lockedAt() != null ? downstream.lockedAt() : completedAt,
-                auditId);
     }
 
-    public UnlockAccountResult unlock(UnlockAccountCommand cmd) {
-        requireReason(cmd.reason());
-
-        String auditId = auditor.newAuditId();
-        Instant startedAt = Instant.now();
-
-        auditor.recordStart(new AdminActionAuditor.StartRecord(
-                auditId, ActionCode.ACCOUNT_UNLOCK, cmd.operator(),
-                "ACCOUNT", cmd.accountId(),
-                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                startedAt));
-
-        AccountServiceClient.LockResponse downstream;
-        try {
-            downstream = accountServiceClient.unlock(
-                    cmd.accountId(),
-                    cmd.operator().operatorId(),
-                    cmd.reason(),
-                    cmd.ticketId(),
-                    cmd.idempotencyKey());
-        } catch (CallNotPermittedException ex) {
-            recordAuditFailure(auditId, ActionCode.ACCOUNT_UNLOCK, cmd.operator(),
-                    cmd.accountId(), cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                    startedAt, "CIRCUIT_OPEN: " + ex.getMessage());
-            throw ex;
-        } catch (DownstreamFailureException ex) {
-            recordAuditFailure(auditId, ActionCode.ACCOUNT_UNLOCK, cmd.operator(),
-                    cmd.accountId(), cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                    startedAt, ex.getMessage());
-            throw ex;
-        }
-
-        Instant completedAt = Instant.now();
-        auditor.recordCompletion(new AdminActionAuditor.CompletionRecord(
-                auditId, ActionCode.ACCOUNT_UNLOCK, cmd.operator(),
-                "ACCOUNT", cmd.accountId(),
-                cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                Outcome.SUCCESS, null, startedAt, completedAt));
-
-        return new UnlockAccountResult(
-                downstream.accountId(),
-                downstream.previousStatus(),
-                downstream.currentStatus(),
-                cmd.operator().operatorId(),
-                downstream.unlockedAt() != null ? downstream.unlockedAt() : completedAt,
-                auditId);
-    }
+    /** Carries the success-path results of {@link #executeAccountAction}. */
+    private record AccountActionOutcome(
+            String auditId,
+            Instant completedAt,
+            AccountServiceClient.LockResponse downstream
+    ) {}
 
     private static void requireReason(String reason) {
         if (reason == null || reason.isBlank()) {

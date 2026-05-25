@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class MembershipPlanRepositoryAdapter implements MembershipPlanRepository {
+public class MembershipPlanRepositoryImpl implements MembershipPlanRepository {
 
     private final MembershipPlanJpaRepository jpa;
 

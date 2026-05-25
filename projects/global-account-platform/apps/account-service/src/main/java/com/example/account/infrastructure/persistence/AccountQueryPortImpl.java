@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class AccountQueryPortAdapter implements AccountQueryPort {
+public class AccountQueryPortImpl implements AccountQueryPort {
 
     private final AccountJpaRepository accountJpaRepository;
     private final ProfileJpaRepository profileJpaRepository;

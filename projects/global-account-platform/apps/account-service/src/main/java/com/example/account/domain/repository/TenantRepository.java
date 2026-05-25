@@ -12,7 +12,7 @@ import java.util.Optional;
 /**
  * Port interface for tenant persistence.
  *
- * <p>Implemented by {@code TenantJpaAdapter} in the infrastructure layer.
+ * <p>Implemented by {@code TenantRepositoryImpl} in the infrastructure layer.
  * The application layer depends only on this interface — never on JPA specifics.
  */
 public interface TenantRepository {

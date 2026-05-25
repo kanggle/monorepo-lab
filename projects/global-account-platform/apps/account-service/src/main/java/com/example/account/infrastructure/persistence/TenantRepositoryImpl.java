@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class TenantJpaAdapter implements TenantRepository {
+public class TenantRepositoryImpl implements TenantRepository {
 
     private final TenantJpaRepository jpaRepository;
 

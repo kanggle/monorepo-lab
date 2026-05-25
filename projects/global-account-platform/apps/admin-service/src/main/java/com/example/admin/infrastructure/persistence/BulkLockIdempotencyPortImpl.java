@@ -9,14 +9,14 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * JPA-backed adapter for {@link BulkLockIdempotencyPort}. Translates the
+ * JPA-backed implementation of {@link BulkLockIdempotencyPort}. Translates the
  * generic port contract onto the {@link BulkLockIdempotencyJpaRepository} and
  * maps {@link DataIntegrityViolationException} (raised by PK collisions on
  * concurrent first requests) to {@link BulkLockIdempotencyPort.DuplicateKeyException}.
  */
 @Component
 @RequiredArgsConstructor
-public class BulkLockIdempotencyJpaAdapter implements BulkLockIdempotencyPort {
+public class BulkLockIdempotencyPortImpl implements BulkLockIdempotencyPort {
 
     private final BulkLockIdempotencyJpaRepository repository;
 

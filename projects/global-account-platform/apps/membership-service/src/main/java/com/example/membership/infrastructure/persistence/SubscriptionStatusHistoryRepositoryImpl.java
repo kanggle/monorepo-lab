@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class SubscriptionStatusHistoryRepositoryAdapter implements SubscriptionStatusHistoryRepository {
+public class SubscriptionStatusHistoryRepositoryImpl implements SubscriptionStatusHistoryRepository {
 
     private final SubscriptionStatusHistoryJpaRepository jpa;
 
