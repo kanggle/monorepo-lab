@@ -150,7 +150,7 @@ services:
   # ---------------------------------------------------------------------------
   auth-service:
     build:
-      context: ../../../../projects/global-account-platform
+      context: ../../../projects/global-account-platform
       dockerfile: apps/auth-service/Dockerfile
     environment:
       <<: *gap-service-env
@@ -181,7 +181,7 @@ services:
   # ---------------------------------------------------------------------------
   account-service:
     build:
-      context: ../../../../projects/global-account-platform
+      context: ../../../projects/global-account-platform
       dockerfile: apps/account-service/Dockerfile
     environment:
       <<: *gap-service-env
@@ -208,7 +208,7 @@ services:
   # ---------------------------------------------------------------------------
   admin-service:
     build:
-      context: ../../../../projects/global-account-platform
+      context: ../../../projects/global-account-platform
       dockerfile: apps/admin-service/Dockerfile
     environment:
       <<: *gap-service-env
@@ -274,7 +274,7 @@ services:
   # ---------------------------------------------------------------------------
   wms-master-service:
     build:
-      context: ../../../../projects/wms-platform/apps/master-service
+      context: ../../../projects/wms-platform/apps/master-service
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: "8081"
@@ -308,7 +308,7 @@ services:
   # ---------------------------------------------------------------------------
   scm-procurement-service:
     build:
-      context: ../../../../projects/scm-platform/apps/procurement-service
+      context: ../../../projects/scm-platform/apps/procurement-service
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: "8080"
@@ -343,7 +343,7 @@ services:
   # ---------------------------------------------------------------------------
   finance-account-service:
     build:
-      context: ../../../../projects/finance-platform/apps/account-service
+      context: ../../../projects/finance-platform/apps/account-service
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: "8080"
@@ -377,7 +377,7 @@ services:
   # ---------------------------------------------------------------------------
   erp-masterdata-service:
     build:
-      context: ../../../../projects/erp-platform/apps/masterdata-service
+      context: ../../../projects/erp-platform/apps/masterdata-service
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: "8080"
@@ -413,7 +413,7 @@ services:
   # ---------------------------------------------------------------------------
   console-bff:
     build:
-      context: ../../../../projects/platform-console/apps/console-bff
+      context: ../../../projects/platform-console/apps/console-bff
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: "8080"
@@ -450,7 +450,7 @@ services:
   # ---------------------------------------------------------------------------
   console-web:
     build:
-      context: ../../../../projects/platform-console/apps/console-web
+      context: ../../../projects/platform-console/apps/console-web
       dockerfile: Dockerfile
     environment:
       PORT: "3000"
