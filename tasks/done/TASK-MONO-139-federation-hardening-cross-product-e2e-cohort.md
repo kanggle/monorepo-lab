@@ -8,7 +8,7 @@ Phase 8 Federation Hardening — Cross-Product E2E Cohort (MVP): root `.github/w
 
 # Status
 
-review
+done
 
 # Owner
 
