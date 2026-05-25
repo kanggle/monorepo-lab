@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-136-worktree-path-leak-defensive-hook.md` — new `.claude/hooks/verify-worktree-isolation.ps1` blocks PreToolUse Edit/Write when `cwd` is a linked git worktree (Agent isolation) but `tool_input.file_path` resolves outside that worktree's toplevel. Defensive layer for the 2026-05-25 PC-BE-005 dispatch leak (≈2.8% rate, 4 leaks / 144 tool_uses, agent self-recovered) — MONO-135 mirror (4 positive + 5 negative fixture, settings.json PreToolUse Edit+Write matcher wire, README inventory + safety-rail 4-block exemption). Root cause investigation deferred to a separate task.
 
 ## in-progress
 
