@@ -8,7 +8,7 @@ wms `*PersistenceAdapter` naming — spec vs naming-conventions 충돌 결정 (s
 
 # Status
 
-review
+done
 
 # Owner
 

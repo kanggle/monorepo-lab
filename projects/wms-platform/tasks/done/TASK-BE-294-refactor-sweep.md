@@ -8,7 +8,7 @@ wms refactor sweep — controller boilerplate + dead port (2026-05-25 scan)
 
 # Status
 
-ready
+done
 
 # Owner
 

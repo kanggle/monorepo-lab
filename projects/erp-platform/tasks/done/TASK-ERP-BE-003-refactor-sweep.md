@@ -8,7 +8,7 @@ erp masterdata-service refactor sweep (2026-05-25 scan)
 
 # Status
 
-ready
+done
 
 # Owner
 
