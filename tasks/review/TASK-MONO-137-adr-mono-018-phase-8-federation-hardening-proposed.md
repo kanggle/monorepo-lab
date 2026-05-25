@@ -8,7 +8,7 @@ TASK-MONO-137
 
 # Status
 
-ready
+review
 
 # Owner
 
