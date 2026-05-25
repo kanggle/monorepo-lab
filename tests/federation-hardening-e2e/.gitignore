@@ -1,0 +1,5 @@
+fixtures/.storage-state.json
+playwright-report/
+test-results/
+node_modules/
+dist/
