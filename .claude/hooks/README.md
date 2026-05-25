@@ -14,6 +14,7 @@ Hook configuration lives in [`.claude/settings.json`](../settings.json). The lis
 | [`spec-check.ps1`](spec-check.ps1) | `PreToolUse[Edit]`, `PreToolUse[Write]` | `ask` | Surface confirmation prompts for edits to `specs/contracts/` (contract-first reminder, `SPEC-CHECK-01`) and `platform/` (highest-priority source of truth reminder, `SPEC-CHECK-02`). |
 | [`rule-consistency-check.ps1`](rule-consistency-check.ps1) | `PreToolUse[Edit]`, `PreToolUse[Write]` | `block` | Verify skill/agent/command files carry required frontmatter and that referenced spec paths exist (`RULE-CONSISTENCY-01..04`). |
 | [`protect-main-branch.ps1`](protect-main-branch.ps1) | `PreToolUse[Bash]` | `block` | Block direct `git push` / force push / hard reset to `main`/`master`, **and any implicit-target `git push` (bare / `origin` / `origin HEAD` / `HEAD`) when the cwd's `git symbolic-ref --short HEAD` is `main`/`master`** (TASK-MONO-135 regression guard — closes the 2026-05-25 fan-platform worktree-HEAD-on-main leak). Allowlists: `portfolio-sync` derivation workdirs, `project-template` extraction workdirs. |
+| [`verify-worktree-isolation.ps1`](verify-worktree-isolation.ps1) | `PreToolUse[Edit]`, `PreToolUse[Write]` | `block` | Block Edit/Write whose `tool_input.file_path` resolves outside the cwd worktree's toplevel when cwd is a *linked* git worktree (Agent `isolation: "worktree"` dispatch). Detects linked worktree via `git-dir != git-common-dir`; main worktree / non-git cwd / detached HEAD / relative file_path / empty inputs silently allowed. TASK-MONO-136 regression guard — closes the 2026-05-25 PC-BE-005 dispatch leak (~2.8% rate, 4 leaks / 144 tool_uses). |
 | [`notify.ps1`](notify.ps1) | `PreToolUse[AskUserQuestion]`, `PermissionRequest` | — (notification only) | Surface a desktop notification when user confirmation is needed. |
 | [`format-check.ps1`](format-check.ps1) | `PostToolUse[Edit]`, `PostToolUse[Write]` | — (async) | Post-edit format / lint check. |
 | [`test-on-edit.ps1`](test-on-edit.ps1) | `PostToolUse[Edit]`, `PostToolUse[Write]` | — (async) | Run unit tests touching the edited file. |
@@ -55,7 +56,7 @@ Rule IDs in use:
 - `RULE-CONSISTENCY-NN` — synchronous PreToolUse hook reserves 01–04 (skill-missing-spec, agent-missing-fields, command-missing-frontmatter, broken-spec-ref). Asynchronous scheduled routine (`monorepo-lab-validate-rules-weekly`) emits 05+ for structural multi-file drift the hook can't detect synchronously.
 - `MEMORY-AUDIT-NN` — emitted by `monorepo-lab-audit-memory-weekly` scheduled routine (01 stale, 02 contradiction, 03 dangling ref, 04 CLAUDE.md duplicate).
 
-`protect-main-branch.ps1` is intentionally exempt — its message is a safety-rail enforcement (Bash-tool guard), not a rule-surface violation, so the standard does not apply.
+`protect-main-branch.ps1` and `verify-worktree-isolation.ps1` are intentionally exempt — their messages are safety-rail enforcements (Bash- and Edit/Write-tool guards), not rule-surface violations, so the standard does not apply.
 
 ---
 
