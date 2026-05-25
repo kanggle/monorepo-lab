@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /** Append-only account status transition log — only {@code save} (F6). */
 @Component
 @RequiredArgsConstructor
-public class AccountStatusHistoryRepositoryAdapter
+public class AccountStatusHistoryRepositoryImpl
         implements AccountStatusHistoryRepository {
 
     private final AccountStatusHistoryJpaRepository jpa;

@@ -13,6 +13,7 @@ import com.example.finance.account.application.port.outbound.CompliancePort;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.application.view.BalanceView;
 import com.example.finance.account.application.view.HoldView;
+import com.example.finance.account.application.view.TransactionPageView;
 import com.example.finance.account.application.view.TransactionView;
 import com.example.finance.account.domain.account.Account;
 import com.example.finance.account.domain.account.ActorType;
@@ -30,20 +31,26 @@ import com.example.finance.account.domain.compliance.KycGate;
 import com.example.finance.account.domain.compliance.ScreeningDecision;
 import com.example.finance.account.domain.error.DomainErrors.AccountNotFoundException;
 import com.example.finance.account.domain.error.DomainErrors.AmlScreeningRequiredException;
+import com.example.finance.account.domain.error.DomainErrors.CurrencyMismatchException;
 import com.example.finance.account.domain.error.DomainErrors.HoldNotFoundException;
+import com.example.finance.account.domain.error.DomainErrors.PermissionDeniedException;
 import com.example.finance.account.domain.error.DomainErrors.SanctionHitException;
 import com.example.finance.account.domain.money.Currency;
 import com.example.finance.account.domain.money.Money;
 import com.example.finance.account.domain.transaction.Transaction;
 import com.example.finance.account.domain.transaction.TransactionType;
 import com.example.finance.account.domain.transaction.repository.TransactionRepository;
+import com.example.finance.account.domain.transaction.status.TransactionStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Account application service — the SINGLE {@code @Transactional} command
@@ -83,6 +90,7 @@ public class AccountApplicationService {
     private final ComplianceFailureRecorder complianceFailureRecorder;
     private final ClockPort clock;
     private final AccountEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     // --------------------------------------------------------------------
     // Account lifecycle
@@ -105,9 +113,11 @@ public class AccountApplicationService {
                 actor.tenantId(), currency, now);
         Balance savedBalance = balanceRepository.save(balance);
 
+        Map<String, Object> afterOpen = new LinkedHashMap<>();
+        afterOpen.put("status", "PENDING_KYC");
         auditLogRepository.save(AuditLog.of(actor.tenantId(), AGG_ACCOUNT, accountId,
                 "OPEN_ACCOUNT", actor.accountId(), actor.actorType(),
-                null, "{\"status\":\"PENDING_KYC\"}", null, now));
+                null, auditJson(afterOpen), null, now));
 
         eventPublisher.publishAccountOpened(saved);
         return AccountView.of(saved, List.of(BalanceView.from(savedBalance)));
@@ -129,8 +139,7 @@ public class AccountApplicationService {
     public AccountView upgradeKyc(UpgradeKycCommand cmd) {
         ActorContext actor = cmd.actor();
         if (!actor.isOperator()) {
-            throw new com.example.finance.account.domain.error.DomainErrors
-                    .PermissionDeniedException("KYC upgrade is operator-only");
+            throw new PermissionDeniedException("KYC upgrade is operator-only");
         }
         Instant now = clock.now();
         Account account = loadAccount(cmd.accountId(), actor.tenantId());
@@ -138,12 +147,15 @@ public class AccountApplicationService {
 
         AccountStatus statusBefore = account.getStatus();
         KycLevel from = account.raiseKycLevel(toLevel, now);
-        AccountStatus statusAfter = statusBefore;
 
         // PENDING_KYC + KYC now ≥ BASIC → activate.
-        if (statusBefore == AccountStatus.PENDING_KYC && toLevel.isAtLeast(KycLevel.BASIC)) {
+        boolean activates = statusBefore == AccountStatus.PENDING_KYC
+                && toLevel.isAtLeast(KycLevel.BASIC);
+        if (activates) {
             account.transitionTo(AccountStatus.ACTIVE, now);
-            statusAfter = AccountStatus.ACTIVE;
+        }
+        AccountStatus statusAfter = activates ? AccountStatus.ACTIVE : statusBefore;
+        if (activates) {
             accountStatusHistoryRepository.save(AccountStatusHistory.record(
                     account.getId(), account.getTenantId(), statusBefore, statusAfter,
                     ActorType.OPERATOR, actor.accountId(), cmd.reason(), now));
@@ -152,10 +164,15 @@ public class AccountApplicationService {
         }
         Account saved = accountRepository.save(account);
 
+        Map<String, Object> beforeKyc = new LinkedHashMap<>();
+        beforeKyc.put("kycLevel", from.name());
+        beforeKyc.put("status", statusBefore.name());
+        Map<String, Object> afterKyc = new LinkedHashMap<>();
+        afterKyc.put("kycLevel", toLevel.name());
+        afterKyc.put("status", statusAfter.name());
         auditLogRepository.save(AuditLog.of(actor.tenantId(), AGG_ACCOUNT, cmd.accountId(),
                 "UPGRADE_KYC", actor.accountId(), ActorType.OPERATOR,
-                "{\"kycLevel\":\"" + from + "\",\"status\":\"" + statusBefore + "\"}",
-                "{\"kycLevel\":\"" + toLevel + "\",\"status\":\"" + statusAfter + "\"}",
+                auditJson(beforeKyc), auditJson(afterKyc),
                 cmd.reason(), now));
         eventPublisher.publishKycUpgraded(saved, from, toLevel, statusAfter);
         return AccountView.of(saved, balanceViews(cmd.accountId(), actor.tenantId()));
@@ -193,12 +210,14 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
+        Map<String, Object> beforeHold = new LinkedHashMap<>();
+        beforeHold.put("available", String.valueOf(balance.getLedgerMinor()));
+        Map<String, Object> afterHold = new LinkedHashMap<>();
+        afterHold.put("held", amount.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "HOLD",
-                "{\"available\":\"" + (balance.getLedgerMinor()) + "\"}",
-                "{\"held\":\"" + amount.toMinorString() + "\"}", cmd.reason(), now);
+                auditJson(beforeHold), auditJson(afterHold), cmd.reason(), now);
         eventPublisher.publishBalanceHeld(savedHold, savedTxn.getId(), savedBalance);
-        eventPublisher.publishTransactionSettled(savedTxn);
-        eventPublisher.publishTransactionCompleted(savedTxn);
+        eventPublisher.publishSettledAndCompleted(savedTxn);
         return new HoldResult(HoldView.from(savedHold), savedTxn.getId());
     }
 
@@ -228,15 +247,16 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
+        Map<String, Object> beforeCapture = new LinkedHashMap<>();
+        beforeCapture.put("hold", holdAmount.toMinorString());
+        Map<String, Object> afterCapture = new LinkedHashMap<>();
+        afterCapture.put("captured", captureAmount.toMinorString());
+        afterCapture.put("released", released.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "CAPTURE",
-                "{\"hold\":\"" + holdAmount.toMinorString() + "\"}",
-                "{\"captured\":\"" + captureAmount.toMinorString()
-                        + "\",\"released\":\"" + released.toMinorString() + "\"}",
-                null, now);
+                auditJson(beforeCapture), auditJson(afterCapture), null, now);
         eventPublisher.publishBalanceCaptured(savedHold, savedTxn.getId(),
                 savedBalance, captureAmount, released);
-        eventPublisher.publishTransactionSettled(savedTxn);
-        eventPublisher.publishTransactionCompleted(savedTxn);
+        eventPublisher.publishSettledAndCompleted(savedTxn);
         return new CaptureResult(savedHold.getId(), captureAmount, released,
                 savedHold.getStatus().name(), savedTxn.getId());
     }
@@ -267,12 +287,14 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
+        Map<String, Object> beforeRelease = new LinkedHashMap<>();
+        beforeRelease.put("held", holdAmount.toMinorString());
+        Map<String, Object> afterRelease = new LinkedHashMap<>();
+        afterRelease.put("released", holdAmount.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "RELEASE",
-                "{\"held\":\"" + holdAmount.toMinorString() + "\"}",
-                "{\"released\":\"" + holdAmount.toMinorString() + "\"}", null, now);
+                auditJson(beforeRelease), auditJson(afterRelease), null, now);
         eventPublisher.publishBalanceReleased(savedHold, savedTxn.getId(), savedBalance);
-        eventPublisher.publishTransactionSettled(savedTxn);
-        eventPublisher.publishTransactionCompleted(savedTxn);
+        eventPublisher.publishSettledAndCompleted(savedTxn);
         return new ReleaseResult(savedHold.getId(), holdAmount,
                 savedHold.getStatus().name(), savedTxn.getId());
     }
@@ -308,12 +330,15 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
+        Map<String, Object> beforeTransfer = new LinkedHashMap<>();
+        beforeTransfer.put("from", cmd.fromAccountId());
+        Map<String, Object> afterTransfer = new LinkedHashMap<>();
+        afterTransfer.put("to", cmd.toAccountId());
+        afterTransfer.put("amount", amount.toMinorString());
         audit(actor, AGG_TRANSACTION, savedTxn.getId(), "TRANSFER",
-                "{\"from\":\"" + cmd.fromAccountId() + "\"}",
-                "{\"to\":\"" + cmd.toAccountId() + "\",\"amount\":\""
-                        + amount.toMinorString() + "\"}", cmd.reason(), now);
-        eventPublisher.publishTransactionSettled(savedTxn);
-        eventPublisher.publishTransactionCompleted(savedTxn);
+                auditJson(beforeTransfer), auditJson(afterTransfer),
+                cmd.reason(), now);
+        eventPublisher.publishSettledAndCompleted(savedTxn);
         return TransactionView.from(savedTxn);
     }
 
@@ -342,36 +367,30 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
+        Map<String, Object> afterTopup = new LinkedHashMap<>();
+        afterTopup.put("credited", amount.toMinorString());
         audit(actor, AGG_BALANCE, accountId, "TOPUP", null,
-                "{\"credited\":\"" + amount.toMinorString() + "\"}",
-                "internal funding (v1 stub)", now);
-        eventPublisher.publishTransactionSettled(savedTxn);
-        eventPublisher.publishTransactionCompleted(savedTxn);
+                auditJson(afterTopup), "internal funding (v1 stub)", now);
+        eventPublisher.publishSettledAndCompleted(savedTxn);
         return TransactionView.from(savedTxn);
     }
 
     @Transactional(readOnly = true)
-    public com.example.finance.account.application.view.TransactionPageView
-            listTransactions(String accountId,
-                             ActorContext actor,
-                             String type,
-                             String status,
-                             int page,
-                             int size) {
+    public TransactionPageView listTransactions(String accountId,
+                                               ActorContext actor,
+                                               String type,
+                                               String status,
+                                               int page,
+                                               int size) {
         loadAccount(accountId, actor.tenantId());
         TransactionType t = type == null || type.isBlank()
                 ? null : TransactionType.valueOf(type.trim().toUpperCase());
-        com.example.finance.account.domain.transaction.status.TransactionStatus s =
-                status == null || status.isBlank() ? null
-                        : com.example.finance.account.domain.transaction.status
-                        .TransactionStatus.valueOf(status.trim().toUpperCase());
+        TransactionStatus s = status == null || status.isBlank()
+                ? null : TransactionStatus.valueOf(status.trim().toUpperCase());
         TransactionRepository.Page p = transactionRepository.findByAccountId(
                 accountId, actor.tenantId(), t, s, page, size);
-        return new com.example.finance.account.application.view.TransactionPageView(
-                p.content().stream()
-                        .map(com.example.finance.account.application.view
-                                .TransactionView::from)
-                        .toList(),
+        return new TransactionPageView(
+                p.content().stream().map(TransactionView::from).toList(),
                 p.page(), p.size(), p.totalElements(), p.totalPages());
     }
 
@@ -464,10 +483,23 @@ public class AccountApplicationService {
         return Money.of(minorUnits, Currency.of(currencyCode));
     }
 
+    /**
+     * Serialises an ordered key-value map to a JSON string for audit payload
+     * fields. Uses {@link LinkedHashMap} order (insertion-ordered) so the
+     * JSON key sequence is deterministic — byte-equal across runs (F6 /
+     * audit-heavy A3).
+     */
+    private String auditJson(Map<String, Object> fields) {
+        try {
+            return objectMapper.writeValueAsString(fields);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("audit JSON serialisation failed", e);
+        }
+    }
+
     private void ensureAccountCurrency(Account account, Money amount) {
         if (account.getCurrency() != amount.currency()) {
-            throw new com.example.finance.account.domain.error.DomainErrors
-                    .CurrencyMismatchException("operation currency "
+            throw new CurrencyMismatchException("operation currency "
                     + amount.currency() + " != account currency "
                     + account.getCurrency());
         }

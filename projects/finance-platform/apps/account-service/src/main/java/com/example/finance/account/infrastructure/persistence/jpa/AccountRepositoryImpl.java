@@ -19,7 +19,7 @@ import java.util.Optional;
  */
 @Component
 @RequiredArgsConstructor
-public class AccountRepositoryAdapter implements AccountRepository {
+public class AccountRepositoryImpl implements AccountRepository {
 
     private final AccountJpaRepository jpa;
     private final PiiEncryptor piiEncryptor;

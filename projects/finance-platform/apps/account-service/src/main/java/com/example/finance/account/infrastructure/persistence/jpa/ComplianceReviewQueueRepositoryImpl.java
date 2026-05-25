@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /** Append-only operator queue — only {@code save} (F4/F8 no auto-clear). */
 @Component
 @RequiredArgsConstructor
-public class ComplianceReviewQueueRepositoryAdapter
+public class ComplianceReviewQueueRepositoryImpl
         implements ComplianceReviewQueueRepository {
 
     private final ComplianceReviewQueueJpaRepository jpa;

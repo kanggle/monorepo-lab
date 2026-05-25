@@ -8,6 +8,7 @@ import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.event.AccountEventPublisher;
 import com.example.finance.account.application.port.outbound.ClockPort;
 import com.example.finance.account.application.port.outbound.CompliancePort;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.finance.account.domain.account.Account;
 import com.example.finance.account.domain.account.KycLevel;
 import com.example.finance.account.domain.account.repository.AccountRepository;
@@ -67,6 +68,7 @@ class AccountApplicationServiceTest {
             new ActorContext("op-1", TENANT, Set.of("OPERATOR"));
     private static final Instant NOW = Instant.parse("2026-05-18T00:00:00Z");
 
+    @Mock ObjectMapper objectMapper;
     @Mock AccountRepository accountRepository;
     @Mock BalanceRepository balanceRepository;
     @Mock TransactionRepository transactionRepository;
@@ -80,8 +82,10 @@ class AccountApplicationServiceTest {
     @InjectMocks AccountApplicationService service;
 
     @BeforeEach
-    void clockStub() {
+    void clockStub() throws Exception {
         lenient().when(clock.now()).thenReturn(NOW);
+        lenient().when(objectMapper.writeValueAsString(any()))
+                .thenReturn("{}");
         lenient().when(accountRepository.save(any(Account.class)))
                 .thenAnswer(i -> i.getArgument(0));
         lenient().when(balanceRepository.save(any(Balance.class)))
@@ -284,7 +288,7 @@ class AccountApplicationServiceTest {
         assertThat(v.status()).isEqualTo("COMPLETED");
         assertThat(fromBal.ledger().minorUnits()).isEqualTo(7500L);
         assertThat(toBal.ledger().minorUnits()).isEqualTo(2500L);
-        verify(eventPublisher).publishTransactionCompleted(any());
+        verify(eventPublisher).publishSettledAndCompleted(any());
     }
 
     // ---------------- KYC upgrade activates account ----------------

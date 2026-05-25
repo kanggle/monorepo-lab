@@ -71,18 +71,7 @@ public class IdempotentExecution {
                     return executeAndStore(tenantId, endpoint, idempotencyKey,
                             payloadHash, action);
                 }
-                case IN_PROGRESS -> {
-                    if (System.nanoTime() >= deadlineNanos) {
-                        // Winner stalled past the bound: deterministic, no fund
-                        // movement, no faked success. account-api.md is silent
-                        // on a stalled concurrent duplicate; 409 (client
-                        // retries) is contract-faithful and green-wash-free.
-                        throw new IdempotencyKeyConflictException(
-                                "Idempotency-Key '" + idempotencyKey
-                                        + "' has a concurrent request still in progress");
-                    }
-                    sleepQuietly();
-                }
+                case IN_PROGRESS -> waitOrThrow(idempotencyKey, deadlineNanos);
             }
         }
     }
@@ -119,6 +108,21 @@ public class IdempotentExecution {
     public static void conflict(String key) {
         throw new IdempotencyKeyConflictException(
                 "Idempotency-Key '" + key + "' reused with a different payload");
+    }
+
+    /**
+     * Waits one poll interval for the in-flight winner to complete, or throws
+     * if the deadline has been reached. The winner stalling past the bound is
+     * deterministic and does not result in fund movement or a faked success
+     * — 409 (client retries) is contract-faithful (account-api.md).
+     */
+    private static void waitOrThrow(String idempotencyKey, long deadlineNanos) {
+        if (System.nanoTime() >= deadlineNanos) {
+            throw new IdempotencyKeyConflictException(
+                    "Idempotency-Key '" + idempotencyKey
+                            + "' has a concurrent request still in progress");
+        }
+        sleepQuietly();
     }
 
     private static void sleepQuietly() {
