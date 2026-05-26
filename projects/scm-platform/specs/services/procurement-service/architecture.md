@@ -145,9 +145,7 @@ com.example.scmplatform.procurement/
 │   ├── event/
 │   │   └── ProcurementEventPublisher.java    ← extends BaseEventPublisher (libs/java-messaging)
 │   └── port/outbound/
-│       ├── SupplierAdapterPort.java          ← supplier integration port
-│       ├── IdempotencyStore.java             ← Redis-or-DB dedupe port
-│       └── ClockPort.java
+│       └── SupplierAdapterPort.java          ← supplier integration port
 ├── infrastructure/                           ← outbound adapters + config
 │   ├── persistence/jpa/                      ← Spring Data + adapter beans
 │   │   (PurchaseOrderJpaRepository, PurchaseOrderRepositoryAdapter, ...)

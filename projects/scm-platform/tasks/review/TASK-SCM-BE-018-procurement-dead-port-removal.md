@@ -8,7 +8,7 @@ procurement-service dead port removal — `IdempotencyStore` + `ClockPort` + `Cl
 
 # Status
 
-ready
+review
 
 # Owner
 
