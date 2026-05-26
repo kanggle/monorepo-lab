@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-302-inventory-architecture-spec-systemic-patterns.md` — inventory-service architecture.md L165 (Layer Rules #3) + L433 (Security #2) 두 문구를 7-consumer + 5-controller × 17-endpoint systemic + BE-027/028 APPROVED-by-review convention 과 정렬 (Tier 2 spec-correction, impl 변경 0). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (2-line spec amend).
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-302-inventory-architecture-spec-systemic-patterns.md` — **REVIEW (impl applied; 0 production code change)**. architecture.md L165 (Layer Rules #3) + L433 (Security #2) 두 위치 amend 완료, 7-consumer + 5-controller × 17-endpoint systemic 패턴 + BE-027/028 APPROVED layered convention 명시화. spec PR #867 (squash `abd902ce`, markdown fast-lane). impl PR (this) = +16/-3 single-file (architecture.md only). AC verify: AC-1/2 amend 적용, AC-3 production code byte-unchanged (`git diff main -- apps/inventory-service/src/` empty), AC-4 cross-ref drift 없음 (master-service 의 동일 문구는 out-of-scope by design, BE-303 후보), AC-5 test byte-unchanged. 분석=Opus 4.7 / 구현=Sonnet 4.6 (직접; 2-line spec amend).
 
 ## done
 
