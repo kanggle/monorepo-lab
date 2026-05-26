@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-018-procurement-dead-port-removal.md` — `/refactor-code procurement` (2026-05-26) dry-run verify 된 TRUE DEAD port 3 파일 제거 (`IdempotencyStore` + `ClockPort` + `ClockConfig`, 사용처/inject site 0). architecture.md L149/L150 tree 2줄 제거. BE-017 § Out of Scope L44 closure. Option A scope (좁음, refactor-code 정신 부합): Exception + table + § Idempotency narrative 보존 (forward-compatible per BE-316 패턴 재사용). behavior-neutral, low risk. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
