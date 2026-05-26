@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,41 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class InventoryRepositoryImpl implements InventoryRepository {
+
+    // ---- Filter descriptor --------------------------------------------------
+
+    private record Filter(String whereFragment, String paramName,
+                          Function<InventoryListCriteria, Object> valueSupplier,
+                          Predicate<InventoryListCriteria> isEnabled) {}
+
+    private static final Filter[] FILTERS = {
+        new Filter("AND i.warehouse_id = :warehouseId",
+                "warehouseId",
+                InventoryListCriteria::warehouseId,
+                c -> c.warehouseId() != null),
+        new Filter("AND i.location_id = :locationId",
+                "locationId",
+                InventoryListCriteria::locationId,
+                c -> c.locationId() != null),
+        new Filter("AND i.sku_id = :skuId",
+                "skuId",
+                InventoryListCriteria::skuId,
+                c -> c.skuId() != null),
+        new Filter("AND i.lot_id = :lotId",
+                "lotId",
+                InventoryListCriteria::lotId,
+                c -> c.lotId() != null),
+        new Filter("AND (i.available_qty > 0 OR i.reserved_qty > 0 OR i.damaged_qty > 0)",
+                null,
+                null,
+                c -> Boolean.TRUE.equals(c.hasStock())),
+        new Filter("AND i.available_qty >= :minAvailable",
+                "minAvailable",
+                InventoryListCriteria::minAvailable,
+                c -> c.minAvailable() != null),
+    };
+
+    // -------------------------------------------------------------------------
 
     private final InventoryJpaRepository repository;
 
@@ -111,15 +148,8 @@ public class InventoryRepositoryImpl implements InventoryRepository {
     @Transactional(readOnly = true)
     public PageView<InventoryView> listViews(InventoryListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
-        if (c.warehouseId() != null) where.append(" AND i.warehouse_id = :warehouseId");
-        if (c.locationId() != null) where.append(" AND i.location_id = :locationId");
-        if (c.skuId() != null) where.append(" AND i.sku_id = :skuId");
-        if (c.lotId() != null) where.append(" AND i.lot_id = :lotId");
-        if (Boolean.TRUE.equals(c.hasStock())) {
-            where.append(" AND (i.available_qty > 0 OR i.reserved_qty > 0 OR i.damaged_qty > 0)");
-        }
-        if (c.minAvailable() != null) {
-            where.append(" AND i.available_qty >= :minAvailable");
+        for (Filter f : FILTERS) {
+            if (f.isEnabled().test(c)) where.append(' ').append(f.whereFragment());
         }
 
         String orderBy = " ORDER BY " + sortClause(c.sort());
@@ -145,25 +175,12 @@ public class InventoryRepositoryImpl implements InventoryRepository {
     private static void bindFilters(jakarta.persistence.Query dataQuery,
                                     jakarta.persistence.Query countQuery,
                                     InventoryListCriteria c) {
-        if (c.warehouseId() != null) {
-            dataQuery.setParameter("warehouseId", c.warehouseId());
-            countQuery.setParameter("warehouseId", c.warehouseId());
-        }
-        if (c.locationId() != null) {
-            dataQuery.setParameter("locationId", c.locationId());
-            countQuery.setParameter("locationId", c.locationId());
-        }
-        if (c.skuId() != null) {
-            dataQuery.setParameter("skuId", c.skuId());
-            countQuery.setParameter("skuId", c.skuId());
-        }
-        if (c.lotId() != null) {
-            dataQuery.setParameter("lotId", c.lotId());
-            countQuery.setParameter("lotId", c.lotId());
-        }
-        if (c.minAvailable() != null) {
-            dataQuery.setParameter("minAvailable", c.minAvailable());
-            countQuery.setParameter("minAvailable", c.minAvailable());
+        for (Filter f : FILTERS) {
+            if (f.paramName() != null && f.isEnabled().test(c)) {
+                Object value = f.valueSupplier().apply(c);
+                dataQuery.setParameter(f.paramName(), value);
+                countQuery.setParameter(f.paramName(), value);
+            }
         }
     }
 

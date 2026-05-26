@@ -120,9 +120,8 @@ public class AdjustStockService implements AdjustStockUseCase {
                 command.delta(), command.bucket(), command.reasonCode(),
                 command.reasonNote(), adjustment.id(), command.actorId(), now);
         return persistAdjustmentResult(adjustment, movement, inventory,
-                MovementType.ADJUSTMENT, command.delta(), command.bucket(),
-                command.reasonCode(), command.reasonNote(),
-                command.delta() < 0, now, command.actorId(), adjustCounter);
+                MovementType.ADJUSTMENT,
+                command.delta() < 0, adjustCounter);
     }
 
     private AdjustmentResult doMarkDamaged(AdjustStockCommand command, Inventory inventory, Instant now) {
@@ -178,19 +177,18 @@ public class AdjustStockService implements AdjustStockUseCase {
                                                      InventoryMovement movement,
                                                      Inventory inventory,
                                                      MovementType movementType,
-                                                     int delta, Bucket bucket,
-                                                     ReasonCode reasonCode, String reasonNote,
                                                      boolean reducedAvailable,
-                                                     Instant now, String actorId,
                                                      Counter counter) {
         adjustmentRepository.insert(adjustment);
         inventoryRepository.updateWithVersionCheck(inventory);
         movementRepository.save(movement);
         outboxWriter.write(buildEvent(adjustment, inventory, movementType,
-                delta, bucket, reasonCode, reasonNote, now, actorId));
+                adjustment.delta(), adjustment.bucket(), adjustment.reasonCode(),
+                adjustment.reasonNote(), adjustment.createdAt(), adjustment.actorId()));
         counter.increment();
-        if (reducedAvailable && bucket == Bucket.AVAILABLE) {
-            lowStockDetection.evaluate(inventory, "inventory.adjusted", null, now, actorId);
+        if (reducedAvailable && adjustment.bucket() == Bucket.AVAILABLE) {
+            lowStockDetection.evaluate(inventory, "inventory.adjusted", null,
+                    adjustment.createdAt(), adjustment.actorId());
         }
         log.info("inventory.adjusted emitted ({}) adjustmentId={} inventoryId={}",
                 movementType, adjustment.id(), inventory.id());
