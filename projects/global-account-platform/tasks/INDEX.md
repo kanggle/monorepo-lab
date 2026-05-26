@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-316-admin-events-bulk-create-stale-prose-fix.md` — F-T1-1 follow-up from `/refactor-spec all` (2026-05-26). `specs/contracts/events/admin-events.md:L57` `ACCOUNT_BULK_CREATE` actionCode stale prose + `(TODO)` marker. TASK-BE-257 `done/` 의 actual decision = "individual `account.created` N건 발행" 와 충돌 (admin.action.performed 채널 X). 3-option weighing in Goal (A=L57 prose rewrite recommended / B=L57+L26 enum entry removal / C=`(TODO)` strip only). spec-only, behavior-neutral, mechanical. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
