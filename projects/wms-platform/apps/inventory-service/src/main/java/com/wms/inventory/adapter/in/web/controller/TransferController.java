@@ -1,5 +1,6 @@
 package com.wms.inventory.adapter.in.web.controller;
 
+import com.wms.inventory.adapter.in.web.JwtHelper;
 import com.wms.inventory.adapter.in.web.dto.request.CreateTransferRequest;
 import com.wms.inventory.adapter.in.web.dto.response.PageResponse;
 import com.wms.inventory.adapter.in.web.dto.response.TransferResponse;
@@ -55,7 +56,7 @@ public class TransferController {
                 request.sourceLocationId(), request.targetLocationId(),
                 request.skuId(), request.lotId(), request.quantity(),
                 request.reasonCode(), request.reasonNote(),
-                actorId(jwt), idempotencyKey);
+                JwtHelper.actorId(jwt), idempotencyKey);
         TransferResult result = transferStock.transfer(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(TransferResponse.from(result));
@@ -88,10 +89,4 @@ public class TransferController {
         return PageResponse.from(queryTransfer.list(criteria), TransferResponse::fromView);
     }
 
-    private static String actorId(Jwt jwt) {
-        if (jwt == null) {
-            return "anonymous";
-        }
-        return jwt.getSubject() != null ? jwt.getSubject() : jwt.getClaimAsString("actorId");
-    }
 }

@@ -80,7 +80,8 @@ class AdjustStockServiceTest {
         lowStockDetection = new LowStockDetectionService(
                 thresholdAdapter, debounceAdapter, masterReadModel, outbox);
         service = new AdjustStockService(
-                invRepo, movementRepo, adjustmentRepo, outbox, masterReadModel,
+                invRepo, movementRepo, adjustmentRepo, outbox,
+                new MasterRefValidator(masterReadModel),
                 lowStockDetection, Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry());
     }

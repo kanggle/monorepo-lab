@@ -13,8 +13,6 @@ import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
-import com.wms.inventory.domain.model.masterref.LotSnapshot;
-import com.wms.inventory.domain.model.masterref.SkuSnapshot;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -59,6 +57,7 @@ public class ReceiveStockService implements ReceiveStockUseCase {
     private final InventoryMovementRepository movementRepository;
     private final OutboxWriter outboxWriter;
     private final MasterReadModelPort masterReadModel;
+    private final MasterRefValidator masterRefValidator;
     private final Clock clock;
     private final Counter receiveCounter;
 
@@ -66,12 +65,14 @@ public class ReceiveStockService implements ReceiveStockUseCase {
                                InventoryMovementRepository movementRepository,
                                OutboxWriter outboxWriter,
                                MasterReadModelPort masterReadModel,
+                               MasterRefValidator masterRefValidator,
                                Clock clock,
                                MeterRegistry meterRegistry) {
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.outboxWriter = outboxWriter;
         this.masterReadModel = masterReadModel;
+        this.masterRefValidator = masterRefValidator;
         this.clock = clock;
         this.receiveCounter = Counter.builder("inventory.mutation.count")
                 .tag("operation", "RECEIVE")
@@ -87,7 +88,7 @@ public class ReceiveStockService implements ReceiveStockUseCase {
         List<InventoryReceivedEvent.Line> eventLines = new ArrayList<>(command.lines().size());
 
         for (ReceiveStockLineCommand line : command.lines()) {
-            validateMasterRefs(line, command.warehouseId());
+            masterRefValidator.validate(line.locationId(), line.skuId(), line.lotId());
 
             Optional<Inventory> existing = inventoryRepository
                     .findByKey(line.locationId(), line.skuId(), line.lotId());
@@ -137,30 +138,5 @@ public class ReceiveStockService implements ReceiveStockUseCase {
                 now, actorId);
     }
 
-    private void validateMasterRefs(ReceiveStockLineCommand line, UUID expectedWarehouseId) {
-        Optional<LocationSnapshot> location = masterReadModel.findLocation(line.locationId());
-        location.ifPresent(s -> {
-            if (!s.isActive()) {
-                throw MasterRefInactiveException.locationInactive(s.id().toString());
-            }
-        });
-        Optional<SkuSnapshot> sku = masterReadModel.findSku(line.skuId());
-        sku.ifPresent(s -> {
-            if (!s.isActive()) {
-                throw MasterRefInactiveException.skuInactive(s.id().toString());
-            }
-        });
-        if (line.lotId() != null) {
-            Optional<LotSnapshot> lot = masterReadModel.findLot(line.lotId());
-            lot.ifPresent(s -> {
-                if (s.isExpired()) {
-                    throw MasterRefInactiveException.lotExpired(s.id().toString());
-                }
-                if (!s.isActive()) {
-                    throw MasterRefInactiveException.lotInactive(s.id().toString());
-                }
-            });
-        }
-    }
 
 }

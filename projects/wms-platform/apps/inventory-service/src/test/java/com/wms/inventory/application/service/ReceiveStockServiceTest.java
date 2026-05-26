@@ -57,6 +57,7 @@ class ReceiveStockServiceTest {
         masterRefs = new FakeMasterReadModel();
         service = new ReceiveStockService(
                 invRepo, movementRepo, outbox, masterRefs,
+                new MasterRefValidator(masterRefs),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry());
     }

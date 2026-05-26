@@ -1,5 +1,6 @@
 package com.wms.inventory.adapter.in.web.controller;
 
+import com.wms.inventory.adapter.in.web.JwtHelper;
 import com.wms.inventory.adapter.in.web.dto.request.CreateAdjustmentRequest;
 import com.wms.inventory.adapter.in.web.dto.request.MarkDamagedRequest;
 import com.wms.inventory.adapter.in.web.dto.request.WriteOffDamagedRequest;
@@ -69,21 +70,16 @@ public class AdjustmentController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new InventoryValidationException("Idempotency-Key header is required");
-        }
+        requireIdempotencyKey(idempotencyKey);
         if (request.delta() == 0) {
             throw new InventoryValidationException("delta must be non-zero");
         }
-        if (request.reasonNote() == null || request.reasonNote().trim().length() < 3) {
-            throw new com.wms.inventory.domain.exception.AdjustmentReasonRequiredException(
-                    "reasonNote is required and must be at least 3 non-blank characters");
-        }
+        requireReasonNote(request.reasonNote());
         AdjustStockCommand command = new AdjustStockCommand(
                 AdjustOperation.REGULAR,
                 request.inventoryId(), request.bucket(), request.delta(),
                 request.reasonCode(), request.reasonNote(),
-                actorId(jwt), idempotencyKey,
+                JwtHelper.actorId(jwt), idempotencyKey,
                 callerRoles(authentication));
         AdjustmentResult result = adjustStock.adjust(command);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -98,18 +94,13 @@ public class AdjustmentController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new InventoryValidationException("Idempotency-Key header is required");
-        }
-        if (request.reasonNote() == null || request.reasonNote().trim().length() < 3) {
-            throw new com.wms.inventory.domain.exception.AdjustmentReasonRequiredException(
-                    "reasonNote is required and must be at least 3 non-blank characters");
-        }
+        requireIdempotencyKey(idempotencyKey);
+        requireReasonNote(request.reasonNote());
         AdjustStockCommand command = new AdjustStockCommand(
                 AdjustOperation.MARK_DAMAGED,
                 inventoryId, Bucket.AVAILABLE, request.quantity(),
                 ReasonCode.ADJUSTMENT_DAMAGE, request.reasonNote(),
-                actorId(jwt), idempotencyKey,
+                JwtHelper.actorId(jwt), idempotencyKey,
                 callerRoles(authentication));
         AdjustmentResult result = adjustStock.adjust(command);
         return ResponseEntity.ok(AdjustmentResponse.from(result));
@@ -123,18 +114,13 @@ public class AdjustmentController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new InventoryValidationException("Idempotency-Key header is required");
-        }
-        if (request.reasonNote() == null || request.reasonNote().trim().length() < 3) {
-            throw new com.wms.inventory.domain.exception.AdjustmentReasonRequiredException(
-                    "reasonNote is required and must be at least 3 non-blank characters");
-        }
+        requireIdempotencyKey(idempotencyKey);
+        requireReasonNote(request.reasonNote());
         AdjustStockCommand command = new AdjustStockCommand(
                 AdjustOperation.WRITE_OFF_DAMAGED,
                 inventoryId, Bucket.DAMAGED, request.quantity(),
                 ReasonCode.DAMAGE_WRITE_OFF, request.reasonNote(),
-                actorId(jwt), idempotencyKey,
+                JwtHelper.actorId(jwt), idempotencyKey,
                 callerRoles(authentication));
         AdjustmentResult result = adjustStock.adjust(command);
         return ResponseEntity.ok(AdjustmentResponse.from(result));
@@ -190,10 +176,16 @@ public class AdjustmentController {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private static String actorId(Jwt jwt) {
-        if (jwt == null) {
-            return "anonymous";
+    private static void requireIdempotencyKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new InventoryValidationException("Idempotency-Key header is required");
         }
-        return jwt.getSubject() != null ? jwt.getSubject() : jwt.getClaimAsString("actorId");
+    }
+
+    private static void requireReasonNote(String note) {
+        if (note == null || note.trim().length() < 3) {
+            throw new com.wms.inventory.domain.exception.AdjustmentReasonRequiredException(
+                    "reasonNote is required and must be at least 3 non-blank characters");
+        }
     }
 }
