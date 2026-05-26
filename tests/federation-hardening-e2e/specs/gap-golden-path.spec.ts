@@ -20,7 +20,7 @@ test.describe('GAP golden-path (operator registry list)', () => {
     page,
   }) => {
     // storageState already loaded from globalSetup (SUPER_ADMIN session).
-    await page.goto('/console/gap/operators');
+    await page.goto('/operators');
 
     // Wait for the page to stabilize — operators list panel
     await page.waitForLoadState('networkidle');

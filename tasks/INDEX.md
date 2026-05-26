@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-140-federation-e2e-cycle-iteration-followup.md` — **TASK-MONO-139 AC-1 cycle-iteration follow-up** (sibling MONO-133 → PC-FE-027 honest scope adjustment pattern). MONO-139 file scope + impl PR + close chore main DONE (`27238601` + `7ae78d85`) **but functional AC-1 (workflow_dispatch GREEN 1회 이상) FAIL on first cycle** — `gh workflow run federation-hardening-e2e.yml --ref main` run [`26410963737`](https://github.com/kanggle/monorepo-lab/actions/runs/26410963737) Phase 1 exit 1: `unable to prepare context: path "/home/runner/work/monorepo-lab/projects/global-account-platform" not found`. **Cycle 1 fix** = `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` 의 9 `context:` 경로 `../../../../projects/` → `../../../projects/` (한 단계 위로 resolve 됨). Cycle 2-N 은 surface 별 minimal fix (sibling MONO-132 5-layer chain 패턴; cycle ≥ 7 honest stop). HARDSTOP-04 보존 (per-domain producer / contract / ADR byte-unchanged). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (dispatcher-direct iteration fix-task, sibling MONO-132/133 답습).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-140-federation-e2e-cycle-iteration-followup.md` — **TASK-MONO-139 AC-1 cycle-iteration follow-up** (sibling MONO-133 → PC-FE-027 honest scope adjustment pattern). impl PR (this PR) applies **cycle 1 fix** = `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` 의 9 `context:` 경로 `../../../../projects/` → `../../../projects/` (`replace_all`; docker-compose `context:` = compose file 기준 상대경로 — 한 단계 더 위 잘못 점유 → repo root resolve 정확). Cycle 2-N 은 동일 PR 안 추가 push (surface 별 minimal fix; sibling MONO-132 5-layer chain). HARDSTOP-04 보존. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct iteration).
 
 ## done
 
