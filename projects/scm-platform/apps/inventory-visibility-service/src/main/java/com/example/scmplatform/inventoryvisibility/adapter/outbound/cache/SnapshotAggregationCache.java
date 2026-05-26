@@ -1,5 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.adapter.outbound.cache;
 
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.SkuBreakdownCachePort;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,16 +14,18 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * Redis cache for cross-node SKU aggregation results (Acceptance Criteria #16).
- * <p>
+ * Redis-backed implementation of {@link SkuBreakdownCachePort}.
+ *
+ * <p>Caches cross-node SKU aggregation results (Acceptance Criteria #16).
  * TTL: 5 minutes (configurable via {@code inventory-visibility.cache.ttl-seconds}).
  * Fail-open: if Redis is down, returns empty (caller falls back to DB query).
- * Response header {@code X-Cache: HIT | MISS | UNAVAILABLE} is set by the controller.
+ * Response header {@code X-Cache: HIT | MISS | UNAVAILABLE} is set by the controller
+ * after interpreting {@link #get} result and {@link #isAvailable()}.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SnapshotAggregationCache {
+public class SnapshotAggregationCache implements SkuBreakdownCachePort {
 
     private static final String KEY_PREFIX = "inv:agg:sku:";
 
@@ -32,6 +35,7 @@ public class SnapshotAggregationCache {
     @Value("${inventory-visibility.cache.ttl-seconds:300}")
     private long ttlSeconds;
 
+    @Override
     public <T> Optional<T> get(String sku, String tenantId, TypeReference<T> typeRef) {
         String key = buildKey(sku, tenantId);
         try {
@@ -44,6 +48,7 @@ public class SnapshotAggregationCache {
         }
     }
 
+    @Override
     public <T> void put(String sku, String tenantId, T value) {
         String key = buildKey(sku, tenantId);
         try {
@@ -56,6 +61,7 @@ public class SnapshotAggregationCache {
         }
     }
 
+    @Override
     public boolean isAvailable() {
         try {
             redisTemplate.opsForValue().get("__health_check__");

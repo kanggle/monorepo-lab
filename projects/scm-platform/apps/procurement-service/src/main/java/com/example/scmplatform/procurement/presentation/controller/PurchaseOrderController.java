@@ -10,7 +10,7 @@ import com.example.scmplatform.procurement.application.command.ConfirmPurchaseOr
 import com.example.scmplatform.procurement.application.command.DraftPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
-import com.example.scmplatform.procurement.infrastructure.security.ActorContextResolver;
+import com.example.scmplatform.procurement.application.security.ActorContextResolver;
 import com.example.scmplatform.procurement.presentation.dto.ApiEnvelope;
 import com.example.scmplatform.procurement.presentation.dto.CancelPurchaseOrderRequest;
 import com.example.scmplatform.procurement.presentation.dto.DraftPurchaseOrderRequest;
@@ -28,8 +28,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.stream.Collectors;
 
 /**
  * Purchase Order REST endpoints. Per
@@ -60,7 +58,7 @@ public class PurchaseOrderController {
                 req.lines().stream()
                         .map(l -> new DraftPurchaseOrderCommand.Line(
                                 l.lineNo(), l.sku(), l.supplierSku(), l.quantity(), l.unitPrice()))
-                        .collect(Collectors.toList())
+                        .toList()
         );
         PurchaseOrderView view = service.draft(cmd);
         return ResponseEntity.status(HttpStatus.CREATED)

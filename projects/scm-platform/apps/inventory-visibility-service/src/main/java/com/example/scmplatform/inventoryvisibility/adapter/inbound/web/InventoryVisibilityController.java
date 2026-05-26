@@ -4,7 +4,7 @@ import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiEn
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.PageResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.SkuBreakdownResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.SnapshotResponse;
-import com.example.scmplatform.inventoryvisibility.adapter.outbound.cache.SnapshotAggregationCache;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.SkuBreakdownCachePort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnapshot;
 import com.example.scmplatform.inventoryvisibility.domain.staleness.NodeStaleness;
@@ -40,11 +40,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InventoryVisibilityController {
 
-    private static final String TENANT_ID = "scm";
     private static final int DEFAULT_PAGE_SIZE = 20;
 
     private final InventoryVisibilityApplicationService applicationService;
-    private final SnapshotAggregationCache cache;
+    private final SkuBreakdownCachePort cache;
 
     /**
      * GET /api/inventory-visibility/snapshot
@@ -59,7 +58,7 @@ public class InventoryVisibilityController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
-        String tenantId = extractTenantId(jwt);
+        String tenantId = TenantClaimExtractor.extractTenantId(jwt);
         List<NodeStaleness> allStaleness = applicationService.getStaleness(tenantId);
         Map<String, StalenessStatus> stalenessMap = buildStalenessMap(allStaleness);
 
@@ -100,7 +99,7 @@ public class InventoryVisibilityController {
             @org.springframework.web.bind.annotation.PathVariable String sku,
             @AuthenticationPrincipal Jwt jwt) {
 
-        String tenantId = extractTenantId(jwt);
+        String tenantId = TenantClaimExtractor.extractTenantId(jwt);
         String cacheStatus = "MISS";
 
         // Try Redis cache first (fail-open — Acceptance Criteria #16)
@@ -143,18 +142,12 @@ public class InventoryVisibilityController {
     @GetMapping("/nodes")
     public ResponseEntity<ApiEnvelope<List<com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse>>> getNodes(
             @AuthenticationPrincipal Jwt jwt) {
-        String tenantId = extractTenantId(jwt);
+        String tenantId = TenantClaimExtractor.extractTenantId(jwt);
         List<com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse> nodes =
                 applicationService.getNodes(tenantId).stream()
                         .map(com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse::from)
                         .toList();
         return ResponseEntity.ok(ApiEnvelope.of(nodes));
-    }
-
-    private String extractTenantId(Jwt jwt) {
-        if (jwt == null) return TENANT_ID;
-        String t = jwt.getClaimAsString("tenant_id");
-        return t != null ? t : TENANT_ID;
     }
 
     private Map<String, StalenessStatus> buildStalenessMap(List<NodeStaleness> list) {
