@@ -130,4 +130,4 @@ Service-types 축은 이 분류 시스템과 **독립적인 직교 축**이다.
 
 - **Manual grep**: `PROJECT.md`의 domain/traits 값이 [taxonomy.md](taxonomy.md)에 등록되어 있는지
 - **File existence**: 선언된 domain/traits에 대응하는 파일이 있거나, 없어도 "추가 제약 없음" 상태인지
-- **`/validate-rules` skill**: 향후 이 규칙 계층까지 검사 범위 확장 예정 (현재 v0.1 스코프 외)
+- **`/validate-rules` skill**: 본 규칙 계층 (rules/ + .claude/config/) 까지 검사 범위 포함. skill 정의의 § 2-5 / 2-6 이 taxonomy.md ↔ `.claude/config/` 카탈로그 set membership, rules/domains/ + rules/traits/ disk file 일치, agent/spec frontmatter service_types 값 catalog 일치까지 verify
