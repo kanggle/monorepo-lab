@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-303-inventory-cohort-b-long-method-polish.md` — inventory-service Cohort B 3 finding (F-L5-1 `persistAdjustmentResult` 12→6 arg shrink + F-L5-2 `transfer()` 82→≤60 LOC via 3 method extraction + F-L5-3 `listViews` WHERE/bind dual-walk → Filter[] 통합). Low risk (Extract Method). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
