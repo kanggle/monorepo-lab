@@ -1,6 +1,6 @@
 # TASK-BE-302 — inventory-service architecture.md systemic-pattern reconciliation
 
-Status: ready
+Status: review
 
 ## Goal
 

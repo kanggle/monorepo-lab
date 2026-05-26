@@ -162,8 +162,13 @@ com.wms.inventory/
    `@Transactional` boundary lives here. Every mutation is one
    `@Transactional` method that: loads aggregate(s), invokes domain method,
    writes movement row, writes outbox row — all in one transaction (W1).
-3. **Adapters depend inward.** They implement outbound ports or call inbound ports.
-   Adapter-internal types (JPA entities, Kafka records) never leak into ports.
+3. **Adapters depend inward.** Inbound adapters call inbound ports (use cases) and
+   may additionally call outbound ports when the call must join the same TX as the
+   inbound dispatch — e.g., `EventDedupePort` write keyed by Kafka `eventId` with
+   `Propagation.MANDATORY`, established in TASK-BE-027 for the three outbound-saga
+   consumers and uniformly applied to all seven consumers in this service. Outbound
+   adapters implement outbound ports. Adapter-internal types (JPA entities, Kafka
+   records) never leak into ports.
 4. **Inbound port grouping**:
    - `AdjustStockUseCase`, `TransferStockUseCase` — REST mutation paths
    - `ReserveStockUseCase`, `ConfirmReservationUseCase`, `ReleaseReservationUseCase` —
@@ -430,7 +435,15 @@ Per `service-types/rest-api.md` + `service-types/event-consumer.md`:
 
 - All endpoints (except health/info) require JWT bearer token validated by
   `gateway-service` and forwarded as headers.
-- Authorization in the application layer — not in controllers.
+- Authorization is layered: (a) controller-level `@PreAuthorize` enforces the
+  **role baseline** (mirrors the role table in
+  `specs/contracts/http/inventory-service-api.md` — see inline doc on
+  `AdjustmentController` / `ReservationController`); (b) application-layer
+  programmatic checks enforce **invariant-tied authorization** (e.g.,
+  `bucket=RESERVED` adjustment requires `INVENTORY_ADMIN`, established in
+  TASK-BE-028 via `AdjustStockCommand.callerRoles`). Direct `jwt.getClaim("role")`
+  parsing in controllers is forbidden; role extraction goes through
+  `Authentication.getAuthorities()` populated by `SecurityConfig`.
 - Roles (v1 baseline):
   - `INVENTORY_READ` — GET endpoints
   - `INVENTORY_WRITE` — adjustments, transfers, reservations
