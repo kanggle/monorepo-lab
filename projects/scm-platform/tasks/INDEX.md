@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-017-refactor-sweep-tail.md` — **READY** (2026-05-26 dry-run via refactoring-engineer agent, Opus). post-BE-016 sweep tail (4 finding, behavior-neutral 1 PR small bundle 권장): (A1) L0 inventory-visibility `InventoryVisibilityController` 가 `adapter.outbound.cache.*` 직접 import → `application/port/outbound/SkuBreakdownCachePort` 신설 + `SnapshotAggregationCache` implements + X-Cache 헤더 (HIT/MISS/UNAVAILABLE) byte-identical 보존 / (A2) L6 procurement `PurchaseOrderController` 의 `ActorContextResolver.currentOrThrow()` 정적 호출 6 site (presentation→infrastructure 정적 의존) → `application/security/` layer 이동 + DI 패턴 정합 (`WebhookSignatureVerifier` BE-016 정착 패턴 답습) / (A3) L6 inventory-visibility `InventoryVisibilityController` + `NodeStalenessController` 의 `private extractTenantId(Jwt)` byte-identical 중복 → `adapter/inbound/web/TenantClaimExtractor` static util / (A4) L6 procurement `PurchaseOrderController.java:63` `.collect(Collectors.toList())` 잔재 → `.toList()`. cohort = LEAN (HEAVY/MID 임계 미달). BE-016 회귀 0건 사전 검증 (Glob+Grep sampling 8 항목 PASS). out-of-scope: dead port (`IdempotencyStore`/`ClockPort`), spec drift (`application/service/` 패키지 위치), L7 god-class (post-BE-016 size top 332 LOC = 681 LOC 임계 미달). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
