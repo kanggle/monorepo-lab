@@ -54,5 +54,5 @@ admin-service가 발행하는 Kafka 이벤트. 모든 운영자 행위의 감사
 - 이 이벤트는 **감사 원장의 비동기 복제본** 역할. admin_actions 테이블이 정본, 이벤트는 외부 전파용
 - PII 포함 금지: `reason`에 이메일/전화 등 기재 금지 (운영자 교육 + 입력 validation)
 - forward-compatible: 새 `actionCode` 추가 시 기존 consumer는 알 수 없는 코드를 로그하고 계속 처리
-- `ACCOUNT_BULK_CREATE` (TASK-BE-257): account-service가 bulk provisioning API 호출 시 발행 예정. 현재는 account-service의 `account_status_history`에만 기록됨. admin-service가 provisioning 감사 emission 패턴을 확립한 후 이 이벤트를 실제 발행한다 (TODO).
+- `ACCOUNT_BULK_CREATE`: `admin.action.performed` actionCode enum 에 정의되어 있으나 **현재 emitter 없음** — TASK-BE-257 의 의도된 설계 (bulk provisioning 은 account-service 가 `account.created` 이벤트 N건을 individual 발행, `admin.action.performed` 채널 사용 안 함). 향후 admin-service 발 bulk-provisioning 감사 emission 이 필요해지면 별도 task 로 활성화 (위 forward-compatible 규칙이 re-introduction 을 cover).
 - DLQ: `admin.action.performed.dlq` (외부 SIEM consumer가 실패 시)
