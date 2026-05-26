@@ -8,7 +8,7 @@ scm refactor sweep tail (post-BE-016, 2026-05-26 dry-run)
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
