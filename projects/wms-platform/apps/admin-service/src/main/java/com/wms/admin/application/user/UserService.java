@@ -128,14 +128,9 @@ public class UserService {
                 // force=true requires WMS_SUPERADMIN
                 throw new AccessDeniedException("force=true requires WMS_SUPERADMIN role");
             }
-            Instant now = clock.instant();
+            Instant cascadeNow = clock.instant();
             List<UserRoleAssignment> active = assignmentRepository.findActiveByUserId(existing.id());
-            for (UserRoleAssignment a : active) {
-                UserRoleAssignment revoked = a.revoke(now, cmd.actorId());
-                UserRoleAssignment saved = assignmentRepository.save(revoked);
-                revokedIds.add(saved.id());
-                assignmentEventHelper.appendAssignmentRevokedEvent(saved, "USER_DEACTIVATED", cmd.actorId(), now);
-            }
+            revokedIds = assignmentEventHelper.cascadeRevoke(active, "USER_DEACTIVATED", cmd.actorId(), cascadeNow);
         }
         Instant now = clock.instant();
         User deactivated = existing.deactivate(now, cmd.actorId());

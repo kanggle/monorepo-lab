@@ -134,14 +134,9 @@ public class RoleService {
             if (!cmd.callerIsSuperadmin()) {
                 throw new AccessDeniedException("force=true requires WMS_SUPERADMIN role");
             }
-            Instant now = clock.instant();
+            Instant cascadeNow = clock.instant();
             List<UserRoleAssignment> active = assignmentRepository.findActiveByRoleId(existing.id());
-            for (UserRoleAssignment a : active) {
-                UserRoleAssignment revoked = a.revoke(now, cmd.actorId());
-                UserRoleAssignment saved = assignmentRepository.save(revoked);
-                revokedIds.add(saved.id());
-                assignmentEventHelper.appendAssignmentRevokedEvent(saved, "ROLE_DEACTIVATED", cmd.actorId(), now);
-            }
+            revokedIds = assignmentEventHelper.cascadeRevoke(active, "ROLE_DEACTIVATED", cmd.actorId(), cascadeNow);
         }
         Instant now = clock.instant();
         Role deactivated = existing.deactivate(now, cmd.actorId());

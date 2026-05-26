@@ -42,7 +42,7 @@ class RoleServiceTest {
         Clock fixed = Clock.fixed(Instant.parse("2026-05-09T10:00:00Z"), ZoneOffset.UTC);
         AdminEventEnvelopeBuilder envelopeBuilder = new AdminEventEnvelopeBuilder(mapper);
         service = new RoleService(roleRepo, assignmentRepo, outbox,
-                envelopeBuilder, new AssignmentEventHelper(outbox, envelopeBuilder), mapper, fixed);
+                envelopeBuilder, new AssignmentEventHelper(assignmentRepo, outbox, envelopeBuilder), mapper, fixed);
     }
 
     @Test

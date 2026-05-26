@@ -48,7 +48,7 @@ class UserServiceAuthzTest {
         Clock fixed = Clock.fixed(Instant.parse("2026-05-09T10:00:00Z"), ZoneOffset.UTC);
         AdminEventEnvelopeBuilder envelopeBuilder = new AdminEventEnvelopeBuilder(mapper);
         UserService raw = new UserService(userRepo, assignmentRepo, outbox,
-                envelopeBuilder, new AssignmentEventHelper(outbox, envelopeBuilder), fixed);
+                envelopeBuilder, new AssignmentEventHelper(assignmentRepo, outbox, envelopeBuilder), fixed);
 
         ProxyFactory pf = new ProxyFactory(raw);
         pf.addAdvice(AuthorizationManagerBeforeMethodInterceptor
