@@ -1,5 +1,6 @@
 package com.wms.inventory.adapter.in.web.controller;
 
+import com.wms.inventory.adapter.in.web.JwtHelper;
 import com.wms.inventory.adapter.in.web.dto.request.ConfirmReservationRequest;
 import com.wms.inventory.adapter.in.web.dto.request.CreateReservationRequest;
 import com.wms.inventory.adapter.in.web.dto.request.ReleaseReservationRequest;
@@ -73,7 +74,7 @@ public class ReservationController {
         int ttl = request.ttlSeconds() == null ? DEFAULT_TTL_SECONDS : request.ttlSeconds();
         ReserveStockCommand command = new ReserveStockCommand(
                 request.pickingRequestId(), request.warehouseId(), lines, ttl,
-                null, actorId(jwt), null);
+                null, JwtHelper.actorId(jwt), null);
         ReservationView result = reserveStock.reserve(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(ReservationResponse.from(result));
     }
@@ -88,7 +89,7 @@ public class ReservationController {
                 .map(l -> new ConfirmReservationCommand.Line(l.reservationLineId(), l.shippedQuantity()))
                 .toList();
         ConfirmReservationCommand command = new ConfirmReservationCommand(
-                id, request.version(), lines, null, actorId(jwt));
+                id, request.version(), lines, null, JwtHelper.actorId(jwt));
         ReservationView result = confirmReservation.confirm(command);
         return ResponseEntity.ok(ReservationResponse.from(result));
     }
@@ -104,7 +105,7 @@ public class ReservationController {
                     "EXPIRED is reserved for the TTL job — callers may use CANCELLED or MANUAL");
         }
         ReleaseReservationCommand command = new ReleaseReservationCommand(
-                id, request.reason(), request.version(), null, actorId(jwt));
+                id, request.reason(), request.version(), null, JwtHelper.actorId(jwt));
         ReservationView result = releaseReservation.release(command);
         return ResponseEntity.ok(ReservationResponse.from(result));
     }
@@ -135,10 +136,4 @@ public class ReservationController {
         return PageResponse.from(queryReservation.list(criteria), ReservationResponse::from);
     }
 
-    private static String actorId(Jwt jwt) {
-        if (jwt == null) {
-            return "anonymous";
-        }
-        return jwt.getSubject() != null ? jwt.getSubject() : jwt.getClaimAsString("actorId");
-    }
 }
