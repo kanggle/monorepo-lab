@@ -8,7 +8,7 @@ admin-service projection-consumer dispatch dedup — 4 `*ProjectionConsumer.onMe
 
 # Status
 
-ready
+review
 
 # Owner
 
