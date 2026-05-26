@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-302-inventory-architecture-spec-systemic-patterns.md` — inventory-service architecture.md L165 (Layer Rules #3) + L433 (Security #2) 두 문구를 7-consumer + 5-controller × 17-endpoint systemic + BE-027/028 APPROVED-by-review convention 과 정렬 (Tier 2 spec-correction, impl 변경 0). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (2-line spec amend).
 
 ## in-progress
 
