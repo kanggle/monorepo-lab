@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-303-inventory-cohort-b-long-method-polish.md` — inventory-service Cohort B 3 finding (F-L5-1 `persistAdjustmentResult` 12→6 arg shrink + F-L5-2 `transfer()` 82→≤60 LOC via 3 method extraction + F-L5-3 `listViews` WHERE/bind dual-walk → Filter[] 통합). Low risk (Extract Method). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-303-inventory-cohort-b-long-method-polish.md` — **REVIEW (impl applied via worktree subagent)**. 3 finding closure: (1) F-L5-1 `AdjustStockService.persistAdjustmentResult` 12→6 arg shrink (delta/bucket/reasonCode/reasonNote/now/actorId 모두 `StockAdjustment` entity 에서 derive), (2) F-L5-2 `TransferStockService.transfer()` 82→59 LOC via 3 private method extraction (`loadOrCreateTarget` + `applyLegs` + `buildTransferredEvent`) + 2 private static nested record (`TargetResolution`, `LegPair`), (3) F-L5-3 `InventoryRepositoryImpl.listViews` WHERE/bind dual-walk → `Filter[6]` 정적 배열 + 단일 loop 통합 (SQL byte-identical). spec PR #870 (squash `19e9930a`, markdown fast-lane). impl PR (this) = +120/-70 across 3 files (inventory-service main only). Local BUILD SUCCESSFUL (worktree agent baseline 2m9s + after 56s). AC-1/2/3 structural verify (signature + LOC + Filter[]), AC-6 cross-project drift = 0, AC-7 domain layer untouched (empty diff). id-ascending lock order (W1) + side-effect order + SQL output byte-identical 보존. 분석=Opus 4.7 / 구현=Sonnet 4.6 (worktree refactoring-engineer agent).
 
 ## done
 
