@@ -136,6 +136,8 @@ com.example.scmplatform.procurement/
 ├── application/                              ← use cases + outbound ports
 │   ├── PurchaseOrderApplicationService.java  ← @Transactional command boundaries
 │   ├── ActorContext.java
+│   ├── security/
+│   │   └── ActorContextResolver.java         ← presentation → application static call (post-BE-017)
 │   ├── PurchaseOrderView.java                ← read-model DTOs
 │   ├── AsnView.java
 │   ├── command/                              ← use-case input records
@@ -162,7 +164,6 @@ com.example.scmplatform.procurement/
 │   │   ├── ServiceLevelOAuth2Config.java
 │   │   ├── AllowedIssuersValidator.java
 │   │   ├── TenantClaimValidator.java
-│   │   ├── ActorContextResolver.java
 │   │   └── ActorContextJwtAuthenticationConverter.java
 │   └── config/
 │       (ClockConfig, JpaConfig)
