@@ -8,7 +8,7 @@ admin-events.md L57 BE-257 stale prose follow-up — `ACCOUNT_BULK_CREATE` actio
 
 # Status
 
-review
+done
 
 # Owner
 
