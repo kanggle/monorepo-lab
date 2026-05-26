@@ -25,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoleService {
 
+    private static final Logger log = LoggerFactory.getLogger(RoleService.class);
     private static final String AGGREGATE_TYPE = "role";
 
     private final RoleRepository roleRepository;
@@ -195,6 +198,7 @@ public class RoleService {
             return objectMapper.readValue(permissionsJson,
                     objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (Exception e) {
+            log.warn("Failed to deserialise permissions json — returning empty list: json={}", permissionsJson, e);
             return List.of();
         }
     }

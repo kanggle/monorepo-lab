@@ -49,6 +49,9 @@ public class InventoryProjectionService {
 
     private static final String SOURCE_SERVICE = "inventory";
 
+    /** v1 default low-stock alert threshold; recomputed at projection time. */
+    private static final int DEFAULT_LOW_STOCK_THRESHOLD = 10;
+
     private final InventorySnapshotRepository snapshotRepo;
     private final AdjustmentAuditRepository auditRepo;
     private final AlertLogRepository alertRepo;
@@ -150,53 +153,58 @@ public class InventoryProjectionService {
     private DedupeOutcome onAdjusted(ProjectionEnvelope envelope) {
         JsonNode p = envelope.payload();
         Instant occurredAt = envelope.occurredAt();
+        appendAuditRowIfAbsent(envelope, p, occurredAt);
+        return updateSnapshotFromAdjustment(p, occurredAt);
+    }
 
-        // Append-only audit row keyed by eventId.
+    private void appendAuditRowIfAbsent(ProjectionEnvelope envelope, JsonNode p, Instant occurredAt) {
         UUID auditId = envelope.eventId();
-        if (!auditRepo.existsById(auditId)) {
-            UUID locationId = uuid(p, "locationId");
-            UUID skuId = uuid(p, "skuId");
-            UUID lotId = optionalUuid(p, "lotId");
-            UUID warehouseId = optionalUuid(p, "warehouseId");
-            if (warehouseId == null) {
-                warehouseId = locationRepo.findById(locationId)
-                        .map(LocationRefEntity::getWarehouseId)
-                        .orElse(new UUID(0, 0));
-            }
-            Integer delta = optionalIntegerBoxed(p, "delta");
-            AdjustmentAuditEntity audit = new AdjustmentAuditEntity(
-                    auditId,
-                    locationId,
-                    skuId,
-                    lotId,
-                    warehouseId,
-                    optionalText(p, "bucket") == null ? "AVAILABLE" : optionalText(p, "bucket"),
-                    delta == null ? 0 : delta,
-                    optionalText(p, "reasonCode"),
-                    optionalText(p, "reasonNote"),
-                    optionalText(p, "actorId"),
-                    occurredAt,
-                    clock.instant());
-            auditRepo.save(audit);
+        if (auditRepo.existsById(auditId)) {
+            return;
         }
-
-        // Snapshot row update (current state in payload.inventory).
         UUID locationId = uuid(p, "locationId");
         UUID skuId = uuid(p, "skuId");
         UUID lotId = optionalUuid(p, "lotId");
-        if (p.has("inventory") && p.get("inventory").isObject()) {
-            JsonNode inv = p.get("inventory");
-            int avail = optionalIntegerBoxed(inv, "availableQty") == null
-                    ? 0 : inv.get("availableQty").asInt();
-            int reserved = optionalIntegerBoxed(inv, "reservedQty") == null
-                    ? 0 : inv.get("reservedQty").asInt();
-            int damaged = optionalIntegerBoxed(inv, "damagedQty") == null
-                    ? 0 : inv.get("damagedQty").asInt();
-            UUID warehouseId = optionalUuid(p, "warehouseId");
-            return upsertSnapshotAbsolute(locationId, skuId, lotId, warehouseId, avail,
-                    reserved, damaged, occurredAt);
+        UUID warehouseId = optionalUuid(p, "warehouseId");
+        if (warehouseId == null) {
+            warehouseId = locationRepo.findById(locationId)
+                    .map(LocationRefEntity::getWarehouseId)
+                    .orElse(new UUID(0, 0));
         }
-        return DedupeOutcome.APPLIED;
+        Integer delta = optionalIntegerBoxed(p, "delta");
+        AdjustmentAuditEntity audit = new AdjustmentAuditEntity(
+                auditId,
+                locationId,
+                skuId,
+                lotId,
+                warehouseId,
+                optionalText(p, "bucket") == null ? "AVAILABLE" : optionalText(p, "bucket"),
+                delta == null ? 0 : delta,
+                optionalText(p, "reasonCode"),
+                optionalText(p, "reasonNote"),
+                optionalText(p, "actorId"),
+                occurredAt,
+                clock.instant());
+        auditRepo.save(audit);
+    }
+
+    private DedupeOutcome updateSnapshotFromAdjustment(JsonNode p, Instant occurredAt) {
+        if (!p.has("inventory") || !p.get("inventory").isObject()) {
+            return DedupeOutcome.APPLIED;
+        }
+        UUID locationId = uuid(p, "locationId");
+        UUID skuId = uuid(p, "skuId");
+        UUID lotId = optionalUuid(p, "lotId");
+        JsonNode inv = p.get("inventory");
+        int avail = optionalIntegerBoxed(inv, "availableQty") == null
+                ? 0 : inv.get("availableQty").asInt();
+        int reserved = optionalIntegerBoxed(inv, "reservedQty") == null
+                ? 0 : inv.get("reservedQty").asInt();
+        int damaged = optionalIntegerBoxed(inv, "damagedQty") == null
+                ? 0 : inv.get("damagedQty").asInt();
+        UUID warehouseId = optionalUuid(p, "warehouseId");
+        return upsertSnapshotAbsolute(locationId, skuId, lotId, warehouseId, avail,
+                reserved, damaged, occurredAt);
     }
 
     private DedupeOutcome onTransferred(ProjectionEnvelope envelope) {
@@ -324,7 +332,7 @@ public class InventoryProjectionService {
     private void applySnapshot(InventorySnapshotEntity existing, UUID locationId, UUID skuId,
                                UUID lotId, UUID warehouseId, int availableQty, int reservedQty,
                                int damagedQty, Instant occurredAt) {
-        boolean lowStock = availableQty <= 10; // v1 default threshold; recomputed at projection.
+        boolean lowStock = availableQty <= DEFAULT_LOW_STOCK_THRESHOLD;
         String locationCode = locationRepo.findById(locationId)
                 .map(LocationRefEntity::getLocationCode).orElse(null);
         String skuCode = skuRepo.findById(skuId).map(SkuRefEntity::getSkuCode).orElse(null);
