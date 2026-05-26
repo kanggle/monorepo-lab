@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-299-admin-mixed-hygiene.md` — `/refactor-code wms admin-service` (2026-05-26) dry-run Cohort C3 (L1+L2+L3+L5 mixed hygiene, 4 finding). F-L1-1 (`OperationsController` direct repo → 새 `ProjectionStatusService` 도입) + F-L2-1 (`RoleService.deserialisePermissions` silent catch → log.warn) + F-L3-1 (`InventoryProjectionService` `lowStock <= 10` magic → constant) + F-L5-3 (`InventoryProjectionService.onAdjusted` 50 LOC → 2 private method). behavior-neutral, low risk. BE-297 직속 후속. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
