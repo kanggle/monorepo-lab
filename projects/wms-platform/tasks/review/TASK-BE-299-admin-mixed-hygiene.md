@@ -8,7 +8,7 @@ admin-service mixed hygiene — Cohort C3: OperationsController service 위임 +
 
 # Status
 
-ready
+review
 
 # Owner
 

@@ -1,13 +1,7 @@
 package com.wms.admin.api.dashboard;
 
 import com.wms.admin.api.dashboard.dto.ProjectionStatusResponse;
-import com.wms.admin.application.repository.AdminEventDedupeRepository;
-import com.wms.admin.infra.observability.KafkaLagProbe;
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import com.wms.admin.application.projection.ProjectionStatusService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,73 +10,22 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * {@code admin-service-api.md § 6.2} — projection lag report.
  *
- * <p>When a {@link KafkaLagProbe} bean is present (default profile, Kafka
- * available) the response carries per-topic {@code offsetLag},
- * {@code lastEventAt} (AdminClient {@code OffsetSpec.maxTimestamp()}),
- * {@code lastProjectedAt} ({@code admin_event_dedupe.processed_at} MAX), and
- * {@code lagSeconds} (Micrometer Timer max for that topic). Under the
- * {@code standalone} profile the probe is absent and the listener registry is
- * the only fallback signal — the response degrades to existence rows.
+ * <p>Thin REST controller; all dedupe-aggregation + lag-probe / listener-registry
+ * fallback logic lives in {@link ProjectionStatusService}.
  */
 @RestController
 @RequestMapping("/api/v1/admin/operations")
 @PreAuthorize("hasRole('WMS_ADMIN')")
 public class OperationsController {
 
-    private final AdminEventDedupeRepository dedupeRepository;
-    private final KafkaListenerEndpointRegistry registry;
-    private final KafkaLagProbe lagProbe;
-    private final String consumerGroup;
+    private final ProjectionStatusService projectionStatusService;
 
-    public OperationsController(AdminEventDedupeRepository dedupeRepository,
-                                ObjectProvider<KafkaListenerEndpointRegistry> registryProvider,
-                                ObjectProvider<KafkaLagProbe> probeProvider,
-                                @Value("${spring.kafka.consumer.group-id:admin-projection}")
-                                        String consumerGroup) {
-        this.dedupeRepository = dedupeRepository;
-        this.registry = registryProvider.getIfAvailable();
-        this.lagProbe = probeProvider.getIfAvailable();
-        this.consumerGroup = consumerGroup;
+    public OperationsController(ProjectionStatusService projectionStatusService) {
+        this.projectionStatusService = projectionStatusService;
     }
 
     @GetMapping("/projection-status")
     public ProjectionStatusResponse projectionStatus() {
-        AdminEventDedupeRepository.LifetimeCounts counts = dedupeRepository.countLifetime();
-        List<ProjectionStatusResponse.ProjectionEntry> entries = new ArrayList<>();
-        double worst = 0.0d;
-
-        if (lagProbe != null) {
-            for (KafkaLagProbe.TopicLag tl : lagProbe.probe()) {
-                entries.add(new ProjectionStatusResponse.ProjectionEntry(
-                        tl.topic(),
-                        tl.consumerGroup(),
-                        tl.lagSeconds(),
-                        tl.lastEventAt(),
-                        tl.lastProjectedAt()));
-                if (tl.lagSeconds() > worst) {
-                    worst = tl.lagSeconds();
-                }
-            }
-        } else if (registry != null) {
-            for (var container : registry.getListenerContainers()) {
-                String[] topics = container.getContainerProperties().getTopics();
-                if (topics == null) continue;
-                for (String topic : topics) {
-                    entries.add(new ProjectionStatusResponse.ProjectionEntry(
-                            topic,
-                            consumerGroup,
-                            0.0d,
-                            null,
-                            null));
-                }
-            }
-        }
-        return new ProjectionStatusResponse(
-                entries,
-                worst,
-                counts.applied(),
-                counts.ignoredDuplicate(),
-                counts.ignoredDuplicateLate(),
-                counts.failed());
+        return projectionStatusService.computeStatus();
     }
 }
