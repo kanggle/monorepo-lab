@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-297-admin-cascade-revoke-dedup.md` — `/refactor-code wms admin-service` (2026-05-26) dry-run Cohort C1 (L5+L6 deactivate-cascade dedup). `UserService.deactivate` + `RoleService.deactivate` 의 byte-identical 7-line cascade-revoke loop → `AssignmentEventHelper.cascadeRevoke` extract. Net delta ~-15 LOC + helper +15 LOC. behavior-neutral, low risk. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
 
 ## in-progress
 
