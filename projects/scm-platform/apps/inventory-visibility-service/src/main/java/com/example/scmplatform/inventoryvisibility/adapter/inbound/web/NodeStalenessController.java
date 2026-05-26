@@ -22,24 +22,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NodeStalenessController {
 
-    private static final String TENANT_ID = "scm";
-
     private final InventoryVisibilityApplicationService applicationService;
 
     @GetMapping("/staleness")
     public ResponseEntity<ApiEnvelope<List<StalenessResponse>>> getStaleness(
             @AuthenticationPrincipal Jwt jwt) {
-        String tenantId = extractTenantId(jwt);
+        String tenantId = TenantClaimExtractor.extractTenantId(jwt);
         List<StalenessResponse> responses = applicationService.getStaleness(tenantId)
                 .stream()
                 .map(StalenessResponse::from)
                 .toList();
         return ResponseEntity.ok(ApiEnvelope.of(responses));
-    }
-
-    private String extractTenantId(Jwt jwt) {
-        if (jwt == null) return TENANT_ID;
-        String t = jwt.getClaimAsString("tenant_id");
-        return t != null ? t : TENANT_ID;
     }
 }
