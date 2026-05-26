@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-301-inventory-duplication-sweep.md` — `/refactor-code wms inventory-service` (2026-05-27) dry-run Cohort A (L6 duplication 3 finding). F-L6-1 (`validateMasterRefs` × 2 service → `MasterRefValidator` helper; TransferStockService.validateSku 다른 로직 = scope 외 제외) + F-L6-2 (`AdjustmentController` 3 endpoint Idempotency-Key + reasonNote guards × 3 → private static methods) + F-L6-3 (`actorId(Jwt)` × 3 controller → `JwtHelper` static util). behavior-neutral, low risk. wms admin 8/8 TRUE 0 후 same-cluster 연장 sweep. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
