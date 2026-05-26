@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-300-admin-projection-consumer-dispatch-dedup.md` — `/refactor-code wms admin-service` (2026-05-26) dry-run Cohort C2 (L6 4-Kafka-consumer dispatch dedup, F-L6-2). 4 `*ProjectionConsumer.onMessage` byte-identical 16-line body × 4 consumer (= 64 LOC dup) → `ProjectionConsumerSupport.dispatch` static utility (functional interface `Consumer<ProjectionEnvelope>` + method reference). SKILL.md AbstractProjectionService precedent (Spring AOP self-invocation IT failures 경고) 회피 패턴. medium risk (Kafka consumer IT 의존, CI authoritative verify 필수). BE-297 (C1) + BE-299 (C3) 직속 후속, wms admin-service 8/8 sweep TRUE 0 도달 목표. 분석=Opus 4.7 / 구현 권장=Opus 4.7.
 
 ## in-progress
 
