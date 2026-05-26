@@ -8,7 +8,7 @@ inventory-service duplication sweep — Cohort A: `MasterRefValidator` + Adjustm
 
 # Status
 
-review
+done
 
 # Owner
 
