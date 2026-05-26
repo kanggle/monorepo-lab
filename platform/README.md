@@ -11,6 +11,8 @@
 | 파일 | 범위 |
 |---|---|
 | [entrypoint.md](entrypoint.md) | 스펙 읽기 순서 — 모든 구현 작업의 시작점 |
+| [hardstop-rules.md](hardstop-rules.md) | Hard Stop 4-block bodies canonical (모든 HARDSTOP-NN stanza의 단일 source of truth) |
+| [lint-remediation-message-standard.md](lint-remediation-message-standard.md) | Hard Stop · rule-violation emission의 4-block message format 표준 |
 | [architecture.md](architecture.md) | 플랫폼 전체 아키텍처 베이스라인 |
 | [architecture-decision-rule.md](architecture-decision-rule.md) | 각 서비스의 내부 아키텍처 선언 의무 |
 | [service-boundaries.md](service-boundaries.md) | 서비스 간 책임 경계와 호출 관계 규칙 |
@@ -29,6 +31,7 @@
 | [api-gateway-policy.md](api-gateway-policy.md) | 퍼블릭 API 노출·라우팅 규칙 |
 | [deployment-policy.md](deployment-policy.md) | k8s 배포 환경 정책 |
 | [refactoring-policy.md](refactoring-policy.md) | 리팩토링 작업 기준 |
+| [object-storage-policy.md](object-storage-policy.md) | S3/MinIO object storage 정책 — `content-heavy` trait 활성화 서비스의 미디어 저장 규칙 |
 | [glossary.md](glossary.md) | 플랫폼 공통 용어집 |
 | [service-types/](service-types/) | service-type별 파일 (rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, frontend-app, identity-platform). canonical 카탈로그는 [service-types/INDEX.md](service-types/INDEX.md) |
 | [contracts/](contracts/) | 플랫폼 전반에서 공유되는 cross-cutting 계약 (모든 프로젝트에 동일 적용) |
