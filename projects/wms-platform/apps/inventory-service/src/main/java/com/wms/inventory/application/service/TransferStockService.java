@@ -95,13 +95,9 @@ public class TransferStockService implements TransferStockUseCase {
                                 + command.sourceLocationId() + ", " + command.skuId() + ", "
                                 + command.lotId() + ")"));
 
-        Optional<Inventory> existingTarget = inventoryRepository.findByKey(
-                command.targetLocationId(), command.skuId(), command.lotId());
-        boolean targetWasCreated = existingTarget.isEmpty();
-        Inventory target = existingTarget.orElseGet(() -> Inventory.createEmpty(
-                UUID.randomUUID(), warehouseId,
-                command.targetLocationId(), command.skuId(), command.lotId(),
-                now, command.actorId()));
+        TargetResolution resolution = loadOrCreateTarget(command, warehouseId, now);
+        Inventory target = resolution.target();
+        boolean targetWasCreated = resolution.wasCreated();
 
         StockTransfer transfer = StockTransfer.create(
                 warehouseId, command.sourceLocationId(), command.targetLocationId(),
@@ -110,40 +106,21 @@ public class TransferStockService implements TransferStockUseCase {
                 command.actorId(), command.idempotencyKey(), now);
 
         // Apply legs in id-ascending order.
-        Inventory first = source.id().compareTo(target.id()) <= 0 ? source : target;
-        Inventory second = first == source ? target : source;
-        InventoryMovement firstLeg = (first == source)
-                ? source.transferOut(command.quantity(), transfer.id(), target.id(), command.actorId(), now)
-                : target.transferIn(command.quantity(), transfer.id(), source.id(), command.actorId(), now);
-        InventoryMovement secondLeg = (second == source)
-                ? source.transferOut(command.quantity(), transfer.id(), target.id(), command.actorId(), now)
-                : target.transferIn(command.quantity(), transfer.id(), source.id(), command.actorId(), now);
+        LegPair legs = applyLegs(source, target, transfer, command, now);
 
         // Persist both Inventory rows in the same id-ascending order.
-        Inventory persistedFirst = persistInventory(first, first == target && targetWasCreated);
-        Inventory persistedSecond = persistInventory(second, second == target && targetWasCreated);
-        Inventory persistedSource = (first == source) ? persistedFirst : persistedSecond;
-        Inventory persistedTarget = (first == target) ? persistedFirst : persistedSecond;
+        Inventory persistedFirst = persistInventory(legs.first(), legs.first() == target && targetWasCreated);
+        Inventory persistedSecond = persistInventory(legs.second(), legs.second() == target && targetWasCreated);
+        Inventory persistedSource = (legs.first() == source) ? persistedFirst : persistedSecond;
+        Inventory persistedTarget = (legs.first() == target) ? persistedFirst : persistedSecond;
 
-        movementRepository.save(firstLeg);
-        movementRepository.save(secondLeg);
+        movementRepository.save(legs.firstLeg());
+        movementRepository.save(legs.secondLeg());
         StockTransfer savedTransfer = transferRepository.insert(transfer);
 
-        String sourceLocationCode = masterReadModel.findLocation(source.locationId())
-                .map(LocationSnapshot::locationCode).orElse(null);
-        String targetLocationCode = masterReadModel.findLocation(target.locationId())
-                .map(LocationSnapshot::locationCode).orElse(null);
-        outboxWriter.write(new InventoryTransferredEvent(
-                savedTransfer.id(), warehouseId, command.skuId(), command.lotId(), command.quantity(),
-                command.reasonCode(),
-                new InventoryTransferredEvent.Endpoint(
-                        persistedSource.locationId(), sourceLocationCode,
-                        persistedSource.id(), persistedSource.availableQty(), false),
-                new InventoryTransferredEvent.Endpoint(
-                        persistedTarget.locationId(), targetLocationCode,
-                        persistedTarget.id(), persistedTarget.availableQty(),
-                        targetWasCreated),
-                now, command.actorId()));
+        outboxWriter.write(buildTransferredEvent(
+                savedTransfer, persistedSource, persistedTarget,
+                warehouseId, command, targetWasCreated, now));
 
         transferCounter.increment();
         // Source row's availableQty just dropped — evaluate the alert.
@@ -157,6 +134,57 @@ public class TransferStockService implements TransferStockUseCase {
                 TransferView.from(savedTransfer),
                 snapshot(persistedSource, false),
                 snapshot(persistedTarget, targetWasCreated));
+    }
+
+    private TargetResolution loadOrCreateTarget(TransferStockCommand command,
+                                                UUID warehouseId, Instant now) {
+        Optional<Inventory> existingTarget = inventoryRepository.findByKey(
+                command.targetLocationId(), command.skuId(), command.lotId());
+        boolean wasCreated = existingTarget.isEmpty();
+        Inventory target = existingTarget.orElseGet(() -> Inventory.createEmpty(
+                UUID.randomUUID(), warehouseId,
+                command.targetLocationId(), command.skuId(), command.lotId(),
+                now, command.actorId()));
+        return new TargetResolution(target, wasCreated);
+    }
+
+    private LegPair applyLegs(Inventory source, Inventory target,
+                              StockTransfer transfer, TransferStockCommand command,
+                              Instant now) {
+        // Apply legs in id-ascending order.
+        Inventory first = source.id().compareTo(target.id()) <= 0 ? source : target;
+        Inventory second = first == source ? target : source;
+        InventoryMovement firstLeg = (first == source)
+                ? source.transferOut(command.quantity(), transfer.id(), target.id(), command.actorId(), now)
+                : target.transferIn(command.quantity(), transfer.id(), source.id(), command.actorId(), now);
+        InventoryMovement secondLeg = (second == source)
+                ? source.transferOut(command.quantity(), transfer.id(), target.id(), command.actorId(), now)
+                : target.transferIn(command.quantity(), transfer.id(), source.id(), command.actorId(), now);
+        return new LegPair(first, second, firstLeg, secondLeg);
+    }
+
+    private InventoryTransferredEvent buildTransferredEvent(StockTransfer savedTransfer,
+                                                            Inventory persistedSource,
+                                                            Inventory persistedTarget,
+                                                            UUID warehouseId,
+                                                            TransferStockCommand command,
+                                                            boolean targetWasCreated,
+                                                            Instant now) {
+        String sourceLocationCode = masterReadModel.findLocation(persistedSource.locationId())
+                .map(LocationSnapshot::locationCode).orElse(null);
+        String targetLocationCode = masterReadModel.findLocation(persistedTarget.locationId())
+                .map(LocationSnapshot::locationCode).orElse(null);
+        return new InventoryTransferredEvent(
+                savedTransfer.id(), warehouseId, command.skuId(), command.lotId(), command.quantity(),
+                command.reasonCode(),
+                new InventoryTransferredEvent.Endpoint(
+                        persistedSource.locationId(), sourceLocationCode,
+                        persistedSource.id(), persistedSource.availableQty(), false),
+                new InventoryTransferredEvent.Endpoint(
+                        persistedTarget.locationId(), targetLocationCode,
+                        persistedTarget.id(), persistedTarget.availableQty(),
+                        targetWasCreated),
+                now, command.actorId());
     }
 
     private Inventory persistInventory(Inventory inventory, boolean isFreshlyCreated) {
@@ -222,4 +250,11 @@ public class TransferStockService implements TransferStockUseCase {
             });
         }
     }
+
+    // ---- Private nested records (file-private extraction helpers) ---------------
+
+    private record TargetResolution(Inventory target, boolean wasCreated) {}
+
+    private record LegPair(Inventory first, Inventory second,
+                           InventoryMovement firstLeg, InventoryMovement secondLeg) {}
 }

@@ -1,6 +1,6 @@
 # TASK-BE-303 — inventory-service Cohort B long-method polish (3 finding)
 
-Status: ready
+Status: review
 
 ## Goal
 
