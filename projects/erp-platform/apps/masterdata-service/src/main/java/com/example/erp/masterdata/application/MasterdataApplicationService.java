@@ -64,6 +64,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * masterdata-service application service — the SINGLE {@code @Transactional}
@@ -130,7 +131,7 @@ public class MasterdataApplicationService {
     @Transactional
     public DepartmentView updateDepartment(UpdateDepartmentCommand cmd) {
         ActorContext actor = cmd.actor();
-        Department existing = loadDepartment(cmd.id(), actor.tenantId());
+        Department existing = loadOrThrow(departmentRepository::findById, cmd.id(), actor.tenantId(), "Department");
         authorize(actor, RequiredScope.WRITE, existing.getParentId());
         Instant now = clock.now();
 
@@ -150,26 +151,23 @@ public class MasterdataApplicationService {
     @Transactional
     public DepartmentView retireDepartment(RetireDepartmentCommand cmd) {
         ActorContext actor = cmd.actor();
-        Department existing = loadDepartment(cmd.id(), actor.tenantId());
+        Department existing = loadOrThrow(departmentRepository::findById, cmd.id(), actor.tenantId(), "Department");
         authorize(actor, RequiredScope.WRITE, existing.getParentId());
         Instant now = clock.now();
 
         // Reference integrity (E1) — block retire if any live referencer exists.
-        if (!departmentRepository.findActiveChildren(existing.getId(), actor.tenantId()).isEmpty()) {
-            throw new MasterdataReferenceViolationException(
-                    "Department " + existing.getId()
-                            + " has active child departments — cannot retire");
-        }
-        if (!employeeRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()).isEmpty()) {
-            throw new MasterdataReferenceViolationException(
-                    "Department " + existing.getId()
-                            + " is referenced by active employees — cannot retire");
-        }
-        if (!costCenterRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()).isEmpty()) {
-            throw new MasterdataReferenceViolationException(
-                    "Department " + existing.getId()
-                            + " is referenced by active cost centers — cannot retire");
-        }
+        ensureNoActiveReferencer(
+                () -> departmentRepository.findActiveChildren(existing.getId(), actor.tenantId()),
+                "Department " + existing.getId()
+                        + " has active child departments — cannot retire");
+        ensureNoActiveReferencer(
+                () -> employeeRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()),
+                "Department " + existing.getId()
+                        + " is referenced by active employees — cannot retire");
+        ensureNoActiveReferencer(
+                () -> costCenterRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()),
+                "Department " + existing.getId()
+                        + " is referenced by active cost centers — cannot retire");
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -185,7 +183,7 @@ public class MasterdataApplicationService {
     @Transactional
     public DepartmentView moveDepartmentParent(MoveDepartmentParentCommand cmd) {
         ActorContext actor = cmd.actor();
-        Department existing = loadDepartment(cmd.id(), actor.tenantId());
+        Department existing = loadOrThrow(departmentRepository::findById, cmd.id(), actor.tenantId(), "Department");
         authorize(actor, RequiredScope.WRITE, existing.getParentId());
         Instant now = clock.now();
 
@@ -222,14 +220,9 @@ public class MasterdataApplicationService {
 
     @Transactional(readOnly = true)
     public DepartmentView getDepartment(String id, ActorContext actor, LocalDate asOf) {
-        Department d = loadDepartment(id, actor.tenantId());
+        Department d = loadOrThrow(departmentRepository::findById, id, actor.tenantId(), "Department");
         authorize(actor, RequiredScope.READ, d.getParentId());
-        // Point-in-time check — for v1 the row IS the current revision; an
-        // asOf filter that falls outside its period returns NOT_FOUND.
-        if (asOf != null && !d.period().contains(asOf)) {
-            throw new MasterdataNotFoundException(
-                    "Department " + id + " has no effective revision at " + asOf);
-        }
+        ensureEffectiveAt(d.period(), asOf, "Department", id);
         return DepartmentView.from(d);
     }
 
@@ -276,7 +269,7 @@ public class MasterdataApplicationService {
     @Transactional
     public EmployeeView updateEmployee(UpdateEmployeeCommand cmd) {
         ActorContext actor = cmd.actor();
-        Employee existing = loadEmployee(cmd.id(), actor.tenantId());
+        Employee existing = loadOrThrow(employeeRepository::findById, cmd.id(), actor.tenantId(), "Employee");
         authorize(actor, RequiredScope.WRITE, existing.getDepartmentId());
         Instant now = clock.now();
 
@@ -305,7 +298,7 @@ public class MasterdataApplicationService {
     @Transactional
     public EmployeeView retireEmployee(RetireEmployeeCommand cmd) {
         ActorContext actor = cmd.actor();
-        Employee existing = loadEmployee(cmd.id(), actor.tenantId());
+        Employee existing = loadOrThrow(employeeRepository::findById, cmd.id(), actor.tenantId(), "Employee");
         authorize(actor, RequiredScope.WRITE, existing.getDepartmentId());
         Instant now = clock.now();
 
@@ -322,12 +315,9 @@ public class MasterdataApplicationService {
 
     @Transactional(readOnly = true)
     public EmployeeView getEmployee(String id, ActorContext actor, LocalDate asOf) {
-        Employee e = loadEmployee(id, actor.tenantId());
+        Employee e = loadOrThrow(employeeRepository::findById, id, actor.tenantId(), "Employee");
         authorize(actor, RequiredScope.READ, e.getDepartmentId());
-        if (asOf != null && !e.period().contains(asOf)) {
-            throw new MasterdataNotFoundException(
-                    "Employee " + id + " has no effective revision at " + asOf);
-        }
+        ensureEffectiveAt(e.period(), asOf, "Employee", id);
         return EmployeeView.from(e);
     }
 
@@ -369,7 +359,7 @@ public class MasterdataApplicationService {
     @Transactional
     public JobGradeView updateJobGrade(UpdateJobGradeCommand cmd) {
         ActorContext actor = cmd.actor();
-        JobGrade existing = loadJobGrade(cmd.id(), actor.tenantId());
+        JobGrade existing = loadOrThrow(jobGradeRepository::findById, cmd.id(), actor.tenantId(), "JobGrade");
         authorize(actor, RequiredScope.WRITE, null);
         Instant now = clock.now();
 
@@ -387,15 +377,14 @@ public class MasterdataApplicationService {
     @Transactional
     public JobGradeView retireJobGrade(RetireJobGradeCommand cmd) {
         ActorContext actor = cmd.actor();
-        JobGrade existing = loadJobGrade(cmd.id(), actor.tenantId());
+        JobGrade existing = loadOrThrow(jobGradeRepository::findById, cmd.id(), actor.tenantId(), "JobGrade");
         authorize(actor, RequiredScope.WRITE, null);
         Instant now = clock.now();
 
-        if (!employeeRepository.findActiveByJobGradeId(existing.getId(), actor.tenantId()).isEmpty()) {
-            throw new MasterdataReferenceViolationException(
-                    "JobGrade " + existing.getId()
-                            + " is referenced by active employees — cannot retire");
-        }
+        ensureNoActiveReferencer(
+                () -> employeeRepository.findActiveByJobGradeId(existing.getId(), actor.tenantId()),
+                "JobGrade " + existing.getId()
+                        + " is referenced by active employees — cannot retire");
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -411,11 +400,8 @@ public class MasterdataApplicationService {
     @Transactional(readOnly = true)
     public JobGradeView getJobGrade(String id, ActorContext actor, LocalDate asOf) {
         authorize(actor, RequiredScope.READ, null);
-        JobGrade g = loadJobGrade(id, actor.tenantId());
-        if (asOf != null && !g.period().contains(asOf)) {
-            throw new MasterdataNotFoundException(
-                    "JobGrade " + id + " has no effective revision at " + asOf);
-        }
+        JobGrade g = loadOrThrow(jobGradeRepository::findById, id, actor.tenantId(), "JobGrade");
+        ensureEffectiveAt(g.period(), asOf, "JobGrade", id);
         return JobGradeView.from(g);
     }
 
@@ -458,7 +444,7 @@ public class MasterdataApplicationService {
     @Transactional
     public CostCenterView updateCostCenter(UpdateCostCenterCommand cmd) {
         ActorContext actor = cmd.actor();
-        CostCenter existing = loadCostCenter(cmd.id(), actor.tenantId());
+        CostCenter existing = loadOrThrow(costCenterRepository::findById, cmd.id(), actor.tenantId(), "CostCenter");
         authorize(actor, RequiredScope.WRITE, existing.getDepartmentId());
         Instant now = clock.now();
 
@@ -480,15 +466,14 @@ public class MasterdataApplicationService {
     @Transactional
     public CostCenterView retireCostCenter(RetireCostCenterCommand cmd) {
         ActorContext actor = cmd.actor();
-        CostCenter existing = loadCostCenter(cmd.id(), actor.tenantId());
+        CostCenter existing = loadOrThrow(costCenterRepository::findById, cmd.id(), actor.tenantId(), "CostCenter");
         authorize(actor, RequiredScope.WRITE, existing.getDepartmentId());
         Instant now = clock.now();
 
-        if (!employeeRepository.findActiveByCostCenterId(existing.getId(), actor.tenantId()).isEmpty()) {
-            throw new MasterdataReferenceViolationException(
-                    "CostCenter " + existing.getId()
-                            + " is referenced by active employees — cannot retire");
-        }
+        ensureNoActiveReferencer(
+                () -> employeeRepository.findActiveByCostCenterId(existing.getId(), actor.tenantId()),
+                "CostCenter " + existing.getId()
+                        + " is referenced by active employees — cannot retire");
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -503,12 +488,9 @@ public class MasterdataApplicationService {
 
     @Transactional(readOnly = true)
     public CostCenterView getCostCenter(String id, ActorContext actor, LocalDate asOf) {
-        CostCenter c = loadCostCenter(id, actor.tenantId());
+        CostCenter c = loadOrThrow(costCenterRepository::findById, id, actor.tenantId(), "CostCenter");
         authorize(actor, RequiredScope.READ, c.getDepartmentId());
-        if (asOf != null && !c.period().contains(asOf)) {
-            throw new MasterdataNotFoundException(
-                    "CostCenter " + id + " has no effective revision at " + asOf);
-        }
+        ensureEffectiveAt(c.period(), asOf, "CostCenter", id);
         return CostCenterView.from(c);
     }
 
@@ -554,7 +536,7 @@ public class MasterdataApplicationService {
     @Transactional
     public BusinessPartnerView updateBusinessPartner(UpdateBusinessPartnerCommand cmd) {
         ActorContext actor = cmd.actor();
-        BusinessPartner existing = loadBusinessPartner(cmd.id(), actor.tenantId());
+        BusinessPartner existing = loadOrThrow(businessPartnerRepository::findById, cmd.id(), actor.tenantId(), "BusinessPartner");
         authorize(actor, RequiredScope.WRITE, null);
         Instant now = clock.now();
 
@@ -580,7 +562,7 @@ public class MasterdataApplicationService {
     @Transactional
     public BusinessPartnerView retireBusinessPartner(RetireBusinessPartnerCommand cmd) {
         ActorContext actor = cmd.actor();
-        BusinessPartner existing = loadBusinessPartner(cmd.id(), actor.tenantId());
+        BusinessPartner existing = loadOrThrow(businessPartnerRepository::findById, cmd.id(), actor.tenantId(), "BusinessPartner");
         authorize(actor, RequiredScope.WRITE, null);
         Instant now = clock.now();
 
@@ -599,11 +581,8 @@ public class MasterdataApplicationService {
     @Transactional(readOnly = true)
     public BusinessPartnerView getBusinessPartner(String id, ActorContext actor, LocalDate asOf) {
         authorize(actor, RequiredScope.READ, null);
-        BusinessPartner b = loadBusinessPartner(id, actor.tenantId());
-        if (asOf != null && !b.period().contains(asOf)) {
-            throw new MasterdataNotFoundException(
-                    "BusinessPartner " + id + " has no effective revision at " + asOf);
-        }
+        BusinessPartner b = loadOrThrow(businessPartnerRepository::findById, id, actor.tenantId(), "BusinessPartner");
+        ensureEffectiveAt(b.period(), asOf, "BusinessPartner", id);
         return BusinessPartnerView.from(b);
     }
 
@@ -634,34 +613,42 @@ public class MasterdataApplicationService {
         return provided != null ? provided : now.atZone(ZoneOffset.UTC).toLocalDate();
     }
 
-    private Department loadDepartment(String id, String tenantId) {
-        return departmentRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "Department not found: " + id));
+    /**
+     * Point-in-time existence check (architecture.md § Effective dating). For
+     * v1 the row IS the current revision; an {@code asOf} that falls outside
+     * its period returns NOT_FOUND. Shared across all five master {@code get*}
+     * use cases.
+     */
+    private void ensureEffectiveAt(EffectivePeriod period, LocalDate asOf,
+                                   String label, String id) {
+        if (asOf != null && !period.contains(asOf)) {
+            throw new MasterdataNotFoundException(
+                    label + " " + id + " has no effective revision at " + asOf);
+        }
     }
 
-    private Employee loadEmployee(String id, String tenantId) {
-        return employeeRepository.findById(id, tenantId)
+    /**
+     * Generic master-row loader. Parallel to {@link #ensureActive} — each
+     * use case passes the repo's {@code findById} method reference and the
+     * entity label used in the NOT_FOUND message. Removes five typed
+     * {@code load<Entity>} helpers that differed only in entity type + label.
+     */
+    private <T> T loadOrThrow(BiFunction<String, String, Optional<T>> finder,
+                              String id, String tenantId, String label) {
+        return finder.apply(id, tenantId)
                 .orElseThrow(() -> new MasterdataNotFoundException(
-                        "Employee not found: " + id));
+                        label + " not found: " + id));
     }
 
-    private JobGrade loadJobGrade(String id, String tenantId) {
-        return jobGradeRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "JobGrade not found: " + id));
-    }
-
-    private CostCenter loadCostCenter(String id, String tenantId) {
-        return costCenterRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "CostCenter not found: " + id));
-    }
-
-    private BusinessPartner loadBusinessPartner(String id, String tenantId) {
-        return businessPartnerRepository.findById(id, tenantId)
-                .orElseThrow(() -> new MasterdataNotFoundException(
-                        "BusinessPartner not found: " + id));
+    /**
+     * Reference-integrity guard (erp E1). If the supplied finder returns any
+     * live referencer, the retire is blocked with the contract message. Shared
+     * across Department / JobGrade / CostCenter retire paths.
+     */
+    private void ensureNoActiveReferencer(Supplier<List<?>> finder, String message) {
+        if (!finder.get().isEmpty()) {
+            throw new MasterdataReferenceViolationException(message);
+        }
     }
 
     private <T> void ensureActive(BiFunction<String, String, Optional<T>> finder,
