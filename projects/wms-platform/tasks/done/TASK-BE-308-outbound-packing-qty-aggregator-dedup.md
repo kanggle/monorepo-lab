@@ -1,6 +1,6 @@
 # TASK-BE-308 — outbound-service PackingQtyAggregator cross-class utility extract (F-L6-1 sumByOrderLine dedup)
 
-Status: review
+Status: done
 
 ## Goal
 
