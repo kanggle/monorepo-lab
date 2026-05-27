@@ -1,7 +1,7 @@
 # Project Overview — monorepo-lab
 
 > **목적**: 본 monorepo 전체 (플랫폼 전략 + 5 프로젝트 + 공유 인프라) 의 단일 진입 스냅샷.
-> **갱신 시점**: 2026-05-09 (마지막 의미 있는 변화: BE-272/273/274 closure — Cluster A 3/3 + Cluster C 5/5 + token customizer bonus = 9/8 deferred IT 회복, ADR-003/004 ACCEPTED, ADR-MONO-003 D2 ≥ 2026-06-09 갱신).
+> **갱신 시점**: 2026-05-28 (마지막 의미 있는 변화: Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28).
 > **위치**: `docs/project-overview.md` — `docs/adr/` (결정 기록) · `docs/guides/` (휴먼 워크플로우 가이드) 와 sibling.
 
 ---
@@ -10,7 +10,7 @@
 
 **multi-domain 백엔드/풀스택 포트폴리오 monorepo**. 5 도메인 프로젝트가 단일 라이브러리 (rules / platform / .claude / libs) 를 공유하면서 동거하고, 라이브러리가 stabilise 된 시점에 별도 Template 레포로 추출되는 **Discovery → Distribution** 전략을 따른다 ([TEMPLATE.md](../TEMPLATE.md)).
 
-- **현재 단계**: Phase 4 catalyst (5 프로젝트 동거) 완료, Phase 5 (Template 추출) **DEFERRED** ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) — 30일 churn freeze 후 재평가 ≥ 2026-06-09 (2026-05-09 재평가로 1-2일 시계 reset, BE-273 Phase 2 libs/java-common 변경 = D4 면제 자연 확장).
+- **현재 단계**: Phase 8 federation hardening MVP **COMPLETE** (2026-05-26, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) ACCEPTED). Phase 5 = **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) ACCEPTED, `kanggle/project-template` public + `is_template: true`). Phase 6 = **COMPLETE** finance + erp v1 양쪽 종결 2026-05-19/20 ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) ACCEPTED). Phase 7 = **LIVE** console-bff Operator Overview + Domain Health 2026-05-20 ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) ACCEPTED). 5/5 backend domains (gap·wms·scm·finance·erp) federated via platform-console.
 - **AI-driven 운영**: Claude Code 기반 rule-driven · spec-driven · task-driven 워크플로우. 80+ skill / 12+ specialized agent / 도메인-trait 자동 dispatch.
 
 ---
@@ -213,8 +213,8 @@ traits/<declared-trait>.md for each trait (if present)
 ```
 
 현재 정의된:
-- **Domains**: `wms`, `ecommerce`, `saas`, `fan-platform`, `scm`
-- **Traits**: `transactional`, `integration-heavy`, `read-heavy`, `content-heavy`, `regulated`, `audit-heavy`, `multi-tenant`, `batch-heavy`
+- **Domains**: `wms`, `ecommerce`, `saas`, `fan-platform`, `scm`, `fintech`, `erp`
+- **Traits**: `transactional`, `integration-heavy`, `read-heavy`, `content-heavy`, `regulated`, `audit-heavy`, `multi-tenant`, `batch-heavy`, `internal-system`
 
 ### 4.2 Source of Truth Priority
 
@@ -303,7 +303,25 @@ traits/<declared-trait>.md for each trait (if present)
 |---|---|---|
 | [ADR-MONO-001](adr/ADR-MONO-001-port-prefix-scaling.md) | ACCEPTED | Traefik hostname routing (Option C). `PORT_PREFIX` scheme 폐기. |
 | [ADR-MONO-002](adr/ADR-MONO-002-phase-4-template-extraction-trigger.md) | ACCEPTED | Phase 4 catalyst = scm-platform 부트스트랩. Phase 5 deferred 의 평가 항목 명시. |
-| [ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md) | DEFERRED (2026-05-09 재평가) | Phase 5 (실제 Template 레포 추출) 보류. shared-library churn freeze 30일 후 재평가 ≥ **2026-06-09** (1-2일 reset, BE-273 Phase 2 libs/java-common 변경 = D4 면제 자연 확장). |
+| [ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md) | SUPERSEDED-on-launch | Phase 5 보류 결정. 2026-05-13 ADR-MONO-003b LAUNCHED 로 SUPERSEDED. historical reference only. |
+| [ADR-MONO-003a](adr/ADR-MONO-003a-d4-override-scope-canonicalization.md) | ACCEPTED | ADR-MONO-003 § D4 (churn freeze) OVERRIDE scope 의 canonical source. D1/D2/D3/D4 redefinition + append-only audit-trail. |
+| [ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) | ACCEPTED (2026-05-13 LAUNCHED) | Phase 5 launch criteria + post-launch sync cadence. `kanggle/project-template` public + `is_template: true` (TASK-MONO-070). |
+| [ADR-MONO-004](adr/ADR-MONO-004-shared-messaging-scaffolding.md) | ACCEPTED | `libs/java-messaging` 신설 — outbox/inbox + ProjectionConsumerSupport + EventEnvelope 표준 (TASK-MONO-049). |
+| [ADR-MONO-005](adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) | ACCEPTED | Saga 4-category taxonomy (A=critical / B=best-effort+CB / C=best-effort+counter / D=fire-and-forget) + timeout escalation + DLQ policy. |
+| [ADR-MONO-006](adr/ADR-MONO-006-lint-remediation-as-agent-context.md) | ACCEPTED | Lint remediation message standard (4-block format) + hook-injected agent context. |
+| [ADR-MONO-007](adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md) | ACCEPTED | Vector + VictoriaMetrics + VictoriaLogs worktree-ephemeral observability stack. |
+| [ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) | ACCEPTED (2026-05-18) | finance-platform 부트스트랩 — D1 Option C (Template fork `kanggle/finance-platform` + monorepo direct-include). domain=`fintech`, traits=[transactional/regulated/audit-heavy]. |
+| [ADR-MONO-009](adr/ADR-MONO-009-chrome-devtools-mcp-visual-regression.md) | ACCEPTED | Chrome DevTools MCP 도입 — visual regression + DOM inspection 자동화. |
+| [ADR-MONO-010](adr/ADR-MONO-010-e2e-tag-taxonomy.md) | ACCEPTED | E2E test tag taxonomy (smoke/golden/full) + Playwright projection. |
+| [ADR-MONO-011](adr/ADR-MONO-011-nightly-full-e2e-cadence.md) | ACCEPTED | Nightly full e2e cadence — cron `0 19 * * *` UTC + workflow_dispatch. |
+| [ADR-MONO-012](adr/ADR-MONO-012-cross-project-architecture-md-canonical-form.md) | ACCEPTED | Cross-project `architecture.md` canonical form (Identity 7-row table + ## sections). |
+| [ADR-MONO-012a](adr/ADR-MONO-012a-cross-project-architecture-md-canonical-form-corrections.md) | ACCEPTED | ADR-MONO-012 corrections — WMS Identity-table form 채택. |
+| [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) | ACCEPTED (2026-05-16) | platform-console foundation — Model B (콘솔이 유일한 프론트엔드). Phase 0~8 D6 roadmap. |
+| [ADR-MONO-014](adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) | ACCEPTED | platform-console operator-auth — RFC 8693 token exchange + per-domain credential. |
+| [ADR-MONO-015](adr/ADR-MONO-015-platform-console-dashboards-model.md) | ACCEPTED | platform-console dashboards composed-overview model. |
+| [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) | ACCEPTED (2026-05-19) | erp-platform 부트스트랩 — D1 Option C. domain=`erp`, traits=[internal-system/transactional/audit-heavy]. 첫 `internal-system`-primary. |
+| [ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) | ACCEPTED (2026-05-20) | console-bff architecture — D1-D8 (skeleton / Operator Overview / Domain Health / per-domain credential / tenant pass-through / cross-tenant deny / per-domain attribution / MVP scope). |
+| [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) | ACCEPTED (2026-05-25) | platform-console Phase 8 federation hardening — D1-D8 cross-product e2e + observability federation + multi-tenant isolation regression. |
 | GAP [ADR-001](../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
 | GAP [ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
 | GAP [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
@@ -314,11 +332,16 @@ traits/<declared-trait>.md for each trait (if present)
 
 각 프로젝트는 [`scripts/sync-portfolio.sh`](../scripts/sync-portfolio.sh) 로 별도 standalone 레포로도 추출 (이중 배포 — hub `ai-workspace` + 개별 독립 레포).
 
-| Project | Standalone repo |
-|---|---|
-| wms-platform | `kanggle/wms-platform` |
-| ecommerce-microservices-platform | `kanggle/ecommerce-microservices-platform` |
-| GAP / scm / fan-platform | _(monorepo-only 또는 미배포)_ |
+| Project | Standalone repo | Status |
+|---|---|---|
+| wms-platform | `kanggle/wms-platform` | 2026-04-28 first publish + 2026-05-09 re-sync (228 commits) |
+| ecommerce-microservices-platform | `kanggle/ecommerce-microservices-platform` | v1 frozen (GAP cutover 영역만 `PROJECT_EXCLUDE_PATHS` 차단) |
+| global-account-platform | `kanggle/global-account-platform` | 2026-05-09 first publish (153 commits) |
+| scm-platform | `kanggle/scm-platform` | 2026-05-09 first publish (140 commits) |
+| fan-platform | `kanggle/fan-platform` | 2026-05-09 first publish (147 commits) |
+| finance-platform | `kanggle/finance-platform` | 2026-05-19 Template fork CONFIRMED (TASK-MONO-116) |
+| erp-platform | `kanggle/erp-platform` | 2026-05-19 Template fork CONFIRMED (TASK-MONO-121) |
+| platform-console | _(monorepo-only)_ | 가로축 콘솔 — 별 standalone 미발행 |
 
 평가자 시간 예산별 진입 경로 분리 (5분 → standalone README, 30분+ → monorepo 풀 컨텍스트).
 
@@ -332,10 +355,13 @@ traits/<declared-trait>.md for each trait (if present)
 | 2. Second project (ecommerce) | ✅ 완료 | 라이브러리 generality 검증 |
 | 3. Third project (GAP) — Rule of Three | ✅ 완료 | true generalization 필터 |
 | 4. catalyst (scm + fan-platform) | ✅ 완료 | 5 프로젝트 동거 + churn 안정화 |
-| 5. Template 추출 | 🔒 DEFERRED ([ADR-MONO-003](adr/ADR-MONO-003-phase-5-template-extraction-deferred.md)) | shared churn freeze 30d → ≥ **2026-06-09** 재평가 (2026-05-09 재평가로 시계 1-2일 reset) |
-| 6. Ongoing sync | 🔮 Future | 라이브러리 개선의 monorepo → template 주기 sync |
+| 5. Template 추출 | ✅ **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md)) | `kanggle/project-template` public + `is_template: true` (TASK-MONO-070) |
+| 6. 새 도메인 부트스트랩 (finance + erp) | ✅ **COMPLETE 2026-05-19/20** (ADR-MONO-008 / ADR-MONO-016) | Template downstream 첫 2회 CONFIRMED — finance v1 + erp v1 monorepo+standalone 양쪽 종결 |
+| 7. platform-console federation (console-bff) | ✅ **LIVE 2026-05-20** ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md)) | console-bff skeleton + Operator Overview + Domain Health — 5/5 backend domains federated |
+| 8. federation hardening (cross-product e2e + observability + isolation) | ✅ **MVP COMPLETE 2026-05-26** ([ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) | TASK-MONO-139/140 cross-product e2e GREEN — 7/7 Playwright specs PASS |
+| 9. Ongoing sync | 🔮 Future | 라이브러리 개선의 monorepo → template 주기 sync (ADR-MONO-003b § D3 cadence) |
 
-**re-eval gate** (D3 by ADR-MONO-003): `scripts/verify-template-readiness.sh` (full mode, no `--no-git`) exit 0 → ADR-MONO-003 ACCEPTED 또는 ADR-MONO-003a 발행 → `scripts/extract-template.sh` 발사.
+**Phase 5 LAUNCH**: COMPLETE. Template sync cadence = [ADR-MONO-003b § D3](adr/ADR-MONO-003b-phase-5-launch-criteria.md) (월 1회 또는 on-demand). ADR-MONO-003 SUPERSEDED-on-launch — historical reference only.
 
 ---
 
