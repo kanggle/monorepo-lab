@@ -14,14 +14,16 @@ All implementation tasks targeting this service must follow this declaration,
 |---|---|
 | Service name | `community-service` |
 | Project | `fan-platform` |
-| Service Type | `rest-api` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
 | Architecture Style | **Layered + 명시적 상태 기계** |
-| Primary stack | Java 21, Spring Boot 3.4, Spring Web (Servlet), Spring Data JPA, Spring Kafka, Spring Data Redis, Spring Security OAuth2 Resource Server |
+| Domain | fan-platform |
+| Primary language / stack | Java 21, Spring Boot 3.4, Spring Web (Servlet), Spring Data JPA, Spring Kafka, Spring Data Redis, Spring Security OAuth2 Resource Server |
 | Bounded Context | `community` |
 | Deployable unit | `apps/community-service/` |
-| Persistent store | Postgres 16 (database `fanplatform_community`) |
+| Data store | Postgres 16 (database `fanplatform_community`) |
 | Cache | Redis 7 (feed cache only — fail-open) |
-| Event bus | Kafka 3.7 (outbox-driven publisher) |
+| Event publication | Kafka via outbox (`community.post.*` lifecycle events — `community.post.published`, `community.post.status_changed.v1`) |
+| Event consumption | none (single-type rest-api) |
 
 ### Service Type Composition
 
