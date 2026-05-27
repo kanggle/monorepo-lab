@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `order-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **DDD-style Architecture** (4-layer + application/port) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,16 +20,21 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/order-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (order.* lifecycle events, ADR-MONO-005 Category A) |
-| Event consumption | none (single-type rest-api; saga participation via outbox + Kafka) |
+| Event consumption | `UserWithdrawn` from `user.user.withdrawn`, `StockChanged` from `product.product.stock-changed`, `PaymentCompleted` / `PaymentRefunded` from `payment.payment.*` (saga participation, ADR-MONO-005 Category A) |
 
 ### Service Type Composition
 
-`order-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. Order lifecycle 도메인 — confirm / ship /
-deliver / cancel / payment / refund. ADR-MONO-005 Category A multi-step saga
-참여 (OrderStuckDetector + OrderStuckRecoveryHandler, TASK-BE-138). 적용되는
-규칙:
+`order-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events for saga orchestration). Primary type is `rest-api`; the
+secondary `event-consumer` capability subscribes to user / product / payment
+lifecycle events to drive Order saga state transitions (ADR-MONO-005 Category
+A multi-step saga, OrderStuckDetector + OrderStuckRecoveryHandler,
+TASK-BE-138). The primary type determines the spec read order — applied
+rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Events" below with topic /
+consumer-group details.
 
 ---
 

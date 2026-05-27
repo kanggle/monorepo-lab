@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `user-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **Layered Architecture** |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,14 +20,19 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/user-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (user.* lifecycle events) |
-| Event consumption | none (single-type rest-api) |
+| Event consumption | `UserSignedUp` from `auth.user.signed-up` (creates initial user profile on auth-service signup) |
 
 ### Service Type Composition
 
-`user-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. User profile 도메인 — CRUD-oriented user
-data management. 적용되는 규칙:
+`user-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events). Primary type is `rest-api`; the secondary `event-consumer`
+capability subscribes to `auth.user.signed-up` to bootstrap user profile
+records when auth-service issues a new user identity. The primary type
+determines the spec read order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Events" below with topic /
+consumer-group details.
 
 ---
 

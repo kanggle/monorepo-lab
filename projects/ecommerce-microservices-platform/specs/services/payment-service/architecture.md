@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `payment-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,16 +20,21 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/payment-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (payment.* lifecycle events) |
-| Event consumption | none (single-type rest-api) |
+| Event consumption | `OrderPlaced` from `order.order.placed`, `OrderCancelled` from `order.order.cancelled` (saga participation, ADR-MONO-005 Category B) |
 
 ### Service Type Composition
 
-`payment-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. Payment lifecycle 도메인 — authorize /
-confirm / refund. PG vendor integration via TossPaymentsAdapter (Resilience4j
-CB + Retry + Bulkhead, ADR-MONO-005 Category B, TASK-BE-139). Hexagonal 으로
-vendor adapter 격리. 적용되는 규칙:
+`payment-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events for saga orchestration). Primary type is `rest-api`; the
+secondary `event-consumer` capability subscribes to order lifecycle events to
+drive payment saga state transitions. PG vendor integration via
+TossPaymentsAdapter (Resilience4j CB + Retry + Bulkhead, ADR-MONO-005
+Category B, TASK-BE-139). Hexagonal 으로 vendor adapter 격리. The primary
+type determines the spec read order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Events" below with topic /
+consumer-group details.
 
 ---
 
