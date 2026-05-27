@@ -104,15 +104,9 @@ class DeliveryDispatchPerRow {
             outbox.writeDeliveryCompleted(delivery, "SUCCEEDED");
             attemptsSucceeded.increment();
         } catch (ChannelNotConfiguredException permanent) {
-            delivery.markFailedPermanent("CHANNEL_NOT_CONFIGURED: " + permanent.getMessage(), clock.instant());
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "FAILED_CHANNEL_NOT_CONFIGURED");
-            attemptsFailed.increment();
+            markPermanentAndPersist(delivery, "CHANNEL_NOT_CONFIGURED", permanent, "FAILED_CHANNEL_NOT_CONFIGURED");
         } catch (ChannelPermanentFailureException permanent) {
-            delivery.markFailedPermanent("VENDOR_4XX: " + permanent.getMessage(), clock.instant());
-            deliveries.update(delivery);
-            outbox.writeDeliveryCompleted(delivery, "FAILED_PERMANENT");
-            attemptsFailed.increment();
+            markPermanentAndPersist(delivery, "VENDOR_4XX", permanent, "FAILED_PERMANENT");
         } catch (RuntimeException retryable) {
             handleRetryable(delivery, retryable);
         } finally {
@@ -121,6 +115,16 @@ class DeliveryDispatchPerRow {
             MDC.remove("channelId");
             MDC.remove("attempt");
         }
+    }
+
+    private void markPermanentAndPersist(NotificationDelivery delivery,
+                                         String reasonPrefix,
+                                         Exception cause,
+                                         String outboxStatus) {
+        delivery.markFailedPermanent(reasonPrefix + ": " + cause.getMessage(), clock.instant());
+        deliveries.update(delivery);
+        outbox.writeDeliveryCompleted(delivery, outboxStatus);
+        attemptsFailed.increment();
     }
 
     private void handleRetryable(NotificationDelivery delivery, RuntimeException error) {
