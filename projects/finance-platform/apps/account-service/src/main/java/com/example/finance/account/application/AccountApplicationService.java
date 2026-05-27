@@ -113,11 +113,9 @@ public class AccountApplicationService {
                 actor.tenantId(), currency, now);
         Balance savedBalance = balanceRepository.save(balance);
 
-        Map<String, Object> afterOpen = new LinkedHashMap<>();
-        afterOpen.put("status", "PENDING_KYC");
         auditLogRepository.save(AuditLog.of(actor.tenantId(), AGG_ACCOUNT, accountId,
                 "OPEN_ACCOUNT", actor.accountId(), actor.actorType(),
-                null, auditJson(afterOpen), null, now));
+                null, auditField("status", "PENDING_KYC"), null, now));
 
         eventPublisher.publishAccountOpened(saved);
         return AccountView.of(saved, List.of(BalanceView.from(savedBalance)));
@@ -164,15 +162,10 @@ public class AccountApplicationService {
         }
         Account saved = accountRepository.save(account);
 
-        Map<String, Object> beforeKyc = new LinkedHashMap<>();
-        beforeKyc.put("kycLevel", from.name());
-        beforeKyc.put("status", statusBefore.name());
-        Map<String, Object> afterKyc = new LinkedHashMap<>();
-        afterKyc.put("kycLevel", toLevel.name());
-        afterKyc.put("status", statusAfter.name());
         auditLogRepository.save(AuditLog.of(actor.tenantId(), AGG_ACCOUNT, cmd.accountId(),
                 "UPGRADE_KYC", actor.accountId(), ActorType.OPERATOR,
-                auditJson(beforeKyc), auditJson(afterKyc),
+                auditFields("kycLevel", from.name(), "status", statusBefore.name()),
+                auditFields("kycLevel", toLevel.name(), "status", statusAfter.name()),
                 cmd.reason(), now));
         eventPublisher.publishKycUpgraded(saved, from, toLevel, statusAfter);
         return AccountView.of(saved, balanceViews(cmd.accountId(), actor.tenantId()));
@@ -210,12 +203,9 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        Map<String, Object> beforeHold = new LinkedHashMap<>();
-        beforeHold.put("available", String.valueOf(balance.getLedgerMinor()));
-        Map<String, Object> afterHold = new LinkedHashMap<>();
-        afterHold.put("held", amount.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "HOLD",
-                auditJson(beforeHold), auditJson(afterHold), cmd.reason(), now);
+                auditField("available", String.valueOf(balance.getLedgerMinor())),
+                auditField("held", amount.toMinorString()), cmd.reason(), now);
         eventPublisher.publishBalanceHeld(savedHold, savedTxn.getId(), savedBalance);
         eventPublisher.publishSettledAndCompleted(savedTxn);
         return new HoldResult(HoldView.from(savedHold), savedTxn.getId());
@@ -247,13 +237,10 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        Map<String, Object> beforeCapture = new LinkedHashMap<>();
-        beforeCapture.put("hold", holdAmount.toMinorString());
-        Map<String, Object> afterCapture = new LinkedHashMap<>();
-        afterCapture.put("captured", captureAmount.toMinorString());
-        afterCapture.put("released", released.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "CAPTURE",
-                auditJson(beforeCapture), auditJson(afterCapture), null, now);
+                auditField("hold", holdAmount.toMinorString()),
+                auditFields("captured", captureAmount.toMinorString(),
+                        "released", released.toMinorString()), null, now);
         eventPublisher.publishBalanceCaptured(savedHold, savedTxn.getId(),
                 savedBalance, captureAmount, released);
         eventPublisher.publishSettledAndCompleted(savedTxn);
@@ -287,12 +274,9 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        Map<String, Object> beforeRelease = new LinkedHashMap<>();
-        beforeRelease.put("held", holdAmount.toMinorString());
-        Map<String, Object> afterRelease = new LinkedHashMap<>();
-        afterRelease.put("released", holdAmount.toMinorString());
         audit(actor, AGG_BALANCE, cmd.accountId(), "RELEASE",
-                auditJson(beforeRelease), auditJson(afterRelease), null, now);
+                auditField("held", holdAmount.toMinorString()),
+                auditField("released", holdAmount.toMinorString()), null, now);
         eventPublisher.publishBalanceReleased(savedHold, savedTxn.getId(), savedBalance);
         eventPublisher.publishSettledAndCompleted(savedTxn);
         return new ReleaseResult(savedHold.getId(), holdAmount,
@@ -330,13 +314,10 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        Map<String, Object> beforeTransfer = new LinkedHashMap<>();
-        beforeTransfer.put("from", cmd.fromAccountId());
-        Map<String, Object> afterTransfer = new LinkedHashMap<>();
-        afterTransfer.put("to", cmd.toAccountId());
-        afterTransfer.put("amount", amount.toMinorString());
         audit(actor, AGG_TRANSACTION, savedTxn.getId(), "TRANSFER",
-                auditJson(beforeTransfer), auditJson(afterTransfer),
+                auditField("from", cmd.fromAccountId()),
+                auditFields("to", cmd.toAccountId(),
+                        "amount", amount.toMinorString()),
                 cmd.reason(), now);
         eventPublisher.publishSettledAndCompleted(savedTxn);
         return TransactionView.from(savedTxn);
@@ -367,10 +348,9 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        Map<String, Object> afterTopup = new LinkedHashMap<>();
-        afterTopup.put("credited", amount.toMinorString());
         audit(actor, AGG_BALANCE, accountId, "TOPUP", null,
-                auditJson(afterTopup), "internal funding (v1 stub)", now);
+                auditField("credited", amount.toMinorString()),
+                "internal funding (v1 stub)", now);
         eventPublisher.publishSettledAndCompleted(savedTxn);
         return TransactionView.from(savedTxn);
     }
@@ -495,6 +475,26 @@ public class AccountApplicationService {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("audit JSON serialisation failed", e);
         }
+    }
+
+    /** Single-field audit payload — preserves the byte-equal contract. */
+    private String auditField(String key, Object value) {
+        Map<String, Object> fields = new LinkedHashMap<>(1);
+        fields.put(key, value);
+        return auditJson(fields);
+    }
+
+    /**
+     * Two-field audit payload with deterministic insertion order (audit-heavy
+     * A3). Overload count is intentionally bounded — current call sites need at
+     * most two fields; add an overload (never a varargs cast) if a use case
+     * needs three.
+     */
+    private String auditFields(String k1, Object v1, String k2, Object v2) {
+        Map<String, Object> fields = new LinkedHashMap<>(2);
+        fields.put(k1, v1);
+        fields.put(k2, v2);
+        return auditJson(fields);
     }
 
     private void ensureAccountCurrency(Account account, Money amount) {
