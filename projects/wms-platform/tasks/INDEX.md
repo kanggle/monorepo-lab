@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-305-notification-permanent-failure-dedup.md` — notification-service F-L6-1 duplication single finding closure. `DeliveryDispatchPerRow.dispatch` L106-115 의 2 permanent-failure catch block (`ChannelNotConfiguredException` + `ChannelPermanentFailureException`) 의 4-line `markFailedPermanent + update + outbox + counter` 패턴을 private helper method `markPermanentAndPersist` 로 in-class extract. 6 intentional preservation 명시 후 verify exemption (AlertConsumer co-location / DeliveryExecutor 4 test seam 등). Low risk (Reduce Duplication, same-class private method, BE-300/304 utility 패턴과 다름). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-305-notification-permanent-failure-dedup.md` — **REVIEW (impl applied)**. `DeliveryDispatchPerRow` 의 단일 file 변경 (+12/-8) — 신규 `markPermanentAndPersist` private method 도입 + 2 permanent-failure catch block 의 4-line block 이 1-line 호출로 치환. **same-class private method extraction** (BE-300/301/304 의 cross-class utility class 와 다른 패턴). AC-1/2/3 코드 verify, AC-6 cross-service drift = 0. success path + retryable + retry-exhausted + REQUIRES_NEW + MDC + Timer + counter call 순서 모두 byte-unchanged. 분석=Opus 4.7 / 구현=Sonnet 4.6 (직접; mechanical extract).
 
 ## done
 
