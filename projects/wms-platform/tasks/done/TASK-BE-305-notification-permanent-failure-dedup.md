@@ -1,6 +1,6 @@
 # TASK-BE-305 — notification-service permanent-failure persist dedup (F-L6-1)
 
-Status: review
+Status: done
 
 ## Goal
 
