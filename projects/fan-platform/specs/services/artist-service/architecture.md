@@ -14,14 +14,16 @@ All implementation tasks targeting this service must follow this declaration,
 |---|---|
 | Service name | `artist-service` |
 | Project | `fan-platform` |
-| Service Type | `rest-api` |
+| Service Type | `rest-api` (single — see Service Type Composition below) |
 | Architecture Style | **Hexagonal (ports/adapters)** |
-| Primary stack | Java 21, Spring Boot 3.4, Spring Web (Servlet), Spring Data JPA, Spring Kafka, Spring Data Redis, Spring Security OAuth2 Resource Server |
+| Domain | fan-platform |
+| Primary language / stack | Java 21, Spring Boot 3.4, Spring Web (Servlet), Spring Data JPA, Spring Kafka, Spring Data Redis, Spring Security OAuth2 Resource Server |
 | Bounded Context | `artist` (master-data for community-service) |
 | Deployable unit | `apps/artist-service/` |
-| Persistent store | Postgres 16 (database `fanplatform_artist`) |
+| Data store | Postgres 16 (database `fanplatform_artist`) |
 | Cache | Redis 7 (artist directory search read-through, fail-open) |
-| Event bus | Kafka 3.7 (outbox-driven publisher) |
+| Event publication | Kafka via outbox (`artist.*` lifecycle events for downstream consumers, e.g. community-service) |
+| Event consumption | none (single-type rest-api) |
 
 ### Service Type Composition
 
