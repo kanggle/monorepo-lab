@@ -19,7 +19,6 @@ import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderStatus;
 import com.wms.outbound.domain.model.OutboundSaga;
 import com.wms.outbound.domain.model.PackingUnit;
-import com.wms.outbound.domain.model.PackingUnitLine;
 import com.wms.outbound.domain.model.PickingConfirmation;
 import com.wms.outbound.domain.model.PickingConfirmationLine;
 import com.wms.outbound.domain.model.PickingRequest;
@@ -228,12 +227,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         }
         // Aggregate packed quantities per orderLineId for additional safety —
         // confirmation lines are the source of truth for SKU/lot/location.
-        Map<UUID, Long> packedSumByOrderLine = new HashMap<>();
-        for (PackingUnit u : packingUnits) {
-            for (PackingUnitLine pul : u.getLines()) {
-                packedSumByOrderLine.merge(pul.getOrderLineId(), (long) pul.getQty(), Long::sum);
-            }
-        }
+        Map<UUID, Long> packedSumByOrderLine = PackingQtyAggregator.sumByOrderLine(packingUnits);
 
         List<ShippingConfirmedEvent.Line> eventLines = new ArrayList<>(savedOrder.getLines().size());
         for (var ol : savedOrder.getLines()) {
