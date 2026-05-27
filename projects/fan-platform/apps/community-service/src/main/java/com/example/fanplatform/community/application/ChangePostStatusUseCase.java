@@ -2,7 +2,6 @@ package com.example.fanplatform.community.application;
 
 import com.example.fanplatform.community.application.event.CommunityEventPublisher;
 import com.example.fanplatform.community.application.exception.PermissionDeniedException;
-import com.example.fanplatform.community.application.exception.PostNotFoundException;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.status.ActorType;
@@ -23,8 +22,7 @@ public class ChangePostStatusUseCase {
 
     @Transactional
     public void execute(String postId, PostStatus target, ActorContext actor, String reason) {
-        Post post = postRepository.findById(postId, actor.tenantId())
-                .orElseThrow(() -> new PostNotFoundException(postId));
+        Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         ActorType actorType = resolveActor(post, actor);
         PostStatus previous = post.changeStatus(target, actorType);
         Post saved = postRepository.save(post);

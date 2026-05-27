@@ -1,6 +1,5 @@
 package com.example.fanplatform.community.application;
 
-import com.example.fanplatform.community.application.exception.PostNotFoundException;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.reaction.Reaction;
@@ -20,8 +19,7 @@ public class RemoveReactionUseCase {
 
     @Transactional
     public void execute(String postId, ActorContext actor) {
-        Post post = postRepository.findById(postId, actor.tenantId())
-                .orElseThrow(() -> new PostNotFoundException(postId));
+        Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         Optional<Reaction> existing = reactionRepository.find(post.getId(), actor.accountId(), actor.tenantId());
         existing.ifPresent(reactionRepository::delete);
     }

@@ -40,8 +40,7 @@ public class PostAccessGuard {
      * @throws MembershipRequiredException MEMBERS_ONLY/PREMIUM gate fails
      */
     public Post requirePublishedAccess(String postId, ActorContext actor) {
-        Post post = postRepository.findById(postId, actor.tenantId())
-                .orElseThrow(() -> new PostNotFoundException(postId));
+        Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         if (post.getStatus() != PostStatus.PUBLISHED) {
             // Hide the existence of DRAFT/HIDDEN/DELETED from non-author readers.
             if (!post.getAuthorAccountId().equals(actor.accountId()) && !actor.isOperator()) {
