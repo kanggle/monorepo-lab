@@ -1,6 +1,6 @@
 # TASK-BE-304 — gateway-service ReactiveJwtAccess utility extract (F-L6-1 dedup)
 
-Status: ready
+Status: review
 
 ## Goal
 
