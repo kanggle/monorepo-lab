@@ -1,7 +1,6 @@
 package com.example.fanplatform.community.application;
 
 import com.example.fanplatform.community.application.exception.PermissionDeniedException;
-import com.example.fanplatform.community.application.exception.PostNotFoundException;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.status.PostStatus;
@@ -29,8 +28,7 @@ public class UpdatePostUseCase {
     @Transactional
     public PostView execute(String postId, ActorContext actor,
                             String title, String body, List<String> mediaRefs) {
-        Post post = postRepository.findById(postId, actor.tenantId())
-                .orElseThrow(() -> new PostNotFoundException(postId));
+        Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         boolean isAuthor = post.getAuthorAccountId().equals(actor.accountId());
         if (!isAuthor && !actor.isOperator()) {
             throw new PermissionDeniedException("Only the author can update this post");

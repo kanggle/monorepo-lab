@@ -21,8 +21,7 @@ public class GetPostUseCase {
 
     @Transactional(readOnly = true)
     public PostView execute(String postId, ActorContext actor) {
-        Post post = postRepository.findById(postId, actor.tenantId())
-                .orElseThrow(() -> new PostNotFoundException(postId));
+        Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         if (post.getStatus() == PostStatus.DELETED) {
             throw new PostNotFoundException(postId);
         }
