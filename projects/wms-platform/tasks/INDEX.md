@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-306-master-pageable-factory.md` — master-service F-L6-1 cross-class duplication closure. 6/6 RepositoryImpl 의 동일 `DEFAULT_SORT_FIELD = "updatedAt"` + `toPageable + resolveSort + parseDirection` 3 private method 패턴을 신규 utility class `PageableFactory` (package-private final + static method) 로 통합. wms cluster 5번째 helper extraction (admin → inventory → gateway → master). Low risk (Reduce Duplication, byte-identical 6 instance + paging/sort well-known pattern). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (utility + 6 RepositoryImpl 치환, mechanical).
 
 ## in-progress
 
