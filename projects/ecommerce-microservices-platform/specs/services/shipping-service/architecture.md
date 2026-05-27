@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `shipping-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,15 +20,19 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/shipping-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (shipping.* lifecycle events) |
-| Event consumption | none (single-type rest-api) |
+| Event consumption | `OrderConfirmed` from `order.order.confirmed` (idempotent via `EventDeduplicationChecker`, creates Shipping records) |
 
 ### Service Type Composition
 
-`shipping-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. Shipping 도메인 — shipping aggregates,
-status transitions with strict ordering rules, event-driven lifecycle. 적용되는
-규칙:
+`shipping-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events). Primary type is `rest-api`; the secondary `event-consumer`
+capability subscribes to `order.order.confirmed` to bootstrap Shipping
+aggregates upon order confirmation. The primary type determines the spec read
+order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Integration Rules" below with
+topic / consumer-group / idempotency details.
 
 ---
 

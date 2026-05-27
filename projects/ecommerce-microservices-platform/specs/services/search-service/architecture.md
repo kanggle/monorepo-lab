@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `search-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,15 +20,20 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/search-service/` |
 | Data store | Elasticsearch (primary index) + PostgreSQL (dedupe state) |
 | Event publication | none |
-| Event consumption | Kafka (product / catalog source topics via index-sync skill) |
+| Event consumption | `ProductCreated` / `ProductUpdated` / `ProductDeleted` / `ProductImagesUpdated` / `StockChanged` from `product.product.*` topics (index sync via index-sync skill) |
 
 ### Service Type Composition
 
-`search-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. Elasticsearch 기반 search / discovery —
-index 관리 + query API. event-driven index sync 는 부수 surface (single-type
-유지). Hexagonal 으로 Elasticsearch adapter 격리. 적용되는 규칙:
+`search-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events). Primary type is `rest-api` for the query API surface; the
+secondary `event-consumer` capability subscribes to product / catalog source
+topics to keep the Elasticsearch index in sync (index-sync skill). Hexagonal
+으로 Elasticsearch adapter 격리. The primary type determines the spec read
+order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Events" below with topic /
+consumer-group details.
 
 ---
 
