@@ -8,7 +8,7 @@ Root `docs/project-overview.md` 2026-05-28 reality-alignment sweep — BE-302/30
 
 # Status
 
-ready
+review
 
 # Owner
 
