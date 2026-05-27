@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-306-master-pageable-factory.md` — master-service F-L6-1 cross-class duplication closure. 6/6 RepositoryImpl 의 동일 `DEFAULT_SORT_FIELD = "updatedAt"` + `toPageable + resolveSort + parseDirection` 3 private method 패턴을 신규 utility class `PageableFactory` (package-private final + static method) 로 통합. wms cluster 5번째 helper extraction (admin → inventory → gateway → master). Low risk (Reduce Duplication, byte-identical 6 instance + paging/sort well-known pattern). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (utility + 6 RepositoryImpl 치환, mechanical).
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-306-master-pageable-factory.md` — **REVIEW (impl applied via worktree subagent)**. 신규 `PageableFactory` package-private utility (`final class` + `private constructor` + `static Pageable from(PageQuery)` + 2 private static helper) + 6 RepositoryImpl 의 2 상수 + 3 private method 제거 + 1-line `PageableFactory.from(pageQuery)` 호출 치환 + 불필요한 `PageRequest`/`Sort` import 정리. **7 file changed** (1 new + 6 modified, +49/-150 = net -101 LOC). Local BUILD SUCCESSFUL (worktree agent baseline + after 17 tasks). AC-1/2/4/7 verify (PageableFactory shape + DEFAULT_SORT_FIELD grep=0 + PageableFactory.from grep=6 + application/service untouched + cross-service drift=0). 6/6 byte-identical 검증 완료. 분석=Opus 4.7 / 구현=Sonnet 4.6 (worktree refactoring-engineer agent).
 
 ## done
 

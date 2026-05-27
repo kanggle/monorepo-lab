@@ -1,6 +1,6 @@
 # TASK-BE-306 — master-service PageableFactory utility extract (F-L6-1 dedup)
 
-Status: ready
+Status: review
 
 ## Goal
 
