@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `account-service` |
 | Project | `global-account-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api + event-consumer` (hybrid — see Service Type Composition below) |
 | Architecture Style | **Layered Architecture + 명시적 상태 기계** |
 | Domain | saas |
 | Primary language / stack | Java 21, Spring Boot |
@@ -20,14 +20,21 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/account-service/` |
 | Data store | MySQL (owned, not shared) |
 | Event publication | Kafka via outbox (`account.status.changed` 등 계정 lifecycle events) |
-| Event consumption | none (single-type rest-api) |
+| Event consumption | `LoginSucceeded` from `auth.login.succeeded` (updates `accounts.last_login_succeeded_at` from auth-service login events) |
 
 ### Service Type Composition
 
-`account-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. 계정·프로필 전담 서비스 — 회원가입, 프로필
-CRUD, 계정 상태(active / locked / dormant / deleted) 상태 기계. 적용되는 규칙:
+`account-service` is a hybrid service per
+`platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
+consumes events). Primary type is `rest-api` for account / profile CRUD +
+명시적 상태 기계 (active / locked / dormant / deleted); the secondary
+`event-consumer` capability subscribes to `auth.login.succeeded` to maintain
+the `last_login_succeeded_at` denormalised projection (independent group ID
+from security-service's own consumer of the same topic). The primary type
+determines the spec read order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+The secondary capability is documented under "Events" / "Integration Rules"
+below with topic / consumer-group details.
 
 ---
 
