@@ -60,40 +60,13 @@ public class ReceiveAsnService implements ReceiveAsnUseCase {
             AuthorizationGuards.requireRole(command.callerRoles(), InboundRoles.ROLE_INBOUND_WRITE);
         }
 
-        WarehouseSnapshot warehouse = masterReadModel.findWarehouse(command.warehouseId())
-                .orElseThrow(() -> new WarehouseNotFoundInReadModelException(command.warehouseId()));
-        if (!warehouse.isActive()) {
-            throw new WarehouseNotFoundInReadModelException(command.warehouseId());
-        }
-
-        PartnerSnapshot partner = masterReadModel.findPartner(command.supplierPartnerId())
-                .orElseThrow(() -> new PartnerInvalidTypeException(command.supplierPartnerId(), "not found in read model"));
-        if (!partner.canSupply()) {
-            throw new PartnerInvalidTypeException(command.supplierPartnerId(),
-                    "status=" + partner.status() + " type=" + partner.partnerType());
-        }
-
-        String asnNo = (command.asnNo() == null || command.asnNo().isBlank())
-                ? asnNoSequence.nextAsnNo()
-                : command.asnNo();
-
-        if (asnPersistence.existsByAsnNo(asnNo)) {
-            throw new AsnNoDuplicateException(asnNo);
-        }
+        resolveActiveWarehouseOrThrow(command.warehouseId());
+        PartnerSnapshot partner = resolveSupplierPartnerOrThrow(command.supplierPartnerId());
+        String asnNo = resolveAsnNoOrThrow(command.asnNo());
 
         Instant now = clock.instant();
         UUID asnId = UuidV7.randomUuid();
-        List<AsnLine> lines = new ArrayList<>();
-        int lineNo = 1;
-        for (ReceiveAsnCommand.Line cmdLine : command.lines()) {
-            SkuSnapshot sku = masterReadModel.findSku(cmdLine.skuId())
-                    .orElseThrow(() -> new SkuInactiveException(cmdLine.skuId()));
-            if (!sku.isActive()) {
-                throw new SkuInactiveException(cmdLine.skuId());
-            }
-            lines.add(new AsnLine(UuidV7.randomUuid(), asnId, lineNo++,
-                    cmdLine.skuId(), cmdLine.lotId(), cmdLine.expectedQty()));
-        }
+        List<AsnLine> lines = buildAsnLines(command.lines(), asnId);
 
         Asn asn = new Asn(asnId, asnNo, AsnSource.valueOf(command.source()),
                 command.supplierPartnerId(), command.warehouseId(),
@@ -112,6 +85,49 @@ public class ReceiveAsnService implements ReceiveAsnUseCase {
 
         log.info("asn_received asnId={} asnNo={} source={}", saved.getId(), saved.getAsnNo(), saved.getSource());
         return toResult(saved);
+    }
+
+    private void resolveActiveWarehouseOrThrow(UUID warehouseId) {
+        WarehouseSnapshot warehouse = masterReadModel.findWarehouse(warehouseId)
+                .orElseThrow(() -> new WarehouseNotFoundInReadModelException(warehouseId));
+        if (!warehouse.isActive()) {
+            throw new WarehouseNotFoundInReadModelException(warehouseId);
+        }
+    }
+
+    private PartnerSnapshot resolveSupplierPartnerOrThrow(UUID supplierPartnerId) {
+        PartnerSnapshot partner = masterReadModel.findPartner(supplierPartnerId)
+                .orElseThrow(() -> new PartnerInvalidTypeException(supplierPartnerId, "not found in read model"));
+        if (!partner.canSupply()) {
+            throw new PartnerInvalidTypeException(supplierPartnerId,
+                    "status=" + partner.status() + " type=" + partner.partnerType());
+        }
+        return partner;
+    }
+
+    private String resolveAsnNoOrThrow(String suppliedAsnNo) {
+        String asnNo = (suppliedAsnNo == null || suppliedAsnNo.isBlank())
+                ? asnNoSequence.nextAsnNo()
+                : suppliedAsnNo;
+        if (asnPersistence.existsByAsnNo(asnNo)) {
+            throw new AsnNoDuplicateException(asnNo);
+        }
+        return asnNo;
+    }
+
+    private List<AsnLine> buildAsnLines(List<ReceiveAsnCommand.Line> cmdLines, UUID asnId) {
+        List<AsnLine> lines = new ArrayList<>();
+        int lineNo = 1;
+        for (ReceiveAsnCommand.Line cmdLine : cmdLines) {
+            SkuSnapshot sku = masterReadModel.findSku(cmdLine.skuId())
+                    .orElseThrow(() -> new SkuInactiveException(cmdLine.skuId()));
+            if (!sku.isActive()) {
+                throw new SkuInactiveException(cmdLine.skuId());
+            }
+            lines.add(new AsnLine(UuidV7.randomUuid(), asnId, lineNo++,
+                    cmdLine.skuId(), cmdLine.lotId(), cmdLine.expectedQty()));
+        }
+        return lines;
     }
 
     private static boolean isSystemActor(String actorId) {
