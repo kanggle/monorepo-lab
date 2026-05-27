@@ -32,7 +32,6 @@ import com.wms.outbound.domain.model.PackingUnitStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -208,12 +207,7 @@ public class PackingService implements CreatePackingUnitUseCase,
                 return false;
             }
         }
-        Map<UUID, Long> sumByOrderLine = new HashMap<>();
-        for (PackingUnit u : units) {
-            for (PackingUnitLine l : u.getLines()) {
-                sumByOrderLine.merge(l.getOrderLineId(), (long) l.getQty(), Long::sum);
-            }
-        }
+        Map<UUID, Long> sumByOrderLine = PackingQtyAggregator.sumByOrderLine(units);
         for (OrderLine ol : order.getLines()) {
             long packed = sumByOrderLine.getOrDefault(ol.getId(), 0L);
             if (packed < ol.getQtyOrdered()) {
@@ -306,12 +300,7 @@ public class PackingService implements CreatePackingUnitUseCase,
             }
         }
         // Sum of PackingUnitLine.qty per orderLineId must equal qtyOrdered.
-        Map<UUID, Long> sumByOrderLine = new HashMap<>();
-        for (PackingUnit u : units) {
-            for (PackingUnitLine l : u.getLines()) {
-                sumByOrderLine.merge(l.getOrderLineId(), (long) l.getQty(), Long::sum);
-            }
-        }
+        Map<UUID, Long> sumByOrderLine = PackingQtyAggregator.sumByOrderLine(units);
         for (OrderLine ol : order.getLines()) {
             long packed = sumByOrderLine.getOrDefault(ol.getId(), 0L);
             if (packed != ol.getQtyOrdered()) {
