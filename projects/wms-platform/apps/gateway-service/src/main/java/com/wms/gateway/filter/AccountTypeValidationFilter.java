@@ -1,12 +1,11 @@
 package com.wms.gateway.filter;
 
 import com.wms.gateway.error.GatewayErrorHandler;
+import com.wms.gateway.security.ReactiveJwtAccess;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -29,14 +28,8 @@ public class AccountTypeValidationFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .filter(JwtAuthenticationToken.class::isInstance)
-                .cast(JwtAuthenticationToken.class)
-                .flatMap(auth -> {
-                    String accountType = auth.getToken().getClaimAsString("account_type");
-                    return Mono.just("OPERATOR".equals(accountType));
-                })
+        return ReactiveJwtAccess.currentJwt()
+                .map(jwt -> "OPERATOR".equals(jwt.getClaimAsString("account_type")))
                 .defaultIfEmpty(Boolean.TRUE) // no JWT security context → public path → proceed
                 .flatMap(proceed -> proceed
                         ? chain.filter(exchange)

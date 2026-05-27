@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-304-gateway-jwt-access-dedup.md` — gateway-service F-L6-1 duplication single finding closure. `ReactiveSecurityContextHolder` → `JwtAuthenticationToken` cast 5-line 패턴 in 2 filter (`JwtHeaderEnrichmentFilter` + `AccountTypeValidationFilter`) 을 신규 utility class `ReactiveJwtAccess` 로 extract. Low risk (Reduce Duplication, BE-300 / BE-301 utility 패턴 답습). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## in-progress
 
@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-304-gateway-jwt-access-dedup.md` — **REVIEW (impl applied)**. 신규 utility `com.wms.gateway.security.ReactiveJwtAccess` (public final + private constructor + `currentToken()` + `currentJwt()` static method) + 2 filter caller 의 5-line cast chain 단일 호출로 치환. **3 file changed** (1 new + 2 modified, +43/-17). Local 빌드 검증은 CI 가 authoritative (gradlew 가 repo root 미존재). AC-1/2/3/4/5 코드 verify 완료, AC-8 cross-service drift = 0. Header 주입 + claim 검증 + filter ordering byte-identical 보존. 분석=Opus 4.7 / 구현=Sonnet 4.6 (직접; mechanical extract).
 
 ## done
 
