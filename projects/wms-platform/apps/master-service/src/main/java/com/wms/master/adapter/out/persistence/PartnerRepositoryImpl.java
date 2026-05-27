@@ -11,9 +11,7 @@ import java.util.UUID;
 import org.postgresql.util.PSQLException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -29,9 +27,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 class PartnerRepositoryImpl implements PartnerPersistencePort {
-
-    private static final String DEFAULT_SORT_FIELD = "updatedAt";
-    private static final Sort.Direction DEFAULT_SORT_DIRECTION = Sort.Direction.DESC;
 
     private static final String PARTNER_CODE_CONSTRAINT = "uq_partners_partner_code";
 
@@ -86,7 +81,7 @@ class PartnerRepositoryImpl implements PartnerPersistencePort {
 
     @Override
     public PageResult<Partner> findPage(ListPartnersCriteria criteria, PageQuery pageQuery) {
-        Pageable pageable = toPageable(pageQuery);
+        Pageable pageable = PageableFactory.from(pageQuery);
         String q = criteria.hasQueryText() ? criteria.q() : null;
         Page<PartnerJpaEntity> page = jpaRepository.search(
                 criteria.status(),
@@ -145,23 +140,4 @@ class PartnerRepositoryImpl implements PartnerPersistencePort {
         return last == null ? null : last.getMessage();
     }
 
-    private Pageable toPageable(PageQuery pageQuery) {
-        Sort sort = resolveSort(pageQuery.sortBy(), pageQuery.sortDirection());
-        return PageRequest.of(pageQuery.page(), pageQuery.size(), sort);
-    }
-
-    private Sort resolveSort(String sortBy, String sortDirection) {
-        String field = (sortBy == null || sortBy.isBlank()) ? DEFAULT_SORT_FIELD : sortBy;
-        Sort.Direction direction = parseDirection(sortDirection);
-        return Sort.by(direction, field);
-    }
-
-    private Sort.Direction parseDirection(String sortDirection) {
-        if (sortDirection == null || sortDirection.isBlank()) {
-            return DEFAULT_SORT_DIRECTION;
-        }
-        return "asc".equalsIgnoreCase(sortDirection)
-                ? Sort.Direction.ASC
-                : Sort.Direction.DESC;
-    }
 }
