@@ -8,7 +8,7 @@ Observability trace foundation (ADR-MONO-007a D1/D2/D3/D6) — VictoriaTraces ba
 
 # Status
 
-review
+done
 
 # Owner
 
