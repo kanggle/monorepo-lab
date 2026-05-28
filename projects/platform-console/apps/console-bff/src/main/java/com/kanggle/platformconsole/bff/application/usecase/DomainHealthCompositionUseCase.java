@@ -11,6 +11,7 @@ import com.kanggle.platformconsole.bff.domain.composition.DegradePolicy;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -59,12 +60,13 @@ public class DomainHealthCompositionUseCase {
 
     public DomainHealthCompositionUseCase(
             MeterRegistry meterRegistry,
+            Tracer tracer,
             GapHealthReadPort gapPort,
             WmsHealthReadPort wmsPort,
             ScmHealthReadPort scmPort,
             FinanceHealthReadPort financePort,
             ErpHealthReadPort erpPort) {
-        this.engine = new CompositionEngine(meterRegistry, ROUTE_LABEL);
+        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
         this.gapPort = gapPort;
         this.wmsPort = wmsPort;
         this.scmPort = scmPort;

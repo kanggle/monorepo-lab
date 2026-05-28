@@ -7,6 +7,7 @@ import io.micrometer.context.ThreadLocalAccessor;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,7 @@ class CompositionEngineTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        engine = new CompositionEngine(meterRegistry, ROUTE);
+        engine = new CompositionEngine(meterRegistry, Tracer.NOOP, ROUTE);
     }
 
     // ------------------------------------------------------------------

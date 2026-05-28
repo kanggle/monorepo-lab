@@ -6,6 +6,8 @@ import io.micrometer.context.ContextSnapshot;
 import io.micrometer.context.ContextSnapshotFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,19 +96,26 @@ public final class CompositionEngine {
     );
 
     private final MeterRegistry meterRegistry;
+    private final Tracer tracer;
     private final String routeLabel;
 
     /**
      * @param meterRegistry the Micrometer registry shared with the use-case
      *                      (used for both latency timers and error counters)
+     * @param tracer        the Micrometer {@link Tracer} used to open a per-leg
+     *                      {@code bff.fanout.leg} span tagged {@code bff.domain}
+     *                      / {@code bff.route} (architecture.md § Observability
+     *                      D7.A). Pass {@link Tracer#NOOP} when tracing is not
+     *                      wired (unit tests).
      * @param routeLabel    the {@code route=...} tag value used for both
      *                      {@code bff_fanout_latency} timers and
      *                      {@code bff_fanout_errors} counters (e.g.
      *                      {@code "operator-overview"} /
      *                      {@code "domain-health"})
      */
-    public CompositionEngine(MeterRegistry meterRegistry, String routeLabel) {
+    public CompositionEngine(MeterRegistry meterRegistry, Tracer tracer, String routeLabel) {
         this.meterRegistry = meterRegistry;
+        this.tracer = tracer;
         this.routeLabel = routeLabel;
     }
 
@@ -221,10 +230,12 @@ public final class CompositionEngine {
     // ------------------------------------------------------------------
 
     /**
-     * Wraps the leg invocation with the per-leg latency {@link Timer} site
-     * and delegates exception classification to the supplied
-     * {@link LegErrorClassifier}. The latency timer name + tags are the
-     * historic per-use-case shape: {@code bff_fanout_latency{domain,route}}.
+     * Wraps the leg invocation with the per-leg latency {@link Timer} site, a
+     * per-leg {@code bff.fanout.leg} trace span tagged {@code bff.domain} /
+     * {@code bff.route} (architecture.md § Observability D7.A — per-domain
+     * attribution in the trace UI), and delegates exception classification to
+     * the supplied {@link LegErrorClassifier}. The latency timer name + tags are
+     * the historic per-use-case shape: {@code bff_fanout_latency{domain,route}}.
      *
      * @param domain     the leg's domain target
      * @param call       the leg body (typically a closure that calls the
@@ -240,13 +251,26 @@ public final class CompositionEngine {
         Timer timer = meterRegistry.timer("bff_fanout_latency",
                 "domain", lowercase(domain),
                 "route", routeLabel);
-        try {
+        // Per-outbound-leg trace span carrying bff.domain / bff.route attributes
+        // for per-domain attribution in the trace UI (architecture.md
+        // § Observability D7.A). Child of the inbound server span (propagated
+        // onto this virtual thread by fanOut, TASK-MONO-146) and parent of the
+        // outbound RestClient client span. A Tracer span (not an Observation) is
+        // used deliberately so NO 4th metric family is introduced — the explicit
+        // bff_fanout_latency timer remains the sole latency metric.
+        Span legSpan = tracer.nextSpan().name("bff.fanout.leg")
+                .tag("bff.domain", lowercase(domain))
+                .tag("bff.route", routeLabel)
+                .start();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(legSpan)) {
             CompositionLeg r = call.get();
             sample.stop(timer);
             return r;
         } catch (RuntimeException e) {
             sample.stop(timer);
             return classifier.classify(domain, e);
+        } finally {
+            legSpan.end();
         }
     }
 

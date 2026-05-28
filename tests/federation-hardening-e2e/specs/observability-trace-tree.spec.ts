@@ -66,17 +66,49 @@ const KNOWN_PRODUCERS = [
   'erp-platform-masterdata-service', // erp
 ];
 
+interface JaegerTag {
+  key: string;
+  value: unknown;
+}
 interface JaegerSpan {
   traceID: string;
   spanID: string;
   operationName: string;
   processID: string;
   startTime: number;
+  tags?: JaegerTag[];
 }
 interface JaegerTrace {
   traceID: string;
   spans: JaegerSpan[];
   processes: Record<string, { serviceName: string }>;
+}
+
+/**
+ * Collect the `bff.domain` values from spans that carry BOTH `bff.domain` and
+ * `bff.route` tags — the per-leg attribution spans (TASK-MONO-147, architecture
+ * D7.A). One per fan-out leg that ran `engine.time(...)`.
+ */
+function legAttributionDomains(trace: JaegerTrace): string[] {
+  const domains = new Set<string>();
+  for (const span of trace.spans ?? []) {
+    const tags = span.tags ?? [];
+    const domainTag = tags.find((t) => t.key === 'bff.domain');
+    const hasRoute = tags.some((t) => t.key === 'bff.route');
+    if (domainTag && hasRoute) domains.add(String(domainTag.value));
+  }
+  return [...domains];
+}
+
+/** Distinct `bff.*` tag keys in a trace (diagnostic for tag round-trip). */
+function bffTagKeys(trace: JaegerTrace): string[] {
+  const keys = new Set<string>();
+  for (const span of trace.spans ?? []) {
+    for (const t of span.tags ?? []) {
+      if (t.key.startsWith('bff.')) keys.add(t.key);
+    }
+  }
+  return [...keys];
 }
 
 /** serviceName -> span count for one trace, via the processID -> process map. */
@@ -231,6 +263,12 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
         : null,
       producerUnion: [...producerUnion],
       knownProducersExpected: KNOWN_PRODUCERS,
+      // Per-leg span attribution (TASK-MONO-147): bff.domain values on spans
+      // that carry both bff.domain + bff.route tags, in the unified trace.
+      legAttributionDomains: bestUnified
+        ? legAttributionDomains(bestUnified.trace)
+        : [],
+      bffTagKeysSeen: bestUnified ? bffTagKeys(bestUnified.trace) : [],
       // The residual ceiling: did the producers join the UNIFIED console-web
       // trace (full ~7-span tree), or only per-leg console-bff-rooted traces?
       unifiedTreeReached: unifiedTreeProducerCount > 0,
@@ -296,6 +334,23 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
         `unifiedTreeReached=${report.unifiedTreeReached}; producerUnion=${JSON.stringify([...producerUnion])}. ` +
         'If false under the full poll, CompositionEngine virtual-thread OTel context ' +
         'propagation regressed (TASK-MONO-146) — producers forked to per-leg trace_ids.',
+    ).toBe(true);
+
+    // 5d. Per-leg span-attribution gate (TASK-MONO-147) — each outbound fan-out
+    //     leg emits a span tagged bff.domain + bff.route for per-domain
+    //     attribution in the trace UI (architecture.md § Observability D7.A 2nd
+    //     tracing bullet). console-bff creates these spans for every leg that
+    //     ran engine.time(...), independent of whether the producer exported.
+    const legDomains = legAttributionDomains(bestUnified!.trace);
+    expect(
+      legDomains.length >= 1,
+      `unified trace ${bestUnified!.trace.traceID} must contain >= 1 span tagged ` +
+        'bff.domain + bff.route (per-leg attribution — architecture.md D7.A). ' +
+        `got legAttributionDomains=${JSON.stringify(legDomains)}, ` +
+        `bffTagKeysSeen=${JSON.stringify(bffTagKeys(bestUnified!.trace))}. ` +
+        'If empty, either the leg span was not emitted (CompositionEngine.time ' +
+        'Tracer wiring regressed) or the bff.domain/bff.route tag key did not ' +
+        'survive the OTLP -> VictoriaTraces -> Jaeger round-trip.',
     ).toBe(true);
   });
 });

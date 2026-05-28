@@ -8,7 +8,7 @@ console-bff per-outbound-leg span attributes (`bff.domain` / `bff.route`) — ar
 
 # Status
 
-ready
+review
 
 # Owner
 
