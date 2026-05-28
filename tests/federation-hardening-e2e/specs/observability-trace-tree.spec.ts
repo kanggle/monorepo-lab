@@ -196,8 +196,11 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
           if (moreProducers) bestProducerJoin = { trace, services };
         }
       }
-      // Both invariants satisfied → stop early.
-      if (bestUnified && bestProducerJoin) break;
+      // Stop once the FULL unified tree is assembled (TASK-MONO-146): producers
+      // joined console-web's single trace_id. This also implies the floor
+      // (web+bff) and the producer-join invariant. If the unified join never
+      // lands the poll runs to the deadline and the gate fails with evidence.
+      if (bestUnified && producersIn(bestUnified.services).length > 0) break;
       await page.waitForTimeout(3_000);
     }
 
@@ -274,6 +277,25 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
     expect(
       bestProducerJoin!.services.has(BFF_SERVICE) && joinProducers.length >= 1,
       `producer-join trace ${bestProducerJoin!.trace.traceID} must carry console-bff + >= 1 producer; got services: ${[...bestProducerJoin!.services.keys()].join(', ')}`,
+    ).toBe(true);
+
+    // 5c. Unified-tree gate (TASK-MONO-146) — the producers join console-web's
+    //     SINGLE trace_id (the full federation tree: console-web SSR ->
+    //     console-bff -> producers), NOT just per-leg console-bff-rooted traces.
+    //     Enabled by CompositionEngine virtual-thread OTel context propagation
+    //     (ContextSnapshot capture + wrapExecutor). This lifts the MONO-145
+    //     `unifiedTreeReached=false` documented ceiling into a regression gate
+    //     and verifies architecture.md § Observability D7.A ("inbound trace
+    //     context propagates to every outbound leg").
+    const unifiedProducers = producersIn(bestUnified!.services);
+    expect(
+      report.unifiedTreeReached && unifiedProducers.length >= 1,
+      `unified console-web trace ${bestUnified!.trace.traceID} must carry >= 1 producer span ` +
+        '(producers must join console-web\'s single trace_id — the full tree). ' +
+        `got unified services: ${[...unified.keys()].join(', ')}; ` +
+        `unifiedTreeReached=${report.unifiedTreeReached}; producerUnion=${JSON.stringify([...producerUnion])}. ` +
+        'If false under the full poll, CompositionEngine virtual-thread OTel context ' +
+        'propagation regressed (TASK-MONO-146) — producers forked to per-leg trace_ids.',
     ).toBe(true);
   });
 });

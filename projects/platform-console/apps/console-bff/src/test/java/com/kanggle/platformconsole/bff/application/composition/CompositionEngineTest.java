@@ -2,6 +2,8 @@ package com.kanggle.platformconsole.bff.application.composition;
 
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
+import io.micrometer.context.ContextRegistry;
+import io.micrometer.context.ThreadLocalAccessor;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -228,5 +231,75 @@ class CompositionEngineTest {
         assertThat(financeCounter.count()).isEqualTo(2.0);
         assertThat(wmsCounter).isNotNull();
         assertThat(wmsCounter.count()).isEqualTo(1.0);
+    }
+
+    // ------------------------------------------------------------------
+    // Scenario 5 — trace-context propagation to virtual-thread legs (MONO-146)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("context_propagation: fanOut captures the calling-thread context and restores it on every virtual-thread leg (TASK-MONO-146)")
+    void fanOut_propagates_calling_thread_context_to_virtual_thread_legs() {
+        // Stand-in for the inbound OTel observation scope: a calling-thread
+        // ThreadLocal exposed via a registered ThreadLocalAccessor. fanOut()
+        // captures a ContextSnapshot on the servlet thread and wraps the
+        // virtual-thread executor, so each leg must observe this value on its
+        // own VT. Without the snapshot wrap a VT starts with empty ThreadLocals
+        // (value would be null), which is exactly the per-leg trace_id fork
+        // TASK-MONO-145 observed.
+        final String accessorKey = "test.trace.ctx";
+        ThreadLocal<String> callerCtx = new ThreadLocal<>();
+        ThreadLocalAccessor<String> accessor = new ThreadLocalAccessor<>() {
+            @Override
+            public Object key() {
+                return accessorKey;
+            }
+
+            @Override
+            public String getValue() {
+                return callerCtx.get();
+            }
+
+            @Override
+            public void setValue(String value) {
+                callerCtx.set(value);
+            }
+
+            @Override
+            public void setValue() {
+                callerCtx.remove();
+            }
+        };
+
+        ContextRegistry registry = ContextRegistry.getInstance();
+        registry.registerThreadLocalAccessor(accessor);
+        try {
+            callerCtx.set("trace-abc-123");
+
+            Map<DomainTarget, String> observed = new ConcurrentHashMap<>();
+            Map<DomainTarget, Supplier<CompositionLeg>> bodies =
+                    new EnumMap<>(DomainTarget.class);
+            for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+                bodies.put(d, () -> {
+                    // Runs on a virtual thread — the propagated context must be visible.
+                    String seen = callerCtx.get();
+                    observed.put(d, seen == null ? "<null>" : seen);
+                    return CompositionLeg.ok(LegOutcome.ok(d), Map.of("ok", true));
+                });
+            }
+
+            Map<DomainTarget, CompositionLeg> results = engine.fanOut("tenant-ctx", bodies);
+
+            assertThat(results).hasSize(5);
+            assertThat(observed).hasSize(5);
+            for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+                assertThat(observed.get(d))
+                        .as("leg %s must observe the propagated calling-thread context on its virtual thread", d)
+                        .isEqualTo("trace-abc-123");
+            }
+        } finally {
+            registry.removeThreadLocalAccessor(accessorKey);
+            callerCtx.remove();
+        }
     }
 }

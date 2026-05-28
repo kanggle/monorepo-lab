@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-146-bff-fanout-trace-context-propagation.md` — **READY** (spec PR). console-bff fan-out **virtual-thread OTel context propagation** → unified federation trace tree (console-web SSR → console-bff → producers under one trace_id). Closes MONO-145's `unifiedTreeReached=false` documented ceiling + conforms impl to the **existing** architecture.md § Observability D7.A spec claim. Atomic root task: `CompositionEngine.fanOut` `ContextSnapshot`+`wrapExecutor` (src) + e2e `unifiedTreeReached=true` regression gate (root tests/). MONO-145 producer-join gate = before/after baseline. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-146-bff-fanout-trace-context-propagation.md` — **REVIEW** (impl PR #916). console-bff fan-out **virtual-thread OTel context propagation** → unified federation trace tree. `CompositionEngine.fanOut` `ContextSnapshot`+`wrapExecutor` (src) + e2e `unifiedTreeReached=true` gate. **AC-3 functional GREEN = workflow_dispatch run [26578708493](https://github.com/kanggle/monorepo-lab/actions/runs/26578708493) `8 passed (45.9s)`, 0 flaky** — single unified trace `f5b3d557` **57 spans** (console-web 25 + console-bff 11 + finance/erp/scm/wms 21), `unifiedTreeReached=true`, all 4 producers joined console-web's trace_id. console-bff IT GREEN (no regression). AC-5 architecture.md/ADR/contract byte-unchanged. 분석=Opus 4.7 / 구현=Opus 4.7 (1-cycle GREEN).
 
 ## done
 
