@@ -8,7 +8,7 @@ TASK-MONO-149
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -68,6 +68,10 @@ Bring the shared rule library back into internal consistency after the 2026-05-2
 6. `platform/error-handling.md` — `DOWNSTREAM_ERROR` is 502 (Platform-Common) and 503 (Admin/saas). The 503 side already documents the split; add the reciprocal note on the 502 entry so the divergence is symmetric.
 7. `platform/naming-conventions.md` — the task-id allowlist `TYPE is BE, FE, or INT` is stale (repo uses `MONO` + project prefixes + letter sub-task suffixes). Generalise to `SCOPE` (project-agnostic — do NOT enumerate project prefixes) and point to `tasks/INDEX.md` as the authoritative registry.
 
+**Hook fix (scope-expanded mid-impl, user-approved)**
+
+8. `.claude/hooks/rule-consistency-check.ps1` — applying fixes 1 & 2 surfaced a real bug in this PreToolUse hook: on an `Edit` it validated only the `new_string` fragment (not the resulting file), so RULE-CONSISTENCY-02/03 falsely reported "missing frontmatter" against compliant files and blocked **every** partial Edit to any agent/command file. Fix = reconstruct the post-edit file (Write → `content`; Edit → on-disk content with `old_string`→`new_string`) so all four checks validate the whole file. Applied by the user directly (the auto-mode classifier hard-blocks the agent from self-modifying a safety hook even with verbal approval — same layer as the documented mass-`push --delete` / kill-process blocks).
+
 ## Out of Scope
 
 - **The 6 Info findings** (agent `skills:` frontmatter unevenness; implement-task↔write-tests test-authoring overlap; `refactor-spec.md` `sed -i`; `refactoring-policy.md` entrypoint trigger; error-handling ACCOUNT_LOCKED/DORMANT TODO; placeholder service-type disclaimers) — deliberately deferred (design-tension / optional-field / external-implementation-gated, not clear defects).
@@ -80,8 +84,9 @@ Bring the shared rule library back into internal consistency after the 2026-05-2
 - **AC-2 (Critical resolved)**: `.claude/agents/common/coordinator.md` scans `common/*.md`; `implement-task.md` template header reads `tasks/ready/`; `grpc-service.md` has no `infra/service-mesh.md` link (and no other dangling link introduced).
 - **AC-3 (Warning resolved)**: `service-boundaries.md` no longer presents `gateway` as a standalone Service Type; both `INSUFFICIENT_STOCK` entries and the 502 `DOWNSTREAM_ERROR` entry carry a cross-domain note; `naming-conventions.md` task-id rule is generalised + points to `tasks/INDEX.md`.
 - **AC-4 (project-agnostic preserved, HARDSTOP-03)**: the `platform/` edits introduce no service name, API path, or project prefix; `git diff origin/main` of shared files contains no project-specific tokens.
-- **AC-5 (scope-lock)**: `git diff origin/main` touches only the 7 named rule files (+ the task lifecycle files); no code/ADR/spec-contract change.
+- **AC-5 (scope-lock)**: `git diff origin/main` touches only the 7 named rule files + `.claude/hooks/rule-consistency-check.ps1` (+ the task lifecycle files); no code/ADR/spec-contract change.
 - **AC-6 (re-run clean on fixed dimensions)**: a follow-up `/validate-rules` would report the 3 Critical + 4 Warning as resolved (the dead glob/path/link gone, the Service Type catalog conflict gone, the error-code collisions annotated, the task-id allowlist current).
+- **AC-7 (hook validates whole file)**: `.claude/hooks/rule-consistency-check.ps1` reconstructs the post-edit file for its frontmatter/spec-ref checks; a partial `Edit` to a compliant agent/command file no longer trips RULE-CONSISTENCY-02/03 (the false-positive that blocked fixes 1 & 2 is gone).
 
 # Related Specs
 
