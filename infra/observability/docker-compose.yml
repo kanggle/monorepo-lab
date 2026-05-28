@@ -88,11 +88,12 @@ services:
   # Vector's otlp sink; queried by trace_id via the Jaeger-compatible
   # /select/jaeger API (the /observe trace skill). Default HTTP port 10428.
   #
-  # NOTE: image tag confirmed against the registry on first stack `up.sh` /
-  # federation-e2e workflow_dispatch run (offline-authored; the VictoriaTraces
-  # tag line is the one variable to verify — fails fast if absent).
+  # Tag confirmed against the Docker Hub registry 2026-05-28 (CI footprint
+  # job surfaced the offline-authored guess; v0.9.0 is the latest stable,
+  # pushed 2026-05-20). VictoriaTraces tags are plain vX.Y.Z (no
+  # `-victoriatraces` suffix — that convention is VictoriaLogs-only).
   victoriatraces:
-    image: victoriametrics/victoria-traces:v0.4.2-victoriatraces
+    image: victoriametrics/victoria-traces:v0.9.0
     restart: "no"
     command:
       - "--retentionPeriod=1d"
