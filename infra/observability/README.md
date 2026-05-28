@@ -1,6 +1,6 @@
 # Worktree-isolated Ephemeral Observability Stack
 
-Operator guide for the Vector + VictoriaLogs + VictoriaMetrics stack defined by ADR-MONO-007.
+Operator guide for the Vector + VictoriaLogs + VictoriaMetrics + VictoriaTraces stack defined by ADR-MONO-007 (logs + metrics) and ADR-MONO-007a (trace layer).
 
 This stack is **opt-in and per-worktree**. It is not started automatically by any Gradle task, dev-setup script, or CI job. The agent or developer brings it up when they want to observe `gateway-service` / `master-service` / other wms services running under `projects/wms-platform/docker-compose.bootrun.yml`, queries the data via LogQL / PromQL, and tears it down when done.
 
@@ -28,7 +28,7 @@ docker compose -f projects/wms-platform/docker-compose.bootrun.yml up -d   # 1. 
 ./scripts/observability/down.sh                                            # 3. tear stack down (wms services unaffected)
 ```
 
-`up.sh` prints the three URLs (VictoriaLogs / VictoriaMetrics / Vector admin) at the end with the dynamically assigned ports. The same values are in `$(git rev-parse --show-toplevel)/.observability/ports.env` if you need them programmatically.
+`up.sh` prints the URLs (VictoriaLogs / VictoriaMetrics / VictoriaTraces / Vector admin) at the end with the dynamically assigned ports. The same values are in `$(git rev-parse --show-toplevel)/.observability/ports.env` if you need them programmatically.
 
 ---
 
@@ -54,6 +54,9 @@ curl -s "http://127.0.0.1:${VICTORIAMETRICS_PORT}/api/v1/query?query=jvm_memory_
 
 # PromQL — request rate by status code
 curl -s "http://127.0.0.1:${VICTORIAMETRICS_PORT}/api/v1/query_range?query=rate(http_server_requests_seconds_count[1m])&start=$(date -d '5 min ago' +%s)&end=$(date +%s)&step=15" | jq .
+
+# Trace tree by trace_id (VictoriaTraces, Jaeger-compat — ADR-MONO-007a)
+curl -s "http://127.0.0.1:${VICTORIATRACES_PORT}/select/jaeger/api/traces/0af7651916cd43dd8448eb211c80319c" | jq .
 ```
 
 Phase 2 (TASK-MONO-066) will wrap these into a `/observe` slash command via a `.claude/skills/cross-cutting/observability-query/` skill — no `curl` boilerplate needed once that lands.
@@ -66,6 +69,7 @@ If you want a UI for ad-hoc exploration:
 
 - VictoriaLogs UI: `http://127.0.0.1:${VICTORIALOGS_PORT}/select/vmui`
 - VictoriaMetrics UI (vmui): `http://127.0.0.1:${VICTORIAMETRICS_PORT}/vmui`
+- VictoriaTraces UI (vmui): `http://127.0.0.1:${VICTORIATRACES_PORT}/select/vmui` (trace layer — ADR-MONO-007a)
 
 Both UIs ship as static assets inside the official images — no extra config or container needed. Agents should prefer the HTTP API + Phase 2 skill; the UIs exist only for human investigations.
 

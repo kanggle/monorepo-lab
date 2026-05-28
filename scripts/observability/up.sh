@@ -157,6 +157,10 @@ mkdir -p "$PORTS_DIR" || {
 vl_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victorialogs 9428 | awk -F: '{ print $NF }')"
 vm_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victoriametrics 8428 | awk -F: '{ print $NF }')"
 vec_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port vector 8686 | awk -F: '{ print $NF }')"
+# Trace layer (ADR-MONO-007a). Best-effort: an older stack without the
+# victoriatraces service leaves this blank (query-traces.sh then emits
+# OBSERVE-QUERY-02 with a re-cycle hint).
+vt_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victoriatraces 10428 2>/dev/null | awk -F: '{ print $NF }')"
 
 cat > "$PORTS_DIR/ports.env" <<EOF
 WORKTREE_HASH=${WORKTREE_HASH}
@@ -165,6 +169,7 @@ NETWORK=${WMS_NETWORK}
 VICTORIALOGS_PORT=${vl_port}
 VICTORIAMETRICS_PORT=${vm_port}
 VECTOR_PORT=${vec_port}
+VICTORIATRACES_PORT=${vt_port}
 STARTED_AT=${START_AT}
 EOF
 
@@ -178,6 +183,8 @@ cat <<EOF
                    curl 'http://127.0.0.1:${vl_port}/select/logsql/query?query=*'
   VictoriaMetrics: http://127.0.0.1:${vm_port}
                    curl 'http://127.0.0.1:${vm_port}/api/v1/query?query=up'
+  VictoriaTraces:  http://127.0.0.1:${vt_port}
+                   curl 'http://127.0.0.1:${vt_port}/select/jaeger/api/traces/<trace_id>'
   Vector admin:    http://127.0.0.1:${vec_port}/health
 
   Ports recorded in: $PORTS_DIR/ports.env
