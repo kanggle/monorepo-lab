@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-142-adr-mono-007a-trace-layer.md` — author ADR-MONO-007a (Trace Layer — VictoriaTraces + OTLP-via-Vector). Resolves ADR-MONO-007 § 2.1 D1 trace deferral (gate = ADR-018 Phase 8 D4 cross-product trace-tree demand) + reconciles ADR-018 D4 VictoriaTraces false-premise (additive, HARDSTOP-04). Unblocks TASK-MONO-143 observability federation impl. doc-only, PROPOSED+ACCEPTED same PR (ADR-007 meta-policy precedent). 분석=Opus 4.7 / 구현=Opus 4.7.
 
 ## in-progress
 
