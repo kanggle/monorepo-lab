@@ -43,21 +43,21 @@ endpoints = []
 scrape_interval_secs = 15
 instance_tag = "instance"
 
-# OTLP/HTTP trace ingest (ADR-MONO-007a D2). Binds :4318 — the endpoint the
-# producers + console-bff + console-web already export to
-# (management.otlp.tracing.endpoint / OTEL_EXPORTER_OTLP_ENDPOINT). Closes the
-# "no listener" gap: before this, services exported to :4318 with nothing
-# receiving. Vector forwards to VictoriaTraces (sinks.victoriatraces) so the
-# cross-product trace tree (console-web → console-bff → 5 producers) assembles
-# in one store, queryable by trace_id.
-[sources.otlp]
-type = "opentelemetry"
-
-[sources.otlp.http]
-address = "0.0.0.0:4318"
-
-[sources.otlp.grpc]
-address = "0.0.0.0:4317"
+# TRACE INGESTION (ADR-MONO-007a D2 — fallback applied 2026-05-28).
+#
+# Original D2 chose "producer/console-web OTLP -> Vector OTLP source ->
+# VictoriaTraces sink" (Vector as the single spine). CI surfaced that Vector
+# 0.45 (pinned by ADR-MONO-007 D1 for the logs+metrics pipeline) has the
+# `opentelemetry` SOURCE but NOT an `opentelemetry` SINK (added in a later
+# Vector release) — wiring it crashed Vector on config load. Rather than bump
+# Vector (risking the working logs+metrics pipeline), ADR-007a D2's documented
+# fallback is applied: services export OTLP **directly** to VictoriaTraces
+# (`victoriatraces:10428/insert/opentelemetry/v1/traces`), traces-only. Vector
+# stays the spine for logs + metrics. See ADR-MONO-007a § 2.2 D2 additive note.
+#
+# Net effect on this file: no trace source/sink here — Vector is unchanged from
+# its logs+metrics shape. VictoriaTraces (docker-compose.yml) receives OTLP on
+# its own port. The /observe trace skill queries it directly by trace_id.
 
 # ---------------------------------------------------------------------------
 # Transforms
@@ -123,27 +123,7 @@ inputs = ["add_worktree_label"]
 endpoint = "http://victoriametrics:8428/api/v1/write"
 healthcheck.enabled = false
 
-# Trace forwarding to VictoriaTraces (ADR-MONO-007a D1/D2). The opentelemetry
-# source exposes a `.traces` output; this sink relays it to VictoriaTraces'
-# native OTLP/HTTP ingest endpoint.
-#
-# VERIFICATION POINT (workflow_dispatch): Vector 0.45's OTLP trace egress to a
-# VictoriaTraces backend is the primary functional unknown for AC-4. If the
-# federation-e2e run shows Vector cannot re-encode the `.traces` stream to OTLP
-# for VictoriaTraces in this version, the documented fallback is ADR-MONO-007a
-# D2's rejected-but-available alternative: producers/console-web export OTLP
-# directly to victoriatraces:10428 (set OTEL_EXPORTER_OTLP_ENDPOINT to the
-# VictoriaTraces OTLP path, bypassing Vector for traces only — logs+metrics
-# stay Vector-mediated). That fallback would be a single ADR-007a D2 revisit
-# note + env change, not a re-architecture.
-[sinks.victoriatraces]
-type = "opentelemetry"
-inputs = ["otlp.traces"]
-
-[sinks.victoriatraces.protocol]
-type = "http"
-uri = "http://victoriatraces:10428/insert/opentelemetry/v1/traces"
-method = "post"
-encoding.codec = "protobuf"
-framing.method = "newline_delimited"
-headers.Content-Type = "application/x-protobuf"
+# No VictoriaTraces sink here — ADR-MONO-007a D2 fallback (see TRACE INGESTION
+# note above): services export OTLP directly to VictoriaTraces, which is not a
+# Vector pipeline stage. Vector 0.45 lacks an `opentelemetry` sink, so routing
+# traces through Vector is not available without a Vector version bump.
