@@ -136,12 +136,17 @@ services:
       - /victoria-traces-data
     ports: ["10428:10428"]
     networks: [fed-e2e]
+    # Healthcheck mirrors infra/observability/docker-compose.yml (MONO-143,
+    # verified healthy on CI Linux). MUST use the literal 127.0.0.1 — the
+    # victoria-traces image is minimal and `localhost` does not resolve there
+    # (MONO-144 cycle 1: `localhost` healthcheck -> perpetually unhealthy ->
+    # producers' `depends_on: service_healthy` failed Phase 2 startup).
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:10428/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:10428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
 
   # ---------------------------------------------------------------------------
   # PostgreSQL sidecars — wms and scm use PostgreSQL, not MySQL.
