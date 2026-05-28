@@ -8,7 +8,7 @@ Author ADR-MONO-007a (Trace Layer — VictoriaTraces + OTLP-via-Vector) — reso
 
 # Status
 
-review
+done
 
 # Owner
 
