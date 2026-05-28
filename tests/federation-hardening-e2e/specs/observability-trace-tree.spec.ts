@@ -78,10 +78,16 @@ async function searchBffTraces(
 }
 
 test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
-  test('one trace_id spans >=2 federation services (console-bff + >=1 producer)', async ({
+  test('one trace_id spans the console-web SSR + console-bff propagation', async ({
     page,
     request,
   }, testInfo) => {
+    // The poll deadline (75s) for OTLP flush + ingest exceeds Playwright's
+    // default 30s per-test timeout (MONO-144 cycle 2: the loop was killed
+    // mid-poll at 30s -> flaky pass-on-retry). Raise to 120s so the cold-stack
+    // flush window fits inside one attempt.
+    test.setTimeout(120_000);
+
     // 1. Drive the Operator Overview fan-out. Navigate (realistic operator
     //    path) + an explicit same-context API request (deterministic
     //    SSR -> BFF -> producer trigger). The proxy route runs server-side
@@ -108,9 +114,16 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
       `[MONO-144] VictoriaTraces ingested services: ${JSON.stringify(ingestedServices)}`,
     );
 
-    // 3. Poll for a console-bff trace with >=2 distinct services. OTLP batch
-    //    export (~5s) + ingest + index latency -> poll up to ~75s, keeping the
-    //    richest trace seen (most distinct services, then most spans).
+    // 3. Poll for the operator-overview trace and wait for the console-web SSR
+    //    root span + console-bff aggregation span to both land under one
+    //    trace_id. OTLP batch export (~5s) + ingest + index latency -> poll up
+    //    to ~75s, keeping the richest trace seen (most distinct services, then
+    //    most spans). MONO-144 cycle 2 evidence: console-web (OTLP/JSON) + the
+    //    4 OTLP producers + console-bff all ingest; the producer spans land
+    //    under their OWN trace_ids (the console-bff -> producer RestClient does
+    //    not propagate the inbound W3C context), so the operator-overview trace
+    //    is reliably console-web + console-bff. Producer-join would require
+    //    console-bff src wiring, which AC-6 forbids here (reported, not gated).
     let best: { trace: JaegerTrace; services: Map<string, number> } | null =
       null;
     const deadline = Date.now() + 75_000;
@@ -124,7 +137,11 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
             (trace.spans?.length ?? 0) > (best.trace.spans?.length ?? 0));
         if (better) best = { trace, services };
       }
-      if (best && best.services.size >= 2 && best.services.has(BFF_SERVICE)) {
+      if (
+        best &&
+        best.services.has(BFF_SERVICE) &&
+        best.services.has(WEB_SERVICE)
+      ) {
         break;
       }
       await page.waitForTimeout(3_000);
@@ -155,7 +172,9 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
       contentType: 'application/json',
     });
 
-    // 5. Gate: the protobuf-reliable propagation invariant.
+    // 5. Gate: the console-web SSR -> console-bff propagation invariant — one
+    //    trace_id carrying both the console-web root span and the console-bff
+    //    aggregation span (>= 2 distinct services).
     expect(
       best,
       'no console-bff trace found in VictoriaTraces within the flush window — ' +
@@ -166,6 +185,10 @@ test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
     expect(
       services.has(BFF_SERVICE),
       `trace ${best!.trace.traceID} must include console-bff (${BFF_SERVICE}); got: ${serviceList}`,
+    ).toBe(true);
+    expect(
+      services.has(WEB_SERVICE),
+      `trace ${best!.trace.traceID} must include the console-web SSR root (${WEB_SERVICE}) — proves console-web -> console-bff W3C traceparent propagation + OTLP/JSON ingest; got: ${serviceList}`,
     ).toBe(true);
     expect(
       services.size,
