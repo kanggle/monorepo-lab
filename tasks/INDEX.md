@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-141-project-overview-md-2026-05-28-reality-alignment.md` — root `docs/project-overview.md` post-Phase-8 reality-alignment (6회째 BE-302/305/PC-FE-015/MONO-128 pattern). 7 surgical edits in 1 file: 갱신 시점 + Phase 5 LAUNCHED + Phase 6/7/8 status + Domains list 7개 + ADR table 17 누락 추가 + Portfolio standalone 5축 갱신 + Roadmap re-eval gate. spec / impl / close chore 3-PR. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (또는 직접 — single-file scope).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-141-project-overview-md-2026-05-28-reality-alignment.md` — root `docs/project-overview.md` post-Phase-8 reality-alignment (6회째 BE-302/305/PC-FE-015/MONO-128 pattern). 7 surgical edits in 1 file: 갱신 시점 + Phase 5 LAUNCHED + Phase 6/7/8 status + Domains list 7개 + ADR table 17 누락 추가 + Portfolio standalone 5축 갱신 + Roadmap re-eval gate. spec PR commit `fdc7afca`. impl = +39/-13 in 1 file scope-locked (AC-2/3/4/5 PASS). 분석=Opus 4.7 / 구현=Opus 4.7 (직접, single-file scope).
 
 ## done
 
