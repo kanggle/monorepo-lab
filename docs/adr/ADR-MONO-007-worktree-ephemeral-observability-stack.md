@@ -60,6 +60,8 @@ The observability spine MUST be composed of three components, each chosen for fo
 
 Traces (VictoriaTraces / Tempo equivalent) are explicitly **deferred to a follow-up ADR** (ADR-MONO-007a, condition: gap #3 Phase 2 closure has validated the LogQL/PromQL query DX on the agent side, and saga-spanning traces become the next gating signal). The trace layer is the riskiest of the three on stability + footprint and adding it before the simpler two pay off would dilute the ROI window.
 
+> **Additive note (2026-05-28, [ADR-MONO-007a](ADR-MONO-007a-trace-layer.md) ACCEPTED):** the trace deferral above is **RESOLVED**. The gate ("saga-spanning traces become the next gating signal") was satisfied by [ADR-MONO-018](ADR-MONO-018-platform-console-phase-8-federation-hardening.md) Phase 8 D4 (cross-product trace-tree demand). ADR-MONO-007a pins the trace backend = **VictoriaTraces** (VM-family homogeneity) + ingestion = producer/console-web OTLP → Vector OTLP source → VictoriaTraces sink + console-web `@opentelemetry` SDK trace origination. The D1 Vector + VictoriaLogs + VictoriaMetrics choice above is byte-unchanged; ADR-007a is purely additive (the 3rd component of the same stack). Impl lands in TASK-MONO-143.
+
 Per-component resident-memory budgets sum to ~135 MB; the 200 MB target leaves a 65 MB headroom for service-side OTel exporters that emit into Vector. Phase 1 verification quantifies actual footprint before Phase 2 expands consumption sites.
 
 ### 2.2 D2 — Topology: per-worktree ephemeral
@@ -192,7 +194,7 @@ No verification work is required by this ADR's own merge — the policy lives or
 1. **TASK-MONO-065 — Phase 1 stack scaffolding.** To be filed in `tasks/ready/` after this ADR merges. Owner: monorepo. Estimate: ~1 spec PR + 1 impl PR.
 2. **TASK-MONO-066 — Phase 2 skill + slash command.** Filed after MONO-065 merges.
 3. **TASK-MONO-067 — Phase 3 coverage expansion + footprint regression CI.** Filed after MONO-066 merges.
-4. **ADR-MONO-007a — Trace layer.** Filed when MONO-066 closes and a saga-spanning bug emerges that the LogQL / PromQL surfaces cannot reach.
+4. **ADR-MONO-007a — Trace layer.** ~~Filed when MONO-066 closes and a saga-spanning bug emerges that the LogQL / PromQL surfaces cannot reach.~~ → **FILED + ACCEPTED 2026-05-28 ([ADR-MONO-007a](ADR-MONO-007a-trace-layer.md), TASK-MONO-142).** Gate satisfied by ADR-MONO-018 Phase 8 D4 cross-product trace-tree demand (not a bug — a federation hardening requirement). Trace backend = VictoriaTraces; impl = TASK-MONO-143.
 5. **gap #4 — Chrome DevTools MCP integration** (memory `reference_openai_harness_engineering.md` § "다이어그램 3개" '눈' row). Separate ADR (ADR-MONO-008+) when frontend visual verification becomes a recurring blocker. Out of scope for this ADR.
 
 ---
