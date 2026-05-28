@@ -15,6 +15,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -96,7 +97,7 @@ class OperatorOverviewCompositionUseCaseTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new OperatorOverviewCompositionUseCase(
-                credentialSelection, meterRegistry,
+                credentialSelection, meterRegistry, Tracer.NOOP,
                 gapPort, wmsPort, scmPort, financePort, erpPort);
     }
 

@@ -11,6 +11,7 @@ import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,7 @@ class DomainHealthCompositionUseCaseTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new DomainHealthCompositionUseCase(
-                meterRegistry, gapPort, wmsPort, scmPort, financePort, erpPort);
+                meterRegistry, Tracer.NOOP, gapPort, wmsPort, scmPort, financePort, erpPort);
     }
 
     // ------------------------------------------------------------------

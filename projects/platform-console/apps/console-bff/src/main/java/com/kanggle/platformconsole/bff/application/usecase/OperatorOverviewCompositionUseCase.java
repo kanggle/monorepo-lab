@@ -14,6 +14,7 @@ import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
 import com.kanggle.platformconsole.bff.domain.credential.OutboundCredential;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -65,13 +66,14 @@ public class OperatorOverviewCompositionUseCase {
     public OperatorOverviewCompositionUseCase(
             CredentialSelectionPort credentialSelection,
             MeterRegistry meterRegistry,
+            Tracer tracer,
             GapAccountsReadPort gapPort,
             WmsInventoryReadPort wmsPort,
             ScmInventoryReadPort scmPort,
             FinanceBalanceReadPort financePort,
             ErpDepartmentsReadPort erpPort) {
         this.credentialSelection = credentialSelection;
-        this.engine = new CompositionEngine(meterRegistry, ROUTE_LABEL);
+        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
         this.gapPort = gapPort;
         this.wmsPort = wmsPort;
         this.scmPort = scmPort;
