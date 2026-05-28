@@ -111,11 +111,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-147-bff-leg-span-attributes.md` — **READY** (spec PR). console-bff per-outbound-leg span attributes (`bff.domain`/`bff.route`) for per-domain trace attribution. Conforms impl to the **existing** architecture.md § Observability D7.A 2nd tracing bullet (currently only metrics carry domain/route; no span does). Atomic root task: `CompositionEngine.time` `bff.fanout.leg` span via injected `Tracer` (src) + e2e span-tag regression gate (root tests/). MONO-146 unified tree = the trace this attribution layers onto. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-147-bff-leg-span-attributes.md` — **IN-PROGRESS** (impl PR). console-bff per-outbound-leg span attributes (`bff.domain`/`bff.route`) for per-domain trace attribution (architecture.md § Observability D7.A 2nd tracing bullet conformance). Atomic root task: `CompositionEngine.time` `bff.fanout.leg` span via injected `Tracer` (src) + e2e span-tag regression gate. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
 
 ## review
 
