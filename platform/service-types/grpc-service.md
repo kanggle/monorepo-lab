@@ -60,7 +60,7 @@ Otherwise, use `rest-api`.
 ## Encryption
 - mTLS REQUIRED for all production traffic
 - Plaintext gRPC is forbidden outside local dev
-- See `infra/service-mesh.md` for mesh-managed mTLS
+- mTLS is managed at the infrastructure / service-mesh layer (deployment-environment-specific; no service in this monorepo currently runs gRPC)
 
 ---
 

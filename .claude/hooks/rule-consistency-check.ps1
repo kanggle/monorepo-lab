@@ -49,12 +49,28 @@ try {
         exit 0
     }
 
+    # Validate the RESULTING file, not the edit fragment.
+    # Write supplies the full file in `content`; Edit supplies only old/new_string
+    # fragments, so reconstruct the post-edit file = on-disk content with
+    # old_string replaced by new_string (literal). Falling back to on-disk content
+    # when the fragment can't be located keeps the whole-file frontmatter checks
+    # correct (a body edit never removes frontmatter). Validating the fragment
+    # alone falsely flags every partial edit as "missing frontmatter".
     $content = ""
-    if ($data.tool_input.content) {
-        $content = $data.tool_input.content
+    if ($null -ne $data.tool_input.content) {
+        $content = [string]$data.tool_input.content
     }
-    elseif ($data.tool_input.new_string) {
-        $content = $data.tool_input.new_string
+    elseif ($null -ne $data.tool_input.old_string) {
+        if ($filePath -and (Test-Path -LiteralPath $filePath)) {
+            $existing = Get-Content -Raw -LiteralPath $filePath
+            $content = $existing.Replace([string]$data.tool_input.old_string, [string]$data.tool_input.new_string)
+        }
+        else {
+            $content = [string]$data.tool_input.new_string
+        }
+    }
+    elseif ($null -ne $data.tool_input.new_string) {
+        $content = [string]$data.tool_input.new_string
     }
 
     # Check 1: Skill files must reference a spec

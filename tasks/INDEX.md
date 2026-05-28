@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-149-validate-rules-remediation.md` — **REVIEW** (impl pushed, awaiting merge-verify + close chore). 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, mechanical rule-file fixes). **Origin** = `/validate-rules` full scan 2026-05-29 (read-only) → 3 Critical + 4 Warning (all re-verified against file bytes; 6 Info out of scope). **spec PR (commit `23df7e7f` on branch)**: task md + INDEX ready entry. **impl (2 commits on branch)**: ① platform/ 5 fixes (`85768000`) — grpc dead-ref reworded, `gateway` row → `rest-api` (gateway role), `INSUFFICIENT_STOCK` 422/400 + `DOWNSTREAM_ERROR` 502/503 cross-domain notes, naming-conventions task-id `{BE,FE,INT}`→`SCOPE` + INDEX pointer (all HARDSTOP-03 project-agnostic, annotation-only on error codes); ② `.claude/` 2 fixes + hook (pending commit) — coordinator agent-glob `*.md`→`common/*.md`, implement-task template header `tasks/in-progress/`→`tasks/ready/`, **+ scope-expanded `.claude/hooks/rule-consistency-check.ps1` fix**. **Mid-impl discovery**: fixes 1/2 surfaced a real RULE-CONSISTENCY-02/03 bug (hook validated the Edit `new_string` fragment, not the resulting file → false "missing frontmatter" block on every partial agent/command Edit). User-approved scope expansion; **user applied the hook patch directly** (auto-mode classifier hard-blocks the agent from self-modifying a safety hook even with verbal approval — same layer as documented mass-`push --delete` / kill-process blocks). **Close chore pending**: BE-303 3-dim after merge.
 
 ## done
 

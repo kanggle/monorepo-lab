@@ -126,7 +126,7 @@ Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected 
 | NOT_FOUND | 404 | Requested resource does not exist (use only where a domain-specific `*_NOT_FOUND` does not apply) |
 | INTERNAL_ERROR | 500 | Unexpected server-side error |
 | DATA_INTEGRITY_VIOLATION | 409 | Generic DB constraint violation not covered by a domain-specific code. Catch-all surfaced by Spring `DataIntegrityViolationException` when no `*Exception.java` mapping applies. Prefer a domain code when a known constraint is hit |
-| DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted |
+| DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted. The Admin/saas section emits the same string at HTTP 503 for admin integration calls — see that section's `DOWNSTREAM_ERROR` |
 | CIRCUIT_OPEN | 503 | Downstream circuit breaker is OPEN; the call was rejected without reaching the dependency. Distinct from DOWNSTREAM_ERROR so dashboards can separate "we tried and it failed" from "we shed load" |
 | SERVICE_UNAVAILABLE | 503 | A required upstream service is unavailable |
 
@@ -193,7 +193,7 @@ Owned by `inventory-service`. See `rules/domains/wms.md` and
 | Code | HTTP | Description |
 |---|---|---|
 | INVENTORY_NOT_FOUND | 404 | No inventory row exists for the given location/SKU/lot tuple |
-| INSUFFICIENT_STOCK | 422 | Requested quantity exceeds available (non-reserved) stock |
+| INSUFFICIENT_STOCK | 422 | Requested quantity exceeds available (non-reserved) stock. Same string as the ecommerce Product `INSUFFICIENT_STOCK` (400) but a distinct operation — this is a reservation/withdrawal exceeding available stock (422), not a stock adjustment going negative |
 | ADJUSTMENT_NOT_FOUND | 404 | Inventory adjustment with given id does not exist |
 | ADJUSTMENT_REASON_REQUIRED | 400 | Inventory adjustment submitted without a reason |
 | TRANSFER_NOT_FOUND | 404 | Stock transfer with given id does not exist |
@@ -260,7 +260,7 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | PRODUCT_NOT_FOUND | 404 | Product with given ID does not exist |
 | INVALID_CATEGORY | 400 | Category with given ID does not exist |
 | VARIANT_NOT_FOUND | 404 | Variant with given ID does not exist |
-| INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock |
+| INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock. Same string as the wms Inventory `INSUFFICIENT_STOCK` (422) but a distinct operation — this is an invalid stock adjustment (400), not a reservation/withdrawal exceeding available stock |
 | IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
 | MEDIA_NOT_FOUND | 404 | Media object not found in object storage by key (product-service `MediaNotFoundException`) |

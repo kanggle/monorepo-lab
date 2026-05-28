@@ -166,7 +166,7 @@ You are implementing a task in this project. Follow these steps exactly:
 
 ## Task
 - Task ID: {taskId}
-- Task file: tasks/in-progress/{taskFileName}
+- Task file: tasks/ready/{taskFileName}
 
 ## Steps
 1. Read `CLAUDE.md`
