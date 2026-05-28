@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-149-validate-rules-remediation.md` — **READY** (spec stage). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (mechanical rule-file fixes) / 리뷰=Opus 4.7. **Origin** = `/validate-rules` full scan 2026-05-29 (read-only) → 3 Critical + 4 Warning (all re-verified against file bytes; 6 Info out of scope). **Impl scope = 7 surgical doc edits**: (Critical) `.claude/agents/common/coordinator.md` agent-glob `*.md`→`common/*.md`; `.claude/commands/implement-task.md` template header `tasks/in-progress/`→`tasks/ready/`; `platform/service-types/grpc-service.md` dead `infra/service-mesh.md` link reworded. (Warning) `platform/service-boundaries.md` `gateway` row → `rest-api` (gateway role); `platform/error-handling.md` `INSUFFICIENT_STOCK` 422/400 + `DOWNSTREAM_ERROR` 502/503 cross-domain notes; `platform/naming-conventions.md` task-id allowlist `{BE,FE,INT}`→generalised `SCOPE` + tasks/INDEX.md pointer. **Constraints**: HARDSTOP-03 project-agnostic in `platform/` (no project prefixes); annotation-only on error codes (no status/string/code change). spec→impl→close 3-PR chain.
 
 ## in-progress
 
