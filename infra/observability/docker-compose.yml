@@ -35,6 +35,8 @@ services:
         condition: service_started
       victoriametrics:
         condition: service_started
+      victoriatraces:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8686/health"]
       interval: 5s
@@ -72,6 +74,36 @@ services:
       - "127.0.0.1::8428"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  # Trace store — the 3rd observability sense (ADR-MONO-007a D1). Same
+  # VictoriaMetrics single-binary family as victorialogs/victoriametrics
+  # (homogeneous ops, ~50 MB resident, tmpfs ephemeral). Ingests OTLP/HTTP
+  # **directly** from services at :10428/insert/opentelemetry/v1/traces
+  # (ADR-007a D2 fallback — Vector 0.45 has no opentelemetry sink; see
+  # vector.toml TRACE INGESTION note). Queried by trace_id via the
+  # Jaeger-compatible /select/jaeger API (the /observe trace skill).
+  #
+  # Tag confirmed against the Docker Hub registry 2026-05-28 (CI footprint
+  # job surfaced the offline-authored guess; v0.9.0 is the latest stable,
+  # pushed 2026-05-20). VictoriaTraces tags are plain vX.Y.Z (no
+  # `-victoriatraces` suffix — that convention is VictoriaLogs-only).
+  victoriatraces:
+    image: victoriametrics/victoria-traces:v0.9.0
+    restart: "no"
+    command:
+      - "--retentionPeriod=1d"
+      - "--storageDataPath=/victoria-traces-data"
+      - "--httpListenAddr=:10428"
+    tmpfs:
+      - /victoria-traces-data
+    ports:
+      - "127.0.0.1::10428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:10428/health"]
       interval: 5s
       timeout: 3s
       retries: 6

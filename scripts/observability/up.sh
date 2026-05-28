@@ -121,20 +121,23 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT" up -d
 
 # ---------- Wait for health -------------------------------------------------
 
+# 4 healthchecked services: vector / victorialogs / victoriametrics +
+# victoriatraces (ADR-MONO-007a D1 trace layer).
+EXPECTED_HEALTHY=4
 deadline=$((START_EPOCH + 30))
 while [ "$(date +%s)" -lt "$deadline" ]; do
   healthy=$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps --format json | \
     awk -F'"Health":"' '/"Health"/ { split($2,a,"\""); print a[1] }' | \
     grep -c '^healthy$' || true)
-  if [ "$healthy" = "3" ]; then
+  if [ "$healthy" = "$EXPECTED_HEALTHY" ]; then
     break
   fi
   sleep 2
 done
 
-if [ "$healthy" != "3" ]; then
+if [ "$healthy" != "$EXPECTED_HEALTHY" ]; then
   emit_4block "OBSERVE-SCAFFOLD-03" \
-    "Stack health check timeout — at least one of (vector / victorialogs / victoriametrics) did not report healthy within 30 s." \
+    "Stack health check timeout — at least one of (vector / victorialogs / victoriametrics / victoriatraces) did not report healthy within 30 s ($healthy/$EXPECTED_HEALTHY healthy)." \
     "$COMPOSE_FILE" \
     "  1. Inspect logs: docker compose -p $PROJECT logs
   2. Verify image versions are pullable (check internet connectivity).
@@ -157,6 +160,10 @@ mkdir -p "$PORTS_DIR" || {
 vl_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victorialogs 9428 | awk -F: '{ print $NF }')"
 vm_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victoriametrics 8428 | awk -F: '{ print $NF }')"
 vec_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port vector 8686 | awk -F: '{ print $NF }')"
+# Trace layer (ADR-MONO-007a). Best-effort: an older stack without the
+# victoriatraces service leaves this blank (query-traces.sh then emits
+# OBSERVE-QUERY-02 with a re-cycle hint).
+vt_port="$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" port victoriatraces 10428 2>/dev/null | awk -F: '{ print $NF }')"
 
 cat > "$PORTS_DIR/ports.env" <<EOF
 WORKTREE_HASH=${WORKTREE_HASH}
@@ -165,6 +172,7 @@ NETWORK=${WMS_NETWORK}
 VICTORIALOGS_PORT=${vl_port}
 VICTORIAMETRICS_PORT=${vm_port}
 VECTOR_PORT=${vec_port}
+VICTORIATRACES_PORT=${vt_port}
 STARTED_AT=${START_AT}
 EOF
 
@@ -178,6 +186,8 @@ cat <<EOF
                    curl 'http://127.0.0.1:${vl_port}/select/logsql/query?query=*'
   VictoriaMetrics: http://127.0.0.1:${vm_port}
                    curl 'http://127.0.0.1:${vm_port}/api/v1/query?query=up'
+  VictoriaTraces:  http://127.0.0.1:${vt_port}
+                   curl 'http://127.0.0.1:${vt_port}/select/jaeger/api/traces/<trace_id>'
   Vector admin:    http://127.0.0.1:${vec_port}/health
 
   Ports recorded in: $PORTS_DIR/ports.env

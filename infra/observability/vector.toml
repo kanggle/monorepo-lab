@@ -43,6 +43,22 @@ endpoints = []
 scrape_interval_secs = 15
 instance_tag = "instance"
 
+# TRACE INGESTION (ADR-MONO-007a D2 — fallback applied 2026-05-28).
+#
+# Original D2 chose "producer/console-web OTLP -> Vector OTLP source ->
+# VictoriaTraces sink" (Vector as the single spine). CI surfaced that Vector
+# 0.45 (pinned by ADR-MONO-007 D1 for the logs+metrics pipeline) has the
+# `opentelemetry` SOURCE but NOT an `opentelemetry` SINK (added in a later
+# Vector release) — wiring it crashed Vector on config load. Rather than bump
+# Vector (risking the working logs+metrics pipeline), ADR-007a D2's documented
+# fallback is applied: services export OTLP **directly** to VictoriaTraces
+# (`victoriatraces:10428/insert/opentelemetry/v1/traces`), traces-only. Vector
+# stays the spine for logs + metrics. See ADR-MONO-007a § 2.2 D2 additive note.
+#
+# Net effect on this file: no trace source/sink here — Vector is unchanged from
+# its logs+metrics shape. VictoriaTraces (docker-compose.yml) receives OTLP on
+# its own port. The /observe trace skill queries it directly by trace_id.
+
 # ---------------------------------------------------------------------------
 # Transforms
 # ---------------------------------------------------------------------------
@@ -106,3 +122,8 @@ type = "prometheus_remote_write"
 inputs = ["add_worktree_label"]
 endpoint = "http://victoriametrics:8428/api/v1/write"
 healthcheck.enabled = false
+
+# No VictoriaTraces sink here — ADR-MONO-007a D2 fallback (see TRACE INGESTION
+# note above): services export OTLP directly to VictoriaTraces, which is not a
+# Vector pipeline stage. Vector 0.45 lacks an `opentelemetry` sink, so routing
+# traces through Vector is not available without a Vector version bump.
