@@ -30,10 +30,15 @@ services:
       - ./vector.toml:/etc/vector/vector.toml:ro
     ports:
       - "127.0.0.1::8686"  # Vector admin / health
+      # OTLP/HTTP trace ingest (ADR-MONO-007a D2). Services already export to
+      # :4318; Vector now listens there and forwards to VictoriaTraces.
+      - "127.0.0.1::4318"
     depends_on:
       victorialogs:
         condition: service_started
       victoriametrics:
+        condition: service_started
+      victoriatraces:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8686/health"]
@@ -72,6 +77,33 @@ services:
       - "127.0.0.1::8428"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  # Trace store — the 3rd observability sense (ADR-MONO-007a D1). Same
+  # VictoriaMetrics single-binary family as victorialogs/victoriametrics
+  # (homogeneous ops, ~50 MB resident, tmpfs ephemeral). Ingests OTLP from
+  # Vector's otlp sink; queried by trace_id via the Jaeger-compatible
+  # /select/jaeger API (the /observe trace skill). Default HTTP port 10428.
+  #
+  # NOTE: image tag confirmed against the registry on first stack `up.sh` /
+  # federation-e2e workflow_dispatch run (offline-authored; the VictoriaTraces
+  # tag line is the one variable to verify — fails fast if absent).
+  victoriatraces:
+    image: victoriametrics/victoria-traces:v0.4.2-victoriatraces
+    restart: "no"
+    command:
+      - "--retentionPeriod=1d"
+      - "--storageDataPath=/victoria-traces-data"
+      - "--httpListenAddr=:10428"
+    tmpfs:
+      - /victoria-traces-data
+    ports:
+      - "127.0.0.1::10428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:10428/health"]
       interval: 5s
       timeout: 3s
       retries: 6
