@@ -111,7 +111,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-143-observability-federation-trace-impl.md` — ADR-MONO-007a D1/D2/D3/D6 trace **foundation**: VictoriaTraces backend + Vector OTLP source/sink (dev `infra/observability/`) + console-web `@opentelemetry` trace origination + `/observe trace` skill. console-web build/lint VERIFIED locally; dev-stack config authored (Docker unavailable locally → runtime verify on CI). depends on ADR-MONO-007a ACCEPTED (MONO-142). 분석=Opus 4.7 / 구현=Opus 4.7.
+- `TASK-MONO-144-federation-e2e-trace-tree-assertion.md` — ADR-MONO-018 D4 cross-product verification (split from MONO-143, MONO-139→140 precedent): extend federation-hardening-e2e stack with VictoriaTraces + Vector OTLP + Playwright 7-span trace-tree spec + `workflow_dispatch` functional GREEN. depends on MONO-143 + federation-hardening-e2e harness (MONO-139/140). 분석=Opus 4.7 / 구현=Sonnet 4.6 (workflow_dispatch diagnostic loop).
 
 ## in-progress
 
