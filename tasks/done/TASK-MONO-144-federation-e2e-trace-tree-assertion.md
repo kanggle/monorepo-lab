@@ -8,7 +8,7 @@ Federation e2e 7-span trace-tree assertion (ADR-MONO-018 D4 cross-product verifi
 
 # Status
 
-review
+done
 
 # Owner
 
