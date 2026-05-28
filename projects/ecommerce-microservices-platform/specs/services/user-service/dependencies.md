@@ -18,7 +18,7 @@
 - own database (`user_db` — user_profiles, user_addresses, wishlist_items)
 
 ## Allowed Service Interactions
-- outbound HTTP to product-service (`GET /api/products/{productId}`) to enrich wishlist items with product name, price, and status (via `RestProductInfoProvider` using `RestTemplate`)
+- outbound HTTP to product-service (`GET /api/products/{productId}`) to enrich wishlist items with product name, price, and status (via `RestProductInfoProvider` using `RestClient`)
 - no inbound direct service calls from other services — all access via gateway-service using published HTTP contract
 
 ## Consumes From
