@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.Date;
-import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -67,13 +66,19 @@ class CrossTenantHttpIntegrationTest extends AbstractMasterdataIntegrationTest {
     }
 
     private String token(String tenant) throws Exception {
+        // scope "erp.read" satisfies RoleScopeAuthorizationAdapter READ
+        // (fail-closed: requires erp.read / erp.write / operator). The
+        // employees list passes targetDepartmentId=null, so no data-scope check.
+        // Cross-tenant tokens are still rejected at the JWT decode tenant gate
+        // (TenantClaimValidator) BEFORE authorization, so scm → 403
+        // TENANT_FORBIDDEN regardless of scope.
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaKey.getKeyID()).build(),
                 new JWTClaimsSet.Builder()
                         .subject("user-d5")
                         .issuer("http://test-issuer")
                         .claim("tenant_id", tenant)
-                        .claim("roles", List.of("ERP_READ"))
+                        .claim("scope", "erp.read")
                         .issueTime(new Date())
                         .expirationTime(Date.from(Instant.now().plusSeconds(300)))
                         .build());
