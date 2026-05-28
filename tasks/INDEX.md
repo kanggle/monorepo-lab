@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-150-protect-push-guard-regex-fix.md` — **READY** (spec stage). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (single-hook regex rescope) / 리뷰=Opus 4.7. **Origin** = validate-hooks audit 2026-05-29 (MONO-149 follow-up). Audit scanned **all 9** `.claude/hooks/*.ps1` for 2 bug classes (A: PreToolUse guard validating the Edit `new_string` fragment not the resulting file; B: regex over-matching across shell-operator chains). **Result: 8 clean, 1 finding** — `protect-main-branch.ps1` L42 `git\s+push.*\b(main|master)\b` (bug B) false-blocks (i) chained commands (`git push origin feat && gh pr create --base main`) and (ii) hyphen-token branch names (`feature-main-fix`). **Fix** = split command on shell operators + match `main`/`master` only as a ref arg (`(?:\s|:)(main|master)(?:\s|$)`) within a `git push` segment; `--force`/`-f`/`reset`/HEAD-block byte-unchanged. **Exec constraint**: `.claude/hooks/` edit+commit is classifier-hard-blocked for the agent → user applies the patch (in task § Scope) + commits; agent does audit/spec/lifecycle/push. spec→impl→close 3-PR chain.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-150-protect-push-guard-regex-fix.md` — **REVIEW** (impl staged; `.claude/` patch user-applied, awaiting commit + merge-verify). 분석=Opus 4.7 / 구현=Opus 4.7. **Origin** = validate-hooks audit 2026-05-29 (MONO-149 follow-up) — scanned all 9 `.claude/hooks/*.ps1`, **8 clean, 1 finding**: `protect-main-branch.ps1` push-target regex `git\s+push.*\b(main|master)\b` false-blocks (i) chained commands (`git push … && gh pr create --base main`) + (ii) hyphen-token branch names (`feature-main-fix`). **Fix** = shell-operator segment split + ref-position match `(?:\s|:)(main|master)(?:\s|$)` within a `git push` segment (`--force`/`-f`/`reset`/HEAD-block byte-unchanged) + 4 fixture cases (1 pos `:master` target / 3 neg chained·hyphen·`main:feature` source). **Exec**: `.claude/hooks/` edit+commit classifier-hard-blocked for agent → user applies 2-file patch + commits; agent did audit/spec/lifecycle/push/PR/merge/close. **Close chore pending**: BE-303 3-dim after merge.
 
 ## done
 

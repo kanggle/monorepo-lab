@@ -140,6 +140,42 @@ try {
     }
     Assert-Allowed -Output $n4
     "PASS: negative-4 (HEAD=main + explicit `HEAD:feature-x` refspec allowed)"
+    
+    # --- Positive 5 (TASK-MONO-150): refspec TARGET master — still blocked.
+    $p5 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'Bash'
+        tool_input = @{ command = 'git push origin feature:master' }
+        cwd        = $repoFeat
+    }
+    Assert-PlainBlock -Output $p5 -ExpectedReasonSubstring 'direct push, force push, or hard reset'
+    "PASS: positive-5 (refspec target :master blocked)"
+
+    # --- Negative 5 (TASK-MONO-150): chained command must not bleed across `&&`.
+    $n5 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'Bash'
+        tool_input = @{ command = 'git push -u origin task/x && gh pr create --base main' }
+        cwd        = $repoFeat
+    }
+    Assert-Allowed -Output $n5
+    "PASS: negative-5 (chained git push && gh pr create --base main allowed)"
+
+    # --- Negative 6 (TASK-MONO-150): hyphen-token branch name containing "main".
+    $n6 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'Bash'
+        tool_input = @{ command = 'git push origin feature-main-fix' }
+        cwd        = $repoFeat
+    }
+    Assert-Allowed -Output $n6
+    "PASS: negative-6 (hyphen-token branch feature-main-fix allowed)"
+
+    # --- Negative 7 (TASK-MONO-150): refspec SOURCE main (push FROM main).
+    $n7 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'Bash'
+        tool_input = @{ command = 'git push origin main:feature-x' }
+        cwd        = $repoFeat
+    }
+    Assert-Allowed -Output $n7
+    "PASS: negative-7 (refspec source main:feature-x allowed)"
 }
 finally {
     Remove-Item -Path $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
