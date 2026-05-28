@@ -2,6 +2,8 @@ package com.kanggle.platformconsole.bff.application.composition;
 
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
+import io.micrometer.context.ContextSnapshot;
+import io.micrometer.context.ContextSnapshotFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -12,6 +14,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +60,17 @@ import java.util.function.Supplier;
  * pre-resolve on the servlet thread and pass plain values down (see
  * {@code OperatorOverviewCompositionUseCase} pattern, byte-unchanged
  * by this extraction).
+ *
+ * <p><b>Trace context propagation (TASK-MONO-146)</b>: {@link #fanOut} captures
+ * an {@link ContextSnapshot} on the calling (servlet) thread and wraps the
+ * virtual-thread executor with it, so the inbound OTel observation/trace scope
+ * is restored on each leg and every outbound {@code RestClient} span continues
+ * the inbound {@code trace_id} (architecture.md § Observability D7.A — the
+ * unified federation trace tree). This is orthogonal to the request-scope
+ * discipline above: a {@link ContextSnapshot} only carries registered
+ * {@code ThreadLocalAccessor}s (observation / MDC), and {@code @RequestScope}
+ * has none — so request-scoped state still does NOT leak onto the virtual
+ * threads.
  */
 public final class CompositionEngine {
 
@@ -128,8 +142,22 @@ public final class CompositionEngine {
     public Map<DomainTarget, CompositionLeg> fanOut(
             String tenantIdForLogging,
             Map<DomainTarget, Supplier<CompositionLeg>> legBodies) {
-        // Java 21 virtual-thread executor: each leg gets its own VT.
+        // Capture the caller (servlet) thread's propagated context — notably the
+        // inbound OTel observation/trace scope — so each leg's outbound RestClient
+        // span continues the SAME trace_id (architecture.md § Observability D7.A:
+        // "the inbound request's OTel trace context propagates to every outbound
+        // leg via W3C traceparent"). A virtual thread otherwise starts with empty
+        // ThreadLocals, so each leg's client observation roots a fresh trace_id
+        // (TASK-MONO-145 observed per-leg fork). Only registered
+        // ThreadLocalAccessors are captured (observation / MDC); @RequestScope has
+        // none, so the request-scoped credential context stays OFF the virtual
+        // threads — the pre-resolve-on-servlet-thread discipline (see class
+        // javadoc) is preserved.
+        ContextSnapshot snapshot = ContextSnapshotFactory.builder().build().captureAll();
+        // Java 21 virtual-thread executor: each leg gets its own VT. The wrapped
+        // executor restores the captured context around every submitted leg.
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Executor tracedExecutor = snapshot.wrapExecutor(executor);
             Map<DomainTarget, CompletableFuture<CompositionLeg>> futures =
                     new EnumMap<>(DomainTarget.class);
             for (DomainTarget domain : CARD_ORDER) {
@@ -138,7 +166,7 @@ public final class CompositionEngine {
                     throw new IllegalStateException(
                             "CompositionEngine.fanOut: missing leg body for " + domain);
                 }
-                futures.put(domain, CompletableFuture.supplyAsync(body, executor));
+                futures.put(domain, CompletableFuture.supplyAsync(body, tracedExecutor));
             }
 
             CompletableFuture<Void> all = CompletableFuture.allOf(

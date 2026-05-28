@@ -40,6 +40,12 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-tracing-bridge-otel'
     implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+    // Direct use of io.micrometer.context.* (ContextSnapshot) to propagate the
+    // inbound OTel trace scope onto the virtual-thread fan-out legs
+    // (CompositionEngine, TASK-MONO-146). Already transitive via
+    // micrometer-tracing-bridge-otel; declared explicitly per direct-dependency
+    // hygiene. Version managed by the Spring Boot BOM.
+    implementation 'io.micrometer:context-propagation'
 
     // JSON
     implementation 'com.fasterxml.jackson.core:jackson-databind'
