@@ -8,7 +8,7 @@ docs/project-overview.md reality-alignment — record ADR-MONO-007a (Trace Layer
 
 # Status
 
-in-progress
+review
 
 # Owner
 

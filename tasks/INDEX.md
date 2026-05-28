@@ -115,11 +115,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-148-project-overview-trace-alignment.md` — **IN-PROGRESS** (impl PR). docs/project-overview.md reality-alignment (MONO-141 precedent, 6th): add missing **ADR-MONO-007a** (Trace Layer) ADR-table row + update **Phase 8 status** to D4 observability (MONO-142~147) + D5 isolation (PC-BE-006/ERP-BE-004) COMPLETE 2026-05-28 (7→8 specs). docs-only. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6.
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-148-project-overview-trace-alignment.md` — **REVIEW** (impl PR #922). docs/project-overview.md reality-alignment (MONO-141 precedent, 6th): added **ADR-MONO-007a** (Trace Layer) ADR-table row + updated **Phase 8 status** → D4 observability (MONO-142~147) + D5 isolation (PC-BE-006/ERP-BE-004) COMPLETE 2026-05-28, 8/8 specs. AC-4 docs-only (project-overview.md only), AC-5 ADR-007a link resolves. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, docs).
 
 ## done
 
