@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-004-masterdata-cross-tenant-http-it.md` — ADR-MONO-018 D5 federation isolation regression, **erp slice** (lean gap-fill: wms/scm/finance/GAP producer ITs + console-bff `CrossTenantDenyIntegrationTest` (PC-BE-006) already cover the rest; erp had only a validator unit + controller slice test, no HTTP-layer IT). Adds `CrossTenantHttpIntegrationTest` (mirrors finance pattern): `GET /api/erp/masterdata/employees` with `tenant_id=scm` → 403 TENANT_FORBIDDEN; `tenant_id=*` → 2xx (wildcard accepted); `tenant_id=erp` → 2xx; no token → 401. test-only. 분석=Opus 4.7 / 구현=Opus 4.7 (isolation → Opus).
 
 ## in-progress
 
