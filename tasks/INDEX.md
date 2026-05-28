@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-144-federation-e2e-trace-tree-assertion.md` — ADR-MONO-018 D4 cross-product verification (split from MONO-143, MONO-139→140 precedent): extend federation-hardening-e2e stack with VictoriaTraces + Vector OTLP + Playwright 7-span trace-tree spec + `workflow_dispatch` functional GREEN. depends on MONO-143 + federation-hardening-e2e harness (MONO-139/140). 분석=Opus 4.7 / 구현=Sonnet 4.6 (workflow_dispatch diagnostic loop).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-144-federation-e2e-trace-tree-assertion.md` — **impl PR open**. ADR-MONO-018 D4 cross-product verification (split from MONO-143, MONO-139→140 precedent): federation-hardening-e2e stack + VictoriaTraces (ADR-007a D2 direct-OTLP, no Vector trace stage) + `observability-trace-tree.spec.ts` + `workflow_dispatch` functional GREEN. **Honest-scope gate = single `trace_id` across ≥2 federation services (console-bff + ≥1 producer); 7-span tree = observed ceiling (console-web OTLP/JSON ingestion unconfirmed + AC-6 forbids exporter swap; producer count rides MONO-140-deferred fan-out).** depends on MONO-143 + harness (MONO-139/140). 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct workflow_dispatch diagnostic loop).
 
 ## done
 
