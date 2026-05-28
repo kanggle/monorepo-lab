@@ -35,7 +35,7 @@ Additional constraints tied to `Service Type` declared in `specs/services/<servi
 
 | Service Type | Must NOT |
 |---|---|
-| `gateway` (API gateway) | Contain business logic; persist domain data; own aggregate state |
+| `rest-api` (gateway role) | Contain business logic; persist domain data; own aggregate state (a gateway is declared as Service Type `rest-api` — see `api-gateway-policy.md` — not a standalone Service Type) |
 | `rest-api` | Expose non-public internal endpoints to external traffic; bypass contract definitions |
 | `event-consumer` | Publish events that belong to another service's aggregate; skip idempotency |
 | `batch-job` | Own primary domain state; call non-public endpoints; mutate without an audit trail |

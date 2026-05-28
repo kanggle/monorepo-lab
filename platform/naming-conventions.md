@@ -86,8 +86,9 @@ Examples:
 
 # Tasks
 
-- Task IDs: `TASK-{TYPE}-{NUMBER}` where TYPE is BE, FE, or INT.
-- Task file names: `TASK-{TYPE}-{NUMBER}-{kebab-case-title}.md`
+- Task IDs: `TASK-{SCOPE}-{NUMBER}` where SCOPE identifies the owning scope — `MONO` for monorepo-level shared work, a work-type such as `BE` / `FE` / `INT`, or a project-specific prefix declared in that project's `tasks/INDEX.md`. A sub-task may append a lowercase letter suffix (e.g. `TASK-MONO-046-7a`).
+- Task file names: `TASK-{SCOPE}-{NUMBER}-{kebab-case-title}.md`
+- The authoritative registry of active task IDs is the monorepo-level `tasks/INDEX.md` and each `projects/<name>/tasks/INDEX.md`.
 
 ---
 
