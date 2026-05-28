@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-146-bff-fanout-trace-context-propagation.md` — **READY** (spec PR). console-bff fan-out **virtual-thread OTel context propagation** → unified federation trace tree (console-web SSR → console-bff → producers under one trace_id). Closes MONO-145's `unifiedTreeReached=false` documented ceiling + conforms impl to the **existing** architecture.md § Observability D7.A spec claim. Atomic root task: `CompositionEngine.fanOut` `ContextSnapshot`+`wrapExecutor` (src) + e2e `unifiedTreeReached=true` regression gate (root tests/). MONO-145 producer-join gate = before/after baseline. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
 
 ## in-progress
 
