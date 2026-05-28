@@ -39,7 +39,18 @@ try {
     # current tip matches what we last fetched) is NOT blocked on non-protected
     # branches; the first regex still catches main/master targets regardless of
     # the force flavor. TASK-MONO-043 (A) fixed this false-positive.
-    if ($command -match 'git\s+push.*\b(main|master)\b' -or
+    # TASK-MONO-150: scope the main/master target match to an actual `git push`
+    # segment + ref position. Previous `git\s+push.*\b(main|master)\b` matched
+    # across shell-operator chains (`git push origin feat && gh pr create
+    # --base main`) and hyphen-token branch names (`feature-main-fix`).
+    $pushTargetsMainMaster = $false
+    foreach ($seg in ($command -split '\s*(?:&&|\|\||;|\|)\s*')) {
+        if ($seg -match 'git\s+push\b' -and $seg -match '(?:\s|:)(main|master)(?:\s|$)') {
+            $pushTargetsMainMaster = $true
+            break
+        }
+    }
+    if ($pushTargetsMainMaster -or
         $command -match 'git\s+push\s+--force(?!-with-lease)' -or
         $command -match 'git\s+push\s+-f\b' -or
         $command -match 'git\s+reset\s+--hard\s+origin/(main|master)') {

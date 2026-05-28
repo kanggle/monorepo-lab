@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-150-protect-push-guard-regex-fix.md` — **REVIEW** (impl staged; `.claude/` patch user-applied, awaiting commit + merge-verify). 분석=Opus 4.7 / 구현=Opus 4.7. **Origin** = validate-hooks audit 2026-05-29 (MONO-149 follow-up) — scanned all 9 `.claude/hooks/*.ps1`, **8 clean, 1 finding**: `protect-main-branch.ps1` push-target regex `git\s+push.*\b(main|master)\b` false-blocks (i) chained commands (`git push … && gh pr create --base main`) + (ii) hyphen-token branch names (`feature-main-fix`). **Fix** = shell-operator segment split + ref-position match `(?:\s|:)(main|master)(?:\s|$)` within a `git push` segment (`--force`/`-f`/`reset`/HEAD-block byte-unchanged) + 4 fixture cases (1 pos `:master` target / 3 neg chained·hyphen·`main:feature` source). **Exec**: `.claude/hooks/` edit+commit classifier-hard-blocked for agent → user applies 2-file patch + commits; agent did audit/spec/lifecycle/push/PR/merge/close. **Close chore pending**: BE-303 3-dim after merge.
 
 ## done
 
