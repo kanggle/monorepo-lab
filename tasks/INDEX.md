@@ -115,11 +115,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-147-bff-leg-span-attributes.md` — **IN-PROGRESS** (impl PR). console-bff per-outbound-leg span attributes (`bff.domain`/`bff.route`) for per-domain trace attribution (architecture.md § Observability D7.A 2nd tracing bullet conformance). Atomic root task: `CompositionEngine.time` `bff.fanout.leg` span via injected `Tracer` (src) + e2e span-tag regression gate. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-147-bff-leg-span-attributes.md` — **REVIEW** (impl PR #919). console-bff per-outbound-leg span attributes (`bff.domain`/`bff.route`) for per-domain trace attribution (architecture.md § Observability D7.A 2nd tracing bullet). `CompositionEngine.time` `bff.fanout.leg` span via injected `Tracer` (src) + e2e span-tag gate. **AC-3 functional GREEN = workflow_dispatch run [26581269229](https://github.com/kanggle/monorepo-lab/actions/runs/26581269229) `8 passed (46.4s)`, 0 flaky** — `legAttributionDomains=[wms,gap,scm,finance,erp]` (all 5 legs tagged), `bffTagKeysSeen=[bff.route,bff.domain]` (tag keys survived OTLP→VictoriaTraces→Jaeger round-trip), 62-span unified trace. `Tracer` (not Observation) → no 4th metric. console-bff IT GREEN. AC-5 byte-unchanged. 분석=Opus 4.7 / 구현=Opus 4.7 (1-cycle GREEN).
 
 ## done
 
