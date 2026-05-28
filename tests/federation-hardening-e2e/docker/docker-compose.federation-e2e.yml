@@ -112,6 +112,38 @@ services:
     networks: [fed-e2e]
 
   # ---------------------------------------------------------------------------
+  # VictoriaTraces — trace backend for the ADR-MONO-018 D4 cross-product
+  # distributed-trace verification (TASK-MONO-144). Image/flags/healthcheck
+  # mirror infra/observability/docker-compose.yml (MONO-143 dev-stack).
+  #
+  # ADR-007a D2 **direct**-OTLP fallback (Vector 0.45 has no `opentelemetry`
+  # sink — see infra/observability/vector.toml TRACE INGESTION note): the
+  # OTLP-capable Spring producers + console-bff export OTLP/protobuf directly
+  # here (MANAGEMENT_OTLP_TRACING_ENDPOINT env below), and console-web exports
+  # OTLP/JSON via otel-node (OTEL_EXPORTER_OTLP_ENDPOINT). No Vector trace
+  # stage in this cohort — there is no Vector container here at all (this stack
+  # carries logs/metrics implicitly via container stdout, not a Vector spine).
+  #
+  # Host port 10428 mapped so the Playwright job (runs on the runner host)
+  # can query the Jaeger-compat API at http://localhost:10428/select/jaeger/...
+  victoriatraces:
+    image: victoriametrics/victoria-traces:v0.9.0
+    command:
+      - "--retentionPeriod=1d"
+      - "--storageDataPath=/victoria-traces-data"
+      - "--httpListenAddr=:10428"
+    tmpfs:
+      - /victoria-traces-data
+    ports: ["10428:10428"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:10428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
   # PostgreSQL sidecars — wms and scm use PostgreSQL, not MySQL.
   # Two separate instances to avoid cross-domain schema collision.
   # ---------------------------------------------------------------------------
@@ -287,10 +319,14 @@ services:
       JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
       KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       wms-postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["18091:8081"]
     networks: [fed-e2e]
     healthcheck:
@@ -324,10 +360,14 @@ services:
       JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
       KAFKA_BOOTSTRAP: 127.0.0.1:9999
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       scm-postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["18092:8080"]
     networks: [fed-e2e]
     healthcheck:
@@ -357,10 +397,14 @@ services:
       OIDC_ISSUER_URL: http://auth-service:8081
       JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
       FINANCE_ACCOUNT_PII_KEY: finance-account-dev-pii-key-32bytes!!
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["18086:8080"]
     networks: [fed-e2e]
     healthcheck:
@@ -393,10 +437,14 @@ services:
       JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
       KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["18093:8080"]
     networks: [fed-e2e]
     healthcheck:
@@ -428,6 +476,12 @@ services:
       CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://scm-procurement-service:8080
       CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
       CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://erp-masterdata-service:8080
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      # console-bff adopts console-web's inbound W3C traceparent and continues
+      # the trace; its exported spans share console-web's trace_id (the
+      # federation propagation hub).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
@@ -435,6 +489,7 @@ services:
       wms-master-service: { condition: service_started }
       scm-procurement-service: { condition: service_started }
       erp-masterdata-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["18090:8080"]
     networks: [fed-e2e]
     healthcheck:
@@ -467,10 +522,19 @@ services:
       GAP_ADMIN_API_BASE: http://admin-service:8085
       CONSOLE_BFF_URL: http://console-bff:8080
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # TASK-MONO-144 — otel-node (MONO-143 D3) starts the root SSR span +
+      # undici auto-instrumentation injects W3C traceparent into the console-bff
+      # fetch. otel-node appends `/v1/traces` to this endpoint (OTLP/JSON).
+      # Whether VictoriaTraces ingests OTLP/JSON is the MONO-144 reported
+      # unknown — see task md honest-scope note. The traceparent propagation to
+      # console-bff happens regardless of console-web's own export success.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry
+      OTEL_SERVICE_NAME: console-web
     depends_on:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
       console-bff: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
     ports: ["3000:3000"]
     networks: [fed-e2e]
     healthcheck:

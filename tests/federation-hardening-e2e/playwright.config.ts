@@ -4,7 +4,8 @@ import path from 'node:path';
 /**
  * TASK-MONO-139 — Phase 8 Federation Hardening cross-product e2e suite config.
  * ADR-MONO-018 D1 (location: root tests/), D2 (harness: Playwright on PC-FE-019..031),
- * D3 (scope: 7 spec files — 5 golden-path + 2 composition).
+ * D3 (scope: 8 spec files — 5 golden-path + 2 composition + 1 observability
+ * trace-tree, the last added by TASK-MONO-144 / ADR-MONO-018 D4).
  *
  * Mirrors projects/platform-console/apps/console-web/playwright.config.ts
  * with cross-product adjustments: testDir = ./specs, baseURL = CONSOLE_BASE_URL.

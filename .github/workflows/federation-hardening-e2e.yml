@@ -15,8 +15,9 @@ name: Federation Hardening E2E (Phase 8 cross-product, nightly)
 #      (GAP auth/account/admin + finance-account + wms-master + scm-procurement
 #      + erp-masterdata + console-bff). Uploads artifact.
 #   2. federation-hardening-e2e-fullstack (timeout 50 min): downloads boot
-#      jars, builds console-web, starts phased docker-compose stack (11+ svcs),
-#      applies seed SQL, runs 7 Playwright specs, uploads trace artifact.
+#      jars, builds console-web, starts phased docker-compose stack (12+ svcs
+#      incl. victoriatraces), applies seed SQL, runs 8 Playwright specs
+#      (+ observability-trace-tree, TASK-MONO-144), uploads trace artifact.
 #
 # Phase 8 gate (already satisfied per ADR-018 § 1.1):
 #   - ADR-MONO-017 ACCEPTED 2026-05-20 (Phase 7 LIVE)
@@ -193,11 +194,11 @@ jobs:
         run: pnpm build
 
       # --- Phase 1: Start GAP core stack ---
-      - name: Start docker compose Phase 1 (mysql + redis + kafka + GAP services)
+      - name: Start docker compose Phase 1 (mysql + redis + kafka + victoriatraces + GAP services)
         working-directory: tests/federation-hardening-e2e/docker
         run: |
           docker compose -f docker-compose.federation-e2e.yml up -d --build \
-            mysql redis kafka auth-service account-service admin-service
+            mysql redis kafka victoriatraces auth-service account-service admin-service
 
       - name: Wait for admin-service health (gates phase 1.5 seed.sql)
         # admin-service Flyway depends on account_db / auth_db being ready.
@@ -350,7 +351,7 @@ jobs:
       - name: Add auth-service to /etc/hosts (PC-FE-028 iter 7 pattern)
         run: echo "127.0.0.1 auth-service" | sudo tee -a /etc/hosts
 
-      - name: Run Playwright federation hardening e2e (7 specs, Chromium)
+      - name: Run Playwright federation hardening e2e (8 specs, Chromium)
         working-directory: tests/federation-hardening-e2e
         env:
           CONSOLE_BASE_URL: http://localhost:3000
@@ -363,6 +364,8 @@ jobs:
           E2E_SCM_BASE_URL: http://localhost:18092
           E2E_FINANCE_BASE_URL: http://localhost:18086
           E2E_ERP_BASE_URL: http://localhost:18093
+          # TASK-MONO-144 — VictoriaTraces Jaeger-compat query API (host port).
+          E2E_VICTORIATRACES_URL: http://localhost:10428
         run: pnpm exec playwright test --project=chromium
 
       - name: Dump docker compose logs on failure
