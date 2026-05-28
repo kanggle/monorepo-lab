@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-BE-006-console-bff-cross-tenant-deny-it.md` — ADR-MONO-018 D5 federation isolation regression, **console-bff slice** (lean gap-fill: producer-side ITs wms/scm/finance/GAP already exist; this + erp HTTP IT are the genuine gaps). Adds `CrossTenantDenyIntegrationTest`: forged cross-tenant (JWT `tenant_id=gap` + `X-Tenant-Id=scm`, all 5 producers 403) → BFF forwards `X-Tenant-Id` **verbatim** + surfaces per-card `PERMISSION_DENIED` in a 200 envelope (producer-side authority invariant, no central BFF gate). test-only. 분석=Opus 4.7 / 구현=Opus 4.7 (isolation → Opus).
 
 ## in-progress
 
