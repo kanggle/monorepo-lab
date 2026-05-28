@@ -111,11 +111,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-145-federation-trace-tree-producer-join.md` — **READY** (spec PR). ADR-MONO-018 D4 follow-up: strengthen `tests/federation-hardening-e2e/specs/observability-trace-tree.spec.ts` to wait for + assert the **console-bff→producer** trace join (one `trace_id` co-assembling a console-bff span + ≥1 producer server span), lifting the MONO-144 "observed ceiling" into a `workflow_dispatch`-verified regression gate. `tests/` only — propagation already wired in `RestClientConfig` (no `projects/*/apps/*/src/**` change). MONO-144's spec only inspected the single richest trace; the per-leg `console-bff→producer` traces (virtual-thread fan-out forks each leg's trace) were never searched. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-145-federation-trace-tree-producer-join.md` — **IN-PROGRESS** (impl PR). ADR-MONO-018 D4 follow-up: strengthen `tests/federation-hardening-e2e/specs/observability-trace-tree.spec.ts` to wait for + assert the **console-bff→producer** trace join (one `trace_id` co-assembling a console-bff span + ≥1 producer server span), lifting the MONO-144 "observed ceiling" into a `workflow_dispatch`-verified regression gate. `tests/` only — propagation already wired in `RestClientConfig` (no `projects/*/apps/*/src/**` change). 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
 
 ## review
 
