@@ -121,20 +121,23 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT" up -d
 
 # ---------- Wait for health -------------------------------------------------
 
+# 4 healthchecked services: vector / victorialogs / victoriametrics +
+# victoriatraces (ADR-MONO-007a D1 trace layer).
+EXPECTED_HEALTHY=4
 deadline=$((START_EPOCH + 30))
 while [ "$(date +%s)" -lt "$deadline" ]; do
   healthy=$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps --format json | \
     awk -F'"Health":"' '/"Health"/ { split($2,a,"\""); print a[1] }' | \
     grep -c '^healthy$' || true)
-  if [ "$healthy" = "3" ]; then
+  if [ "$healthy" = "$EXPECTED_HEALTHY" ]; then
     break
   fi
   sleep 2
 done
 
-if [ "$healthy" != "3" ]; then
+if [ "$healthy" != "$EXPECTED_HEALTHY" ]; then
   emit_4block "OBSERVE-SCAFFOLD-03" \
-    "Stack health check timeout — at least one of (vector / victorialogs / victoriametrics) did not report healthy within 30 s." \
+    "Stack health check timeout — at least one of (vector / victorialogs / victoriametrics / victoriatraces) did not report healthy within 30 s ($healthy/$EXPECTED_HEALTHY healthy)." \
     "$COMPOSE_FILE" \
     "  1. Inspect logs: docker compose -p $PROJECT logs
   2. Verify image versions are pullable (check internet connectivity).
