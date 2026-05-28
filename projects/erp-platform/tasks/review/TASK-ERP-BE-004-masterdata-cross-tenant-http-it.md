@@ -8,7 +8,7 @@ masterdata-service HTTP-layer cross-tenant isolation IT (ADR-MONO-018 D5 — fed
 
 # Status
 
-ready
+review
 
 # Owner
 
