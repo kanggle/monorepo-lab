@@ -115,11 +115,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-145-federation-trace-tree-producer-join.md` — **IN-PROGRESS** (impl PR). ADR-MONO-018 D4 follow-up: strengthen `tests/federation-hardening-e2e/specs/observability-trace-tree.spec.ts` to wait for + assert the **console-bff→producer** trace join (one `trace_id` co-assembling a console-bff span + ≥1 producer server span), lifting the MONO-144 "observed ceiling" into a `workflow_dispatch`-verified regression gate. `tests/` only — propagation already wired in `RestClientConfig` (no `projects/*/apps/*/src/**` change). 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, workflow_dispatch diagnostic loop).
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-145-federation-trace-tree-producer-join.md` — **REVIEW** (impl PR #913). ADR-MONO-018 D4 follow-up: strengthened `tests/federation-hardening-e2e/specs/observability-trace-tree.spec.ts` to assert the **console-bff→producer** trace join (one `trace_id` co-assembling a console-bff span + ≥1 producer server span), lifting the MONO-144 "observed ceiling" into a regression gate. **AC-4 functional GREEN = workflow_dispatch run [26575565435](https://github.com/kanggle/monorepo-lab/actions/runs/26575565435) `8 passed (48.0s)`, 0 flaky**; producerUnion = all 4 OTLP producers (finance/erp/wms-master/scm) joined per-leg; `unifiedTreeReached=false` (per-leg join, unified tree = documented ceiling). AC-3 src diff empty. 분석=Opus 4.7 / 구현=Opus 4.7 (dispatcher-direct, 1-cycle GREEN).
 
 ## done
 
