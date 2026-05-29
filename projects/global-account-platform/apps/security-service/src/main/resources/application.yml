@@ -89,6 +89,15 @@ security-service:
     jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
     issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
 
+# TASK-BE-318 (ADR-005 단계 3): outbound /internal/** calls to account-service authenticate
+# with a GAP client_credentials Bearer JWT (replaces the legacy X-Internal-Token). Token is
+# fetched from GAP /oauth2/token and cached by GapClientCredentialsTokenProvider.
+gap:
+  internal-client:
+    token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+    client-id: ${SECURITY_SERVICE_CLIENT_ID:security-service-client}
+    client-secret: ${SECURITY_SERVICE_CLIENT_SECRET:secret}
+
 security:
   detection:
     velocity:

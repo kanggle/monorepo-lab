@@ -18,10 +18,14 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("AccountServiceClient 단위 테스트")
 class AccountServiceClientUnitTest {
@@ -43,7 +47,12 @@ class AccountServiceClientUnitTest {
         autoLock.setReadTimeoutMs(5000);
         props.setAutoLock(autoLock);
 
-        client = new AccountServiceClient(props, new ObjectMapper(), new SimpleMeterRegistry(), "");
+        // TASK-BE-318: token provider mocked so the unit test exercises lock logic without a
+        // real GAP /oauth2/token endpoint; returns a fixed bearer used in the header assertion.
+        GapClientCredentialsTokenProvider tokenProvider = mock(GapClientCredentialsTokenProvider.class);
+        when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+
+        client = new AccountServiceClient(props, new ObjectMapper(), new SimpleMeterRegistry(), tokenProvider);
     }
 
     @AfterEach
@@ -80,6 +89,23 @@ class AccountServiceClientUnitTest {
         LockResult result = client.lock(buildEvent("acc-1"));
 
         assertThat(result.status()).isEqualTo(Status.ALREADY_LOCKED);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-318: lock 호출에 Authorization: Bearer 헤더를 첨부하고 X-Internal-Token 은 보내지 않는다")
+    void lock_attachesBearerHeader_noXInternalToken() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"previousStatus\":\"ACTIVE\"," +
+                                "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-01-01T00:00:00Z\"}")));
+
+        client.lock(buildEvent("acc-1"));
+
+        wireMock.verify(postRequestedFor(urlPathMatching("/internal/accounts/.*/lock"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withoutHeader("X-Internal-Token"));
     }
 
     @Test

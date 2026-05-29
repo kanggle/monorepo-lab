@@ -75,6 +75,11 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         // Point auto-lock client at WireMock, fast timeouts.
         registry.add("security.detection.auto-lock.account-service-base-url",
                 () -> "http://localhost:" + wireMockServer.port());
+        // TASK-BE-318: the auto-lock client now fetches a GAP client_credentials Bearer token.
+        // Point the token endpoint at the same WireMock (stubbed in setUp) so the lock call
+        // authenticates without a real auth-service.
+        registry.add("gap.internal-client.token-uri",
+                () -> "http://localhost:" + wireMockServer.port() + "/oauth2/token");
         registry.add("security.detection.auto-lock.max-attempts", () -> "1");
         registry.add("security.detection.auto-lock.initial-backoff-ms", () -> "50");
         registry.add("security.detection.auto-lock.connect-timeout-ms", () -> "2000");
@@ -100,6 +105,13 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         wireMockServer.resetAll();
+        // TASK-BE-318: stub the GAP client_credentials token endpoint so the auto-lock client can
+        // obtain a Bearer token. resetAll() clears stubs, so (re)register it each test.
+        wireMockServer.stubFor(post(urlEqualTo("/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-jwt\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
