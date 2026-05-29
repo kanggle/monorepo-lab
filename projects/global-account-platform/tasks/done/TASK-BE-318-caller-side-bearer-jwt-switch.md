@@ -8,7 +8,7 @@ TASK-BE-318
 
 # Status
 
-ready
+done
 
 # Owner
 
