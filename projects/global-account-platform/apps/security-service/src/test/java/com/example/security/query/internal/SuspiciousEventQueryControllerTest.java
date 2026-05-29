@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,6 +49,12 @@ class SuspiciousEventQueryControllerTest {
 
     @MockitoBean
     private SecurityQueryService queryService;
+
+    // TASK-BE-317: InternalAuthFilter now depends on a JwtDecoder (dual-allow). These slice tests
+    // exercise the X-Internal-Token path only (no Bearer header), so the decoder is never invoked;
+    // the mock just satisfies the bean dependency.
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     private static final String TOKEN = "test-internal-token";
 

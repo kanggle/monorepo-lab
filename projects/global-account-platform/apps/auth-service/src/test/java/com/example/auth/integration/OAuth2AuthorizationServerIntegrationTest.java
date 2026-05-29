@@ -3,7 +3,14 @@ package com.example.auth.integration;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
 import org.junit.jupiter.api.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+
+import java.security.interfaces.RSAPublicKey;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -248,5 +255,48 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
                             .as("Must not be 404 (route missing) — SAS must not have swallowed the route")
                             .isNotEqualTo(404);
                 });
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. TASK-BE-317 — GAP-internal service workload client (ADR-005 단계 1)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(7)
+    @DisplayName("TASK-BE-317: account-service-client (client_credentials) issues a JWKS-verifiable JWT with INTERNAL tenant claims")
+    void clientCredentials_internalServiceClient_issuesJwksVerifiableToken() throws Exception {
+        String basicAuth = "Basic " + Base64.getEncoder()
+                .encodeToString("account-service-client:secret".getBytes());
+
+        // AC-1: token endpoint returns 200 + access_token for the seeded GAP-internal svc client.
+        MvcResult result = mockMvc.perform(post("/oauth2/token")
+                        .header(HttpHeaders.AUTHORIZATION, basicAuth)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "internal.invoke"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.token_type").value("Bearer"))
+                .andReturn();
+
+        String accessToken = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("access_token").asText();
+
+        // AC-2: the token is verifiable via the GAP JWKS (signature) and carries the GAP issuer
+        // plus the service-identity / INTERNAL tenant claims.
+        String jwksJson = mockMvc.perform(get("/oauth2/jwks"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        RSAKey rsaKey = JWKSet.parse(jwksJson).getKeys().get(0).toRSAKey();
+        RSAPublicKey publicKey = rsaKey.toRSAPublicKey();
+        JwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
+
+        Jwt jwt = decoder.decode(accessToken); // throws if the signature or exp is invalid
+        assertThat(jwt.getIssuer()).as("iss claim must be the GAP issuer").isNotNull();
+        assertThat(jwt.getSubject())
+                .as("client_credentials principal == client_id (service identity)")
+                .isEqualTo("account-service-client");
+        assertThat(jwt.getClaimAsString("tenant_id")).isEqualTo("global-account-platform");
+        assertThat(jwt.getClaimAsString("tenant_type")).isEqualTo("INTERNAL");
     }
 }

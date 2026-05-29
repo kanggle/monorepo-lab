@@ -81,6 +81,13 @@ security-service:
   dedup:
     redis-ttl-seconds: ${DEDUP_REDIS_TTL:86400}
   internal-token: ${INTERNAL_SERVICE_TOKEN:}
+  # TASK-BE-317 (ADR-005 단계 2): /internal/** also accepts a GAP-issued client_credentials
+  # JWT (Authorization: Bearer) alongside X-Internal-Token. Decoder validates signature
+  # (JWKS) + issuer only — security-service serves all tenants, so no tenant_id pinning.
+  # JWKS is fetched lazily (no OIDC discovery at startup).
+  internal-jwt:
+    jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
+    issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
 
 security:
   detection:
