@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -36,17 +35,17 @@ public class AccountServiceClient implements AccountLockClient {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final DetectionProperties.AutoLock cfg;
-    private final String internalToken;
+    private final GapClientCredentialsTokenProvider tokenProvider;
     private final Counter retryCounter;
     private final Counter failureCounter;
 
     public AccountServiceClient(DetectionProperties properties,
                                 ObjectMapper objectMapper,
                                 MeterRegistry meterRegistry,
-                                @Value("${security-service.internal-token:}") String internalToken) {
+                                GapClientCredentialsTokenProvider tokenProvider) {
         this.cfg = properties.getAutoLock();
         this.objectMapper = objectMapper;
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(cfg.getConnectTimeoutMs()))
                 .build();
@@ -80,9 +79,9 @@ public class AccountServiceClient implements AccountLockClient {
                         .header("Content-Type", "application/json")
                         .header("Idempotency-Key", event.getId())
                         .POST(HttpRequest.BodyPublishers.ofString(body));
-                if (internalToken != null && !internalToken.isBlank()) {
-                    reqBuilder.header("X-Internal-Token", internalToken);
-                }
+                // TASK-BE-318: authenticate via GAP client_credentials Bearer JWT
+                // (account-service /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                reqBuilder.header("Authorization", "Bearer " + tokenProvider.currentBearer());
                 HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
                 int code = resp.statusCode();
                 if (code == 200) {
