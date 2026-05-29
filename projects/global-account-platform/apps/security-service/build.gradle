@@ -12,6 +12,13 @@ dependencies {
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')
 
+    // TASK-BE-317 (ADR-005 단계 2): verify GAP client_credentials JWTs on /internal/**
+    // (dual-allow with the legacy X-Internal-Token). Only the JOSE/decoder module is
+    // pulled in — NOT spring-boot-starter-oauth2-resource-server — because security-service
+    // has no Spring Security web filter chain and must not gain a default (lock-everything)
+    // chain. NimbusJwtDecoder is used directly inside InternalAuthFilter.
+    implementation 'org.springframework.security:spring-security-oauth2-jose'
+
     // Spring Boot starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

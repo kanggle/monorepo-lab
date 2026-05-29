@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -21,12 +22,19 @@ import java.util.Set;
 
 /**
  * Filter that enforces authentication on /internal/** endpoints.
- * Checks for X-Internal-Token header and validates it against the configured token.
- * Returns 403 PERMISSION_DENIED in the standard error format if missing or invalid.
  *
- * <p>A blank token is only permitted when running under 'test' or 'standalone' profiles.
- * In all other profiles a blank token logs a WARN at startup and every internal request
- * is rejected with 403.</p>
+ * <p><b>TASK-BE-317 (ADR-005 단계 2 — dual-allow):</b> a request is accepted when it carries
+ * <em>either</em> a valid static {@code X-Internal-Token} <em>or</em> a valid GAP
+ * {@code client_credentials} JWT ({@code Authorization: Bearer}). The JWT is verified with a
+ * {@link org.springframework.security.oauth2.jwt.JwtDecoder} backed by GAP's JWKS (signature +
+ * issuer). security-service has no Spring Security web filter chain, so the JWT verification is
+ * performed directly here rather than via {@code oauth2ResourceServer} (see
+ * {@link InternalJwtDecoderConfig}). When neither credential is valid the request is rejected with
+ * 403 PERMISSION_DENIED in the standard error format (fail-closed, contract preserved).
+ *
+ * <p>A blank token is only permitted when running under 'test' or 'standalone' profiles; in those
+ * profiles every internal request passes (legacy dev/test bypass). In all other profiles a blank
+ * token means the X-Internal-Token path can never match — only a valid JWT is accepted.
  */
 @Slf4j
 @Component
@@ -35,19 +43,23 @@ public class InternalAuthFilter implements Filter {
 
     private static final String INTERNAL_PATH_PREFIX = "/internal/";
     private static final String TOKEN_HEADER = "X-Internal-Token";
+    private static final String BEARER_PREFIX = "Bearer ";
     private static final Set<String> BLANK_TOKEN_ALLOWED_PROFILES = Set.of("test", "standalone");
 
     private final String expectedToken;
     private final ObjectMapper objectMapper;
     private final Environment environment;
+    private final org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
 
     public InternalAuthFilter(
             @Value("${security-service.internal-token:}") String expectedToken,
             ObjectMapper objectMapper,
-            Environment environment) {
+            Environment environment,
+            org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder) {
         this.expectedToken = expectedToken;
         this.objectMapper = objectMapper;
         this.environment = environment;
+        this.jwtDecoder = jwtDecoder;
     }
 
     @PostConstruct
@@ -56,8 +68,9 @@ public class InternalAuthFilter implements Filter {
             if (isBlankTokenAllowedProfile()) {
                 log.info("Internal auth token is blank; permitted in current profile");
             } else {
-                log.warn("security-service.internal-token is blank — all /internal/** requests will be rejected. "
-                        + "Set the token property or run with 'test'/'standalone' profile to bypass.");
+                log.warn("security-service.internal-token is blank — /internal/** requests authenticate "
+                        + "only via GAP JWT (Authorization: Bearer). Set the token property or run with "
+                        + "'test'/'standalone' profile to bypass.");
             }
         }
     }
@@ -74,26 +87,53 @@ public class InternalAuthFilter implements Filter {
             return;
         }
 
-        // Allow blank token only in test/standalone profiles
+        // Dev/test bypass: blank token under test/standalone profiles accepts everything.
+        if ((expectedToken == null || expectedToken.isBlank()) && isBlankTokenAllowedProfile()) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // Accept path 1: valid static X-Internal-Token.
+        if (internalTokenValid(httpRequest)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // Accept path 2 (TASK-BE-317): valid GAP client_credentials JWT.
+        if (bearerJwtValid(httpRequest)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        log.warn("Unauthorized access attempt to internal endpoint: path={}, remoteAddr={}",
+                path, httpRequest.getRemoteAddr());
+        writePermissionDenied((HttpServletResponse) response);
+    }
+
+    private boolean internalTokenValid(HttpServletRequest request) {
         if (expectedToken == null || expectedToken.isBlank()) {
-            if (isBlankTokenAllowedProfile()) {
-                chain.doFilter(request, response);
-                return;
-            }
-            log.warn("Rejecting internal request — no token configured: path={}", path);
-            writePermissionDenied((HttpServletResponse) response);
-            return;
+            return false;
         }
+        String providedToken = request.getHeader(TOKEN_HEADER);
+        return expectedToken.equals(providedToken);
+    }
 
-        String providedToken = httpRequest.getHeader(TOKEN_HEADER);
-        if (providedToken == null || !expectedToken.equals(providedToken)) {
-            log.warn("Unauthorized access attempt to internal endpoint: path={}, remoteAddr={}",
-                    path, httpRequest.getRemoteAddr());
-            writePermissionDenied((HttpServletResponse) response);
-            return;
+    private boolean bearerJwtValid(HttpServletRequest request) {
+        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            return false;
         }
-
-        chain.doFilter(request, response);
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        if (token.isEmpty()) {
+            return false;
+        }
+        try {
+            jwtDecoder.decode(token);
+            return true;
+        } catch (org.springframework.security.oauth2.jwt.JwtException e) {
+            log.warn("Internal request presented an invalid GAP JWT: {}", e.getMessage());
+            return false;
+        }
     }
 
     private boolean isBlankTokenAllowedProfile() {

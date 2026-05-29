@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-317-service-to-service-client-credentials-jwt-dual-accept.md` — **READY** (ADR-005 옵션 A 단계 1+2, 무중단). 서비스 간 인증을 정적 `X-Internal-Token` → GAP `client_credentials` 단기 JWT 로. GAP 서비스 client 등록 + 수신측(account/security) `/internal/**` JWKS JWT 검증 **추가하되 X-Internal-Token 병행 허용**(회귀 0). 후속 BE-318(호출측 전환)·BE-319(정적 토큰 제거 + 계약 spec 10개 갱신). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (cross-service 보안 — SecurityConfig 다중 + SAS client_credentials).
 
 ## in-progress
 

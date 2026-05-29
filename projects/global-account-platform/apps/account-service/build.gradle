@@ -19,6 +19,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    // TASK-BE-317: verify GAP client_credentials JWT on /internal/** (dual-allow with
+    // the legacy X-Internal-Token during the ADR-005 단계 2 migration window).
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
