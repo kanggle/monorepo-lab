@@ -8,7 +8,7 @@ TASK-MONO-151
 
 # Status
 
-review
+done
 
 # Owner
 
