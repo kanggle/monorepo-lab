@@ -77,7 +77,7 @@ spring:
           audiences: ${GATEWAY_AUDIENCE}   # e.g., wms
 ```
 
-Custom `account_type` enforcement is added as a reactive `GlobalFilter` (see WMS gateway pattern in `projects/wms-platform/apps/gateway-service`).
+Custom `account_type` enforcement is added as a reactive `GlobalFilter` (see the `backend/gateway-security` skill for the edge-gateway filter pattern).
 
 ---
 

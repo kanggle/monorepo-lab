@@ -101,7 +101,7 @@ Required alerts:
 class OrderEventConsumerIntegrationTest {
 
     @Container
-    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0"));
 
     @Test
     void duplicateDeliveryProducesSingleSideEffect() {
