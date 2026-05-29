@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-032-console-web-dockerignore-windows-build-fix.md` — **READY** (build-infra fix). `console-web` 누락된 `.dockerignore` 추가 — Dockerfile builder `COPY . .` 가 host(Windows-native) `node_modules` 로 alpine `node_modules` 를 덮어써 `MODULE_NOT_FOUND` 빌드 실패하던 갭(CI Linux 무영향, Windows 로컬 전용). Dockerfile line 7 주석이 이미 전제. 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 (단일 파일, 빌드 인프라).
 
 ## in-progress
 
