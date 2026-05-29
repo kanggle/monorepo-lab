@@ -104,6 +104,7 @@ Codes activated by the `transactional` trait declared in `PROJECT.md`. Expected 
 | Code | HTTP | Description |
 |---|---|---|
 | CONFLICT | 409 | Optimistic lock collision on concurrent update (`version` mismatch) |
+| CONCURRENT_MODIFICATION | 409 | Registered descriptive alias of `CONFLICT` (same optimistic-lock 409 shape). Emitted on contract surfaces that prefer the descriptive name for readability (erp masterdata, fintech account); treat as equivalent to `CONFLICT` |
 | STATE_TRANSITION_INVALID | 422 | Requested state transition is not allowed from the current aggregate state |
 | DUPLICATE_REQUEST | 409 | Same `Idempotency-Key` replayed with a different request body/hash on the same endpoint |
 | IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header absent on a mutating endpoint that requires it (T1). Emitted by handler-side `MissingRequestHeaderException` guard, not a domain exception |

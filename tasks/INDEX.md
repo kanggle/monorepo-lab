@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-151-validate-rules-warnings.md` — **REVIEW** (impl bundled branch; awaiting close chore). 분석=Opus 4.7 / 구현=Opus 4.7. **Origin** = `/validate-rules` full scan 2026-05-29 (read-only, MONO-149/150 직후) → Critical 0 / Warning 3 / Info 5. 본 task = Warning 3건 closure (Info 5 비차단 deferred). **3 fixes**: (1) `platform/error-handling.md` Transactional Trait 표에 `CONCURRENT_MODIFICATION` registry alias 행 추가 (409, `CONFLICT` 등가 — erp/fintech 가 readability 위해 쓰는 descriptive name 을 정식 등록; rename 아님, prose note 무변경); (2) `.claude/skills/service-types/event-consumer-setup/SKILL.md` Kafka 이미지 `confluentinc/cp-kafka:7.5.0`→`apache/kafka:3.7.0` (testcontainers skill 정전과 통일); (3) `.claude/skills/service-types/identity-platform-setup/SKILL.md` 구체 프로젝트 경로 `projects/wms-platform/apps/gateway-service` 제거 → `backend/gateway-security` skill 참조 (shared project-agnostic). 동작 영향 0. 3 수정 모두 `platform/`+`.claude/skills/` = classifier `.claude/hooks|agents|commands` block 대상 아님 → agent end-to-end.
 
 ## done
 
