@@ -104,6 +104,8 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
         registry.add("admin.auth-service.base-url", wireMock::baseUrl);
         registry.add("admin.account-service.base-url", wireMock::baseUrl);
         registry.add("admin.security-service.base-url", wireMock::baseUrl);
+        // TASK-BE-318b: account (tenant) client fetches a GAP client_credentials Bearer token.
+        registry.add("gap.internal-client.token-uri", () -> wireMock.baseUrl() + "/oauth2/token");
     }
 
     @Autowired MockMvc mockMvc;
@@ -112,6 +114,12 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void resetAndSeed() {
         wireMock.resetAll();
+        // TASK-BE-318b: stub the GAP token endpoint so the tenant client can obtain a Bearer token.
+        wireMock.stubFor(WireMock.post(WireMock.urlEqualTo("/oauth2/token"))
+                .willReturn(WireMock.aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-jwt\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
         seedSuperAdmin();
         seedRegularOp();
     }

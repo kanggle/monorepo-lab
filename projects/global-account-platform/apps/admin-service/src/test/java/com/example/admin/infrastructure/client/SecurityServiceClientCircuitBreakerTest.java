@@ -47,11 +47,14 @@ class SecurityServiceClientCircuitBreakerTest {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
 
+        GapClientCredentialsTokenProvider tokenProvider =
+                org.mockito.Mockito.mock(GapClientCredentialsTokenProvider.class);
+        org.mockito.Mockito.when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         client = new SecurityServiceClient(
                 "http://localhost:" + wireMock.port(),
                 500,
                 1000,
-                "test-token");
+                tokenProvider);
 
         CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
                 .failureRateThreshold(50f)

@@ -30,14 +30,14 @@ import java.util.Map;
 public class AccountServiceClient {
 
     private final RestClient restClient;
-    private final String internalToken;
+    private final GapClientCredentialsTokenProvider tokenProvider;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AccountServiceClient(
             @Value("${admin.account-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            @Value("${admin.downstream.internal-token:}") String internalToken) {
+            GapClientCredentialsTokenProvider tokenProvider) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -48,7 +48,7 @@ public class AccountServiceClient {
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
     }
 
     @Retry(name = "accountService")
@@ -60,11 +60,7 @@ public class AccountServiceClient {
                             .path("/internal/accounts")
                             .queryParam("email", email)
                             .build())
-                    .headers(h -> {
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
-                    })
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(org.springframework.http.HttpStatusCode::isError, (req, resp) -> {
                         throw org.springframework.web.client.HttpClientErrorException.create(
@@ -91,11 +87,7 @@ public class AccountServiceClient {
                             .queryParam("page", page)
                             .queryParam("size", size)
                             .build())
-                    .headers(h -> {
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
-                    })
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(org.springframework.http.HttpStatusCode::isError, (req, resp) -> {
                         throw org.springframework.web.client.HttpClientErrorException.create(
@@ -176,9 +168,9 @@ public class AccountServiceClient {
                     .uri(path)
                     .headers(h -> {
                         if (operatorId != null) h.add("X-Operator-ID", operatorId);
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
+                        // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
+                        // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                        h.setBearerAuth(tokenProvider.currentBearer());
                     })
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {
@@ -211,9 +203,8 @@ public class AccountServiceClient {
                     .headers(h -> {
                         h.add("Idempotency-Key", idempotencyKey);
                         if (operatorId != null) h.add("X-Operator-ID", operatorId);
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
+                        // TASK-BE-318b: GAP client_credentials Bearer JWT (replaces X-Internal-Token).
+                        h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
                     })
                     .body(body)

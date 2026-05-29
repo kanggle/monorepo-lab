@@ -46,11 +46,14 @@ class AccountServiceClientResilienceTest {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
 
+        GapClientCredentialsTokenProvider tokenProvider =
+                org.mockito.Mockito.mock(GapClientCredentialsTokenProvider.class);
+        org.mockito.Mockito.when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         client = new AccountServiceClient(
                 "http://localhost:" + wireMock.port(),
                 1000,
                 2000,
-                "test-token");
+                tokenProvider);
 
         // Mirror application.yml: maxAttempts=3, ignore NonRetryableDownstreamException
         RetryConfig retryConfig = RetryConfig.custom()
