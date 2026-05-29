@@ -72,7 +72,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-317-service-to-service-client-credentials-jwt-dual-accept.md` — **READY** (ADR-005 옵션 A 단계 1+2, 무중단). 서비스 간 인증을 정적 `X-Internal-Token` → GAP `client_credentials` 단기 JWT 로. GAP 서비스 client 등록 + 수신측(account/security) `/internal/**` JWKS JWT 검증 **추가하되 X-Internal-Token 병행 허용**(회귀 0). 후속 BE-318(호출측 전환)·BE-319(정적 토큰 제거 + 계약 spec 10개 갱신). 분석=Opus 4.7 / 구현 권장=Opus 4.7 (cross-service 보안 — SecurityConfig 다중 + SAS client_credentials).
+> BE-317(단계 1+2 수신측 dual-allow) + BE-318(단계 3a security 호출측) 은 **done/** 으로 종결됨. 아래는 ADR-005 무중단 마이그레이션의 잔여 호출측 전환(3b/3c) + 정적 토큰 제거(단계 4).
+
+- `TASK-BE-318b-admin-caller-bearer-jwt-switch.md` — **READY** (ADR-005 단계 3b). admin-service 의 account/security `/internal/**` 호출을 X-Internal-Token → GAP `client_credentials` Bearer JWT 로 (admin-service-client). admin→auth 는 auth permitAll 이라 X-token 유지. Blueprint=BE-318(security). 주의: admin 클라이언트 테스트 4종 + account/security 호출 trigger IT footprint. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (BE-318 패턴 복제 — 단, admin IT 토큰 엔드포인트 처리 주의).
+- `TASK-BE-318c-auth-caller-bearer-jwt-switch.md` — **READY** (ADR-005 단계 3c). auth-service 의 account `/internal/**` 호출(현재 **무인증** — 잠재 401 갭)에 Bearer JWT 첨부 (auth-service-client, self-call lazy). Blueprint=BE-318. 주의: account 호출 trigger auth IT 약 6종 토큰 엔드포인트 처리(MockMvc self-call 불가) 필요. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (패턴 복제 — IT footprint 주의).
+- `TASK-BE-319-receiver-static-token-removal-and-contract-update.md` — **READY** (ADR-005 단계 4). 수신측 account/security `/internal/**` 의 정적 X-Internal-Token 제거(JWT 단일) + 내부 계약 spec 인증 절 갱신 + docker-compose `INTERNAL_API_TOKEN` 정리. ⚠️ **선행**: security 부분=BE-318b 후 / account 부분=BE-318(완료)+BE-318b+BE-318c+**membership→account 전환(BE-253 follow-up 미완 블로커)** 모두 후. BE-319a(security)/BE-319b(account) 분할 권장. 분석=Opus 4.8 / 구현 권장=Opus 4.8 (계약 SoT + 다중 서비스 제거 + 선행 게이팅 판단).
 
 ## in-progress
 
