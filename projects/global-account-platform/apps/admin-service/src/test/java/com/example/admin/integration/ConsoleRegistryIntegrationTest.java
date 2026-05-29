@@ -122,6 +122,20 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         registry.add("admin.auth-service.base-url", wireMock::baseUrl);
         registry.add("admin.account-service.base-url", wireMock::baseUrl);
         registry.add("admin.security-service.base-url", wireMock::baseUrl);
+        // TASK-BE-318b: account (tenant) client fetches a GAP client_credentials Bearer token.
+        registry.add("gap.internal-client.token-uri", () -> wireMock.baseUrl() + "/oauth2/token");
+    }
+
+    /**
+     * TASK-BE-318b: stub the GAP client_credentials token endpoint so the tenant client can
+     * obtain a Bearer token. resetAll() clears stubs, so (re)register after every reset.
+     */
+    private static void stubGapTokenEndpoint() {
+        wireMock.stubFor(WireMock.post(WireMock.urlEqualTo("/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-jwt\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
     }
 
     @Autowired MockMvc mockMvc;
@@ -168,6 +182,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void resetAndSeed() {
         wireMock.resetAll();
+        stubGapTokenEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -266,6 +281,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("account-service tenant list 5xx → 503 (no partial catalog)")
     void accountServiceDown_returns503() throws Exception {
         wireMock.resetAll();
+        stubGapTokenEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse().withStatus(503)
                         .withHeader("Content-Type", "application/json")
@@ -327,6 +343,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         // Override the WireMock tenant stub for this test: all 5 slugs ACTIVE so
         // the tenant-selection rule can populate finance.tenants and erp.tenants.
         wireMock.resetAll();
+        stubGapTokenEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -358,6 +375,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     void singleTenantErpOperator_seesErpInteractive_financeEmpty() throws Exception {
         // Override the WireMock tenant stub for this test: all 5 slugs ACTIVE.
         wireMock.resetAll();
+        stubGapTokenEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)

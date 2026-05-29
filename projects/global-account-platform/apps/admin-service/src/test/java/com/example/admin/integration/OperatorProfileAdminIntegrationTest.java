@@ -131,6 +131,8 @@ class OperatorProfileAdminIntegrationTest extends AbstractIntegrationTest {
         registry.add("admin.auth-service.base-url", wireMock::baseUrl);
         registry.add("admin.account-service.base-url", wireMock::baseUrl);
         registry.add("admin.security-service.base-url", wireMock::baseUrl);
+        // TASK-BE-318b: GAP client_credentials token endpoint → same WireMock (stubbed in stubTenantList).
+        registry.add("gap.internal-client.token-uri", () -> wireMock.baseUrl() + "/oauth2/token");
     }
 
     @Autowired MockMvc mockMvc;
@@ -144,6 +146,12 @@ class OperatorProfileAdminIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void stubTenantList() {
         wireMock.resetAll();
+        // TASK-BE-318b: account client fetches a GAP client_credentials Bearer token first.
+        wireMock.stubFor(WireMock.post(WireMock.urlEqualTo("/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-jwt\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)

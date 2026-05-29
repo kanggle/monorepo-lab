@@ -36,13 +36,13 @@ import java.util.List;
 public class SecurityServiceClient {
 
     private final RestClient restClient;
-    private final String internalToken;
+    private final GapClientCredentialsTokenProvider tokenProvider;
 
     public SecurityServiceClient(
             @Value("${admin.security-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            @Value("${admin.downstream.internal-token:}") String internalToken) {
+            GapClientCredentialsTokenProvider tokenProvider) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
@@ -52,7 +52,7 @@ public class SecurityServiceClient {
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
     }
 
     @Retry(name = "securityService")
@@ -79,7 +79,7 @@ public class SecurityServiceClient {
                             .queryParamIfPresent("from", java.util.Optional.ofNullable(from))
                             .queryParamIfPresent("to", java.util.Optional.ofNullable(to))
                             .build())
-                    .headers(this::applyInternalToken)
+                    .headers(this::applyAuth)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {
                         throw HttpClientErrorException.create(
@@ -103,10 +103,10 @@ public class SecurityServiceClient {
         }
     }
 
-    private void applyInternalToken(org.springframework.http.HttpHeaders h) {
-        if (internalToken != null && !internalToken.isBlank()) {
-            h.add("X-Internal-Token", internalToken);
-        }
+    // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
+    // (security /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+    private void applyAuth(org.springframework.http.HttpHeaders h) {
+        h.setBearerAuth(tokenProvider.currentBearer());
     }
 
     public record LoginHistoryEntry(

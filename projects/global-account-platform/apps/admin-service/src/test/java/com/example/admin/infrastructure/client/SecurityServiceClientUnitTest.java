@@ -13,11 +13,15 @@ import java.time.Instant;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("SecurityServiceClient 단위 테스트")
 class SecurityServiceClientUnitTest {
@@ -32,7 +36,10 @@ class SecurityServiceClientUnitTest {
     void setUp() {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
-        client = new SecurityServiceClient(wireMock.baseUrl(), 3000, 5000, "");
+        // TASK-BE-318b: token provider mocked — returns a fixed bearer for the header assertion.
+        GapClientCredentialsTokenProvider tokenProvider = mock(GapClientCredentialsTokenProvider.class);
+        when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+        client = new SecurityServiceClient(wireMock.baseUrl(), 3000, 5000, tokenProvider);
     }
 
     @AfterEach
@@ -75,6 +82,22 @@ class SecurityServiceClientUnitTest {
 
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).signalType()).isEqualTo("CREDENTIAL_STUFFING");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-318b: 호출에 Authorization: Bearer 헤더를 첨부하고 X-Internal-Token 은 보내지 않는다")
+    void query_attachesBearerHeader_noXInternalToken() {
+        wireMock.stubFor(get(urlPathMatching("/internal/security/login-history.*"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[]}")));
+
+        client.queryLoginHistory("acc-1", FROM, TO);
+
+        wireMock.verify(getRequestedFor(urlPathMatching("/internal/security/login-history.*"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withoutHeader("X-Internal-Token"));
     }
 
     @Test

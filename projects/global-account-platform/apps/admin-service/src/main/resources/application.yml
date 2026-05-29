@@ -119,6 +119,19 @@ admin:
   security-service:
     base-url: ${SECURITY_SERVICE_URL:http://localhost:8084}
 
+# TASK-BE-318b (ADR-005 단계 3b): outbound /internal/** calls to account-service
+# (AccountServiceClient, AccountServiceTenantClient) and security-service
+# (SecurityServiceClient) authenticate with a GAP client_credentials Bearer JWT
+# (replaces the legacy X-Internal-Token; receivers dual-allow per BE-317). The
+# token is fetched from GAP /oauth2/token and cached by GapClientCredentialsTokenProvider.
+# admin → auth (AuthServiceClient) intentionally keeps X-Internal-Token (auth
+# receiver still permitAll) — admin.downstream.internal-token above is retained for it.
+gap:
+  internal-client:
+    token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+    client-id: ${ADMIN_SERVICE_CLIENT_ID:admin-service-client}
+    client-secret: ${ADMIN_SERVICE_CLIENT_SECRET:secret}
+
 resilience4j:
   retry:
     instances:

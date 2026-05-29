@@ -44,14 +44,14 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
     private static final String CB_NAME = "accountService";
 
     private final RestClient restClient;
-    private final String internalToken;
+    private final GapClientCredentialsTokenProvider tokenProvider;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AccountServiceTenantClient(
             @Value("${admin.account-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            @Value("${admin.downstream.internal-token:}") String internalToken) {
+            GapClientCredentialsTokenProvider tokenProvider) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -62,7 +62,7 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
     }
 
     @Override
@@ -212,10 +212,10 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
         }
     }
 
+    // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
+    // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
     private void addInternalHeaders(org.springframework.http.HttpHeaders h) {
-        if (internalToken != null && !internalToken.isBlank()) {
-            h.add("X-Internal-Token", internalToken);
-        }
+        h.setBearerAuth(tokenProvider.currentBearer());
     }
 
     private String extractErrorCode(byte[] body) {

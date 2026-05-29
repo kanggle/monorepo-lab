@@ -109,6 +109,9 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
         registry.add("admin.auth-service.base-url", wireMock::baseUrl);
         registry.add("admin.account-service.base-url", wireMock::baseUrl);
         registry.add("admin.security-service.base-url", wireMock::baseUrl);
+        // TASK-BE-318b: account/security clients fetch a GAP client_credentials Bearer token.
+        // Point the token endpoint at the same WireMock (stubbed in resetStubs).
+        registry.add("gap.internal-client.token-uri", () -> wireMock.baseUrl() + "/oauth2/token");
     }
 
     @Autowired
@@ -123,6 +126,18 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void resetStubs() {
         wireMock.resetAll();
+        stubGapTokenEndpoint();
+    }
+
+    /**
+     * TASK-BE-318b: stub the GAP client_credentials token endpoint so the account/security
+     * clients can obtain a Bearer token. resetAll() clears stubs, so (re)register each test.
+     */
+    private static void stubGapTokenEndpoint() {
+        wireMock.stubFor(WireMock.post(WireMock.urlEqualTo("/oauth2/token"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-jwt\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
     }
 
     private static final String OPERATOR_UUID = "00000000-0000-7000-8000-000000000001";
