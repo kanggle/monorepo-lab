@@ -8,7 +8,7 @@ TASK-BE-317
 
 # Status
 
-ready
+done
 
 # Owner
 
