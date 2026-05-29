@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-144 | user-service `RestProductInfoProvider` 의 `RestTemplate` → `RestClient` 마이그레이션 — 외부 prototype 이관 잔재였던 마지막 production `RestTemplate` 사용처를 monorepo 표준(Spring 6 `RestClient`)으로 정렬. config bean(`wishlistRestClient`, connect 3s/read 5s 보존) + provider(병렬 fan-out·`DELETED` fallback 무변경) + unit test(5 시나리오 보존) + `dependencies.md` spec 1줄. `:user-service:test` 그린. HTTP wire 동작 무변경. 분석=Opus 4.7 / 구현=Opus 4.7 — small refactor. 2026-05-29. | user-service | code, test, refactor |
 
 ## done
 

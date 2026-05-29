@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Profile("!standalone")
 public class RestProductInfoProvider implements ProductInfoProvider {
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final String productServiceBaseUrl;
 
     public RestProductInfoProvider(
-            @Qualifier("wishlistRestTemplate") RestTemplate restTemplate,
+            @Qualifier("wishlistRestClient") RestClient restClient,
             @Value("${product-service.base-url:http://localhost:8082}") String productServiceBaseUrl) {
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.productServiceBaseUrl = productServiceBaseUrl;
     }
 
@@ -41,11 +41,10 @@ public class RestProductInfoProvider implements ProductInfoProvider {
         CompletableFuture<?>[] futures = productIds.stream()
                 .map(productId -> CompletableFuture.runAsync(() -> {
                     try {
-                        ProductDetailResponse response = restTemplate.getForObject(
-                                productServiceBaseUrl + "/api/products/{productId}",
-                                ProductDetailResponse.class,
-                                productId
-                        );
+                        ProductDetailResponse response = restClient.get()
+                                .uri(productServiceBaseUrl + "/api/products/{productId}", productId)
+                                .retrieve()
+                                .body(ProductDetailResponse.class);
                         if (response != null) {
                             result.put(productId, new ProductInfo(
                                     productId,

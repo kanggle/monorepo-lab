@@ -8,35 +8,55 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RestProductInfoProvider 단위 테스트")
+@SuppressWarnings({"rawtypes", "unchecked"})
 class RestProductInfoProviderUnitTest {
 
     @Mock
-    private RestTemplate restTemplate;
+    private RestClient restClient;
+
+    @Mock
+    private RestClient.RequestHeadersUriSpec uriSpec;
 
     private RestProductInfoProvider provider;
 
     private static final String BASE_URL = "http://localhost:8082";
+    private static final String URL_TEMPLATE = BASE_URL + "/api/products/{productId}";
 
     @BeforeEach
     void setUp() {
-        provider = new RestProductInfoProvider(restTemplate, BASE_URL);
+        provider = new RestProductInfoProvider(restClient, BASE_URL);
+    }
+
+    private void stubProduct(UUID productId, ProductDetailResponse response) {
+        RestClient.ResponseSpec responseSpec = stubChain(productId);
+        given(responseSpec.body(ProductDetailResponse.class)).willReturn(response);
+    }
+
+    private void stubProductFailure(UUID productId, RuntimeException error) {
+        RestClient.ResponseSpec responseSpec = stubChain(productId);
+        given(responseSpec.body(ProductDetailResponse.class)).willThrow(error);
+    }
+
+    private RestClient.ResponseSpec stubChain(UUID productId) {
+        RestClient.RequestHeadersSpec requestSpec = mock(RestClient.RequestHeadersSpec.class);
+        RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        given(uriSpec.uri(URL_TEMPLATE, productId)).willReturn(requestSpec);
+        given(requestSpec.retrieve()).willReturn(responseSpec);
+        return responseSpec;
     }
 
     @Test
@@ -45,17 +65,9 @@ class RestProductInfoProviderUnitTest {
         UUID productId1 = UUID.randomUUID();
         UUID productId2 = UUID.randomUUID();
 
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(productId1)
-        )).willReturn(new ProductDetailResponse(productId1.toString(), "Product 1", "desc", "ON_SALE", 10000, UUID.randomUUID().toString()));
-
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(productId2)
-        )).willReturn(new ProductDetailResponse(productId2.toString(), "Product 2", "desc", "ON_SALE", 20000, UUID.randomUUID().toString()));
+        given(restClient.get()).willReturn(uriSpec);
+        stubProduct(productId1, new ProductDetailResponse(productId1.toString(), "Product 1", "desc", "ON_SALE", 10000, UUID.randomUUID().toString()));
+        stubProduct(productId2, new ProductDetailResponse(productId2.toString(), "Product 2", "desc", "ON_SALE", 20000, UUID.randomUUID().toString()));
 
         Map<UUID, ProductInfo> result = provider.getProductInfos(Set.of(productId1, productId2));
 
@@ -72,7 +84,7 @@ class RestProductInfoProviderUnitTest {
         Map<UUID, ProductInfo> result = provider.getProductInfos(Set.of());
 
         assertThat(result).isEmpty();
-        verify(restTemplate, never()).getForObject(anyString(), any(), any(UUID.class));
+        verifyNoInteractions(restClient);
     }
 
     @Test
@@ -80,11 +92,8 @@ class RestProductInfoProviderUnitTest {
     void getProductInfos_fetchFails_returnsDELETED() {
         UUID productId = UUID.randomUUID();
 
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(productId)
-        )).willThrow(new RestClientException("Connection refused"));
+        given(restClient.get()).willReturn(uriSpec);
+        stubProductFailure(productId, new RestClientException("Connection refused"));
 
         Map<UUID, ProductInfo> result = provider.getProductInfos(Set.of(productId));
 
@@ -98,11 +107,8 @@ class RestProductInfoProviderUnitTest {
     void getProductInfos_nullResponse_returnsDELETED() {
         UUID productId = UUID.randomUUID();
 
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(productId)
-        )).willReturn(null);
+        given(restClient.get()).willReturn(uriSpec);
+        stubProduct(productId, null);
 
         Map<UUID, ProductInfo> result = provider.getProductInfos(Set.of(productId));
 
@@ -117,17 +123,9 @@ class RestProductInfoProviderUnitTest {
         UUID successId = UUID.randomUUID();
         UUID failId = UUID.randomUUID();
 
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(successId)
-        )).willReturn(new ProductDetailResponse(successId.toString(), "Success Product", "desc", "ON_SALE", 15000, UUID.randomUUID().toString()));
-
-        given(restTemplate.getForObject(
-                eq(BASE_URL + "/api/products/{productId}"),
-                any(),
-                eq(failId)
-        )).willThrow(new RestClientException("Not found"));
+        given(restClient.get()).willReturn(uriSpec);
+        stubProduct(successId, new ProductDetailResponse(successId.toString(), "Success Product", "desc", "ON_SALE", 15000, UUID.randomUUID().toString()));
+        stubProductFailure(failId, new RestClientException("Not found"));
 
         Map<UUID, ProductInfo> result = provider.getProductInfos(Set.of(successId, failId));
 
