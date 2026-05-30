@@ -147,6 +147,23 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
             }
             """;
 
+    /**
+     * TASK-BE-322 (ADR-MONO-019 step 1): the backward-compatible subscription
+     * seed for this IT's tenant list. The {@code finance} domain-slug tenant
+     * self-subscribes, so the subscription-driven catalog binding stays
+     * byte-identical to the pre-BE-322 slug binding (net-zero) — the finance
+     * product item resolves exactly as before so the operatorContext round-trip
+     * (IT-1 / IT-2) is unaffected. {@code fan-platform} is not a domain product
+     * and carries no self-subscription.
+     */
+    private static final String BACKWARD_COMPAT_SUBSCRIPTIONS = """
+            {
+              "items": [
+                {"tenantId":"finance","domainKey":"finance"}
+              ]
+            }
+            """;
+
     @BeforeEach
     void stubTenantList() {
         wireMock.resetAll();
@@ -161,6 +178,15 @@ class OperatorProfileIntegrationTest extends AbstractIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(ACTIVE_TENANTS_WITH_FINANCE)));
+        // TASK-BE-322: registry GET (IT-1 / IT-2) now consults the account
+        // tenant-domain-subscription surface; without this stub the tenant
+        // client throws DownstreamFailureException → 503. resetAll() clears
+        // stubs, so register here on every reset.
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(BACKWARD_COMPAT_SUBSCRIPTIONS)));
     }
 
     /**
