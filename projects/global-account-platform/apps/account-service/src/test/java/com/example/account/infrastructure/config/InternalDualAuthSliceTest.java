@@ -25,22 +25,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * TASK-BE-317 (ADR-005 단계 2) — dual-allow on account-service {@code /internal/**}.
+ * TASK-BE-319b (ADR-005 단계 4b) — JWT-only auth on account-service {@code /internal/**}.
  *
  * <p>Verifies the full Spring Security chain (InternalApiFilter + oauth2ResourceServer +
- * {@code .authenticated()}): a request is accepted with <em>either</em> a valid
- * {@code X-Internal-Token} (AC-4) <em>or</em> a valid GAP {@code client_credentials} JWT (AC-3),
- * and rejected with 401 when neither is present (AC-5, fail-closed). The JWT decoder is mocked so
- * no real JWKS is needed; the {@code "test"} profile is intentionally NOT active so the bypass stays
- * off and the real token check runs.
+ * {@code .authenticated()}): a request is accepted <em>only</em> with a valid GAP
+ * {@code client_credentials} JWT, and rejected with 401 when it is absent — or when only the
+ * (now-removed) {@code X-Internal-Token} is presented (fail-closed). The JWT decoder is mocked so no
+ * real JWKS is needed; the {@code "test"} profile is intentionally NOT active and the bypass stays
+ * off so the real resource-server path runs.
  */
 @WebMvcTest(AccountStatusQueryController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
-@TestPropertySource(properties = {
-        "internal.api.token=expected-token",
-        "internal.api.bypass-when-unconfigured=false"
-})
-@DisplayName("Internal /internal/** dual-allow slice tests (TASK-BE-317)")
+@TestPropertySource(properties = "internal.api.bypass-when-unconfigured=false")
+@DisplayName("Internal /internal/** JWT-only slice tests (TASK-BE-319b)")
 class InternalDualAuthSliceTest {
 
     @Autowired
@@ -62,17 +59,16 @@ class InternalDualAuthSliceTest {
     }
 
     @Test
-    @DisplayName("AC-4: 유효 X-Internal-Token → 200 (기존 호출자 회귀 0)")
-    void validInternalToken_returns200() throws Exception {
-        stubStatus();
+    @DisplayName("TASK-BE-319b: X-Internal-Token 만 → 401 (X-token 경로 제거됨)")
+    void xInternalTokenOnly_returns401() throws Exception {
         mockMvc.perform(get("/internal/accounts/acc-1/status")
                         .header("X-Internal-Token", "expected-token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
-    @DisplayName("AC-3: 유효 GAP JWT(Bearer) → 200")
+    @DisplayName("유효 GAP JWT(Bearer) → 200")
     void validBearerJwt_returns200() throws Exception {
         stubStatus();
         Jwt jwt = Jwt.withTokenValue("good-jwt")

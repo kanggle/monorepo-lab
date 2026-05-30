@@ -81,17 +81,16 @@ outbox:
 
 internal:
   api:
-    # Token used to authenticate /internal/** requests from sibling services. MUST be set in
-    # production; when unset and bypass-when-unconfigured=false (default), all /internal/**
-    # requests are rejected with 401 (fail-closed). The bypass flag is intended for
-    # @WebMvcTest slice tests and local development only — never enable in production.
-    token: ${INTERNAL_API_TOKEN:}
+    # TASK-BE-319b (ADR-005 단계 4b): /internal/** authenticates with a GAP-issued
+    # client_credentials JWT (Authorization: Bearer) ONLY — the legacy static X-Internal-Token
+    # (internal.api.token) was removed now that every caller (security/admin/auth/community/
+    # membership) is on Bearer. When bypass-when-unconfigured=false (default) and no valid JWT is
+    # presented, /internal/** is rejected with 401 (fail-closed). The bypass flag is for @WebMvcTest
+    # slice tests, local development and the 'test'/'standalone' profiles only — never in production.
     bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}
-    # TASK-BE-317 (ADR-005 단계 2): /internal/** also accepts a GAP-issued
-    # client_credentials JWT (Authorization: Bearer) alongside X-Internal-Token.
-    # The decoder validates signature (JWKS) + issuer only — account-service is
-    # multi-tenant, so no tenant_id pinning here. JWKS is fetched lazily (no OIDC
-    # discovery at startup), so bootup is not coupled to auth-service availability.
+    # The decoder validates signature (JWKS) + issuer only — account-service is multi-tenant, so no
+    # tenant_id pinning here. JWKS is fetched lazily (no OIDC discovery at startup), so bootup is not
+    # coupled to auth-service availability.
     jwt:
       jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
       issuer: ${OIDC_ISSUER_URL:http://localhost:8081}

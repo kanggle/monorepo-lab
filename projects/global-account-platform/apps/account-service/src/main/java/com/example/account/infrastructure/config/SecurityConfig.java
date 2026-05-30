@@ -26,19 +26,16 @@ import java.util.Arrays;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${internal.api.token:}")
-    private String internalApiToken;
-
     /**
      * When {@code true}, the {@link InternalApiFilter} authenticates {@code /internal/**}
-     * requests without checking the token (the token is unconfigured). Intended for
-     * {@code @WebMvcTest} slice tests. Production must keep this {@code false} (default) so that an
-     * unconfigured token produces a fail-closed 401 (only a valid GAP JWT would then pass).
+     * requests without a JWT (dev/test bypass). Intended for {@code @WebMvcTest} slice tests and
+     * standalone/local runs. Production must keep this {@code false} (default) so that {@code /internal/**}
+     * is fail-closed — only a valid GAP client_credentials JWT passes (TASK-BE-319b).
      */
     @Value("${internal.api.bypass-when-unconfigured:false}")
     private boolean bypassProperty;
 
-    // TASK-BE-317: GAP JWKS + issuer for verifying client_credentials JWTs on /internal/**.
+    // TASK-BE-317/319b: GAP JWKS + issuer for verifying client_credentials JWTs on /internal/** (sole auth path).
     @Value("${internal.api.jwt.jwk-set-uri:http://localhost:8081/oauth2/jwks}")
     private String jwkSetUri;
 
@@ -53,9 +50,10 @@ public class SecurityConfig {
 
     @Bean
     public InternalApiFilter internalApiFilter() {
-        boolean testProfileActive = Arrays.asList(environment.getActiveProfiles()).contains("test");
-        boolean bypass = bypassProperty || testProfileActive;
-        return new InternalApiFilter(internalApiToken, bypass);
+        java.util.List<String> profiles = Arrays.asList(environment.getActiveProfiles());
+        boolean bypassProfileActive = profiles.contains("test") || profiles.contains("standalone");
+        boolean bypass = bypassProperty || bypassProfileActive;
+        return new InternalApiFilter(bypass);
     }
 
     /**
@@ -80,16 +78,16 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Runs before the bearer-token filter: a valid X-Internal-Token authenticates the
-                // request; otherwise it defers to the JWT path / the .authenticated() gate below.
+                // Non-terminal: under the dev/test/standalone bypass it authenticates /internal/**;
+                // otherwise it defers entirely to the JWT path / the .authenticated() gate below.
                 .addFilterBefore(internalApiFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/accounts/signup").permitAll()
                         // TASK-BE-114: token in body is the auth — no JWT required.
                         .requestMatchers("/api/accounts/signup/verify-email").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
-                        // TASK-BE-317: dual-allow — satisfied by X-Internal-Token (InternalApiFilter)
-                        // OR a valid GAP client_credentials JWT (oauth2ResourceServer below).
+                        // TASK-BE-319b: JWT-only — satisfied solely by a valid GAP client_credentials
+                        // JWT (oauth2ResourceServer below); the static X-Internal-Token path was removed.
                         .requestMatchers("/internal/**").authenticated()
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().denyAll()
@@ -104,8 +102,8 @@ public class SecurityConfig {
 
     /**
      * Preserves the legacy {@code /internal/**} 401 contract
-     * ({@code {"code":"UNAUTHORIZED","message":...}}) when neither a valid X-Internal-Token nor a
-     * valid GAP JWT is presented.
+     * ({@code {"code":"UNAUTHORIZED","message":...}}) when no valid GAP client_credentials JWT is
+     * presented (TASK-BE-319b — the static X-Internal-Token path was removed).
      */
     static void onAuthenticationFailure(HttpServletRequest request,
                                         HttpServletResponse response,
