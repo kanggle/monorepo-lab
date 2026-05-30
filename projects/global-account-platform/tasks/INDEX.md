@@ -72,11 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-> BE-317(단계 1+2 수신측 dual-allow) + BE-318(단계 3a security 호출측) 은 **done/** 으로 종결됨. 아래는 ADR-005 무중단 마이그레이션의 잔여 호출측 전환(3b/3c) + 정적 토큰 제거(단계 4).
+> **ADR-005 무중단 마이그레이션 완전 종결** (2026-05-30, **done/**): BE-317(단계 1+2) + BE-318/318b/318c/318d(단계 3) + BE-319/319a/319b(단계 4) + 후속 BE-320(account IT inert X-token scaffolding 정리) + BE-321(e2e inter-service JWT 검증 정합). account/security `/internal/**` = GAP client_credentials Bearer JWT 단일. 아래는 **ADR-MONO-019 customer-tenant model**(별 axis) 실행 roadmap.
 
-- `TASK-BE-318b-admin-caller-bearer-jwt-switch.md` — **READY** (ADR-005 단계 3b). admin-service 의 account/security `/internal/**` 호출을 X-Internal-Token → GAP `client_credentials` Bearer JWT 로 (admin-service-client). admin→auth 는 auth permitAll 이라 X-token 유지. Blueprint=BE-318(security). 주의: admin 클라이언트 테스트 4종 + account/security 호출 trigger IT footprint. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (BE-318 패턴 복제 — 단, admin IT 토큰 엔드포인트 처리 주의).
-- `TASK-BE-318c-auth-caller-bearer-jwt-switch.md` — **READY** (ADR-005 단계 3c). auth-service 의 account `/internal/**` 호출(현재 **무인증** — 잠재 401 갭)에 Bearer JWT 첨부 (auth-service-client, self-call lazy). Blueprint=BE-318. 주의: account 호출 trigger auth IT 약 6종 토큰 엔드포인트 처리(MockMvc self-call 불가) 필요. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (패턴 복제 — IT footprint 주의).
-- `TASK-BE-319-receiver-static-token-removal-and-contract-update.md` — **READY** (ADR-005 단계 4). 수신측 account/security `/internal/**` 의 정적 X-Internal-Token 제거(JWT 단일) + 내부 계약 spec 인증 절 갱신 + docker-compose `INTERNAL_API_TOKEN` 정리. ⚠️ **선행**: security 부분=BE-318b 후 / account 부분=BE-318(완료)+BE-318b+BE-318c+**membership→account 전환(BE-253 follow-up 미완 블로커)** 모두 후. BE-319a(security)/BE-319b(account) 분할 권장. 분석=Opus 4.8 / 구현 권장=Opus 4.8 (계약 SoT + 다중 서비스 제거 + 선행 게이팅 판단).
+- `TASK-BE-322-tenant-domain-subscription-model-and-catalog.md` — **READY** (ADR-MONO-019 § 3.3 **step 1**, ACCEPTED 로 UNPAUSED — TASK-MONO-153 #955 `d15d20a6`). GAP backward-compatible customer-tenant 모델: account-service `tenant_domain_subscription` N:M 테이블 + Flyway `V0019` + **하위호환 시드**(도메인-슬러그 테넌트 각각 자기 도메인 구독 → 카탈로그 동작 byte-identical) + 내부 구독 조회 표면(Bearer JWT) + admin-service `ConsoleRegistryUseCase.selectableTenants()` 구독-기반 재작성(D4, `gap` bindsAllTenants 불변) + **net-zero IT**(registry 응답 pre/post byte-identical). registry envelope shape 불변(zero console-web change). **step 2(실 고객)/step 3(도메인 게이트 dual-accept, Opus)/step 4(cleanup) 는 out of scope** — 본 task 머지 main 이 그들의 dependency-correct base. 분석=Opus 4.8 / **구현 권장=Opus** (ADR-019 § 3.3 step 1 명시 — registry+catalog resolution+isolation-adjacent+cross-service). **orthogonal** to ADR-005/TASK-BE-317. 작성만(authoring) — 구현은 별 Opus 세션.
 
 ## in-progress
 
