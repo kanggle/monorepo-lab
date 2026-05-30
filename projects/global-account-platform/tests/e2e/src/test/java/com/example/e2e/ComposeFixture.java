@@ -40,6 +40,9 @@ public final class ComposeFixture implements BeforeAllCallback, ExtensionContext
     public static final String ADMIN_BASE_URL = "http://" + HOST + ":" + ADMIN_PORT;
     public static final String ACCOUNT_BASE_URL = "http://" + HOST + ":" + ACCOUNT_PORT;
     public static final String SECURITY_BASE_URL = "http://" + HOST + ":" + SECURITY_PORT;
+    // TASK-BE-321: auth-service base URL — exposes /oauth2/token (client_credentials mint) for
+    // workload-identity e2e assertions. AUTH_PORT was already used by the health probe below.
+    public static final String AUTH_BASE_URL = "http://" + HOST + ":" + AUTH_PORT;
 
     private static final String[] HEALTH_URLS = {
             "http://" + HOST + ":" + AUTH_PORT + "/actuator/health",
