@@ -8,7 +8,9 @@ federation-hardening-e2e 하니스 fix — `driveOidcPkceLogin` 의 수동 `trac
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #975 (squash `83f52d97`). MONO-154 회귀 fix-forward — `driveOidcPkceLogin` 에 `manageTracing=true` 파라미터 추가, 수동 트레이싱을 `CI && manageTracing` 게이트. `loginAsSuperAdmin`(global-setup)=true(무변경) / `loginAsAcmeOperator`(in-test)=false(테스트 러너 자체 트레이싱 위임). login.ts only. **검증**: federation-e2e 재실행 run 26697320370 = **9 passed (37.2s) SUCCESS**(이중 tracing.start throw 해소 → entitlement 단언 실행 GREEN). 3차원(MERGED `83f52d97` / tip 일치 / pre-merge 0). **메타**: MONO-154 워크플로 검증이 tsc 로는 못 잡는 런타임 이중-tracing 회귀를 포착 — workflow_dispatch 실검증의 가치 사례. (부수: #975 squash 에 MONO-154 task 의 ready→done 이동이 leak — 본 close 에서 MONO-154 Status 정정.)
 
 # Owner
 
