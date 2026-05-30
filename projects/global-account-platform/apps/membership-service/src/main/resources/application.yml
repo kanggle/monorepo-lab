@@ -39,6 +39,16 @@ outbox:
     membership.subscription.expired: membership.subscription.expired
     membership.subscription.cancelled: membership.subscription.cancelled
 
+# TASK-BE-318d (ADR-005 단계 3): outbound /internal/accounts/** calls (AccountStatusClient)
+# authenticate with a GAP client_credentials Bearer JWT (replaces the legacy X-Internal-Token).
+# Token is fetched from GAP /oauth2/token and cached by GapClientCredentialsTokenProvider.
+# membership-service-client is pre-registered (V0009, client_credentials, scope account.read).
+gap:
+  internal-client:
+    token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+    client-id: ${MEMBERSHIP_SERVICE_CLIENT_ID:membership-service-client}
+    client-secret: ${MEMBERSHIP_SERVICE_CLIENT_SECRET:membership-service-secret}
+
 membership:
   # TASK-BE-253: OIDC Resource Server validators.
   oauth2:
@@ -49,10 +59,9 @@ membership:
     base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
     connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:2000}
     read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:3000}
-    # NOTE: membership → account is OUT of TASK-BE-253 scope (only community → * was
-    # migrated). The X-Internal-Token header is preserved here until a follow-up
-    # task migrates the membership → account call to client_credentials.
-    internal-token: ${ACCOUNT_SERVICE_INTERNAL_TOKEN:}
+    # TASK-BE-318d: membership → account `/internal/accounts/{id}/status` now authenticates with a
+    # GAP client_credentials Bearer JWT (gap.internal-client below) — the legacy X-Internal-Token was
+    # removed. Receiver dual-allows JWT or X-token (BE-317).
   idempotency:
     ttl-seconds: ${IDEMPOTENCY_TTL_SECONDS:86400}
   scheduler:

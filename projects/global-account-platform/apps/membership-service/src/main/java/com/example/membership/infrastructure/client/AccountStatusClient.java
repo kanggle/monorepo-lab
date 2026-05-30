@@ -25,16 +25,16 @@ public class AccountStatusClient implements AccountStatusChecker {
 
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
-    private final String internalToken;
+    private final GapClientCredentialsTokenProvider tokenProvider;
 
     public AccountStatusClient(
             @Value("${membership.account-service.base-url}") String baseUrl,
             @Value("${membership.account-service.connect-timeout-ms:2000}") int connectTimeoutMs,
             @Value("${membership.account-service.read-timeout-ms:3000}") int readTimeoutMs,
-            @Value("${membership.account-service.internal-token:}") String internalToken) {
+            GapClientCredentialsTokenProvider tokenProvider) {
         this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountStatus");
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
     }
 
     @Override
@@ -58,7 +58,7 @@ public class AccountStatusClient implements AccountStatusChecker {
         try {
             AccountStatusResponse body = restClient.get()
                     .uri("/internal/accounts/{id}/status", accountId)
-                    .headers(this::applyInternalToken)
+                    .headers(this::applyAuth)
                     .retrieve()
                     .body(AccountStatusResponse.class);
             if (body == null || body.status() == null) {
@@ -72,10 +72,10 @@ public class AccountStatusClient implements AccountStatusChecker {
         }
     }
 
-    private void applyInternalToken(HttpHeaders headers) {
-        if (internalToken != null && !internalToken.isBlank()) {
-            headers.set("X-Internal-Token", internalToken);
-        }
+    // TASK-BE-318d: authenticate via GAP client_credentials Bearer JWT
+    // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+    private void applyAuth(HttpHeaders headers) {
+        headers.setBearerAuth(tokenProvider.currentBearer());
     }
 
     public record AccountStatusResponse(String accountId, String status) {

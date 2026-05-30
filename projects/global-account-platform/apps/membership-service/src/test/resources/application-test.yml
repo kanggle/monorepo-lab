@@ -40,7 +40,8 @@ membership:
     base-url: http://localhost:0
     connect-timeout-ms: 2000
     read-timeout-ms: 3000
-    internal-token: test-internal-token
+    # TASK-BE-318d: internal-token removed (membership → account is Bearer JWT now). IT that trigger
+    # account-status calls mock GapClientCredentialsTokenProvider; others never fetch a token (lazy).
   idempotency:
     ttl-seconds: 86400
   scheduler:
