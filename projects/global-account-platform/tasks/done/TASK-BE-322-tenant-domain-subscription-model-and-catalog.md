@@ -8,7 +8,9 @@ ADR-MONO-019 § 3.3 step 1 — GAP backward-compatible customer-tenant model + s
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #958 (squash `704ee590`). ADR-MONO-019 § 3.3 **step 1** 구현(opus dispatch). account-service `tenant_domain_subscription` N:M + Flyway `V0019`(하위호환 시드 `INSERT IGNORE SELECT FROM tenants WHERE IN (wms,scm,erp,finance)`, gap 행 없음, FK-safe) + 도메인/영속/query use-case + `GET /internal/tenant-domain-subscriptions`(BE-319b JWT 게이트) + 내부 계약. admin-service `TenantDomainSubscriptionPort` + `AccountServiceTenantClient.listActiveSubscriptions()`(Bearer, accountService CB/retry→503) + `ConsoleRegistryUseCase.selectableTenants()` 구독-기반 재작성(**gap bindsAllTenants 분기 + operator scope M3/M6 불변**, activeTenants 순서 보존). **NET-ZERO**: 하위호환 시드 → registry 응답 byte-identical(ConsoleRegistryIntegrationTest 단언 무변경). **scope-lock**: TenantClaimValidator·ProductCatalog 무변경, step2/3/4 artifact 0, ADR-019 D3 무변경. **3차원 검증**(MERGED `704ee590` / origin/main tip 일치 / pre-merge 0 failing). **CI 1-fix cycle**: 1차 run 에서 OperatorProfileIntegrationTest IT-1/IT-2 가 registry 호출 시 구독 stub 누락으로 503 → 하위호환 시드 stub 추가(단언 무변경) → 2차 GAP Integration GREEN(3m5s, Flyway V0019 clean-migrate + net-zero IT). 후속: step 2(실 고객 시드) → step 3(도메인 게이트 dual-accept, Opus) → step 4(cleanup), 본 머지 main 이 dependency-correct base.
 
 # Owner
 
