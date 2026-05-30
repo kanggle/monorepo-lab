@@ -18,6 +18,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -324,6 +326,68 @@ public class AccountServiceClient implements AccountServicePort {
             ));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
+    @Override
+    public List<String> listEntitledDomains(String tenantId) {
+        Supplier<List<String>> supplier = () -> doListEntitledDomains(tenantId);
+
+        Supplier<List<String>> retryingSupplier =
+                Retry.decorateSupplier(retry, supplier);
+        Supplier<List<String>> resilientSupplier =
+                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
+
+        try {
+            return resilientSupplier.get();
+        } catch (HttpClientErrorException e) {
+            // TASK-BE-324: any 4xx (incl. unstubbed-WireMock 404) is treated as an
+            // account-service failure here; the caller (TenantClaimTokenCustomizer)
+            // fail-softs and omits the entitled_domains claim.
+            log.warn("Account service entitled-domains lookup returned client error {}: {}",
+                    e.getStatusCode(), e.getMessage());
+            throw new AccountServiceUnavailableException(
+                    "Account service entitled-domains lookup failed", e);
+        } catch (RuntimeException e) {
+            log.error("Account service entitled-domains lookup failed after retries: "
+                            + "msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> doListEntitledDomains(String tenantId) {
+        try {
+            // account-service returns { "items": [ { "tenantId", "domainKey" }, ... ] }
+            Map<String, Object> body = restClient().get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/internal/tenant-domain-subscriptions")
+                            .queryParam("tenantId", tenantId)
+                            .build())
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .body(Map.class);
+
+            List<String> domainKeys = new ArrayList<>();
+            if (body != null && body.get("items") instanceof List<?> items) {
+                for (Object item : items) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        Object domainKey = itemMap.get("domainKey");
+                        if (domainKey instanceof String dk && !dk.isBlank()) {
+                            domainKeys.add(dk);
+                        }
+                    }
+                }
+            }
+            return domainKeys;
         } catch (HttpClientErrorException e) {
             throw e;
         } catch (RuntimeException e) {

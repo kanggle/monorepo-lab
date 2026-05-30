@@ -32,14 +32,18 @@ public class TenantDomainSubscriptionController {
     private final TenantDomainSubscriptionQueryUseCase queryUseCase;
 
     /**
-     * GET /internal/tenant-domain-subscriptions[?domainKey=]
+     * GET /internal/tenant-domain-subscriptions[?domainKey=][&tenantId=]
      * Returns all ACTIVE tenant↔domain subscriptions, optionally filtered to a
-     * single {@code domainKey}.
+     * single {@code domainKey} and/or {@code tenantId} (both compose with AND).
+     *
+     * <p>TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): {@code tenantId} reverse-lookup
+     * backs the auth-service issuance-time {@code entitled_domains} claim populate.
      */
     @GetMapping
     public ResponseEntity<SubscriptionListResponse> listSubscriptions(
-            @RequestParam(required = false) String domainKey) {
-        List<TenantDomainSubscriptionResult> results = queryUseCase.listActive(domainKey);
+            @RequestParam(required = false) String domainKey,
+            @RequestParam(required = false) String tenantId) {
+        List<TenantDomainSubscriptionResult> results = queryUseCase.listActive(domainKey, tenantId);
         List<SubscriptionItem> items = results.stream()
                 .map(r -> new SubscriptionItem(r.tenantId(), r.domainKey()))
                 .toList();

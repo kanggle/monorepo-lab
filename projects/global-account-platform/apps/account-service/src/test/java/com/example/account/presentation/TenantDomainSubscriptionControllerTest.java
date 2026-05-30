@@ -38,7 +38,7 @@ class TenantDomainSubscriptionControllerTest {
     @Test
     @DisplayName("GET /internal/tenant-domain-subscriptions → 200 with items[]")
     void list_returnsItems() throws Exception {
-        given(queryUseCase.listActive(isNull())).willReturn(List.of(
+        given(queryUseCase.listActive(isNull(), isNull())).willReturn(List.of(
                 new TenantDomainSubscriptionResult("wms", "wms"),
                 new TenantDomainSubscriptionResult("scm", "scm")));
 
@@ -53,12 +53,26 @@ class TenantDomainSubscriptionControllerTest {
     @Test
     @DisplayName("GET ?domainKey=wms → forwards filter to the use-case")
     void list_withDomainFilter() throws Exception {
-        given(queryUseCase.listActive(eq("wms"))).willReturn(List.of(
+        given(queryUseCase.listActive(eq("wms"), isNull())).willReturn(List.of(
                 new TenantDomainSubscriptionResult("wms", "wms")));
 
         mockMvc.perform(get("/internal/tenant-domain-subscriptions").param("domainKey", "wms"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].domainKey").value("wms"));
+    }
+
+    @Test
+    @DisplayName("GET ?tenantId=acme → forwards tenantId reverse-lookup to the use-case (BE-324)")
+    void list_withTenantIdFilter() throws Exception {
+        given(queryUseCase.listActive(isNull(), eq("acme"))).willReturn(List.of(
+                new TenantDomainSubscriptionResult("acme", "finance"),
+                new TenantDomainSubscriptionResult("acme", "wms")));
+
+        mockMvc.perform(get("/internal/tenant-domain-subscriptions").param("tenantId", "acme"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].tenantId").value("acme"))
+                .andExpect(jsonPath("$.items[0].domainKey").value("finance"));
     }
 }

@@ -80,4 +80,63 @@ class TenantDomainSubscriptionQueryUseCaseTest {
 
         assertThat(useCase().listActive("   ")).hasSize(1);
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-324 — tenantId reverse lookup (ADR-MONO-019 § 3.3 keystone)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("tenantId reverse lookup → only that tenant's ACTIVE subscriptions")
+    void listActive_tenantIdReverseLookup_returnsTenantSubs() {
+        when(repository.findActiveByTenantId("acme")).thenReturn(List.of(
+                sub("acme", "finance"), sub("acme", "wms")));
+
+        List<TenantDomainSubscriptionResult> results = useCase().listActive(null, "acme");
+
+        assertThat(results)
+                .extracting(TenantDomainSubscriptionResult::tenantId,
+                        TenantDomainSubscriptionResult::domainKey)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("acme", "finance"),
+                        org.assertj.core.groups.Tuple.tuple("acme", "wms"));
+    }
+
+    @Test
+    @DisplayName("tenantId reverse lookup with domainKey → AND-composed")
+    void listActive_tenantIdAndDomainKey_andComposed() {
+        when(repository.findActiveByTenantId("acme")).thenReturn(List.of(
+                sub("acme", "finance"), sub("acme", "wms")));
+
+        List<TenantDomainSubscriptionResult> results = useCase().listActive("finance", "acme");
+
+        assertThat(results)
+                .extracting(TenantDomainSubscriptionResult::domainKey)
+                .containsExactly("finance");
+    }
+
+    @Test
+    @DisplayName("unknown tenantId → empty")
+    void listActive_unknownTenantId_returnsEmpty() {
+        when(repository.findActiveByTenantId("nope")).thenReturn(List.of());
+
+        assertThat(useCase().listActive(null, "nope")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("null tenantId → falls back to findAllActive (existing behaviour)")
+    void listActive_nullTenantId_usesFindAllActive() {
+        when(repository.findAllActive()).thenReturn(List.of(sub("wms", "wms"), sub("scm", "scm")));
+
+        List<TenantDomainSubscriptionResult> results = useCase().listActive(null, null);
+
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("blank tenantId → falls back to findAllActive (existing behaviour)")
+    void listActive_blankTenantId_usesFindAllActive() {
+        when(repository.findAllActive()).thenReturn(List.of(sub("wms", "wms")));
+
+        assertThat(useCase().listActive(null, "  ")).hasSize(1);
+    }
 }

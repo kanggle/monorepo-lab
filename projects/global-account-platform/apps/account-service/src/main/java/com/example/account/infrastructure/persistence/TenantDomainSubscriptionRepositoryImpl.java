@@ -20,4 +20,11 @@ public class TenantDomainSubscriptionRepositoryImpl implements TenantDomainSubsc
                 .map(TenantDomainSubscriptionJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<TenantDomainSubscription> findActiveByTenantId(String tenantId) {
+        return jpaRepository.findByStatusAndTenantId(TenantStatus.ACTIVE, tenantId).stream()
+                .map(TenantDomainSubscriptionJpaEntity::toDomain)
+                .toList();
+    }
 }

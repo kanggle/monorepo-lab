@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -55,6 +56,22 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
     /** SAS uses the string "id_token" as the token type value for ID tokens. */
     private static final String ID_TOKEN_TYPE_VALUE = "id_token";
+
+    /**
+     * TASK-BE-324: signed claim carrying the tenant's ACTIVE entitled domainKeys.
+     * Must match the domain-side gates' {@code CLAIM_ENTITLED_DOMAINS} exactly.
+     */
+    private static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
+
+    /**
+     * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
+     * issuance time. Autowired by constructor injection.
+     */
+    private final AccountServicePort accountServicePort;
+
+    public TenantClaimTokenCustomizer(AccountServicePort accountServicePort) {
+        this.accountServicePort = accountServicePort;
+    }
 
     @Override
     public void customize(JwtEncodingContext context) {
@@ -159,6 +176,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                     .claim("tenant_type", tenantType);
             log.debug("TenantClaimTokenCustomizer: authorization_code — injected tenant_id={}, " +
                     "tenant_type={} from principal for clientId={}", tenantId, tenantType, clientId);
+            populateEntitledDomains(context, tenantId);
         } else {
             // Fallback: client metadata from ClientSettings (Option B) or clientName (legacy)
             RegisteredClient client = context.getRegisteredClient();
@@ -173,6 +191,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                         .claim("tenant_type", tenantInfo.tenantType());
                 log.debug("TenantClaimTokenCustomizer: authorization_code — fallback to client " +
                         "tenant metadata tenant_id={} for clientId={}", tenantInfo.tenantId(), clientId);
+                populateEntitledDomains(context, tenantInfo.tenantId());
             } else {
                 log.error("SECURITY: authorization_code token issued without tenant metadata. " +
                         "clientId={}, principal={}", clientId, principal.getName());
@@ -181,6 +200,38 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                                 "neither principal attributes nor client metadata contain tenant context. " +
                                 "clientId=" + clientId);
             }
+        }
+    }
+
+    /**
+     * TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): populates the signed
+     * {@code entitled_domains} claim from the tenant's ACTIVE domain subscriptions
+     * (queried from account-service at issuance time). Only invoked from the
+     * {@code authorization_code}/{@code refresh_token} path — never from
+     * {@code client_credentials} (recursion safety: a cc issuance is what mints the
+     * Bearer used to call account-service; if the cc path called account it would
+     * re-invoke this customizer → infinite recursion).
+     *
+     * <p><b>fail-soft</b>: any failure (account-service down / circuit-open / timeout /
+     * exception) OR an empty result → the claim is omitted and issuance proceeds with
+     * the legacy {@code tenant_id} gate (net-zero). Token issuance must never depend on
+     * account-service availability, so the exception is swallowed (logged at WARN).
+     */
+    private void populateEntitledDomains(JwtEncodingContext context, String tenantId) {
+        try {
+            java.util.List<String> entitled = accountServicePort.listEntitledDomains(tenantId);
+            if (entitled != null && !entitled.isEmpty()) {
+                context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, entitled);
+                log.debug("TenantClaimTokenCustomizer: injected entitled_domains={} for tenant_id={}",
+                        entitled, tenantId);
+            }
+        } catch (RuntimeException e) {
+            // fail-soft (ADR-MONO-019 keystone): token issuance must not depend on
+            // account-service availability. Omit entitled_domains → legacy tenant_id
+            // gate still applies (net-zero). Do NOT propagate.
+            log.warn("TenantClaimTokenCustomizer: entitled_domains lookup failed for tenant_id={}, "
+                            + "omitting claim (fail-soft): {}",
+                    tenantId, e.toString());
         }
     }
 

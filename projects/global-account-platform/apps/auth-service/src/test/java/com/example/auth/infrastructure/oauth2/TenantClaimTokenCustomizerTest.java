@@ -1,5 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,11 +20,15 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -47,9 +53,12 @@ class TenantClaimTokenCustomizerTest {
     @Mock
     private Authentication principal;
 
+    @Mock
+    private AccountServicePort accountServicePort;
+
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer();
+        customizer = new TenantClaimTokenCustomizer(accountServicePort);
     }
 
     // -----------------------------------------------------------------------
@@ -355,6 +364,105 @@ class TenantClaimTokenCustomizerTest {
         // principal details take priority
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
         assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-324 — entitled_domains claim populate (ADR-MONO-019 § 3.3 keystone)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("authorization_code: account returns [finance] → entitled_domains=[finance] injected")
+    void authorizationCode_entitledDomains_injected() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of("tenant_id", "wms-tenant", "tenant_type", "B2B");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of("finance"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+        assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("finance");
+        assertThat(built.getClaims()).containsKey("entitled_domains");
+    }
+
+    @Test
+    @DisplayName("authorization_code: account returns [] → no entitled_domains claim (net-zero)")
+    void authorizationCode_emptyEntitledDomains_omitsClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of("tenant_id", "wms-tenant", "tenant_type", "B2B");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+        assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
+    }
+
+    @Test
+    @DisplayName("authorization_code: account throws → fail-soft, no entitled_domains, no exception")
+    void authorizationCode_accountThrows_failSoft() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of("tenant_id", "wms-tenant", "tenant_type", "B2B");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant"))
+                .thenThrow(new AccountServiceUnavailableException("account down", new RuntimeException()));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        // must not throw (fail-soft)
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // token still issued with tenant_id; entitled_domains omitted
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+        assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
+    }
+
+    @Test
+    @DisplayName("client_credentials: listEntitledDomains never called (recursion safety) + no entitled_domains")
+    void clientCredentials_entitledDomainsNeverLookedUp() {
+        RegisteredClient client = buildClient("fan-platform|B2C");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        verify(accountServicePort, never()).listEntitledDomains(any());
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("fan-platform");
+        assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
     }
 
     // -----------------------------------------------------------------------

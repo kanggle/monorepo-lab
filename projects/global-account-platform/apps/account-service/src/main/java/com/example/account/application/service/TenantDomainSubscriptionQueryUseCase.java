@@ -29,7 +29,27 @@ public class TenantDomainSubscriptionQueryUseCase {
      */
     @Transactional(readOnly = true)
     public List<TenantDomainSubscriptionResult> listActive(String domainKey) {
-        List<TenantDomainSubscription> subscriptions = subscriptionRepository.findAllActive();
+        return listActive(domainKey, null);
+    }
+
+    /**
+     * Returns ACTIVE subscriptions optionally filtered by {@code tenantId} and/or
+     * {@code domainKey} ({@code null}/blank = that filter is not applied; both
+     * compose with AND).
+     *
+     * <p>TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): when {@code tenantId} is
+     * non-blank, the subscriptions are reverse-looked-up for that single tenant
+     * (used by auth-service to derive {@code entitled_domains} at token issuance);
+     * an optional {@code domainKey} then narrows that smaller set. When
+     * {@code tenantId} is {@code null}/blank, behaviour is identical to the legacy
+     * single-arg path (all ACTIVE subscriptions, optional {@code domainKey} filter).
+     */
+    @Transactional(readOnly = true)
+    public List<TenantDomainSubscriptionResult> listActive(String domainKey, String tenantId) {
+        List<TenantDomainSubscription> subscriptions =
+                (tenantId == null || tenantId.isBlank())
+                        ? subscriptionRepository.findAllActive()
+                        : subscriptionRepository.findActiveByTenantId(tenantId);
         return subscriptions.stream()
                 .filter(s -> domainKey == null || domainKey.isBlank()
                         || domainKey.equals(s.getDomainKey()))

@@ -16,4 +16,12 @@ public interface TenantDomainSubscriptionJpaRepository
             ORDER BY s.domainKey ASC, s.tenantId ASC
             """)
     List<TenantDomainSubscriptionJpaEntity> findByStatus(@Param("status") TenantStatus status);
+
+    @Query("""
+            SELECT s FROM TenantDomainSubscriptionJpaEntity s
+            WHERE s.status = :status AND s.tenantId = :tenantId
+            ORDER BY s.domainKey ASC, s.tenantId ASC
+            """)
+    List<TenantDomainSubscriptionJpaEntity> findByStatusAndTenantId(
+            @Param("status") TenantStatus status, @Param("tenantId") String tenantId);
 }
