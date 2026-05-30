@@ -47,6 +47,8 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 
 > **Net-zero (ADR-019 step 1)**: backward-compat 시드(`(wms,wms)`/`(scm,scm)`/`(erp,erp)`/`(finance,finance)` self-subscription)로 인해 consumer(admin) catalog derivation 결과가 기존과 byte-identical 하다.
 
+> **Net-positive (ADR-019 step 2 — TASK-BE-325)**: step 2 부터 실 고객 테넌트(예: `acme-corp`)가 이 표면을 통해 catalog `tenants[]` 에 도메인-슬러그와 함께 등장한다. 응답 envelope shape(`items[].tenantId` + `items[].domainKey`)과 `tenants: string[]` 은 불변(ADR-019 D4); values 만 실 고객 id 를 포함하도록 확장된다.
+
 **Errors**:
 
 | Status | Code | Condition |
