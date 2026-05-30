@@ -42,9 +42,11 @@ traffic. Per `platform/api-gateway-policy.md` it MUST:
   request (and future supplier/demand/logistics/settlement/notification/admin
   paths declared in v2) to the owning service.
 - Validate JWT bearer tokens (OAuth2 Resource Server) against GAP's JWKS.
-- Enforce tenant isolation: only `tenant_id=scm` (or the SUPER_ADMIN
-  wildcard `*`) is admitted; cross-tenant tokens are rejected at the edge with
-  403 `TENANT_FORBIDDEN`.
+- Enforce tenant isolation via **entitlement-trust dual-accept** (ADR-MONO-019
+  § D5): a token is admitted when the legacy slug `tenant_id ∈ {scm, *}` (`*` =
+  SUPER_ADMIN platform-scope) **or** the GAP-signed `entitled_domains` claim
+  contains `scm`; cross-tenant tokens that satisfy neither branch are rejected
+  at the edge with 403 `TENANT_FORBIDDEN`.
 - Strip client-supplied identity headers and set them from verified claims.
 - Enforce rate limits per `(account-or-client_id, route)` for authenticated
   traffic and `(clientIp, route)` for unauthenticated traffic. Keys are
@@ -100,7 +102,7 @@ com.example.scmplatform.gateway/
 │   └── FailOpenRateLimiter.java           ← Redis fail-open wrapper + metric
 ├── security/
 │   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy global-account-platform
-│   ├── TenantClaimValidator.java          ← tenant_id ∈ { scm, * }
+│   ├── TenantClaimValidator.java          ← dual-accept: tenant_id ∈ { scm, * } ∪ entitled_domains ∋ scm
 │   └── JwksHealthProbe.java               ← startup-time JWKS reachability probe
 └── error/
     ├── ApiErrorEnvelope.java
@@ -205,8 +207,20 @@ Per `platform/security-rules.md` and
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the
   legacy `"global-account-platform"` string (D2-b deprecation window).
-- Tenant: `TenantClaimValidator` — only `tenant_id ∈ { scm, * }`. The
-  wildcard accommodates SUPER_ADMIN platform-scope tokens.
+- Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
+  (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
+  (`*` = SUPER_ADMIN platform-scope) **or** the GAP-signed `entitled_domains`
+  claim (a list of domain keys) contains `scm`. Rejection requires **both**
+  branches to fail (fail-closed; entitlement only widens). The
+  `entitled_domains` claim is read only from an RS256/JWKS-verified token, so
+  it is unforgeable — **GAP is the entitlement authority**; a non-list / null /
+  empty / non-string-element claim degrades to "not entitled". The shared
+  static `TenantClaimValidator.isEntitled(jwt, domain)` helper is the single
+  source of truth for the entitlement branch. While GAP has not yet populated
+  `entitled_domains` the claim is absent → only the legacy path applies →
+  **production net-zero**. This is the ADR-MONO-019 **dual-accept window**; the
+  legacy slug branch is removed in step 4 once GAP populates the claim
+  (separate follow-up).
 - Forwarded headers after successful validation:
   - `X-User-Id` ← `sub`
   - `X-Account-Id` ← `sub` (alias used by scm-platform downstream services;
@@ -285,7 +299,7 @@ Disabled in tests via `gateway.jwks.startup-probe.enabled=false`.
 | Situation | Response |
 |---|---|
 | Missing / invalid JWT on protected route | 401 UNAUTHORIZED |
-| Cross-tenant token (`tenant_id != scm` and not `*`) | 403 TENANT_FORBIDDEN |
+| Cross-tenant token — `tenant_id ∉ {scm, *}` **and** signed `entitled_domains ∌ scm` (dual-accept both branches fail) | 403 TENANT_FORBIDDEN |
 | JWT valid but missing required role/scope (future per-route enforcement) | 403 FORBIDDEN |
 | Rate limit exceeded | 429 + `Retry-After: 1` |
 | Downstream unreachable (procurement / inventory-visibility not yet bootstrapped) | 503 SERVICE_UNAVAILABLE |

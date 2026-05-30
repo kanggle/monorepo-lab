@@ -74,8 +74,10 @@ config/         ← Spring @Configuration beans only
 
 All 4 read-only endpoints share the `/api/inventory-visibility` base path
 (rewritten from `/api/v1/inventory-visibility/**` by gateway-service). All
-require a JWT with `tenant_id ∈ {scm, *}`; no per-endpoint role/scope
-differentiation in v1 (defense-in-depth via `TenantClaimEnforcer` filter).
+require a JWT that satisfies the entitlement-trust dual-accept gate
+(`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`, § Multi-tenancy);
+no per-endpoint role/scope differentiation in v1 (defense-in-depth via
+`TenantClaimEnforcer` filter).
 All are **gateway-routed (public)** and listed in
 [`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md).
 Formal request / response shapes live in
@@ -129,8 +131,8 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 
 - OAuth2 Resource Server (RS256)
 - JWKS: `${OIDC_ISSUER_URL}/oauth2/jwks`
-- Validators: JwtTimestampValidator + AllowedIssuersValidator + TenantClaimValidator (tenant_id=scm)
-- Service-level TenantClaimEnforcer filter (defense-in-depth)
+- Validators: JwtTimestampValidator + AllowedIssuersValidator
+- Service-level `TenantClaimEnforcer` filter (defense-in-depth) — entitlement-trust dual-accept gate (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`); carries a local `isEntitled` helper (no decode-time validator in this service)
 - Public paths: `/actuator/health`, `/actuator/info`, `/actuator/prometheus`
 
 ## Dependencies
@@ -182,11 +184,28 @@ Invalid envelopes (null `eventId` or null `payload`) bypass dedupe and route str
 
 **N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a GAP `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant).
 
-The `tenant_id=scm` claim is still **fail-closed enforced** (single-tenant gate, defense-in-depth — consistent with `procurement-service`):
+The domain claim is still **fail-closed enforced** at the gate via
+**entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
+defense-in-depth — consistent with `procurement-service`). A token is accepted
+when **either** the legacy slug `tenant_id ∈ {scm, *}` (`*` = SUPER_ADMIN
+platform-scope) **or** the GAP-signed `entitled_domains` claim (a list of domain
+keys) contains `scm`; rejection (403 `TENANT_FORBIDDEN`) requires **both**
+branches to fail (fail-closed; entitlement only *widens*). `entitled_domains` is
+read only from an RS256/JWKS-verified token, so it is unforgeable — **GAP is the
+entitlement authority**; a non-list / null / empty / non-string-element claim
+degrades to "not entitled". While GAP has not yet populated `entitled_domains`
+the claim is absent → only the legacy path applies → **production net-zero**
+(ADR-MONO-019 **dual-accept window**; the legacy slug branch is removed in step
+4 once GAP populates the claim — separate follow-up):
 
-1. **Gateway** — `TenantClaimValidator` rejects tokens whose `tenant_id ∉ {scm, *}` at JWT decode time.
-2. **Service JWT validator chain** — `AllowedIssuersValidator` + `TenantClaimValidator` re-run during local decode (the gateway forwards the bearer; the service decodes again).
-3. **Service filter** — `TenantClaimEnforcer` servlet filter rejects with 403 `TENANT_FORBIDDEN` when the claim is missing or not in `{scm, *}` (public actuator paths skipped).
+1. **Gateway** — `TenantClaimValidator` applies the dual-accept gate at JWT decode time.
+2. **Service JWT validator chain** — `AllowedIssuersValidator` re-run during local decode (the gateway forwards the bearer; the service decodes again).
+3. **Service filter** — `TenantClaimEnforcer` servlet filter applies the dual-accept gate and rejects with 403 `TENANT_FORBIDDEN` (public actuator paths skipped). This service has no decode-time `TenantClaimValidator`, so the enforcer carries a **local** `isEntitled` helper (the entitlement check cannot be shared across modules).
+
+This dual-accept gate is independent of row-level isolation: the
+`adapter/inbound/web/TenantClaimExtractor` (which extracts `tenant_id` for
+row scoping, defaulting to `scm`) is **not** an enforcement gate and is
+unchanged.
 
 The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "scm"`. Consumed `wms-platform` events are cross-project but are projected into the single `scm` tenant scope.
 
@@ -242,7 +261,7 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
 | 1 | Duplicate wms `eventId` | skipped, no mutation (`event_dedupe`, T8) |
 | 2 | Invalid envelope (null `eventId` / `payload`) | immediate `<topic>.DLT`, no retry |
 | 3 | Transient consumer processing error | 3 retries (1s, 2s exponential) → `<topic>.DLT` on exhaustion |
-| 4 | Cross-tenant JWT (`tenant_id ∉ {scm, *}`) | 403 `TENANT_FORBIDDEN` (validator chain or `TenantClaimEnforcer`) |
+| 4 | Cross-tenant JWT — `tenant_id ∉ {scm, *}` **and** signed `entitled_domains ∌ scm` (dual-accept both branches fail) | 403 `TENANT_FORBIDDEN` (validator chain or `TenantClaimEnforcer`) |
 | 5 | Redis cache miss / Redis outage | **fail-OPEN** → fall back to PostgreSQL; response header `X-Cache: UNAVAILABLE`; never 5xx (invariant #6) |
 | 6 | wms topic silent / consumer lag grows | node `last_event_at` ages → sweep flips node to STALE / UNREACHABLE → `SNAPSHOT_STALE` alert |
 | 7 | `StalenessDetectionScheduler` ShedLock held by another replica | silent skip + `staleness_sweep_run_count{result=skipped}` (not an error, B5) |

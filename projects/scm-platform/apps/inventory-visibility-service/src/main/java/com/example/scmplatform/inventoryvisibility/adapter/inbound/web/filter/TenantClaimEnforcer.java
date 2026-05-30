@@ -21,6 +21,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * Service-level fail-closed re-enforcement of {@code tenant_id}=scm.
@@ -28,6 +30,14 @@ import java.time.Instant;
  * independently enforce the same tenant invariant.
  * <p>
  * Mirrors procurement-service TenantClaimEnforcer pattern.
+ *
+ * <p>Applies the <strong>entitlement-trust dual-accept</strong> gate
+ * (ADR-MONO-019 § D5): pass when legacy {@code tenant_id ∈ {expectedTenantId,
+ * "*"}} <em>or</em> the signed {@code entitled_domains} claim contains
+ * {@code expectedTenantId}; otherwise 403 {@code TENANT_FORBIDDEN}. Rejection
+ * requires <strong>both</strong> branches to fail (fail-closed). This service
+ * has no decode-time validator, so {@link #isEntitled} lives locally here (each
+ * service owns its copy — the helper cannot be shared across modules).
  */
 @Slf4j
 @Component
@@ -37,6 +47,7 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String WILDCARD_TENANT = "*";
     private static final String CLAIM_TENANT_ID = "tenant_id";
+    private static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
 
     private final String expectedTenantId;
 
@@ -58,12 +69,17 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth instanceof JwtAuthenticationToken jwtAuth) {
             String tenantId = jwtAuth.getToken().getClaimAsString(CLAIM_TENANT_ID);
-            if (tenantId == null || tenantId.isBlank()) {
+            boolean entitled = isEntitled(jwtAuth.getToken(), expectedTenantId);
+            if ((tenantId == null || tenantId.isBlank()) && !entitled) {
                 writeError(response, HttpStatus.UNAUTHORIZED.value(),
                         "UNAUTHORIZED", "tenant_id claim is required");
                 return;
             }
-            if (!WILDCARD_TENANT.equals(tenantId) && !expectedTenantId.equals(tenantId)) {
+            boolean legacyOk = WILDCARD_TENANT.equals(tenantId)
+                    || expectedTenantId.equals(tenantId);
+            // Dual-accept: reject only when BOTH legacy slug and the signed
+            // entitled_domains claim fail (fail-closed; entitlement only widens).
+            if (!legacyOk && !entitled) {
                 log.warn("TenantClaimEnforcer rejected cross-tenant request: tenant={} path={}",
                         tenantId, request.getRequestURI());
                 writeError(response, HttpStatus.FORBIDDEN.value(),
@@ -73,6 +89,30 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Local entitlement-trust check (this service has no decode-time validator
+     * to share with). Returns {@code true} iff the verified
+     * {@code entitled_domains} claim is a list of strings that contains
+     * {@code domain}. Any claim shape anomaly (absent / non-list / null or
+     * non-string element) yields {@code false} (fail-closed — no NPE, no
+     * blanket trust).
+     */
+    static boolean isEntitled(Jwt jwt, String domain) {
+        if (jwt == null || domain == null) {
+            return false;
+        }
+        Object raw = jwt.getClaims().get(CLAIM_ENTITLED_DOMAINS);
+        if (!(raw instanceof List<?> list)) {
+            return false;
+        }
+        for (Object element : list) {
+            if (element instanceof String s && s.equals(domain)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void writeError(HttpServletResponse response, int status,

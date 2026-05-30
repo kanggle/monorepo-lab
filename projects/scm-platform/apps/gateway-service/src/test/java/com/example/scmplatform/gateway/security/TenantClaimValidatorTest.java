@@ -91,4 +91,81 @@ class TenantClaimValidatorTest {
                 jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "   "));
         assertThat(r.hasErrors()).isTrue();
     }
+
+    private static Jwt jwtWith(java.util.Map<String, Object> claims) {
+        Jwt.Builder b = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .issuer("http://gap.local")
+                .subject("user-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60));
+        claims.forEach(b::claim);
+        return b.build();
+    }
+
+    @Test
+    @DisplayName("entitlement-trust: tenant_id=acme + entitled_domains=[scm] → success")
+    void entitledCrossTenantPasses() {
+        OAuth2TokenValidatorResult r = validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme", "entitled_domains", java.util.List.of("scm"))));
+        assertThat(r.hasErrors()).isFalse();
+    }
+
+    @Test
+    @DisplayName("non-entitled: tenant_id=acme + entitled_domains=[wms] → tenant_mismatch")
+    void nonEntitledCrossTenantRejected() {
+        OAuth2TokenValidatorResult r = validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme", "entitled_domains", java.util.List.of("wms"))));
+        assertThat(r.hasErrors()).isTrue();
+        assertThat(r.getErrors()).anyMatch(
+                e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
+    }
+
+    @Test
+    @DisplayName("non-entitled: tenant_id=acme without entitled_domains → tenant_mismatch")
+    void crossTenantNoEntitlementRejected() {
+        OAuth2TokenValidatorResult r = validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme")));
+        assertThat(r.hasErrors()).isTrue();
+    }
+
+    @Test
+    @DisplayName("legacy scm/* still pass with entitlement branch present")
+    void legacyStillPasses() {
+        assertThat(validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "scm", "entitled_domains", java.util.List.of("wms"))))
+                .hasErrors()).isFalse();
+        assertThat(validator.validate(jwtWith(java.util.Map.of("tenant_id", "*")))
+                .hasErrors()).isFalse();
+    }
+
+    @Test
+    @DisplayName("entitled_domains containing scm grants even when tenant_id absent")
+    void entitledWithoutTenantIdPasses() {
+        OAuth2TokenValidatorResult r = validator.validate(jwtWith(java.util.Map.of(
+                "entitled_domains", java.util.List.of("scm"))));
+        assertThat(r.hasErrors()).isFalse();
+    }
+
+    @Test
+    @DisplayName("claim shape safety: non-list / empty / non-string element → not entitled, fail-closed")
+    void claimShapeSafety() {
+        // non-list (String)
+        assertThat(validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme", "entitled_domains", "scm"))).hasErrors()).isTrue();
+        // empty list
+        assertThat(validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme", "entitled_domains", java.util.List.of())))
+                .hasErrors()).isTrue();
+        // non-string element
+        assertThat(validator.validate(jwtWith(java.util.Map.of(
+                "tenant_id", "acme", "entitled_domains", java.util.List.of(42))))
+                .hasErrors()).isTrue();
+        // isEntitled static helper null-safety
+        assertThat(TenantClaimValidator.isEntitled(null, "scm")).isFalse();
+        assertThat(TenantClaimValidator.isEntitled(
+                jwtWith(java.util.Map.of("tenant_id", "scm")), null)).isFalse();
+        assertThat(TenantClaimValidator.isEntitled(
+                jwtWith(java.util.Map.of("tenant_id", "acme")), "scm")).isFalse();
+    }
 }
