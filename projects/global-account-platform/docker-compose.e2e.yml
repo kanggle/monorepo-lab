@@ -196,9 +196,9 @@ services:
       # http://localhost:8081 which targets the account container itself in
       # Docker, causing all signup attempts to fail with AUTH_SERVICE_UNAVAILABLE.
       AUTH_SERVICE_URL: http://auth-service:8081
-      # TASK-BE-142: /internal/** is fail-closed when token is unset. Must match
-      # the value used by sibling services (admin-service, security-service).
-      INTERNAL_API_TOKEN: e2e-internal-token
+      # TASK-BE-319b: INTERNAL_API_TOKEN removed. account-service /internal/** no longer accepts the
+      # static X-Internal-Token — authentication is GAP client_credentials JWT only (every caller is
+      # on Bearer: security/admin/auth/community/membership). Fail-closed via the .authenticated() gate.
     # TASK-BE-045: stagger startup (auth -> account -> admin -> security) to
     # spread initial HikariCP checkFailFast connection bursts on MySQL.
     depends_on:

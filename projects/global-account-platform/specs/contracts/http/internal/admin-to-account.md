@@ -4,7 +4,7 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 
 **호출 방향**: admin-service (client) → account-service (server)
 **노출 경로**: `/internal/accounts/*`
-**인증**: mTLS 또는 내부 서비스 토큰
+**인증** (TASK-BE-318b 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <GAP client_credentials JWT>` — admin-service 가 `admin-service-client` 로 GAP `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 정적 `X-Internal-Token` 은 제거됨.
 
 ---
 

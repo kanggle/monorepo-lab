@@ -14,52 +14,46 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Authenticates {@code /internal/**} requests carrying the static {@code X-Internal-Token}
- * header (TASK-BE-142 fail-closed semantics).
+ * Authenticates {@code /internal/**} requests <em>only</em> under the dev/test bypass.
  *
- * <p><b>TASK-BE-317 (ADR-005 단계 2 — dual-allow):</b> this filter is now
- * <em>non-terminal</em>. Instead of writing 401 itself, it merely populates the
- * {@link org.springframework.security.core.context.SecurityContext} with an authenticated
- * token when a valid {@code X-Internal-Token} is present (or when running unconfigured under
- * the dev/test bypass). The final authorization decision is made by the Spring Security
- * filter chain, where {@code /internal/**} is {@code .authenticated()}. This lets a request
- * authenticate via <em>either</em> a valid {@code X-Internal-Token} (this filter) <em>or</em>
- * a valid GAP {@code client_credentials} JWT (the OAuth2 resource-server
- * {@code BearerTokenAuthenticationFilter}, which runs after this one). When neither produces
- * an {@code Authentication}, the chain rejects with 401 (fail-closed preserved).
+ * <p><b>TASK-BE-319b (ADR-005 단계 4b — JWT-only):</b> the legacy static {@code X-Internal-Token}
+ * acceptance path has been removed now that every caller — security (BE-318) / admin (BE-318b) /
+ * auth (BE-318c) / community (BE-253) / membership (BE-318d) — authenticates with a GAP
+ * {@code client_credentials} Bearer JWT. In all real profiles {@code /internal/**} is authenticated
+ * solely by the OAuth2 resource-server ({@code BearerTokenAuthenticationFilter}) against the
+ * {@code .authenticated()} gate; this filter no longer participates.
  *
- * <p>The filter is registered before
- * {@code org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter}.
- * It does not reject on a missing/invalid token — it simply leaves the context untouched so
- * the bearer-token path (or the final {@code .authenticated()} gate) can act.
+ * <p>This filter remains <em>non-terminal</em> and serves a single purpose: under the
+ * {@code bypass} flag (the {@code 'test'}/{@code 'standalone'} profile or an explicit
+ * {@code internal.api.bypass-when-unconfigured=true}) it populates the
+ * {@link org.springframework.security.core.context.SecurityContext} with an authenticated token so
+ * {@code @WebMvcTest} slice tests and local/standalone runs can reach {@code /internal/**} without a
+ * real JWT. It never rejects — a request it does not authenticate simply defers to the bearer-token
+ * path and the final {@code .authenticated()} gate (which rejects with 401, fail-closed).
  *
- * <p>Fail-closed: when no token is configured AND the bypass is disabled, the filter sets no
- * authentication, so every {@code /internal/**} request is rejected by the {@code .authenticated()}
- * rule with 401. The bypass flag is intended solely for {@code @WebMvcTest} slice tests and local
- * development — production deployments must supply {@code INTERNAL_API_TOKEN}.
+ * <p>The bypass is a profile-gated dev/test convenience, not a shared secret — production profiles
+ * always require a valid GAP JWT.
  */
 @Slf4j
 public class InternalApiFilter extends OncePerRequestFilter {
 
-    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
     private static final String INTERNAL_PATH_PREFIX = "/internal/";
 
-    /** Principal name attached to requests authenticated via the static internal token. */
+    /** Principal name attached to requests authenticated via the dev/test bypass. */
     static final String INTERNAL_PRINCIPAL = "internal-service-token";
-    /** Authority granted to internal-token-authenticated requests. */
+    /** Authority granted to bypass-authenticated requests. */
     static final String INTERNAL_AUTHORITY = "ROLE_INTERNAL";
 
-    private final String expectedToken;
-    private final boolean bypassWhenUnconfigured;
+    private final boolean bypass;
 
-    public InternalApiFilter(String expectedToken, boolean bypassWhenUnconfigured) {
-        this.expectedToken = expectedToken;
-        this.bypassWhenUnconfigured = bypassWhenUnconfigured;
-        if ((expectedToken == null || expectedToken.isBlank()) && !bypassWhenUnconfigured) {
-            log.warn("INTERNAL_API_TOKEN is not configured — /internal/** requests authenticate only via "
-                    + "GAP JWT; X-Internal-Token requests are rejected with 401 (fail-closed).");
-        } else if (expectedToken == null || expectedToken.isBlank()) {
-            log.warn("INTERNAL_API_TOKEN is not configured — bypass is enabled (dev/test only). DO NOT USE IN PRODUCTION.");
+    public InternalApiFilter(boolean bypass) {
+        this.bypass = bypass;
+        if (!bypass) {
+            log.info("/internal/** authenticate only via GAP client_credentials JWT (Authorization: Bearer); "
+                    + "no static-token path (TASK-BE-319b, fail-closed).");
+        } else {
+            log.warn("InternalApiFilter bypass is enabled (dev/test/standalone only) — /internal/** requests "
+                    + "are authenticated without a JWT. DO NOT USE IN PRODUCTION.");
         }
     }
 
@@ -67,24 +61,10 @@ public class InternalApiFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                      HttpServletResponse response,
                                      FilterChain filterChain) throws ServletException, IOException {
-        if (request.getRequestURI().startsWith(INTERNAL_PATH_PREFIX) && internalTokenAccepted(request)) {
+        if (bypass && request.getRequestURI().startsWith(INTERNAL_PATH_PREFIX)) {
             authenticateInternalRequest();
         }
         filterChain.doFilter(request, response);
-    }
-
-    /**
-     * @return {@code true} when this request should be treated as an authenticated internal call
-     *         based on the static token (or the dev/test bypass). Never rejects — a {@code false}
-     *         result simply defers to the bearer-token path / final authorization rule.
-     */
-    private boolean internalTokenAccepted(HttpServletRequest request) {
-        boolean tokenConfigured = expectedToken != null && !expectedToken.isBlank();
-        if (!tokenConfigured) {
-            // Unconfigured: authenticate only under the dev/test bypass; otherwise leave unauthenticated.
-            return bypassWhenUnconfigured;
-        }
-        return expectedToken.equals(request.getHeader(INTERNAL_TOKEN_HEADER));
     }
 
     private void authenticateInternalRequest() {

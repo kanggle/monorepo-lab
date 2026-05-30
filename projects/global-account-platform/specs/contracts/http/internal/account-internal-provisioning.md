@@ -10,7 +10,7 @@ expose `/internal/**` to the public internet.
 > registration, OAuth client issuance, JWKS setup, and event subscription.
 
 **Path prefix**: `/internal/tenants/{tenantId}/accounts`
-**Authentication**: `X-Internal-Token` header (service-to-service token) or mTLS
+**Authentication**: `Authorization: Bearer <GAP client_credentials JWT>` (TASK-BE-319b; 정적 `X-Internal-Token` 제거됨). account-service `InternalApiFilter`/oauth2 resource-server 가 JWKS 서명 + issuer 로 검증.
 **Authorization**: Path `{tenantId}` must match the caller's JWT `tenant_id` claim,
 or the caller must hold a platform-scope `SUPER_ADMIN` role.
 
@@ -23,8 +23,8 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 
 | Header | Required | Description |
 |---|---|---|
-| `X-Internal-Token` | Yes | Shared service-to-service token (`INTERNAL_API_TOKEN` env var) |
-| `X-Tenant-Id` | Conditional | Caller's tenant scope. Required when no JWT is present. |
+| `Authorization` | Yes | `Bearer <GAP client_credentials JWT>` (TASK-BE-319b; replaces the removed `X-Internal-Token`) |
+| `X-Tenant-Id` | Conditional | Caller's tenant scope. Required when not derivable from the JWT. |
 
 ---
 
@@ -39,7 +39,7 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 | `ACCOUNT_NOT_FOUND` | 404 | `{accountId}` does not exist within this tenant |
 | `STATE_TRANSITION_INVALID` | 409 | Requested status transition is not permitted by `AccountStatusMachine` |
 | `VALIDATION_ERROR` | 400 | Request body fails Bean Validation |
-| `UNAUTHORIZED` | 401 | `X-Internal-Token` is missing or invalid |
+| `UNAUTHORIZED` | 401 | `Authorization: Bearer` JWT is missing or invalid |
 | `BULK_LIMIT_EXCEEDED` | 400 | `items` array exceeds the maximum of 1 000 entries (TASK-BE-257) |
 
 ---
