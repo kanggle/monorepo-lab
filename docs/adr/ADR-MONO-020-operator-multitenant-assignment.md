@@ -1,0 +1,144 @@
+# ADR-MONO-020 — Operator ↔ multi-customer assignment (AWS IAM Identity Center "user → multiple account assignments" parity; active-tenant token scoping)
+
+**Status:** PROPOSED
+
+**History:** PROPOSED 2026-05-31 (TASK-MONO-156 — authors the decision record for the **N:M operator↔tenant assignment** axis that [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) § D3 chose to defer (D3-A single-value `admin_operators.tenant_id` MVP; D3-B "Deferred, not rejected — § 3.3 step 4 extension"), and resolves the **active-tenant token-scoping** question that the TASK-MONO-154 runtime-activation investigation surfaced as **not specified in any ADR** (the operator's GAP OIDC token `tenant_id` is fixed at login from `credentials.tenant_id`, so an operator assigned to several customers cannot switch the active customer mid-session). Six decisions D1-D6, **CHOSEN-PROPOSED** direction per the reasoning below; the ACCEPTED transition is a separate user-explicit-intent-gated task per D6/§ 6, mirroring the ADR-MONO-014/015/017/018/**019** staged-child pattern. **No implementation in this task — decision record + impact scope + migration roadmap only.**)
+
+**Decision driver:** [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) introduced the real customer-tenant model (tenant ↔ domain subscription N:M; entitlement-trust domain gates; GAP issues a tenant-scoped token only when entitled) and shipped it end-to-end for a **single-tenant-per-operator** MVP (D3-A): an operator's scope is the single `admin_operators.tenant_id` (or the `'*'` platform sentinel), whose value is now a real customer id rather than a domain slug. That MVP is intentionally small and zero-regression — but it is **not** the production SaaS shape. AWS IAM Identity Center (and GCP equivalents) model an operator/user as assignable to **multiple** customers/accounts, each assignment carrying a **permission set**; the operator picks an *active* account, and the IdP (AWS STS) mints a **short-lived account-scoped credential** for the selected account — but only when the assignment exists. The runtime-activation work (TASK-MONO-154) made the gap concrete: the GAP OIDC access token that reaches the federated domains carries a `tenant_id` claim fixed at OIDC login (sourced from `credentials.tenant_id` via `CredentialAuthenticationProvider` → `TenantClaimTokenCustomizer`). With the single-value model that is fine (one operator → one customer → one tenant in the token). The moment an operator is assigned to **several** customers, "which `tenant_id` is in the token when the operator views customer *B*?" has **no answer in any existing ADR** — ADR-MONO-014's RFC 8693 exchange scopes the *operator* token (`iss=admin-service`, used only for `/api/admin/**`, tenant from `admin_operators.tenant_id`), not the domain-facing GAP OIDC token; ADR-MONO-019 D3-A deliberately sidesteps it by allowing exactly one tenant per operator. Introducing the N:M assignment table **and** deciding the active-tenant token-scoping mechanism is a cross-cutting decision spanning GAP (auth-service issuance + admin-service assignment store), the console (switcher → active-tenant → token), and the inherited isolation invariants. Authoring the implementation without resolving these axes would silently bake the tenant-switching auth model (HARDSTOP-09) and silently supersede the ADR-MONO-019 D3-A single-value MVP assumption (HARDSTOP-04 — must be recorded, not implied). This ADR is that decision record.
+
+**Supersedes:** none. **Amends:** [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) § D3 (additive § History note recording that the **production form of D3-A's single-value `admin_operators.tenant_id` MVP is the N:M operator-tenant assignment decided here**; ADR-019 D1-D6 + § 2-7 bodies byte-unchanged — HARDSTOP-04 discipline preserved). **Reconciles:** none yet (PROPOSED scopes the architecture; `console-integration-contract.md` § 2.4.x + `admin_operators` schema + auth-service issuance are byte-unchanged at PROPOSED — D2/D6 explicitly preserve current shapes during the dual-read window; reconciliation lands at the post-ACCEPTED execution tasks, never inside this ADR).
+
+**Related:** [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) (parent — customer-tenant model; this ADR realizes its deferred D3-B / § 3.3 step-4 extension and resolves the active-tenant token-scoping its D5 entitlement-trust model implies but does not specify for the multi-assignment case), [ADR-MONO-014](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (RFC 8693 operator token exchange — this ADR's D2 active-tenant scoping **extends** the exchange model from "operator identity" to "operator-assumes-tenant"), [ADR-MONO-017](ADR-MONO-017-platform-console-bff-architecture.md) (D6 `tenant_id` pass-through — the BFF stays a pass-through under multi-tenant switching, never a tenant rewriter), [ADR-001 (GAP)](../../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) (GAP central OIDC IdP — the issuance authority D2 centralizes on), [ADR-002 (GAP)](../../projects/global-account-platform/docs/adr/ADR-002-admin-rbac.md) (`admin_operators.tenant_id` + `'*'` sentinel + RBAC — the scope model D1/D5 extend to N:M + permission-set), `rules/traits/multi-tenant.md` (M1-M7 — the isolation invariants preserved while the *allowed-set* widens per active selection), `projects/global-account-platform/apps/admin-service/.../OperatorAccessTokenIssuer.java` + `TokenExchangeService.java` (the exchange code D2 extends), `projects/global-account-platform/apps/auth-service/.../oauth2/TenantClaimTokenCustomizer.java` (the keystone `entitled_domains` derivation D3 reuses on the assume-tenant path).
+
+---
+
+## 1. Context
+
+### 1.1 What D3-A (ADR-019) shipped, and its ceiling
+
+ADR-MONO-019 D3-A (CHOSEN, MVP): an operator's tenant scope is the single `admin_operators.tenant_id` (or `'*'` platform-scope). Step 2 (TASK-BE-325) seeded the first real customer `acme-corp`; the runtime capstone (TASK-MONO-154) proved end-to-end that an `acme-corp`-scoped operator's GAP OIDC token (`tenant_id=acme-corp` + keystone-injected `entitled_domains=[finance,wms]`) passes the finance/wms domain gates (entitlement-trust) and is rejected by scm/erp. This works precisely because the operator has **exactly one** customer tenant: the value baked into the OIDC token at login is unambiguous.
+
+The ceiling: a real SaaS operator (a support engineer, a managed-service partner) is assigned to **many** customers. Under D3-A they would need a separate login identity per customer — there is no in-session "switch active customer" because the domain-facing token's `tenant_id` is fixed at login.
+
+### 1.2 The production shape (AWS IAM Identity Center parity)
+
+AWS: a *user* is granted *account assignments* (account × permission-set) in IAM Identity Center. The user picks an account; STS issues a **short-lived, account-scoped credential** for it — only if the assignment exists. The downstream service trusts the credential's account and isolates by it. Two distinct facts: (i) *which accounts the user may assume* (the assignment), and (ii) *which account is active right now* (the selection → a scoped credential). The credential is re-minted per active-account, not fixed at login.
+
+The portfolio's analog after this ADR: (i) `operator_tenant_assignment` N:M (operator × customer-tenant × permission-set) — the assignment store; (ii) an **assume-tenant** step at GAP that mints a short-lived GAP OIDC token scoped to the *selected* customer (`tenant_id=<selected>` + `entitled_domains=<selected's subscriptions>`) — but only when the operator's assignment **and** the customer's subscription (ADR-019 D2) both exist. The federated domains' entitlement-trust gates (ADR-019 D5, already shipped) accept it unchanged; the BFF passes it through unchanged (ADR-017 D6).
+
+### 1.3 The unspecified point this ADR must resolve (HARDSTOP-09)
+
+TASK-MONO-154's investigation established: the domain-facing GAP OIDC token's `tenant_id` is fixed at login (`credentials.tenant_id`). ADR-014's exchange produces the *operator* token (`iss=admin-service`), not the domain-facing token. **No ADR specifies how a multi-assignment operator obtains a domain-facing token scoped to a *selected* customer.** Implementing tenant-switching without deciding this would bake the auth model silently. D2 below is that decision.
+
+---
+
+## 2. Decision
+
+> Direction is **CHOSEN-PROPOSED**; finalised (byte-unchanged) at ACCEPTED. Each decision lists the chosen option + the rejected/deferred alternatives.
+
+### D1 — operator ↔ tenant assignment store (N:M)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. New `operator_tenant_assignment` N:M table (operator_id × tenant_id × permission_set_ref), dual-read with the legacy single-value `admin_operators.tenant_id`** | Add an explicit grant table in admin_db. An operator's effective scope = the union of its assignment rows; the legacy `admin_operators.tenant_id` (incl. `'*'`) is read as an implicit single assignment during the migration window (D6). Each assignment row carries a permission-set reference (D5). | **CHOSEN** — explicit least-privilege grant (inherits ADR-019 D3 ⑤); additive to ADR-002; dual-read keeps every existing single-value/`'*'` operator working with zero regression. |
+| B. Multi-value column on `admin_operators` (CSV / JSON tenant list) | Stuff several tenants into one column | Rejected — un-queryable, no per-assignment permission-set, no FK integrity, no audit surface. |
+| C. Derive multi-assignment from subscription | An operator of a domain sees every customer subscribed to it | Rejected — same least-privilege violation ADR-019 D3 Option C rejected: "customer subscribes to domain" ≠ "this operator may act for that customer". |
+
+### D2 — active-tenant token scoping (the crux; AWS STS AssumeRole analog)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **B. RFC 8693 *assume-tenant* token-exchange at GAP — the console exchanges the operator's base session for a short-lived GAP OIDC token scoped to the SELECTED customer (`tenant_id=<selected>` + `entitled_domains=<selected's ACTIVE subscriptions>`), issued only when (operator assignment ∈ D1) ∧ (customer subscription ∈ ADR-019 D2) both hold** | Extends the ADR-014 exchange model from "operator identity" to "operator-assumes-tenant". On switcher selection, console-web (server-side) calls a GAP assume-tenant endpoint; GAP validates the subject + the operator's assignment to the selected tenant + the tenant's existence, then issues a short-lived domain-facing token carrying the selected `tenant_id` and the keystone-style `entitled_domains` (D3). The BFF passes it through (ADR-017 D6); the domain gates (ADR-019 D5) accept it. Re-exchange per selection (no long-lived multi-tenant token). | **CHOSEN** — exact STS-AssumeRole parity (②/③: central issuance, self-contained short-lived token, no per-request callback); reuses the proven RFC 8693 / keystone machinery; the assignment ∧ subscription double-check is the entitlement gate at issuance, exactly as ADR-019 D5 intends. |
+| A. auth-service issues a tenant-context OIDC token via a new grant/param | A new auth-service capability to request a token scoped to tenant T | Viable but **rejected as primary** — duplicates the exchange surface ADR-014 already established; an exchange (B) composes with the operator-identity exchange and keeps the "assume a scope you're assigned" framing explicit. (Recorded as the fallback if the exchange composition proves impractical at execution.) |
+| C. Re-authenticate (full OIDC login) per tenant switch | Switching customer forces a re-login | Rejected — hostile UX; defeats the in-session switcher; AWS does not re-authenticate to switch accounts, it re-mints a scoped credential. |
+
+### D3 — `entitled_domains` for the assumed token (least-privilege, per active selection)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. `entitled_domains` = the SELECTED customer's ACTIVE subscriptions only (ADR-019 D2), derived at assume-tenant issuance via the keystone path (BE-324)** | The assumed token carries exactly the active customer's subscribed domains — not a union across all the operator's assignments. Reuses `TenantClaimTokenCustomizer`'s subscription lookup, keyed on the selected `tenant_id`. | **CHOSEN** — least-privilege per active scope; identical semantics to the single-tenant keystone already shipped; the domain gate behavior is unchanged. |
+| B. Union of all assigned tenants' subscriptions | One token grants every domain across every assignment | Rejected — over-broad; an operator viewing customer A could reach customer B's domains within A's token; breaks the active-selection isolation. |
+
+### D4 — console active-tenant flow (BFF stays a pass-through)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. console-web (server-side) drives the assume-tenant exchange on switcher selection; stores the assumed short-lived token in the operator's server session; the BFF forwards it verbatim (ADR-017 D6 unchanged)** | The switcher selection triggers (server-side) the D2 exchange; the resulting tenant-scoped token becomes the `Authorization` bearer the BFF passes through; `X-Tenant-Id` = the same selected tenant. No BFF code change — the BFF remains value-agnostic pass-through (proven by TASK-PC-BE-007). | **CHOSEN** — preserves ADR-017 D6 HARD INVARIANT (BFF never mints/rewrites); the active-tenant concern lives in console-web's server session + GAP issuance, exactly where ADR-014 already places the operator-token concern. |
+| B. BFF rewrites/mints the tenant-scoped token | The BFF becomes the tenant-switching authority | Rejected — violates ADR-017 D6.A (producer-side authority; BFF never mints/rewrites). |
+
+### D5 — permission-set per assignment (AWS permission-set analog)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Each `operator_tenant_assignment` row references a permission-set (RBAC role-set) scoped to that (operator, tenant); the operator's effective permissions are those of the active assignment** | Inherits ADR-002 RBAC; the permission-set is per assignment so an operator can be a SUPPORT_READONLY for customer A and a SECURITY_ANALYST for customer B. | **CHOSEN** — true Identity-Center parity; least-privilege per customer; additive to the existing role model. |
+| B. Single global role-set regardless of customer | One role-set for all of an operator's customers | Rejected — coarse; can't model per-customer least-privilege; not the production shape. |
+
+### D6 — migration phasing (zero-regression; BE-303 / BE-317 discipline)
+
+| Option | Mechanics | Verdict |
+|---|---|---|
+| **A. Backward-compatible staged migration, each step independently main-GREEN; ACCEPTED is step 0** | **Step 0 (doc-only):** this ADR PROPOSED → ACCEPTED (user-gated). **Step 1:** add `operator_tenant_assignment` (D1) + permission-set ref (D5); **dual-read** — effective scope = assignment rows ∪ legacy single-value `admin_operators.tenant_id`/`'*'` (every existing operator keeps working unchanged). **Step 2:** implement the assume-tenant exchange (D2) + `entitled_domains` derivation (D3) behind the existing single-tenant path (single-assignment operators get a token identical to today). **Step 3:** console-web active-tenant switcher flow (D4) for multi-assignment operators; seed a multi-assignment demo operator; e2e proves switching A↔B re-scopes the token + domain gates follow. **Step 4 (cleanup):** retire the legacy single-value `admin_operators.tenant_id` read once all operators are migrated to assignments. | **CHOSEN** — each step main-GREEN; the riskiest change (issuance + switching) lands behind a dual-read window — the BE-317 dual-accept / BE-303 CI-RED-at-merge discipline (and ADR-019's own 4-step precedent). |
+| B. Big-bang (table + exchange + switcher + cleanup in one PR) | Single atomic flip | Rejected — transiently breaks operator auth; impossible to bisect; violates BE-303. |
+
+---
+
+## 3. Consequences
+
+### 3.1 Hard invariants this ADR carries
+
+- **multi-tenant M1-M7 preserved** — `tenant_id` stays the single isolation key (M1); the domain 3-layer gate (M2), 404-over-403 (M3), enumeration defense (M4), async propagation (M5), and the cross-tenant-leak regression cohort (M6) are all unchanged. This ADR widens *which tenant is active per selection*, never relaxes a domain's row-level isolation. The assumed token is still a single-`tenant_id` token at any moment.
+- **GAP is the single issuance/entitlement authority (ADR-019 ②)** — the assignment store (D1), the assume-tenant issuance (D2), and the `entitled_domains` derivation (D3) all live in GAP. No domain replicates assignment or re-derives entitlement. Reinforces the central-IdP pattern.
+- **ADR-017 D6 BFF pass-through preserved** — the BFF never mints or rewrites the tenant-scoped token; active-tenant scoping is a console-web-session + GAP-issuance concern (D4). The TASK-PC-BE-007 pass-through invariant continues to hold for the assumed token.
+- **ADR-014 exchange model extended, not replaced** — the operator-identity exchange (GAP OIDC → admin-service operator token) is unchanged; D2 adds a *sibling* assume-tenant exchange (GAP base session → tenant-scoped GAP OIDC token) on the same RFC 8693 substrate.
+- **Least-privilege (ADR-019 D3 ⑤)** — explicit assignment grant (D1) + per-active `entitled_domains` (D3) + per-assignment permission-set (D5); no implicit cross-customer reach.
+- **Short-lived, self-contained tokens (ADR-019 D5 ③)** — the assumed token is short-lived and re-minted per selection; no per-request domain→GAP callback.
+
+### 3.2 What this ADR does NOT do (deferred to ACCEPTED + post-ACCEPTED execution)
+
+- No implementation: no `operator_tenant_assignment` table, no assume-tenant endpoint, no console switcher flow — all post-ACCEPTED execution tasks (§ 3.3).
+- No change to ADR-019 D1-D6 bodies (the amend is an additive note only — HARDSTOP-04).
+- No change to the single-tenant runtime shipped by ADR-019 (D3-A operators keep working via D6 dual-read).
+- Does not resolve cross-IdP federation or external-customer self-service operator provisioning (out of scope; a future axis if it arises → a new ADR, per ADR-018 § 3.3 precedent).
+
+### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
+
+1. **`TASK-…`** (GAP admin-service, D1+D5) — `operator_tenant_assignment` + permission-set; dual-read with legacy single-value. Model = **Opus** (auth scope).
+2. **`TASK-…`** (GAP auth-service, D2+D3) — assume-tenant RFC 8693 exchange + `entitled_domains` derivation for the selected tenant; single-assignment path byte-identical to today. Model = **Opus** (issuance, highest-risk).
+3. **`TASK-…`** (platform-console, D4) — console-web active-tenant switcher → assume-tenant flow; multi-assignment demo operator seed; federation-e2e A↔B switch spec. Model = **Opus / Sonnet**.
+4. **`TASK-…`** (cleanup, D6 step 4) — retire legacy single-value read once migrated.
+
+---
+
+## 4. Alternatives Considered
+
+- **Stay single-tenant-per-operator (do nothing).** Rejected as the *production* answer — it is the ADR-019 D3-A MVP, sufficient for the demo but not SaaS-real; this ADR records the production form, gated, without forcing immediate implementation.
+- **Encode assignments only in the token (no table).** Rejected (mirrors ADR-019 D2 Option B) — assignment is a durable business + audit fact, not only a token claim; the token MAY carry the active scope but the source of truth is the table.
+- **Make the BFF the tenant-switching authority.** Rejected — violates ADR-017 D6 (D4-B).
+- **Per-request domain→GAP entitlement check for the active tenant.** Rejected (mirrors ADR-019 D5 Option C) — per-request cross-service call; GAP runtime SPOF; defeats self-contained tokens.
+
+## 5. Relationship to ADR-MONO-019 / 014 / 017 / 002 + ADR-005 (GAP)
+
+| | ADR-019 (parent) | ADR-014 (operator-auth) | ADR-017 (BFF) | ADR-002 (GAP admin-rbac) | ADR-005 (GAP) |
+|---|---|---|---|---|---|
+| Relationship | **Realizes** its deferred D3-B / § 3.3 step-4 extension; resolves the active-tenant scoping its D5 implies | **Extends** the RFC 8693 exchange to assume-tenant | D6 pass-through **preserved** (BFF never mints/rewrites the assumed token) | `admin_operators.tenant_id` + `'*'` + RBAC **extended** to N:M + per-assignment permission-set | **Orthogonal** (service-to-service workload identity; shares no files) |
+
+This ADR amends ADR-MONO-019 § History additively (records that D3-A's single-value MVP production form is the N:M assignment decided here; ADR-019 D1-D6 byte-unchanged) and is a prerequisite for its deferred D3-B execution. ADR-MONO-017 D6 / ADR-MONO-014 exchange / ADR-MONO-002 scope invariants are inherited unchanged. ADR-005 (GAP) is orthogonal.
+
+## 6. Status Transition History
+
+| Date | Transition | Decision summary | Trigger | PR |
+|---|---|---|---|---|
+| 2026-05-31 | created PROPOSED | D1 = `operator_tenant_assignment` N:M (dual-read with legacy single-value); D2 = RFC 8693 assume-tenant exchange minting a short-lived GAP OIDC token scoped to the SELECTED customer (`tenant_id` + `entitled_domains`), issued only when assignment (D1) ∧ subscription (ADR-019 D2) hold (AWS STS AssumeRole analog, extends ADR-014); D3 = `entitled_domains` = selected customer's ACTIVE subscriptions only (least-privilege, keystone-derived); D4 = console-web drives the assume-tenant flow, BFF stays pass-through (ADR-017 D6); D5 = per-assignment permission-set (AWS permission-set analog); D6 = backward-compatible staged migration (step 0 ACCEPTED → assignment table → assume-tenant exchange → console switcher → legacy-read cleanup) | "진행" (TASK-MONO-156 — after ADR-019 runtime activation arc complete; user chose to author the deferred D3-B axis as a committed ADR rather than leave it an unspecified backlog item) | #<this> |
+
+> ACCEPTED transition (post-PROPOSED): a separate user-explicit-intent-gated task (sibling MONO-153 pattern) — D1-D6 CHOSEN-PROPOSED direction will be **finalised byte-unchanged** (ACCEPTED *finalises*, does not re-decide), authorizing the § 3.3 execution roadmap. **Execution steps remain PAUSED until ACCEPTED.**
+
+## 7. Provenance
+
+- ADR-MONO-019 § D3 (D3-A single-value MVP CHOSEN; D3-B "Deferred, not rejected — § 3.3 step 4 extension") + § D5 (entitlement-trust; "GAP issues a domain-scoped token only when subscription + assignment exist" — the issuance mechanism this ADR's D2 specifies for the multi-assignment case).
+- TASK-MONO-154 done-note + runtime investigation — surfaced the active-tenant token-scoping as not specified in any ADR (the domain-facing OIDC token `tenant_id` is fixed at login from `credentials.tenant_id`).
+- ADR-MONO-014 — RFC 8693 operator token exchange (the substrate D2 extends).
+- ADR-MONO-017 D6 — BFF `tenant_id` pass-through (preserved; D4).
+- ADR-002 (GAP) — `admin_operators.tenant_id` + `'*'` sentinel + RBAC (extended by D1/D5).
+- `rules/traits/multi-tenant.md` M1-M7 — isolation invariants preserved while the allowed-set widens per active selection.
+
+분석=Opus 4.8 / 구현=Opus 4.8 (cross-cutting operator-tenant-auth architecture; D1-D6 PROPOSED-direction reasoning under HARDSTOP-04/09 discipline; AWS IAM Identity Center / STS AssumeRole parity; staged-child ADR pattern per ADR-014/015/017/018/019).

@@ -77,6 +77,8 @@ Six decision axes. Each table's first row is **CHOSEN (PROPOSED direction)**.
 | B. Full N:M `operator_tenant_assignment` join table now | Operator → many customers, each with a permission set, immediately | **Deferred, not rejected** — this is the eventual AWS Identity Center "user → multiple account assignments" shape; folded into the roadmap (§ 3.3 step 4 extension) so the MVP stays small and zero-regression. |
 | C. Derive operator access from subscription (operator sees every subscribed customer) | No explicit operator↔tenant grant; if a customer subscribes to a domain, any operator of that domain sees it | Rejected — **violates least-privilege (⑤)**: "customer subscribes to domain" (D2) and "this operator may act for that customer" are different facts; conflating them means a domain operator automatically gains cross-customer reach. The operator's tenant access MUST be an explicit grant. |
 
+> **Additive note (ADR-MONO-020, 2026-05-31 — HARDSTOP-04 supersession record):** D3-A's single-value `admin_operators.tenant_id` is the **MVP**, not the production form. The N:M operator↔tenant assignment shape this table defers as Option B ("§ 3.3 step 4 extension") — together with the **active-tenant token-scoping** mechanism the TASK-MONO-154 runtime investigation surfaced as unspecified (the domain-facing GAP OIDC token's `tenant_id` is fixed at login from `credentials.tenant_id`, so a multi-assignment operator cannot switch the active customer mid-session) — is decided in [ADR-MONO-020](ADR-MONO-020-operator-multitenant-assignment.md) (PROPOSED). This note is additive; the D3 decision table above is byte-unchanged.
+
 ### D4 — Catalog resolution rewrite (console-facing; envelope-shape-preserving)
 
 | Option | Mechanics | Verdict |
