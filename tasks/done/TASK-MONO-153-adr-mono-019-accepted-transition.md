@@ -8,7 +8,9 @@ ADR-MONO-019 PROPOSED → ACCEPTED transition + recording — platform-console R
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #955 (squash `d15d20a6`). ADR-MONO-019 `Status: PROPOSED → ACCEPTED` (History ACCEPTED clause + § 1.3 past-tense + § 6 ACCEPTED row + PROPOSED row `#<this>`→`#953`) + ADR-MONO-003a § 3 audit row #24 + tasks/INDEX(MONO-153 ready + MONO-152 ready→done reconcile). D1-D6 + § 2/3/4/5/7 byte-unchanged (ACCEPTED=finalise; HARDSTOP-04). ADR-013/014/015/016/017/018/002/005 byte-unchanged. doc-only, CI `changes` GREEN. 3차원 검증(MERGED `d15d20a6` / origin/main tip 일치 / pre-merge 0 failing). 효과: ADR-019 § 3.3 4-step execution roadmap UNPAUSED → step 1 (GAP backward-compatible model+catalog) dependency-correct base 확립.
 
 # Owner
 
