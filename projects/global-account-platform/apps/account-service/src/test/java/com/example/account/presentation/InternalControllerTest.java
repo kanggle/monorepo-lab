@@ -42,8 +42,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Internal Controller slice tests")
 class InternalControllerTest {
 
-    private static final String INTERNAL_TOKEN = "";
-
     @Autowired
     private MockMvc mockMvc;
 
@@ -59,8 +57,7 @@ class InternalControllerTest {
         given(accountStatusUseCase.getStatus(eq("acc-123")))
                 .willReturn(new AccountStatusResult("acc-123", "ACTIVE", Instant.now(), null));
 
-        mockMvc.perform(get("/internal/accounts/acc-123/status")
-                        .header("X-Internal-Token", INTERNAL_TOKEN))
+        mockMvc.perform(get("/internal/accounts/acc-123/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
@@ -72,7 +69,6 @@ class InternalControllerTest {
                 .willReturn(new StatusChangeResult("acc-123", "ACTIVE", "LOCKED", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/lock")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -93,7 +89,6 @@ class InternalControllerTest {
                         StatusChangeReason.ADMIN_LOCK));
 
         mockMvc.perform(post("/internal/accounts/acc-123/lock")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -112,7 +107,6 @@ class InternalControllerTest {
                 .willReturn(new StatusChangeResult("acc-123", "LOCKED", "ACTIVE", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/unlock")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -134,7 +128,6 @@ class InternalControllerTest {
                 .willReturn(new DeleteAccountResult("acc-123", "ACTIVE", "DELETED", gracePeriodEndsAt));
 
         mockMvc.perform(post("/internal/accounts/acc-123/delete")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -158,7 +151,6 @@ class InternalControllerTest {
                         StatusChangeReason.ADMIN_DELETE));
 
         mockMvc.perform(post("/internal/accounts/acc-123/delete")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -178,7 +170,6 @@ class InternalControllerTest {
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(post("/internal/accounts/acc-999/delete")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -199,7 +190,6 @@ class InternalControllerTest {
                 .willReturn(new SocialSignupResult("acc-new", "new@example.com", "ACTIVE", true));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -222,7 +212,6 @@ class InternalControllerTest {
                 .willReturn(new SocialSignupResult("acc-existing", "existing@example.com", "ACTIVE", false));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -241,7 +230,6 @@ class InternalControllerTest {
     @DisplayName("POST /internal/accounts/social-signup missing email returns 400")
     void socialSignup_missingEmail_returns400() throws Exception {
         mockMvc.perform(post("/internal/accounts/social-signup")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -257,7 +245,6 @@ class InternalControllerTest {
     @DisplayName("POST /internal/accounts/social-signup missing provider returns 400")
     void socialSignup_missingProvider_returns400() throws Exception {
         mockMvc.perform(post("/internal/accounts/social-signup")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -276,7 +263,6 @@ class InternalControllerTest {
                 .willReturn(new SocialSignupResult("acc-locked", "locked@example.com", "LOCKED", false));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

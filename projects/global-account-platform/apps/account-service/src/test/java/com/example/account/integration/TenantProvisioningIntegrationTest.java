@@ -47,14 +47,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("TenantProvisioning 통합 테스트 — TASK-BE-231")
 class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
-    private static final String INTERNAL_TOKEN = "test-internal-token";
     private static final String WMS_TENANT_ID = "wms";
     private static final String FAN_TENANT_ID = "fan-platform";
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> INTERNAL_TOKEN);
     }
 
     @Autowired private MockMvc mockMvc;
@@ -85,7 +83,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         String email = "wms-user-" + UUID.randomUUID() + "@example.com";
 
         MvcResult result = mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -144,7 +141,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("WMS 토큰으로 다른 테넌트(fan-platform) path 호출 → 403 TENANT_SCOPE_DENIED")
     void createAccount_wmsCallerDifferentTenant_returns403() throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", FAN_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)  // WMS caller, fan-platform path
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -161,7 +157,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("미등록 tenantId → 404 TENANT_NOT_FOUND")
     void createAccount_unregisteredTenant_returns404() throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", "nonexistent-t")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", "nonexistent-t")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -184,7 +179,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
                 """, suspendedTenantId);
 
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", suspendedTenantId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", suspendedTenantId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -216,7 +210,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Create in wms via provisioning — should succeed despite same email
         MvcResult wmsResult = mockMvc.perform(
                         post("/internal/tenants/{tenantId}/accounts", WMS_TENANT_ID)
-                                .header("X-Internal-Token", INTERNAL_TOKEN)
                                 .header("X-Tenant-Id", WMS_TENANT_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -254,7 +247,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Create account first
         MvcResult createResult = mockMvc.perform(
                         post("/internal/tenants/{tenantId}/accounts", WMS_TENANT_ID)
-                                .header("X-Internal-Token", INTERNAL_TOKEN)
                                 .header("X-Tenant-Id", WMS_TENANT_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -273,7 +265,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Replace roles
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -308,7 +299,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         MvcResult createResult = mockMvc.perform(
                         post("/internal/tenants/{tenantId}/accounts", WMS_TENANT_ID)
-                                .header("X-Internal-Token", INTERNAL_TOKEN)
                                 .header("X-Tenant-Id", WMS_TENANT_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -325,7 +315,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/internal/tenants/{tenantId}/accounts/{accountId}",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value(accountId))
@@ -346,7 +335,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         MvcResult createResult = mockMvc.perform(
                         post("/internal/tenants/{tenantId}/accounts", WMS_TENANT_ID)
-                                .header("X-Internal-Token", INTERNAL_TOKEN)
                                 .header("X-Tenant-Id", WMS_TENANT_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -363,7 +351,6 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/status",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

@@ -47,14 +47,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("BulkProvisioning 통합 테스트 — TASK-BE-257")
 class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
 
-    private static final String INTERNAL_TOKEN = "test-internal-token";
     private static final String WMS_TENANT_ID = "wms-bulk-test";
     private static final String OTHER_TENANT_ID = "other-bulk-test";
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> INTERNAL_TOKEN);
     }
 
     @Autowired private MockMvc mockMvc;
@@ -104,7 +102,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
         }
 
         MvcResult result = mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"items\": [" + items + "] }"))
@@ -173,7 +170,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
                 """.formatted(dupEmail1, newEmail1, dupEmail2, newEmail2, newEmail3);
 
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -191,7 +187,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("X-Tenant-Id != path tenantId → 403 TENANT_SCOPE_DENIED")
     void bulkCreate_crossTenant_returns403() throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", OTHER_TENANT_ID)    // different from path
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -213,7 +208,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
         }
 
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"items\": [" + items + "] }"))
@@ -227,7 +221,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("빈 items 배열 → 200 + 빈 결과")
     void bulkCreate_emptyItems_returns200EmptyResult() throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"items\": [] }"))
@@ -245,7 +238,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
         String email = "bulk-role-" + UUID.randomUUID() + "@example.com";
 
         MvcResult result = mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", WMS_TENANT_ID)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -277,7 +269,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("미등록 테넌트 → 404 TENANT_NOT_FOUND")
     void bulkCreate_unregisteredTenant_returns404() throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts:bulk", "nonexistent-bulk")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", "nonexistent-bulk")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -291,7 +282,6 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
 
     private void provisionSingle(String tenantId, String email) throws Exception {
         mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", tenantId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", tenantId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

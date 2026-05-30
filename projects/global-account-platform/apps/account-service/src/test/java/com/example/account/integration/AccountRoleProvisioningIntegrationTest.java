@@ -58,14 +58,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("AccountRoleProvisioning integration — TASK-BE-255")
 class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
-    private static final String INTERNAL_TOKEN = "test-internal-token";
     private static final String WMS_TENANT_ID = "wms";
     private static final String FAN_TENANT_ID = "fan-platform";
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> INTERNAL_TOKEN);
     }
 
     @Autowired private MockMvc mockMvc;
@@ -94,7 +92,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         rolesJson.append(']');
 
         MvcResult result = mockMvc.perform(post("/internal/tenants/{tenantId}/accounts", tenantId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", tenantId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -134,7 +131,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Try to assign roles to that account via WMS path — same tenant scope as caller.
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
                         WMS_TENANT_ID, fanAccountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -187,7 +183,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Replace
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -233,7 +228,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:add",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -272,7 +266,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:add",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -300,7 +293,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:remove",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -343,7 +335,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:remove",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -370,7 +361,6 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/roles:add",
                         WMS_TENANT_ID, accountId)
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .header("X-Tenant-Id", WMS_TENANT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

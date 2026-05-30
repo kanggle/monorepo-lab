@@ -51,7 +51,6 @@ class SignupRollbackIntegrationTest extends AbstractIntegrationTest {
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> "test-internal-token");
         // Tighten retry timings so the 2-retry path finishes quickly in test
         registry.add("account.auth-service.connect-timeout-ms", () -> "1000");
         registry.add("account.auth-service.read-timeout-ms", () -> "1000");
