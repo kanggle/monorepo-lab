@@ -32,7 +32,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>Verifies:
  * <ul>
- *   <li>internal token authentication via {@link InternalAuthFilter}</li>
  *   <li>read-only query response shape (PII-safe — evidence is rule-supplied, no raw IP/email)</li>
  *   <li>error mapping through {@link QueryExceptionHandler} for missing params and type mismatch</li>
  *   <li>size cap at 100</li>
@@ -50,43 +49,21 @@ class SuspiciousEventQueryControllerTest {
     @MockitoBean
     private SecurityQueryService queryService;
 
-    // TASK-BE-317: InternalAuthFilter now depends on a JwtDecoder (dual-allow). These slice tests
-    // exercise the X-Internal-Token path only (no Bearer header), so the decoder is never invoked;
-    // the mock just satisfies the bean dependency.
+    // TASK-BE-319a: InternalAuthFilter is JWT-only (X-Internal-Token removed). Under @ActiveProfiles("test")
+    // the filter bypasses auth entirely, so these slice tests need no credential header — they focus on
+    // controller logic. Filter auth behaviour (valid/invalid/missing JWT → pass/403) is covered by
+    // InternalAuthFilterTest. The decoder bean is still required to construct the @Import-ed filter.
     @MockitoBean
     private JwtDecoder jwtDecoder;
-
-    private static final String TOKEN = "test-internal-token";
 
     @Test
     @DisplayName("accountId 파라미터가 누락되면 400 VALIDATION_ERROR 응답을 반환한다")
     void getSuspiciousEvents_missingAccountId_returns400() throws Exception {
-        mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN))
+        mockMvc.perform(get("/internal/security/suspicious-events"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Missing required parameter: accountId"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("X-Internal-Token 헤더가 없으면 403 PERMISSION_DENIED 응답을 반환한다")
-    void getSuspiciousEvents_missingInternalToken_returns403() throws Exception {
-        mockMvc.perform(get("/internal/security/suspicious-events")
-                        .param("accountId", "acc-001"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"))
-                .andExpect(jsonPath("$.timestamp").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("X-Internal-Token 헤더 값이 잘못되면 403 PERMISSION_DENIED 응답을 반환한다")
-    void getSuspiciousEvents_invalidInternalToken_returns403() throws Exception {
-        mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", "wrong-token")
-                        .param("accountId", "acc-001"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test
@@ -96,7 +73,6 @@ class SuspiciousEventQueryControllerTest {
                 .thenThrow(new IllegalArgumentException("from must be before to"));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -108,7 +84,6 @@ class SuspiciousEventQueryControllerTest {
     @DisplayName("page 파라미터가 정수가 아니면 400 VALIDATION_ERROR 응답을 반환한다")
     void getSuspiciousEvents_pageParameterTypeMismatch_returns400() throws Exception {
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001")
                         .param("page", "not-a-number"))
                 .andExpect(status().isBadRequest())
@@ -133,7 +108,6 @@ class SuspiciousEventQueryControllerTest {
                 .thenReturn(new PageImpl<>(List.of(view), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value("evt-1"))
@@ -160,7 +134,6 @@ class SuspiciousEventQueryControllerTest {
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 100), 0));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001")
                         .param("size", "200"))
                 .andExpect(status().isOk())
@@ -175,7 +148,6 @@ class SuspiciousEventQueryControllerTest {
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 1), 0));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001")
                         .param("size", "0"))
                 .andExpect(status().isOk())
@@ -194,7 +166,6 @@ class SuspiciousEventQueryControllerTest {
                 .thenReturn(new PageImpl<>(List.of(geoEvent), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001")
                         .param("ruleCode", "GEO_ANOMALY"))
                 .andExpect(status().isOk())

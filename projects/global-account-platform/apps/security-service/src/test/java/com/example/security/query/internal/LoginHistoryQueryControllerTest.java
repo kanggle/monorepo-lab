@@ -34,42 +34,21 @@ class LoginHistoryQueryControllerTest {
     @MockitoBean
     private SecurityQueryService queryService;
 
-    // TASK-BE-317: InternalAuthFilter now depends on a JwtDecoder (dual-allow). These slice tests
-    // exercise the X-Internal-Token path only (no Bearer header), so the decoder is never invoked.
+    // TASK-BE-319a: InternalAuthFilter is JWT-only (X-Internal-Token removed). Under @ActiveProfiles("test")
+    // the filter bypasses auth entirely, so these slice tests need no credential header — they focus on
+    // controller logic. Filter auth behaviour (valid/invalid/missing JWT → pass/403) is covered by
+    // InternalAuthFilterTest. The decoder bean is still required to construct the @Import-ed filter.
     @MockitoBean
     private JwtDecoder jwtDecoder;
-
-    private static final String TOKEN = "test-internal-token";
 
     @Test
     @DisplayName("Returns 400 VALIDATION_ERROR when accountId is missing")
     void missingAccountIdReturns400() throws Exception {
-        mockMvc.perform(get("/internal/security/login-history")
-                        .header("X-Internal-Token", TOKEN))
+        mockMvc.perform(get("/internal/security/login-history"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Missing required parameter: accountId"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("Returns 403 PERMISSION_DENIED when X-Internal-Token is missing")
-    void missingTokenReturns403() throws Exception {
-        mockMvc.perform(get("/internal/security/login-history")
-                        .param("accountId", "acc-001"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"))
-                .andExpect(jsonPath("$.timestamp").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("Returns 403 PERMISSION_DENIED when X-Internal-Token is invalid")
-    void invalidTokenReturns403() throws Exception {
-        mockMvc.perform(get("/internal/security/login-history")
-                        .header("X-Internal-Token", "wrong-token")
-                        .param("accountId", "acc-001"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test
@@ -79,7 +58,6 @@ class LoginHistoryQueryControllerTest {
                 .thenThrow(new IllegalArgumentException("from must be before to"));
 
         mockMvc.perform(get("/internal/security/login-history")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -88,7 +66,7 @@ class LoginHistoryQueryControllerTest {
     }
 
     @Test
-    @DisplayName("Returns 200 with paginated login history when authenticated")
+    @DisplayName("Returns 200 with paginated login history")
     void authenticatedRequestReturns200() throws Exception {
         LoginHistoryView view = new LoginHistoryView(
                 "evt-001", "acc-001", "SUCCESS",
@@ -99,7 +77,6 @@ class LoginHistoryQueryControllerTest {
                 .thenReturn(new PageImpl<>(List.of(view), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/login-history")
-                        .header("X-Internal-Token", TOKEN)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].eventId").value("evt-001"))
