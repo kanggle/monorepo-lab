@@ -70,8 +70,16 @@ async function driveOidcPkceLogin(
   email: string,
   password: string,
   activeTenant: string = DEFAULTS.defaultTenant,
+  manageTracing: boolean = true,
 ): Promise<void> {
-  const tracingEnabled = !!process.env.CI;
+  // Manual tracing is for the global-setup context (no Playwright-managed
+  // per-test trace there). When this helper is called from INSIDE a test
+  // (e.g. loginAsAcmeOperator), the test context already has tracing started
+  // by playwright.config `use.trace` — a second context.tracing.start() throws
+  // "Tracing has been already started". In-test callers pass manageTracing=false
+  // and rely on the test runner's own trace. (MONO-155 — fixes the MONO-154
+  // double-start regression caught by the federation-e2e workflow_dispatch run.)
+  const tracingEnabled = !!process.env.CI && manageTracing;
   if (tracingEnabled) {
     await mkdir(TRACE_DIR, { recursive: true });
     await context.tracing.start({
@@ -170,6 +178,8 @@ export async function loginAsAcmeOperator(
     DEFAULTS.acmeOperatorEmail,
     DEFAULTS.acmeOperatorPassword,
     DEFAULTS.acmeTenant,
+    // In-test caller — the test context already has Playwright-managed tracing.
+    false,
   );
 }
 
