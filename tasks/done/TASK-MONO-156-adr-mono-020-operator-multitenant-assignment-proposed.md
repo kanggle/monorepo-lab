@@ -8,7 +8,9 @@ ADR-MONO-020 작성 (PROPOSED) — operator ↔ multi-customer assignment (D3-B,
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #977 (squash `3be2ba51`). 신규 `docs/adr/ADR-MONO-020-operator-multitenant-assignment.md` **PROPOSED** — ADR-019 § D3 가 deferred 한 N:M operator↔tenant assignment(D3-B, AWS IAM Identity Center "user → multiple account assignments" parity) + MONO-154 가 미명세로 표면화한 **active-tenant 토큰 스코핑**(도메인-facing OIDC 토큰 tenant_id 가 로그인 시 `credentials.tenant_id` 고정 → multi-assignment operator 세션-중 전환 불가)을 6-decision(CHOSEN-PROPOSED)로 결정 기록. **D2(crux)** = RFC8693 assume-tenant exchange(AWS STS AssumeRole analog, ADR-014 확장; assignment ∩ subscription 검증 후 selected tenant_id+entitled_domains short-lived 토큰 발급). D1 N:M 테이블(dual-read) / D3 entitled_domains=선택 고객 구독만(least-priv, keystone) / D4 console-web drives, **BFF pass-through 유지(ADR-017 D6)** / D5 per-assignment permission-set / D6 backward-compatible staged. **HARDSTOP-04**: ADR-019 § D3 뒤 additive supersession note(D1-D6 body byte-unchanged). **ADR-003a § 3 row #25**(Meta-policy PROPOSED publish, sibling #13/#18/#22). **staged**: PROPOSED 만 — ACCEPTED + 구현은 별 user-gated tasks(sibling ADR-019→MONO-153 패턴). docs-only. **3차원**(MERGED `3be2ba51` / tip 일치 / pre-merge 0, docs fast-lane). **BE-299 re-stage** ✓. **출처/메타**: ADR-019 런타임 활성화 arc 완료 후, 잔여 3개(gap=no-op / step4=시기상조 / D3-B=미명세) 중 유일하게 implement 가능했던 게 "D3-B ADR authoring" — HARDSTOP-09(미명세 축 → 새 ADR)를 추측 구현 대신 결정 기록으로 정공법. 후속: ADR-020 ACCEPTED 승급(별 task) → 실행(operator_tenant_assignment + assume-tenant exchange + console switcher) = ADR-019 step 4 extension entry point.
 
 # Owner
 
