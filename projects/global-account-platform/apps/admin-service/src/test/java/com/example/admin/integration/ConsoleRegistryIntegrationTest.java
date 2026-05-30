@@ -436,6 +436,96 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                         .doesNotExist());
     }
 
+    // ── TASK-BE-325: real customer tenant acme-corp in catalog ──────────────
+
+    /**
+     * TASK-BE-325 (ADR-MONO-019 § 3.3 step 2 — net-positive): a real customer
+     * tenant {@code acme-corp} subscribed to finance + wms appears in those
+     * products' {@code tenants[]} for a platform-scope (SUPER_ADMIN) operator.
+     * scm + erp products must NOT list acme-corp (not subscribed). Existing
+     * net-zero slug assertions are in separate tests with separate stubs —
+     * this test uses its own stub constants to avoid polluting them.
+     *
+     * <p>M6 isolation is preserved: a platform-scope operator legitimately sees
+     * all tenants; acme-corp is an ACTIVE-registered tenant in the stub.
+     */
+    @Test
+    @DisplayName("TASK-BE-325: SUPER_ADMIN → acme-corp in finance+wms tenants; absent in scm+erp (ADR-019 step 2)")
+    void realCustomerTenant_acmeCorp_appearsInFinanceAndWms() throws Exception {
+        // ── stub bodies local to this test (separate from ALL_ACTIVE_TENANTS /
+        //    BACKWARD_COMPAT_SUBSCRIPTIONS to avoid contaminating existing cases) ──
+
+        // All five portfolio slugs + acme-corp ACTIVE
+        String tenantsWithAcmeCorp = """
+                {
+                  "items": [
+                    {"tenantId":"fan-platform","displayName":"Fan Platform","tenantType":"B2C_CONSUMER",
+                     "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                    {"tenantId":"wms","displayName":"Warehouse Management Platform","tenantType":"B2B_ENTERPRISE",
+                     "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                    {"tenantId":"scm","displayName":"Supply Chain Management Platform","tenantType":"B2B_ENTERPRISE",
+                     "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                    {"tenantId":"finance","displayName":"Finance Platform","tenantType":"B2B_ENTERPRISE",
+                     "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                    {"tenantId":"erp","displayName":"Enterprise Resource Planning","tenantType":"B2B_ENTERPRISE",
+                     "status":"ACTIVE","createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"},
+                    {"tenantId":"acme-corp","displayName":"Acme Corporation","tenantType":"B2B_ENTERPRISE",
+                     "status":"ACTIVE","createdAt":"2026-05-31T00:00:00Z","updatedAt":"2026-05-31T00:00:00Z"}
+                  ],
+                  "page":0,"size":100,"totalElements":6,"totalPages":1
+                }
+                """;
+
+        // Backward-compat self-subs PLUS acme-corp→finance and acme-corp→wms
+        String subscriptionsWithAcmeCorp = """
+                {
+                  "items": [
+                    {"tenantId":"wms","domainKey":"wms"},
+                    {"tenantId":"scm","domainKey":"scm"},
+                    {"tenantId":"erp","domainKey":"erp"},
+                    {"tenantId":"finance","domainKey":"finance"},
+                    {"tenantId":"acme-corp","domainKey":"finance"},
+                    {"tenantId":"acme-corp","domainKey":"wms"}
+                  ]
+                }
+                """;
+
+        wireMock.resetAll();
+        stubGapTokenEndpoint();
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(tenantsWithAcmeCorp)));
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(subscriptionsWithAcmeCorp)));
+        seedOperator(SUPER_ADMIN_UUID, "*");
+
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(SUPER_ADMIN_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(5))
+                // finance product (index 4): acme-corp subscribed → must appear
+                .andExpect(jsonPath("$.products[4].productKey").value("finance"))
+                .andExpect(jsonPath("$.products[4].tenants",
+                        org.hamcrest.Matchers.hasItem("acme-corp")))
+                // wms product (index 1): acme-corp subscribed → must appear
+                .andExpect(jsonPath("$.products[1].productKey").value("wms"))
+                .andExpect(jsonPath("$.products[1].tenants",
+                        org.hamcrest.Matchers.hasItem("acme-corp")))
+                // scm product (index 2): acme-corp NOT subscribed → must be absent
+                .andExpect(jsonPath("$.products[2].productKey").value("scm"))
+                .andExpect(jsonPath("$.products[2].tenants",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("acme-corp"))))
+                // erp product (index 3): acme-corp NOT subscribed → must be absent
+                .andExpect(jsonPath("$.products[3].productKey").value("erp"))
+                .andExpect(jsonPath("$.products[3].tenants",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("acme-corp"))));
+    }
+
     /**
      * TASK-BE-304: helper to seed an operator with a non-null
      * {@code finance_default_account_id}. V0028 has already added the

@@ -301,6 +301,103 @@ class ConsoleRegistryUseCaseTest {
     }
 
     /**
+     * TASK-BE-325 (ADR-MONO-019 § 3.3 step 2 — net-positive): real customer
+     * tenant {@code acme-corp} subscribed to finance + wms appears in those
+     * products' selectableTenants for a platform-scope operator. scm and erp
+     * must NOT list acme-corp (not subscribed). The {@code gap}
+     * {@code bindsAllTenants} branch and operator scope invariants are
+     * unchanged — this is an additive assertion on top of the backward-compat
+     * subscription seed.
+     */
+    @Nested
+    @DisplayName("TASK-BE-325: real customer tenant acme-corp in catalog (ADR-019 step 2)")
+    class RealCustomerTenantAcmeCorp {
+
+        @Test
+        @DisplayName("platform-scope operator: acme-corp in finance+wms tenants; absent in scm+erp")
+        void acmeCorp_appearsInFinanceAndWms_absentInScmErp() {
+            stubOperator("super", "*");
+            // All five slug tenants + acme-corp ACTIVE
+            stubTenants(
+                    tenant("fan-platform", "ACTIVE"),
+                    tenant("wms", "ACTIVE"),
+                    tenant("scm", "ACTIVE"),
+                    tenant("erp", "ACTIVE"),
+                    tenant("finance", "ACTIVE"),
+                    tenant("acme-corp", "ACTIVE"));
+            // Backward-compat self-subs PLUS acme-corp → finance and acme-corp → wms
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("wms", "wms"),
+                    new TenantDomainSubscriptionSummary("scm", "scm"),
+                    new TenantDomainSubscriptionSummary("erp", "erp"),
+                    new TenantDomainSubscriptionSummary("finance", "finance"),
+                    new TenantDomainSubscriptionSummary("acme-corp", "finance"),
+                    new TenantDomainSubscriptionSummary("acme-corp", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            // finance: acme-corp subscribed → present
+            assertThat(product(r, "finance").tenants())
+                    .as("finance.tenants must include acme-corp (subscribed via V0020)")
+                    .contains("acme-corp");
+
+            // wms: acme-corp subscribed → present
+            assertThat(product(r, "wms").tenants())
+                    .as("wms.tenants must include acme-corp (subscribed via V0020)")
+                    .contains("acme-corp");
+
+            // scm: acme-corp NOT subscribed → absent
+            assertThat(product(r, "scm").tenants())
+                    .as("scm.tenants must NOT include acme-corp (not subscribed)")
+                    .doesNotContain("acme-corp");
+
+            // erp: acme-corp NOT subscribed → absent
+            assertThat(product(r, "erp").tenants())
+                    .as("erp.tenants must NOT include acme-corp (not subscribed)")
+                    .doesNotContain("acme-corp");
+        }
+
+        @Test
+        @DisplayName("gap bindsAllTenants: acme-corp appears in gap.tenants (ACTIVE, platform-scope)")
+        void acmeCorp_appearsInGap_bindsAllTenants() {
+            stubOperator("super", "*");
+            stubTenants(
+                    tenant("wms", "ACTIVE"),
+                    tenant("acme-corp", "ACTIVE"));
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("wms", "wms"),
+                    new TenantDomainSubscriptionSummary("acme-corp", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            // gap federates ALL active tenants regardless of subscriptions
+            assertThat(product(r, "gap").tenants())
+                    .as("gap.bindsAllTenants federates acme-corp automatically (no gap subscription row needed)")
+                    .contains("acme-corp");
+        }
+
+        @Test
+        @DisplayName("operator scope invariant: single-tenant wms operator does NOT see acme-corp")
+        void singleTenantWmsOperator_doesNotSeeAcmeCorp() {
+            stubOperator("wms-op", "wms");
+            stubTenants(
+                    tenant("wms", "ACTIVE"),
+                    tenant("acme-corp", "ACTIVE"));
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("wms", "wms"),
+                    new TenantDomainSubscriptionSummary("acme-corp", "finance"),
+                    new TenantDomainSubscriptionSummary("acme-corp", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
+
+            // M6 isolation: single-tenant operator never sees another tenant's id
+            assertThat(r.products())
+                    .as("M6: single-tenant wms operator must not see acme-corp in any product")
+                    .allSatisfy(p -> assertThat(p.tenants()).doesNotContain("acme-corp"));
+        }
+    }
+
+    /**
      * TASK-BE-304: per-product per-operator profile attributes emission rule.
      *
      * <p>Authoritative spec:
