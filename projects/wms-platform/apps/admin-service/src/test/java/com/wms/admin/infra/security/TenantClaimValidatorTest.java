@@ -1,4 +1,4 @@
-package com.wms.outbound.config.security;
+package com.wms.admin.infra.security;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,7 +10,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("TenantClaimValidator 단위 테스트 (outbound)")
+@DisplayName("TenantClaimValidator 단위 테스트 (admin)")
 class TenantClaimValidatorTest {
 
     private final TenantClaimValidator validator = new TenantClaimValidator("wms");
@@ -24,6 +24,22 @@ class TenantClaimValidatorTest {
                 .expiresAt(Instant.now().plusSeconds(60))
                 .claim(name, value)
                 .build();
+    }
+
+    private static Jwt jwtWith(Object tenantId, Object entitledDomains) {
+        Jwt.Builder b = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .issuer("http://localhost:8081")
+                .subject("operator-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60));
+        if (tenantId != null) {
+            b.claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId);
+        }
+        if (entitledDomains != null) {
+            b.claim(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS, entitledDomains);
+        }
+        return b.build();
     }
 
     @Test
@@ -59,22 +75,6 @@ class TenantClaimValidatorTest {
         assertThat(validator.validate(
                 jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "  "))
                 .hasErrors()).isTrue();
-    }
-
-    private static Jwt jwtWith(Object tenantId, Object entitledDomains) {
-        Jwt.Builder b = Jwt.withTokenValue("token")
-                .header("alg", "RS256")
-                .issuer("http://localhost:8081")
-                .subject("operator-1")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(60));
-        if (tenantId != null) {
-            b.claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId);
-        }
-        if (entitledDomains != null) {
-            b.claim(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS, entitledDomains);
-        }
-        return b.build();
     }
 
     @Test
