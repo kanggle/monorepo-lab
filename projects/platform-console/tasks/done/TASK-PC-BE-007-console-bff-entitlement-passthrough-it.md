@@ -8,7 +8,9 @@ ADR-MONO-019 § 3.3 step 3 (console-bff 항목) — console-bff `tenant_id` + `e
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #972 (squash `0a11e0f7`). ADR-MONO-019 § 3.3 step 3 console-bff deliverable("1 console-bff tenant_id pass-through IT, ADR-017 D6"). 신규 `EntitlementPassThroughIntegrationTest`(CrossTenantDenyIntegrationTest 하니스 미러) — operator JWT(`tenant_id=acme-corp` + `entitled_domains=[finance,wms]` 서명) + `X-Tenant-Id=acme-corp`(일치). **AC-A/C**: 비-GAP 5 leg 각 outbound Bearer = inbound 토큰 **byte-identical**(entitled_domains claim 보존 — strip/재서명 안 함) + `X-Tenant-Id` verbatim(ADR-017 D6.A no-rewrite). **AC-B**: finance/wms 200→ok card / scm/erp 403→forbidden·PERMISSION_DENIED per-card(200 envelope, 중앙 collapse·gate 없음). **production code 0** — BFF 가 이미 pass-through(OperatorCredentialContext raw bearer 추출 → CredentialSelectionAdapter 비-GAP→GapOidcAccessToken → RestClientHelper as-is; entitled_domains 미검사). regression gate. **3차원**(MERGED `0a11e0f7` / tip 일치 / pre-merge 0). **BE-299 re-stage** ✓. **CI 1-pass**: console-bff Integration GREEN 50s(MockWebServer+@SpringBootTest, stateless — Testcontainers 불요; agent 로컬 실행도 PASS) + Build GREEN. **scope-lock**: 신규 IT 1 파일만(src/main 0). **후속**: PC-BE-008(acme-corp operator 시드 + federation-hardening-e2e 런타임 cross-domain spec). **메타**: console-bff 는 credential 재설계 불필요 — pass-through 투명성을 IT 로 고정하는 것이 step 3 console-bff 몫. operator OIDC 토큰의 tenant_id 는 `auth_db.credentials.tenant_id` 에서 옴(CredentialAuthenticationProvider setDetails → customizer principal-details 우선; ClientSettings `gap` fallback 미도달) → acme-corp 계정 로그인 시 tenant_id=acme-corp + keystone entitled_domains=[finance,wms].
 
 # Owner
 
