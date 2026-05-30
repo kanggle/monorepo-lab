@@ -18,6 +18,16 @@ name: global-account-platform-e2e
 
 x-service-env: &service-env
   SPRING_PROFILES_ACTIVE: e2e
+  # TASK-BE-321 (ADR-005 단계 4 e2e 검증 정합): align the GAP SAS workload-token chain to the
+  # in-network auth-service URL. This single value drives — auth(SAS): the `iss` claim minted on
+  # /oauth2/token (oidc.issuer-url) + auth's own self-call token-uri; account/security receivers:
+  # `*.jwt.issuer` (must equal token iss) + `jwk-set-uri` (must be network-reachable); admin/security
+  # callers: gap.internal-client.token-uri. ALL four services must share the same value or the
+  # receiver issuer check fails (401). gateway-service merges this anchor too but does NOT read
+  # OIDC_ISSUER_URL — it validates USER login tokens (issuer=global-account-platform, a separate
+  # custom-JWT system via /internal/auth/jwks), so this is a no-op for the gateway and does not
+  # ripple into user-token validation.
+  OIDC_ISSUER_URL: http://auth-service:8081
   DB_HOST: mysql
   DB_PORT: "3306"
   REDIS_HOST: redis
