@@ -16,6 +16,12 @@ import { test, expect } from '@playwright/test';
  * This spec verifies the composition renders (200 OK + 5-card grid) when all
  * 5 producers are live. Degrade path (force-pause one domain) = MVP
  * out-of-scope per ADR-018 D3 (note AC-4: "degrade path = MVP 외").
+ *
+ * NOTE (TASK-MONO-154): the per-card status assertion this spec left
+ * MVP-relaxed (heading-only) is now un-deferred in its entitlement-trust form
+ * by entitlement-trust-crossdomain.spec.ts — that sibling spec asserts the
+ * entitled vs non-entitled per-card `forbidden` discriminator for the
+ * real-customer acme-corp operator. This SUPER_ADMIN spec is left unchanged.
  */
 test.describe('Operator Overview composition (5-domain fan-out)', () => {
   test('renders 5-card grid with all 5 domains showing ok status', async ({

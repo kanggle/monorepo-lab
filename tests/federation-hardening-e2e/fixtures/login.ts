@@ -46,6 +46,16 @@ const DEFAULTS = {
   // '*' in addition to the domain-specific value, per seed.sql TASK-BE-312
   // note). Domain-specific navigation is done by the spec directly.
   defaultTenant: '*',
+  // TASK-MONO-154 — real-customer acme-corp operator. Credential matches
+  // seed.sql section 6/7 (auth_db.credentials tenant_id='acme-corp' +
+  // admin_db.admin_operators oidc_subject=email). SAME Argon2id hash of
+  // 'devpassword123!' as the SUPER_ADMIN row (same password). The token minted
+  // for this operator carries tenant_id='acme-corp' + keystone-injected
+  // entitled_domains=[finance,wms] (BE-324 reverse-lookup of the account_db
+  // acme-corp → [finance,wms] subscriptions seeded by GAP Flyway V0019/V0020).
+  acmeOperatorEmail: 'acme-operator@example.com',
+  acmeOperatorPassword: 'devpassword123!',
+  acmeTenant: 'acme-corp',
 };
 
 /**
@@ -59,6 +69,7 @@ async function driveOidcPkceLogin(
   context: BrowserContext,
   email: string,
   password: string,
+  activeTenant: string = DEFAULTS.defaultTenant,
 ): Promise<void> {
   const tracingEnabled = !!process.env.CI;
   if (tracingEnabled) {
@@ -90,13 +101,16 @@ async function driveOidcPkceLogin(
       page.click('button[type="submit"]'),
     ]);
 
-    // Seed console_active_tenant cookie. For the cross-product suite the
-    // SUPER_ADMIN operator has tenant_id='*', which is accepted by all
-    // producers. The cookie value '*' signals platform-scope to console-web.
+    // Seed console_active_tenant cookie. For the SUPER_ADMIN cross-product
+    // suite the operator has tenant_id='*', accepted by all producers (cookie
+    // value '*' signals platform-scope to console-web). For the MONO-154
+    // acme-corp operator the cookie is 'acme-corp' (the real-customer slug) so
+    // the BFF fan-out carries the acme-corp tenant context to every producer —
+    // the entitlement gate then accepts finance/wms and rejects scm/erp.
     await context.addCookies([
       {
         name: 'console_active_tenant',
-        value: DEFAULTS.defaultTenant,
+        value: activeTenant,
         domain: new URL(DEFAULTS.consoleOrigin).hostname,
         path: '/',
         httpOnly: true,
@@ -134,4 +148,34 @@ export async function loginAsSuperAdmin(
  */
 export async function loginAsSuperAdminPage(page: Page): Promise<void> {
   await loginAsSuperAdmin(page.context());
+}
+
+/**
+ * TASK-MONO-154 — authenticates a context as the seeded real-customer
+ * `acme-corp` operator via the SAME production-identical OIDC PKCE flow
+ * (no programmatic token mint, no cookie-token injection). After login the
+ * console_active_tenant cookie is set to 'acme-corp' so the BFF fan-out
+ * carries the acme-corp tenant context to every producer.
+ *
+ * The minted token carries tenant_id='acme-corp' + keystone-injected
+ * entitled_domains=[finance,wms] (BE-324). The downstream domain gates
+ * (step 3) accept finance/wms (entitled) and reject scm/erp (not entitled) —
+ * this is the entitlement-trust discriminator the new spec asserts.
+ */
+export async function loginAsAcmeOperator(
+  context: BrowserContext,
+): Promise<void> {
+  await driveOidcPkceLogin(
+    context,
+    DEFAULTS.acmeOperatorEmail,
+    DEFAULTS.acmeOperatorPassword,
+    DEFAULTS.acmeTenant,
+  );
+}
+
+/**
+ * Convenience for specs that need a logged-in page as the acme-corp operator.
+ */
+export async function loginAsAcmeOperatorPage(page: Page): Promise<void> {
+  await loginAsAcmeOperator(page.context());
 }

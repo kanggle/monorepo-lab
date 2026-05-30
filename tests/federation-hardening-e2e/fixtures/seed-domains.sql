@@ -59,6 +59,46 @@ INSERT IGNORE INTO balances (
 );
 
 -- ---------------------------------------------------------------------------
+-- TASK-MONO-154 — acme-corp finance account + balance.
+--    Real-customer finance data scoped to tenant_id='acme-corp', matching the
+--    admin_operators.finance_default_account_id seeded in seed.sql section 7
+--    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8a200'). This makes the finance leg
+--    return a real 200 (balance present) for the acme-corp operator instead of
+--    MISSING_PREREQUISITE — proving entitlement-trust ACCEPT with live data.
+--    The acme-corp JWT carries tenant_id='acme-corp' + entitled_domains with
+--    finance; finance-account-service TenantClaimValidator dual-accepts the
+--    entitled_domains claim (ADR-019 step 3 gate).
+--    owner_ref reuses the same AES-256-GCM envelope as the SUPER_ADMIN demo row
+--    (opaque encrypted blob; the overview finance card surfaces balance, not a
+--    decrypted owner_ref — same key as the docker-compose overlay).
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO accounts (
+    id, tenant_id, owner_ref, status, kyc_level, currency,
+    created_at, updated_at, version
+) VALUES (
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
+    'acme-corp',
+    'v1:Al7AbOFq84oJ2wYqG+RB7CulHFYrnpNnNjp55iEWoJqqvscRZPN9mW46xrgq4w==',
+    'ACTIVE',
+    'FULL',
+    'KRW',
+    NOW(6), NOW(6), 0
+);
+
+INSERT IGNORE INTO balances (
+    id, account_id, tenant_id, currency,
+    ledger_minor, held_minor,
+    created_at, updated_at, version
+) VALUES (
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8b201',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
+    'acme-corp',
+    'KRW',
+    500000, 0,
+    NOW(6), NOW(6), 0
+);
+
+-- ---------------------------------------------------------------------------
 -- erp_db — department + employee + cost_center rows (masterdata-service Flyway).
 --    One row per aggregate — minimum shape to satisfy erp-golden-path.spec.ts.
 --    effective_from=past, effective_to=NULL (currently active per E2 spec).
