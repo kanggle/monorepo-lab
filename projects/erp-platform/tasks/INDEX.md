@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-005-tenant-gate-entitlement-trust-dual-accept.md` — **READY** (ADR-MONO-019 § 3.3 step 3 복제 1/N, erp). 분석=Opus 4.8 / **구현 권장=Opus** (격리 게이트). finance 파일럿(FIN-BE-006) blueprint 의 erp 복제 — erp masterdata `TenantClaimValidator`(decode)+`TenantClaimEnforcer`(filter)를 `tenant_id == erp` 고정 → **entitlement-trust dual-accept**: legacy(`tenant_id ∈ {erp,*}`) ∪ 서명 토큰 `entitled_domains ∋ erp`, 거부=둘 다 불충족(공유 `isEntitled` 헬퍼). **net-zero**(claim 부재 시 legacy만). erp validator 는 finance 와 byte-identical 구조 → 동일 편집 + 격리 IT + architecture.md. GAP `entitled_domains` populate = 별 shared follow-up. depends on FIN-BE-006(#960 `df1efa5a`).
 
 ## in-progress
 

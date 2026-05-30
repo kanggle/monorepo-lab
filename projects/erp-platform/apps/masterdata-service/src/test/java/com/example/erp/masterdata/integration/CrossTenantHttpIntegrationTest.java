@@ -66,22 +66,31 @@ class CrossTenantHttpIntegrationTest extends AbstractMasterdataIntegrationTest {
     }
 
     private String token(String tenant) throws Exception {
+        return token(tenant, null);
+    }
+
+    private String token(String tenant, java.util.List<String> entitledDomains)
+            throws Exception {
         // scope "erp.read" satisfies RoleScopeAuthorizationAdapter READ
         // (fail-closed: requires erp.read / erp.write / operator). The
         // employees list passes targetDepartmentId=null, so no data-scope check.
         // Cross-tenant tokens are still rejected at the JWT decode tenant gate
         // (TenantClaimValidator) BEFORE authorization, so scm → 403
-        // TENANT_FORBIDDEN regardless of scope.
+        // TENANT_FORBIDDEN regardless of scope — UNLESS the signed
+        // entitled_domains claim grants the erp domain (dual-accept window).
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+                .subject("user-d5")
+                .issuer("http://test-issuer")
+                .claim("tenant_id", tenant)
+                .claim("scope", "erp.read")
+                .issueTime(new Date())
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)));
+        if (entitledDomains != null) {
+            claims.claim("entitled_domains", entitledDomains);
+        }
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaKey.getKeyID()).build(),
-                new JWTClaimsSet.Builder()
-                        .subject("user-d5")
-                        .issuer("http://test-issuer")
-                        .claim("tenant_id", tenant)
-                        .claim("scope", "erp.read")
-                        .issueTime(new Date())
-                        .expirationTime(Date.from(Instant.now().plusSeconds(300)))
-                        .build());
+                claims.build());
         jwt.sign(new RSASSASigner(rsaKey));
         return jwt.serialize();
     }
@@ -109,6 +118,30 @@ class CrossTenantHttpIntegrationTest extends AbstractMasterdataIntegrationTest {
         mockMvc.perform(get(EMPLOYEES)
                         .header("Authorization", "Bearer " + token("erp")))
                 .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    @DisplayName("entitlement-trust: signed entitled_domains=[erp] on tenant_id=wms "
+            + "→ gate passes (2xx, NOT 403 TENANT_FORBIDDEN)")
+    void entitledCrossTenantPassesGate() throws Exception {
+        // The dual-accept gate admits a non-erp slug whose signed
+        // entitled_domains contains erp; the employees list then resolves
+        // (2xx). Load-bearing: NOT 403 / NOT TENANT_FORBIDDEN.
+        mockMvc.perform(get(EMPLOYEES)
+                        .header("Authorization", "Bearer "
+                                + token("wms", java.util.List.of("erp"))))
+                .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    @DisplayName("non-entitled: signed entitled_domains=[scm] on tenant_id=wms "
+            + "→ 403 TENANT_FORBIDDEN (legacy AND entitlement both fail)")
+    void nonEntitledCrossTenantForbidden() throws Exception {
+        mockMvc.perform(get(EMPLOYEES)
+                        .header("Authorization", "Bearer "
+                                + token("wms", java.util.List.of("scm"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
     }
 
     @Test
