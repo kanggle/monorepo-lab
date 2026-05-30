@@ -8,7 +8,9 @@ ADR-MONO-020 PROPOSED → ACCEPTED 승급 (doc-only governance flip). D3-B opera
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #979 (squash `de68ab03`). ADR-MONO-020 `Status: PROPOSED → ACCEPTED` doc-only governance flip (sibling ADR-019/MONO-153 패턴). D1-D6 CHOSEN-PROPOSED **finalised byte-unchanged**(§ 1-5/7 byte-identical to PROPOSED #977 `3be2ba51`; flip = Status + History ACCEPTED clause + § 6 ACCEPTED row[`#<this>`→`#977` 해소] + minimal past-tense; ADR-020 diff 9-line 전부 governance, decision body 무변경 — **HARDSTOP-04**). ADR-003a § 3 row #26(Meta-policy ACCEPTED, sibling #23/#24). ADR-019 byte-unchanged(§ D3 additive note final). **3차원**(MERGED `de68ab03` / tip 일치 / pre-merge 0, docs fast-lane). **BE-299 re-stage** ✓. **효과**: ADR-020 § 3.3 execution roadmap **UNPAUSED** = ADR-019 step 4 extension(D3-B) 실행 entry — operator_tenant_assignment(D1) → assume-tenant exchange(D2) → console switcher(D4) → legacy-read cleanup(D6), 각 future user-gated task, dependency-correct base = 본 ACCEPTED main. **메타**: ADR-019 PROPOSED(MONO-152)→ACCEPTED(MONO-153) 와 동형 same-session staged-child cycle (ADR-020 PROPOSED MONO-156 #977 → ACCEPTED MONO-157 #979). 구현은 여전히 별 task — staged 규율 보존.
 
 # Owner
 
