@@ -371,13 +371,37 @@ auto-closed. Real external-statement matching = v2 (`ledger-service` /
 finance-platform is **not** internally multi-tenant (single financial
 service); GAP supplies `tenant_id=finance`. Defense-in-depth (mirrors scm):
 
-1. **Gateway** (v1 deferred) — `tenant_id ∈ {finance, *}` at JWT decode.
+1. **Gateway** (v1 deferred) — domain gate at JWT decode.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` (SAS issuer +
    legacy `global-account-platform` D2-b window — byte-identical to the
-   future gateway's allowed-issuers) + `TenantClaimValidator`
-   (`tenant_id ∈ {finance, *}`).
-3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` if
-   tenant claim missing/mismatched (public paths skipped).
+   future gateway's allowed-issuers) + `TenantClaimValidator`.
+3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` when
+   the gate rejects (public paths skipped).
+
+**Domain gate — entitlement-trust dual-accept** (ADR-MONO-019 § D5, pilot
+domain). Both enforcement points (`TenantClaimValidator` at decode time and
+`TenantClaimEnforcer` filter) apply the *same* rule via the shared
+`TenantClaimValidator.isEntitled(jwt, domain)` helper (single source of truth
+— a split would let entitled traffic pass decode yet be blocked by the
+filter). A token is accepted when **either**:
+
+- **(legacy slug)** `tenant_id ∈ {finance, *}` — `*` is SUPER_ADMIN
+  platform-scope; **or**
+- **(entitlement-trust)** the GAP-signed `entitled_domains` claim (a list of
+  domain keys) contains `finance`.
+
+Rejection (403 `TENANT_FORBIDDEN`) requires **both** branches to fail
+(fail-closed; entitlement only *widens* the allowed set, never weakens the
+legacy reject). `entitled_domains` is read only from an RS256/JWKS-verified
+token, so it is unforgeable — **GAP is the entitlement authority**; a
+non-list / null / empty / non-string-element claim degrades to "not entitled".
+Row-level isolation is unchanged: `ActorContextJwtAuthenticationConverter`
+still keys row scoping off `tenant_id`, so an entitled cross-slug token sees
+only its own `tenant_id` partition. While GAP has not yet populated
+`entitled_domains` the claim is absent → only the legacy path applies →
+**production net-zero**. This is the ADR-MONO-019 **dual-accept window**; the
+legacy `tenant_id == slug` branch is removed in step 4 once GAP populates the
+claim (separate follow-up).
 
 Config keys (TASK-MONO-114 skeleton `application.yml`):
 `financeplatform.oauth2.allowed-issuers` + `.required-tenant-id=finance`.
@@ -475,7 +499,7 @@ No cross-service master-event consumption in v1 (account-service is a leaf).
 |---|---|---|
 | 1 | Missing `Idempotency-Key` on mutation | 400 `IDEMPOTENCY_KEY_REQUIRED` |
 | 2 | Same key, different payload | 409 `IDEMPOTENCY_KEY_CONFLICT` |
-| 3 | Cross-tenant JWT (`tenant_id ∉ {finance,*}`) | 403 `TENANT_FORBIDDEN` |
+| 3 | Cross-tenant JWT — `tenant_id ∉ {finance,*}` **and** signed `entitled_domains ∌ finance` (dual-accept both branches fail) | 403 `TENANT_FORBIDDEN` |
 | 4 | Redis offline during idempotency check | fail-CLOSED → `idempotency_keys` table; both down → 503 `IDEMPOTENCY_STORE_UNAVAILABLE` |
 | 5 | Fund move on non-ACTIVE account | 409 `ACCOUNT_NOT_ACTIVE` / `ACCOUNT_FROZEN` |
 | 6 | `available < amount` | 422 `INSUFFICIENT_AVAILABLE_BALANCE` |

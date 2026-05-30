@@ -32,6 +32,15 @@ class TenantClaimEnforcerTest {
                 new JwtAuthenticationToken(jwt));
     }
 
+    private void authenticate(String tenant, java.util.List<String> entitledDomains) {
+        Jwt jwt = new Jwt("t", Instant.now(), Instant.now().plusSeconds(60),
+                Map.of("alg", "RS256"),
+                Map.of("tenant_id", tenant, "entitled_domains", entitledDomains,
+                        "sub", "u"));
+        SecurityContextHolder.getContext().setAuthentication(
+                new JwtAuthenticationToken(jwt));
+    }
+
     @Test
     @DisplayName("finance tenant passes through the chain")
     void financePasses() throws Exception {
@@ -48,6 +57,34 @@ class TenantClaimEnforcerTest {
     @DisplayName("cross-tenant → 403 TENANT_FORBIDDEN, chain NOT invoked")
     void crossTenantBlocked() throws Exception {
         authenticate("wms");
+        FilterChain chain = mock(FilterChain.class);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req(), resp, chain);
+        assertThat(resp.getStatus()).isEqualTo(403);
+        assertThat(resp.getContentAsString()).contains("TENANT_FORBIDDEN");
+        verify(chain, never()).doFilter(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("entitlement-trust: tenant_id=acme + entitled_domains=[finance] passes through")
+    void entitledCrossTenantPasses() throws Exception {
+        authenticate("acme", java.util.List.of("finance"));
+        FilterChain chain = mock(FilterChain.class);
+        MockHttpServletRequest request = req();
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(request, resp, chain);
+        verify(chain).doFilter(request, resp);
+        assertThat(resp.getStatus()).isEqualTo(200);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("non-entitled: tenant_id=acme + entitled_domains=[wms] → 403, chain NOT invoked")
+    void nonEntitledCrossTenantBlocked() throws Exception {
+        authenticate("acme", java.util.List.of("wms"));
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse resp = new MockHttpServletResponse();
         filter.doFilter(req(), resp, chain);

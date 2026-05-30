@@ -49,17 +49,25 @@ class CrossTenantHttpIntegrationTest extends AbstractAccountIntegrationTest {
     }
 
     private String token(String tenant) throws Exception {
+        return token(tenant, null);
+    }
+
+    private String token(String tenant, java.util.List<String> entitledDomains)
+            throws Exception {
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+                .subject("user-1")
+                .issuer("http://test-issuer")
+                .claim("tenant_id", tenant)
+                .claim("roles", java.util.List.of("HOLDER"))
+                .issueTime(new Date())
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)));
+        if (entitledDomains != null) {
+            claims.claim("entitled_domains", entitledDomains);
+        }
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256)
                         .keyID(rsaKey.getKeyID()).build(),
-                new JWTClaimsSet.Builder()
-                        .subject("user-1")
-                        .issuer("http://test-issuer")
-                        .claim("tenant_id", tenant)
-                        .claim("roles", java.util.List.of("HOLDER"))
-                        .issueTime(new Date())
-                        .expirationTime(Date.from(Instant.now().plusSeconds(300)))
-                        .build());
+                claims.build());
         jwt.sign(new RSASSASigner(rsaKey));
         return jwt.serialize();
     }
@@ -78,5 +86,30 @@ class CrossTenantHttpIntegrationTest extends AbstractAccountIntegrationTest {
     void missingToken() throws Exception {
         mockMvc.perform(get("/api/finance/accounts/acc-x"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("entitlement-trust: signed entitled_domains=[finance] on tenant_id=acme "
+            + "→ gate passes (NOT 403 TENANT_FORBIDDEN)")
+    void entitledCrossTenantPassesGate() throws Exception {
+        // The dual-accept gate must let this through; the request then resolves
+        // against the account repository. acc-x does not exist → 404 (the gate
+        // is open). The load-bearing assertion is: NOT 403 and NOT
+        // TENANT_FORBIDDEN — the entitlement branch admitted a non-finance slug.
+        mockMvc.perform(get("/api/finance/accounts/acc-x")
+                        .header("Authorization", "Bearer "
+                                + token("acme", java.util.List.of("finance"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("non-entitled: signed entitled_domains=[wms] on tenant_id=acme "
+            + "→ 403 TENANT_FORBIDDEN (legacy AND entitlement both fail)")
+    void nonEntitledCrossTenantForbidden() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/acc-x")
+                        .header("Authorization", "Bearer "
+                                + token("acme", java.util.List.of("wms"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
     }
 }

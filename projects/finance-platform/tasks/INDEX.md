@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-006-tenant-gate-entitlement-trust-dual-accept-pilot.md` — **READY** (ADR-MONO-019 § 3.3 step 3 파일럿, 1 도메인=finance). 분석=Opus 4.8 / **구현 권장=Opus** (격리 게이트). finance tenant 게이트를 `tenant_id == finance` 고정 → **entitlement-trust dual-accept**: legacy(`tenant_id ∈ {finance,*}`) ∪ 서명 토큰 `entitled_domains ∋ finance`. 양 enforcement 지점(`TenantClaimValidator` decode + `TenantClaimEnforcer` filter) 동일 적용 + 격리 IT(entitled 타테넌트 통과 / non-entitled 403) + architecture.md § Multi-tenancy. **net-zero**(claim 부재 시 legacy만). GAP `entitled_domains` populate = 별 shared follow-up(step 2와 함께). 본 파일럿 CI-GREEN 후 wms/scm/erp/gap+console-bff 복제. depends on ADR-019 ACCEPTED(MONO-153) + step 1(BE-322).
 
 ## in-progress
 
