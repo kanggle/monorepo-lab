@@ -26,8 +26,16 @@ import java.time.Instant;
 /**
  * Service-level fail-closed re-enforcement of {@code tenant_id} (defense-in-
  * depth — gateway + {@link TenantClaimValidator} during decode + this filter
- * each independently enforce the invariant). Cross-tenant → 403
- * {@code TENANT_FORBIDDEN}.
+ * each independently enforce the invariant).
+ *
+ * <p>Applies the same <strong>entitlement-trust dual-accept</strong> gate as
+ * {@link TenantClaimValidator} (ADR-MONO-019 § D5): pass when legacy
+ * {@code tenant_id ∈ {expectedTenantId, "*"}} <em>or</em> the signed
+ * {@code entitled_domains} claim contains {@code expectedTenantId}; otherwise
+ * 403 {@code TENANT_FORBIDDEN}. The entitlement branch reuses
+ * {@link TenantClaimValidator#isEntitled} so both enforcement points share a
+ * single source of truth (mismatch would create a decode-pass / filter-block
+ * split).
  */
 @Slf4j
 @Component
@@ -59,13 +67,18 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
         if (auth instanceof JwtAuthenticationToken jwtAuth) {
             String tenantId = jwtAuth.getToken()
                     .getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID);
-            if (tenantId == null || tenantId.isBlank()) {
+            boolean entitled = TenantClaimValidator.isEntitled(
+                    jwtAuth.getToken(), expectedTenantId);
+            if ((tenantId == null || tenantId.isBlank()) && !entitled) {
                 writeError(response, HttpStatus.UNAUTHORIZED.value(),
                         "UNAUTHORIZED", "tenant_id claim is required");
                 return;
             }
-            if (!WILDCARD_TENANT.equals(tenantId)
-                    && !expectedTenantId.equals(tenantId)) {
+            boolean legacyOk = WILDCARD_TENANT.equals(tenantId)
+                    || expectedTenantId.equals(tenantId);
+            // Dual-accept: reject only when BOTH legacy slug and the signed
+            // entitled_domains claim fail (fail-closed; entitlement only widens).
+            if (!legacyOk && !entitled) {
                 log.warn("TenantClaimEnforcer rejected cross-tenant request: "
                         + "tenant={} path={}", tenantId, request.getRequestURI());
                 writeError(response, HttpStatus.FORBIDDEN.value(),
