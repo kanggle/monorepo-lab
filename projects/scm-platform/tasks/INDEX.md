@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-019-tenant-gate-entitlement-trust-dual-accept.md` — **READY** (ADR-MONO-019 § 3.3 step 3 복제 2/N, scm). 분석=Opus 4.8 / **구현 권장=Opus** (격리 게이트, 다중 서비스). finance/erp blueprint 의 scm 복제 — **4 enforcement 지점**(gateway `TenantClaimValidator` + procurement `TenantClaimValidator`/`TenantClaimEnforcer` + inventory-visibility `TenantClaimEnforcer`)을 `tenant_id == scm` 고정 → **entitlement-trust dual-accept**: legacy(`tenant_id ∈ {scm,*}`) ∪ 서명 토큰 `entitled_domains ∋ scm`, 거부=둘 다 불충족. **서비스별 로컬 `isEntitled`**(모듈 공유 불가; procurement 내부 validator↔enforcer 공유). `TenantClaimExtractor`는 게이트 아님(무변경). **net-zero**(claim 부재 시 legacy만) + 격리 IT + architecture.md. GAP populate=별 follow-up. depends on FIN-BE-006/ERP-BE-005.
 
 ## in-progress
 

@@ -473,17 +473,34 @@ Every table carries `tenant_id VARCHAR(64) NOT NULL`; key indexes prefix
 **always** accept `tenantId` and embed it in `WHERE`. Cross-tenant reads are
 structurally impossible — there is no method that omits tenant.
 
-Defense-in-depth tenant enforcement (3 layers):
+Defense-in-depth tenant enforcement (3 layers), each applying the same
+**entitlement-trust dual-accept** gate (ADR-MONO-019 § D5):
 
 1. **Gateway** — `TenantClaimValidator` rejects cross-tenant tokens at JWT
-   decode time; `tenant_id ∈ {scm, *}` only.
+   decode time.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` +
    `TenantClaimValidator` re-run during local JWT decode (the gateway
    forwards the bearer; the service decodes it again).
 3. **Service filter** — `TenantClaimEnforcer` (servlet filter, public-paths
-   skipped) reads the resolved `JwtAuthenticationToken` and rejects with
-   403 `TENANT_FORBIDDEN` if `tenant_id` is missing or not in
-   `{scm, *}`.
+   skipped) reads the resolved `JwtAuthenticationToken` and applies the same
+   gate, reusing `TenantClaimValidator.isEntitled` so decode-time and filter
+   stay in lockstep (a split would let entitled traffic pass decode yet be
+   blocked by the filter).
+
+**Domain gate — entitlement-trust dual-accept.** A token is accepted when
+**either** the legacy slug `tenant_id ∈ {scm, *}` (`*` = SUPER_ADMIN
+platform-scope) **or** the GAP-signed `entitled_domains` claim (a list of
+domain keys) contains `scm`. Rejection (403 `TENANT_FORBIDDEN`) requires
+**both** branches to fail (fail-closed; entitlement only *widens* the allowed
+set, never weakens the legacy reject). `entitled_domains` is read only from an
+RS256/JWKS-verified token, so it is unforgeable — **GAP is the entitlement
+authority**; a non-list / null / empty / non-string-element claim degrades to
+"not entitled". Row-level isolation is unchanged: repository methods still scope
+every read by `tenant_id`, so an entitled cross-slug token sees only its own
+`tenant_id` partition. While GAP has not yet populated `entitled_domains` the
+claim is absent → only the legacy path applies → **production net-zero**. This
+is the ADR-MONO-019 **dual-accept window**; the legacy slug branch is removed in
+step 4 once GAP populates the claim (separate follow-up).
 
 Webhook endpoints are excluded from JWT enforcement (they have no GAP
 identity) but are still tenant-scoped via the request body — the supplier
@@ -504,7 +521,8 @@ Same as `gateway-service` (consistent issuer allow-list):
 - Validators: `JwtTimestampValidator` (default) +
   `AllowedIssuersValidator` (SAS issuer + legacy `"global-account-platform"`
   during D2-b deprecation window) + `TenantClaimValidator`
-  (`tenant_id ∈ {scm, *}`).
+  (entitlement-trust dual-accept: `tenant_id ∈ {scm, *}` ∪ signed
+  `entitled_domains ∋ scm`).
 - The allowed-issuers value MUST stay byte-identical to
   `gateway-service`'s `application.yml` — drift causes
   gateway-pass / service-401 inconsistencies. Cross-service edit must land
@@ -617,7 +635,7 @@ is bootstrapped.
 |---|---|---|
 | 1 | Missing `Idempotency-Key` on mutating REST | 400 `IDEMPOTENCY_KEY_REQUIRED` |
 | 2 | Same `Idempotency-Key` with different payload | 422 `IDEMPOTENCY_KEY_MISMATCH` (`IdempotencyKeyMismatchException`) |
-| 3 | Cross-tenant JWT (tenant_id ∉ {scm, *}) | 403 `TENANT_FORBIDDEN` (validator chain or filter) |
+| 3 | Cross-tenant JWT — `tenant_id ∉ {scm, *}` **and** signed `entitled_domains ∌ scm` (dual-accept both branches fail) | 403 `TENANT_FORBIDDEN` (validator chain or filter) |
 | 4 | Redis offline during idempotency check | fail-CLOSED → fall back to `idempotency_keys` table; if both unavailable, 503 `IDEMPOTENCY_STORE_UNAVAILABLE` |
 | 5 | Supplier circuit OPEN | 503 `SUPPLIER_UNAVAILABLE` (translated by fallback method); PO stays in pre-call status |
 | 6 | Supplier 4xx (HttpClientErrorException) | propagates, no retry; mapped to 502 `SUPPLIER_REJECTED` by GlobalExceptionHandler |
