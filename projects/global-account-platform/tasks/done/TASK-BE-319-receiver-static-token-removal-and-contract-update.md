@@ -8,7 +8,9 @@ TASK-BE-319
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-30)**: 권장 분할대로 양 half 모두 구현 완료. **security 수신측 = TASK-BE-319a**(#943 squash `317b2682`). **account 수신측 = BE-319b**(impl #947 squash `a67cc054`): `InternalApiFilter` X-token 경로 제거(bypass 전용) + `internal.api.token`/`INTERNAL_API_TOKEN` 제거 + 계약 spec 5종 Bearer 갱신. account 호출자 전원 Bearer 선행요건은 BE-318(security)/318b(admin)/318c(auth)/318d(membership)/BE-253(community) 으로 충족. ADR-005 단계 4 종결(공유 X-Internal-Token 정적 비밀 제거; client_secret 만 정적 잔존 — 완전 keyless 는 mTLS 후속 ADR). 잔여: account IT 7종의 inert X-token 테스트 scaffolding 기계적 정리(별도 follow-up; 기능 무영향).
 
 # Owner
 
