@@ -100,7 +100,8 @@ management:
 security-service:
   dedup:
     redis-ttl-seconds: 60
-  internal-token: test-internal-token
+  # TASK-BE-319a: internal-token removed (JWT-only). The 'test' profile bypasses InternalAuthFilter,
+  # so /internal/** slice + integration tests need no credential.
 
 # TASK-BE-032: override detection thresholds for test runs.
 # Demonstrates that rule behaviour is config-driven and can be tuned

@@ -153,6 +153,7 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 - **허용 엔드포인트** (admin-service 전용, 내부 경로):
   - `GET /internal/security/login-history?accountId=&from=&to=`
   - `GET /internal/security/suspicious-events?accountId=&from=&to=`
+- **인증** (TASK-BE-319a, ADR-005 단계 4a): `/internal/**` 는 GAP `client_credentials` JWT(`Authorization: Bearer`) **단일** 인증 — `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증(정적 `X-Internal-Token` 제거됨). `test`/`standalone` profile 은 우회.
 - **금지**: 상태 변경 메서드, 외부 노출 경로, 배치 대량 export
 - 응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4) — IP 일부만 노출, 이메일 마스킹
 - 조회 액션 자체가 감사됨 — meta-audit ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5)

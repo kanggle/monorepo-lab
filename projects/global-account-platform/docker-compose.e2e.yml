@@ -217,9 +217,9 @@ services:
       DB_NAME: security_db
       DB_USERNAME: security_user
       DB_PASSWORD: security_pass
-      # TASK-BE-142: token used for outbound calls to account-service /internal/**.
-      # Must match account-service's INTERNAL_API_TOKEN.
-      INTERNAL_SERVICE_TOKEN: e2e-internal-token
+      # TASK-BE-319a: INTERNAL_SERVICE_TOKEN removed. security-service no longer accepts the static
+      # X-Internal-Token on /internal/** (GAP JWT only); its outbound calls to account-service already
+      # use a GAP client_credentials Bearer JWT (BE-318), so no static token is needed either side.
     # TASK-BE-045: last in the startup chain (auth -> account -> admin -> security).
     depends_on:
       mysql: { condition: service_healthy }

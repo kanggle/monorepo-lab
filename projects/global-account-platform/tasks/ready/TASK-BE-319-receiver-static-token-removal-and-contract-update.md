@@ -29,6 +29,7 @@ backend
   - **account 수신측** X-token 제거 선행 요건: TASK-BE-318(security→account, 완료) + TASK-BE-318b(admin→account) + TASK-BE-318c(auth→account) + **membership→account 전환**.
 - ⚠️ **membership→account 미전환 블로커**: membership-service `AccountStatusClient` 는 아직 `X-Internal-Token` 사용(TASK-BE-253 follow-up, 미완). account 수신측에서 X-token 을 제거하면 membership→account 호출이 깨진다. **account 부분은 membership→account 전환(별도 task — BE-253 follow-up 재활성 또는 신규)이 선행되어야 한다.**
 - **권장 분할**: 선행 요건이 다르므로 본 task 를 **BE-319a(security 수신측 제거, BE-318b 후)** 와 **BE-319b(account 수신측 제거, 모든 account 호출자+membership 후)** 로 쪼개 진행해도 된다.
+- **⚠️ 분할 적용됨 (2026-05-30)**: security half 는 **TASK-BE-319a** 로 분리·구현됨(`InternalAuthFilter` JWT 전용 + 계약/spec/env 정리). **본 task(BE-319)의 잔여 scope = account 수신측(=BE-319b)** 이며 여전히 **membership→account 전환 미완으로 블록**. account 부분만 본 task 에서 진행한다(아래 In scope 의 security-service 항목은 BE-319a 에서 완료).
 
 ---
 
