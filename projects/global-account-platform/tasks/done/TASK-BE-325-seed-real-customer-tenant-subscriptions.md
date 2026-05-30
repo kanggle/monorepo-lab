@@ -8,7 +8,9 @@ ADR-MONO-019 § 3.3 step 2 — 실 고객 테넌트(`acme-corp`) + N:M 도메인
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #970 (squash `b6f284f7`). ADR-MONO-019 § 3.3 **step 2** — 첫 실 고객 테넌트. account-service Flyway `V0020` 시드: `acme-corp`(ACTIVE, B2B_ENTERPRISE) + 구독 `acme-corp`→finance, `acme-corp`→wms(**gap 없음**[bindsAllTenants], **scm/erp 없음**[의도적 미-entitlement, 부정 케이스]; tenant insert→subscription FK 순서, INSERT IGNORE). 구독-기반 카탈로그(BE-322)가 스위처에 **고객명** 노출, keystone(BE-324) 역조회가 `acme-corp` 토큰에 `entitled_domains=[finance,wms]` 주입. **증명**: account `@DataJpaTest`(real DB, TenantJpaRepositoryTest 하니스 확장) `findByStatusAndTenantId("acme-corp")`={finance,wms} + `"wms"`={wms}(V0019 self-sub 무회귀) + 미존재=빈 + acme-corp 는 gap/scm/erp 제외. admin `ConsoleRegistryIntegrationTest`(WireMock IT) + `ConsoleRegistryUseCaseTest`(unit `@Nested RealCustomerTenantAcmeCorp` 3 case): acme-corp 가 finance/wms 노출, scm/erp 불포함, gap binds-all 포함, M6 isolation 보존. **net-positive(net-zero 아님)**: step 2 가 카탈로그를 의도적으로 확장(고객 등장), 기존 slug-tenant 단언 무변경(별 stub). **production code 0** — BE-322 derivation + BE-324 repository 가 이미 임의 고객 처리. **runtime 무변경**(acme-corp 토큰 발급 주체 미존재 → catalog-visible-but-runtime-inert; console-bff credential path 별건). **3차원**(MERGED `b6f284f7` / tip 일치 / pre-merge 0). **BE-299 re-stage** ✓. **CI 1-pass**: GAP Integration GREEN 2m21s(V0020 clean-migrate + acme-corp 카탈로그 IT + 역조회 @DataJpaTest) + Build GREEN. **scope-lock**: V0020 + account 역조회 test + admin 카탈로그 2 test + spec 노트 만. **후속**: 런타임 cross-domain E2E(console-bff per-domain credential 의 tenant-scoped 진화에 의존, step 3 잔여 console-bff 항목).
 
 # Owner
 
