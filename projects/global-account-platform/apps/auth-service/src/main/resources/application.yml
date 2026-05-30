@@ -115,3 +115,14 @@ auth:
     base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
     connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:5000}
+
+# TASK-BE-318c (ADR-005 단계 3c): outbound /internal/accounts/** calls (status / social-signup /
+# profile) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated). auth-service
+# IS the GAP SAS, so the token is minted via a self-call to its own /oauth2/token — lazy (first
+# outbound call) so startup never depends on the SAS being ready. Cached by
+# GapClientCredentialsTokenProvider. Receiver (account /internal/**) dual-allows JWT or X-token (BE-317).
+gap:
+  internal-client:
+    token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+    client-id: ${AUTH_SERVICE_CLIENT_ID:auth-service-client}
+    client-secret: ${AUTH_SERVICE_CLIENT_SECRET:secret}
