@@ -8,7 +8,9 @@ ADR-MONO-019 § 3.3 step 3 **파일럿 (1 도메인 = finance)** — finance acc
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #960 (squash `df1efa5a`). ADR-MONO-019 § 3.3 **step 3 파일럿(finance)** — tenant 격리 게이트 entitlement-trust dual-accept (opus dispatch). `TenantClaimValidator`(decode) + `TenantClaimEnforcer`(filter) 양 enforcement 지점이 공유 정적 헬퍼 `TenantClaimValidator.isEntitled(jwt, domain)` 로 동일 적용 — **거부 = !legacyOk && !entitled** (fail-closed; claim 형 anomaly→false). legacy(`tenant_id ∈ {finance,*}`) ∪ 서명 토큰 `entitled_domains ∋ finance`. **net-zero**(claim 부재 시 legacy만). 격리 IT: entitled 타테넌트(acme+[finance])→404(게이트 통과, NOT 403) / non-entitled(acme+[wms])→403 TENANT_FORBIDDEN / 기존 crossTenant·missingToken 무변경. architecture.md § Multi-tenancy + Failure #3 갱신. **3차원 검증**(MERGED `df1efa5a` / origin/main tip 일치 / pre-merge 0 failing). **CI 1-pass**: finance Integration(Testcontainers) GREEN 1m44s(entitled/non-entitled IT 1차 통과). **scope-lock**: 다른 도메인/console-bff/GAP claim populate/legacy 제거/step 2 artifact 0. **후속**: ① wms/scm/erp/gap + console-bff 게이트 복제(본 blueprint) ② GAP auth-service `entitled_domains` populate(shared, step 2 와 함께 — auth→account `/internal/tenant-domain-subscriptions`(BE-322) 조회).
 
 # Owner
 
