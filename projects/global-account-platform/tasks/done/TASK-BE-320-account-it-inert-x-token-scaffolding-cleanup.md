@@ -8,7 +8,9 @@ account-service 테스트의 죽은 `X-Internal-Token` scaffolding 정리 — TA
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-30)**: impl PR #949 (squash `9720fdbe`). account-service 테스트 11종에서 inert `internal.api.token`/`X-Internal-Token` scaffolding 제거 — 11 files −59/+1, 프로덕션 코드 0. 보존 2종(`InternalApiFilterTest`/`InternalDualAuthSliceTest`)의 negative 회귀 게이트 무변경. CI GREEN(특히 Integration global-account-platform 2m4s + gap docker-compose smoke — account IT 실제 실행 통과로 AC-3/AC-4 충족). ADR-005 단계 4 문서화 후속 정리 종결.
 
 # Owner
 
