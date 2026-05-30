@@ -8,7 +8,9 @@ e2e inter-service JWT 검증 정합 — docker-compose.e2e.yml 의 `OIDC_ISSUER_
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-30)**: impl PR #951 (squash `8dfeef06`). `docker-compose.e2e.yml` 공유 anchor 에 `OIDC_ISSUER_URL=http://auth-service:8081` 추가(workload-token 체인 일관 정렬) + `ComposeFixture.AUTH_BASE_URL` + `InternalWorkloadAuthE2ETest`(@Tag smoke). **CI 가 정합을 실증**: 1차 run 에서 account 무인증 401 + Bearer **404 PASS**(수신측이 GAP JWT 실검증 — landmine 해소 확인), security fail-closed 가 401 아닌 **403**(`InternalAuthFilter` PERMISSION_DENIED, account oauth2ResourceServer 401 과 서비스별 차이)으로 드러나 테스트 단언만 403 으로 정정 → 2차 run gap e2e smoke GREEN(3m1s). 프로덕션 코드 0. ADR-005 단계 4 latent landmine #2 종결 — 마이그레이션이 PR-time e2e 에서 회귀-게이트화됨.
 
 # Owner
 
