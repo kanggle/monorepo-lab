@@ -8,7 +8,9 @@ ADR-MONO-019 § 3.3 step 3 복제 (wms) — wms-platform 의 6 서비스 tenant 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-05-31)**: impl PR #966 (squash `0e20b02a`). ADR-MONO-019 § 3.3 step 3 복제 3/N (wms, 6 서비스 validator-only; opus dispatch). **6 `TenantClaimValidator`**(gateway/admin/inbound/inventory/master/outbound)를 `tenant_id==wms` strict → **entitlement-trust dual-accept**: legacy strict equals(`tenant_id==wms`, **wildcard `*` 미도입** — finance/erp/scm blueprint 의 `WILDCARD_TENANT` 분기 의도적 제외, wms net-zero) ∪ 서명 `entitled_domains ∋ wms`, **거부=!legacyOk && !entitled**(fail-closed). **서비스별 로컬 isEntitled/safeStringList**(모듈 경계). `TenantClaimExtractor`/notification-service 무변경. **net-zero**(claim 부재 시 legacy strict 만). 6 validator 각 단위테스트 3 케이스(entitled cross-slug 통과 / wrong-domain 거부 / malformed fail-closed). **admin-service `TenantClaimValidatorTest` 신규**(기존 부재 — dual-accept 커버리지 확보). gateway-service overview.md § JWT-validation dual-accept 갱신(타 서비스 spec 은 v1-deferred forward-decl → 무변경). **3차원**(MERGED `0e20b02a` / tip 일치 / pre-merge 0 non-success). **BE-299 re-stage** ✓. **CI**: 1차 `LocationIntegrationTest:142` 선재 flake(`shortSuffix()`=`10+random*890` 충돌 → 중복 warehouseCode 409; validator 무관 — 깨졌으면 28개 전 인증 IT 실패, 1개만 + legacy 경로 무변경) → `--failed` 재실행 GREEN(2m44s). **scope-lock**: wms 6 validator+test+gateway spec 만. **남은 step 3**: gap+console-bff + GAP `entitled_domains` populate(shared). **메타**: wms validator 는 strict-equals(no wildcard)였으므로 blueprint 의 wildcard 분기를 복사하면 net-zero 위반 — 도메인별 기존 legacy semantics 보존이 복제의 1순위 제약.
 
 # Owner
 
