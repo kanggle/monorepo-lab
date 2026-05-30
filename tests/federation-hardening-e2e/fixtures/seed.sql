@@ -135,3 +135,97 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
  WHERE o.operator_id = 'e2e-super-admin';
+
+-- ===========================================================================
+-- TASK-MONO-154 — ADR-MONO-019 runtime activation capstone.
+-- Real customer `acme-corp` operator (entitled_domains=[finance,wms]).
+--
+-- This block is ADD-ONLY — the SUPER_ADMIN rows above are NOT modified.
+-- Purpose: prove the entitlement-trust gate at runtime. An acme-corp operator
+-- logs into platform-console; keystone (BE-324) injects entitled_domains=
+-- [finance,wms] into the OIDC token (reverse-looked-up by BE-325 from the
+-- account_db `acme-corp` → [finance,wms] subscriptions, seeded by GAP Flyway
+-- V0019/V0020 — NOT re-seeded here). The domain gates (step 3) then ACCEPT
+-- finance/wms (entitled) and REJECT scm/erp (acme-corp is neither their slug
+-- nor in their entitled set). The RBAC binding below is SUPER_ADMIN purely so
+-- the operator can reach the console shell — the tenant ENTITLEMENT is what is
+-- under test, NOT RBAC.
+--
+-- Re-runnable: INSERT IGNORE / ON DUPLICATE KEY UPDATE (same discipline as
+-- the SUPER_ADMIN block).
+--
+-- NOTE on account_db: the `acme-corp` tenant + [finance,wms] subscriptions are
+-- created by GAP Flyway V0019/V0020 (BE-322/BE-325) which run automatically in
+-- the compose — they are deliberately NOT seeded here.
+-- ===========================================================================
+
+-- 6. auth_db — acme-corp operator credential row.
+--    Same Argon2id hash as SUPER_ADMIN (same password 'devpassword123!').
+--    tenant_id='acme-corp' (real customer slug, NOT the '*' platform sentinel).
+USE `auth_db`;
+
+INSERT IGNORE INTO credentials (
+    tenant_id,
+    account_id,
+    email,
+    credential_hash,
+    hash_algorithm,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'acme-corp',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c200',
+    'acme-operator@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id',
+    NOW(6),
+    NOW(6),
+    0
+);
+
+-- 7. admin_db — acme-corp operator row.
+--    tenant_id='acme-corp'; finance_default_account_id points at the acme-corp
+--    finance account seeded in seed-domains.sql (so the finance leg returns a
+--    real 200 with balance data, NOT MISSING_PREREQUISITE).
+USE `admin_db`;
+
+INSERT INTO admin_operators (
+    operator_id,
+    tenant_id,
+    email,
+    password_hash,
+    display_name,
+    status,
+    oidc_subject,
+    finance_default_account_id,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'acme-corp-operator',
+    'acme-corp',
+    'acme-operator@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'Acme Operator',
+    'ACTIVE',
+    'acme-operator@example.com',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
+    NOW(6),
+    NOW(6),
+    0
+)
+ON DUPLICATE KEY UPDATE
+    tenant_id    = VALUES(tenant_id),
+    oidc_subject = VALUES(oidc_subject),
+    finance_default_account_id = VALUES(finance_default_account_id),
+    status       = 'ACTIVE',
+    updated_at   = NOW(6);
+
+-- 8. Bind acme-corp operator to SUPER_ADMIN role (console-shell reachability
+--    only; the entitlement gate — NOT RBAC — is the discriminator under test).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
+ WHERE o.operator_id = 'acme-corp-operator';
