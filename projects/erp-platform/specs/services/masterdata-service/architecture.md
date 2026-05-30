@@ -529,13 +529,36 @@ erp-platform is **not** internally multi-tenant (single-org internal
 system per `PROJECT.md` Out-of-Scope `multi-tenant`). GAP supplies
 `tenant_id = erp`. Defense-in-depth (mirrors finance / scm):
 
-1. **Gateway** (v1 deferred) — `tenant_id ∈ {erp, *}` at JWT decode.
+1. **Gateway** (v1 deferred) — domain gate at JWT decode.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` (SAS issuer
    + legacy `global-account-platform` D2-b window — byte-identical to the
-   future gateway's allowed-issuers) + `TenantClaimValidator`
-   (`tenant_id ∈ {erp, *}`).
-3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` if
-   the tenant claim is missing or mismatched (public paths skipped).
+   future gateway's allowed-issuers) + `TenantClaimValidator`.
+3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` when
+   the gate rejects (public paths skipped).
+
+**Domain gate — entitlement-trust dual-accept** (ADR-MONO-019 § D5, mirrors
+the finance pilot). Both enforcement points (`TenantClaimValidator` at decode
+time and `TenantClaimEnforcer` filter) apply the *same* rule via the shared
+`TenantClaimValidator.isEntitled(jwt, domain)` helper (single source of truth
+— a split would let entitled traffic pass decode yet be blocked by the
+filter). A token is accepted when **either**:
+
+- **(legacy slug)** `tenant_id ∈ {erp, *}` — `*` is SUPER_ADMIN
+  platform-scope; **or**
+- **(entitlement-trust)** the GAP-signed `entitled_domains` claim (a list of
+  domain keys) contains `erp`.
+
+Rejection (403 `TENANT_FORBIDDEN`) requires **both** branches to fail
+(fail-closed; entitlement only *widens* the allowed set, never weakens the
+legacy reject). `entitled_domains` is read only from an RS256/JWKS-verified
+token, so it is unforgeable — **GAP is the entitlement authority**; a
+non-list / null / empty / non-string-element claim degrades to "not entitled".
+Row-level isolation is unchanged: row scoping still keys off `tenant_id`, so
+an entitled cross-slug token sees only its own `tenant_id` partition. While
+GAP has not yet populated `entitled_domains` the claim is absent → only the
+legacy path applies → **production net-zero**. This is the ADR-MONO-019
+**dual-accept window**; the legacy `tenant_id == slug` branch is removed in
+step 4 once GAP populates the claim (separate follow-up).
 
 Config keys (TASK-MONO-119 skeleton `application.yml`):
 `erpplatform.oauth2.allowed-issuers` + `.required-tenant-id=erp`.
@@ -675,7 +698,7 @@ is a leaf — the `read-model-service` v2 will be the inbound consumer).
 |---|---|---|
 | 1 | Missing `Idempotency-Key` on mutation | 400 `IDEMPOTENCY_KEY_REQUIRED` |
 | 2 | Same key, different payload | 409 `IDEMPOTENCY_KEY_CONFLICT` |
-| 3 | Cross-tenant JWT (`tenant_id ∉ {erp,*}`) | 403 `TENANT_FORBIDDEN` |
+| 3 | Cross-tenant JWT — `tenant_id ∉ {erp,*}` **and** signed `entitled_domains ∌ erp` (dual-accept both branches fail) | 403 `TENANT_FORBIDDEN` |
 | 4 | Missing JWT / invalid signature / expired | 401 `UNAUTHORIZED` |
 | 5 | External (non-internal-network) traffic at ingress | rejected at Traefik / network layer; if surfaced through a debug path → 403 `EXTERNAL_TRAFFIC_REJECTED` |
 | 6 | Caller lacks required role | 403 `PERMISSION_DENIED` |
