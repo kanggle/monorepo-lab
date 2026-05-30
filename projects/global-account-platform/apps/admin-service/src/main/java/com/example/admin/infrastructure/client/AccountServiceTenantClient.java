@@ -4,7 +4,9 @@ import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.admin.application.exception.TenantAlreadyExistsException;
 import com.example.admin.application.exception.TenantNotFoundException;
+import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.port.TenantProvisioningPort;
+import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,7 +41,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-public class AccountServiceTenantClient implements TenantProvisioningPort {
+public class AccountServiceTenantClient implements TenantProvisioningPort, TenantDomainSubscriptionPort {
 
     private static final String CB_NAME = "accountService";
 
@@ -212,6 +214,35 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
         }
     }
 
+    // TASK-BE-322 (ADR-MONO-019 D4): read ACTIVE tenant↔domain subscriptions from
+    // the account-service entitlement authority (D2). Mirrors list() — same CB/retry,
+    // same Bearer JWT auth, same downstream-failure mapping (5xx/CB-open → 503).
+    @Override
+    @Retry(name = CB_NAME)
+    @CircuitBreaker(name = CB_NAME)
+    public List<TenantDomainSubscriptionSummary> listActiveSubscriptions() {
+        try {
+            SubscriptionListResponse response = restClient.get()
+                    .uri("/internal/tenant-domain-subscriptions")
+                    .headers(h -> addInternalHeaders(h))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(SubscriptionListResponse.class);
+            return toSubscriptionSummaries(response);
+        } catch (RestClientResponseException e) {
+            log.warn("account-service returned {} on GET /internal/tenant-domain-subscriptions: {}",
+                    e.getStatusCode(), e.getMessage());
+            throw new DownstreamFailureException("account-service subscription list error", e);
+        } catch (Exception e) {
+            log.error("account-service GET /internal/tenant-domain-subscriptions failed", e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
     // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
     // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
     private void addInternalHeaders(org.springframework.http.HttpHeaders h) {
@@ -245,6 +276,13 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
         return new TenantPageSummary(items, r.page(), r.size(), r.totalElements(), r.totalPages());
     }
 
+    private static List<TenantDomainSubscriptionSummary> toSubscriptionSummaries(SubscriptionListResponse r) {
+        if (r == null || r.items() == null) return List.of();
+        return r.items().stream()
+                .map(i -> new TenantDomainSubscriptionSummary(i.tenantId(), i.domainKey()))
+                .toList();
+    }
+
     // ---- Response DTOs -------------------------------------------------------
 
     private record TenantResponse(
@@ -262,5 +300,15 @@ public class AccountServiceTenantClient implements TenantProvisioningPort {
             int size,
             long totalElements,
             int totalPages
+    ) {}
+
+    // TASK-BE-322: account /internal/tenant-domain-subscriptions response shape.
+    private record SubscriptionListResponse(
+            List<SubscriptionItemResponse> items
+    ) {}
+
+    private record SubscriptionItemResponse(
+            String tenantId,
+            String domainKey
     ) {}
 }

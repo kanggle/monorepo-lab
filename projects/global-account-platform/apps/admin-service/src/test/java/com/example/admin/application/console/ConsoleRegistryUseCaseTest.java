@@ -2,7 +2,9 @@ package com.example.admin.application.console;
 
 import com.example.admin.application.OperatorContext;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
+import com.example.admin.application.tenant.ListTenantDomainSubscriptionsUseCase;
 import com.example.admin.application.tenant.ListTenantsUseCase;
+import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
@@ -45,8 +47,12 @@ class ConsoleRegistryUseCaseTest {
     @Mock
     private ListTenantsUseCase listTenantsUseCase;
 
+    @Mock
+    private ListTenantDomainSubscriptionsUseCase listSubscriptionsUseCase;
+
     private ConsoleRegistryUseCase useCase() {
-        return new ConsoleRegistryUseCase(operatorRepository, listTenantsUseCase);
+        return new ConsoleRegistryUseCase(
+                operatorRepository, listTenantsUseCase, listSubscriptionsUseCase);
     }
 
     private void stubOperator(String operatorId, String tenantId) {
@@ -76,6 +82,25 @@ class ConsoleRegistryUseCaseTest {
                         tenants.length, 1));
     }
 
+    /**
+     * TASK-BE-322: the backward-compatible seed (ADR-019 step 1) — each
+     * domain-slug tenant subscribes to its own domain. With this seed the
+     * subscription-driven binding reproduces the legacy
+     * {@code tenantSlug == domain} binding byte-identically; every catalog
+     * assertion below therefore holds exactly as before.
+     */
+    private void stubBackwardCompatSubscriptions() {
+        when(listSubscriptionsUseCase.execute()).thenReturn(List.of(
+                new TenantDomainSubscriptionSummary("wms", "wms"),
+                new TenantDomainSubscriptionSummary("scm", "scm"),
+                new TenantDomainSubscriptionSummary("erp", "erp"),
+                new TenantDomainSubscriptionSummary("finance", "finance")));
+    }
+
+    private void stubSubscriptions(TenantDomainSubscriptionSummary... subs) {
+        when(listSubscriptionsUseCase.execute()).thenReturn(List.of(subs));
+    }
+
     private static TenantSummary tenant(String id, String status) {
         return new TenantSummary(id, id, "B2B_ENTERPRISE", status,
                 Instant.now(), Instant.now());
@@ -95,6 +120,7 @@ class ConsoleRegistryUseCaseTest {
         // available stays true (AC-1 / TASK-BE-305 reality-alignment).
         stubOperator("op-1", "*");
         stubTenants(tenant("fan-platform", "ACTIVE"));
+        stubBackwardCompatSubscriptions();
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
 
@@ -115,6 +141,7 @@ class ConsoleRegistryUseCaseTest {
                 tenant("fan-platform", "ACTIVE"),
                 tenant("wms", "ACTIVE"),
                 tenant("scm", "ACTIVE"));
+        stubBackwardCompatSubscriptions();
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
 
@@ -131,6 +158,7 @@ class ConsoleRegistryUseCaseTest {
         stubTenants(
                 tenant("fan-platform", "ACTIVE"),
                 tenant("wms", "SUSPENDED"));
+        stubBackwardCompatSubscriptions();
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
 
@@ -148,6 +176,7 @@ class ConsoleRegistryUseCaseTest {
                 tenant("fan-platform", "ACTIVE"),
                 tenant("wms", "ACTIVE"),
                 tenant("scm", "ACTIVE"));
+        stubBackwardCompatSubscriptions();
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
 
@@ -171,6 +200,7 @@ class ConsoleRegistryUseCaseTest {
     void singleTenantOperator_ownTenantSuspended() {
         stubOperator("wms-op", "wms");
         stubTenants(tenant("wms", "SUSPENDED"));
+        stubBackwardCompatSubscriptions();
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
 
@@ -185,6 +215,89 @@ class ConsoleRegistryUseCaseTest {
 
         assertThatThrownBy(() -> useCase().execute(new OperatorContext("ghost", "jti")))
                 .isInstanceOf(OperatorUnauthorizedException.class);
+    }
+
+    /**
+     * TASK-BE-322 (ADR-MONO-019 D4): the domain product binding is now driven by
+     * the account-service subscription read, not the fixed {@code tenantSlug}.
+     */
+    @Nested
+    @DisplayName("TASK-BE-322: subscription-driven domain binding")
+    class SubscriptionDrivenBinding {
+
+        @Test
+        @DisplayName("net-zero: backward-compat self-subscriptions reproduce the legacy slug binding exactly")
+        void backwardCompatSeed_reproducesLegacyBinding() {
+            stubOperator("super", "*");
+            stubTenants(
+                    tenant("fan-platform", "ACTIVE"),
+                    tenant("wms", "ACTIVE"),
+                    tenant("scm", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            // identical to the pre-BE-322 binding: each domain product → own slug
+            assertThat(product(r, "wms").tenants()).containsExactly("wms");
+            assertThat(product(r, "scm").tenants()).containsExactly("scm");
+            // gap (bindsAllTenants) is unaffected by the subscription read
+            assertThat(product(r, "gap").tenants())
+                    .containsExactlyInAnyOrder("fan-platform", "wms", "scm");
+        }
+
+        @Test
+        @DisplayName("a domain with NO active subscription → tenants:[] even when other slugs are ACTIVE")
+        void noSubscription_emptyTenants() {
+            stubOperator("super", "*");
+            stubTenants(
+                    tenant("wms", "ACTIVE"),
+                    tenant("scm", "ACTIVE"));
+            // only wms self-subscribes; scm has no subscription row.
+            stubSubscriptions(new TenantDomainSubscriptionSummary("wms", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            assertThat(product(r, "wms").tenants()).containsExactly("wms");
+            assertThat(product(r, "scm").tenants())
+                    .as("scm has no ACTIVE subscription → empty binding")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("binding follows the subscription, not the slug: a non-slug tenant subscribed to wms is bound")
+        void subscriptionDrivesBinding_notSlug() {
+            // 'acme' (a future-style customer tenant) subscribes to the wms domain.
+            stubOperator("super", "*");
+            stubTenants(
+                    tenant("acme", "ACTIVE"),
+                    tenant("wms", "ACTIVE"));
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("acme", "wms"),
+                    new TenantDomainSubscriptionSummary("wms", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            assertThat(product(r, "wms").tenants())
+                    .as("binding = subscriptions(wms) ∩ activeTenants")
+                    .containsExactlyInAnyOrder("acme", "wms");
+        }
+
+        @Test
+        @DisplayName("subscribed tenant not registered/ACTIVE → excluded by the activeTenants intersection")
+        void subscribedButNotActive_excluded() {
+            stubOperator("super", "*");
+            // 'acme' subscribes to wms but is NOT in the active tenant list.
+            stubTenants(tenant("wms", "ACTIVE"));
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("acme", "wms"),
+                    new TenantDomainSubscriptionSummary("wms", "wms"));
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
+
+            assertThat(product(r, "wms").tenants())
+                    .as("acme subscribed but not ACTIVE-registered → excluded")
+                    .containsExactly("wms");
+        }
     }
 
     /**
@@ -209,6 +322,7 @@ class ConsoleRegistryUseCaseTest {
         void nullColumn_financeOperatorContextNull() {
             stubOperator("op-1", "*", null);
             stubTenants(tenant("fan-platform", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
 
             ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
 
@@ -222,6 +336,7 @@ class ConsoleRegistryUseCaseTest {
         void setColumn_financeOperatorContextPopulated() {
             stubOperator("op-2", "*", ACCOUNT_UUID);
             stubTenants(tenant("fan-platform", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
 
             ConsoleRegistry r = useCase().execute(new OperatorContext("op-2", "jti"));
 
@@ -240,6 +355,7 @@ class ConsoleRegistryUseCaseTest {
             // receive operatorContext in v1 (AC-3 substring-count-1 invariant).
             stubOperator("op-3", "*", ACCOUNT_UUID);
             stubTenants(tenant("fan-platform", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
 
             ConsoleRegistry r = useCase().execute(new OperatorContext("op-3", "jti"));
 
@@ -258,6 +374,7 @@ class ConsoleRegistryUseCaseTest {
             // whitespace-only → treated as NULL (StringUtils.hasText)".
             stubOperator("op-4", "*", "   ");
             stubTenants(tenant("fan-platform", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
 
             ConsoleRegistry r = useCase().execute(new OperatorContext("op-4", "jti"));
 

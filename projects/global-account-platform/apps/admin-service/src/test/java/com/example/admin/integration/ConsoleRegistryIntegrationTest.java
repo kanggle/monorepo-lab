@@ -179,10 +179,41 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
             }
             """;
 
+    /**
+     * TASK-BE-322 (ADR-MONO-019 step 1): the backward-compatible subscription
+     * seed — each domain-slug tenant self-subscribes. This makes the
+     * subscription-driven catalog binding byte-identical to the pre-BE-322
+     * slug binding (net-zero). `gap` is intentionally absent (it federates all
+     * tenants via bindsAllTenants and never consults this surface).
+     */
+    private static final String BACKWARD_COMPAT_SUBSCRIPTIONS = """
+            {
+              "items": [
+                {"tenantId":"wms","domainKey":"wms"},
+                {"tenantId":"scm","domainKey":"scm"},
+                {"tenantId":"erp","domainKey":"erp"},
+                {"tenantId":"finance","domainKey":"finance"}
+              ]
+            }
+            """;
+
+    /**
+     * TASK-BE-322: re-register the subscription endpoint stub. resetAll() clears
+     * stubs, so call after every reset (mirrors stubGapTokenEndpoint()).
+     */
+    private static void stubSubscriptionsEndpoint() {
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(BACKWARD_COMPAT_SUBSCRIPTIONS)));
+    }
+
     @BeforeEach
     void resetAndSeed() {
         wireMock.resetAll();
         stubGapTokenEndpoint();
+        stubSubscriptionsEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -282,6 +313,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     void accountServiceDown_returns503() throws Exception {
         wireMock.resetAll();
         stubGapTokenEndpoint();
+        stubSubscriptionsEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse().withStatus(503)
                         .withHeader("Content-Type", "application/json")
@@ -344,6 +376,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         // the tenant-selection rule can populate finance.tenants and erp.tenants.
         wireMock.resetAll();
         stubGapTokenEndpoint();
+        stubSubscriptionsEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -376,6 +409,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         // Override the WireMock tenant stub for this test: all 5 slugs ACTIVE.
         wireMock.resetAll();
         stubGapTokenEndpoint();
+        stubSubscriptionsEndpoint();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants"))
                 .willReturn(aResponse()
                         .withStatus(200)

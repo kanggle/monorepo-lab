@@ -262,8 +262,8 @@ selection per § Tenant selection rule).
 
 1. the product's tenant binding — `gap` binds to **all** registered tenants
    (the platform itself federates them); each of `wms` / `scm` / `erp` /
-   `finance` binds to its own tenant slug (the slug it registered at
-   bootstrap);
+   `finance` binds to the tenants that hold an **ACTIVE subscription** to its
+   `domain_key` (TASK-BE-322 / ADR-MONO-019 D2/D4 — see below);
 2. the **operator's tenant scope** — `'*'` (platform) ⇒ all; a single
    tenant slug ⇒ only that slug;
 3. the tenant being **registered + ACTIVE** in `tenants` (account-service
@@ -271,6 +271,24 @@ selection per § Tenant selection rule).
    is excluded.
 
 An unavailable product always has `tenants: []` regardless of operator scope.
+
+#### Subscription-driven domain binding (TASK-BE-322 — ADR-MONO-019 D2/D4)
+
+The domain product binding in (1) is derived from the **ACTIVE tenant↔domain
+subscriptions** that GAP account-service owns (ADR-019 **D2** entitlement
+authority), read by admin-service via the internal subscription surface
+([`internal/account-tenant-domain-subscriptions.md`](internal/account-tenant-domain-subscriptions.md))
+and projected here (ADR-019 **D4**). This **replaces** the prior fixed
+`tenantSlug == domain` binding; the `gap` `bindsAllTenants` branch is unchanged
+(it never consults subscriptions). The operator-scope intersection (2) and the
+registered+ACTIVE intersection (3) are unchanged and still apply on top.
+
+**Net-zero (ADR-019 step 1)**: a backward-compatible seed has each domain-slug
+tenant self-subscribe (`(wms,wms)`, `(scm,scm)`, `(erp,erp)`, `(finance,finance)`),
+so `subscriptions(domain_key) ∩ activeTenants` reproduces the legacy slug
+binding **byte-identically**. The response envelope, item shape, and values are
+unchanged in step 1; real customer-tenant subscriptions surface in a later step
+without an envelope change.
 
 ---
 

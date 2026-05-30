@@ -2,7 +2,9 @@ package com.example.admin.application.console;
 
 import com.example.admin.application.OperatorContext;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
+import com.example.admin.application.tenant.ListTenantDomainSubscriptionsUseCase;
 import com.example.admin.application.tenant.ListTenantsUseCase;
+import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.AdminOperator;
@@ -12,8 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,6 +33,14 @@ import java.util.Set;
  * {@code specs/features/multi-tenancy.md} "Platform Console". The 5-product
  * catalog is fixed (ADR-MONO-013 federated domains). {@code available} and the
  * per-product tenant binding are derived here.
+ *
+ * <p>TASK-BE-322 (ADR-MONO-019 D4): a domain product's {@code tenants} binding
+ * is now derived from the ACTIVE tenant↔domain subscriptions account-service
+ * owns (ADR-019 D2 entitlement authority), read via
+ * {@link ListTenantDomainSubscriptionsUseCase}, instead of the prior fixed
+ * {@code tenantSlug == domain} binding. The response envelope is unchanged
+ * (zero console-web change); the backward-compatible seed keeps the values
+ * byte-identical in step 1.
  *
  * <p>Multi-tenant isolation ({@code rules/traits/multi-tenant.md} M3/M6): a
  * single-tenant operator NEVER sees another tenant's slug in any product's
@@ -48,6 +60,7 @@ public class ConsoleRegistryUseCase {
 
     private final AdminOperatorJpaRepository operatorRepository;
     private final ListTenantsUseCase listTenantsUseCase;
+    private final ListTenantDomainSubscriptionsUseCase listSubscriptionsUseCase;
 
     public ConsoleRegistry execute(OperatorContext operator) {
         AdminOperator adminOperator = resolveOperator(operator);
@@ -56,13 +69,21 @@ public class ConsoleRegistryUseCase {
         // or unregistered tenant is excluded by construction.
         List<String> activeTenants = activeRegisteredTenantSlugs();
 
+        // TASK-BE-322 (ADR-MONO-019 D2/D4): ACTIVE tenant↔domain subscriptions,
+        // grouped domainKey → tenant ids. account-service is the entitlement
+        // authority; a domain product binds to the tenants subscribed to its
+        // domain_key (replaces the prior fixed `tenantSlug == domain` binding).
+        // Fetched once per request (same as activeTenants).
+        Map<String, Set<String>> subscriptionsByDomain = subscriptionsByDomain();
+
         boolean platformScope = adminOperator.isPlatformScope();
         String ownTenant = adminOperator.tenantId();
 
         List<ConsoleProduct> products = new ArrayList<>(ProductCatalog.entries().size());
         for (ProductCatalog.Entry entry : ProductCatalog.entries()) {
             List<String> tenants = entry.available()
-                    ? selectableTenants(entry, platformScope, ownTenant, activeTenants)
+                    ? selectableTenants(entry, platformScope, ownTenant, activeTenants,
+                            subscriptionsByDomain)
                     : List.of();
             products.add(new ConsoleProduct(
                     entry.productKey(),
@@ -108,22 +129,40 @@ public class ConsoleRegistryUseCase {
      * (3) the tenant being registered + ACTIVE.
      *
      * <p>{@code gap} binds to all registered tenants (the platform federates
-     * them); a domain product binds to its own tenant slug.
+     * them); a domain product binds to the tenants that hold an ACTIVE
+     * subscription to its {@code productKey} (TASK-BE-322 / ADR-019 D4 — the
+     * subscription read replaces the prior fixed {@code tenantSlug == domain}
+     * binding).
+     *
+     * <p>net-zero (ADR-019 step 1): the backward-compatible seed makes each
+     * domain-slug tenant subscribe to its own domain
+     * ({@code (wms,wms),(scm,scm),(erp,erp),(finance,finance)}), so the
+     * subscription set for {@code domainKey=wms} is {@code {wms}} and
+     * {@code {wms} ∩ activeTenants} reproduces the old
+     * {@code activeTenants.contains("wms") ? ["wms"] : []} binding exactly.
      */
     private List<String> selectableTenants(ProductCatalog.Entry entry,
                                             boolean platformScope,
                                             String ownTenant,
-                                            List<String> activeTenants) {
+                                            List<String> activeTenants,
+                                            Map<String, Set<String>> subscriptionsByDomain) {
         // (1) product binding
         List<String> bound;
         if (entry.bindsAllTenants()) {
             bound = activeTenants; // (1)∩(3): already ACTIVE+registered
         } else {
-            // domain product → bound to exactly its own tenant slug, only if
-            // that tenant is registered + ACTIVE (3).
-            bound = activeTenants.contains(entry.tenantSlug())
-                    ? List.of(entry.tenantSlug())
-                    : List.of();
+            // domain product → bound to the tenants subscribed to its
+            // domain_key (productKey), intersected with registered+ACTIVE (3).
+            // Preserve activeTenants ordering for deterministic output.
+            Set<String> subscribed =
+                    subscriptionsByDomain.getOrDefault(entry.productKey(), Set.of());
+            List<String> intersection = new ArrayList<>();
+            for (String tenant : activeTenants) {
+                if (subscribed.contains(tenant)) {
+                    intersection.add(tenant);
+                }
+            }
+            bound = intersection;
         }
 
         // (2) operator scope
@@ -132,6 +171,24 @@ public class ConsoleRegistryUseCase {
         }
         // single-tenant operator: never expose another tenant's slug.
         return bound.contains(ownTenant) ? List.of(ownTenant) : List.of();
+    }
+
+    /**
+     * TASK-BE-322: groups the ACTIVE tenant↔domain subscriptions by domain key.
+     * account-service owns the entitlement table (ADR-019 D2); a downstream
+     * failure propagates as the same {@code DownstreamFailureException} →
+     * {@code 503} the tenant list call already raises (no partial catalog).
+     */
+    private Map<String, Set<String>> subscriptionsByDomain() {
+        Map<String, Set<String>> byDomain = new LinkedHashMap<>();
+        for (TenantDomainSubscriptionSummary s : listSubscriptionsUseCase.execute()) {
+            if (s == null || s.domainKey() == null || s.tenantId() == null) {
+                continue;
+            }
+            byDomain.computeIfAbsent(s.domainKey(), k -> new LinkedHashSet<>())
+                    .add(s.tenantId());
+        }
+        return byDomain;
     }
 
     private List<String> activeRegisteredTenantSlugs() {
