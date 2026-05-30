@@ -81,6 +81,17 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     MockMvc mockMvc;
 
+    // TASK-BE-318d: AccountStatusClient mints a GAP client_credentials Bearer token via /oauth2/token,
+    // unreachable in @SpringBootTest. Mock the provider to return a fixed bearer so the WireMock account
+    // stub is exercised (existing stubs match by URL and don't assert the auth header).
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.example.membership.infrastructure.client.GapClientCredentialsTokenProvider gapTokenProvider;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubGapClientCredentialsToken() {
+        org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
+    }
+
     @Autowired
     JdbcTemplate jdbcTemplate;
 
