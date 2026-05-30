@@ -72,6 +72,17 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
     static WireMockServer wireMock;
 
     @Autowired private MockMvc mockMvc;
+
+    // TASK-BE-318c: AccountServiceClient now mints a GAP client_credentials Bearer token via a SAS
+    // self-call to /oauth2/token, unreachable in @SpringBootTest+MockMvc. Replace the provider with
+    // a mock returning a fixed bearer so account stubs are exercised hermetically.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.example.auth.infrastructure.client.GapClientCredentialsTokenProvider gapTokenProvider;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubGapClientCredentialsToken() {
+        org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
+    }
     @Autowired private ObjectMapper objectMapper;
     @Autowired private DeviceSessionRepository deviceSessionRepository;
     @Autowired private OutboxJpaRepository outboxJpaRepository;

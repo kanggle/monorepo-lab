@@ -18,13 +18,17 @@ import java.net.http.HttpClient;
 import java.util.Optional;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("AccountServiceClient 단위 테스트")
 class AccountServiceClientUnitTest {
@@ -39,7 +43,12 @@ class AccountServiceClientUnitTest {
     void setUp() {
         wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
-        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000);
+        // TASK-BE-318c: token provider mocked — returns a fixed bearer for the header assertion.
+        // The per-call setBearerAuth(...) is applied at the request-builder level, so it survives
+        // the cachedRestClient reflection-replacement below.
+        GapClientCredentialsTokenProvider tokenProvider = mock(GapClientCredentialsTokenProvider.class);
+        when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
         // JDK HttpClient defaults to HTTP/2 (H2C) which causes RST_STREAM with WireMock.
         // Replace with an HTTP/1.1-only client so stubs are served predictably.
         HttpClient jdkHttp11 = HttpClient.newBuilder()
@@ -76,6 +85,21 @@ class AccountServiceClientUnitTest {
         assertThat(result).isPresent();
         assertThat(result.get().accountId()).isEqualTo("acc-1");
         assertThat(result.get().accountStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-318c: status 호출에 Authorization: Bearer 헤더를 첨부한다")
+    void getAccountStatus_attachesBearerHeader() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"status\":\"ACTIVE\"}")));
+
+        client.getAccountStatus("acc-1");
+
+        wireMockServer.verify(getRequestedFor(urlEqualTo(STATUS_PATH))
+                .withHeader("Authorization", equalTo("Bearer test-jwt")));
     }
 
     @Test

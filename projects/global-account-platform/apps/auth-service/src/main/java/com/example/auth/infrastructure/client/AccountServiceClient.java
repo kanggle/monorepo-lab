@@ -43,6 +43,7 @@ public class AccountServiceClient implements AccountServicePort {
     private final int readTimeoutMs;
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
+    private final GapClientCredentialsTokenProvider tokenProvider;
 
     /**
      * Cached {@link RestClient} keyed by base URL string. The base URL is resolved
@@ -62,12 +63,14 @@ public class AccountServiceClient implements AccountServicePort {
     public AccountServiceClient(
             Environment environment,
             @Value("${auth.account-service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${auth.account-service.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${auth.account-service.read-timeout-ms:5000}") int readTimeoutMs,
+            GapClientCredentialsTokenProvider tokenProvider) {
         this.environment = environment;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
         this.retry = ResilienceClientFactory.buildRetry("accountService");
+        this.tokenProvider = tokenProvider;
     }
 
     /**
@@ -78,12 +81,14 @@ public class AccountServiceClient implements AccountServicePort {
      * <p>Production code uses the {@link Environment}-based constructor and therefore
      * benefits from the lazy URL resolution that Cluster C of TASK-MONO-046-1 added.
      */
-    public AccountServiceClient(String baseUrl, int connectTimeoutMs, int readTimeoutMs) {
+    public AccountServiceClient(String baseUrl, int connectTimeoutMs, int readTimeoutMs,
+                                GapClientCredentialsTokenProvider tokenProvider) {
         this.environment = null;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
         this.retry = ResilienceClientFactory.buildRetry("accountService");
+        this.tokenProvider = tokenProvider;
         this.cachedBaseUrl = baseUrl;
         this.cachedRestClient = ResilienceClientFactory.buildRestClient(
                 baseUrl, connectTimeoutMs, readTimeoutMs);
@@ -163,6 +168,9 @@ public class AccountServiceClient implements AccountServicePort {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = restClient().get()
                     .uri("/internal/accounts/{id}/status", accountId)
+                    // TASK-BE-318c: authenticate via GAP client_credentials Bearer JWT
+                    // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
                         if (response.getStatusCode().value() == 404) {
@@ -236,6 +244,8 @@ public class AccountServiceClient implements AccountServicePort {
 
             return restClient().post()
                     .uri("/internal/accounts/social-signup")
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(requestBody)
                     .retrieve()
@@ -282,6 +292,8 @@ public class AccountServiceClient implements AccountServicePort {
             //     tenantId, tenantType }
             Map<String, Object> body = restClient().get()
                     .uri("/internal/accounts/{id}/profile", accountId)
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
                         if (response.getStatusCode().value() == 404) {
