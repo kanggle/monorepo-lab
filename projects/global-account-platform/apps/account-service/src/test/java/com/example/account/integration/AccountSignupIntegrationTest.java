@@ -42,10 +42,7 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> "test-internal-token");
     }
-
-    private static final String INTERNAL_TOKEN = "test-internal-token";
 
     @Autowired
     private MockMvc mockMvc;
@@ -146,7 +143,6 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
 
         // Lock account
         mockMvc.perform(post("/internal/accounts/" + accountId + "/lock")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -202,7 +198,6 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
 
         // Try to lock deleted account
         mockMvc.perform(post("/internal/accounts/" + accountId + "/lock")
-                        .header("X-Internal-Token", INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

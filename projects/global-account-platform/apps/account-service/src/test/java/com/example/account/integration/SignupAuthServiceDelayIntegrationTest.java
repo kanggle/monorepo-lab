@@ -58,7 +58,6 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> "test-internal-token");
         registry.add("account.auth-service.base-url",
                 () -> "http://localhost:" + wireMock.port());
         // Use 15s read-timeout (the new default) — 4s delay stub must fit within this window

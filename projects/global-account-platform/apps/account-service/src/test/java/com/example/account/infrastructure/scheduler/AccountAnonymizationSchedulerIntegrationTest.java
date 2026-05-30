@@ -73,7 +73,6 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("internal.api.token", () -> "test-internal-token");
     }
 
     @Autowired
