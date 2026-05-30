@@ -54,7 +54,7 @@ ADR-005 단계 4 종결 후 남은 **latent landmine**: `docker-compose.e2e.yml`
   - 토큰 발급: `POST auth /oauth2/token` (Basic `admin-service-client:secret`, `grant_type=client_credentials`, `scope=internal.invoke`) → 200 + 비어있지 않은 access_token.
   - account fail-closed: `GET account /internal/accounts/{uuid}/status` (인증 없음) → 401.
   - account validate: 동일 + `Authorization: Bearer <token>` → **404**(account not found) — JWT 가 수락되어 비즈니스 로직까지 도달했음을 증명(401 아님).
-  - security fail-closed: `GET security /internal/security/login-history?accountId=<uuid>` (인증 없음) → 401.
+  - security fail-closed: `GET security /internal/security/login-history?accountId=<uuid>` (인증 없음) → **403**(security `InternalAuthFilter` 의 established `PERMISSION_DENIED` — account 의 oauth2ResourceServer 401 과 서비스별로 다름, 둘 다 fail-closed).
   - security validate: 동일 + Bearer → 200(빈 페이지).
 
 ## Out of scope
@@ -67,7 +67,7 @@ ADR-005 단계 4 종결 후 남은 **latent landmine**: `docker-compose.e2e.yml`
 # Acceptance Criteria
 
 - **AC-1**: `docker-compose.e2e.yml` 의 auth/account/security/admin 4서비스에 `OIDC_ISSUER_URL: http://auth-service:8081` 설정.
-- **AC-2**: `InternalWorkloadAuthE2ETest`(`@Tag("smoke")`)가 추가되어 — (a) client_credentials 토큰 발급 200, (b) account 무인증 401, (c) account Bearer 404(검증 통과), (d) security 무인증 401, (e) security Bearer 200 — **PR-time `:e2eSmokeTest` 잡에서 GREEN**.
+- **AC-2**: `InternalWorkloadAuthE2ETest`(`@Tag("smoke")`)가 추가되어 — (a) client_credentials 토큰 발급 200, (b) account 무인증 401, (c) account Bearer 404(검증 통과), (d) security 무인증 403(`PERMISSION_DENIED`), (e) security Bearer 200 — **PR-time `:e2eSmokeTest` 잡에서 GREEN**.
 - **AC-3**: 기존 smoke(`GoldenPathE2ETest`) 회귀 0(operator-auth 는 SAS issuer 변경과 무관).
 - **AC-4**: gateway 사용자토큰 검증(issuer=`global-account-platform`, 별개 시스템) 무영향 — gateway e2e 경로 회귀 0.
 - **AC-5**: 프로덕션 코드 diff 0(테스트 + compose + ComposeFixture 상수만).

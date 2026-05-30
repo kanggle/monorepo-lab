@@ -80,17 +80,20 @@ class InternalWorkloadAuthE2ETest extends E2EBase {
     }
 
     @Test
-    @DisplayName("security /internal/security/**: 무인증 401 (fail-closed), 유효 GAP JWT 200")
+    @DisplayName("security /internal/security/**: 무인증 403 (fail-closed), 유효 GAP JWT 200")
     void security_internal_requires_valid_gap_jwt() {
         String accountId = UUID.randomUUID().toString();
 
-        // (a) no credentials → fail-closed 401
+        // (a) no credentials → fail-closed. security-service's InternalAuthFilter rejects with
+        //     403 PERMISSION_DENIED (its established, contract-preserved status — BE-319a), whereas
+        //     account-service's oauth2ResourceServer entry point answers 401. Both are fail-closed;
+        //     the per-service status difference is intentional.
         Response noAuth = RestAssured.given()
                 .baseUri(ComposeFixture.SECURITY_BASE_URL)
                 .get("/internal/security/login-history?accountId={id}", accountId);
         assertThat(noAuth.statusCode())
-                .as("security /internal/security/** rejects unauthenticated request")
-                .isEqualTo(401);
+                .as("security /internal/security/** rejects unauthenticated request (403 PERMISSION_DENIED)")
+                .isEqualTo(403);
 
         // (b) valid GAP Bearer → 200 with an empty page for an unknown account
         String token = mintWorkloadToken("admin-service-client");
