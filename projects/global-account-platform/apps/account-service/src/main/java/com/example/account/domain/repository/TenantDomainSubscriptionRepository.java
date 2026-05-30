@@ -19,4 +19,13 @@ public interface TenantDomainSubscriptionRepository {
      * groups by {@code domainKey}.
      */
     List<TenantDomainSubscription> findAllActive();
+
+    /**
+     * TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): returns the ACTIVE subscriptions
+     * for a single {@code tenantId} (reverse lookup), ordered identically to
+     * {@link #findAllActive()}. Backs the auth-service issuance-time
+     * {@code entitled_domains} claim populate (its consumer derives the entitled
+     * domainKey list for that tenant).
+     */
+    List<TenantDomainSubscription> findActiveByTenantId(String tenantId);
 }

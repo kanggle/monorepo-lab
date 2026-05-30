@@ -4,6 +4,7 @@ import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -54,4 +55,25 @@ public interface AccountServicePort {
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
     Optional<AccountProfileResult> getAccountProfile(String accountId);
+
+    /**
+     * Returns the ACTIVE subscribed product/domain keys for a tenant.
+     *
+     * <p>TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): called by
+     * {@link com.example.auth.infrastructure.oauth2.TenantClaimTokenCustomizer} at
+     * {@code authorization_code}/{@code refresh_token} issuance time to populate the
+     * signed {@code entitled_domains} claim. Calls
+     * {@code GET /internal/tenant-domain-subscriptions?tenantId=<tid>} and extracts
+     * {@code items[].domainKey}.</p>
+     *
+     * <p>Throws {@link com.example.auth.application.exception.AccountServiceUnavailableException}
+     * on account-service failure (5xx / circuit-open / timeout / IO) — consistent with the
+     * sibling methods. The <b>caller decides fail-soft</b>: the token customizer catches this
+     * and omits the claim so token issuance never depends on account-service availability.</p>
+     *
+     * @param tenantId the tenant whose ACTIVE subscriptions to resolve
+     * @return the ACTIVE subscribed domainKeys (possibly empty)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
+     */
+    List<String> listEntitledDomains(String tenantId);
 }

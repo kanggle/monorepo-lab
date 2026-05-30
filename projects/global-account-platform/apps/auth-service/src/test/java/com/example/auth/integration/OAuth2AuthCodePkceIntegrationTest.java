@@ -102,6 +102,22 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
                                   "tenantType": "B2C"
                                 }
                                 """)));
+
+        // TASK-BE-324: stub the tenant-domain-subscriptions reverse-lookup that the
+        // TenantClaimTokenCustomizer calls at authorization_code issuance time to
+        // populate the signed entitled_domains claim. Matched on path (any tenantId
+        // query value) — returns a single ACTIVE subscription so the claim is present.
+        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+                .willReturn(WireMock.aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "items": [
+                                    { "tenantId": "fan-platform", "domainKey": "finance" }
+                                  ]
+                                }
+                                """)));
     }
 
     @AfterAll
@@ -264,6 +280,17 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
         assertThat(accessPayload.has("tenant_type"))
                 .as("access_token must contain tenant_type claim")
                 .isTrue();
+
+        // TASK-BE-324: entitled_domains claim populated from the stubbed
+        // tenant-domain-subscriptions reverse lookup.
+        assertThat(accessPayload.has("entitled_domains"))
+                .as("access_token must contain entitled_domains claim (BE-324 keystone)")
+                .isTrue();
+        assertThat(accessPayload.get("entitled_domains").isArray())
+                .as("entitled_domains must be a JSON array (List<String>)")
+                .isTrue();
+        assertThat(accessPayload.get("entitled_domains").get(0).asText())
+                .isEqualTo("finance");
 
         // id_token must be present when openid scope is requested
         assertThat(tokenResponse.has("id_token"))

@@ -22,6 +22,9 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `domainKey` | string | No | 단일 도메인키 필터 (`gap`\|`wms`\|`scm`\|`erp`\|`finance`). 생략/공백이면 전체 ACTIVE 구독 반환. |
+| `tenantId` | string | No | 단일 테넌트 id 필터 — 그 테넌트의 ACTIVE 구독만 반환. auth-service 발급-시점 entitled_domains populate(ADR-019 keystone)용 역조회. 생략/공백이면 필터 미적용. |
+
+> **`tenantId` + `domainKey` 조합**: 둘 다 지정 시 AND 로 합성된다 (그 테넌트의, 그 domainKey 인 ACTIVE 구독). `tenantId` 역조회(TASK-BE-324 ADR-019 § 3.3 keystone)는 auth-service `TenantClaimTokenCustomizer` 가 authorization_code/refresh_token 발급 시 그 테넌트의 ACTIVE domainKey 목록을 받아 서명된 `entitled_domains` claim 으로 주입하는 데 쓰인다 (실패/빈 결과 → claim 생략 fail-soft, net-zero).
 
 **Response 200 OK**:
 ```json
