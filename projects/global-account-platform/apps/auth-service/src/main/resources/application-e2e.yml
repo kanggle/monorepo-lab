@@ -29,10 +29,5 @@ spring:
 logging:
   level:
     root: INFO
-    # DIAGNOSTIC (TASK-MONO-158 B-side) — surface the assume-tenant
-    # entitled_domains injection + the account-service subscription lookup so
-    # the globex re-scope (empty entitled_domains?) is observable. Remove once green.
-    com.example.auth.infrastructure.oauth2.TenantClaimTokenCustomizer: DEBUG
-    com.example.auth.infrastructure.client.AccountServiceClient: DEBUG
   file:
     name: ""

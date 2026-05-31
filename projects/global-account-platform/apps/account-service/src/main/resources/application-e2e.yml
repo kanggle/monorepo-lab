@@ -11,7 +11,12 @@ spring:
       maximum-pool-size: 5
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # TASK-MONO-160: migration-dev carries the e2e-only globex-corp demo customer
+    # (V0021) so the ADR-020 D4 A↔B switch proof has a second customer with
+    # complementary [scm,erp] subscriptions, present at startup via Flyway
+    # (matching the acme-corp V0020 path). migration-dev is NOT loaded in
+    # production — globex-corp never reaches a real DB.
+    locations: classpath:db/migration,classpath:db/migration-dev
     baseline-on-migrate: false
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
