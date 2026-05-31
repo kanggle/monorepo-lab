@@ -115,6 +115,13 @@ auth:
     base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
     connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:5000}
+  # TASK-BE-327 (ADR-MONO-020 D2): assume-tenant exchange assignment gate — auth-service calls
+  # admin-service GET /internal/operator-assignments/check at issuance time. FAIL-CLOSED: any failure
+  # (not-assigned / admin down / timeout / circuit-open) denies the assumed token.
+  admin-service:
+    base-url: ${ADMIN_SERVICE_URL:http://localhost:8084}
+    connect-timeout-ms: ${ADMIN_SERVICE_CONNECT_TIMEOUT:3000}
+    read-timeout-ms: ${ADMIN_SERVICE_READ_TIMEOUT:5000}
 
 # TASK-BE-318c (ADR-005 단계 3c): outbound /internal/accounts/** calls (status / social-signup /
 # profile) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated). auth-service

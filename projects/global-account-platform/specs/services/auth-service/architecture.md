@@ -115,10 +115,14 @@ apps/auth-service/src/main/java/com/example/auth/
     │   │                                          (RFC 7662 extension, Phase 2c)
     │   ├── OidcUserInfoMapper.java          ← /oauth2/userinfo 응답 구성 (account-service 조회)
     │   ├── SasRefreshTokenAuthenticationProvider.java  ← refresh_token grant + reuse detection
+    │   ├── AssumeTenantAuthenticationConverter.java    ← TASK-BE-327: assume-tenant token-exchange grant converter
+    │   ├── AssumeTenantAuthenticationProvider.java     ← TASK-BE-327: subject 검증 + fail-closed assignment gate + mint (no refresh)
+    │   ├── PublicClientTokenExchangeAuthenticationConverter.java ← TASK-BE-327: public-client client-auth for token-exchange
     │   └── DomainSyncOAuth2AuthorizationService.java   ← SAS ↔ JPA RefreshTokenRepository 동기화
     │                                                      revoke 시 JPA 도메인 스토어도 갱신 (Phase 2c)
     ├── client/
-    │   └── AccountServiceClient.java    ← 내부 HTTP, credential lookup
+    │   ├── AccountServiceClient.java    ← 내부 HTTP, status/profile/entitled_domains lookup (fail-soft)
+    │   └── AdminAssignmentClient.java   ← TASK-BE-327: assume-tenant assignment gate (admin-service, **fail-CLOSED**)
     └── config/
         ├── PersistenceConfig.java
         ├── RedisConfig.java
@@ -139,6 +143,20 @@ apps/auth-service/src/main/java/com/example/auth/
 - `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담
 - `@Order(2)` — `SecurityConfig.filterChain`: `/api/auth/**`, `/api/accounts/**`, `/actuator/**`, `/internal/**`
 - 두 체인은 request matcher로 완전 분리 — 상호 간섭 없음
+
+**Assume-Tenant 발급 경로 (TASK-BE-327 / ADR-MONO-020 § 3.3 step 2, D2+D3)**:
+
+`authorization_code` 로그인 발급 경로와 **나란히** 존재하는 두 번째 domain-facing 발급 경로. `POST /oauth2/token` 의 `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) 가 운영자의 base GAP OIDC 세션을 **선택된** customer tenant 로 scope 된 단명 토큰으로 교환한다 (AWS STS AssumeRole 유사; ADR-014 operator-identity exchange 의 sibling, 그쪽은 byte-unchanged).
+
+1. `AssumeTenantAuthenticationConverter` (token endpoint, grant_type 필터 — 불일치 시 null → 기존 grant byte-unchanged) 가 `subject_token`/`subject_token_type`/`audience`(=선택 tenant) 를 파싱. `audience` 누락 → `invalid_request`.
+2. `AssumeTenantAuthenticationProvider`:
+   - subject_token 을 **auth-service 자기 `JwtDecoder`(자신이 서명한 동일 JWKS)** 로 검증 → `sub` 추출. 실패 → `invalid_grant` (fail-closed).
+   - **fail-CLOSED assignment gate**: `OperatorAssignmentPort`(`AdminAssignmentClient`) → admin-service `GET /internal/operator-assignments/check`. 미할당/admin 장애/timeout/circuit-open 모두 `AssumeTenantDeniedException` → `invalid_grant`, 토큰 미발급. **account-service entitled_domains 의 fail-soft 와 정반대 정책 — 절대 섞지 않는다.**
+   - 동일한 `JwtGenerator` + `TenantClaimTokenCustomizer`(token-exchange 분기) 로 mint → login 토큰과 **동일 `iss`/kid**. 선택 tenant + tenant_type 은 `AssumeTenantAuthenticationToken`(=authorizationGrant) 으로 운반되어 customizer 가 읽는다 (JwtGenerator 가 임의 context.put() 은 복사하지 않으므로 authorizationGrant 경유).
+   - **refresh token 미발급** (단명, selection 마다 재발급 — ADR-020 § 3.1).
+3. `entitled_domains` (D3): **선택된** tenant 의 ACTIVE subscriptions 만 (union 없음), keystone `populateEntitledDomains` 재사용 (fail-soft).
+
+상세: [specs/contracts/http/auth-api.md](../../contracts/http/auth-api.md) § Assume-Tenant Exchange, [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md).
 
 **revocation 동작 흐름 (Phase 2c)**:
 1. `POST /oauth2/revoke` → SAS `OAuth2TokenRevocationEndpointFilter` 수신
@@ -201,7 +219,8 @@ presentation → application → domain
 ## Integration Rules
 
 - **HTTP 컨트랙트 (외부)**: [specs/contracts/http/auth-api.md](../../contracts/http/) — `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/auth/jwks`. 로그인 응답·refresh 응답에 `tenant_id` 노출
-- **HTTP 컨트랙트 (내부)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회
+- **HTTP 컨트랙트 (내부, → account-service)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회. entitled_domains lookup (TASK-BE-324) — **fail-soft** (caller 가 claim 생략).
+- **HTTP 컨트랙트 (내부, → admin-service)** (TASK-BE-327, 신규 outbound edge): [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — assume-tenant 발급 시점의 1회성 assignment 확인 (`GET /internal/operator-assignments/check`). GAP `client_credentials` Bearer JWT (`GapClientCredentialsTokenProvider` 재사용). **fail-CLOSED**: 실패 시 발급 거부. per-request 도메인→GAP callback 이 아니라 issuance-time one-shot (ADR-020 § 3.1 은 후자만 금지).
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
 - **퍼시스턴스**: MySQL — `credentials`, `refresh_tokens`, `social_identities`, `outbox_events`, `processed_events` (idempotency). 모두 `tenant_id` NOT NULL. `credentials.email`은 `(tenant_id, email)` unique. `oauth_clients` 는 SAS 등록 client (V0008~). **public client lineage**: `demo-spa-client` (V0008) + `platform-console-web` (V0015, TASK-BE-296) 는 `client_authentication_methods=["none"]` + `client_secret_hash=NULL` + PKCE 필수. `platform-console-web` 의 redirect 는 `http://console.local/api/auth/callback`, scope `openid profile email tenant.read`, refresh rotation 은 `PublicClientRefreshTokenAuthenticationConverter` + `SasRefreshTokenAuthenticationProvider` 경로로 demo-spa-client 와 동일하게 처리됨 (ADR-003 옵션 B closure — converter 는 NONE 인증 client 전부에 fire, 신규 wiring 없음). 상세: [specs/features/multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console", [specs/contracts/http/console-registry-api.md](../../contracts/http/console-registry-api.md)
 - **Redis**: `login:fail:{tenant_id}:{email_hash}` 카운터 (`rules/traits/transactional.md` T1; `rules/traits/multi-tenant.md` M1 테넌트 prefix; `rules/traits/regulated.md` R4 — email 은 평문이 아닌 SHA256 해시. 정규 키 스키마는 [redis-keys.md](./redis-keys.md)), `refresh:blacklist:{tenant_id}:{jti}`, `jwks:cache` (서명 키는 테넌트 공통)

@@ -252,9 +252,46 @@ sentinel)가 본 서비스 모델, (3) gateway 가 `/api/admin/**` 의 operator 
 - 상세 contract: [specs/contracts/http/console-registry-api.md](../../contracts/http/console-registry-api.md).
   product catalog/`available` 규칙 동기 소스: [specs/features/multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console".
 
+## Assume-Tenant Assignment Check (TASK-BE-327 / ADR-MONO-020 § 3.3 step 2, D2)
+
+admin-service 는 `GET /internal/operator-assignments/check?oidcSubject=&tenantId=`
+로 운영자의 **effective tenant scope** 포함 여부를 노출한다. auth-service 의
+assume-tenant 발급기가 issuance-time **one-shot** 으로 호출하여 fail-closed
+assignment 게이트를 통과시킨다 (도메인→GAP per-request callback 아님 — ADR-020
+§ 3.1 은 후자만 금지).
+
+- 판정: `oidcSubject` → `admin_operators` row (`AdminOperatorPort.findByOidcSubject`)
+  **fail-closed** (없음/비-ACTIVE → `assigned=false`); `'*'` platform-scope
+  (`isPlatformScope()`) → 비-blank tenant 모두 `assigned=true` (sentinel 이 모든
+  tenant 부여 — 단 assumed 토큰은 선택된 구체 tenant 를 운반, `'*'` 아님);
+  그 외 → `TenantScopeResolver.resolveEffectiveTenantScope(internalId, homeTenant)
+  .contains(tenantId)` (BE-326 D1 dual-read: assignment rows ∪ {legacy home}).
+- **read-only — `admin_actions` row 미생성** (ADR-014 token-exchange "not audited"
+  규칙과 동일; 후속 도메인 명령이 각각 audit). 운영자 존재 여부를 boolean 너머로
+  노출하지 않는다 (열거 방어).
+- 본 엔드포인트로 인해 D1 effective-scope (BE-326) 가 이제 auth-service 에 의해
+  cross-service 로 읽힌다. 스키마 변경 없음 (V0030 already shipped).
+
+### `/internal/**` 보안 체인 (신규, TASK-BE-327)
+
+admin-service 는 기존 단일 operator-JWT 체인(`/api/admin/**`)에 더해 **두 번째**
+`SecurityFilterChain @Order(0)` (`securityMatcher("/internal/**")`) 을 추가한다.
+account-service `SecurityConfig`/`InternalApiFilter` 를 미러링한다:
+
+- GAP `client_credentials` JWT 만 수용 (`internalJwtDecoder` = GAP JWKS + issuer);
+  미제시/무효 → 401 `UNAUTHORIZED` (production fail-closed).
+- non-terminal dev/test bypass (`InternalApiFilter`, `test`/`standalone` 프로파일
+  또는 `internal.api.bypass-when-unconfigured=true`) 는 production 을 약화시키지
+  않는다 (account-service 와 동일).
+- 기존 operator 체인(`@Order(2)`, `/api/admin/**`)은 byte-unchanged — 이미
+  `/internal/**` 를 매칭하지 않는다 (유일한 변경 = 명시적 `@Order(2)` 부여).
+
+상세: [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md), [rbac.md](./rbac.md).
+
 ## Integration Rules
 
 - **HTTP 컨트랙트 (외부)**: [specs/contracts/http/admin-api.md](../../contracts/http/) — admin 전용 엔드포인트. [specs/contracts/http/console-registry-api.md](../../contracts/http/) — platform-console product/tenant registry (`GET /api/admin/console/registry`, TASK-BE-296)
+- **HTTP 컨트랙트 (in-coming)**: [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — auth-service → admin-service assume-tenant assignment check (`GET /internal/operator-assignments/check`, GAP client_credentials JWT, read-only, TASK-BE-327)
 - **HTTP 컨트랙트 (out-going)**:
   - [specs/contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) — 강제 로그아웃
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) — lock/unlock/delete

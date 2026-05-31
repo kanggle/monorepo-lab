@@ -466,6 +466,69 @@ class TenantClaimTokenCustomizerTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-BE-327 — assume-tenant (token-exchange) branch (ADR-MONO-020 D2+D3)
+    // -----------------------------------------------------------------------
+
+    private AssumeTenantAuthenticationToken assumeGrant(String tenantId, String tenantType) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, tenantType);
+    }
+
+    @Test
+    @DisplayName("assume-tenant: selected tenant_id/tenant_type injected + entitled_domains=selected's subs only")
+    void assumeTenant_injectsSelectedTenant_andEntitledDomains() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant()).thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
+        // D3: keyed on the SELECTED tenant only.
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance", "wms"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
+        assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("finance", "wms");
+    }
+
+    @Test
+    @DisplayName("assume-tenant: account unavailable → token WITHOUT entitled_domains (fail-soft), still tenant_id")
+    void assumeTenant_accountUnavailable_failSoft() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant()).thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
+        when(accountServicePort.listEntitledDomains("acme-corp"))
+                .thenThrow(new AccountServiceUnavailableException("account down", new RuntimeException()));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        // must NOT throw — entitled_domains is fail-soft (token still issued).
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
+        assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
+    }
+
+    @Test
+    @DisplayName("assume-tenant: selected tenant context missing → fail-closed IllegalStateException")
+    void assumeTenant_missingSelectedTenant_failsClosed() {
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant()).thenReturn(assumeGrant(null, "B2B_ENTERPRISE"));
+
+        assertThatThrownBy(() -> customizer.customize(context))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("selected tenant_id/tenant_type is required");
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 

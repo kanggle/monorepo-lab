@@ -289,3 +289,5 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1 (PII/secret 분리 저장·마스킹)과 R2 (시크릿 평문 저장 금지) 준수.
 
 > RBAC 테이블의 **행동 규칙**(권한 평가 알고리즘, seed 매트릭스, DENIED 기록 정책, JWT claim)은 본 문서가 아닌 [rbac.md](./rbac.md)에서 선언된다. 본 문서는 스키마와 분류만 다룬다.
+
+> **TASK-BE-327 (ADR-MONO-020 D2)**: `operator_tenant_assignment` (V0030) + `admin_operators.{oidc_subject, tenant_id}` 로 구성되는 D1 effective-scope 가 이제 auth-service 에 의해 `GET /internal/operator-assignments/check` 로 **cross-service read** 된다 (assume-tenant 발급 게이트). **스키마 변경 없음** — read-only 노출만 추가. 상세: [rbac.md](./rbac.md), [architecture.md](./architecture.md).

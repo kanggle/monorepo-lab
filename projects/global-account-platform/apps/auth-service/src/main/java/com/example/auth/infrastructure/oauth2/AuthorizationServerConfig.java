@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
@@ -99,6 +100,10 @@ public class AuthorizationServerConfig {
     // (A3 anti-pattern) so we use a programmatic TransactionTemplate inside the provider.
     @Autowired
     private PlatformTransactionManager transactionManager;
+    // TASK-BE-327 (ADR-MONO-020 D2): the assume-tenant exchange's fail-closed
+    // assignment gate (admin-service) — injected into the lazily-built provider.
+    @Autowired
+    private OperatorAssignmentPort operatorAssignmentPort;
 
     /**
      * SAS security filter chain — Order(1).
@@ -127,12 +132,29 @@ public class AuthorizationServerConfig {
             OidcUserInfoMapper oidcUserInfoMapper,
             OAuth2AuthorizationService oAuth2AuthorizationService,
             RegisteredClientRepository registeredClientRepository,
-            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator) throws Exception {
+            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator,
+            JwtDecoder jwtDecoder) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         TenantIntrospectionCustomizer introspectionCustomizer = new TenantIntrospectionCustomizer();
+
+        // TASK-BE-327 (ADR-MONO-020 D2): assume-tenant token-exchange wiring.
+        // Client-auth converter (public platform-console-web client on
+        // grant_type=token-exchange) mirrors the refresh-token public-client
+        // converter; the existing PublicClientNoPkceAuthenticationProvider passes
+        // the resulting client token through.
+        PublicClientTokenExchangeAuthenticationConverter publicClientTokenExchangeConverter =
+                new PublicClientTokenExchangeAuthenticationConverter(registeredClientRepository);
+        // Token-endpoint grant converter + provider. The provider validates the
+        // subject token (local JWKS), runs the fail-closed assignment gate, and
+        // mints through the same oAuth2TokenGenerator + TenantClaimTokenCustomizer.
+        AssumeTenantAuthenticationConverter assumeTenantConverter =
+                new AssumeTenantAuthenticationConverter();
+        AssumeTenantAuthenticationProvider assumeTenantProvider =
+                new AssumeTenantAuthenticationProvider(
+                        jwtDecoder, operatorAssignmentPort, oAuth2TokenGenerator);
 
         // TASK-BE-272 / ADR-003 option A: public-client converters for
         // refresh_token grant + revoke endpoint. Stock SAS converters do not
@@ -174,6 +196,9 @@ public class AuthorizationServerConfig {
                                         clientAuth
                                                 .authenticationConverter(publicClientRefreshTokenConverter)
                                                 .authenticationConverter(publicClientRevokeConverter)
+                                                // TASK-BE-327: public-client client-auth for the
+                                                // assume-tenant token-exchange grant.
+                                                .authenticationConverter(publicClientTokenExchangeConverter)
                                                 // Pass-through provider for the
                                                 // already-authenticated tokens
                                                 // emitted by our converters.
@@ -190,8 +215,16 @@ public class AuthorizationServerConfig {
                                 // after the SAS configurer has been applied via .with(). We use a
                                 // Customizer that captures http to resolve the generator lazily.
                                 .tokenEndpoint(tokenEndpoint ->
-                                        tokenEndpoint.authenticationProvider(
-                                                buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator)))
+                                        tokenEndpoint
+                                                .authenticationProvider(
+                                                        buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator))
+                                                // TASK-BE-327: assume-tenant token-exchange grant.
+                                                // The converter filters by grant_type (returns null
+                                                // on mismatch → existing grants byte-unchanged); the
+                                                // provider runs subject-validation + the fail-closed
+                                                // assignment gate + mint (no refresh token).
+                                                .accessTokenRequestConverter(assumeTenantConverter)
+                                                .authenticationProvider(assumeTenantProvider))
                                 // Phase 2c: token revocation endpoint (RFC 7009).
                                 // SAS default revocation provider calls authorizationService.remove(),
                                 // which triggers DomainSyncOAuth2AuthorizationService to revoke the
