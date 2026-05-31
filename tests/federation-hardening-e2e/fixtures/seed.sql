@@ -250,20 +250,14 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
 -- Re-runnable: INSERT IGNORE / ON DUPLICATE KEY UPDATE (same discipline).
 -- ===========================================================================
 
--- 9. account_db — globex-corp customer tenant + COMPLEMENTARY subscriptions.
---    acme-corp (GAP Flyway V0020) = [finance,wms]; globex-corp = [scm,erp] so
---    the A↔B switch flips the entitled set unambiguously. account-service
---    Flyway (V0009 tenants + V0019 tenant_domain_subscription) has run by this
---    phase (post-GAP-Flyway). globex-corp is e2e-fixture-scoped (NOT a new
---    production migration — the A↔B proof needs it only in the e2e stack).
-USE `account_db`;
-
-INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
-VALUES ('globex-corp', 'Globex Corporation', 'B2B_ENTERPRISE', 'ACTIVE', NOW(6), NOW(6));
-
-INSERT IGNORE INTO tenant_domain_subscription (tenant_id, domain_key, status, created_at, updated_at)
-VALUES ('globex-corp', 'scm', 'ACTIVE', NOW(6), NOW(6)),
-       ('globex-corp', 'erp', 'ACTIVE', NOW(6), NOW(6));
+-- 9. account_db — globex-corp customer tenant + [scm,erp] subscriptions.
+--    MOVED to account-service Flyway db/migration-dev/V0021 (TASK-MONO-160):
+--    account-service's per-tenant keystone query did NOT return globex rows
+--    inserted HERE (post-startup, externally) — only Flyway-inserted rows
+--    (acme-corp V0020) were returned. Seeding globex via Flyway-dev (loaded by
+--    the e2e profile only) makes it present at account-service startup, exactly
+--    like acme-corp, so the assume-tenant entitled_domains for globex resolves
+--    to [scm,erp]. The multi-operator (auth_db/admin_db, below) stays here.
 
 -- 10. auth_db — multi-assignment operator credential row.
 --     Same Argon2id hash as the others (password 'devpassword123!').
