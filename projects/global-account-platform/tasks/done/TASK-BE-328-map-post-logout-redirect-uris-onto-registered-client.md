@@ -8,7 +8,9 @@ TASK-BE-328
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-01)**: impl PR #998 (squash `fc1d70b5`). RP-initiated OIDC logout 403 fix — completes TASK-PC-FE-033. **근본원인**: V0021 이 post-logout URI 를 `client_settings` JSON 커스텀 키(`settings.client.post-logout-redirect-uris`)에만 등록했으나, SAS `OidcLogoutAuthenticationProvider` 는 `post_logout_redirect_uri` 를 **오직 `RegisteredClient.getPostLogoutRedirectUris()` 전용 필드**로만 검증함. 커스텀 `OAuthClientMapper.toRegisteredClient` 가 그 setting 을 해당 필드로 **복사하지 않아** inert → `/connect/logout` 이 모든 URI 를 403. (덤: V0011/12/16 fan/ecommerce post-logout 시드도 동일하게 inert — RP-logout 한 번도 구동 안 됨.) #996 IT 는 inert 한 ClientSettings 키만 단언해 결함을 놓침. **수정**: 매퍼가 setting 을 `builder.postLogoutRedirectUri(...)` 로 복사(additive — ClientSettings 키 유지, round-trip 무변경). **테스트**: 매퍼 단위 2건(`getPostLogoutRedirectUris()` populated/empty) + seed IT 강화(field 단언 = load-bearing). **실증**: federation-e2e live `curl /connect/logout` → `status=302 redirect=http://localhost:3000/login`(이전 403). **3차원**(MERGED `fc1d70b5` / origin/main tip 일치 / pre-merge 0 failing — Build&Test JDK21 + GAP Integration PASS). 분석=Opus 4.8 / 구현=Opus. **메타: SAS post-logout-redirect-uris 는 ClientSettings 키가 아니라 RegisteredClient 전용 필드 — 커스텀 client 매퍼는 명시적 복사 필요; IT 는 실제 SAS 가 읽는 필드를 단언해야(setting 존재만으론 inert 검증).**
 
 # Owner
 
