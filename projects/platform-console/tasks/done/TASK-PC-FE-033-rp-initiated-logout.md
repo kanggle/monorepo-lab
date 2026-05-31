@@ -8,7 +8,7 @@ Console logout = **RP-initiated OIDC logout** (OIDC end_session). Today the cons
 
 # Status
 
-ready
+done
 
 # Owner
 
