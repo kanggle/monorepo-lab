@@ -1445,6 +1445,36 @@ The operator credential the console presents to `/api/admin/**` (§ 2.2 registry
 - **Resilience parity (§ 2.5)**: the exchange call uses the same `integration-heavy` discipline as the registry call — explicit hard timeout (AbortController), structured logging, no unbounded default — but the operator-boundary outcome is fail-closed (no partial authed state), distinct from the registry's degrade-the-section behaviour.
 - **Tenant scope**: never derived from the GAP OIDC token. GAP resolves operator tenant scope producer-side from `admin_operators.tenant_id` (ADR-002 `'*'` platform sentinel); the console sends no tenant to the exchange (consistent with § 2.2 registry tenant scoping). Cross-references: GAP [`console-registry-api.md` § Authentication](../../../global-account-platform/specs/contracts/http/console-registry-api.md) (operator token now via the exchange; producer requirement unchanged).
 
+### 2.7 Active-Tenant Switcher → Assume-Tenant Exchange (normative — ADR-MONO-020 D4)
+
+The active-tenant switcher re-scopes the operator's **domain-facing** credential to the selected customer. Setting the `console_active_tenant` cookie (X-Tenant-Id) alone does **nothing** — the federated domain entitlement gates (ADR-MONO-019 D5) trust the **signed** GAP OIDC token claims (`tenant_id` + `entitled_domains`), not a header. So on switcher selection the console **server-side** drives a second RFC 8693 exchange (the *assume-tenant* exchange, distinct from the § 2.6 operator exchange) to mint a short-lived GAP OIDC token re-scoped to the selected customer, and uses it as the domain-facing bearer. The BFF (§ 2.4.9) forwards it verbatim (ADR-MONO-017 D6 pass-through — **0-byte console-bff change**).
+
+- **Two server-side exchanges (do NOT conflate)**:
+  - **§ 2.6 operator-identity exchange** (ADR-MONO-014): admin **JSON** `POST /api/admin/auth/token-exchange` → operator token for `/api/admin/**`. Unchanged.
+  - **assume-tenant exchange** (this section): SAS **form-urlencoded** `POST ${OIDC_ISSUER_URL}/oauth2/token`, `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` + `subject_token=<base GAP OIDC access token>` + `subject_token_type=urn:ietf:params:oauth:token-type:access_token` + `audience=<selected tenant>` + `client_id`. **Consume only** — the request/response/error contract is owned producer-side by GAP [`auth-api.md` § Assume-Tenant Exchange](../../../global-account-platform/specs/contracts/http/auth-api.md) (TASK-BE-327); this file states the consumer obligation, it does NOT redefine the wire shape.
+  - **Response 200** (SAS shape): `{ access_token, token_type: "Bearer", expires_in }` — **no `refresh_token`** (the assumed token is short-lived and re-minted per selection / GAP refresh). The console stores `access_token` in its own HttpOnly·Secure·SameSite=Lax cookie (`console_assumed_token`) with `maxAge = expires_in`, validates `token_type === "Bearer"`.
+
+- **Domain-facing credential resolution (the central change)**: `getDomainFacingToken()` = **the assumed token if an active-tenant assumption exists, else the base `getAccessToken()`**. Every tenant-scoped domain read uses it for the GAP-OIDC bearer:
+  - the cross-domain overview proxy (§ 2.4.9.1) `Authorization: Bearer` (the BFF's non-GAP fan-out legs forward it; the GAP leg keeps using `X-Operator-Token`, § 2.6, unchanged);
+  - the 4 non-GAP domain section clients (`features/{wms,scm,finance,erp}-ops`, §§ 2.4.5–2.4.8) — the per-domain credential rule § 2.4.5 is unchanged, only **which** GAP OIDC token.
+  - **GAP-domain clients** (`features/{accounts,audit,operators,dashboards}` → `getOperatorToken()`) are **unchanged** — the operator-token boundary (§ 2.1/§ 2.6, the #569 invariant) is untouched; `getDomainFacingToken()` is never a GAP `/api/admin/**` credential.
+  - **net-zero**: a non-switched / single-tenant operator has no assumed token, so `getDomainFacingToken()` returns the base token → existing behaviour is byte-identical.
+
+- **Switch route (`POST /api/tenant`)**: after the existing registry-membership allow-check (defence-in-depth — kept), call the assume-tenant exchange (subject = base token, audience = selected tenant); on success set BOTH `console_assumed_token` (maxAge = `expires_in`) and `console_active_tenant=<tenant>` **atomically**. The assumed token is scoped to the current active tenant **by construction** (both set/cleared together; never serve an assumed token for a tenant ≠ the active-tenant cookie).
+
+- **Fail-closed switch** (mirrors the § 2.6 operator boundary — never degrade-with-fallback on the selected-tenant boundary):
+  - assume-tenant `denied` (producer `400 invalid_grant`: the D2 assignment gate / subject invalid / the producer's admin-service leg unavailable) → `403 TENANT_FORBIDDEN`, **no cookie change** (the prior selection + assumed token are preserved).
+  - `invalid` (producer `400 invalid_request`: blank/malformed audience) → `422`.
+  - `unavailable` (5xx / timeout / network / unexpected shape) → `503 DOWNSTREAM_ERROR`.
+  - missing base GAP token → `401 TOKEN_INVALID` (no exchange attempted).
+  - The base GAP OIDC token is the `subject_token` only — **never logged, never returned**; the console **never** falls back to the base token on the selected-tenant boundary (the silent wrong-tenant-view defect this closes).
+
+- **Clear path**: `tenant=''` deletes **BOTH** `console_active_tenant` and `console_assumed_token` (they are coupled).
+
+- **Refresh re-assume**: the assumed token has no refresh token (the grant issues none). On GAP refresh (`/api/auth/refresh`), after the § 2.6 operator-token re-exchange, when an active tenant is set the console **re-assumes** it from the rotated base token. On re-assume failure it drops BOTH the assumed token and the active tenant (the operator falls back to base/no-tenant — never a stale assumed token); the base GAP + operator session stays valid. A whole-session drop (GAP refresh rejected / operator re-exchange fail-closed) also clears the assumed token + active tenant.
+
+- **Selectable tenants**: the switcher's selectable set is the ConsoleRegistry effective scope (TASK-BE-326 dual-read: assignment rows ∪ legacy home tenant) — a multi-assignment operator surfaces all assigned customers. No console change is needed for that (BE-326 already wired it); D4 is purely the credential re-scope on selection.
+
 ---
 
 ## 3. GAP `admin-web` absorption — VERIFIED parity matrix (Phase 3 gate)
@@ -1531,4 +1561,4 @@ authorizing `admin-web` removal — that is a distinct GAP-internal change.
 
 ## 5. Change Rule
 
-Changes to the contract elements (§ 2) require updating this file **before** implementation, and — if they alter a deployed integration — an ADR per [`architecture-decision-rule.md`](../../../../platform/architecture-decision-rule.md). The skeleton → full transition (adding concrete per-domain endpoint schemas) is additive and tracked per domain task. The § 2.1/§ 2.6 operator-token-exchange element is governed by ADR-MONO-014 (ACCEPTED); the RFC 8693 request/response/error contract is owned producer-side by GAP `admin-api.md` — a change there is a GAP project-internal spec-first change cross-referenced here, not redefined here.
+Changes to the contract elements (§ 2) require updating this file **before** implementation, and — if they alter a deployed integration — an ADR per [`architecture-decision-rule.md`](../../../../platform/architecture-decision-rule.md). The skeleton → full transition (adding concrete per-domain endpoint schemas) is additive and tracked per domain task. The § 2.1/§ 2.6 operator-token-exchange element is governed by ADR-MONO-014 (ACCEPTED); the RFC 8693 request/response/error contract is owned producer-side by GAP `admin-api.md` — a change there is a GAP project-internal spec-first change cross-referenced here, not redefined here. The § 2.7 active-tenant switcher → assume-tenant flow is governed by ADR-MONO-020 (ACCEPTED) D4; the assume-tenant RFC 8693 request/response/error contract is owned producer-side by GAP `auth-api.md § Assume-Tenant Exchange` (TASK-BE-327) — consumed here, not redefined.
