@@ -26,6 +26,8 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
 
     private static final String SCOPE_READ = "erp.read";
     private static final String SCOPE_WRITE = "erp.write";
+    /** Domain key matched against the signed {@code entitled_domains} claim. */
+    private static final String DOMAIN_KEY = "erp";
 
     @Override
     public AuthorizationDecision evaluate(ActorContext actor, RequiredScope required,
@@ -33,10 +35,14 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
         if (actor == null || actor.roles() == null) {
             return AuthorizationDecision.denyRole("no roles claim");
         }
-        // Role check
+        // Role check. READ additionally honours ADR-MONO-019 § D5
+        // entitlement-trust: a signed entitled_domains ∋ "erp" claim grants
+        // READ visibility even without an erp.read/operator role, mirroring the
+        // tenant gate's TenantClaimValidator.isEntitled dual-accept. WRITE is
+        // NEVER widened by entitlement-trust (visibility, not mutation).
         boolean roleOk = switch (required) {
             case READ -> actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
-                    || actor.isOperator();
+                    || actor.isOperator() || actor.isEntitledTo(DOMAIN_KEY);
             case WRITE -> actor.hasScope(SCOPE_WRITE) || actor.isOperator();
         };
         if (!roleOk) {
