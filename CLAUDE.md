@@ -195,10 +195,14 @@ Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](doc
 - After a PR squash-merges, delete its feature + close-chore refs immediately. Stacked work uses a single tip-only PR (the tip contains its base; the base ref becomes squash-residue → delete it too).
 - A ref is squash-merge-stale (safe to delete) when its task is in `origin/main`'s `tasks/done/` (or its squash commit is in `git log origin/main`).
 - The auto-mode classifier blocks mass `git push origin --delete` even with a matching permission-allowlist entry (it is a higher safety layer) — mass remote-ref deletion must be run in the user's own shell; `gh pr create` / `gh pr merge --squash` pass; local `git branch -D` is fine for the agent. On a classifier block: STOP and hand the user the exact command — do not reformulate to bypass.
+- **`git branch -r` is a stale local cache, not `origin` truth.** Before concluding remote-branch state or recommending a mass remote deletion, run `git fetch --prune` (or `git remote prune origin`). `git fetch origin main` updates only `main` and does NOT prune — so refs already deleted on `origin` (P3 applied) linger locally as dozens of stale tracking refs that falsely read as "needs cleanup". Prune first, confirm the real residue, then hand over only what genuinely remains (often nothing — avoid an unnecessary user `push --delete`).
+- **Stacked-PR base-ref-deletion auto-close hazard.** Deleting a PR's base ref auto-closes that PR on GitHub, and `gh pr reopen` is then rejected — so `gh pr merge <base> --squash --delete-branch` is destructive-in-disguise for any child PR stacked on it. Prevention: retarget the child first (`gh pr edit <child> --base main`), or merge the base without `--delete-branch`. Recovery: `git rebase --onto origin/main <base-squash-sha>` the child, `--force-with-lease`, open a fresh PR.
+
+**`.claude/` self-modification is classifier-blocked** — the auto-mode classifier hard-blocks editing or committing files under `.claude/hooks/`, `.claude/agents/`, `.claude/commands/` even with explicit user approval (the same higher-safety layer as mass `push --delete`). Hand the exact patch to the user to apply + commit; do not attempt a shell-write bypass. `platform/` is NOT subject to this — only `.claude/`. Detail: project memory `env_classifier_claude_self_mod_block`.
 
 **CI path-filter constraint** — when editing `.github/workflows/` `dorny/paths-filter` configuration: never use negation patterns (the `predicate-quantifier: 'some'` negation misclassifies a file as "in"); use a pure-positive `code-changed` filter composed with the original via an outputs-layer AND; backfill new code extensions into the positive filter; add an entry per new project.
 
-Worked examples + procedure: project memories `project_branch_hygiene_policy` (branch hygiene) and `project_ci_path_filter_074_075_quirk` (CI path-filter).
+Worked examples + procedure: project memories `project_branch_hygiene_policy` (branch hygiene + stacked-PR hazard + prune-before-conclude), `project_ci_path_filter_074_075_quirk` (CI path-filter), and `env_classifier_claude_self_mod_block` (classifier `.claude/` block).
 
 ---
 
