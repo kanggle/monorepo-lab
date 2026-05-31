@@ -126,6 +126,24 @@ admin:
 # token is fetched from GAP /oauth2/token and cached by GapClientCredentialsTokenProvider.
 # admin → auth (AuthServiceClient) intentionally keeps X-Internal-Token (auth
 # receiver still permitAll) — admin.downstream.internal-token above is retained for it.
+
+# TASK-BE-327 (ADR-MONO-020 D2) / TASK-MONO-159 — INBOUND /internal/** chain
+# (GET /internal/operator-assignments/check, @Order(0) SecurityFilterChain).
+# The GAP client_credentials Bearer JWT presented by auth-service's
+# AdminAssignmentClient is validated against the auth-service (SAS) JWKS +
+# issuer, env-driven from OIDC_ISSUER_URL — MIRRORS account-service /
+# security-service /internal config. Without this block the @Value defaults in
+# SecurityConfig resolve to localhost:8081, so any non-localhost deploy (the
+# federation-e2e auth→admin assume-tenant edge) cannot fetch the JWKS and
+# rejects the cc JWT with 401 → fail-closed assume-tenant deny. fail-closed
+# (bypass-when-unconfigured=false) is preserved; the bypass is @WebMvcTest only.
+internal:
+  api:
+    bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}
+    jwt:
+      jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
+      issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
+
 gap:
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}

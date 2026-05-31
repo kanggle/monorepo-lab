@@ -195,6 +195,12 @@ services:
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
       ACCOUNT_SERVICE_URL: http://account-service:8082
+      # TASK-MONO-159 — auth→admin assume-tenant assignment-check edge (BE-327).
+      # AdminAssignmentClient (auth.admin-service.base-url) calls admin-service
+      # GET /internal/operator-assignments/check at assume-tenant issuance time.
+      # Without this it defaults to localhost:8084 (the auth container itself) →
+      # connection refused → fail-closed deny → 403 on every tenant switch.
+      ADMIN_SERVICE_URL: http://admin-service:8085
       OIDC_ISSUER_URL: http://auth-service:8081
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
