@@ -54,6 +54,7 @@ public class UpdateOperatorProfileUseCase {
 
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
+    private final TenantScopeResolver tenantScopeResolver;
 
     /**
      * Sets or clears another operator's {@code finance_default_account_id}
@@ -102,7 +103,12 @@ public class UpdateOperatorProfileUseCase {
                         "Caller not found for operatorId=" + caller.operatorId()));
 
         boolean callerIsPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(callerView.tenantId());
-        if (!callerIsPlatformScope && !Objects.equals(callerView.tenantId(), target.tenantId())) {
+        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
+        // tenant). NET-ZERO with no assignments → {home tenant} → the membership
+        // check reduces to the legacy `callerTenant.equals(targetTenant)`.
+        java.util.Set<String> effectiveTenants = tenantScopeResolver
+                .resolveEffectiveTenantScope(callerView.internalId(), callerView.tenantId());
+        if (!callerIsPlatformScope && !effectiveTenants.contains(target.tenantId())) {
             throw new TenantScopeDeniedException(
                     "Caller tenant '" + callerView.tenantId() + "' may not modify operator in tenant '"
                             + target.tenantId() + "'");

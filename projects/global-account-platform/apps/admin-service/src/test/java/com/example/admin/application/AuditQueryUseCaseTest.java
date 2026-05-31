@@ -44,17 +44,26 @@ class AuditQueryUseCaseTest {
     private AdminActionAuditor auditor;
     @Mock
     private OperatorLookupPort operatorLookupPort;
+    @Mock
+    private TenantScopeResolver tenantScopeResolver;
 
     private AuditQueryUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor, operatorLookupPort);
+        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor,
+                operatorLookupPort, tenantScopeResolver);
 
         // Default: normal operator in "fan-platform" (non-platform-scope)
         when(operatorLookupPort.findByOperatorId("op-1"))
                 .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(1L, "op-1", "fan-platform")));
         when(auditor.reserveAuditId()).thenReturn("meta-audit-id");
+
+        // TASK-BE-326 NET-ZERO default: no assignments → effective scope = {home tenant}.
+        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("fan-platform")))
+                .thenReturn(java.util.Set.of("fan-platform"));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("*")))
+                .thenReturn(java.util.Set.of("*"));
 
         // Default admin-action repo response for tenant-scoped finder
         when(adminActionRepo.findByTenantId(anyString(), any(), any(), any(), any(), any(Pageable.class)))
@@ -201,6 +210,26 @@ class AuditQueryUseCaseTest {
         assertThatThrownBy(() -> useCase.query(cmd("unknown-op", null, "admin", 0, 20, null)))
                 .isInstanceOf(TenantScopeDeniedException.class)
                 .hasMessageContaining("Operator not found");
+    }
+
+    // ── TASK-BE-326: dual-read assigned (non-home) tenant ─────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-326: 일반 운영자가 배정(assignment)된 비-home tenant 조회 시 허용 — findByTenantId(assigned)")
+    void query_normalOperator_assignedNonHomeTenant_allowed_usesFindByTenantId() {
+        // op-1 home = fan-platform, but has an assignment to "wms" → effective
+        // scope {fan-platform, wms}. Querying "wms" must NOT be denied (legacy
+        // single-equality would deny) and must query the assigned tenant's rows.
+        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("fan-platform")))
+                .thenReturn(java.util.Set.of("fan-platform", "wms"));
+        when(adminActionRepo.findByTenantId(eq("wms"), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "wms"));
+
+        verify(adminActionRepo).findByTenantId(eq("wms"), any(), any(), any(), any(), any(Pageable.class));
+        verify(adminActionRepo, never()).searchCrossTenant(anyString(), any(), any(), any(), any(), any(Pageable.class));
+        verify(auditor, never()).recordCrossTenantDenied(any(), anyString(), any(), anyString(), anyString());
     }
 
     // ── TASK-BE-262: cross-tenant deny audit row ──────────────────────────────

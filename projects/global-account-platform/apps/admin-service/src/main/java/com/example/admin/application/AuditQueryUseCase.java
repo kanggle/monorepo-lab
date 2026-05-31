@@ -40,6 +40,7 @@ public class AuditQueryUseCase {
     private final SecurityServiceClient securityServiceClient;
     private final AdminActionAuditor auditor;
     private final OperatorLookupPort operatorLookupPort;
+    private final TenantScopeResolver tenantScopeResolver;
 
     public AuditQueryResult query(QueryAuditCommand cmd) {
         // Authorization is enforced by RequiresPermissionAspect on the
@@ -55,6 +56,12 @@ public class AuditQueryUseCase {
         String operatorTenantId = opSummary.tenantId();
         boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
 
+        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
+        // tenant). NET-ZERO with no assignments → {home tenant} → the membership
+        // check below reduces to the legacy `operatorTenantId.equals(requested)`.
+        java.util.Set<String> effectiveTenants = tenantScopeResolver
+                .resolveEffectiveTenantScope(opSummary.internalId(), operatorTenantId);
+
         // Resolve effective tenantId for the query
         String requestedTenantId = cmd.tenantId();
         if (requestedTenantId == null || requestedTenantId.isBlank()) {
@@ -64,7 +71,7 @@ public class AuditQueryUseCase {
 
         // Tenant-scope gate: non-platform-scope operators may only query their own tenant.
         // TASK-BE-262: record a best-effort DENIED audit row before throwing.
-        if (!isPlatformScope && !operatorTenantId.equals(requestedTenantId)) {
+        if (!isPlatformScope && !effectiveTenants.contains(requestedTenantId)) {
             auditor.recordCrossTenantDenied(
                     cmd.operator(),
                     operatorTenantId,
@@ -104,9 +111,12 @@ public class AuditQueryUseCase {
                         cmd.from(), cmd.to(),
                         PageRequest.of(page, size));
             } else {
-                // Normal operator — own tenant only
+                // Normal operator — own (or effectively-assigned, TASK-BE-326)
+                // tenant. requestedTenantId has already passed the effective-scope
+                // gate above; with no assignments it equals operatorTenantId, so
+                // this is byte-identical to the legacy single-tenant query.
                 adminPage = adminActionRepo.findByTenantId(
-                        operatorTenantId,
+                        requestedTenantId,
                         cmd.accountId(), cmd.actionCode(),
                         cmd.from(), cmd.to(),
                         PageRequest.of(page, size));
