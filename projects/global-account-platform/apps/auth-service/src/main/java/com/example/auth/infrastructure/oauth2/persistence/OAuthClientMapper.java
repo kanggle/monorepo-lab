@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,6 +47,22 @@ public class OAuthClientMapper {
 
     /** Custom ClientSettings key for the tenant type (e.g. B2C, B2B). */
     public static final String SETTING_TENANT_TYPE = "custom.tenant_type";
+
+    /**
+     * ClientSettings key under which post-logout redirect URIs are persisted in
+     * the {@code oauth_clients.client_settings} JSON (V0011/V0012/V0016/V0021).
+     *
+     * <p><b>Not a SAS-standard ClientSettings key.</b> SAS reads post-logout
+     * URIs from the dedicated {@link RegisteredClient#getPostLogoutRedirectUris()}
+     * field (its {@code OidcLogoutAuthenticationProvider} validates the
+     * {@code post_logout_redirect_uri} against it), NOT from ClientSettings.
+     * {@link #toRegisteredClient} therefore copies this custom setting onto the
+     * builder's {@code postLogoutRedirectUri} — without that copy the value is
+     * inert and RP-initiated logout ({@code /connect/logout}) rejects every
+     * {@code post_logout_redirect_uri} (TASK-PC-FE-033).
+     */
+    public static final String SETTING_POST_LOGOUT_REDIRECT_URIS =
+            "settings.client.post-logout-redirect-uris";
 
     /**
      * SAS-enriched ObjectMapper — used to read/write ClientSettings and TokenSettings.
@@ -133,6 +150,19 @@ public class OAuthClientMapper {
 
         for (String scope : entity.getScopes()) {
             builder.scope(scope);
+        }
+
+        // Copy the custom post-logout-redirect-uris setting onto the dedicated
+        // RegisteredClient field SAS actually reads (see
+        // SETTING_POST_LOGOUT_REDIRECT_URIS). The value is a List<String> under
+        // SAS default typing (typed-array envelope); tolerate any Collection.
+        Object postLogout = clientSettings.getSetting(SETTING_POST_LOGOUT_REDIRECT_URIS);
+        if (postLogout instanceof Collection<?> uris) {
+            for (Object uri : uris) {
+                if (uri != null) {
+                    builder.postLogoutRedirectUri(uri.toString());
+                }
+            }
         }
 
         return builder.build();

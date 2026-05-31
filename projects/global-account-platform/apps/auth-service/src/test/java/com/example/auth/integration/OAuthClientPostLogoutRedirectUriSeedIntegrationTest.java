@@ -280,6 +280,19 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                         "http://console.local/login",
                         "http://localhost:3000/login");
 
+        // THE load-bearing assertion (TASK-BE-328): the custom ClientSettings key
+        // above is INERT on its own — SAS's OidcLogoutAuthenticationProvider
+        // validates post_logout_redirect_uri against the RegisteredClient's
+        // dedicated postLogoutRedirectUris field. OAuthClientMapper must copy the
+        // setting onto that field, otherwise /connect/logout 403s every
+        // post_logout_redirect_uri (the defect the V0021-only fix shipped with).
+        assertThat(console.getPostLogoutRedirectUris())
+                .as("OAuthClientMapper must populate RegisteredClient.postLogoutRedirectUris "
+                        + "from the custom setting, else SAS rejects the console's post_logout_redirect_uri")
+                .containsExactlyInAnyOrder(
+                        "http://console.local/login",
+                        "http://localhost:3000/login");
+
         // Core V0015 fields intact alongside the V0021 addition.
         assertThat(console.getClientSettings().isRequireProofKey()).isTrue();
         assertThat(console.getScopes())

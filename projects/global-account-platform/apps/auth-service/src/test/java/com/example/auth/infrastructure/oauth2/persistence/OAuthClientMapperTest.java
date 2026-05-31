@@ -313,6 +313,50 @@ class OAuthClientMapperTest {
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
     }
 
+    /**
+     * TASK-BE-328: the custom {@code settings.client.post-logout-redirect-uris}
+     * setting must be copied onto the SAS {@link RegisteredClient}'s dedicated
+     * {@code postLogoutRedirectUris} field — that is the ONLY place SAS's
+     * {@code OidcLogoutAuthenticationProvider} reads when validating a
+     * {@code post_logout_redirect_uri}. Without this copy the setting is inert
+     * and RP-initiated logout ({@code /connect/logout}) rejects every URI with
+     * 403 (the defect the V0021-only TASK-PC-FE-033 fix shipped with).
+     */
+    @Test
+    @DisplayName("toRegisteredClient: post-logout setting is copied onto RegisteredClient.postLogoutRedirectUris")
+    void toRegisteredClient_postLogoutRedirectUrisPopulatedOnRegisteredClientField() {
+        OAuthClientEntity entity = buildPkceClientEntity("platform-console", "B2B");
+        entity.setClientId("platform-console-web");
+        entity.setClientSettings("""
+                {"@class":"java.util.Collections$UnmodifiableMap",\
+                "settings.client.require-proof-key":true,\
+                "settings.client.require-authorization-consent":false,\
+                "settings.client.post-logout-redirect-uris":\
+                ["java.util.ArrayList",["http://console.local/login","http://localhost:3000/login"]]}""");
+
+        RegisteredClient client = mapper.toRegisteredClient(entity);
+
+        assertThat(client.getPostLogoutRedirectUris())
+                .as("the dedicated postLogoutRedirectUris field SAS validates against must be populated")
+                .containsExactlyInAnyOrder(
+                        "http://console.local/login", "http://localhost:3000/login");
+    }
+
+    /**
+     * TASK-BE-328 guard: a client with NO post-logout setting must have an EMPTY
+     * {@code postLogoutRedirectUris} (no accidental injection / NPE) — the
+     * mapper's copy is strictly conditional on the setting's presence.
+     */
+    @Test
+    @DisplayName("toRegisteredClient: absent post-logout setting leaves postLogoutRedirectUris empty")
+    void toRegisteredClient_noPostLogoutSetting_emptyField() {
+        OAuthClientEntity entity = buildPkceClientEntity("fan-platform", "B2C");
+
+        RegisteredClient client = mapper.toRegisteredClient(entity);
+
+        assertThat(client.getPostLogoutRedirectUris()).isEmpty();
+    }
+
     // -----------------------------------------------------------------------
     // Round-trip
     // -----------------------------------------------------------------------
