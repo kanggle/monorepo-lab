@@ -8,7 +8,7 @@ ADR-MONO-020 D4 **federation-e2e leg-target wiring completion** — the console-
 
 # Status
 
-ready
+done
 
 # Owner
 

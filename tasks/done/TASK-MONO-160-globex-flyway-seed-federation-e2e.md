@@ -8,7 +8,7 @@ Fix-forward for TASK-MONO-158 (ADR-MONO-020 D4) federation-e2e **B-side** — se
 
 # Status
 
-ready
+done
 
 # Owner
 

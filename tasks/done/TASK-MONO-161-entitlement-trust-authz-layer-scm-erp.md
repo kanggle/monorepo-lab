@@ -8,7 +8,7 @@ ADR-MONO-019 entitlement-trust **authz-layer completion** — extend the per-dom
 
 # Status
 
-ready
+done
 
 # Owner
 
