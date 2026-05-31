@@ -6,9 +6,12 @@ import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
   tokenCookieOpts,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
+import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -77,6 +80,9 @@ export async function POST() {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
+      // Whole session dropped → also clear the coupled tenant + assumed token.
+      jar.delete(ASSUMED_TOKEN_COOKIE);
+      jar.delete(TENANT_COOKIE);
       logger.warn('refresh_failed', { requestId, status: upstream.status });
       return NextResponse.json(
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
@@ -111,6 +117,9 @@ export async function POST() {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
+      // Whole session dropped → also clear the coupled tenant + assumed token.
+      jar.delete(ASSUMED_TOKEN_COOKIE);
+      jar.delete(TENANT_COOKIE);
       const failClosed =
         err instanceof OperatorExchangeError && err.reason === 'fail_closed';
       logger.warn('refresh_reexchange_failed', {
@@ -121,6 +130,33 @@ export async function POST() {
         { code: 'TOKEN_INVALID', message: 'operator session ended' },
         { status: 401 },
       );
+    }
+
+    // --- Re-assume the active tenant (ADR-MONO-020 D4 / § 2.7) ------------
+    // The assumed (domain-facing) token has NO refresh token (D2) — it is
+    // re-minted from the rotated base GAP access token. If an active tenant is
+    // set, re-assume it now so the domain-facing credential stays scoped to
+    // the selected customer after a refresh. On any re-assume failure DROP
+    // BOTH the assumed token AND the active tenant (the operator falls back to
+    // the base/no-tenant state — NEVER a stale assumed token). The base GAP +
+    // operator session stays valid; only the tenant selection is reset.
+    const activeTenant = jar.get(TENANT_COOKIE)?.value;
+    if (activeTenant) {
+      try {
+        const assumed = await exchangeForAssumedToken(
+          data.access_token,
+          activeTenant,
+        );
+        jar.set(ASSUMED_TOKEN_COOKIE, assumed.accessToken, {
+          ...tokenCookieOpts,
+          maxAge: assumed.expiresIn,
+        });
+      } catch {
+        // Drop the coupled pair — no stale assumed token, no orphan tenant.
+        jar.delete(ASSUMED_TOKEN_COOKIE);
+        jar.delete(TENANT_COOKIE);
+        logger.warn('refresh_reassume_failed', { requestId });
+      }
     }
 
     logger.info('refresh_ok', { requestId });

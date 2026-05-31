@@ -239,10 +239,12 @@ describe('finance-api — per-domain credential selection (REUSE of § 2.4.5; th
     );
   });
 
-  it('uses getAccessToken() and NEVER getOperatorToken() for finance (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for finance (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
-    const getAccessSpy = vi.spyOn(sessionModule, 'getAccessToken');
+    // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
+    // else base) — STILL never the operator token.
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
     const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
     vi.stubGlobal(
       'fetch',
@@ -251,7 +253,7 @@ describe('finance-api — per-domain credential selection (REUSE of § 2.4.5; th
 
     await getBalances('acct-1');
 
-    expect(getAccessSpy).toHaveBeenCalled();
+    expect(getDomainFacingSpy).toHaveBeenCalled();
     // The operator-token path is ABSENT for finance — same shape as the
     // FE-007 wms / FE-008 scm assertions; a future blanket-apply
     // refactor would break this.

@@ -54,6 +54,8 @@ import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
 } from '@/shared/lib/session';
@@ -117,7 +119,9 @@ describe('GET /api/auth/login (PKCE initiation)', () => {
     expect(verifier?.opts).toMatchObject({
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      // TASK-BE-311: session/transient cookies use SameSite=Lax (the
+      // post-callback top-level GET navigation must carry them).
+      sameSite: 'lax',
     });
     expect(state?.value).toContain('|/console');
   });
@@ -184,7 +188,8 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(acc?.opts).toMatchObject({
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      // TASK-BE-311: SameSite=Lax for session cookies (see above).
+      sameSite: 'lax',
       path: '/',
       maxAge: 1800,
     });
@@ -197,7 +202,8 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(op?.opts).toMatchObject({
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      // TASK-BE-311: SameSite=Lax for session cookies (see above).
+      sameSite: 'lax',
       path: '/',
       maxAge: 900,
     });
@@ -355,6 +361,113 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
     expect(cookieDeletes).toContain(ACCESS_COOKIE);
     expect(cookieDeletes).toContain(REFRESH_COOKIE);
     expect(cookieDeletes).toContain(OPERATOR_COOKIE);
+  });
+
+  it('re-assumes the active tenant after refresh (ADR-MONO-020 D4 / § 2.7)', async () => {
+    cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
+    cookieJar.set(TENANT_COOKIE, { value: 'acme-corp', opts: {} });
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, { value: 'old.assumed', opts: {} });
+    // Distinguish the two /oauth2/token calls by grant_type in the body.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const u = String(url);
+        if (u.includes('/api/admin/auth/token-exchange')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                accessToken: 'new.op',
+                expiresIn: 600,
+                tokenType: 'admin',
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            ),
+          );
+        }
+        const body = String(init?.body ?? '');
+        if (body.includes('grant-type%3Atoken-exchange')) {
+          // assume-tenant exchange → fresh assumed token (SAS Bearer shape).
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                access_token: 'new.assumed',
+                token_type: 'Bearer',
+                expires_in: 1800,
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            ),
+          );
+        }
+        // GAP refresh_token grant.
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: 'new.acc',
+              token_type: 'Bearer',
+              expires_in: 1800,
+              refresh_token: 'new.ref',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+    const res = await refreshPOST();
+    expect(res.status).toBe(200);
+    // The assumed token is re-minted from the rotated base token.
+    expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.value).toBe('new.assumed');
+    expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('acme-corp');
+  });
+
+  it('drops the assumed token + active tenant when re-assume fails after refresh', async () => {
+    cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
+    cookieJar.set(TENANT_COOKIE, { value: 'acme-corp', opts: {} });
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, { value: 'old.assumed', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const u = String(url);
+        if (u.includes('/api/admin/auth/token-exchange')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                accessToken: 'new.op',
+                expiresIn: 600,
+                tokenType: 'admin',
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            ),
+          );
+        }
+        const body = String(init?.body ?? '');
+        if (body.includes('grant-type%3Atoken-exchange')) {
+          // assume-tenant exchange fails (e.g. assignment revoked since login).
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'invalid_grant' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: 'new.acc',
+              token_type: 'Bearer',
+              expires_in: 1800,
+              refresh_token: 'new.ref',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+    const res = await refreshPOST();
+    // The base GAP + operator session stays valid (200); only the tenant
+    // selection is reset — never a stale assumed token.
+    expect(res.status).toBe(200);
+    expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
+    expect(cookieDeletes).toContain(TENANT_COOKIE);
   });
 
   it('drops the whole session when GAP refresh succeeds but the re-exchange 401s (operator deactivated since login)', async () => {
