@@ -8,7 +8,7 @@ Promote two HIGH-priority operational rules from project memory to `CLAUDE.md` (
 
 # Status
 
-ready
+done
 
 # Owner
 
