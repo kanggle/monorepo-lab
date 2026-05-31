@@ -11,11 +11,12 @@ name: Federation Hardening E2E (Phase 8 cross-product, nightly)
 # (ADR-MONO-018 D1 explicit decision).
 #
 # 2 jobs:
-#   1. federation-hardening-boot-jars (timeout 25 min): builds 8 boot jars
-#      (GAP auth/account/admin + finance-account + wms-master + scm-procurement
-#      + erp-masterdata + console-bff). Uploads artifact.
+#   1. federation-hardening-boot-jars (timeout 25 min): builds 10 boot jars
+#      (GAP auth/account/admin + finance-account + wms-master + wms-admin
+#      + scm-procurement + scm-inventory-visibility + erp-masterdata
+#      + console-bff). Uploads artifact.
 #   2. federation-hardening-e2e-fullstack (timeout 50 min): downloads boot
-#      jars, builds console-web, starts phased docker-compose stack (12+ svcs
+#      jars, builds console-web, starts phased docker-compose stack (14+ svcs
 #      incl. victoriatraces), applies seed SQL, runs 8 Playwright specs
 #      (+ observability-trace-tree, TASK-MONO-144), uploads trace artifact.
 #
@@ -74,8 +75,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build federation hardening e2e boot jars
-        # 8 boot jars: GAP (auth/account/admin) + finance-account + wms-master
-        # + scm-procurement + erp-masterdata + console-bff.
+        # 10 boot jars: GAP (auth/account/admin) + finance-account + wms-master
+        # + wms-admin + scm-procurement + scm-inventory-visibility + erp-masterdata
+        # + console-bff. wms-admin + scm-inventory-visibility added TASK-MONO-162
+        # (the producers the operator-overview wms/scm legs actually call).
         # console-web is a Next.js standalone build (handled in e2e job).
         run: >-
           ./gradlew
@@ -84,7 +87,9 @@ jobs:
           :projects:global-account-platform:apps:admin-service:bootJar
           :projects:finance-platform:apps:account-service:bootJar
           :projects:wms-platform:apps:master-service:bootJar
+          :projects:wms-platform:apps:admin-service:bootJar
           :projects:scm-platform:apps:procurement-service:bootJar
+          :projects:scm-platform:apps:inventory-visibility-service:bootJar
           :projects:erp-platform:apps:masterdata-service:bootJar
           :projects:platform-console:apps:console-bff:bootJar
           --no-daemon --stacktrace
@@ -102,7 +107,9 @@ jobs:
             projects/global-account-platform/apps/admin-service/build/libs/admin-service.jar
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
+            projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
+            projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
             projects/erp-platform/apps/masterdata-service/build/libs/masterdata-service.jar
             projects/platform-console/apps/console-bff/build/libs/console-bff.jar
           retention-days: 1
@@ -169,15 +176,21 @@ jobs:
           mv artifact-staging/finance-platform/apps/account-service/build/libs/account-service.jar \
              projects/finance-platform/apps/account-service/build/libs/account-service.jar
 
-          # wms-platform
+          # wms-platform (master-service + admin-service — TASK-MONO-162)
           mkdir -p projects/wms-platform/apps/master-service/build/libs/
           mv artifact-staging/wms-platform/apps/master-service/build/libs/master-service.jar \
              projects/wms-platform/apps/master-service/build/libs/master-service.jar
+          mkdir -p projects/wms-platform/apps/admin-service/build/libs/
+          mv artifact-staging/wms-platform/apps/admin-service/build/libs/admin-service.jar \
+             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
 
-          # scm-platform
+          # scm-platform (procurement-service + inventory-visibility-service — TASK-MONO-162)
           mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
           mv artifact-staging/scm-platform/apps/procurement-service/build/libs/procurement-service.jar \
              projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
+          mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
+          mv artifact-staging/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
+             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
 
           # erp-platform
           mkdir -p projects/erp-platform/apps/masterdata-service/build/libs/
@@ -234,8 +247,10 @@ jobs:
         working-directory: tests/federation-hardening-e2e/docker
         run: |
           docker compose -f docker-compose.federation-e2e.yml up -d --build \
-            wms-postgres scm-postgres \
-            wms-master-service scm-procurement-service finance-account-service erp-masterdata-service \
+            wms-postgres wms-admin-postgres scm-postgres scm-inv-postgres \
+            wms-master-service wms-admin-service \
+            scm-procurement-service scm-inventory-visibility-service \
+            finance-account-service erp-masterdata-service \
             console-bff console-web
 
       - name: Wait for finance-account-service health
@@ -286,6 +301,40 @@ jobs:
           docker compose -f docker-compose.federation-e2e.yml logs --tail=50 scm-procurement-service
           exit 1
 
+      - name: Wait for wms-admin-service health
+        # TASK-MONO-162 — the producer the operator-overview wms leg actually calls.
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          echo "Waiting for wms-admin-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.federation-e2e.yml ps wms-admin-service \
+                | grep -q "healthy"; then
+              echo "wms-admin-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "wms-admin-service did not become healthy in time"
+          docker compose -f docker-compose.federation-e2e.yml logs --tail=50 wms-admin-service
+          exit 1
+
+      - name: Wait for scm-inventory-visibility-service health
+        # TASK-MONO-162 — the producer the operator-overview scm leg actually calls.
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          echo "Waiting for scm-inventory-visibility-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.federation-e2e.yml ps scm-inventory-visibility-service \
+                | grep -q "healthy"; then
+              echo "scm-inventory-visibility-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "scm-inventory-visibility-service did not become healthy in time"
+          docker compose -f docker-compose.federation-e2e.yml logs --tail=50 scm-inventory-visibility-service
+          exit 1
+
       - name: Wait for erp-masterdata-service health
         working-directory: tests/federation-hardening-e2e/docker
         run: |
@@ -324,6 +373,24 @@ jobs:
         run: |
           docker compose -f docker-compose.federation-e2e.yml exec -T scm-postgres \
             psql -U scm -d scm_procurement < ../fixtures/seed-scm.sql
+
+      - name: Apply seed-wms-admin.sql (wms admin_inventory_snapshot, post-Flyway)
+        # TASK-MONO-162 — applied against wms-admin-postgres (admin_db, PostgreSQL)
+        # after wms-admin-service Flyway is healthy. Feeds the operator-overview
+        # wms card (GET /api/v1/admin/dashboard/inventory).
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          docker compose -f docker-compose.federation-e2e.yml exec -T wms-admin-postgres \
+            psql -U admin -d admin_db < ../fixtures/seed-wms-admin.sql
+
+      - name: Apply seed-scm-inv.sql (scm inventory-visibility read-model, post-Flyway)
+        # TASK-MONO-162 — applied against scm-inv-postgres (scm_inventory_visibility,
+        # PostgreSQL) after scm-inventory-visibility-service Flyway is healthy.
+        # Feeds the operator-overview scm card (GET /api/inventory-visibility/snapshot).
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          docker compose -f docker-compose.federation-e2e.yml exec -T scm-inv-postgres \
+            psql -U scm -d scm_inventory_visibility < ../fixtures/seed-scm-inv.sql
 
       - name: Wait for console-web health
         working-directory: tests/federation-hardening-e2e/docker

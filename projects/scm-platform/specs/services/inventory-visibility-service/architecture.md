@@ -131,8 +131,9 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 
 - OAuth2 Resource Server (RS256)
 - JWKS: `${OIDC_ISSUER_URL}/oauth2/jwks`
-- Validators: JwtTimestampValidator + AllowedIssuersValidator
-- Service-level `TenantClaimEnforcer` filter (defense-in-depth) — entitlement-trust dual-accept gate (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`); carries a local `isEntitled` helper (no decode-time validator in this service)
+- Validators (`ServiceLevelOAuth2Config`): JwtTimestampValidator + AllowedIssuersValidator + decode-time `tenantClaimValidator`
+- **Decode-time** `tenantClaimValidator` (`ServiceLevelOAuth2Config`) — entitlement-trust dual-accept gate at JWT decode (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`); carries a local `isEntitled` helper. **Both** authz layers (decode validator + filter) dual-accept; a domain-entitled cross-tenant token must survive decode before the filter runs (TASK-MONO-162)
+- Service-level `TenantClaimEnforcer` filter (defense-in-depth) — entitlement-trust dual-accept gate (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`); carries a local `isEntitled` helper
 - Public paths: `/actuator/health`, `/actuator/info`, `/actuator/prometheus`
 
 ## Dependencies
@@ -199,8 +200,8 @@ the claim is absent → only the legacy path applies → **production net-zero**
 4 once GAP populates the claim — separate follow-up):
 
 1. **Gateway** — `TenantClaimValidator` applies the dual-accept gate at JWT decode time.
-2. **Service JWT validator chain** — `AllowedIssuersValidator` re-run during local decode (the gateway forwards the bearer; the service decodes again).
-3. **Service filter** — `TenantClaimEnforcer` servlet filter applies the dual-accept gate and rejects with 403 `TENANT_FORBIDDEN` (public actuator paths skipped). This service has no decode-time `TenantClaimValidator`, so the enforcer carries a **local** `isEntitled` helper (the entitlement check cannot be shared across modules).
+2. **Service JWT validator chain (decode-time)** — `AllowedIssuersValidator` + the decode-time `tenantClaimValidator` (`ServiceLevelOAuth2Config`) re-run during local decode (the gateway forwards the bearer; the service decodes again). The decode-time validator applies the **entitlement-trust dual-accept** itself (TASK-MONO-162) via a local `isEntitled` helper — without it a domain-entitled cross-tenant token (e.g. globex `entitled_domains ∋ scm`) is rejected at decode before the filter's dual-accept can run.
+3. **Service filter** — `TenantClaimEnforcer` servlet filter applies the dual-accept gate and rejects with 403 `TENANT_FORBIDDEN` (public actuator paths skipped). It carries its own **local** `isEntitled` helper (the entitlement check cannot be shared across modules); the decode validator and the filter are independent gates and **both** dual-accept.
 
 This dual-accept gate is independent of row-level isolation: the
 `adapter/inbound/web/TenantClaimExtractor` (which extracts `tenant_id` for

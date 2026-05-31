@@ -174,7 +174,8 @@ export const WmsDataSchema = z
   .passthrough();
 export type WmsData = z.infer<typeof WmsDataSchema>;
 
-// scm inventory visibility — `GET /api/scm/inventory/visibility`.
+// scm inventory visibility — producer `GET /api/inventory-visibility/snapshot`
+// (the BFF leg path; FE consumes the BFF, not the producer — TASK-MONO-162).
 // Surfaces optional `meta.warning` (S5 "Not for procurement decisions"
 // non-blocking hint per § 2.4.6 invariant).
 export const ScmDataSchema = z

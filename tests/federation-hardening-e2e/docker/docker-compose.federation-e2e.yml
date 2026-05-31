@@ -17,24 +17,40 @@
 #   - finance_db + erp_db CREATE DATABASE
 #
 # Phase 2 (started after phase 1.5):
-#   - wms-postgres (PostgreSQL for master-service)
-#   - scm-postgres  (PostgreSQL for procurement-service)
-#   - wms-master-service (wms domain read endpoint /api/v1/master/warehouses)
-#   - scm-procurement-service (scm domain read endpoint /api/scm/purchase-orders)
+#   - wms-postgres (PostgreSQL for master-service / master_db)
+#   - wms-admin-postgres (PostgreSQL for admin-service / admin_db — TASK-MONO-162)
+#   - scm-postgres  (PostgreSQL for procurement-service / scm_procurement)
+#   - scm-inv-postgres (PostgreSQL for inventory-visibility-service /
+#     scm_inventory_visibility — TASK-MONO-162)
+#   - wms-master-service (wms warehouses read /api/v1/master/warehouses — legacy
+#     leg, kept harmless; the operator-overview wms leg no longer targets it)
+#   - wms-admin-service (wms inventory snapshot /api/v1/admin/dashboard/inventory
+#     — the producer the BFF WmsInventoryReadAdapter actually calls; TASK-MONO-162)
+#   - scm-procurement-service (scm PO read /api/procurement/po — golden-path leg)
+#   - scm-inventory-visibility-service (scm inventory snapshot
+#     /api/inventory-visibility/snapshot — the producer the BFF
+#     ScmInventoryReadAdapter actually calls; TASK-MONO-162)
 #   - finance-account-service (finance read endpoint /api/finance/accounts/{id})
 #   - erp-masterdata-service (erp read endpoint /api/erp/masterdata/employees)
 #   - console-bff (Spring Boot orchestrator — operator-overview + domain-health)
 #   - console-web (Next.js Playwright target)
 #
-# Phase 2.5 (seed-domains.sql + seed-wms.sql + seed-scm.sql applied):
+# Phase 2.5 (seed-domains.sql + seed-wms.sql + seed-wms-admin.sql + seed-scm.sql
+#            + seed-scm-inv.sql applied):
 #   - finance_db.accounts + balances (via mysql exec)
 #   - erp_db.departments + employees (via mysql exec)
 #   - wms warehouses (via psql exec against wms-postgres)
+#   - wms admin_inventory_snapshot (via psql exec against wms-admin-postgres)
 #   - scm purchase_orders (via psql exec against scm-postgres)
+#   - scm inventory snapshot read-model (via psql exec against scm-inv-postgres)
 #
-# console-bff outbound wiring (replaces 127.0.0.1:9 placeholder):
-#   CONSOLE_BFF_OUTBOUND_WMS_BASE_URL=http://wms-master-service:8081
-#   CONSOLE_BFF_OUTBOUND_SCM_BASE_URL=http://scm-procurement-service:8080
+# console-bff outbound wiring (replaces 127.0.0.1:9 placeholder). The wms + scm
+# operator-overview legs point at the producers that actually serve the BFF
+# adapter paths (TASK-MONO-162 — previously mis-wired to master/procurement):
+#   CONSOLE_BFF_OUTBOUND_WMS_BASE_URL=http://wms-admin-service:8086
+#       (/api/v1/admin/dashboard/inventory — InventoryDashboardController)
+#   CONSOLE_BFF_OUTBOUND_SCM_BASE_URL=http://scm-inventory-visibility-service:8080
+#       (/api/inventory-visibility/snapshot — InventoryVisibilityController)
 #   CONSOLE_BFF_OUTBOUND_ERP_BASE_URL=http://erp-masterdata-service:8080
 #
 # Usage (local dev):
@@ -180,6 +196,42 @@ services:
       retries: 10
       start_period: 20s
     ports: ["15433:5432"]
+    networks: [fed-e2e]
+
+  # wms-admin-postgres — admin-service uses admin_db (NOT master-service's
+  # master_db), so it needs its own sidecar (a shared instance would fail
+  # admin-service Flyway/validate). TASK-MONO-162.
+  wms-admin-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: admin_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d admin_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15434:5432"]
+    networks: [fed-e2e]
+
+  # scm-inv-postgres — inventory-visibility-service uses scm_inventory_visibility
+  # (NOT procurement-service's scm_procurement), so it needs its own sidecar.
+  # TASK-MONO-162.
+  scm-inv-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scm_inventory_visibility
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scm -d scm_inventory_visibility"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15435:5432"]
     networks: [fed-e2e]
 
   # ---------------------------------------------------------------------------
@@ -348,6 +400,45 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
+  # wms-admin-service — wms inventory snapshot read-model (TASK-MONO-162).
+  # Serves /api/v1/admin/dashboard/inventory (InventoryDashboardController,
+  # @PreAuthorize hasRole('WMS_VIEWER')) — the producer the BFF
+  # WmsInventoryReadAdapter actually calls. DB admin_db (own postgres sidecar,
+  # NOT master_db). Port 8086 internally (application.yml default SERVER_PORT).
+  # ---------------------------------------------------------------------------
+  wms-admin-service:
+    build:
+      context: ../../../projects/wms-platform/apps/admin-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8086"
+      DB_URL: jdbc:postgresql://wms-admin-postgres:5432/admin_db
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    depends_on:
+      wms-admin-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
+    ports: ["18094:8086"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
   # scm-procurement-service — scm domain read endpoint.
   # Exposes /api/scm/purchase-orders (PO list).
   # Uses scm-postgres sidecar (PostgreSQL).
@@ -383,6 +474,54 @@ services:
     networks: [fed-e2e]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # scm-inventory-visibility-service — scm inventory snapshot read producer
+  # (TASK-MONO-162). Serves /api/inventory-visibility/snapshot
+  # (InventoryVisibilityController) — the producer the BFF
+  # ScmInventoryReadAdapter actually calls. Two-layer authz: decode-time
+  # ServiceLevelOAuth2Config validator + TenantClaimEnforcer filter, BOTH
+  # entitlement-trust dual-accept (globex token tenant_id=globex-corp +
+  # entitled_domains=[scm,erp] passes). DB scm_inventory_visibility (own
+  # postgres sidecar, NOT scm_procurement). Port 8080 internally.
+  # ---------------------------------------------------------------------------
+  scm-inventory-visibility-service:
+    build:
+      context: ../../../projects/scm-platform/apps/inventory-visibility-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      POSTGRES_HOST: scm-inv-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: scm_inventory_visibility
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    depends_on:
+      scm-inv-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
+    ports: ["18095:8080"]
+    networks: [fed-e2e]
+    # inventory-visibility-service Dockerfile is a layertools image with NO curl
+    # installed (unlike procurement-service). Use busybox wget (present in the
+    # temurin-alpine base) for the healthcheck — same pattern as victoriatraces.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 12
@@ -483,8 +622,12 @@ services:
       # ADR-MONO-018 D1: replaces the 127.0.0.1:9 non-routable placeholders
       # in platform-console docker-compose.e2e.yml (wms/scm/erp were placeholder).
       CONSOLE_BFF_OUTBOUND_GAP_BASE_URL: http://admin-service:8085
-      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://wms-master-service:8081
-      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://scm-procurement-service:8080
+      # TASK-MONO-162 — the wms + scm operator-overview legs now target the
+      # producers that actually serve the BFF adapter paths (previously the wms
+      # leg was mis-wired to master-service → NoResourceFoundException → 500, and
+      # the scm leg to procurement-service → 404, both masking the real card).
+      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://wms-admin-service:8086
+      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://scm-inventory-visibility-service:8080
       CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
       CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://erp-masterdata-service:8080
       # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
@@ -498,7 +641,9 @@ services:
       admin-service: { condition: service_started }
       finance-account-service: { condition: service_started }
       wms-master-service: { condition: service_started }
+      wms-admin-service: { condition: service_started }
       scm-procurement-service: { condition: service_started }
+      scm-inventory-visibility-service: { condition: service_started }
       erp-masterdata-service: { condition: service_started }
       victoriatraces: { condition: service_healthy }
     ports: ["18090:8080"]

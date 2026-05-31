@@ -88,6 +88,16 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Domain key for the entitlement-trust READ-visibility synthesis. A token
+     * whose signed {@code entitled_domains} claim contains {@code wms} is granted
+     * {@code ROLE_WMS_VIEWER} (READ only) even when it carries no WMS role claim.
+     */
+    static final String ENTITLEMENT_DOMAIN = "wms";
+
+    /** The single READ-visibility role synthesised from entitlement-trust. */
+    static final String VIEWER_ROLE = "ROLE_WMS_VIEWER";
+
     static JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter defaults = new JwtGrantedAuthoritiesConverter();
@@ -97,6 +107,17 @@ public class SecurityConfig {
             Collection<GrantedAuthority> authorities = new ArrayList<>(defaults.convert(jwt));
             Object roleClaim = jwt.getClaim("role");
             authorities.addAll(extractRoles(roleClaim));
+            // Entitlement-trust dual-accept (ADR-MONO-019 § D5, ADR-MONO-020 D4 —
+            // TASK-MONO-162): a wms-entitled token (entitled_domains ∋ "wms") is
+            // granted ROLE_WMS_VIEWER so the @PreAuthorize("hasRole('WMS_VIEWER')")
+            // READ dashboards pass. This synthesises ONLY the VIEWER role — the
+            // WRITE-gated roles (WMS_OPERATOR/WMS_ADMIN/WMS_SUPERADMIN) are
+            // unaffected, so entitlement-trust never widens mutation authority
+            // (READ visibility only; net-zero for role/scope/SUPER_ADMIN tokens —
+            // entitled_domains is read only from the RS256/JWKS-verified token).
+            if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {
+                authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));
+            }
             return authorities;
         });
         return converter;
