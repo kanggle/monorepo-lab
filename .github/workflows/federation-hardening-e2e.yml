@@ -227,7 +227,20 @@ jobs:
         working-directory: tests/federation-hardening-e2e/docker
         run: |
           docker compose -f docker-compose.federation-e2e.yml exec -T mysql \
-            mysql -uroot -prootpass < ../fixtures/seed.sql
+            mysql -uroot -prootpass --show-warnings < ../fixtures/seed.sql
+
+      # DIAGNOSTIC (TASK-MONO-158 B-side) — confirm globex-corp tenant +
+      # [scm,erp] subscriptions persisted to account_db and the multi-operator
+      # assignment rows exist. Non-failing (pure SELECT). Remove once green.
+      - name: Diagnostic — globex-corp account_db + assignment state
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          docker compose -f docker-compose.federation-e2e.yml exec -T mysql \
+            mysql -uroot -prootpass -t -e "\
+              SELECT '--tenants--' AS x; SELECT tenant_id,status FROM account_db.tenants WHERE tenant_id IN ('acme-corp','globex-corp'); \
+              SELECT '--subscriptions--' AS x; SELECT tenant_id,domain_key,status FROM account_db.tenant_domain_subscription WHERE tenant_id IN ('acme-corp','globex-corp') ORDER BY tenant_id,domain_key; \
+              SELECT '--assignments--' AS x; SELECT o.operator_id,ota.tenant_id FROM admin_db.operator_tenant_assignment ota JOIN admin_db.admin_operators o ON ota.operator_id=o.id WHERE o.operator_id='multi-operator';" \
+            || echo "diagnostic query failed (non-fatal)"
 
       # --- Phase 2: Start producer services + console ---
       - name: Start docker compose Phase 2 (producers + console-bff + console-web)
