@@ -50,12 +50,6 @@ public class TenantDomainSubscriptionQueryUseCase {
                 (tenantId == null || tenantId.isBlank())
                         ? subscriptionRepository.findAllActive()
                         : subscriptionRepository.findActiveByTenantId(tenantId);
-        // DIAGNOSTIC (TASK-MONO-158 B-side) — log the per-tenant keystone result
-        // so the globex empty-result vs acme is observable. Remove once green.
-        org.slf4j.LoggerFactory.getLogger(TenantDomainSubscriptionQueryUseCase.class)
-                .info("DIAG listActive tenantId=[{}] domainKey=[{}] -> {} rows {}",
-                        tenantId, domainKey, subscriptions.size(),
-                        subscriptions.stream().map(TenantDomainSubscription::getDomainKey).toList());
         return subscriptions.stream()
                 .filter(s -> domainKey == null || domainKey.isBlank()
                         || domainKey.equals(s.getDomainKey()))
