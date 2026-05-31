@@ -11,11 +11,12 @@ name: Federation Hardening E2E (Phase 8 cross-product, nightly)
 # (ADR-MONO-018 D1 explicit decision).
 #
 # 2 jobs:
-#   1. federation-hardening-boot-jars (timeout 25 min): builds 8 boot jars
-#      (GAP auth/account/admin + finance-account + wms-master + scm-procurement
-#      + erp-masterdata + console-bff). Uploads artifact.
+#   1. federation-hardening-boot-jars (timeout 25 min): builds 10 boot jars
+#      (GAP auth/account/admin + finance-account + wms-master + wms-admin
+#      + scm-procurement + scm-inventory-visibility + erp-masterdata
+#      + console-bff). Uploads artifact.
 #   2. federation-hardening-e2e-fullstack (timeout 50 min): downloads boot
-#      jars, builds console-web, starts phased docker-compose stack (12+ svcs
+#      jars, builds console-web, starts phased docker-compose stack (14+ svcs
 #      incl. victoriatraces), applies seed SQL, runs 8 Playwright specs
 #      (+ observability-trace-tree, TASK-MONO-144), uploads trace artifact.
 #

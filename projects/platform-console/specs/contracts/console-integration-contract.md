@@ -1095,7 +1095,7 @@ redefined here**:
 |---|---|---|---|---|---|
 | 1 | accounts summary | `GET /api/admin/accounts?page=0&size=1` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` | GAP [`admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot) |
 | 2 | wms inventory health | `GET /api/v1/admin/dashboard/inventory` (snapshot) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.1 Dashboard / Read-Model (already bound by § 2.4.5 / FE-007) | inventory snapshot health summary (stock total, alert count) |
-| 3 | scm procurement / inventory | `GET /api/scm/inventory/visibility` (snapshot) — the existing scm gateway public read (§ 2.4.6 / FE-008) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
+| 3 | scm procurement / inventory | `GET /api/inventory-visibility/snapshot` (snapshot) — inventory-visibility-service **direct** producer read (see scm-leg topology note below; § 2.4.6 / FE-008) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
 | 4 | finance balance health | `GET /api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → an `operatorDefaultAccountId` resolution mechanism is required (registry-side or operator-profile-side; spec-first decided **at MVP impl** — see § Implementation guidance); if absent → that card renders `forbidden` (not a crash) |
 | 5 | erp masterdata snapshot | `GET /api/erp/masterdata/departments?active=true&page=0&size=1` (page total snapshot, asOf=now implicit) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.8 verbatim) | erp [`masterdata-api.md`](../../../erp-platform/specs/contracts/http/masterdata-api.md) § Departments (already bound by § 2.4.8 / FE-010) | active department count (snapshot, asOf=now — E3 effective-dating implicit) |
 
@@ -1104,6 +1104,27 @@ spec-side and impl-side** (ADR-MONO-017 § 3.3 sixth confirmation). The
 console-bff composition use-case calls the existing GETs verbatim;
 no `/summary` / `/dashboard-card` aggregating endpoint is added to any
 producer (D3.B rejection).
+
+> **scm-leg topology (TASK-MONO-162 — ADR-MONO-020 D4 reconciliation).** Card 3
+> calls the inventory-visibility **producer service directly**
+> (`GET /api/inventory-visibility/snapshot`), consistent with every other
+> composition leg — wms-admin (`/api/v1/admin/dashboard/inventory`),
+> finance-account, and erp-masterdata are all **direct** producer reads; the
+> console-bff composition never routes through a domain gateway. The scm
+> `gateway-service` `/api/v1/inventory-visibility/**` public route (the § 2.4.6
+> producer-endpoint table above, authoritative in `gateway-public-routes.md`)
+> remains the **external** public-read surface for non-console consumers — it is
+> **not** on the console-bff composition path. The earlier card path
+> `/api/scm/inventory/visibility` matched neither the gateway route nor the
+> service and was a defect (corrected here). **Rationale**: the scm gateway
+> carries its own `required-tenant-id=scm` `TenantClaimValidator` that is **not**
+> entitlement-trust-aware (ADR-MONO-019 § D5), so an assume-tenant token
+> (`tenant_id=<customer>`, `entitled_domains ∋ scm`) would be rejected **at the
+> gateway**; routing the console leg direct-to-producer lets the producer's own
+> decode-time validator + `TenantClaimEnforcer` filter (both entitlement-trust
+> dual-accepting after MONO-162) enforce tenancy. Reinstating the gateway on the
+> console path is a documented follow-up gated on retrofitting the gateway
+> validator with the same dual-accept.
 
 ##### Response schema (`200 OK`)
 
