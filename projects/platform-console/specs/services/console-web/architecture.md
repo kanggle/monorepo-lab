@@ -202,7 +202,27 @@ GAP access token·operator token 모두 **절대 JavaScript 접근 불가** (Htt
 | GAP (§§ 2.4.1–2.4.4) | **exchanged operator token** (`getOperatorToken()`) | server-side RFC 8693 교환 (§ 2.6) | ADR-MONO-014; **#569 trust-boundary invariant** — GAP OIDC token 은 GAP `/api/admin/**` 에 **결코** 도달 안 함 |
 | **wms (§ 2.4.5, TASK-PC-FE-007)** | **GAP OIDC access token** (`getAccessToken()`, FE-001 GAP-session 쿠키) | `Authorization: Bearer <GAP OIDC access token>` **직접** | wms `admin-service-api.md` § Global Conventions + `gap-integration.md`: GAP RS256 JWT (ADR-001), JWKS 검증, **`tenant_id=wms` 는 JWT claim 에서 producer-side 강제**. wms 는 token-exchange **없음** — GAP OIDC token 을 **요구** |
 
-**#569 invariant 은 GAP-domain-scoped 이며 wms 로 일반화되지 않는다**: #569 는 GAP OIDC token 을 **GAP** `/api/admin/**` 에 금지한다 — GAP 가 거기서 § 2.6 exchanged token 을 요구하기 때문. wms 게이트웨이는 정반대로 GAP OIDC token 을 **요구**한다 — 둘은 충돌이 아니라 서로 다른 per-domain 바인딩이다. 구현자는 (a) GAP operator-token-exchange (§ 2.6) 를 wms 로 옮겨서도, (b) "admin path 의 GAP token" 을 보편적 #569 위반으로 취급해서도 안 된다. `features/wms-ops` 클라이언트는 `getAccessToken()` 을 쓰고 `getOperatorToken()` 은 **절대** 쓰지 않는다 (테스트가 FE-002..006 단언의 역으로 고정). finance/erp (Phase 5/6) 콘솔 섹션은 이 명시된 규칙을 상속한다 — 추측이 아니라 각 producer 인증 계약에 대해 자격을 명시 선언한다.
+**#569 invariant 은 GAP-domain-scoped 이며 wms 로 일반화되지 않는다**: #569 는 GAP OIDC token 을 **GAP** `/api/admin/**` 에 금지한다 — GAP 가 거기서 § 2.6 exchanged token 을 요구하기 때문. wms 게이트웨이는 정반대로 GAP OIDC token 을 **요구**한다 — 둘은 충돌이 아니라 서로 다른 per-domain 바인딩이다. 구현자는 (a) GAP operator-token-exchange (§ 2.6) 를 wms 로 옮겨서도, (b) "admin path 의 GAP token" 을 보편적 #569 위반으로 취급해서도 안 된다. `features/wms-ops` 클라이언트는 도메인-facing 토큰을 쓰고 `getOperatorToken()` 은 **절대** 쓰지 않는다 (테스트가 FE-002..006 단언의 역으로 고정). finance/erp (Phase 5/6) 콘솔 섹션은 이 명시된 규칙을 상속한다 — 추측이 아니라 각 producer 인증 계약에 대해 자격을 명시 선언한다.
+
+### Active-tenant 스위처 → assume-tenant 교환 (ADR-MONO-020 D4 / `console-integration-contract.md` § 2.7)
+
+콘솔은 **두 개의 server-side RFC 8693 교환**을 가진다 (혼동 금지):
+
+1. **operator-identity 교환** (ADR-MONO-014, § 2.6): admin **JSON** `POST /api/admin/auth/token-exchange` → `/api/admin/**` operator token. 변경 없음.
+2. **assume-tenant 교환** (ADR-MONO-020 D4, § 2.7, **신규**): SAS **form-urlencoded** `POST ${OIDC_ISSUER_URL}/oauth2/token`, `grant_type=...token-exchange` + `subject_token=<base GAP OIDC access token>` + `audience=<선택 tenant>`. → 선택된 customer 로 re-scope 된 단명 domain-facing GAP OIDC token (`tenant_id=<선택>` + `entitled_domains=<선택의 ACTIVE subs>`). **refresh_token 없음** — selection / GAP refresh 마다 재발급. producer 계약은 GAP [`auth-api.md § Assume-Tenant Exchange`](../../../../global-account-platform/specs/contracts/http/auth-api.md) (TASK-BE-327) 소유 — 소비만, 와이어 shape 재정의 금지.
+
+**assumed-token 세션 + domain-facing resolver**: `shared/lib/session.ts` 에 `ASSUMED_TOKEN_COOKIE`(`console_assumed_token`, HttpOnly·Secure·Lax) + `getAssumedToken()` + **`getDomainFacingToken()` = `getAssumedToken() ?? getAccessToken()`** (중심 resolver). 모든 tenant-scoped 도메인 read 의 GAP-OIDC bearer = `getDomainFacingToken()`:
+
+- cross-domain overview 프록시(§ 2.4.9.1) `Authorization: Bearer` (BFF 의 non-GAP fan-out leg 이 verbatim forward; GAP leg 은 `X-Operator-Token` 유지 — § 2.6 불변);
+- 4 non-GAP 도메인 클라이언트(`features/{wms,scm,finance,erp}-ops`, §§ 2.4.5–2.4.8) — per-domain credential 규칙 § 2.4.5 불변, **어느 GAP OIDC token** 인지만 변경.
+- **GAP 도메인 클라이언트**(`features/{accounts,audit,operators,dashboards}` → `getOperatorToken()`)는 **변경 없음** — operator-token 경계(§ 2.1/§ 2.6, #569)는 그대로. `getDomainFacingToken()` 은 결코 GAP `/api/admin/**` 자격이 아니다.
+- **net-zero**: 미전환 / single-tenant 운영자는 assumed token 이 없어 `getDomainFacingToken()` = base token → 기존 동작 byte-identical.
+
+**스위치 라우트(`POST /api/tenant`)**: 기존 registry-membership allow-check (defence-in-depth — 유지) 후 assume-tenant 교환 호출; 성공 시 `console_assumed_token`(maxAge=`expires_in`) + `console_active_tenant=<tenant>` 를 **atomically** 설정. assumed token 은 현재 active tenant 로 construction-scoped. **fail-closed**: `denied`(producer `400 invalid_grant` — D2 assignment 게이트/subject 무효/admin-service 장애) → 403, **쿠키 무변경**(이전 선택 보존); `invalid`(`400 invalid_request`) → 422; `unavailable`(5xx/timeout/network) → 503; base token 부재 → 401. base GAP token 은 `subject_token` 입력일 뿐 — **미로깅·미반환**; 선택-tenant 경계에서 base token 으로 **절대 fallback 안 함**. `tenant=''` clear → **두 쿠키 모두** 삭제(coupled).
+
+**refresh 재-assume**: assumed token 은 refresh token 이 없으므로 GAP refresh 시 operator-token 재교환 후 active tenant 가 있으면 rotated base token 으로 **재-assume**. 재-assume 실패 → assumed token + active tenant 모두 drop (base/no-tenant 로 fallback — stale assumed token 금지); base GAP+operator 세션은 유효. 전체 세션 drop(GAP refresh 거부 / operator 재교환 fail-closed) 시에도 assumed token + active tenant clear.
+
+**선택 가능 tenant**: 스위처의 선택 가능 집합 = ConsoleRegistry effective scope (TASK-BE-326 dual-read: assignment rows ∪ legacy home tenant) — multi-assignment 운영자는 할당된 모든 customer 가 노출 (BE-326 가 이미 wire — 콘솔 변경 불필요). D4 는 selection 시 credential re-scope 만.
 
 ## Performance Budget
 
@@ -261,7 +281,9 @@ GAP access token·operator token 모두 **절대 JavaScript 접근 불가** (Htt
 - [`console-integration-contract.md`](../../contracts/console-integration-contract.md) — 소비 통합 계약 (§ 2.1/§ 2.6 operator-token 교환)
 - [`ADR-MONO-013`](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md) — 콘솔 foundation (D1 Model B · D4 admin-web 폐기 · D5 계약 · D6 roadmap)
 - [`ADR-MONO-014`](../../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md) — operator-auth 교환 결정 (D2 re-exchange · D3 OIDC↔operator mapping · D4 spec-first)
-- GAP [`admin-api.md` §`POST /api/admin/auth/token-exchange`](../../../../global-account-platform/specs/contracts/http/admin-api.md) + [`admin-service/security.md`](../../../../global-account-platform/specs/services/admin-service/security.md) — 교환 producer 계약 (authoritative, 소비만)
+- GAP [`admin-api.md` §`POST /api/admin/auth/token-exchange`](../../../../global-account-platform/specs/contracts/http/admin-api.md) + [`admin-service/security.md`](../../../../global-account-platform/specs/services/admin-service/security.md) — operator-identity 교환 producer 계약 (authoritative, 소비만, § 2.6)
+- [`ADR-MONO-020`](../../../../../docs/adr/ADR-MONO-020-operator-multitenant-assignment.md) — operator multi-customer assignment (D1 assignment 테이블 / D2 assume-tenant 교환 / **D4 console active-tenant 스위처 → assume-tenant flow**). console-web 은 D4 의 consumer (§ Active-tenant 스위처 → assume-tenant 교환). 소비 의무 canonical = [`console-integration-contract.md` § 2.7](../../contracts/console-integration-contract.md)
+- GAP [`auth-api.md` § Assume-Tenant Exchange](../../../../global-account-platform/specs/contracts/http/auth-api.md) — assume-tenant RFC 8693 교환 producer 계약 (authoritative, 소비만, form-urlencoded `/oauth2/token` + `audience`; TASK-BE-327)
 - GAP [`admin-api.md`](../../../../global-account-platform/specs/contracts/http/admin-api.md) §§ accounts/sessions (`GET /api/admin/accounts`·`.../lock`·`bulk-lock`·`.../unlock`·`POST /api/admin/sessions/{accountId}/revoke`·`.../gdpr-delete`·`GET .../export`) — GAP accounts parity producer 계약 (authoritative, 소비만; `features/accounts` / TASK-PC-FE-002)
 - GAP [`admin-api.md` §`GET /api/admin/audit`](../../../../global-account-platform/specs/contracts/http/admin-api.md) — GAP audit+security read parity producer 계약 (authoritative, 소비만; `features/audit` / TASK-PC-FE-003)
 - GAP [`admin-api.md`](../../../../global-account-platform/specs/contracts/http/admin-api.md) §§ operators (`GET /api/admin/operators`·`POST /api/admin/operators`·`PATCH .../{operatorId}/roles`·`PATCH .../{operatorId}/status`·`PATCH .../me/password`) — GAP operators 관리 parity producer 계약 (authoritative, 소비만, **per-endpoint 헤더 매트릭스**; `features/operators` / TASK-PC-FE-004)

@@ -22,6 +22,19 @@ export const REFRESH_COOKIE = 'console_refresh_token';
 export const OPERATOR_COOKIE = 'console_operator_token';
 /** Active tenant for tenant-scoped server-side domain calls (multi-tenant). */
 export const TENANT_COOKIE = 'console_active_tenant';
+/** Domain-facing **assumed** GAP OIDC access token (ADR-MONO-020 D4 / § 2.7).
+ *  Minted server-side by the assume-tenant RFC 8693 exchange
+ *  (`assume-tenant-exchange.ts`) when the operator switches to a customer
+ *  tenant: it carries `tenant_id=<selected>` + `entitled_domains=<selected's
+ *  ACTIVE subs>` (re-scoped signed claims — NOT just X-Tenant-Id). It is the
+ *  **domain-facing bearer** for the non-GAP domain reads + the cross-domain
+ *  overview proxy (see {@link getDomainFacingToken}). Scoped to the CURRENT
+ *  {@link TENANT_COOKIE} BY CONSTRUCTION — the `/api/tenant` switch sets BOTH
+ *  atomically and clearing the tenant clears this cookie. The grant issues no
+ *  refresh token (D2); it is re-assumed on every GAP refresh. Never an
+ *  `/api/admin/**` credential (the GAP operator-token boundary § 2.6 is
+ *  unchanged). */
+export const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
 /** Short-lived PKCE/state cookies used only between /login and /callback. */
 export const PKCE_VERIFIER_COOKIE = 'console_pkce_verifier';
 export const OAUTH_STATE_COOKIE = 'console_oauth_state';
@@ -90,6 +103,44 @@ export async function getOperatorToken(): Promise<string | null> {
 export async function getActiveTenant(): Promise<string | null> {
   const jar = await cookies();
   return jar.get(TENANT_COOKIE)?.value ?? null;
+}
+
+/**
+ * Server-side read of the **assumed** (tenant-scoped) domain-facing token, or
+ * null when no active-tenant assumption exists (ADR-MONO-020 D4 / § 2.7).
+ *
+ * Present ⇔ the operator has switched to a customer tenant via `/api/tenant`
+ * (the switch mints it via the assume-tenant exchange and sets it atomically
+ * with {@link TENANT_COOKIE}). Absent for a non-switched / single-tenant
+ * operator (net-zero — see {@link getDomainFacingToken}). Scoped to the
+ * current active tenant BY CONSTRUCTION (never served for a tenant ≠ the
+ * active-tenant cookie — both are set/cleared together).
+ */
+export async function getAssumedToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(ASSUMED_TOKEN_COOKIE)?.value ?? null;
+}
+
+/**
+ * The **domain-facing** GAP-OIDC bearer for every tenant-scoped domain read
+ * (the cross-domain overview proxy + the 4 non-GAP domain section clients
+ * wms/scm/finance/erp). ADR-MONO-020 D4 / § 2.7 — the central resolver:
+ *
+ *   - the **assumed** token if an active-tenant assumption exists (the
+ *     operator switched to a customer → the signed `tenant_id` +
+ *     `entitled_domains` are re-scoped to that customer, so the domain
+ *     entitlement gates follow the selection);
+ *   - else the base {@link getAccessToken} (a non-switched / single-tenant
+ *     operator keeps using the login token EXACTLY as before — **net-zero**;
+ *     the existing per-domain credential rule § 2.4.5 is unchanged, only WHICH
+ *     GAP OIDC token).
+ *
+ * This is NOT a GAP `/api/admin/**` credential (that boundary uses
+ * {@link getOperatorToken}, § 2.6, unchanged). The GAP-domain clients
+ * (accounts/audit/operators/dashboards) MUST NOT use this resolver.
+ */
+export async function getDomainFacingToken(): Promise<string | null> {
+  return (await getAssumedToken()) ?? (await getAccessToken());
 }
 
 /**

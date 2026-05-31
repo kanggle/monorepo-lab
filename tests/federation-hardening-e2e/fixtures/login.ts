@@ -56,6 +56,14 @@ const DEFAULTS = {
   acmeOperatorEmail: 'acme-operator@example.com',
   acmeOperatorPassword: 'devpassword123!',
   acmeTenant: 'acme-corp',
+  // TASK-MONO-158 — multi-assignment operator (ADR-MONO-020 D4). Assigned to
+  // BOTH acme-corp ([finance,wms]) AND globex-corp ([scm,erp]) via two D1
+  // operator_tenant_assignment rows (seed.sql sections 9–13). Home tenant =
+  // acme-corp. The active-tenant cookie is NOT pre-set — the tenant-switch
+  // spec drives the switcher (real /api/tenant POST → assume-tenant exchange),
+  // so the assumed (re-scoped) token is what gates the domain cards.
+  multiOperatorEmail: 'multi-operator@example.com',
+  multiOperatorPassword: 'devpassword123!',
 };
 
 /**
@@ -69,7 +77,7 @@ async function driveOidcPkceLogin(
   context: BrowserContext,
   email: string,
   password: string,
-  activeTenant: string = DEFAULTS.defaultTenant,
+  activeTenant: string | null = DEFAULTS.defaultTenant,
   manageTracing: boolean = true,
 ): Promise<void> {
   // Manual tracing is for the global-setup context (no Playwright-managed
@@ -115,17 +123,26 @@ async function driveOidcPkceLogin(
     // acme-corp operator the cookie is 'acme-corp' (the real-customer slug) so
     // the BFF fan-out carries the acme-corp tenant context to every producer —
     // the entitlement gate then accepts finance/wms and rejects scm/erp.
-    await context.addCookies([
-      {
-        name: 'console_active_tenant',
-        value: activeTenant,
-        domain: new URL(DEFAULTS.consoleOrigin).hostname,
-        path: '/',
-        httpOnly: true,
-        secure: false,
-        sameSite: 'Strict',
-      },
-    ]);
+    //
+    // TASK-MONO-158 — when activeTenant is null (the multi-assignment
+    // operator) the cookie is NOT pre-set: the tenant-switch spec drives the
+    // real /api/tenant POST so the assume-tenant exchange mints the re-scoped
+    // (assumed) token, which is what actually gates the domain cards. A
+    // pre-set cookie without the assumed token would only set X-Tenant-Id —
+    // which does nothing to the SIGNED-claim domain gates (the exact D4 point).
+    if (activeTenant !== null) {
+      await context.addCookies([
+        {
+          name: 'console_active_tenant',
+          value: activeTenant,
+          domain: new URL(DEFAULTS.consoleOrigin).hostname,
+          path: '/',
+          httpOnly: true,
+          secure: false,
+          sameSite: 'Strict',
+        },
+      ]);
+    }
   } finally {
     if (tracingEnabled) {
       try {
@@ -188,4 +205,30 @@ export async function loginAsAcmeOperator(
  */
 export async function loginAsAcmeOperatorPage(page: Page): Promise<void> {
   await loginAsAcmeOperator(page.context());
+}
+
+/**
+ * TASK-MONO-158 — authenticates a context as the seeded multi-assignment
+ * operator (assigned to BOTH acme-corp and globex-corp) via the SAME
+ * production-identical OIDC PKCE flow (no programmatic token mint).
+ *
+ * The active-tenant cookie is NOT pre-set (activeTenant=null): the
+ * tenant-switch-rescope spec drives the switcher via the real /api/tenant
+ * POST, which triggers the server-side assume-tenant exchange (ADR-MONO-020
+ * D4) to mint the re-scoped (assumed) token. Switching acme-corp ↔ globex-corp
+ * flips the SIGNED `entitled_domains`, so the domain entitlement gates follow
+ * (finance/wms entitled for acme-corp; scm/erp entitled for globex-corp).
+ */
+export async function loginAsMultiOperator(
+  context: BrowserContext,
+): Promise<void> {
+  await driveOidcPkceLogin(
+    context,
+    DEFAULTS.multiOperatorEmail,
+    DEFAULTS.multiOperatorPassword,
+    // NO pre-set active tenant — the spec drives the switch.
+    null,
+    // In-test caller — the test context already has Playwright-managed tracing.
+    false,
+  );
 }

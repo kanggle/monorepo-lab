@@ -241,10 +241,12 @@ describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(String(url)).toContain('http://erp.local/api/erp/masterdata/departments');
   });
 
-  it('uses getAccessToken() and NEVER getOperatorToken() for erp (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for erp (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
-    const getAccessSpy = vi.spyOn(sessionModule, 'getAccessToken');
+    // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
+    // else base) — STILL never the operator token.
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
     const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
     vi.stubGlobal(
       'fetch',
@@ -253,7 +255,7 @@ describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the IN
 
     await listEmployees({});
 
-    expect(getAccessSpy).toHaveBeenCalled();
+    expect(getDomainFacingSpy).toHaveBeenCalled();
     // The operator-token path is ABSENT for erp — same shape as the
     // FE-007/FE-008/FE-009 assertions; a future blanket-apply
     // refactor would break this.

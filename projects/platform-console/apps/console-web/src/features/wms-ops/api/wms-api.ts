@@ -1,5 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getAccessToken } from '@/shared/lib/session';
+import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
 import {
@@ -167,7 +167,12 @@ async function callWmsAdmin<T>(
   //    GAP-domain (§ 2.6 exchanged) credential; wms would reject it
   //    (wrong issuer/type) and it would misapply the GAP auth model. The
   //    #569 invariant is GAP-domain-scoped and does NOT apply here.
-  const token = await getAccessToken();
+  //    ── ADR-MONO-020 D4 / § 2.7: the credential is the DOMAIN-FACING GAP
+  //    OIDC token — the ASSUMED (tenant-scoped) token when the operator has
+  //    switched to a customer, else the base access token (net-zero). Still
+  //    NOT the operator token. The signed `tenant_id`/`entitled_domains`
+  //    follow the active-tenant selection (the A↔B re-scope).
+  const token = await getDomainFacingToken();
   if (!token) {
     logger.warn('wms_no_gap_session', { requestId, path: opts.path });
     // No GAP OIDC session ⇒ whole-session re-login (not a per-section

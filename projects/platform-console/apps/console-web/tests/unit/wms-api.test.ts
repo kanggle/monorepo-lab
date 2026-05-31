@@ -168,16 +168,20 @@ describe('wms-api — per-domain credential selection (the INVERSE of #569; § 2
     );
   });
 
-  it('uses getAccessToken() and NEVER getOperatorToken() for wms (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for wms (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
-    const getAccessSpy = vi.spyOn(sessionModule, 'getAccessToken');
+    // ADR-MONO-020 D4 / § 2.7: the credential is now the DOMAIN-FACING token
+    // (assumed-when-switched, else the base GAP token). With no assumed token
+    // it resolves to the base token — net-zero. It is STILL never the
+    // operator token (the per-domain rule / #569 boundary holds).
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
     const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(INV_PAGE)));
 
     await listInventory();
 
-    expect(getAccessSpy).toHaveBeenCalled();
+    expect(getDomainFacingSpy).toHaveBeenCalled();
     // The operator-token path is ABSENT for wms — the inverse of the
     // FE-002..006 assertion; a future blanket-apply refactor would break
     // this.

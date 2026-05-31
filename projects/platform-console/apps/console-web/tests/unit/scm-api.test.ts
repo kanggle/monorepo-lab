@@ -223,10 +223,12 @@ describe('scm-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(String(url)).toContain('http://scm.local/api/v1/procurement/po');
   });
 
-  it('uses getAccessToken() and NEVER getOperatorToken() for scm (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for scm (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
-    const getAccessSpy = vi.spyOn(sessionModule, 'getAccessToken');
+    // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
+    // else base) — STILL never the operator token.
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
     const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
     vi.stubGlobal(
       'fetch',
@@ -235,7 +237,7 @@ describe('scm-api — per-domain credential selection (REUSE of § 2.4.5; the IN
 
     await listPurchaseOrders();
 
-    expect(getAccessSpy).toHaveBeenCalled();
+    expect(getDomainFacingSpy).toHaveBeenCalled();
     // The operator-token path is ABSENT for scm — same shape as the FE-007
     // wms assertion; a future blanket-apply refactor would break this.
     expect(getOperatorSpy).not.toHaveBeenCalled();

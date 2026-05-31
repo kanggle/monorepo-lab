@@ -58,6 +58,48 @@ export class OperatorExchangeError extends Error {
 }
 
 /**
+ * Assume-tenant exchange (RFC 8693, ADR-MONO-020 D2/D4) failure taxonomy
+ * (console-integration-contract § 2.7 fail-closed switch mapping). The
+ * assume-tenant exchange (`assume-tenant-exchange.ts`) re-scopes the
+ * operator's domain-facing credential to the **selected** customer tenant —
+ * the active-tenant switcher's server-side driver. The producer is the SAS
+ * `POST ${OIDC_ISSUER_URL}/oauth2/token` token-exchange grant (auth-api.md
+ * § Assume-Tenant Exchange — BE-327), DISTINCT from the § 2.6 admin JSON
+ * exchange (form-urlencoded `audience` vs admin JSON shape).
+ *
+ *   - `denied` — producer `400 invalid_grant`: the operator is NOT assigned
+ *     to the selected tenant (the D2 fail-CLOSED assignment gate), OR the
+ *     subject token is invalid/expired, OR admin-service was unavailable at
+ *     the gate (the producer itself fails closed on its admin-service leg).
+ *     The switch is REJECTED → `/api/tenant` 403; the prior selection +
+ *     assumed token are preserved (no cookie change). NEVER fall back to the
+ *     base token on the selected-tenant boundary.
+ *   - `invalid` — producer `400 invalid_request`: `audience` missing/malformed
+ *     or `subject_token`/`subject_token_type` missing. A client-side request
+ *     defect → `/api/tenant` 422.
+ *   - `unavailable` — `5xx` / timeout / network / unexpected response shape
+ *     (`token_type` ≠ `Bearer`, absent `access_token`): the exchange could not
+ *     complete → `/api/tenant` 503. No partial/stale assumed-token state.
+ *
+ * No `subject_token` / assumed token value is ever placed in this error or
+ * logged (security invariant — mirrors {@link OperatorExchangeError}).
+ */
+export class AssumeTenantError extends Error {
+  readonly reason: 'denied' | 'invalid' | 'unavailable';
+  readonly code: string;
+  constructor(
+    reason: AssumeTenantError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AssumeTenantError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * GAP accounts surface degrade signal (console-integration-contract § 2.4.1 /
  * § 2.5). Mirrors {@link RegistryUnavailableError}: a `503 DOWNSTREAM_ERROR` /
  * `503 CIRCUIT_OPEN` / timeout on a GAP accounts call must degrade ONLY the

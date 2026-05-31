@@ -1,5 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getAccessToken } from '@/shared/lib/session';
+import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
 import {
@@ -209,7 +209,10 @@ async function callErp<T>(
   //    that is the GAP-domain (§ 2.6 exchanged) credential; erp
   //    would reject it (wrong issuer/type). The #569 invariant is
   //    GAP-domain-scoped.
-  const token = await getAccessToken();
+  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING GAP OIDC token — the
+  //    ASSUMED (tenant-scoped) token when the operator has switched, else
+  //    the base access token (net-zero). Still NOT the operator token.
+  const token = await getDomainFacingToken();
   if (!token) {
     logger.warn('erp_no_gap_session', {
       requestId,

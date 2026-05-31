@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   getAccessToken,
+  getDomainFacingToken,
   getOperatorToken,
   getActiveTenant,
 } from '@/shared/lib/session';
@@ -93,6 +94,21 @@ export async function GET() {
     );
   }
 
+  // ── Domain-facing inbound principal (ADR-MONO-020 D4 / § 2.7) ────────────
+  // The BFF forwards `Authorization: Bearer <token>` verbatim to the non-GAP
+  // legs (ADR-017 D6 pass-through, 0-byte). We put the **domain-facing** token
+  // here: the ASSUMED (tenant-scoped) token when the operator has switched to
+  // a customer (so the non-GAP domain entitlement gates follow the selection),
+  // else the base token (net-zero). The GAP leg keeps using `X-Operator-Token`
+  // (§ 2.6 operator-token boundary — unchanged).
+  const domainFacingToken = await getDomainFacingToken();
+  if (!domainFacingToken) {
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+      { status: 401 },
+    );
+  }
+
   // Option (a) activation (TASK-PC-FE-014): forward the optional
   // operator finance default account id when present. The helper itself
   // returns null on absent / whitespace / registry-degraded — we set the
@@ -102,7 +118,7 @@ export async function GET() {
   const financeDefaultAccountId = await getFinanceDefaultAccountId();
   const outboundHeaders: Record<string, string> = {
     Accept: 'application/json',
-    Authorization: `Bearer ${accessToken}`,
+    Authorization: `Bearer ${domainFacingToken}`,
     'X-Operator-Token': operatorToken,
     'X-Tenant-Id': tenant,
     'X-Request-Id': requestId,

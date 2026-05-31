@@ -6,6 +6,7 @@ import {
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
   TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
 } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -53,6 +54,7 @@ export async function POST() {
   jar.delete(REFRESH_COOKIE);
   jar.delete(OPERATOR_COOKIE);
   jar.delete(TENANT_COOKIE);
+  jar.delete(ASSUMED_TOKEN_COOKIE);
   logger.info('logout_complete', { requestId });
   return new NextResponse(null, { status: 204 });
 }

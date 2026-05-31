@@ -229,3 +229,124 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
  WHERE o.operator_id = 'acme-corp-operator';
+
+-- ===========================================================================
+-- TASK-MONO-158 — ADR-MONO-020 § 3.3 step 3 (D4) active-tenant switcher →
+-- assume-tenant flow. Multi-assignment demo operator + 2nd customer tenant.
+--
+-- This block is ADD-ONLY — the SUPER_ADMIN + acme-corp rows above are NOT
+-- modified. Purpose: prove the A↔B switch re-scopes the SIGNED domain-facing
+-- token (tenant_id + entitled_domains) so the federated domain entitlement
+-- gates follow the selection. A multi-assignment operator is assigned to BOTH
+-- acme-corp ([finance,wms]) AND globex-corp ([scm,erp], COMPLEMENTARY) via two
+-- D1 `operator_tenant_assignment` rows (BE-326). On switcher selection the
+-- console drives the D2 assume-tenant exchange (BE-327) → a token scoped to the
+-- selected customer; switching A↔B flips finance/wms ↔ scm/erp entitlement.
+--
+-- The ConsoleRegistry effective-scope (BE-326 dual-read = assignment rows ∪
+-- legacy home tenant) surfaces BOTH customers in this operator's switcher with
+-- NO console change.
+--
+-- Re-runnable: INSERT IGNORE / ON DUPLICATE KEY UPDATE (same discipline).
+-- ===========================================================================
+
+-- 9. account_db — globex-corp customer tenant + COMPLEMENTARY subscriptions.
+--    acme-corp (GAP Flyway V0020) = [finance,wms]; globex-corp = [scm,erp] so
+--    the A↔B switch flips the entitled set unambiguously. account-service
+--    Flyway (V0009 tenants + V0019 tenant_domain_subscription) has run by this
+--    phase (post-GAP-Flyway). globex-corp is e2e-fixture-scoped (NOT a new
+--    production migration — the A↔B proof needs it only in the e2e stack).
+USE `account_db`;
+
+INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
+VALUES ('globex-corp', 'Globex Corporation', 'B2B_ENTERPRISE', 'ACTIVE', NOW(6), NOW(6));
+
+INSERT IGNORE INTO tenant_domain_subscription (tenant_id, domain_key, status, created_at, updated_at)
+VALUES ('globex-corp', 'scm', 'ACTIVE', NOW(6), NOW(6)),
+       ('globex-corp', 'erp', 'ACTIVE', NOW(6), NOW(6));
+
+-- 10. auth_db — multi-assignment operator credential row.
+--     Same Argon2id hash as the others (password 'devpassword123!').
+--     Home tenant = 'acme-corp' (one of its assigned customers — the home
+--     tenant is the login tenant_id; the D1 assignments grant the ADDITIONAL
+--     scope. globex-corp is reachable purely via the assignment row + the
+--     assume-tenant exchange, NOT the home tenant).
+USE `auth_db`;
+
+INSERT IGNORE INTO credentials (
+    tenant_id,
+    account_id,
+    email,
+    credential_hash,
+    hash_algorithm,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'acme-corp',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300',
+    'multi-operator@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id',
+    NOW(6),
+    NOW(6),
+    0
+);
+
+-- 11. admin_db — multi-assignment operator row (home tenant = acme-corp).
+USE `admin_db`;
+
+INSERT INTO admin_operators (
+    operator_id,
+    tenant_id,
+    email,
+    password_hash,
+    display_name,
+    status,
+    oidc_subject,
+    finance_default_account_id,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'multi-operator',
+    'acme-corp',
+    'multi-operator@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'Multi Operator',
+    'ACTIVE',
+    'multi-operator@example.com',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
+    NOW(6),
+    NOW(6),
+    0
+)
+ON DUPLICATE KEY UPDATE
+    tenant_id    = VALUES(tenant_id),
+    oidc_subject = VALUES(oidc_subject),
+    finance_default_account_id = VALUES(finance_default_account_id),
+    status       = 'ACTIVE',
+    updated_at   = NOW(6);
+
+-- 12. Two D1 operator_tenant_assignment rows (BE-326): the operator is assigned
+--     to BOTH acme-corp AND globex-corp. permission_set_id NULL = inherit the
+--     operator-level role grants. With these rows present, the BE-326 dual-read
+--     effective scope = {acme-corp, globex-corp} ∪ {home=acme-corp} =
+--     {acme-corp, globex-corp} — both surface in the switcher.
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'acme-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id = 'multi-operator';
+
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'globex-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id = 'multi-operator';
+
+-- 13. Bind multi-operator to SUPER_ADMIN role (console-shell reachability only;
+--     the tenant ENTITLEMENT re-scope — NOT RBAC — is the discriminator).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
+ WHERE o.operator_id = 'multi-operator';
