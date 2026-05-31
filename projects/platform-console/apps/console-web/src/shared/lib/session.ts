@@ -35,6 +35,12 @@ export const TENANT_COOKIE = 'console_active_tenant';
  *  `/api/admin/**` credential (the GAP operator-token boundary § 2.6 is
  *  unchanged). */
 export const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
+/** GAP OIDC `id_token` from the login/refresh token response. Stored ONLY to
+ *  serve as the `id_token_hint` for RP-initiated logout (OIDC end_session /
+ *  `/connect/logout` — TASK-PC-FE-033). NEVER a credential: it is not sent to
+ *  any `/api/**` boundary, only as the logout hint that lets the IdP terminate
+ *  its own session (so the next login re-presents the GAP credential form). */
+export const ID_TOKEN_COOKIE = 'console_id_token';
 /** Short-lived PKCE/state cookies used only between /login and /callback. */
 export const PKCE_VERIFIER_COOKIE = 'console_pkce_verifier';
 export const OAUTH_STATE_COOKIE = 'console_oauth_state';
@@ -97,6 +103,16 @@ export async function getAccessToken(): Promise<string | null> {
 export async function getOperatorToken(): Promise<string | null> {
   const jar = await cookies();
   return jar.get(OPERATOR_COOKIE)?.value ?? null;
+}
+
+/**
+ * Server-side read of the GAP OIDC `id_token` (or null). Used ONLY as the
+ * `id_token_hint` for RP-initiated logout (`/connect/logout` — TASK-PC-FE-033).
+ * Never a credential — see {@link ID_TOKEN_COOKIE}.
+ */
+export async function getIdToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(ID_TOKEN_COOKIE)?.value ?? null;
 }
 
 /** Server-side read of the active tenant (or null when none selected). */

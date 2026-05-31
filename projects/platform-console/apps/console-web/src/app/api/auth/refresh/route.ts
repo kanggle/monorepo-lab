@@ -8,6 +8,7 @@ import {
   OPERATOR_COOKIE,
   TENANT_COOKIE,
   ASSUMED_TOKEN_COOKIE,
+  ID_TOKEN_COOKIE,
   tokenCookieOpts,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
@@ -44,6 +45,9 @@ const RefreshResponseSchema = z.object({
   token_type: z.string(),
   expires_in: z.number().int().positive(),
   refresh_token: z.string().min(1).optional(),
+  // Rotated id_token (openid scope) — kept fresh for the logout id_token_hint
+  // (TASK-PC-FE-033). Optional: not every refresh response re-issues it.
+  id_token: z.string().min(1).optional(),
 });
 
 export async function POST() {
@@ -80,6 +84,7 @@ export async function POST() {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
+      jar.delete(ID_TOKEN_COOKIE);
       // Whole session dropped → also clear the coupled tenant + assumed token.
       jar.delete(ASSUMED_TOKEN_COOKIE);
       jar.delete(TENANT_COOKIE);
@@ -101,6 +106,13 @@ export async function POST() {
         maxAge: 2_592_000,
       });
     }
+    // Keep the logout id_token_hint fresh (TASK-PC-FE-033).
+    if (data.id_token) {
+      jar.set(ID_TOKEN_COOKIE, data.id_token, {
+        ...tokenCookieOpts,
+        maxAge: data.expires_in,
+      });
+    }
 
     // --- Re-exchange the operator token (§ 2.6 / ADR-MONO-014 D2) ---------
     // No operator-refresh state: the rotated GAP access token is re-exchanged
@@ -117,6 +129,7 @@ export async function POST() {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
+      jar.delete(ID_TOKEN_COOKIE);
       // Whole session dropped → also clear the coupled tenant + assumed token.
       jar.delete(ASSUMED_TOKEN_COOKIE);
       jar.delete(TENANT_COOKIE);

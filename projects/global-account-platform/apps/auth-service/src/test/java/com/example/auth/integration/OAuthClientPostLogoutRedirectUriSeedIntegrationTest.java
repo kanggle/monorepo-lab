@@ -213,7 +213,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("regression: clean clients (demo-spa/wms/scm/platform-console-web) still resolve unchanged")
+    @DisplayName("regression: clean clients (demo-spa/wms/scm) still resolve unchanged; platform-console-web resolves (V0021 PLR asserted separately)")
     void cleanClients_stillResolveUnchanged() {
         // V0008 public client — no array-valued custom setting.
         RegisteredClient demoSpa =
@@ -247,7 +247,9 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
         assertThat(scm.getClientSettings().<String>getSetting("custom.tenant_id"))
                 .isEqualTo("scm");
 
-        // V0015 platform-console-web public client (BE-296).
+        // V0015 platform-console-web public client (BE-296). V0021
+        // (TASK-PC-FE-033) added post-logout-redirect-uris for RP-initiated
+        // logout — asserted in detail by platformConsoleClient_hasV0021PostLogoutRedirectUris().
         RegisteredClient console =
                 registeredClientRepository.findByClientId("platform-console-web");
         assertThat(console).as("platform-console-web must still resolve").isNotNull();
@@ -255,8 +257,32 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                 .containsExactly(ClientAuthenticationMethod.NONE);
         assertThat(console.getClientSettings().<String>getSetting("custom.tenant_id"))
                 .isEqualTo("gap");
-        assertThat(console.getClientSettings().<Object>getSetting(PLR_KEY))
-                .as("clean V0015 client carries no post-logout-redirect-uris")
-                .isNull();
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. TASK-PC-FE-033 — platform-console-web RP-initiated-logout registration
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("V0021: platform-console-web resolves; post-logout-redirect-uris == [console.local/login, localhost:3000/login]")
+    void platformConsoleClient_hasV0021PostLogoutRedirectUris() {
+        dumpRawClientSettings("platform-console-web");
+        RegisteredClient console =
+                registeredClientRepository.findByClientId("platform-console-web");
+
+        assertThat(console).as("platform-console-web must deserialize").isNotNull();
+
+        List<String> postLogout = console.getClientSettings().getSetting(PLR_KEY);
+        assertThat(postLogout)
+                .as("V0021 post-logout-redirect-uris must round-trip to the exact seeded List<String> "
+                        + "(typed-array form) so the console RP-initiated logout post_logout_redirect_uri matches")
+                .containsExactly(
+                        "http://console.local/login",
+                        "http://localhost:3000/login");
+
+        // Core V0015 fields intact alongside the V0021 addition.
+        assertThat(console.getClientSettings().isRequireProofKey()).isTrue();
+        assertThat(console.getScopes())
+                .contains("openid", "profile", "email", "tenant.read");
     }
 }

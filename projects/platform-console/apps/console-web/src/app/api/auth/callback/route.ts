@@ -6,6 +6,7 @@ import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
+  ID_TOKEN_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   tokenCookieOpts,
@@ -137,6 +138,14 @@ export async function GET(req: Request) {
         maxAge: 2_592_000,
       });
     }
+    // id_token: stored ONLY as the RP-initiated-logout `id_token_hint`
+    // (TASK-PC-FE-033 — never a credential). Optional in the OIDC response.
+    if (data.id_token) {
+      jar.set(ID_TOKEN_COOKIE, data.id_token, {
+        ...tokenCookieOpts,
+        maxAge: data.expires_in,
+      });
+    }
 
     // --- Server-side operator-token exchange (§ 2.6 / ADR-MONO-014) -------
     // The GAP access token is NOT an /api/admin/** credential — exchange it
@@ -152,6 +161,7 @@ export async function GET(req: Request) {
       jar.delete(ACCESS_COOKIE);
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
+      jar.delete(ID_TOKEN_COOKIE);
       if (
         err instanceof OperatorExchangeError &&
         err.reason === 'fail_closed'
