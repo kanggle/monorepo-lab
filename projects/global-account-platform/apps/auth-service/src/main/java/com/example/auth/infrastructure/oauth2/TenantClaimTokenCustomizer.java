@@ -90,6 +90,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             customizeForClientCredentials(context);
         } else if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(grantType)) {
             customizeForAuthorizationCode(context);
+        } else if (AuthorizationGrantType.TOKEN_EXCHANGE.equals(grantType)) {
+            // TASK-BE-327 (ADR-MONO-020 D2+D3): assume-tenant exchange. The
+            // selected tenant + tenant_type are carried on the token context by
+            // AssumeTenantAuthenticationProvider; inject them + the SELECTED
+            // tenant's entitled_domains (D3, least-privilege, fail-soft).
+            customizeForAssumeTenant(context);
         } else if (AuthorizationGrantType.REFRESH_TOKEN.equals(grantType)) {
             // TASK-BE-274 cycle 3: SasRefreshTokenAuthenticationProvider generates a
             // brand-new JWT for the rotated access token using a fresh TokenContext whose
@@ -201,6 +207,51 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                                 "clientId=" + clientId);
             }
         }
+    }
+
+    /**
+     * TASK-BE-327 (ADR-MONO-020 § 3.3 step 2, D2+D3): assume-tenant exchange
+     * branch. The SELECTED tenant + its {@code tenant_type} are carried on the
+     * {@link AssumeTenantAuthenticationToken} (the context's authorizationGrant),
+     * which {@code JwtGenerator} copies verbatim into the encoding context.
+     * Injects {@code tenant_id=<selected>} + {@code tenant_type} and reuses the
+     * keystone {@link #populateEntitledDomains} <b>verbatim</b> keyed on the
+     * SELECTED tenant — least-privilege (NO union across the operator's other
+     * assignments, D3) + fail-soft (account down → claim omitted) +
+     * recursion-safe (this branch never runs on {@code client_credentials}).
+     *
+     * <p>Fail-closed on a missing selected tenant: the provider always sets the
+     * context attributes, so a blank value here is a wiring bug — reject rather
+     * than mint a tenant-less token (auth-service fails closed on missing tenant).
+     */
+    private void customizeForAssumeTenant(JwtEncodingContext context) {
+        // The selected tenant is carried on the authorizationGrant (the
+        // AssumeTenantAuthenticationToken), which JwtGenerator copies verbatim into
+        // the JwtEncodingContext (unlike arbitrary context.put() attributes, which
+        // it does NOT copy).
+        String selectedTenantId = null;
+        String selectedTenantType = null;
+        if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
+            selectedTenantId = grant.getSelectedTenantId();
+            selectedTenantType = grant.getSelectedTenantType();
+        }
+
+        if (selectedTenantId == null || selectedTenantId.isBlank()
+                || selectedTenantType == null || selectedTenantType.isBlank()) {
+            log.error("SECURITY: assume-tenant token issued without selected tenant context. "
+                    + "tenant_id={}, tenant_type={}", selectedTenantId, selectedTenantType);
+            throw new IllegalStateException(
+                    "selected tenant_id/tenant_type is required for assume-tenant issuance (fail-closed)");
+        }
+
+        context.getClaims()
+                .claim("tenant_id", selectedTenantId)
+                .claim("tenant_type", selectedTenantType);
+        log.debug("TenantClaimTokenCustomizer: assume-tenant — injected tenant_id={}, tenant_type={}",
+                selectedTenantId, selectedTenantType);
+
+        // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
+        populateEntitledDomains(context, selectedTenantId);
     }
 
     /**

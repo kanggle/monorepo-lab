@@ -51,7 +51,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       (JPA-backed, loaded from the Flyway-seeded row).</li>
  *   <li>It is a public client: {@code client_authentication_methods=[none]},
  *       no client secret, PKCE required.</li>
- *   <li>Grants are exactly {@code authorization_code} + {@code refresh_token};
+ *   <li>Grants are {@code authorization_code} + {@code refresh_token}
+ *       (+ {@code token-exchange} from V0020, TASK-BE-327 / ADR-MONO-020 D2);
  *       redirect uri + scopes per the contract.</li>
  *   <li>Full Authorization Code + PKCE flow issues tokens.</li>
  *   <li>{@code refresh_token} rotation behaves like the existing public-client
@@ -249,11 +250,17 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
                 .as("PKCE must be required (require-proof-key=true)")
                 .isTrue();
 
-        // Grants: authorization_code + refresh_token only.
+        // Grants: authorization_code + refresh_token + token-exchange.
+        // TASK-BE-327 (ADR-MONO-020 D2): V0020 appends the RFC 8693
+        // token-exchange grant so the client advertises the assume-tenant
+        // exchange alongside the original two grants (the authorization_code +
+        // refresh_token flows themselves are byte-unchanged — proven by the
+        // AuthCode+PKCE / refresh-rotation cases below).
         assertThat(client.getAuthorizationGrantTypes())
                 .containsExactlyInAnyOrder(
                         AuthorizationGrantType.AUTHORIZATION_CODE,
-                        AuthorizationGrantType.REFRESH_TOKEN);
+                        AuthorizationGrantType.REFRESH_TOKEN,
+                        AuthorizationGrantType.TOKEN_EXCHANGE);
 
         // Redirect uri per console-registry-api.md / multi-tenancy.md.
         assertThat(client.getRedirectUris()).contains(CONSOLE_REDIRECT_URI);

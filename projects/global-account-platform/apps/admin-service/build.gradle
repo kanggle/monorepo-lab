@@ -19,6 +19,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    // TASK-BE-327: GAP client_credentials JWT resource-server for the /internal/** chain
+    // (assume-tenant assignment-check edge). Mirrors account-service.
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
 
     // Kafka

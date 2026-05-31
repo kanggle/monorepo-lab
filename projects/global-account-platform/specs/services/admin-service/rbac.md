@@ -234,6 +234,31 @@ function evaluateAuditRead(operator, permissionSet, request):
 
 ---
 
+## Assume-Tenant Assignment Check — `/internal/operator-assignments/check` (TASK-BE-327 / ADR-MONO-020 D2)
+
+auth-service 의 assume-tenant 발급기가 issuance-time **one-shot** 으로 호출하는
+read-only 인가 표면. 운영자(GAP OIDC subject)의 **effective tenant scope**(BE-326
+D1 dual-read: `operator_tenant_assignment` rows ∪ {legacy `admin_operators.tenant_id`})
+가 선택된 customer tenant 를 포함하는지 boolean 으로 응답한다.
+
+- **판정**: `findByOidcSubject` fail-closed (row 없음/비-ACTIVE → `assigned=false`);
+  `'*'` platform-scope (`isPlatformScope()`) → 비-blank tenant 모두 `true`
+  (sentinel 이 모든 tenant 부여 — 단 assumed 토큰은 선택된 구체 tenant_id 를
+  운반, `'*'` 토큰은 도메인-facing 토큰에 절대 발급되지 않는다);
+  그 외 → `TenantScopeResolver.resolveEffectiveTenantScope(...).contains(tenantId)`.
+- **권한 평가(`RequiresPermissionAspect`) 비경유**: 이 엔드포인트는 `/internal/**`
+  체인에 속하며 operator 권한이 아니라 GAP `client_credentials` 워크로드 JWT 로
+  인가된다. 따라서 `@RequiresPermission` annotation 도, `admin_actions` row 도
+  적용되지 않는다 (read-only — ADR-014 token-exchange "not audited" 규칙 동일).
+- **`/internal/**` 체인**: `SecurityFilterChain @Order(0)` + `securityMatcher("/internal/**")`,
+  GAP JWKS resource-server, account-service 미러링. 미인증 → 401 `UNAUTHORIZED`.
+  기존 operator 체인(`@Order(2)`, `/api/admin/**`)은 byte-unchanged.
+- D1 effective-scope 가 이제 auth-service 에 cross-service 로 읽힌다. 스키마 변경 없음.
+
+상세: [architecture.md](./architecture.md) "Assume-Tenant Assignment Check", [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md).
+
+---
+
 ## Open Issues (to TASK-BE-028)
 
 - `@RequiresPermission` annotation + `AspectJ` 또는 `HandlerInterceptor` 중 선택
