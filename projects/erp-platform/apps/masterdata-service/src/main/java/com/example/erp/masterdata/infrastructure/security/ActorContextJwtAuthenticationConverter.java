@@ -40,7 +40,12 @@ public class ActorContextJwtAuthenticationConverter
         if (scope.isEmpty() && roles.contains("client_credentials")) {
             scope = Set.of("*");
         }
-        ActorContext actor = new ActorContext(actorId, tenantId, roles, scope);
+        // ADR-MONO-019 § D5 entitlement-trust: lift the signed entitled_domains
+        // claim into the actor so the authorization layer can dual-accept READ
+        // (mirrors TenantClaimValidator.isEntitled / safeStringList — fail-closed
+        // on any shape anomaly: absent / non-list / non-string element → empty).
+        Set<String> entitledDomains = extractEntitledDomains(jwt);
+        ActorContext actor = new ActorContext(actorId, tenantId, roles, scope, entitledDomains);
         Collection<GrantedAuthority> authorities = new ArrayList<>();
         for (String role : roles) {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
@@ -63,6 +68,31 @@ public class ActorContextJwtAuthenticationConverter
                 for (String part : s.split("[,\\s]+")) {
                     if (!part.isBlank()) out.add(part);
                 }
+            }
+        }
+        return out.isEmpty() ? Collections.emptySet() : out;
+    }
+
+    /**
+     * Extracts the signed {@code entitled_domains} claim (ADR-MONO-019 § D5)
+     * fail-closed: it MUST be a JSON list of strings (the shape GAP's
+     * {@code TenantClaimTokenCustomizer} emits). Any anomaly — absent /
+     * non-list / null or non-string element — degrades to the empty set (no
+     * NPE, no blanket trust), mirroring
+     * {@link TenantClaimValidator#isEntitled(Jwt, String)} /
+     * {@code safeStringList}. The CSV/space-split alias path used for roles is
+     * deliberately NOT applied here: {@code entitled_domains} is a structured
+     * list claim, never a delimited string.
+     */
+    private static Set<String> extractEntitledDomains(Jwt jwt) {
+        Object raw = jwt.getClaims().get(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS);
+        if (!(raw instanceof Collection<?> list)) {
+            return Collections.emptySet();
+        }
+        Set<String> out = new HashSet<>();
+        for (Object element : list) {
+            if (element instanceof String s && !s.isBlank()) {
+                out.add(s);
             }
         }
         return out.isEmpty() ? Collections.emptySet() : out;

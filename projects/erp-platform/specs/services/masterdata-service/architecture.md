@@ -473,6 +473,34 @@ Single un-bypassable application path:
 4. **Fail-CLOSED default** — if the JWT lacks a recognizable role/scope,
    the decision is `DENY`. There is no allow-by-default codepath.
 
+**Entitlement-trust READ dual-accept** (ADR-MONO-019 § D5, TASK-MONO-161) —
+the `RoleScopeAuthorizationAdapter` **READ** branch also accepts a signed
+`entitled_domains ∋ "erp"` claim, mirroring the tenant gate's
+`TenantClaimValidator.isEntitled` dual-accept at the **role/scope authorization
+layer**:
+
+```
+READ  authorized when:  erp.read ∨ erp.write ∨ isOperator() ∨ isEntitledTo("erp")
+WRITE authorized when:  erp.write ∨ isOperator()        ← entitlement NEVER widens WRITE
+```
+
+Rationale: an operator viewing a customer they are *entitled* to (via the
+assume-tenant token — `tenant_id=<customer>` + `entitled_domains=[…,erp]`,
+ADR-MONO-020 D4) carries no `erp.read`/operator role, yet the tenant gate
+already admits them; without this the **separate** authz layer would still 403
+the entitled-but-no-role token (the gap MONO-161 closes — the tenant gate and
+the role/scope authz layer are independent gates, both must dual-accept).
+`entitledDomains` is lifted from the RS256/JWKS-verified JWT by
+`ActorContextJwtAuthenticationConverter` (fail-closed on shape anomaly:
+absent / non-list / non-string element → empty set, mirroring
+`safeStringList`). **Net-zero**: SUPER_ADMIN / scope-bearing /
+`client_credentials` tokens authorize exactly as before (the change only ADDS
+an OR branch). **READ-only**: WRITE/mutation stays scope/role-gated, and the
+**targeted** data-scope check is unchanged — an entitlement-trust READ with a
+non-null `targetDepartmentId` and no `org_scope` still fails closed
+(`DATA_SCOPE_FORBIDDEN`); entitlement-trust grants the **READ-overview**
+(`targetDepartmentId == null`) granularity only.
+
 The matrix is per-use-case (declared in `MasterdataApplicationService`
 method signatures via constants), not a generic interceptor — the
 declaration is auditable by reading the use-case source.
