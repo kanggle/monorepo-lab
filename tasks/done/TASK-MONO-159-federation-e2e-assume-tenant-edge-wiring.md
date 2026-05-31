@@ -8,7 +8,7 @@ Fix-forward for TASK-MONO-158 (ADR-MONO-020 D4) — wire the **auth→admin assu
 
 # Status
 
-ready
+done
 
 # Owner
 

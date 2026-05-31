@@ -8,7 +8,7 @@ ADR-MONO-020 § 3.3 step 3 (D4) — console-web **active-tenant switcher → ass
 
 # Status
 
-ready
+done
 
 # Owner
 
