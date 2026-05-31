@@ -1,5 +1,6 @@
 package com.example.admin.presentation.tenant;
 
+import com.example.admin.application.TenantScopeResolver;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.tenant.CreateTenantUseCase;
 import com.example.admin.application.tenant.GetTenantUseCase;
@@ -63,6 +64,7 @@ public class TenantAdminController {
     private final ListTenantsUseCase listTenantsUseCase;
     private final PermissionEvaluator permissionEvaluator;
     private final AdminOperatorJpaRepository operatorRepository;
+    private final TenantScopeResolver tenantScopeResolver;
 
     /**
      * POST /api/admin/tenants
@@ -134,9 +136,24 @@ public class TenantAdminController {
     @GetMapping("/{tenantId}")
     public ResponseEntity<TenantResponse> getTenant(@PathVariable String tenantId) {
         OperatorContext operator = OperatorContextHolder.require();
-        AdminOperator adminOperator = resolveAdminOperator(operator);
+        var entity = operatorRepository.findByOperatorId(operator.operatorId())
+                .orElseThrow(() -> new com.example.admin.application.exception.OperatorUnauthorizedException(
+                        "Operator not found: " + operator.operatorId()));
+        AdminOperator adminOperator = new AdminOperator(
+                entity.getOperatorId(),
+                entity.getEmail(),
+                entity.getDisplayName(),
+                AdminOperator.Status.valueOf(entity.getStatus()),
+                entity.getVersion(),
+                entity.getTenantId(),
+                entity.getFinanceDefaultAccountId());
 
-        if (!permissionEvaluator.isTenantAllowed(adminOperator, tenantId)) {
+        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
+        // tenant). NET-ZERO with no assignments → {home tenant} → legacy behavior.
+        java.util.Set<String> effectiveTenants = tenantScopeResolver
+                .resolveEffectiveTenantScope(entity.getId(), entity.getTenantId());
+
+        if (!permissionEvaluator.isTenantAllowed(adminOperator, tenantId, effectiveTenants)) {
             throw new TenantScopeDeniedException(
                     "Operator is not allowed to access tenant: " + tenantId);
         }

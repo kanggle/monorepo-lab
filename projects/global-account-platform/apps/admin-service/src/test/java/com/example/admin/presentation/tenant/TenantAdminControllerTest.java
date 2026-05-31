@@ -82,6 +82,7 @@ class TenantAdminControllerTest {
     @MockitoBean PermissionEvaluator permissionEvaluator;
     @MockitoBean AdminOperatorJpaRepository operatorRepository;
     @MockitoBean AdminActionAuditor adminActionAuditor; // required by RequiresPermissionAspect
+    @MockitoBean com.example.admin.application.TenantScopeResolver tenantScopeResolver; // TASK-BE-326
 
     // Pre-created mocks — stubs are set in @BeforeEach to avoid interleaving
     // with when(...).thenReturn(Optional.of(helperMethod())) call chains.
@@ -118,19 +119,27 @@ class TenantAdminControllerTest {
         lenient().when(permissionEvaluator.hasPermission(eq(REGULAR_OP_ID), anyString())).thenReturn(false);
         lenient().when(permissionEvaluator.hasAllPermissions(anyString(), any())).thenReturn(true);
 
-        // isTenantAllowed:
+        // TASK-BE-326: the controller now calls the 3-arg dual-read overload
+        // isTenantAllowed(operator, target, effectiveTenants). The resolver
+        // returns the NET-ZERO effective scope = {home tenant}.
+        lenient().when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("*")))
+                .thenReturn(java.util.Set.of("*"));
+        lenient().when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("tenant-a")))
+                .thenReturn(java.util.Set.of("tenant-a"));
+
+        // isTenantAllowed (3-arg):
         //   - SUPER_ADMIN (tenantId='*'): allowed everywhere
         //   - Regular op (tenantId='tenant-a'): allowed only for own tenant, denied for others
         // Use lenient() + argThat() so unused stubs do not cause failures.
         lenient().when(permissionEvaluator.isTenantAllowed(
                 Mockito.argThat(op -> op != null && "*".equals(op.tenantId())),
-                anyString())).thenReturn(true);
+                anyString(), any())).thenReturn(true);
         lenient().when(permissionEvaluator.isTenantAllowed(
                 Mockito.argThat(op -> op != null && "tenant-a".equals(op.tenantId())),
-                eq("tenant-a"))).thenReturn(true);
+                eq("tenant-a"), any())).thenReturn(true);
         lenient().when(permissionEvaluator.isTenantAllowed(
                 Mockito.argThat(op -> op != null && "tenant-a".equals(op.tenantId())),
-                eq("tenant-b"))).thenReturn(false);
+                eq("tenant-b"), any())).thenReturn(false);
     }
 
     private String superAdminToken() {

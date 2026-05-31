@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,6 +103,54 @@ class PermissionEvaluatorTenantScopeTest {
     void nullOperator_returnsFalse() {
         assertThat(EVALUATOR.isTenantAllowed(null, "fan-platform")).isFalse();
         assertThat(EVALUATOR.isTenantAllowed(null, null)).isFalse();
+    }
+
+    // ── TASK-BE-326: 3-arg dual-read overload ──────────────────────────────────
+
+    @Test
+    @DisplayName("BE-326: net-zero — effective={home} → home tenant allowed, other denied (legacy parity)")
+    void dualRead_netZero_homeAllowed_otherDenied() {
+        AdminOperator op = operator("fan-platform");
+        Set<String> effective = Set.of("fan-platform"); // no assignments
+        assertThat(EVALUATOR.isTenantAllowed(op, "fan-platform", effective)).isTrue();
+        assertThat(EVALUATOR.isTenantAllowed(op, "other-platform", effective)).isFalse();
+    }
+
+    @Test
+    @DisplayName("BE-326: assigned non-home tenant in effective set → allowed (union membership)")
+    void dualRead_assignedNonHomeTenant_allowed() {
+        AdminOperator op = operator("wms");
+        Set<String> effective = Set.of("wms", "scm"); // assignment → scm
+        assertThat(EVALUATOR.isTenantAllowed(op, "scm", effective))
+                .as("assigned tenant scm is a member of the effective scope → allowed")
+                .isTrue();
+        assertThat(EVALUATOR.isTenantAllowed(op, "wms", effective)).isTrue();
+        assertThat(EVALUATOR.isTenantAllowed(op, "erp", effective))
+                .as("erp neither home nor assigned → denied")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("BE-326: platform-scope short-circuits regardless of effective set")
+    void dualRead_platformScope_alwaysAllowed() {
+        AdminOperator superAdmin = operator("*");
+        assertThat(EVALUATOR.isTenantAllowed(superAdmin, "anything", Set.of("*"))).isTrue();
+        assertThat(EVALUATOR.isTenantAllowed(superAdmin, null, Set.of("*"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("BE-326: null/empty effective set falls back to {operator.tenantId()} (legacy compat)")
+    void dualRead_nullEffective_fallsBackToOwnTenant() {
+        AdminOperator op = operator("fan-platform");
+        assertThat(EVALUATOR.isTenantAllowed(op, "fan-platform", null)).isTrue();
+        assertThat(EVALUATOR.isTenantAllowed(op, "other", null)).isFalse();
+        assertThat(EVALUATOR.isTenantAllowed(op, null, Set.of())).isTrue(); // null target → own tenant
+    }
+
+    @Test
+    @DisplayName("BE-326: operator=null → false (null-safe)")
+    void dualRead_nullOperator_false() {
+        assertThat(EVALUATOR.isTenantAllowed(null, "fan-platform", Set.of("fan-platform"))).isFalse();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

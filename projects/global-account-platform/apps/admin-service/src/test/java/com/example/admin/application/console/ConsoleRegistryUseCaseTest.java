@@ -1,6 +1,7 @@
 package com.example.admin.application.console;
 
 import com.example.admin.application.OperatorContext;
+import com.example.admin.application.TenantScopeResolver;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.tenant.ListTenantDomainSubscriptionsUseCase;
 import com.example.admin.application.tenant.ListTenantsUseCase;
@@ -50,13 +51,28 @@ class ConsoleRegistryUseCaseTest {
     @Mock
     private ListTenantDomainSubscriptionsUseCase listSubscriptionsUseCase;
 
+    @Mock
+    private TenantScopeResolver tenantScopeResolver;
+
     private ConsoleRegistryUseCase useCase() {
         return new ConsoleRegistryUseCase(
-                operatorRepository, listTenantsUseCase, listSubscriptionsUseCase);
+                operatorRepository, listTenantsUseCase, listSubscriptionsUseCase,
+                tenantScopeResolver);
     }
 
     private void stubOperator(String operatorId, String tenantId) {
         stubOperator(operatorId, tenantId, null);
+    }
+
+    /**
+     * TASK-BE-326: stub ONLY the operator entity lookup (no resolver stub) — for
+     * tests that drive the effective scope explicitly via {@link #stubEffectiveScope}.
+     */
+    private void stubOperatorEntityOnly(String operatorId, String tenantId) {
+        AdminOperatorJpaEntity entity = AdminOperatorJpaEntity.create(
+                operatorId, operatorId + "@example.com", "x", "Op",
+                "ACTIVE", tenantId, Instant.now());
+        when(operatorRepository.findByOperatorId(operatorId)).thenReturn(Optional.of(entity));
     }
 
     /**
@@ -74,6 +90,19 @@ class ConsoleRegistryUseCaseTest {
             ReflectionTestUtils.setField(entity, "financeDefaultAccountId", financeDefaultAccountId);
         }
         when(operatorRepository.findByOperatorId(operatorId)).thenReturn(Optional.of(entity));
+        // TASK-BE-326 NET-ZERO default: no assignments → effective scope = {home tenant}.
+        // The factory leaves id null in unit context; match any id + the home tenant.
+        stubEffectiveScope(tenantId, tenantId);
+    }
+
+    /**
+     * TASK-BE-326: stub the dual-read resolver. {@code homeTenant} is the
+     * operator's home {@code admin_operators.tenant_id} (the lookup key);
+     * {@code effective} are the resolved effective tenantIds (home ∪ assigned).
+     */
+    private void stubEffectiveScope(String homeTenant, String... effective) {
+        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq(homeTenant)))
+                .thenReturn(java.util.Set.of(effective));
     }
 
     private void stubTenants(TenantSummary... tenants) {
@@ -394,6 +423,48 @@ class ConsoleRegistryUseCaseTest {
             assertThat(r.products())
                     .as("M6: single-tenant wms operator must not see acme-corp in any product")
                     .allSatisfy(p -> assertThat(p.tenants()).doesNotContain("acme-corp"));
+        }
+    }
+
+    /**
+     * TASK-BE-326 (ADR-MONO-020 D6 step 1): when a single-tenant operator has
+     * one or more {@code operator_tenant_assignment} rows, its effective tenant
+     * scope is the union {home ∪ assigned}; the catalog's selectableTenants is
+     * therefore {@code bound ∩ effectiveTenants}. Net-zero is covered by every
+     * other test (no assignment stub → {home tenant}); this nested class proves
+     * the union path.
+     */
+    @Nested
+    @DisplayName("TASK-BE-326: assignment-driven effective tenant scope (dual-read)")
+    class AssignmentDrivenScope {
+
+        @Test
+        @DisplayName("wms operator with an assignment to scm → sees scm in gap+scm products (bound ∩ {wms,scm})")
+        void wmsOperator_assignedScm_seesScm() {
+            // operator home = wms; effective scope = UNION {wms, scm}
+            // (simulating one operator_tenant_assignment row → scm).
+            stubOperatorEntityOnly("wms-op", "wms");
+            stubEffectiveScope("wms", "wms", "scm");
+            stubTenants(
+                    tenant("fan-platform", "ACTIVE"),
+                    tenant("wms", "ACTIVE"),
+                    tenant("scm", "ACTIVE"));
+            stubBackwardCompatSubscriptions();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
+
+            // gap binds all tenants; effective {wms,scm} → gap shows wms + scm (not fan-platform)
+            assertThat(product(r, "gap").tenants())
+                    .as("effective scope {wms,scm}: gap shows both, never the un-assigned fan-platform")
+                    .containsExactlyInAnyOrder("wms", "scm");
+            assertThat(product(r, "wms").tenants()).containsExactly("wms");
+            // scm product (bound={scm}) ∩ {wms,scm} = {scm} → now visible (was empty pre-assignment)
+            assertThat(product(r, "scm").tenants())
+                    .as("scm product now selectable via the scm assignment")
+                    .containsExactly("scm");
+            // fan-platform is neither home nor assigned → never leaked
+            assertThat(r.products())
+                    .allSatisfy(p -> assertThat(p.tenants()).doesNotContain("fan-platform"));
         }
     }
 

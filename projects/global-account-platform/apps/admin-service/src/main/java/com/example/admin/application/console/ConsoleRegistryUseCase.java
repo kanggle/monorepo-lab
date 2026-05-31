@@ -1,6 +1,7 @@
 package com.example.admin.application.console;
 
 import com.example.admin.application.OperatorContext;
+import com.example.admin.application.TenantScopeResolver;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.tenant.ListTenantDomainSubscriptionsUseCase;
 import com.example.admin.application.tenant.ListTenantsUseCase;
@@ -8,6 +9,7 @@ import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -61,9 +63,22 @@ public class ConsoleRegistryUseCase {
     private final AdminOperatorJpaRepository operatorRepository;
     private final ListTenantsUseCase listTenantsUseCase;
     private final ListTenantDomainSubscriptionsUseCase listSubscriptionsUseCase;
+    private final TenantScopeResolver tenantScopeResolver;
 
     public ConsoleRegistry execute(OperatorContext operator) {
-        AdminOperator adminOperator = resolveOperator(operator);
+        // TASK-BE-326: resolveOperator() reads the JPA entity directly (bypasses
+        // OperatorLookupPort). We capture the entity here so the dual-read
+        // resolver gets the internal BIGINT id + home tenant (divergence risk #1
+        // — the registry path is wired explicitly).
+        AdminOperatorJpaEntity entity = operatorRepository.findByOperatorId(operator.operatorId())
+                .orElseThrow(() -> new OperatorUnauthorizedException(
+                        "Operator not found: " + operator.operatorId()));
+        AdminOperator adminOperator = toDomain(entity);
+
+        // Effective tenant scope: assignment rows ∪ {home tenant}. NET-ZERO with
+        // no assignments → {home tenant} → byte-identical legacy binding.
+        Set<String> effectiveTenants = tenantScopeResolver
+                .resolveEffectiveTenantScope(entity.getId(), entity.getTenantId());
 
         // Registered, ACTIVE tenant slugs (account-service owned). A SUSPENDED
         // or unregistered tenant is excluded by construction.
@@ -77,12 +92,11 @@ public class ConsoleRegistryUseCase {
         Map<String, Set<String>> subscriptionsByDomain = subscriptionsByDomain();
 
         boolean platformScope = adminOperator.isPlatformScope();
-        String ownTenant = adminOperator.tenantId();
 
         List<ConsoleProduct> products = new ArrayList<>(ProductCatalog.entries().size());
         for (ProductCatalog.Entry entry : ProductCatalog.entries()) {
             List<String> tenants = entry.available()
-                    ? selectableTenants(entry, platformScope, ownTenant, activeTenants,
+                    ? selectableTenants(entry, platformScope, effectiveTenants, activeTenants,
                             subscriptionsByDomain)
                     : List.of();
             products.add(new ConsoleProduct(
@@ -143,7 +157,7 @@ public class ConsoleRegistryUseCase {
      */
     private List<String> selectableTenants(ProductCatalog.Entry entry,
                                             boolean platformScope,
-                                            String ownTenant,
+                                            Set<String> effectiveTenants,
                                             List<String> activeTenants,
                                             Map<String, Set<String>> subscriptionsByDomain) {
         // (1) product binding
@@ -169,8 +183,18 @@ public class ConsoleRegistryUseCase {
         if (platformScope) {
             return List.copyOf(bound);
         }
-        // single-tenant operator: never expose another tenant's slug.
-        return bound.contains(ownTenant) ? List.of(ownTenant) : List.of();
+        // single-tenant operator: never expose a tenant outside the operator's
+        // effective scope. TASK-BE-326 dual-read: bound ∩ effectiveTenants
+        // (assignment rows ∪ home tenant), preserving bound ordering. NET-ZERO
+        // with no assignments → effectiveTenants == {home tenant} → reproduces
+        // the legacy `bound.contains(ownTenant) ? [ownTenant] : []` exactly.
+        List<String> scoped = new ArrayList<>();
+        for (String tenant : bound) {
+            if (effectiveTenants.contains(tenant)) {
+                scoped.add(tenant);
+            }
+        }
+        return scoped;
     }
 
     /**
@@ -213,17 +237,14 @@ public class ConsoleRegistryUseCase {
         return new ArrayList<>(slugs);
     }
 
-    private AdminOperator resolveOperator(OperatorContext operator) {
-        return operatorRepository.findByOperatorId(operator.operatorId())
-                .map(e -> new AdminOperator(
-                        e.getOperatorId(),
-                        e.getEmail(),
-                        e.getDisplayName(),
-                        AdminOperator.Status.valueOf(e.getStatus()),
-                        e.getVersion(),
-                        e.getTenantId(),
-                        e.getFinanceDefaultAccountId()))
-                .orElseThrow(() -> new OperatorUnauthorizedException(
-                        "Operator not found: " + operator.operatorId()));
+    private AdminOperator toDomain(AdminOperatorJpaEntity e) {
+        return new AdminOperator(
+                e.getOperatorId(),
+                e.getEmail(),
+                e.getDisplayName(),
+                AdminOperator.Status.valueOf(e.getStatus()),
+                e.getVersion(),
+                e.getTenantId(),
+                e.getFinanceDefaultAccountId());
     }
 }
