@@ -35,6 +35,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -204,6 +205,20 @@ public class GlobalExceptionHandler {
             AuthenticationCredentialsNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiErrorEnvelope.of("UNAUTHORIZED", "Authentication required"));
+    }
+
+    /**
+     * Defense-in-depth (TASK-MONO-162): a request to a path this service does
+     * not serve raises {@link NoResourceFoundException}. Without this handler it
+     * falls through to {@link #handleUnexpected} → 500, which a caller (e.g. the
+     * console-bff leg classifier) reads as {@code DOWNSTREAM_ERROR/degraded}
+     * rather than the truthful "not found" — masking a mis-route as a service
+     * fault. Map it to a clean 404 so future mis-routes degrade honestly.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorEnvelope.of("NOT_FOUND", "Resource not found"));
     }
 
     @ExceptionHandler(Exception.class)

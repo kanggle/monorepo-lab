@@ -366,6 +366,18 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - Other services receive role claims in JWT; they enforce their own
   finer-grained permissions (e.g., `INVENTORY_WRITE` mapped from
   `WMS_OPERATOR`).
+- **Entitlement-trust READ dual-accept** (ADR-MONO-019 § D5, ADR-MONO-020 D4 —
+  TASK-MONO-162): the `jwtAuthenticationConverter` (`config/SecurityConfig`)
+  synthesises **only** `ROLE_WMS_VIEWER` when the RS256/JWKS-verified
+  `entitled_domains` claim contains `wms` (reusing `TenantClaimValidator.isEntitled`),
+  so a wms-entitled token with no WMS role claim passes the READ
+  `@PreAuthorize("hasRole('WMS_VIEWER')")` dashboards (e.g.
+  `GET /api/v1/admin/dashboard/inventory`). The **WRITE-gated** roles
+  (`WMS_OPERATOR`/`WMS_ADMIN`/`WMS_SUPERADMIN`) are **never** synthesised —
+  entitlement-trust grants READ visibility only, never mutation authority.
+  Net-zero for role/scope/SUPER_ADMIN tokens (the branch only ADDS the VIEWER
+  authority; `entitled_domains` is read only from the verified token, so it is
+  unforgeable, and an absent/malformed claim grants nothing — fail-closed).
 
 ### PII Handling
 
