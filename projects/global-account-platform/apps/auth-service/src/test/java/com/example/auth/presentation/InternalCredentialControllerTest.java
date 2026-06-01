@@ -71,6 +71,51 @@ class InternalCredentialControllerTest {
     }
 
     @Test
+    @DisplayName("POST /internal/auth/credentials — accountType=OPERATOR is mapped onto the command (TASK-BE-330 D2)")
+    void createCredential_carriesAccountType() throws Exception {
+        Instant createdAt = Instant.parse("2026-06-02T10:00:00Z");
+        given(createCredentialUseCase.execute(any(CreateCredentialCommand.class)))
+                .willReturn(new CreateCredentialResult("acc-op", createdAt));
+
+        mockMvc.perform(post("/internal/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountId": "acc-op",
+                                  "email": "operator@example.com",
+                                  "password": "password123",
+                                  "tenantId": "acme-corp",
+                                  "accountType": "OPERATOR"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<CreateCredentialCommand> captor =
+                ArgumentCaptor.forClass(CreateCredentialCommand.class);
+        verify(createCredentialUseCase).execute(captor.capture());
+        CreateCredentialCommand cmd = captor.getValue();
+        assertThat(cmd.accountType()).isEqualTo("OPERATOR");
+        assertThat(cmd.tenantId()).isEqualTo("acme-corp");
+    }
+
+    @Test
+    @DisplayName("Invalid accountType (not CONSUMER|OPERATOR) → 400 VALIDATION_ERROR")
+    void invalidAccountTypeReturns400() throws Exception {
+        mockMvc.perform(post("/internal/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountId": "acc-1",
+                                  "email": "user@example.com",
+                                  "password": "password123",
+                                  "accountType": "SUPERUSER"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     @DisplayName("POST /internal/auth/credentials — idempotent retry returns 200 OK (TASK-BE-247)")
     void idempotentRetry_returns200() throws Exception {
         Instant createdAt = Instant.parse("2026-04-30T10:00:00Z");

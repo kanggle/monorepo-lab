@@ -55,10 +55,13 @@ public class SignupUseCase {
             //   TASK-BE-313: pass the account's tenantId (signup public-flow may have
             //   the default tenant; pass-through preserves the existing fallback semantics
             //   in auth-service's CreateCredentialUseCase when tenantId is null).
+            //   TASK-BE-330 (ADR-MONO-021 D2): self-service signup is a CONSUMER
+            //   account (jwt-standard-claims.md L14-19) — set the type explicitly
+            //   rather than relying on the auth-service column default.
             try {
                 authServicePort.createCredential(
                         account.getId(), account.getEmail(), command.password(),
-                        account.getTenantId().value());
+                        account.getTenantId().value(), AuthServicePort.ACCOUNT_TYPE_CONSUMER);
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }

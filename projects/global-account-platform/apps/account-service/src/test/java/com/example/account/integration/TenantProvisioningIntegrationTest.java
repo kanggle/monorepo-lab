@@ -130,11 +130,15 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         // tenantId so the credential row in auth_db matches the account row's
         // tenant scope (regression guard — without this, credentials always
         // fell back to "fan-platform" and TenantProvisioningE2ETest 401'd).
+        // TASK-BE-330 (ADR-MONO-021 D2): enterprise provisioning also carries
+        // account_type=OPERATOR (company-provisioned B2B account).
         org.mockito.Mockito.verify(authServicePort).createCredential(
                 org.mockito.ArgumentMatchers.eq(accountId),
                 org.mockito.ArgumentMatchers.eq(email),
                 org.mockito.ArgumentMatchers.eq("Password1!"),
-                org.mockito.ArgumentMatchers.eq(WMS_TENANT_ID));
+                org.mockito.ArgumentMatchers.eq(WMS_TENANT_ID),
+                org.mockito.ArgumentMatchers.eq(
+                        com.example.account.application.port.AuthServicePort.ACCOUNT_TYPE_OPERATOR));
     }
 
     @Test
