@@ -46,6 +46,58 @@ export function shouldSkipGap(): boolean {
 }
 
 /**
+ * The CONSUMER credential seeded by `e2e/fixtures/gap-consumer-seed.sql` (run
+ * against the GAP `auth_db` before the Playwright run). Password matches the
+ * federation-e2e Argon2id seed. Used by `loginAsSeededConsumer` for the real
+ * GAP-backed specs (TASK-INT-023).
+ */
+export const SEEDED_CONSUMER: TestUser = {
+  name: 'E2E Consumer',
+  email: 'e2e-consumer@example.com',
+  password: 'devpassword123!',
+  accountType: 'CONSUMER',
+};
+
+/**
+ * Fill + submit GAP's `/login` credential form. GAP renders the Spring Security
+ * DEFAULT login page (no custom template): `<input id="username">` +
+ * `<input id="password">` + a hidden `_csrf` + a submit button, posting to
+ * `/login`. (The legacy `completeGapSignIn` below assumes a richer
+ * signup-or-login page that the current GAP does NOT render — kept only for the
+ * still-SKIP_GAP_E2E CRUD specs.)
+ */
+export async function fillGapCredentialForm(page: Page, user: TestUser): Promise<void> {
+  await page.waitForURL(
+    (url) => /\/login$/.test(url.pathname) || /\/oauth2\/authorize/.test(url.toString()),
+    { timeout: 15_000 },
+  );
+  await page.locator('#username').fill(user.email);
+  await page.locator('#password').fill(user.password);
+  await page.locator('form[action="/login"] button[type="submit"]').click();
+}
+
+/**
+ * Real GAP login as the SEEDED consumer: web-store `/login` → GAP button →
+ * GAP credential form → back into web-store. No signup (GAP has no inline
+ * signup); the credential must already exist (gap-consumer-seed.sql).
+ */
+export async function loginAsSeededConsumer(
+  page: Page,
+  user: TestUser = SEEDED_CONSUMER,
+): Promise<void> {
+  await page.goto('/login');
+  const trigger = page.getByRole('button', { name: 'Global Account 로 로그인' });
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await fillGapCredentialForm(page, user);
+  // Back on the web-store origin (localhost), no longer on any /login form.
+  await page.waitForURL(
+    (url) => url.hostname === 'localhost' && !url.pathname.startsWith('/login'),
+    { timeout: 30_000 },
+  );
+}
+
+/**
  * Drive the GAP signup-or-login page. The exact selectors depend on GAP's
  * own login UI (defined in `projects/global-account-platform/`); when the
  * GAP UI changes, update this helper.

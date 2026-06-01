@@ -56,6 +56,10 @@ export default defineConfig({
           // not yet in the docker-compose), so the values below only need to
           // satisfy NextAuth's "config exists" check.
           NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? 'fullstack-test-secret-not-real',
+          // App origin — used for OIDC callback + the RP-initiated-logout
+          // post_logout_redirect_uri (federated-logout.ts). Real-GAP runs
+          // (SKIP_GAP_E2E=0) override OIDC_ISSUER_URL to http://auth-service:8081.
+          NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? 'http://localhost:3000',
           OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL ?? 'http://127.0.0.1:1',
           ECOMMERCE_WEB_STORE_CLIENT_ID:
             process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',
