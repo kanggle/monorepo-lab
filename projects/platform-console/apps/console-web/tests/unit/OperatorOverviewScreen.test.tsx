@@ -68,7 +68,7 @@ describe('OperatorOverviewScreen — render all cards', () => {
     render(<OperatorOverviewScreen initial={OK} />, { wrapper: wrapper() });
 
     expect(
-      screen.getByRole('heading', { name: '운영자 개요' }),
+      screen.getByRole('heading', { name: 'GAP 상세 (계정 · 감사 · 운영자)' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('overview-accounts-total')).toHaveTextContent(
       '150',
@@ -153,7 +153,7 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
     ).toHaveTextContent('7');
     // the shell heading is intact
     expect(
-      screen.getByRole('heading', { name: '운영자 개요' }),
+      screen.getByRole('heading', { name: 'GAP 상세 (계정 · 감사 · 운영자)' }),
     ).toBeInTheDocument();
   });
 
@@ -224,7 +224,7 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
     expect(screen.getByTestId('overview-refresh')).toBeInTheDocument();
     // the shell is intact, not a blank crash
     expect(
-      screen.getByRole('heading', { name: '운영자 개요' }),
+      screen.getByRole('heading', { name: 'GAP 상세 (계정 · 감사 · 운영자)' }),
     ).toBeInTheDocument();
   });
 });

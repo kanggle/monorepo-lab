@@ -3,19 +3,21 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
- * TASK-PC-FE-013 nav-additive guard.
+ * `(console)/layout.tsx` nav-source guard.
  *
- * The Phase 7 second dashboard adds ONE nav entry "도메인 상태" pointing
- * at `/dashboards/health`. The FE-011 "통합 개요" entry pointing at
- * `/dashboards/overview` must remain BYTE-UNCHANGED — additive only,
- * never re-ordered, never removed.
+ * Originally a TASK-PC-FE-013 additive guard ("도메인 상태" added after
+ * "통합 개요"). TASK-PC-FE-034 consolidates the two overview entries:
+ *   - the separate "통합 개요" entry (`nav-operator-overview`) is REMOVED;
+ *   - the single "개요" entry (`nav-dashboards`) now points at the
+ *     5-domain cross-domain overview `/dashboards/overview` (the console
+ *     landing);
+ *   - "도메인 상태" (`nav-domain-health`, `/dashboards/health`) is
+ *     unchanged and still reachable;
+ *   - a new "ERP 운영" entry (`nav-erp`, `/erp`) is added after Finance.
  *
- * We assert directly on the layout source string (the layout is a server
- * component and can't be mounted in jsdom without a Next.js app router
- * context; the existing erp-nav / operators-nav tests sidestep this by
- * testing the *target screen*, but the layout is the only file the task
- * mandates to be additive). Reading source is the simplest objective
- * additive guard.
+ * The layout is a server component and can't be mounted in jsdom without a
+ * Next.js app-router context; asserting on the source string is the
+ * simplest objective nav guard (same approach as the prior FE-013 guard).
  */
 
 const APP_ROOT = path.resolve(__dirname, '..', '..');
@@ -27,35 +29,48 @@ const LAYOUT_PATH = path.resolve(
   'layout.tsx',
 );
 
-describe('(console)/layout.tsx — nav additive guard', () => {
-  it('contains the existing FE-011 "통합 개요" entry pointing at /dashboards/overview', () => {
+describe('(console)/layout.tsx — nav consolidation guard (TASK-PC-FE-034)', () => {
+  it('the single "개요" entry points at the 5-domain overview /dashboards/overview', () => {
     const src = readFileSync(LAYOUT_PATH, 'utf8');
-    expect(src).toContain('data-testid="nav-operator-overview"');
+    expect(src).toContain('data-testid="nav-dashboards"');
     expect(src).toContain('href="/dashboards/overview"');
-    expect(src).toContain('통합 개요');
+    expect(src).toContain('개요');
   });
 
-  it('adds the new FE-013 "도메인 상태" entry pointing at /dashboards/health', () => {
+  it('removes the separate "통합 개요" (nav-operator-overview) entry', () => {
+    const src = readFileSync(LAYOUT_PATH, 'utf8');
+    expect(src).not.toContain('data-testid="nav-operator-overview"');
+    expect(src).not.toContain('통합 개요');
+  });
+
+  it('no nav entry points at the bare /dashboards (GAP detail is card-reached only)', () => {
+    const src = readFileSync(LAYOUT_PATH, 'utf8');
+    expect(src).not.toContain('href="/dashboards"');
+  });
+
+  it('keeps the "도메인 상태" entry pointing at /dashboards/health (unchanged)', () => {
     const src = readFileSync(LAYOUT_PATH, 'utf8');
     expect(src).toContain('data-testid="nav-domain-health"');
     expect(src).toContain('href="/dashboards/health"');
     expect(src).toContain('도메인 상태');
   });
 
-  it('the new entry appears AFTER the existing "통합 개요" entry (additive, never re-orders)', () => {
+  it('adds the new "ERP 운영" entry (nav-erp) pointing at /erp, after Finance', () => {
     const src = readFileSync(LAYOUT_PATH, 'utf8');
-    const overviewIdx = src.indexOf('data-testid="nav-operator-overview"');
-    const healthIdx = src.indexOf('data-testid="nav-domain-health"');
-    expect(overviewIdx).toBeGreaterThan(-1);
-    expect(healthIdx).toBeGreaterThan(-1);
-    expect(healthIdx).toBeGreaterThan(overviewIdx);
+    expect(src).toContain('data-testid="nav-erp"');
+    expect(src).toContain('href="/erp"');
+    expect(src).toContain('ERP 운영');
+    const financeIdx = src.indexOf('data-testid="nav-finance"');
+    const erpIdx = src.indexOf('data-testid="nav-erp"');
+    expect(financeIdx).toBeGreaterThan(-1);
+    expect(erpIdx).toBeGreaterThan(-1);
+    expect(erpIdx).toBeGreaterThan(financeIdx);
   });
 
-  it('does NOT remove any pre-existing nav entry (5 prior entries still present)', () => {
+  it('does NOT remove any of the other pre-existing nav entries', () => {
     const src = readFileSync(LAYOUT_PATH, 'utf8');
-    // FE-001..010 nav entries — all must still be present.
     expect(src).toContain('data-testid="nav-dashboards"');
-    expect(src).toContain('data-testid="nav-operator-overview"');
+    expect(src).toContain('data-testid="nav-domain-health"');
     expect(src).toContain('data-testid="nav-catalog"');
     expect(src).toContain('data-testid="nav-audit"');
     expect(src).toContain('data-testid="nav-operators"');

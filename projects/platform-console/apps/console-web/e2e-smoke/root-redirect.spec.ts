@@ -2,8 +2,9 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Root redirect — 미인증 BrowserContext 가 `/` 에 접근하면 (a) root page 가
- * `/dashboards` 로 redirect → (b) `(console)/layout.tsx` 의 `isAuthenticated()`
- * 가드가 false → `/login` 으로 server-side redirect → (c) login page 가 렌더.
+ * `/dashboards/overview` (5도메인 통합 개요 = 콘솔 랜딩, TASK-PC-FE-034) 로
+ * redirect → (b) `(console)/layout.tsx` 의 `isAuthenticated()` 가드가 false →
+ * `/login` 으로 server-side redirect → (c) login page 가 렌더.
  *
  * backend 미기동: `isAuthenticated()` 는 cookies 만 읽으므로 fetch 0; redirect
  * chain 전체가 deterministic.

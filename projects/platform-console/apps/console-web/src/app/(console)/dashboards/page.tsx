@@ -5,9 +5,13 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GAP composed operator overview route (TASK-PC-FE-005 — ADR-MONO-013
- * Phase 2 slice 4 / ADR-MONO-015 D1-B). The console landing/home + an
- * in-console nav destination — NOT a catalog product (the catalog
- * `gap.baseRoute` stays `/accounts`, FE-002 unchanged).
+ * Phase 2 slice 4 / ADR-MONO-015 D1-B). Re-positioned by TASK-PC-FE-034
+ * from the console landing to the **GAP-card drill-down detail** of the
+ * 5-domain cross-domain overview (`/dashboards/overview`): it is reached
+ * by activating the GAP card on the home overview, and offers a back link
+ * to that overview. NOT a catalog product (the catalog `gap.baseRoute`
+ * stays `/accounts`, FE-002 unchanged). A bookmarked `/dashboards`
+ * deep-link still opens this detail directly.
  *
  * Server component: the initial overview is composed server-side by a
  * bounded fan-out over the EXISTING FE-002/003/004 read clients with the
@@ -28,8 +32,15 @@ export default async function DashboardsPage() {
   if (state.noTenant || !state.overview) {
     return (
       <section aria-labelledby="overview-heading">
+        <Link
+          href="/dashboards/overview"
+          data-testid="gap-detail-back-link"
+          className="mb-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          ← 통합 개요로 돌아가기
+        </Link>
         <h1 id="overview-heading" className="mb-6 text-2xl font-semibold">
-          운영자 개요
+          GAP 상세 (계정 · 감사 · 운영자)
         </h1>
         <div
           role="status"
@@ -40,7 +51,7 @@ export default async function DashboardsPage() {
             테넌트를 먼저 선택하세요.
           </p>
           <p>
-            운영자 개요는 테넌트 범위로 구성됩니다. 상단의 테넌트
+            GAP 상세는 테넌트 범위로 구성됩니다. 상단의 테넌트
             스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
           </p>
           <Link

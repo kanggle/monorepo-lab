@@ -52,20 +52,11 @@ export default async function ConsoleLayout({
               <ul className="flex items-center gap-4 text-sm">
                 <li>
                   <Link
-                    href="/dashboards"
+                    href="/dashboards/overview"
                     data-testid="nav-dashboards"
                     className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
                   >
                     개요
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/dashboards/overview"
-                    data-testid="nav-operator-overview"
-                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
-                  >
-                    통합 개요
                   </Link>
                 </li>
                 <li>
@@ -129,6 +120,15 @@ export default async function ConsoleLayout({
                     className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
                   >
                     Finance 운영
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/erp"
+                    data-testid="nav-erp"
+                    className="rounded px-1 py-0.5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  >
+                    ERP 운영
                   </Link>
                 </li>
               </ul>

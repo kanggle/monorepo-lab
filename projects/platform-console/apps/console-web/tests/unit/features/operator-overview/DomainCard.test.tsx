@@ -56,6 +56,36 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     ).toHaveTextContent('12,345');
   });
 
+  it('gap ok → renders the drill-down link to the GAP detail (/dashboards) (TASK-PC-FE-034 AC-5)', () => {
+    const card: Card = {
+      domain: 'gap',
+      status: 'ok',
+      data: { totalElements: 12345 },
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    const link = screen.getByTestId('operator-overview-card-gap-drilldown');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/dashboards');
+    // The link carries the GAP card heading text (accessible name) so the
+    // heading semantics are preserved (AC-5 a11y).
+    expect(link).toHaveAccessibleName(/GAP 계정/);
+  });
+
+  it.each(['wms', 'scm', 'finance', 'erp'] as const)(
+    '%s ok → does NOT render a drill-down link (AC-6: GAP card only)',
+    (domain) => {
+      const card: Card = { domain, status: 'ok', data: {} };
+      render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+        wrapper: wrapper(),
+      });
+      expect(
+        screen.queryByTestId('operator-overview-card-gap-drilldown'),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it('wms ok → renders stock + alerts', () => {
     const card: Card = {
       domain: 'wms',
@@ -165,6 +195,20 @@ describe('DomainCard — degraded branch', () => {
     },
   );
 
+  it('gap degraded → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
+    const card: Card = {
+      domain: 'gap',
+      status: 'degraded',
+      reason: 'TIMEOUT',
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    expect(
+      screen.queryByTestId('operator-overview-card-gap-drilldown'),
+    ).not.toBeInTheDocument();
+  });
+
   it('degraded card status attribute is "degraded"', () => {
     const card: Card = {
       domain: 'gap',
@@ -208,6 +252,20 @@ describe('DomainCard — forbidden branch', () => {
       ).not.toBeInTheDocument();
     },
   );
+
+  it('gap forbidden → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
+    const card: Card = {
+      domain: 'gap',
+      status: 'forbidden',
+      reason: 'PERMISSION_DENIED',
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    expect(
+      screen.queryByTestId('operator-overview-card-gap-drilldown'),
+    ).not.toBeInTheDocument();
+  });
 
   it('finance forbidden/MISSING_PREREQUISITE → actionable hint surfaces (§ 2.4.9.1)', () => {
     const card: Card = {
