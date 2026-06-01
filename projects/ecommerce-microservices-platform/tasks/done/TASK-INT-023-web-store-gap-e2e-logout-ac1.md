@@ -1,5 +1,7 @@
 # TASK-INT-023: web-store real-GAP e2e — RP-initiated logout AC-1 automation
 
+> **Status: DONE (2026-06-01)** — impl PR #1004 (squash `73b7b01c`). Lean real-GAP OIDC stack for the web-store logout AC-1, closing the TASK-FE-070 live-verification gap. **핵심 발견**: web-store 로그인은 `auth_db.credentials`만 필요(SAS form-login, account-service·account_type 클레임 불필요) → 4컨테이너 lean 스택 + 시드 1행. `docker-compose.gap-e2e.yml` + consumer 시드 + `loginAsSeededConsumer`(실 Spring `#username`/`#password` 폼) + `rp-initiated-logout.spec.ts`(`shouldSkipGap()` 게이트 → 기존 CI 무회귀) + playwright NEXTAUTH_URL + CI 핸드오프 문서(`.github` classifier 차단 → 사용자 적용). **라이브 실증**: 실행 중 federation-e2e GAP(V0012 web-store client + BE-328 매퍼) 대상 `1 passed (51.0s)` — 로그인→로그아웃→재로그인 GAP `#username` 폼 재노출. compose config + tsc clean. 3차원 ✓. 공유 federated-logout 패턴(fan/admin/console) transitively 검증. **메타: NextAuth v5 federated logout = `getToken`(@auth/core) server-only id_token; Next `output:standalone` 빌드는 Windows symlink 권한 필요(dev 우회); GAP `/login`=Spring 기본 폼(signup-or-login 아님).** 분석=Opus 4.8 / 구현=Opus.
+
 ## Goal
 
 Stand up a LEAN real-GAP OIDC stack for the web-store Playwright suite so the RP-initiated logout (`end_session`) AC-1 — login → logout → re-login re-presents the GAP credential form (no silent re-auth) — can be verified end-to-end against a real IdP, closing the live-verification gap left open by TASK-FE-070 (the web-store logout fix shipped under decision (A): merged + CI-green but not browser-verified).
