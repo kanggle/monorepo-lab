@@ -8,7 +8,9 @@ Author **ADR-MONO-021 PROPOSED** — `account_type` OIDC claim source. Records W
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-02)**: impl PR #1006 (squash `20f19c26`). ADR-MONO-021 PROPOSED publish — `account_type` OIDC 클레임 source 결정 기록(HARDSTOP-09 해소). D1=per-account `auth_db.credentials.account_type` denormalize(tenant_id 패턴; tenant_type·client/scope 도출 기각) / D2=provisioning 설정(signup→CONSUMER, operator→OPERATOR) / D3=access+id token 주입 / D4=staged net-positive un-break / D5=userinfo 보류. **동기 구체**: gateway `AccountTypeEnforcementFilter` 가 클레임 부재 시 모든 인증요청 403(`"CONSUMER".equals(null)=false`) → 실 correctness 갭(현재 SKIP_GAP_E2E 로 가려짐). 어느 ADR 도 amend 안 함(net-new claim). ADR-003a §3 row #27(Meta-policy, sibling #13/#18/#22/#25). doc-only(201 lines, apps/ 0). 3차원 ✓(docs fast-lane, MERGED `20f19c26`/tip 일치/0 fail). **후속(user-gated)**: ADR-021 ACCEPTED transition(별 task, sibling MONO-153/157) → 구현(credentials 컬럼+customizer/provider+provisioning+e2e). 분석=Opus 4.8 / 구현=Opus.
 
 # Owner
 
