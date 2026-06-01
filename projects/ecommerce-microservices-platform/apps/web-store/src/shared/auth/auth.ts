@@ -98,6 +98,9 @@ export const authConfig: NextAuthConfig = {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
+        // Keep the id_token server-side as the RP-initiated-logout id_token_hint
+        // (GAP end_session). Never surfaced to the public session.
+        token.idToken = account.id_token;
       }
       if (profile) {
         const p = profile as GapOidcProfile;

@@ -76,10 +76,22 @@ describe('로그아웃 카트 통합 (NextAuth)', () => {
 
     mockSignOut.mockResolvedValue({ url: '/' } as unknown as ReturnType<typeof signOut> extends Promise<infer R> ? R : never);
     mockUseSession.mockReturnValue(authenticatedSession());
+
+    // RP-initiated logout: logout() fetches the end_session URL then navigates.
+    // No id_token in this unit context → { url: null } → local-only fallback '/'.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: null }) }),
+    );
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { set href(_v: string) {} },
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('logout() 호출 시 itemCount=0 + localStorage cart 삭제 + signOut 호출', async () => {
@@ -106,7 +118,7 @@ describe('로그아웃 카트 통합 (NextAuth)', () => {
       await user.click(screen.getByText('logout'));
     });
 
-    expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: '/' });
+    expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
     expect(storage['cart']).toBeUndefined();
   });
 
