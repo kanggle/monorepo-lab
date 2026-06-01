@@ -8,7 +8,7 @@ TASK-MONO-168
 
 # Status
 
-review
+done
 
 # Owner
 
