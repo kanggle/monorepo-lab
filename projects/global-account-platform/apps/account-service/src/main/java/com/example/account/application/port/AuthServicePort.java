@@ -11,23 +11,36 @@ package com.example.account.application.port;
  */
 public interface AuthServicePort {
 
+    /** Self-registered B2C account — the {@code account_type} JWT claim value for self-service signup. */
+    String ACCOUNT_TYPE_CONSUMER = "CONSUMER";
+
+    /** Company-provisioned B2B account — the {@code account_type} JWT claim value for enterprise provisioning. */
+    String ACCOUNT_TYPE_OPERATOR = "OPERATOR";
+
     /**
      * Create a credential row for a freshly-persisted account.
      *
-     * @param accountId the account UUID (must match {@code accounts.id})
-     * @param email     lower-cased email (credential lookup key)
-     * @param password  plaintext password; hashed by auth-service, never stored plain
-     * @param tenantId  tenant slug the credential belongs to (must match
-     *                  {@code accounts.tenant_id}); when {@code null}, auth-service
-     *                  defaults to {@code "fan-platform"} (public signup path).
-     *                  TASK-BE-313: this parameter was missing pre-fix, causing
-     *                  credentials always to fall back to {@code "fan-platform"}
-     *                  regardless of the account's actual tenant scope — which
-     *                  broke multi-tenant login flows (TenantProvisioningE2ETest).
+     * @param accountId   the account UUID (must match {@code accounts.id})
+     * @param email       lower-cased email (credential lookup key)
+     * @param password    plaintext password; hashed by auth-service, never stored plain
+     * @param tenantId    tenant slug the credential belongs to (must match
+     *                    {@code accounts.tenant_id}); when {@code null}, auth-service
+     *                    defaults to {@code "fan-platform"} (public signup path).
+     *                    TASK-BE-313: this parameter was missing pre-fix, causing
+     *                    credentials always to fall back to {@code "fan-platform"}
+     *                    regardless of the account's actual tenant scope — which
+     *                    broke multi-tenant login flows (TenantProvisioningE2ETest).
+     * @param accountType the per-account-immutable classification
+     *                    ({@link #ACCOUNT_TYPE_CONSUMER} | {@link #ACCOUNT_TYPE_OPERATOR}) the
+     *                    provisioning path decided (ADR-MONO-021 D2: self-service signup → CONSUMER,
+     *                    enterprise provisioning → OPERATOR). Carried so the credential row records
+     *                    the contract-required {@code account_type} JWT claim at the moment the
+     *                    account is born; when {@code null}, auth-service defaults to CONSUMER
+     *                    (the step-1 migration default).
      * @throws CredentialAlreadyExistsConflict if auth-service reports 409 (concurrent signup)
      * @throws AuthServiceUnavailable          if auth-service is unreachable / 5xx / timeout
      */
-    void createCredential(String accountId, String email, String password, String tenantId);
+    void createCredential(String accountId, String email, String password, String tenantId, String accountType);
 
     /** Thrown when auth-service reports 409 — concurrent signup created the credential. */
     final class CredentialAlreadyExistsConflict extends RuntimeException {

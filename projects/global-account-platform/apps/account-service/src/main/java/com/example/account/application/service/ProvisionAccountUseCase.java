@@ -94,9 +94,13 @@ public class ProvisionAccountUseCase {
             //    inherits the same tenant scope as the account row. Without
             //    this, auth-service defaults to "fan-platform" and login fails
             //    the tenant scope check (TenantProvisioningE2ETest 401 surface).
+            //    TASK-BE-330 (ADR-MONO-021 D2): an enterprise-provisioned account
+            //    is an OPERATOR (company-provisioned B2B, jwt-standard-claims.md
+            //    L14-19) — set the type explicitly so the credential row records it.
             try {
                 authServicePort.createCredential(
-                        account.getId(), account.getEmail(), command.password(), command.tenantId());
+                        account.getId(), account.getEmail(), command.password(), command.tenantId(),
+                        AuthServicePort.ACCOUNT_TYPE_OPERATOR);
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }

@@ -18,7 +18,9 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 {
   "accountId": "string (UUID v7, max 36)",
   "email": "string (RFC 5322)",
-  "password": "string (min 8)"
+  "password": "string (min 8)",
+  "tenantId": "string (tenant slug, optional)",
+  "accountType": "CONSUMER | OPERATOR (optional)"
 }
 ```
 
@@ -27,6 +29,8 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 | `accountId` | string | Yes | 방금 생성된 계정의 UUID. `auth_db.credentials.account_id` 와 일치해야 함 |
 | `email` | string | Yes | 로그인 lookup key. lower-case 정규화 후 저장 |
 | `password` | string | Yes | 평문. auth-service 가 argon2id 해시 후 `credentials.credential_hash` 에 저장. **caller 는 반드시 HTTPS 내부망으로만 전송할 것** |
+| `tenantId` | string | No | 테넌트 slug. 생략 시 `"fan-platform"` 기본값 (TASK-BE-229/313) |
+| `accountType` | string | No | 계정 분류 `CONSUMER`\|`OPERATOR` (ADR-MONO-021 D2 / TASK-BE-330). 프로비저닝 경로가 결정: self-service signup → `CONSUMER`, enterprise 프로비저닝 → `OPERATOR`. **생략 시 `CONSUMER` 기본값** (step-1 마이그레이션 default). per-account immutable — 멱등 재시도 경로는 기존 값을 변경하지 않는다. `account_type` JWT 클레임의 source ([platform/contracts/jwt-standard-claims.md](../../../../../../platform/contracts/jwt-standard-claims.md) L46) |
 
 **Response 201 Created** — 신규 credential 행 삽입 성공:
 

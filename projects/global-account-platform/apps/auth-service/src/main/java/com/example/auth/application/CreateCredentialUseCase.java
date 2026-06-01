@@ -50,6 +50,9 @@ public class CreateCredentialUseCase {
         String accountId = command.accountId();
         String email = Credential.normalizeEmail(command.email());
         String tenantId = command.tenantId() != null ? command.tenantId() : "fan-platform";
+        // TASK-BE-330 (ADR-MONO-021 D2): the provisioning path carries the account_type;
+        // null defaults to CONSUMER (Credential.normalizeAccountType / step-1 migration default).
+        String accountType = command.accountType();
 
         // TASK-BE-247: idempotency — check existing row before hashing (argon2id is expensive)
         if (credentialRepository.existsByAccountId(accountId)) {
@@ -73,6 +76,7 @@ public class CreateCredentialUseCase {
         Credential credential = Credential.create(
                 accountId,
                 tenantId,
+                accountType,
                 email,
                 CredentialHash.argon2id(hash),
                 now
