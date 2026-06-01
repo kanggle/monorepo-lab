@@ -8,7 +8,7 @@ Consolidate "개요" + "통합 개요" — promote the BFF cross-domain Operator
 
 # Status
 
-review
+done
 
 # Owner
 
