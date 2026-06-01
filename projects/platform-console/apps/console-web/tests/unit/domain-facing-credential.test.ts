@@ -115,7 +115,7 @@ describe('domain-facing credential after switch (§ 2.7)', () => {
       data: [],
       meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
     };
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/api/admin/accounts'))
         return Promise.resolve(jsonResponse(ACCOUNTS_PAGE));

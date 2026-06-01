@@ -21,6 +21,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     SSR page consumes.
  */
 
+// TASK-PC-FE-030 — `getOperatorOverviewState()` lazy-imports `next/headers`
+// `cookies()` and forwards `(await cookies()).toString()` as the Cookie
+// header to the in-process proxy fetch. Outside a request scope the real
+// `cookies()` throws, so it must be mocked here; the `toString()` shape is
+// what the wrapper reads (the discriminated-state assertions exercise the
+// proxy response, not the cookie contents).
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    toString: () => 'gap_at=a; gap_op=op; gap_tenant=wms',
+    get: () => undefined,
+  }),
+}));
+
 import {
   OperatorOverviewSchema,
   fetchOperatorOverview,

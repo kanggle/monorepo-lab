@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-166-console-web-unit-typecheck-lint-pr-ci-gate.md` — **REVIEW** (impl PR open). console-web vitest unit + `tsc --noEmit` + `next lint` 를 PR CI(`frontend-unit-tests` job)에 편입 + 선결 pre-existing test 부채 수정(atomic). 갭=console-web 은 PR CI 에 nightly Playwright e2e 만 있고 unit/typecheck/lint job 부재(TASK-PC-FE-034 close 에서 발견) → 5 unit fail + 4 tsc error 가 게이트 밖에 누적(logout.test.ts 2=PC-FE-033 stale / operator-overview-api.test.ts 3=PC-FE-030 `cookies()` mock 누락 / domain-facing-credential.test.ts 4 tsc=mock.calls 인덱싱 타입). **수정 완료**: 3종 test 부채 test-only 수정(프로덕션 코드 무변경 — 항목별 stale 확정) → 로컬 suite GREEN(771/771) + tsc clean + lint clean → `frontend-unit-tests` job `if:` 에 `platform-console` 추가 + console-web install/test/tsc/lint 스텝 + cache-dependency-path. **path-filter negation 금지(MONO-074/075)** — 기존 `platform-console` pure-positive+`code-changed` AND 재사용, 신규 filter 없음. monorepo-level(shared `.github/workflows/`). 분석=Opus 4.8 / 구현=Opus. surfaced-by=PC-FE-034. ref=[[project_ci_path_filter_074_075_quirk]].
 
 ## done
 
