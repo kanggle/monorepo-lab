@@ -8,7 +8,9 @@ ADR-MONO-021 § 3.3 step 1 (D1+D3) — emit the platform-required `account_type`
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-02)**: impl PR #1010 (squash `ebd3d908`; backend-engineer opus dispatch + dispatcher 검토·컴파일 재검증). ADR-MONO-021 §3.3 step 1(D1+D3) — GAP `account_type`(CONSUMER\|OPERATOR) OIDC 클레임 발급. V0022 `credentials.account_type VARCHAR(20) NOT NULL DEFAULT 'CONSUMER'`(per-account denormalize, tenant_id/V0007 패턴) + Credential 도메인(신규 canonical 10-arg + `@Deprecated` 9-arg 하위호환[기존 호출자 무파손] + `normalizeAccountType` CONSUMER\|OPERATOR 검증) + CredentialJpaEntity + CredentialAuthenticationProvider details-map + TenantClaimTokenCustomizer 주입(authcode/refresh access+id / **assume-tenant 보존**[operator OPERATOR 유지, AssumeTenantAuthenticationToken 6-arg] / **client_credentials 미주입**[workload≠account]) + operator 시드 OPERATOR(federation-e2e + console-web e2e fixtures). **동기**: ecommerce gateway `AccountTypeEnforcementFilter`가 클레임 부재 시 모든 인증요청 403(`"CONSUMER".equals(null)=false`) → net-positive un-break. unit 42 GREEN(Credential 8/Provider 2/Customizer 26/AssumeTenant 6) + IT 갱신(FormLoginIT account_type=CONSUMER access+id / CredentialJpaRepositoryTest 컬럼 default+OPERATOR round-trip). **3차원**(MERGED `ebd3d908`/tip 일치/pre-merge 0 — **Integration global-account-platform PASS = 실 MySQL IT 검증**; 전 IT green=console-bff 등 무회귀). 분석=Opus 4.8 / 구현=Opus. **후속(ADR-021 §3.3)**: D2 provisioning explicit-set(signup→CONSUMER/operator→OPERATOR) + D4 step3 INT-023 e2e account_type 단언.
 
 # Owner
 
