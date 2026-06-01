@@ -1071,6 +1071,8 @@ logging, and edge-routing constraints declared in § 2.4.9 apply verbatim
 and are **not re-derived** here. ADR-MONO-013 § 3.3 "zero retrofit" — **sixth
 confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
 
+> **UI routing note (TASK-PC-FE-034, 2026-06-02; additive — composition body byte-unchanged).** This composition route is the console **landing/home** (the authenticated root `/` lands on `/dashboards/overview`; the single "개요" top-nav entry points here). The **GAP card** in the rendered envelope is an accessible **drill-down link to the GAP-only composed overview** (`/dashboards`, § 2.4.4 / ADR-MONO-015 D1-B) — the accounts/audit/operators 3-leg detail. This note governs **only** the consumer-side (`console-web`) landing + nav + GAP-card link wiring; the request headers, response envelope, per-card status discipline, auth flow, resilience, observability labels, and the read-only/no-mutation hard invariant of this route are **unchanged**. See ADR-MONO-017 § D8 amendment + ADR-MONO-015 § 6 amendment.
+
 ##### Surface
 
 | # | Method / Path | Purpose | Auth | Producer |

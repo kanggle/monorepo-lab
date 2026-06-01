@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-034-overview-consolidation-bff-home-and-gap-drilldown.md` — **READY**. "개요"(GAP-only `/dashboards`, FE-005) + "통합 개요"(5-domain BFF `/dashboards/overview`, FE-011) 중복 해소. 통합 개요를 콘솔 landing/home 으로 승격(root `page.tsx` redirect `/dashboards` → `/dashboards/overview`) + 상단 nav 의 "통합 개요" 엔트리 제거, "개요" 단일화(→ overview) + GAP-only 개요를 통합 개요 GAP-card 의 drill-down detail 로 재배치(DomainCard gap 카드에 `/dashboards` 링크) + 누락된 ERP 운영 nav 동반 추가. **두 화면 모두 유지(삭제 아님)**, producer/console-bff/§2.4.9.1 composition body byte-unchanged(read-only, zero retrofit). Spec PR=ADR-MONO-015 §D1-B(drill-down 재배치) + ADR-MONO-017 §D8(landing 승격) additive amendment(HARDSTOP-04 clean) + console-integration-contract §2.4.9.1 UI-routing note + console-web architecture nav 인벤토리 갱신. Impl PR=console-web routing/nav 재구성 + e2e nav-rendering 회귀 갱신 + GAP drill-down smoke. 분석=Opus 4.8 / 구현 권장=Opus. precedent=FE-005/FE-011(둘 다 kept).
 
 ## in-progress
 

@@ -165,8 +165,11 @@ Append-only.
 |---|---|---|---|---|
 | 2026-05-20 | created PROPOSED | D1 = REST orchestrator; D2 = server-side fan-out only; D3 = reuse per-domain reads verbatim; D4 = per-domain credential rule extended (HARD INVARIANT); D5 = per-domain circuit-breaker inherited; D6 = `tenant_id` pass-through; D7 = per-domain fan-out attribution; D8 = MVP = 1 "Operator Overview" | "Priority 3 — ADR-MONO-013 Phase 7 console-bff PROPOSED authoring (Recommended)" (AskUserQuestion direct selection 2026-05-20) | this PR (TASK-MONO-125) |
 | 2026-05-20 | PROPOSED → ACCEPTED | D1-D8 byte-unchanged (finalised) | "ADR-017 ACCEPTED" via AskUserQuestion option A selection 2026-05-20 (post `/audit-memory`, option description: *"이 옵션 선택 자체가 § D6.1 user-explicit intent 'ADR-017 ACCEPTED' 로 간주되어 진행됨"*) | this PR (TASK-MONO-126) |
+| 2026-06-02 | AMENDED (D8 landing promotion; additive) | D1-D8 **byte-unchanged**. The MVP "Operator Overview" cross-domain dashboard (§ D8 / `/dashboards/overview`) is **promoted to the console landing/home**; the GAP-only composed overview (ADR-MONO-015 D1-B) becomes its GAP-card drill-down. Composition route (§ 2.4.9.1) body unchanged — FE landing/nav binding only. | "권고대로 진행" (overview-consolidation A안) | (TASK-PC-FE-034) |
 
 ACCEPTED execution (post-ACCEPTED): `TASK-PC-BE-001` (console-bff skeleton) + `TASK-PC-FE-011` (MVP Operator Overview dashboard) — both **future** tasks; Phase 7 `console-bff` skeleton stays unstarted until ACCEPTED.
+
+> **Amendment — D8 landing promotion (TASK-PC-FE-034, 2026-06-02; additive, HARDSTOP-04 clean).** The MVP "Operator Overview" cross-domain dashboard (§ D8, `features/operator-overview`, `GET /api/console/dashboards/operator-overview`, `/dashboards/overview`) is **promoted to the console landing/home** — the authenticated root (`/`) now lands here, and it is the single "개요" top-nav entry. The GAP-only composed overview (ADR-MONO-015 D1-B, `/dashboards`) is **demoted to the GAP-card drill-down** of this home overview (see ADR-MONO-015 § 6 amendment). This is a **FE landing/nav-binding change only**: the § 2.4.9.1 composition route's request/response/auth/resilience/observability body is **byte-unchanged**, the read-only + zero-retrofit invariants (§ 3.1) hold, and no `console-bff`/producer source is touched. D1-D8 decision axes stand verbatim.
 
 ---
 

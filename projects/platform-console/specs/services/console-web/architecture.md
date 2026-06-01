@@ -71,15 +71,19 @@ apps/console-web/
 │   ├── app/                           # Next.js App Router routes
 │   │   ├── (auth)/login/page.tsx      # GAP OIDC 진입 (Phase 2)
 │   │   ├── (console)/                 # 인증 필수 레이아웃
-│   │   │   ├── layout.tsx             # topbar + tenant switcher + catalog nav
+│   │   │   ├── layout.tsx             # topbar + tenant switcher + 상단 nav (개요=통합 overview 랜딩 / 도메인 상태 / 카탈로그 / 감사·보안 / 운영자 / wms / scm / finance / erp — TASK-PC-FE-034 단일화)
 │   │   │   ├── page.tsx               # data-driven 서비스 카탈로그 (현 skeleton: 정적 placeholder)
-│   │   │   ├── dashboards/            # ✅ GAP 운영자 통합 overview (composed, read-only; 콘솔 랜딩 + in-console nav, TASK-PC-FE-005)
+│   │   │   ├── dashboards/            # ✅ 대시보드 묶음
+│   │   │   │   ├── overview/          # ✅ 5도메인 통합 개요 (operator-overview, BFF federation) — **콘솔 랜딩/홈** + 단일 "개요" nav (TASK-PC-FE-011; landing 승격 TASK-PC-FE-034)
+│   │   │   │   ├── (index page.tsx)   # ✅ GAP-only 합성 개요 (accounts+audit+operators 3-leg, read-only) — 통합 개요 GAP-card **drill-down detail** (구 콘솔 랜딩; TASK-PC-FE-005, drill-down 재배치 TASK-PC-FE-034)
+│   │   │   │   └── health/            # ✅ 도메인 상태 대시보드 (BFF federation, TASK-PC-FE-013)
 │   │   │   ├── accounts/              # ✅ GAP accounts 운영자 parity 라우트 (catalog gap.baseRoute → 여기, TASK-PC-FE-002)
 │   │   │   ├── audit/                 # ✅ GAP audit+security read parity 라우트 (in-console nav, TASK-PC-FE-003)
 │   │   │   ├── operators/             # ✅ GAP operators 관리 parity 라우트 (in-console nav, TASK-PC-FE-004)
 │   │   │   ├── wms/                   # ✅ wms 운영 섹션 (read + alert-ack; in-console nav, Phase 4 slice 1, TASK-PC-FE-007)
 │   │   │   ├── scm/                   # ✅ scm 운영 섹션 (read-only: procurement PO + inventory-visibility; in-console nav, Phase 4 slice 2, TASK-PC-FE-008)
-│   │   │   └── finance/               # ✅ finance 운영 섹션 (read-only: account + balances + transactions; in-console nav, Phase 5, TASK-PC-FE-009)
+│   │   │   ├── finance/               # ✅ finance 운영 섹션 (read-only: account + balances + transactions; in-console nav, Phase 5, TASK-PC-FE-009)
+│   │   │   └── erp/                    # ✅ erp 운영 섹션 (read-only masterdata: 부서/직급/직원/원가센터/거래처; in-console nav, TASK-PC-FE-010; nav 등록 TASK-PC-FE-034)
 │   │   ├── api/                       # Route Handlers (auth proxy / health / 도메인 변이 프록시)
 │   │   │   ├── auth/{login,logout,callback,refresh}/route.ts  # OIDC + HttpOnly cookie (Phase 2)
 │   │   │   ├── accounts/...           # ✅ accounts 변이 same-origin 프록시 (client mutation → server operator token, TASK-PC-FE-002)
