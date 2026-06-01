@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-168-project-overview-reality-alignment-adr-019-020-021.md` — **REVIEW** (작업 완료, PR open). `docs/project-overview.md` reality-alignment 9회째 (MONO-141/148 패턴) — 2026-05-28(MONO-148) snapshot 이후 머지분 반영. surgical edits 6곳: line 4 timestamp(→2026-06-02) + §7 ADR table 3행(ADR-019/020/021 ACCEPTED) + §2.2 GAP(multi-tenant SaaS 실체화 BE-322~330/INT-024 + workload-identity ADR-005/BE-317~321) + §2.6 console(Phase 8 + entitlement-trust active-tenant 전환 + PC-FE-034 overview consolidation + MONO-166 CI gate) + §9 로드맵 8+ 행 + ADR-005 dangling 링크 수정. no decisions, docs-only, monorepo-level. 분석=Opus 4.8 / 구현=Opus(직접). ref=[[project_platform_console_adr_013]] [[project_gap_idp_promotion]].
 
 ## done
 
