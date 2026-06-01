@@ -1,6 +1,8 @@
 # TASK-INT-024: web-store real-GAP e2e — assert account_type=CONSUMER claim end-to-end
 
-> **Status: ready**
+> **Status: done**
+>
+> **완료 (2026-06-02)**: impl PR #1014 (squash `aa3ec383`). ADR-MONO-021 §3.3 step 3(D4 step3) — web-store GAP e2e 가 `account_type=CONSUMER` 클레임의 full OIDC 왕복(GAP id_token→NextAuth profile→jwt→session→`/api/auth/session`)을 단언. `account-type-claim.spec.ts`(`shouldSkipGap()` 게이트 → 기존 SKIP_GAP_E2E=1 CI skip, nightly GAP suite 실행) + `gap-consumer-seed.sql` `account_type='CONSUMER'` 명시(BE-330 D2) + 구식 "미발급" 주석 정정. **정적검증**: web-store `tsc --noEmit` clean + `docker compose -f docker-compose.gap-e2e.yml config` valid + gated. **클레임 발급 = BE-329 `FormLoginIntegrationTest`(실 MySQL, 실제 SAS access+id 토큰 디코드 → account_type=CONSUMER)로 결정론적 증명**; 본 spec 은 NextAuth 전파 레이어 추가. **AC-1 라이브 실행 = nightly GAP CI 위임** — 실행 중 INT-023/federation-e2e GAP 이미지가 BE-329 이전(account_type 미발급)이라 로컬 재빌드 필요하나, 22h 가동 공유 스택 + 문서화 OOM-cascade fragility 대비 단일 gated spec 위한 재빌드는 비례성 낮음. 3차원 ✓(MERGED `aa3ec383`/tip 일치/pre-merge 0 — Frontend lint&build + E2E smoke + gap docker-compose 전 green). **ADR-MONO-021 §3.3 steps 1–3 완료.** 분석=Opus 4.8 / 구현=Opus.
 
 ## Goal
 
