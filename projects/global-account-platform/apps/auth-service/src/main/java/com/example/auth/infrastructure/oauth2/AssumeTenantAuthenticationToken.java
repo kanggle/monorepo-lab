@@ -24,6 +24,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String subjectTokenType;
     private final String selectedTenantId;
     private final String selectedTenantType;
+    private final String operatorAccountType;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -46,12 +47,29 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            String subjectTokenType,
                                            String selectedTenantId,
                                            String selectedTenantType) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId, selectedTenantType, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-BE-329) — additionally carries the operator's
+     * {@code account_type} (OPERATOR), read from the validated subject token, so the
+     * customizer's token-exchange branch can PRESERVE it on the assumed token (the
+     * operator stays OPERATOR while acting for a customer — ADR-MONO-021 D3). It rides
+     * the same {@code getAuthorizationGrant()} copy path as {@code selectedTenantType}.
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           String operatorAccountType) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
         this.subjectTokenType = subjectTokenType;
         this.selectedTenantId = selectedTenantId;
         this.selectedTenantType = selectedTenantType;
+        this.operatorAccountType = operatorAccountType;
         setAuthenticated(false);
     }
 
@@ -83,5 +101,14 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
 
     public String getSelectedTenantType() {
         return selectedTenantType;
+    }
+
+    /**
+     * TASK-BE-329 — the operator's {@code account_type} (OPERATOR), carried from the
+     * validated subject token so it is PRESERVED on the assumed token (ADR-MONO-021 D3).
+     * Null on the converter-side token (resolved by the provider).
+     */
+    public String getOperatorAccountType() {
+        return operatorAccountType;
     }
 }

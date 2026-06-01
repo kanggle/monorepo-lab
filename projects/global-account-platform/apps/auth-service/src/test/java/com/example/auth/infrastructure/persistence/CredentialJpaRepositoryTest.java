@@ -98,6 +98,34 @@ class CredentialJpaRepositoryTest {
         assertThat(repo.findByEmail("ghost@example.com")).isEmpty();
     }
 
+    // ── TASK-BE-329 (ADR-MONO-021 D1): account_type column ─────────────────────
+
+    @Test
+    @DisplayName("account_type — 컬럼 미지정 INSERT → DEFAULT 'CONSUMER' 백필 (V0022)")
+    void accountType_defaultsToConsumer() {
+        String accountId = uuid();
+        // helper omits account_type → relies on the V0022 column DEFAULT.
+        insertCredential(accountId, uuid() + "@example.com");
+
+        CredentialJpaEntity entity = repo.findByAccountId(accountId).orElseThrow();
+        assertThat(entity.getAccountType()).isEqualTo("CONSUMER");
+        assertThat(entity.toDomain().getAccountType()).isEqualTo("CONSUMER");
+    }
+
+    @Test
+    @DisplayName("account_type — OPERATOR 명시 INSERT → round-trip")
+    void accountType_operatorRoundTrips() {
+        String accountId = uuid();
+        jdbc.update(
+                "INSERT INTO credentials (account_id, tenant_id, account_type, email, credential_hash, hash_algorithm, created_at, updated_at, version)" +
+                " VALUES (?, 'acme-corp', 'OPERATOR', ?, ?, ?, NOW(6), NOW(6), 0)",
+                accountId, uuid() + "@example.com", "$argon2id$placeholder", "argon2id");
+
+        CredentialJpaEntity entity = repo.findByAccountId(accountId).orElseThrow();
+        assertThat(entity.getAccountType()).isEqualTo("OPERATOR");
+        assertThat(entity.toDomain().getAccountType()).isEqualTo("OPERATOR");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void insertCredential(String accountId, String email) {

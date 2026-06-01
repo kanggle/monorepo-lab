@@ -65,8 +65,11 @@ FLUSH PRIVILEGES;
 -- ---------------------------------------------------------------------------
 USE `auth_db`;
 
+-- TASK-BE-329 (ADR-MONO-021 D4): account_type='OPERATOR' — without it the V0022
+-- column DEFAULT 'CONSUMER' would mis-type this seeded operator as CONSUMER.
 INSERT IGNORE INTO credentials (
     tenant_id,
+    account_type,
     account_id,
     email,
     credential_hash,
@@ -76,6 +79,7 @@ INSERT IGNORE INTO credentials (
     version
 ) VALUES (
     '*',
+    'OPERATOR',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
     'e2e-super-admin@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
@@ -164,8 +168,10 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
 --    tenant_id='acme-corp' (real customer slug, NOT the '*' platform sentinel).
 USE `auth_db`;
 
+-- TASK-BE-329 (ADR-MONO-021 D4): account_type='OPERATOR' (acme-corp operator).
 INSERT IGNORE INTO credentials (
     tenant_id,
+    account_type,
     account_id,
     email,
     credential_hash,
@@ -175,6 +181,7 @@ INSERT IGNORE INTO credentials (
     version
 ) VALUES (
     'acme-corp',
+    'OPERATOR',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8c200',
     'acme-operator@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
@@ -267,8 +274,10 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
 --     assume-tenant exchange, NOT the home tenant).
 USE `auth_db`;
 
+-- TASK-BE-329 (ADR-MONO-021 D4): account_type='OPERATOR' (multi-assignment operator).
 INSERT IGNORE INTO credentials (
     tenant_id,
+    account_type,
     account_id,
     email,
     credential_hash,
@@ -278,6 +287,7 @@ INSERT IGNORE INTO credentials (
     version
 ) VALUES (
     'acme-corp',
+    'OPERATOR',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300',
     'multi-operator@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',

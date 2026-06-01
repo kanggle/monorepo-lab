@@ -22,6 +22,12 @@ public class CredentialJpaEntity {
     @Column(name = "tenant_id", nullable = false, length = 32)
     private String tenantId;
 
+    // TASK-BE-329 (ADR-MONO-021 D1): account_type denormalized onto credentials so
+    // the form-login issuance path can emit the account_type claim with no
+    // cross-service call. NOT NULL DEFAULT 'CONSUMER' (V0022).
+    @Column(name = "account_type", nullable = false, length = 20)
+    private String accountType;
+
     @Column(name = "account_id", nullable = false, unique = true, length = 36)
     private String accountId;
 
@@ -50,6 +56,7 @@ public class CredentialJpaEntity {
     public Credential toDomain() {
         return new Credential(id, accountId,
                 tenantId != null ? tenantId : "fan-platform",
+                accountType != null ? accountType : Credential.DEFAULT_ACCOUNT_TYPE,
                 email, credentialHash, hashAlgorithm, createdAt, updatedAt, version);
     }
 
@@ -57,6 +64,7 @@ public class CredentialJpaEntity {
         CredentialJpaEntity entity = new CredentialJpaEntity();
         entity.id = credential.getId();
         entity.tenantId = credential.getTenantId();
+        entity.accountType = credential.getAccountType();
         entity.accountId = credential.getAccountId();
         entity.email = credential.getEmail();
         entity.credentialHash = credential.getCredentialHash();

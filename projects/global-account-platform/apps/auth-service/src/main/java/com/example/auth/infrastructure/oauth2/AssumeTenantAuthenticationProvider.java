@@ -92,9 +92,15 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
+        String operatorAccountType;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
+            // TASK-BE-329 (ADR-MONO-021 D3): preserve the operator's account_type
+            // through the exchange — read it from the validated subject token (the
+            // operator's base GAP OIDC token, which carries account_type=OPERATOR).
+            // Mirrors how the selected tenant_type is carried onto the resolved grant.
+            operatorAccountType = subjectJwt.getClaimAsString("account_type");
         } catch (JwtException e) {
             log.debug("assume-tenant: subject_token validation failed (fail-closed): {}", e.toString());
             throw invalidGrant("subject_token is invalid");
@@ -123,7 +129,7 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // grant carrying the resolved tenant_type so it survives the copy.
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType);
 
         DefaultOAuth2TokenContext.Builder contextBuilder = DefaultOAuth2TokenContext.builder()
                 .registeredClient(registeredClient)

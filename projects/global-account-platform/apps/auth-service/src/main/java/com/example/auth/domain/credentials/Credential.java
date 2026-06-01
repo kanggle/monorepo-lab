@@ -15,12 +15,29 @@ import java.util.Objects;
  * <p>As of TASK-BE-229, the credential also carries {@code tenantId} so that
  * tenant-scoped login lookup is possible without a cross-service call.
  * (specs/features/multi-tenancy.md §Isolation Strategy)</p>
+ *
+ * <p>As of TASK-BE-329 (ADR-MONO-021 D1), the credential also carries
+ * {@code accountType} ({@code CONSUMER} | {@code OPERATOR}) — the platform-required
+ * {@code account_type} JWT claim, denormalized onto {@code credentials} (mirroring
+ * {@code tenantId}) so the form-login issuance path can emit it without a
+ * cross-service call. Per-account and immutable
+ * (platform/contracts/jwt-standard-claims.md L46 / service-types/identity-platform.md L131).</p>
  */
 public class Credential {
+
+    /** Default account_type when a value is absent (D4: migration default = CONSUMER). */
+    public static final String DEFAULT_ACCOUNT_TYPE = "CONSUMER";
+
+    /** Self-registered B2C account (jwt-standard-claims.md). */
+    public static final String ACCOUNT_TYPE_CONSUMER = "CONSUMER";
+
+    /** Company-provisioned B2B account (jwt-standard-claims.md). */
+    public static final String ACCOUNT_TYPE_OPERATOR = "OPERATOR";
 
     private final Long id;
     private final String accountId;
     private final String tenantId;
+    private final String accountType;
     private final String email;
     private final String credentialHash;
     private final String hashAlgorithm;
@@ -28,18 +45,53 @@ public class Credential {
     private final Instant updatedAt;
     private final int version;
 
-    public Credential(Long id, String accountId, String tenantId, String email,
+    /**
+     * Canonical constructor (TASK-BE-329) — carries {@code accountType}.
+     */
+    public Credential(Long id, String accountId, String tenantId, String accountType, String email,
                       String credentialHash, String hashAlgorithm,
                       Instant createdAt, Instant updatedAt, int version) {
         this.id = id;
         this.accountId = Objects.requireNonNull(accountId, "accountId must not be null");
         this.tenantId = Objects.requireNonNull(tenantId, "tenantId must not be null");
+        this.accountType = normalizeAccountType(accountType);
         this.email = Objects.requireNonNull(email, "email must not be null");
         this.credentialHash = Objects.requireNonNull(credentialHash, "credentialHash must not be null");
         this.hashAlgorithm = Objects.requireNonNull(hashAlgorithm, "hashAlgorithm must not be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         this.version = version;
+    }
+
+    /**
+     * @deprecated Use {@link #Credential(Long, String, String, String, String, String, String, Instant, Instant, int)}
+     *             which requires accountType. Retained for backwards compatibility; defaults
+     *             accountType to {@value #DEFAULT_ACCOUNT_TYPE}.
+     */
+    @Deprecated
+    public Credential(Long id, String accountId, String tenantId, String email,
+                      String credentialHash, String hashAlgorithm,
+                      Instant createdAt, Instant updatedAt, int version) {
+        this(id, accountId, tenantId, DEFAULT_ACCOUNT_TYPE, email, credentialHash, hashAlgorithm,
+                createdAt, updatedAt, version);
+    }
+
+    /**
+     * Validates + normalizes an account_type to the contract-allowed set
+     * ({@code CONSUMER} | {@code OPERATOR}). A null/blank value defaults to
+     * {@value #DEFAULT_ACCOUNT_TYPE} (D4 migration window). Any other value is a
+     * programming/data error — fail fast (the contract restricts the claim to two values).
+     */
+    public static String normalizeAccountType(String accountType) {
+        if (accountType == null || accountType.isBlank()) {
+            return DEFAULT_ACCOUNT_TYPE;
+        }
+        String normalized = accountType.trim().toUpperCase();
+        if (!ACCOUNT_TYPE_CONSUMER.equals(normalized) && !ACCOUNT_TYPE_OPERATOR.equals(normalized)) {
+            throw new IllegalArgumentException(
+                    "accountType must be CONSUMER or OPERATOR (jwt-standard-claims.md), was: " + accountType);
+        }
+        return normalized;
     }
 
     /**
@@ -59,12 +111,24 @@ public class Credential {
      */
     public static Credential create(String accountId, String tenantId, String email,
                                      CredentialHash hash, Instant now) {
+        return create(accountId, tenantId, DEFAULT_ACCOUNT_TYPE, email, hash, now);
+    }
+
+    /**
+     * Factory carrying an explicit {@code accountType} (TASK-BE-329). The signup/
+     * provisioning path (D2, follow-up) passes {@code CONSUMER}/{@code OPERATOR}
+     * explicitly; this factory defaults to {@value #DEFAULT_ACCOUNT_TYPE} via the
+     * tenant-only overload above for the migration window.
+     */
+    public static Credential create(String accountId, String tenantId, String accountType, String email,
+                                     CredentialHash hash, Instant now) {
         Objects.requireNonNull(hash, "hash must not be null");
         Objects.requireNonNull(now, "now must not be null");
         return new Credential(
                 null,
                 accountId,
                 Objects.requireNonNull(tenantId, "tenantId must not be null"),
+                accountType,
                 normalizeEmail(email),
                 hash.hash(),
                 hash.algorithm(),
@@ -107,6 +171,7 @@ public class Credential {
                 this.id,
                 this.accountId,
                 this.tenantId,
+                this.accountType,
                 this.email,
                 newHash.hash(),
                 newHash.algorithm(),
@@ -126,6 +191,14 @@ public class Credential {
 
     public String getTenantId() {
         return tenantId;
+    }
+
+    /**
+     * The account classification ({@code CONSUMER} | {@code OPERATOR}) emitted as the
+     * {@code account_type} JWT claim. Per-account and immutable (TASK-BE-329).
+     */
+    public String getAccountType() {
+        return accountType;
     }
 
     public String getEmail() {
