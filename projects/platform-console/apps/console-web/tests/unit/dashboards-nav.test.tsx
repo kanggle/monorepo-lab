@@ -60,13 +60,23 @@ describe('dashboards nav — does not disturb the catalog gap.baseRoute (FE-002)
     expect(OVERVIEW_QUICK_LINKS.operators).toBe('/operators');
   });
 
-  it('the overview screen mounts as an in-console destination (read-only, no confirm dialog)', () => {
+  it('the GAP detail screen mounts as a drill-down destination (read-only, no confirm dialog)', () => {
     render(<OperatorOverviewScreen initial={OVERVIEW} />, {
       wrapper: wrapper(),
     });
+    // TASK-PC-FE-034: re-framed as the GAP drill-down detail.
     expect(
-      screen.getByRole('heading', { name: '운영자 개요' }),
+      screen.getByRole('heading', { name: 'GAP 상세 (계정 · 감사 · 운영자)' }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+  });
+
+  it('the GAP detail screen offers a back link to the home overview (/dashboards/overview)', () => {
+    render(<OperatorOverviewScreen initial={OVERVIEW} />, {
+      wrapper: wrapper(),
+    });
+    const back = screen.getByTestId('gap-detail-back-link');
+    expect(back).toBeInTheDocument();
+    expect(back).toHaveAttribute('href', '/dashboards/overview');
   });
 });

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import {
   type Card,
   type DomainKey,
@@ -229,6 +230,17 @@ export interface DomainCardProps {
 
 export function DomainCard({ card, overviewForRetry }: DomainCardProps) {
   const id = `domain-card-${card.domain}`;
+
+  // GAP-card drill-down (TASK-PC-FE-034 / AC-5 + AC-6): on the home
+  // cross-domain overview the GAP card links to the GAP-only composed
+  // overview detail (`/dashboards`, § 2.4.4 / ADR-MONO-015 D1-B —
+  // accounts · audit · operators 3-leg). AC-6 default: the affordance is
+  // present ONLY when the GAP card is `ok` — on `degraded` / `forbidden`
+  // the GAP detail would itself degrade, so the link is suppressed and the
+  // card keeps its existing placeholder + retry behaviour. The other 4
+  // domain cards are unchanged (no drill-down — a separate future task).
+  const gapDrilldown = card.domain === 'gap' && card.status === 'ok';
+
   return (
     <section
       aria-labelledby={`${id}-heading`}
@@ -241,7 +253,19 @@ export function DomainCard({ card, overviewForRetry }: DomainCardProps) {
         id={`${id}-heading`}
         className="mb-3 text-lg font-semibold text-foreground"
       >
-        {DOMAIN_TITLE[card.domain]}
+        {gapDrilldown ? (
+          <Link
+            href="/dashboards"
+            data-testid="operator-overview-card-gap-drilldown"
+            className="inline-flex items-center gap-1 rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {DOMAIN_TITLE[card.domain]}
+            <span aria-hidden="true">→</span>
+            <span className="sr-only">상세 보기</span>
+          </Link>
+        ) : (
+          DOMAIN_TITLE[card.domain]
+        )}
       </h2>
 
       <div className="flex-1">

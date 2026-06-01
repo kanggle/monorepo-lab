@@ -163,18 +163,26 @@ export function OperatorOverviewScreen({
 
   return (
     <section aria-labelledby="overview-heading">
+      <Link
+        href="/dashboards/overview"
+        data-testid="gap-detail-back-link"
+        className="mb-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        ← 통합 개요로 돌아가기
+      </Link>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1
             id="overview-heading"
             className="mb-2 text-2xl font-semibold"
           >
-            운영자 개요
+            GAP 상세 (계정 · 감사 · 운영자)
           </h1>
           <p className="text-sm text-muted-foreground">
-            계정 · 감사/보안 · 운영자 현황 통합 개요 (읽기 전용). 각 항목은
-            독립적으로 동작하며, 한 항목 장애가 다른 항목이나 콘솔 전체에
-            영향을 주지 않습니다.
+            통합 개요의 GAP 카드에서 진입한 GAP 플랫폼 운영 상세입니다. 계정 ·
+            감사/보안 · 운영자 현황 합성 개요 (읽기 전용). 각 항목은 독립적으로
+            동작하며, 한 항목 장애가 다른 항목이나 콘솔 전체에 영향을 주지
+            않습니다.
           </p>
         </div>
         <Button
