@@ -97,8 +97,15 @@ Append-only.
 |---|---|---|---|---|
 | 2026-05-16 | created PROPOSED | B (composed operator overview) | "B. 합성 operator overview (read)" (resolution-direction answer) | #578 (TASK-MONO-111) |
 | 2026-05-16 | PROPOSED → ACCEPTED | B (unchanged) | "ACCEPTED 승격 + FE-005 착수" | this PR (TASK-MONO-112) |
+| 2026-06-02 | AMENDED (D1-B re-position; additive) | B **unchanged** — the GAP composed overview is **re-positioned** from a peer top-level overview to the **GAP-card drill-down detail** of the 5-domain overview (ADR-MONO-017 § D8). The D2 parity-line satisfaction is **preserved** (the GAP overview still exists, now reached via the GAP card). | "권고대로 진행" (overview-consolidation A안) | (TASK-PC-FE-034) |
 
 ACCEPTED execution: `TASK-PC-FE-005` authored (platform-console, spec-first composed overview); § D5 sequence in progress. `FE-006` stays unstarted until `TASK-PC-FE-005` merged.
+
+> **Amendment — D1-B re-position (TASK-PC-FE-034, 2026-06-02; additive, HARDSTOP-04 clean).** Operationally, having both the GAP-only composed overview (`features/dashboards`, `/dashboards`, this ADR's D1-B) **and** the later 5-domain cross-domain overview (`features/operator-overview`, `/dashboards/overview`, ADR-MONO-017 § D8) as **peer** top-level nav entries proved confusing — two screens both named "operator overview". This amendment establishes a hierarchy WITHOUT reversing the B decision or deleting either screen:
+> - The 5-domain cross-domain overview becomes the console **landing/home** (ADR-MONO-017 § D8 amendment).
+> - The GAP-only composed overview (D1-B) becomes the **drill-down detail reached by clicking the GAP card** on the home overview — it is NOT deleted, and the D2 `dashboards` parity-line satisfaction is fully preserved (the GAP overview still exists and is still composed from the same existing read surfaces; only its nav position moves from peer to GAP-card child).
+> - The D3 surface (read-only, server-side fan-out over existing GAP reads, per-card isolation) is **byte-unchanged**. No producer change, no new GAP contract, no mutation surface — zero retrofit.
+> Decision B ("composed operator overview, not Grafana") stands verbatim; this is a UI routing-hierarchy refinement only.
 
 ## 7. Provenance
 
