@@ -611,7 +611,13 @@ describe('erp-api — confidential + audit-heavy (no token / PII / financial / s
     expect(all).not.toContain('BP-CONFIDENTIAL');
     expect(all).not.toContain('ACME Corp');
     expect(all).not.toContain('BANK_TRANSFER');
-    expect(all).not.toContain('30');
+    // Payment-terms structure must not leak. The bare value `30` (termDays)
+    // is NOT a sound probe — `30` appears incidentally inside the log line's
+    // ISO `ts` timestamp and the random `requestId` UUID, so asserting on it
+    // is timing-flaky (GREEN locally, RED in CI). Probe the distinctive
+    // payment-terms keys instead, which only appear if the body leaks.
+    expect(all).not.toContain('termDays');
+    expect(all).not.toContain('paymentTerms');
     expect(all).not.toContain('bp-secret');
   });
 
