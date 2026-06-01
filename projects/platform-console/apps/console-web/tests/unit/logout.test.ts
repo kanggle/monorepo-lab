@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * `POST /api/auth/logout` must clear the operator cookie too (in addition to
- * the GAP access/refresh/tenant cookies) — TASK-PC-FE-002a. Cookie clearing
- * is the source of truth for "logged out" even if GAP revoke fails.
+ * `POST /api/auth/logout` — TASK-PC-FE-033 (RP-initiated OIDC logout).
+ *
+ * The route now clears ALL console session cookies (access / refresh /
+ * operator / tenant / assumed / id_token) and returns `200 { logoutUrl }`
+ * (NOT 204): the client navigates the browser to `logoutUrl` so the IdP
+ * terminates its own session. With no `id_token` cookie there is no
+ * `id_token_hint`, so `logoutUrl` falls back to the local `<app>/login`.
+ * Cookie clearing is the source of truth for "logged out" even if the GAP
+ * revoke fails.
  */
 
 const cookieJar = new Map<string, string>();
@@ -53,7 +59,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/auth/logout', () => {
-  it('clears the operator cookie alongside access/refresh/tenant (204)', async () => {
+  it('clears the operator cookie alongside access/refresh/tenant (200 { logoutUrl })', async () => {
     cookieJar.set(ACCESS_COOKIE, 'a');
     cookieJar.set(REFRESH_COOKIE, 'r');
     cookieJar.set(OPERATOR_COOKIE, 'op');
@@ -61,7 +67,10 @@ describe('POST /api/auth/logout', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
 
     const res = await logoutPOST();
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { logoutUrl: string };
+    // No id_token cookie set → local-only fallback to <app>/login.
+    expect(body.logoutUrl).toBe('http://console.local/login');
     expect(cookieDeletes).toContain(ACCESS_COOKIE);
     expect(cookieDeletes).toContain(REFRESH_COOKIE);
     expect(cookieDeletes).toContain(OPERATOR_COOKIE);
@@ -74,7 +83,7 @@ describe('POST /api/auth/logout', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('revoke down')));
 
     const res = await logoutPOST();
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
     expect(cookieDeletes).toContain(OPERATOR_COOKIE);
   });
 });
