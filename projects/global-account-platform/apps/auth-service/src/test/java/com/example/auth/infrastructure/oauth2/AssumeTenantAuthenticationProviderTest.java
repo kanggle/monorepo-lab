@@ -136,6 +136,36 @@ class AssumeTenantAuthenticationProviderTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-329: operator's account_type from subject token carried onto the resolved grant")
+    void preservesOperatorAccountType_onResolvedGrant() {
+        Jwt operatorSubject = Jwt.withTokenValue(SUBJECT_TOKEN)
+                .header("alg", "RS256")
+                .subject(OIDC_SUBJECT)
+                .claim("tenant_id", "acme-corp")
+                .claim("account_type", "OPERATOR")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
+        when(operatorAssignmentPort.isAssigned(OIDC_SUBJECT, SELECTED_TENANT)).thenReturn(true);
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        provider.authenticate(exchange());
+
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        Object grant = captor.getValue().getAuthorizationGrant();
+        assertThat(grant).isInstanceOf(AssumeTenantAuthenticationToken.class);
+        // The operator stays OPERATOR while acting for the customer (ADR-MONO-021 D3).
+        assertThat(((AssumeTenantAuthenticationToken) grant).getOperatorAccountType()).isEqualTo("OPERATOR");
+    }
+
+    @Test
     @DisplayName("subject token 무효 → invalid_grant (admin 미호출, mint 없음)")
     void invalidSubjectToken_invalidGrant_noAdminCall() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN))

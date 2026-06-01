@@ -259,6 +259,102 @@ class TenantClaimTokenCustomizerTest {
         assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2C");
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-BE-329 (ADR-MONO-021 D3) — account_type claim
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("authorization_code: account_type from principal details → injected into access_token")
+    void authorizationCode_accountType_injectedIntoAccessToken() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "fan-platform",
+                "tenant_type", "B2C",
+                "account_type", "CONSUMER");
+        when(principal.getDetails()).thenReturn(details);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("account_type")).isEqualTo("CONSUMER");
+    }
+
+    @Test
+    @DisplayName("authorization_code: account_type=OPERATOR honoured from principal details")
+    void authorizationCode_operatorAccountType_injected() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "acme-corp",
+                "tenant_type", "B2B_ENTERPRISE",
+                "account_type", "OPERATOR");
+        when(principal.getDetails()).thenReturn(details);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+    }
+
+    @Test
+    @DisplayName("authorization_code: id_token also receives account_type")
+    void authorizationCode_idToken_receivesAccountType() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "fan-platform",
+                "tenant_type", "B2C",
+                "account_type", "CONSUMER");
+        when(principal.getDetails()).thenReturn(details);
+
+        when(context.getTokenType()).thenReturn(new OAuth2TokenType("id_token"));
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("account_type")).isEqualTo("CONSUMER");
+    }
+
+    @Test
+    @DisplayName("client_credentials: NO account_type claim (a workload is not an account)")
+    void clientCredentials_noAccountType() {
+        RegisteredClient client = buildClient("fan-platform|B2C");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
+    }
+
     @Test
     @DisplayName("authorization_code: id_token also receives tenant claims")
     void authorizationCode_idToken_receivesTenantClaims() {
@@ -473,6 +569,33 @@ class TenantClaimTokenCustomizerTest {
         return new AssumeTenantAuthenticationToken(
                 null, "subject", "urn:ietf:params:oauth:token-type:access_token",
                 tenantId, tenantType);
+    }
+
+    private AssumeTenantAuthenticationToken assumeGrant(
+            String tenantId, String tenantType, String operatorAccountType) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, tenantType, operatorAccountType);
+    }
+
+    @Test
+    @DisplayName("assume-tenant: PRESERVES the operator's account_type=OPERATOR on the assumed token")
+    void assumeTenant_preservesOperatorAccountType() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // The operator stays OPERATOR while acting for a customer (ADR-MONO-021 D3).
+        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
     }
 
     @Test

@@ -64,6 +64,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     private static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
 
     /**
+     * TASK-BE-329 (ADR-MONO-021 D3): the platform-required {@code account_type} claim
+     * (CONSUMER|OPERATOR — jwt-standard-claims.md L46). Injected on the access + id
+     * token for account-bearing grants (authorization_code / refresh_token /
+     * assume-tenant). Omitted for client_credentials (a workload is not an account).
+     */
+    private static final String CLAIM_ACCOUNT_TYPE = "account_type";
+
+    /**
      * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
      * issuance time. Autowired by constructor injection.
      */
@@ -182,6 +190,9 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                     .claim("tenant_type", tenantType);
             log.debug("TenantClaimTokenCustomizer: authorization_code — injected tenant_id={}, " +
                     "tenant_type={} from principal for clientId={}", tenantId, tenantType, clientId);
+            // TASK-BE-329 (D3): account_type from the principal details (set by
+            // CredentialAuthenticationProvider from the credential). Mirrors tenant_id.
+            injectAccountTypeFromPrincipal(context, principal);
             populateEntitledDomains(context, tenantId);
         } else {
             // Fallback: client metadata from ClientSettings (Option B) or clientName (legacy)
@@ -231,9 +242,11 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // it does NOT copy).
         String selectedTenantId = null;
         String selectedTenantType = null;
+        String operatorAccountType = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
+            operatorAccountType = grant.getOperatorAccountType();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -249,6 +262,11 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 .claim("tenant_type", selectedTenantType);
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected tenant_id={}, tenant_type={}",
                 selectedTenantId, selectedTenantType);
+
+        // TASK-BE-329 (D3): PRESERVE the operator's account_type (the operator stays
+        // OPERATOR while acting for a customer). Carried on the grant from the operator's
+        // validated subject token (AssumeTenantAuthenticationProvider). Mirrors tenant.
+        injectAccountType(context, operatorAccountType);
 
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         populateEntitledDomains(context, selectedTenantId);
@@ -318,6 +336,33 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             }
         }
         return null;
+    }
+
+    /**
+     * TASK-BE-329 (D3): injects the {@code account_type} claim from the authenticated
+     * principal's details map (set by
+     * {@link com.example.auth.infrastructure.security.CredentialAuthenticationProvider}
+     * from the credential). Exact mirror of the {@code tenant_id} principal-details
+     * read. If the principal carries no account_type (e.g. a client-metadata fallback
+     * path with no credential principal), the claim is omitted — the gateways already
+     * tolerate a missing claim by rejecting, and this path is not the credential
+     * form-login path that the contract targets.
+     */
+    private void injectAccountTypeFromPrincipal(JwtEncodingContext context, Authentication principal) {
+        injectAccountType(context, extractTenantAttribute(principal, CLAIM_ACCOUNT_TYPE));
+    }
+
+    /**
+     * TASK-BE-329 (D3): injects a resolved {@code account_type} value (CONSUMER|OPERATOR)
+     * onto the token claims when present and non-blank. Shared by the
+     * authorization_code/refresh_token path (read from principal details) and the
+     * assume-tenant path (carried on the grant — operator's preserved type).
+     */
+    private void injectAccountType(JwtEncodingContext context, String accountType) {
+        if (accountType != null && !accountType.isBlank()) {
+            context.getClaims().claim(CLAIM_ACCOUNT_TYPE, accountType);
+            log.debug("TenantClaimTokenCustomizer: injected account_type={}", accountType);
+        }
     }
 
     /**

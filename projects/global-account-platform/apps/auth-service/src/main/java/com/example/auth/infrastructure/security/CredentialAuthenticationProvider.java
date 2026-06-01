@@ -103,9 +103,19 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // NOT on the allowlist, and the subsequent /oauth2/token round-trip
         // fails with `IllegalArgumentException: not in the allowlist`.
         // `HashMap` is on the allowlist via Spring Security's stock mixins.
+        // TASK-BE-329 (ADR-MONO-021 D1/D3): the per-account account_type
+        // (CONSUMER|OPERATOR) is read from the resolved credential and published in
+        // the details map so TenantClaimTokenCustomizer emits it as the account_type
+        // claim — exactly as tenant_id is. Defaults to CONSUMER for rows minted
+        // during the migration window (column DEFAULT 'CONSUMER').
+        String accountType = Optional.ofNullable(credential.getAccountType())
+                .filter(s -> !s.isBlank())
+                .orElse(Credential.ACCOUNT_TYPE_CONSUMER);
+
         Map<String, Object> details = new HashMap<>();
         details.put("tenant_id", tenantId);
         details.put("tenant_type", tenantType);
+        details.put("account_type", accountType);
         details.put("account_id", credential.getAccountId());
 
         UsernamePasswordAuthenticationToken authenticated =
