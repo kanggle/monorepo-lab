@@ -8,7 +8,7 @@ Admit `console-web` vitest unit + `tsc --noEmit` typecheck + `next lint` into th
 
 # Status
 
-review
+done
 
 # Owner
 
