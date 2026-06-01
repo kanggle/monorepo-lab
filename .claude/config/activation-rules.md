@@ -107,7 +107,7 @@ Activate rules for:
 - operational traceability
 - SSO integration
 
-→ Detailed rules: *(file to be created when a project declares this trait)*
+→ Detailed rules: [`rules/traits/internal-system.md`](../../rules/traits/internal-system.md)
 
 ---
 

@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-167-internal-system-trait-rules-authoring.md` — **REVIEW** (작업 완료, PR open). 누락된 `rules/traits/internal-system.md` 작성(on-demand-policy backfill — erp-platform 이 ADR-MONO-016 부트스트랩에서 `internal-system` primary 선언했으나 상세 rules 파일 미추가) + `.claude/config/activation-rules.md` line 110 stale "(file to be created)" 포인터 정합. **no new decisions** — 이미 고정된 5 카테고리(RBAC / admin·operator workflow / scheduled jobs / operational traceability / SSO integration)를 audit-heavy.md sibling 구조로 표현(I1 SSO 단일인증 / I2 외부노출금지·내부망경계 / I3 RBAC fail-closed / I4 admin·operator 워크플로+SoD / I5 scheduled-jobs 거버넌스 / I6 operational traceability). 카탈로그(taxonomy/traits.md/activation-rules)는 이미 등록 — membership 변경 없음. domain-agnostic(erp 특화는 erp.md cross-ref). **classifier 가 `.claude/config/` 는 차단 안 함**(hooks/agents/commands 만) → activation-rules 포인터 직접 갱신 성공. monorepo-level(shared `rules/`). 분석=Opus 4.8 / 구현=Opus. surfaced-by=refactor_sweep RULES-001 + audit-memory 2026-06-02. ref=[[project_refactor_sweep_status]].
 
 ## done
 
