@@ -53,7 +53,23 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     } catch {
       // localStorage 접근 실패 시 무시
     }
-    await signOut({ callbackUrl: '/' });
+    // RP-initiated logout (TASK-PC-FE-033 / BE-328): fetch the GAP end_session
+    // URL FIRST (while the id_token cookie still exists), then clear the local
+    // NextAuth session, then hard-navigate to GAP so the IdP terminates its own
+    // session — otherwise the next login silently re-authenticates with no
+    // credential form. Falls back to a local-only logout when there is no
+    // id_token_hint or the lookup fails.
+    let endSessionUrl: string | null = null;
+    try {
+      const res = await fetch('/api/auth/end-session-url', { cache: 'no-store' });
+      if (res.ok) {
+        endSessionUrl = ((await res.json()) as { url: string | null }).url;
+      }
+    } catch {
+      // network/lookup failure → local-only logout
+    }
+    await signOut({ redirect: false });
+    window.location.href = endSessionUrl ?? '/';
   }, []);
 
   const value = useMemo(

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { signOut } from '@/shared/auth/auth';
+import { buildGapEndSessionUrl } from '@/shared/auth/federated-logout';
 import { getFanSession, isAuthenticated } from '@/shared/auth/session';
 
 /** Top navigation. Server Component — reads session via the server boundary. */
@@ -43,7 +44,12 @@ export async function Header() {
               <form
                 action={async () => {
                   'use server';
-                  await signOut({ redirectTo: '/login' });
+                  // RP-initiated logout: clear the local NextAuth session AND
+                  // redirect to GAP end_session so the IdP terminates its own
+                  // session (no silent re-auth on next login). Falls back to a
+                  // local-only logout when there is no id_token_hint.
+                  const endSession = await buildGapEndSessionUrl();
+                  await signOut({ redirectTo: endSession ?? '/login' });
                 }}
               >
                 <button

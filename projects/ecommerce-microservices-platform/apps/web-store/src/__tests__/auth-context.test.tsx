@@ -111,7 +111,7 @@ describe('AuthContext (NextAuth + GAP)', () => {
     expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/' });
   });
 
-  it('logout() 호출 시 signOut 호출 + 토큰 브리지 정리', async () => {
+  it('logout() 호출 시 end_session URL 조회 → signOut(redirect:false) → GAP 리다이렉트 (RP-initiated logout)', async () => {
     mockUseSession.mockReturnValue({
       data: {
         accountId: 'acc-1',
@@ -124,6 +124,25 @@ describe('AuthContext (NextAuth + GAP)', () => {
       update: vi.fn(),
     } as ReturnType<typeof useSession>);
 
+    // The server route returns the GAP end_session URL; logout must navigate to
+    // it so the IdP session is terminated (RP-initiated logout).
+    const endSession =
+      'http://gap.local/connect/logout?id_token_hint=x&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F&client_id=ecommerce-web-store-client';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: endSession }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const hrefSetter = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        set href(v: string) {
+          hrefSetter(v);
+        },
+      },
+    });
+
     const user = userEvent.setup();
     render(
       <AuthProvider>
@@ -134,8 +153,14 @@ describe('AuthContext (NextAuth + GAP)', () => {
     await user.click(screen.getByText('logout'));
 
     await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: '/' });
+      expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
     });
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/end-session-url', {
+      cache: 'no-store',
+    });
+    expect(hrefSetter).toHaveBeenCalledWith(endSession);
+
+    vi.unstubAllGlobals();
   });
 
   it('useAuth 를 AuthProvider 없이 사용하면 에러가 발생한다', () => {

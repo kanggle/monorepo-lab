@@ -30,5 +30,11 @@ declare module 'next-auth/jwt' {
     accountId?: string;
     tenantId?: string | null;
     roles?: string[];
+    /**
+     * GAP OIDC `id_token` — kept server-side on the JWT ONLY to serve as the
+     * `id_token_hint` for RP-initiated logout (GAP `end_session`). Never copied
+     * onto the public Session (would leak via /api/auth/session).
+     */
+    idToken?: string;
   }
 }
