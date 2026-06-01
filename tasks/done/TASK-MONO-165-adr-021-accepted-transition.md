@@ -8,7 +8,9 @@ ADR-MONO-021 PROPOSED → ACCEPTED 승급 (doc-only governance flip). `account_t
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-02)**: impl PR #1008 (squash `6bbdca08`). ADR-MONO-021 `PROPOSED → ACCEPTED` doc-only flip (sibling ADR-020/MONO-157). D1-D5 finalised byte-unchanged(§1-5/7 byte-identical to PROPOSED #1006 `20f19c26`; flip=Status+History ACCEPTED clause+§6 ACCEPTED row[`#1006` 해소]+§1.3/§3.3 past-tense, HARDSTOP-04). ADR-003a §3 row #28(sibling #26/#24). doc-only. 3차원 ✓(docs fast-lane). **효과**: ADR-021 §3.3 execution roadmap **UNPAUSED** — credentials `account_type` 컬럼+customizer/provider 주입(D1/D3) → provisioning(D2) → INT-023 e2e 단언(D4 step3), 각 future task, dependency-correct base = 본 ACCEPTED main. 분석=Opus 4.8 / 구현=Opus.
 
 # Owner
 
