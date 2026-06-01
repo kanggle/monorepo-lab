@@ -8,7 +8,7 @@ Author the missing `rules/traits/internal-system.md` trait rules file (on-demand
 
 # Status
 
-review
+done
 
 # Owner
 
