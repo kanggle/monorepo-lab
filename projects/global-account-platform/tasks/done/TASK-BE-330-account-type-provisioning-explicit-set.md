@@ -8,7 +8,9 @@ ADR-MONO-021 § 3.3 step 2 (D2) — set `account_type` explicitly at provisionin
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-02)**: impl PR #1012 (squash `18bf38d3`). ADR-MONO-021 §3.3 step 2(D2) — `account_type`(CONSUMER\|OPERATOR)을 프로비저닝 경로가 명시 결정해 `POST /internal/auth/credentials` 로 carry. `AuthServicePort.createCredential` 5번째 param `accountType` + `ACCOUNT_TYPE_CONSUMER`/`OPERATOR` 경계 상수 + `SignupUseCase`(self-service)→CONSUMER / `ProvisionAccountUseCase`(enterprise)→OPERATOR (jwt-standard-claims.md L14-19) + `AuthServiceClient` 조건부 body 포함(null→생략→CONSUMER 기본값) + `CreateCredentialRequest`/`Command` optional accountType(@Pattern CONSUMER\|OPERATOR, @Deprecated overload 보존) + `CreateCredentialUseCase`→step1 `Credential.create(..accountType..)` factory + auth-internal.md 계약. tenant_id carry-through(BE-313) 정확 미러. **3차원**(MERGED `18bf38d3`/tip 일치/pre-merge 0 — **Integration global-account-platform PASS = 실 MySQL IT** + E2E smoke gap docker-compose PASS; 전 체크 green). 분석=Opus 4.8 / 구현=Opus. **후속(ADR-021 §3.3)**: D4 step3 INT-023 e2e account_type=CONSUMER 단언.
 
 # Owner
 
