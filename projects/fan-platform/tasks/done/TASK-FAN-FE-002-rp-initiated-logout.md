@@ -8,7 +8,9 @@ fan-platform-web logout = **RP-initiated OIDC logout** (GAP `end_session`). Toda
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-01)**: impl PR #1000 (squash `158253bf`, fan+ecommerce 묶음). fan-platform-web RP-initiated OIDC logout — id_token 캡처(jwt callback) + `federated-logout.ts`(server-only `getToken`→GAP end_session URL, post_logout_redirect_uri=app origin+`/` exact-match V0011) + Header server-action `signOut({redirectTo: endSession ?? '/login'})`. BE-328(매퍼가 post-logout→RegisteredClient 복사)로 V0011 fan URI effective. tsc+lint clean, CI green. **AC-1 라이브 브라우저(로그인→로그아웃→폼 재노출)는 후속 스모크**(잔여 리스크 낮음: GAP 수락 BE-328 일반증명 + null→local-only fallback; (A) 결정). 3차원 ✓.
 
 # Owner
 
