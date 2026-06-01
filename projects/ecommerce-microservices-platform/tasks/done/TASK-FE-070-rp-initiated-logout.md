@@ -1,5 +1,7 @@
 # TASK-FE-070: web-store logout = RP-initiated OIDC logout (GAP end_session)
 
+> **Status: DONE (2026-06-01)** — impl PR #1000 (squash `158253bf`, fan+ecommerce 묶음). web-store RP-initiated OIDC logout: id_token 캡처(jwt callback) + `federated-logout.ts`(server-only `getToken`→GAP end_session URL) + route `/api/auth/end-session-url` + client `logout()` = URL fetch→`signOut({redirect:false})`→navigate; cart/token-bridge cleanup 보존. 2 vitest 갱신(CI green). BE-328(매퍼 post-logout→RegisteredClient 복사)로 V0012 web-store URI effective. tsc+lint clean. **AC-1 라이브 브라우저는 후속 스모크**(잔여 리스크 낮음: GAP 수락 BE-328 일반증명 + fetch-fail→local-only fallback; (A) 결정). 3차원 ✓.
+
 ## Goal
 
 web-store logout terminates the GAP IdP session so the next sign-in re-presents the credential form (no silent re-auth). Today `logout()` only calls NextAuth `signOut` (clears the local session cookie); the GAP (SAS) IdP session survives → silent re-authentication on the next login. Same defect class as platform-console (TASK-PC-FE-033) and fan-platform-web (TASK-FAN-FE-002).
