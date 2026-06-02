@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-332-wms-readmodel-nullable-temporal-filter-pg-type-inference-class-cleanup.md` — BE-331 audit follow-up: cast the nullable **temporal** filter bounds across the remaining 5 wms-platform PostgreSQL read-model queries that carry the same `:tempParam IS NULL OR …` 42P18 pattern (admin `ShipmentSummary`/`OrderSummary`/`AsnSummary`, master `JpaLot`, outbound `Order` find/count). Each 500s on an unfiltered search. `CAST(:p AS string)` fix (query text only) + 6 real-PostgreSQL regression tests. Audit ruled out global-account/erp/finance (MySQL — 42P18 is PG-specific, proven) + scm procurement (no temporal filter). 분석=Opus 4.8 / 구현 권장=Opus (직접 — real-PG 검증 admin+master+outbound).
 
 ## in-progress
 

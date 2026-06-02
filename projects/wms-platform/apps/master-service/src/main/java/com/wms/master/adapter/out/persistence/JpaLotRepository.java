@@ -29,12 +29,16 @@ interface JpaLotRepository extends JpaRepository<LotJpaEntity, UUID> {
      * Filter by optional skuId, optional status, optional expiry window. Null
      * parameters mean "do not filter".
      */
+    // CAST(:p AS string) on the nullable temporal IS-NULL guards — a bare
+    // `:expiryBefore IS NULL` binds an untyped null PostgreSQL cannot type
+    // (42P18) on an unfiltered call → 500. Same fix as AlertLogRepository
+    // (TASK-BE-331); the < / > comparison keeps temporal typing. TASK-BE-332.
     @Query("""
             SELECT l FROM LotJpaEntity l
             WHERE (:skuId IS NULL OR l.skuId = :skuId)
               AND (:status IS NULL OR l.status = :status)
-              AND (:expiryBefore IS NULL OR (l.expiryDate IS NOT NULL AND l.expiryDate < :expiryBefore))
-              AND (:expiryAfter  IS NULL OR (l.expiryDate IS NOT NULL AND l.expiryDate > :expiryAfter))
+              AND (CAST(:expiryBefore AS string) IS NULL OR (l.expiryDate IS NOT NULL AND l.expiryDate < :expiryBefore))
+              AND (CAST(:expiryAfter  AS string) IS NULL OR (l.expiryDate IS NOT NULL AND l.expiryDate > :expiryAfter))
             """)
     Page<LotJpaEntity> search(
             @Param("skuId") UUID skuId,

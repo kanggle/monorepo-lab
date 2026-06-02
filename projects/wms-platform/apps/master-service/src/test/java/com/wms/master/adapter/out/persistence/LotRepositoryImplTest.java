@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -219,6 +221,25 @@ class LotRepositoryImplTest {
         secondLoad.applyUpdate(LocalDate.of(2028, 1, 1), null, false, "actor-second");
         assertThatThrownBy(() -> adapter.update(secondLoad))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    }
+
+    @Test
+    @DisplayName("search — all-null filters run on Postgres without 42P18 (TASK-BE-332)")
+    void search_allNullFilters_doesNotFailPgTypeInference() {
+        // The nullable temporal bounds (expiryBefore/expiryAfter) bound as untyped
+        // nulls made PostgreSQL abort the prepared statement with
+        // `42P18 could not determine data type of parameter`. Pin the all-null path
+        // (the LotSearch endpoint's default) against real Postgres. Same class as
+        // BE-331 AlertLog.
+        UUID skuId = UUID.randomUUID();
+        seedSku(skuId);
+        Lot saved = adapter.insert(lot(skuId, "LOT-BE332", null, LocalDate.of(2026, 12, 31)));
+
+        Page<LotJpaEntity> result =
+                jpaRepository.search(null, null, null, null, PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .anyMatch(e -> e.getId().equals(saved.getId()));
     }
 
     // ---------- helpers ----------
