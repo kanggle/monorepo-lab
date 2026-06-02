@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-035-console-web-docker-build-cache-optimization.md` — **REVIEW** (impl PR open; build-infra; spec-less bundled per `feedback_pr_bundling`, TASK-PC-FE-032 선례). `console-web` Docker 이미지 빌드 최적화 — `# syntax=docker/dockerfile:1` + BuildKit 캐시 마운트 2건(`deps`: pnpm store `/root/.local/share/pnpm/store`, `builder`: Next.js 증분 컴파일 캐시 `/app/.next/cache`) + `.dockerignore` 테스트 소스/test-only 설정 제외(`tests`·`vitest`/`playwright` config·`**/*.test|spec.ts(x)`·`.github`; **`.eslintrc.json`은 `next build` lint가 쓰므로 보존**). 런타임 동작·이미지 크기 불변(`runner`는 standalone/static/public만 복사, `.next/cache` 미복사). **실측 2026-06-02**: cold(.next/cache 비어있음) 229s → warm(소스 1줄 변경, 마운트 populated) 91s **(~60%↓)** → 무변경 8s(full layer cache). app source/producer/console-bff/contract/ADR **무변경**(diff=Dockerfile+.dockerignore+task+INDEX only). provenance off(`--provenance=false --sbom=false`)는 빌드-명령 플래그라 문서화만(미커밋, compose/CI 편입은 별건). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. 후속 후보=공유 frontend base Dockerfile 통합(console-web+ecommerce+fan, root TASK-MONO 성격).
 
 ## done
 

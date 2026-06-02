@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Multi-stage Next.js standalone production image.
 # Mirrors the standard Next.js standalone pattern; admin-web has no Dockerfile
 # so this follows the official Next.js Docker best-practice for standalone output.
@@ -20,7 +21,11 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+# pnpm store cache mount — persists the content-addressable package store across
+# builds so a lockfile change (deps-layer cache miss) re-links from cache instead
+# of re-downloading. No effect on the image (store lives only in the mount).
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # ---- builder stage ----
 FROM node:20-alpine AS builder
@@ -36,7 +41,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV NEXT_STANDALONE=1
 
-RUN pnpm build
+# .next/cache mount — persists Next.js's incremental webpack/SWC compile cache
+# across builds. The `COPY . .` layer is invalidated on every source change, so
+# without this `pnpm build` always recompiles cold; the mount turns source-only
+# rebuilds into incremental compiles. NOT copied into the runner image (only
+# .next/standalone + .next/static are), so image size is unchanged.
+RUN --mount=type=cache,target=/app/.next/cache \
+    pnpm build
 
 # ---- runner stage ----
 FROM node:20-alpine AS runner

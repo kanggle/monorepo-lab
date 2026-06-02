@@ -10,3 +10,17 @@ README.md
 coverage
 playwright-report
 test-results
+# Test sources + test-only configs — never imported by `next build`, so
+# excluding them keeps a test-file edit from invalidating the `COPY . .` layer
+# (avoids a needless recompile). NOTE: .eslintrc.json is intentionally NOT
+# excluded — `next build` runs ESLint and relies on it.
+tests
+vitest.config.ts
+vitest.setup.ts
+playwright.config.ts
+playwright.smoke.config.ts
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+.github
