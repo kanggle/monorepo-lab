@@ -200,7 +200,16 @@ class PurchaseOrderControllerSliceTest {
 
         mockMvc.perform(get(BASE_URL).param("status", "DRAFT"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].status").value("DRAFT"));
+                .andExpect(jsonPath("$.data.content[0].status").value("DRAFT"))
+                // TASK-SCM-BE-020: monetary/quantity decimals serialise as
+                // STRINGS per procurement-api.md (NOT JSON numbers) — the
+                // platform-console PC-FE-008 consumer parses them as z.string().
+                .andExpect(jsonPath("$.data.content[0].totalAmount")
+                        .value(org.hamcrest.Matchers.instanceOf(String.class)))
+                .andExpect(jsonPath("$.data.content[0].lines[0].quantity")
+                        .value(org.hamcrest.Matchers.instanceOf(String.class)))
+                .andExpect(jsonPath("$.data.content[0].lines[0].unitPrice")
+                        .value(org.hamcrest.Matchers.instanceOf(String.class)));
     }
 
     @Test
