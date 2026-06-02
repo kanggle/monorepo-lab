@@ -8,7 +8,7 @@ TASK-BE-334
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -52,9 +52,9 @@ outbound-service is **not deployed in any running stack** (absent from the feder
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `SecurityConfig` is `@ConditionalOnWebApplication(type = SERVLET)`; a `webEnvironment=NONE` `@SpringBootTest` no longer fails with `No qualifying bean of type HttpSecurity` (verified — SagaSweeperIT/TmsClientAdapterIT now load context + progress to the deferred test-data layer).
-- [ ] **AC-2** `:outbound-service:check` green — web-slice/unit tests unaffected (web contexts still load SecurityConfig; production security unchanged).
-- [ ] **AC-3** Diff confined to `SecurityConfig.java` (+ task lifecycle). No contract/ADR/domain change.
+- [x] **AC-1** `SecurityConfig` is `@ConditionalOnWebApplication(type = SERVLET)`; a `webEnvironment=NONE` `@SpringBootTest` no longer fails with `No qualifying bean of type HttpSecurity` (verified — SagaSweeperIT/TmsClientAdapterIT now load context + progress to the deferred test-data FK layer).
+- [x] **AC-2** `:outbound-service:check` green locally + CI "Build & Test (JDK 21, Linux)" 2m26s (19 checks pass) — web-slice/unit tests unaffected; production security unchanged.
+- [x] **AC-3** Diff confined to `SecurityConfig.java` (+ task lifecycle). No contract/ADR/domain change.
 
 # Remaining (deferred follow-up — dedicated task, low priority)
 
@@ -81,11 +81,11 @@ Full outbound `integrationTest` green + CI wiring: fix the per-test FK setup (`S
 
 # Definition of Done
 
-- [ ] `@ConditionalOnWebApplication(SERVLET)` on `SecurityConfig`.
-- [ ] `:check` green; securityFilterChain context-load failure eliminated (verified in IT run).
-- [ ] Diff confined; no contract/ADR/domain change.
-- [ ] Task md + `INDEX.md` updated (incl. the deferred comprehensive IT-suite repair).
-- [ ] Ready for review.
+- [x] `@ConditionalOnWebApplication(SERVLET)` on `SecurityConfig`.
+- [x] `:check` green; securityFilterChain context-load failure eliminated (verified in IT run).
+- [x] Diff confined; no contract/ADR/domain change.
+- [x] Task md + `INDEX.md` updated (incl. the deferred comprehensive IT-suite repair).
+- [x] Reviewed + merged (impl PR #1047 squash `fe9607b6`, 3-dim verified).
 
 ---
 
