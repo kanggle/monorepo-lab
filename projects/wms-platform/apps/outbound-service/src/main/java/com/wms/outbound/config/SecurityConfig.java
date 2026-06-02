@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -49,7 +50,14 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * {@code roles} (Spring Security default). Both are mapped to {@code ROLE_*}
  * authorities so {@code @PreAuthorize("hasRole('OUTBOUND_READ')")} works.
  */
+// TASK-BE-334: servlet-web only. The filter chain depends on HttpSecurity, which
+// exists solely in a servlet web context. Without this, a @SpringBootTest with
+// webEnvironment=NONE (the outbound IT base) fails to load — securityFilterChain
+// has no HttpSecurity bean to inject. Production runs as a servlet web app, so
+// the condition is true there (security unchanged); non-web contexts (the saga /
+// TMS ITs that only autowire domain beans) cleanly skip it.
 @Configuration
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableMethodSecurity
 public class SecurityConfig {
 
