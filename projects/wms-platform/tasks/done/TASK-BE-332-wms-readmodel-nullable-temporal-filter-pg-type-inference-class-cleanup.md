@@ -8,7 +8,7 @@ wms-platform PostgreSQL read-model queries — cast the nullable **temporal** fi
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -69,12 +69,12 @@ Every wms-platform PostgreSQL read-model search endpoint with an optional date r
 
 # Acceptance Criteria
 
-- [ ] **AC-1** All 5 repositories' nullable temporal IS-NULL guards are `CAST(:p AS string)`; the `>=`/`<=`/`<`/`>` comparisons keep temporal typing.
-- [ ] **AC-2** `admin-service` `:integrationTest` green incl. the 3 new search-null tests (real PostgreSQL 16) — verified locally.
-- [ ] **AC-3** `master-service` `LotRepositoryImplTest` green incl. the new search-null-expiry test (real PostgreSQL 16) — verified locally.
-- [ ] **AC-4** `outbound-service` `OrderJpaRepositoryFilterIT` green (findFiltered + countFiltered all-null, real PostgreSQL 16) — verified locally.
-- [ ] **AC-5** Diff confined to the 5 repository `@Query` strings + the 4 touched/added test files (+ task lifecycle). No schema/entity/domain/contract/ADR change.
-- [ ] **AC-6** `:check` green for the 3 services (CI).
+- [x] **AC-1** All 5 repositories' nullable temporal IS-NULL guards are `CAST(:p AS string)`; the `>=`/`<=`/`<`/`>` comparisons keep temporal typing.
+- [x] **AC-2** `admin-service` `:integrationTest` green incl. the 3 new search-null tests (real PostgreSQL 16) — 14/14 locally + CI "Integration (master+notification)" job 2m24s.
+- [x] **AC-3** `master-service` `LotRepositoryImplTest` green incl. the new search-null-expiry test (real PostgreSQL 16) — verified locally.
+- [x] **AC-4** `outbound-service` `OrderJpaRepositoryFilterIT` green (findFiltered + countFiltered all-null, real PostgreSQL 16) — verified locally.
+- [x] **AC-5** Diff confined to the 5 repository `@Query` strings + the 4 touched/added test files (+ task lifecycle). No schema/entity/domain/contract/ADR change.
+- [x] **AC-6** `:check` green for the 3 services — CI "Build & Test (JDK 21, Linux)" 3m35s pass (20 checks total pass).
 
 # Related Specs
 
@@ -104,11 +104,11 @@ Every wms-platform PostgreSQL read-model search endpoint with an optional date r
 
 # Definition of Done
 
-- [ ] 5 repositories' temporal IS-NULL guards cast; 6 regression tests added.
-- [ ] admin/master/outbound real-PostgreSQL tests green locally.
-- [ ] Diff scope confined; schema/entity/contract/ADR untouched.
-- [ ] Task md + `INDEX.md` updated.
-- [ ] Ready for review.
+- [x] 5 repositories' temporal IS-NULL guards cast; 6 regression tests added.
+- [x] admin/master/outbound real-PostgreSQL tests green locally.
+- [x] Diff scope confined; schema/entity/contract/ADR untouched.
+- [x] Task md + `INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1043 squash `02f3eef0`, 3-dim verified).
 
 ---
 
