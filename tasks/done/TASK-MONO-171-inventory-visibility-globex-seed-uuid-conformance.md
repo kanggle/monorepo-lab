@@ -8,7 +8,7 @@ Fix the `inventory-visibility-service` **globex demo seed** so the `node_id` / `
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -60,12 +60,12 @@ Root-owned seed fixtures — DATA ONLY:
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `seed-scm-inv.sql` + `07-scm-inventory.sql` use valid UUID strings for every `id` / `node_id` / `last_event_id`, referentially consistent (snapshot.node_id == staleness.node_id == node.id within each file).
-- [ ] **AC-2** No non-UUID id literal remains in either seed (grep clean).
-- [ ] **AC-3** Diff confined to the two seed `.sql` files (+ task lifecycle). No producer / application / contract / ADR change.
-- [ ] **AC-4** (live, data-layer) Running `scm-inv-postgres` globex rows replaced with the corrected UUID rows; `SELECT` confirms valid-UUID `id`/`node_id`/`last_event_id`.
-- [ ] **AC-5** Federation-hardening-e2e gate stays GREEN on the PR (no spec/assertion references the old literals — verified by grep; the row stays `globex-corp` + non-empty + FRESH).
-- [ ] **AC-6** (live, user browser) globex-corp active tenant → console **SCM 운영** inventory snapshot section renders live (no `scm_error` on `/api/inventory-visibility/snapshot`; combined with SCM-BE-020 the SCM 운영 page renders fully).
+- [x] **AC-1** `seed-scm-inv.sql` + `07-scm-inventory.sql` use valid UUID strings for every `id` / `node_id` / `last_event_id`, referentially consistent (snapshot.node_id == staleness.node_id == node.id within each file). (`e2e00000-…` / `de300000-…` namespaces.)
+- [x] **AC-2** No non-UUID id literal remains in either seed (grep clean — `**/*.sql` scan returned 0).
+- [x] **AC-3** Diff confined to the two seed `.sql` files (+ task lifecycle). No producer / application / contract / ADR change.
+- [x] **AC-4** (live, data-layer) Running `federation-hardening-e2e-scm-inv-postgres-1` globex rows replaced (DELETE malformed + INSERT corrected); `SELECT` confirms valid-UUID `id`/`node_id`/`last_event_id`, referentially consistent. Defensive scan: 0 non-UUID rows across all tenants.
+- [x] **AC-5** Full CI GREEN on PR #1039 (19 checks pass + 1 skip; the transient `scm-platform v1 cross-service smoke` Docker-Hub `eclipse-temurin:21-jre-alpine` registry i/o timeout cleared on re-run — unrelated to the data change). No spec/assertion references the old literals (they existed ONLY in the two seeds).
+- [ ] **AC-6** (live, user browser) globex-corp active tenant → console **SCM 운영** inventory snapshot section renders live (no `scm_error` on `/api/inventory-visibility/snapshot`; combined with SCM-BE-020 the SCM 운영 page renders fully). — pending user browser smoke.
 
 # Related Specs
 
