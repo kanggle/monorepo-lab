@@ -8,7 +8,7 @@ TASK-SCM-BE-021
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -85,7 +85,7 @@ Server-side data-integrity faults (corrupt persisted read-model values) surface 
 - [x] Unit tests green; both services' `:check` green.
 - [x] Diff confined; no contract/spec/ADR change.
 - [x] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified) — pending close chore.
+- [x] Reviewed + merged (impl PR #1049 squash `e4316922`, 3-dim verified).
 
 ---
 
