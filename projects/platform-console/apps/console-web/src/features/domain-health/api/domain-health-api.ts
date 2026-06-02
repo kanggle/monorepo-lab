@@ -69,10 +69,33 @@ async function readErrorEnvelope(
  * BFF proxy route. Throws `ApiError(status, code, message)` for any
  * non-2xx response; returns the parsed/validated envelope otherwise.
  */
-export async function fetchDomainHealth(): Promise<DomainHealth> {
+export async function fetchDomainHealth(
+  /**
+   * Optional Cookie header for server-side callers (the SSR
+   * {@link getDomainHealthState} wrapper passes the page's request cookies
+   * verbatim here). On the client, `credentials: 'include'` lets the browser
+   * attach the HttpOnly cookies natively, so this stays undefined.
+   *
+   * <p>TASK-PC-FE-037 (mirrors the TASK-PC-FE-011/030 fix on the
+   * operator-overview sibling) — Node `fetch` in a server component has no
+   * cookie jar, and `credentials: 'include'` is a browser-only directive.
+   * Without this explicit forward, the in-process proxy route's `cookies()`
+   * read returns empty → the proxy bails with `400 NO_ACTIVE_TENANT` → the
+   * 도메인 상태 개요 page shows "select a tenant" on EVERY load even after
+   * the operator has selected one (the bug this closes).
+   */
+  cookieHeader?: string,
+): Promise<DomainHealth> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (cookieHeader) {
+    headers.Cookie = cookieHeader;
+  }
   const res = await fetch(domainHealthUrl(), {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers,
+    // Same-origin HttpOnly session cookies ride through the proxy on the
+    // browser path; on the server path the `Cookie` header above carries them
+    // explicitly (Node fetch has no implicit cookie jar).
     credentials: 'include',
     cache: 'no-store',
   });
@@ -110,7 +133,17 @@ export interface DomainHealthState {
 
 export async function getDomainHealthState(): Promise<DomainHealthState> {
   try {
-    const health = await fetchDomainHealth();
+    // TASK-PC-FE-037 — forward the page's request cookies to the in-process
+    // proxy fetch (the operator-overview sibling already does this via
+    // TASK-PC-FE-030). Next.js Node `fetch` does NOT auto-forward cookies on
+    // internal calls (`credentials: 'include'` is browser-only), so without
+    // this explicit header the proxy's `cookies()` reads empty → 400
+    // NO_ACTIVE_TENANT → `noTenant: true` even when the session HAS an active
+    // tenant. Lazy-imported so the browser path (`fetchDomainHealth` via the
+    // React Query hook) never pulls in `next/headers`.
+    const { cookies } = await import('next/headers');
+    const cookieHeader = (await cookies()).toString();
+    const health = await fetchDomainHealth(cookieHeader);
     return {
       health,
       noTenant: false,

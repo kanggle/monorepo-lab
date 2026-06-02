@@ -22,6 +22,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     SSR page consumes.
  */
 
+// TASK-PC-FE-037 — `getDomainHealthState()` now lazy-imports `next/headers`
+// `cookies()` and forwards `(await cookies()).toString()` as the Cookie header
+// to the in-process proxy fetch (mirrors the operator-overview sibling). Outside
+// a request scope the real `cookies()` throws, so it must be mocked here.
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    toString: () => 'console_access_token=a; console_operator_token=op; console_active_tenant=acme-corp',
+    get: () => undefined,
+  }),
+}));
+
 import {
   DomainHealthSchema,
   fetchDomainHealth,
@@ -257,6 +268,19 @@ describe('getDomainHealthState — discriminated server-side state', () => {
     const state = await getDomainHealthState();
     expect(state.health).toBeNull();
     expect(state.noTenant).toBe(true);
+  });
+
+  it('forwards the request cookies as the Cookie header to the in-process proxy (TASK-PC-FE-037 regression) — without this the SSR fetch carries no session cookie and the proxy fast-fails NO_ACTIVE_TENANT on every load', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getDomainHealthState();
+
+    const [, init] = fetchMock.mock.calls[0];
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Cookie).toBe(
+      'console_access_token=a; console_operator_token=op; console_active_tenant=acme-corp',
+    );
   });
 
   it('401 → { unauthorized: true }', async () => {

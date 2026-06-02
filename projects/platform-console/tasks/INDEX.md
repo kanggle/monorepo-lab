@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-037-domain-health-ssr-cookie-forward.md` — **REVIEW** (impl PR open; console-web bugfix). 도메인 상태 개요(`/dashboards/health`)가 **테넌트 선택 후에도** "테넌트를 먼저 선택하세요" 게이트를 띄우는 버그(FE-036 라이브 검증 중 사용자 보고; overview는 정상, health만). **RC**: SSR `getDomainHealthState`/`fetchDomainHealth`가 in-process proxy fetch에 **요청 쿠키를 전달 안 함** → Node fetch는 `credentials:'include'`로 쿠키 자동전달 X → proxy `cookies()` 빈값 → 매 로드 `400 NO_ACTIVE_TENANT`(active-tenant 쿠키 유무 무관). operator-overview는 **PC-FE-030(#790)**에서 쿠키전달 픽스했으나 sibling인 domain-health(PC-FE-013)엔 누락. **FIX**: `fetchDomainHealth(cookieHeader?)` 추가 + `getDomainHealthState`가 `(await cookies()).toString()` 전달(operator-overview 미러) + react-query 훅 `queryFn: () => fetchDomainHealth()` 래핑(context가 cookieHeader로 새 `Cookie:[object Object]` 방지). **로컬 선검증: vitest 780/780(+1 회귀) + tsc rc=0 + lint clean.** producer/BFF/contract/ADR 무변경. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6.
 
 ## done
 
