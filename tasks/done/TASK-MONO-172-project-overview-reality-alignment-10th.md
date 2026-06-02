@@ -8,7 +8,7 @@ TASK-MONO-172
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -80,7 +80,7 @@ review
 - [x] 7 surgical edits applied to `docs/project-overview.md`.
 - [x] Diff confined; no code/spec/ADR change.
 - [x] Task md + root `tasks/INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified) — pending close chore.
+- [x] Reviewed + merged (impl PR #1051 squash `f43e803c`, 3-dim verified).
 
 ---
 
