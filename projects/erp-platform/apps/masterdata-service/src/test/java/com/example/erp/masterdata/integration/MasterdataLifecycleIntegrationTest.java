@@ -37,7 +37,7 @@ class MasterdataLifecycleIntegrationTest extends AbstractMasterdataIntegrationTe
         DepartmentView created = service.createDepartment(new CreateDepartmentCommand(
                 OPERATOR, "DEPT-LIFE-1", "Sales", null, LocalDate.of(2026, 1, 1)));
         assertThat(created.status()).isEqualTo("ACTIVE");
-        assertThat(created.effectiveFrom()).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(created.effectivePeriod().effectiveFrom()).isEqualTo(LocalDate.of(2026, 1, 1));
 
         DepartmentView read = service.getDepartment(created.id(), OPERATOR, null);
         assertThat(read.code()).isEqualTo("DEPT-LIFE-1");
@@ -45,7 +45,7 @@ class MasterdataLifecycleIntegrationTest extends AbstractMasterdataIntegrationTe
         DepartmentView retired = service.retireDepartment(
                 new RetireDepartmentCommand(OPERATOR, created.id(), "reorg"));
         assertThat(retired.status()).isEqualTo("RETIRED");
-        assertThat(retired.effectiveTo()).isNotNull();
+        assertThat(retired.effectivePeriod().effectiveTo()).isNotNull();
 
         // Audit row appended (E2 / E8) — exactly 2 rows: CREATE + RETIRE.
         Long count = jdbcTemplate.queryForObject(

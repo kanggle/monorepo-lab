@@ -3,7 +3,9 @@ package com.example.erp.masterdata.presentation.controller;
 import com.example.erp.masterdata.application.ActorContext;
 import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateDepartmentCommand;
+import com.example.erp.masterdata.application.view.AuditDto;
 import com.example.erp.masterdata.application.view.DepartmentView;
+import com.example.erp.masterdata.application.view.EffectivePeriodDto;
 import com.example.erp.masterdata.domain.error.DomainErrors;
 import com.example.erp.masterdata.presentation.advice.GlobalExceptionHandler;
 import com.example.erp.masterdata.presentation.support.IdempotentExecution;
@@ -72,8 +74,8 @@ class DepartmentControllerSliceTest {
     @DisplayName("POST /departments returns 201 + envelope with data.code")
     void createReturns201() throws Exception {
         DepartmentView v = new DepartmentView("d-1", "DEPT-1", "Sales", null,
-                "ACTIVE", LocalDate.of(2026, 1, 1), null,
-                Instant.now(), Instant.now());
+                "ACTIVE", new EffectivePeriodDto(LocalDate.of(2026, 1, 1), null),
+                new AuditDto(Instant.now(), Instant.now()));
         when(service.createDepartment(any(CreateDepartmentCommand.class))).thenReturn(v);
 
         mockMvc.perform(post("/api/erp/masterdata/departments")
@@ -84,6 +86,13 @@ class DepartmentControllerSliceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.code").value("DEPT-1"))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                // TASK-ERP-BE-006: effective-dating is the nested contract shape
+                // (masterdata-api.md § Common shapes), NOT flat top-level fields.
+                // Pins the producer↔contract conformance the platform-console
+                // consumer (PC-FE-010) requires.
+                .andExpect(jsonPath("$.data.effectivePeriod.effectiveFrom").value("2026-01-01"))
+                .andExpect(jsonPath("$.data.effectiveFrom").doesNotExist())
+                .andExpect(jsonPath("$.data.audit.createdAt").exists())
                 .andExpect(jsonPath("$.meta.timestamp").exists());
     }
 
