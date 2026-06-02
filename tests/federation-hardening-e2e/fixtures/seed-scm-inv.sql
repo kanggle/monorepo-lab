@@ -22,12 +22,20 @@
 -- Re-runnable: every INSERT is idempotent via ON CONFLICT DO NOTHING.
 -- =============================================================================
 
+-- NOTE: id / node_id / last_event_id MUST be valid UUID strings — the producer
+-- always writes them as UUIDs (NodeId.of(UUID.randomUUID()), SnapshotId.generate())
+-- and the read-model reconstructors parse them back with UUID.fromString(...).
+-- Human-readable (non-UUID) ids make UUID.fromString
+-- throw IllegalArgumentException → an UNLOGGED 422 VALIDATION_ERROR on /snapshot +
+-- /staleness for this tenant (TASK-MONO-171). Keep node id consistent across the
+-- three tables (inventory_nodes.id ← inventory_snapshots.node_id + node_staleness.node_id).
+
 -- inventory_node — the source node the snapshot rows reference.
 INSERT INTO inventory_nodes (
     id, tenant_id, node_type, node_external_id, name, status,
     created_at, updated_at
 ) VALUES (
-    'e2e-node-globex-01',
+    'e2e00000-0000-4000-8000-000000000001',
     'globex-corp',
     'WMS_WAREHOUSE',
     'GLOBEX-WH-01',
@@ -43,12 +51,12 @@ INSERT INTO inventory_snapshots (
     id, node_id, sku, quantity, tenant_id,
     last_event_id, last_event_at, version, updated_at
 ) VALUES (
-    'e2e-snapshot-globex-01',
-    'e2e-node-globex-01',
+    'e2e00000-0000-4000-8000-000000000002',
+    'e2e00000-0000-4000-8000-000000000001',
     'SKU-E2E-001',
     42.000,
     'globex-corp',
-    'e2e-event-001',
+    'e2e00000-0000-4000-8000-000000000003',
     NOW(),
     0,
     NOW()
@@ -60,10 +68,10 @@ INSERT INTO node_staleness (
     node_id, tenant_id, last_event_at, last_event_id,
     staleness_status, last_checked_at
 ) VALUES (
-    'e2e-node-globex-01',
+    'e2e00000-0000-4000-8000-000000000001',
     'globex-corp',
     NOW(),
-    'e2e-event-001',
+    'e2e00000-0000-4000-8000-000000000003',
     'FRESH',
     NOW()
 )
