@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -63,12 +62,12 @@ public class InventorySnapshotRepositoryImpl implements InventorySnapshotReposit
 
     private InventorySnapshot toDomain(InventorySnapshotJpaEntity e) {
         return new InventorySnapshot(
-                SnapshotId.of(UUID.fromString(e.getId())),
-                NodeId.of(UUID.fromString(e.getNodeId())),
+                SnapshotId.of(ReadModelIds.requireUuid(e.getId(), "inventory_snapshots.id")),
+                NodeId.of(ReadModelIds.requireUuid(e.getNodeId(), "inventory_snapshots.node_id")),
                 Sku.of(e.getSku()),
                 e.getTenantId(),
                 Quantity.of(e.getQuantity()),
-                UUID.fromString(e.getLastEventId()),
+                ReadModelIds.requireUuid(e.getLastEventId(), "inventory_snapshots.last_event_id"),
                 e.getLastEventAt(),
                 e.getVersion(),
                 e.getUpdatedAt()

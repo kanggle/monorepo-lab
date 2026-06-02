@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-021-readmodel-corrupt-data-500-reclassification.md` — **REVIEW** (impl complete, awaiting merge + close chore). Closes the inventory-visibility `422` observability gap that TASK-SCM-BE-020's INDEX entry flagged as OUT OF SCOPE. Corrupt persisted read-model data (a non-UUID id reaching `toDomain` via `UUID.fromString(...)`) threw a bare `IllegalArgumentException` → silent `422 VALIDATION_ERROR` with **no log**; now a new `ReadModelCorruptException` (via a `ReadModelIds.requireUuid` parse helper rerouting the 7 reconstruction sites across 4 repository adapters) maps to `500 INTERNAL_ERROR` + `log.error`, and the residual genuine-`422` `handleIllegalArgument` gains `log.warn` (both inventory-visibility + procurement). **Client-boundary parsing stays 422** (deliberate). **NO contract/spec/ADR change** (`INTERNAL_ERROR`/`VALIDATION_ERROR` already in `rules/domains/scm.md`). Unit tests: `ReadModelIdsTest` + inventory-visibility `GlobalExceptionHandlerTest`. `:check` green both services. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
