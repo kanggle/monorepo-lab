@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-333-outbound-non-standalone-startup-and-tms-dedupe-migration-repair.md` — Repair two latent breakages that stop `outbound-service` starting in any non-`standalone` profile (discovered via the BE-332 "wire outbound IT into CI" follow-up; latent because outbound is undeployed + IT not in CI): (1) `outboxPublisher` **bean-name collision** (outbound's `@Component` vs libs `OutboxAutoConfiguration` `@Bean` — `@ConditionalOnMissingBean` is by-type, misses the differently-typed bean) → fix = `@SpringBootApplication(exclude = OutboxAutoConfiguration.class)` (outbound is outbox-self-contained); (2) `tms_request_dedupe` **Flyway conflict** (V4 schema ≠ V13/entity → V13 `sent_at` index fails) → fix = reconcile V4 to the canonical `(request_id, sent_at, response_snapshot)` schema. `:check` green; bean-override + Flyway errors eliminated. **Deferred (separate task)**: full outbound IT-suite green + CI wiring — fixing 1+2 unmasked further pre-existing web-env IT issues (security `HttpSecurity`/`NONE`, idempotency filter, TmsClientAdapterIT). 분석=Opus 4.8 / 구현 권장=Opus (직접).
 
 ## in-progress
 
