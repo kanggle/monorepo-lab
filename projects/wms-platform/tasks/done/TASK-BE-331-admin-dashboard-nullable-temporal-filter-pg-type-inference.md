@@ -8,7 +8,7 @@ TASK-BE-331
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -60,7 +60,7 @@ backend-engineer (admin-service read-model repository `@Query` — query text on
 - [x] **AC-3** `./gradlew :projects:wms-platform:apps:admin-service:integrationTest` green (all 11 incl. the 2 new) — run locally (CI excludes it).
 - [x] **AC-4** `./gradlew :projects:wms-platform:apps:admin-service:check` green (unit + WebMvc slice unaffected — the slice mocks the repository).
 - [x] **AC-5** Diff confined to the two repository `@Query` strings + the 2 regression tests (+ task lifecycle). No schema/entity/domain/contract/ADR change.
-- [ ] **AC-6** (live) admin-service rebuilt + redeployed into the MONO-170 demo stack → console WMS 운영 (active tenant acme-corp) renders both inventory + alerts (no degrade). — user browser smoke.
+- [~] **AC-6** (live) admin-service **rebuilt (bootJar) + redeployed** into the MONO-170 demo stack — container healthy, started clean (Hibernate validated the new CAST `@Query` at runtime, no startup error). The stack now serves the fix; the console WMS 운영 (acme-corp) inventory + alerts render = **user browser smoke** (the remaining portion).
 
 # Related Specs
 
@@ -95,9 +95,9 @@ backend-engineer (admin-service read-model repository `@Query` — query text on
 - [x] Both repositories' nullable temporal `IS NULL` guards CAST; 2 regression tests added.
 - [x] `:integrationTest` (11/11) + `:check` green locally.
 - [x] Diff scope confined; schema/entity/contract/ADR untouched.
-- [ ] AC-6 live-verified in the demo stack (user browser).
-- [ ] Task md + `INDEX.md` updated.
-- [ ] Ready for review.
+- [~] AC-6: admin-service redeployed (healthy, clean start); browser render = user smoke.
+- [x] Task md + `INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1041 squash `f3d1c6e1`, 3-dim verified).
 
 ---
 
