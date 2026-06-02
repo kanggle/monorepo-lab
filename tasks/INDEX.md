@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-173-federation-scm-leg-producer-health-gate.md` — **REVIEW** (impl complete, awaiting `workflow_dispatch` validation + merge + close chore). Hardens the federation-hardening-e2e **scm leg** gates so a producer-side error (the MONO-170 demo-surfaced drift class) turns the gate RED instead of slipping past — closes the gap MONO-171's INDEX entry self-flagged. **(A)** `scm-golden-path.spec.ts` (`tenant_id='*'`) asserts `scm-po-table` + seed `PO-E2E-001` visible + no degraded/error panel (catches SCM-BE-020-class PO-leg parse-degrade); **(B)** `tenant-switch-rescope.spec.ts` globex side tightens entitled scm from *not-forbidden* to `data-status='ok'` (catches MONO-171/SCM-BE-021-class inventory-visibility `/snapshot` 422 → card degraded, which the generic not-forbidden assertion tolerated). scm-only (other 4 golden-paths = separate task). Diff confined to 2 spec files. Local tsc clean + Playwright collection OK. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

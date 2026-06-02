@@ -154,6 +154,25 @@ test.describe('Active-tenant switch re-scope (A↔B: acme-corp [finance,wms] ↔
       await switchTenant(context, GLOBEX);
       await gotoOverview(page);
       await assertEntitlement(page, ['scm', 'erp'], ['finance', 'wms']);
+
+      // TASK-MONO-173 — scm leg producer-health gate. The generic
+      // assertEntitlement tolerates 'degraded' on the entitled side (line ~44:
+      // "ok with live data OR at minimum degraded"), which let the
+      // MONO-171 / SCM-BE-021 regression slip past: a producer-side
+      // inventory-visibility /snapshot 422 on the globex assumed-tenant
+      // degraded the scm card but did NOT make it forbidden, so this gate
+      // stayed GREEN. Tighten scm specifically to data-status='ok' so a
+      // producer-side scm error turns this gate RED (this '*'-vs-globex path is
+      // the ONLY one that hits the seeded inventory-visibility rows).
+      const scmCard = page.getByTestId('operator-overview-card-scm');
+      await expect(
+        scmCard,
+        'scm leg must be HEALTHY (ok) on globex, not merely not-forbidden — MONO-171/SCM-BE-021 producer-side snapshot-422 regression gate',
+      ).toHaveAttribute('data-status', 'ok');
+      await expect(
+        page.getByTestId('operator-overview-card-scm-degraded'),
+        'scm degraded placeholder must NOT render on globex (producer leg healthy)',
+      ).toHaveCount(0);
     } finally {
       await context.close();
     }
