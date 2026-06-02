@@ -75,6 +75,10 @@
     "console:down": "docker compose --project-directory projects/platform-console down",
     "console:ps": "docker compose --project-directory projects/platform-console ps",
     "console:logs": "docker compose --project-directory projects/platform-console logs -f",
-    "console:docker": "docker compose --project-directory projects/platform-console"
+    "console:docker": "docker compose --project-directory projects/platform-console",
+    "console-demo:up": "bash scripts/console-demo-up.sh",
+    "console-demo:down": "bash scripts/console-demo-down.sh",
+    "console-demo:seed": "NO_BUILD=1 NO_SEED=0 bash scripts/console-demo-up.sh",
+    "console-demo:logs": "docker compose -p federation-hardening-e2e -f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml -f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.demo.yml logs -f console-web scm-gateway"
   }
 }

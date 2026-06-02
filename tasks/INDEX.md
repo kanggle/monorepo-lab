@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-170-console-fullstack-local-dev-demo.md` — **READY / re-implementing on `task/mono-170-console-fullstack-local-dev-demo` (2026-06-02, Approach B)**. Enable the per-domain ops DEMO (WMS/SCM/Finance/ERP 운영) on the `federation-hardening-e2e` stack via an **additive overlay** — `docker-compose.federation-e2e.demo.yml` (scm-gateway + console-web per-domain ops base URLs) + globex-corp seed delta + `scripts/console-demo-{up,down}.{ps1,sh}` + runbook + root `console-demo:*`. **CI base compose byte-unchanged.** **Approach pivot**: originally "assemble `*:up` into Traefik `*.local` full stack" (A) — live-smoke discovered the per-project `docker-compose.yml` are **infra-only** (app services run only via the fed-e2e harness or `bootRun`), so `*:up` chaining could never serve login. Re-decided with user → B (overlay on the running fed-e2e). **AC-1…6 live-verified** against the running stack: overlay config clean; scripts parse; scm-gateway healthy + routes **401-not-404** (`TenantClaimValidator` dual-accepts entitled_domains ∋ scm, ADR-019 §D5); console-web 4 ops base URLs injected; per-tenant demo data present (acme finance/wms; globex scm-inventory+PO+ERP). **AC-7…10 = user browser smoke** (login `multi-operator` → acme=finance/wms ops, globex=scm/erp ops — ADR-020 re-scope proof). NO producer/BFF/console/contract/ADR change. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## in-progress
 

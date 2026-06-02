@@ -1,0 +1,83 @@
+# =============================================================================
+# TASK-MONO-170 — platform-console per-domain ops DEMO overlay
+# =============================================================================
+# ADDITIVE overlay on top of docker-compose.federation-e2e.yml. The CI base
+# compose is BYTE-UNCHANGED (the CI federation gate is unaffected). This overlay
+# adds what the per-domain ops pages (WMS/SCM/Finance/ERP 운영) need beyond the
+# BFF overview/health legs that the base wires:
+#
+#   1. scm-gateway — the SCM ops page calls the gateway path
+#      /api/v1/{procurement,inventory-visibility}/** (rewritten to
+#      /api/{procurement,inventory-visibility}/**). The base runs the scm
+#      services DIRECTLY (BFF→service), with NO gateway. This adds it.
+#   2. console-web per-domain ops base URLs — the base leaves them unset, so the
+#      console defaults to *.local (unreachable on this bridge net). Point them
+#      at the container DNS names (the per-domain ops clients use the assumed /
+#      active-tenant token; producers + the scm gateway dual-accept the
+#      entitled_domains claim — ADR-MONO-019 §D5).
+#
+# Usage (from repo root — same project name as the base so it composes):
+#   docker compose -p federation-hardening-e2e \
+#     -f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml \
+#     -f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.demo.yml \
+#     up -d --build scm-gateway console-web
+#
+# (or:  pnpm console-demo:up  — the script wraps this + the demo seed.)
+# =============================================================================
+
+name: federation-hardening-e2e
+
+services:
+  # ---------------------------------------------------------------------------
+  # scm-gateway — Spring Cloud Gateway (scm edge). Routes the console SCM ops
+  # paths to the base's scm producers. entitlement-trust dual-accept at the
+  # gateway (TenantClaimValidator) passes the globex assumed token
+  # (entitled_domains ∋ scm). JWKS startup probe targets the base auth-service.
+  # ---------------------------------------------------------------------------
+  scm-gateway:
+    build:
+      context: ../../../projects/scm-platform/apps/gateway-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      OIDC_ISSUER_URL: http://auth-service:8081
+      OIDC_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      OIDC_REQUIRED_TENANT_ID: scm
+      # Downstream producers — the base service names (NOT the gateway's
+      # production defaults procurement-service / inventory-visibility-service).
+      PROCUREMENT_SERVICE_URI: http://scm-procurement-service:8080
+      INVENTORY_VISIBILITY_SERVICE_URI: http://scm-inventory-visibility-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      # Allow the console origin through the gateway CORS (server-side calls
+      # don't strictly need it, but harmless + future browser-direct).
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      scm-procurement-service: { condition: service_started }
+      scm-inventory-visibility-service: { condition: service_started }
+    ports: ["18096:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # console-web — ADD the per-domain ops base URLs (merged into the base env).
+  # WMS/Finance/ERP are reached DIRECTLY (the services validate the token +
+  # dual-accept entitled_domains); SCM goes through the gateway above.
+  # ---------------------------------------------------------------------------
+  console-web:
+    environment:
+      WMS_ADMIN_BASE_URL: http://wms-admin-service:8086/api/v1/admin
+      SCM_GATEWAY_BASE_URL: http://scm-gateway:8080
+      FINANCE_BASE_URL: http://finance-account-service:8080
+      ERP_BASE_URL: http://erp-masterdata-service:8080
+    depends_on:
+      scm-gateway: { condition: service_started }
