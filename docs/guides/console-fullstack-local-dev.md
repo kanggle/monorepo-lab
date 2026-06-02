@@ -1,186 +1,147 @@
-# platform-console — Full-Stack Local-Dev Demo
+# platform-console — Per-Domain Ops Demo (on the federation-hardening-e2e stack)
 
 > **Human reference only** (per `CLAUDE.md`, `docs/guides/` is NOT an AI source of truth).
 > Authored by **TASK-MONO-170**.
 
-Bring up the **entire** platform-console portfolio demo locally — all 5 backend
-domains (GAP · WMS · SCM · Finance · ERP) + console-bff + console-web — behind
-the shared Traefik `*.local` router, with demo data + a demo operator, so EVERY
-console screen renders live:
+Make **every** platform-console screen render live — including the four
+per-domain ops pages (WMS · SCM · Finance · ERP 운영) that no existing stack
+served — by adding a thin **additive overlay** to the already-containerized
+`federation-hardening-e2e` harness.
 
-| Screen | What it proves | Demo path |
+| Screen | Proves | Active tenant |
 |---|---|---|
-| 운영자 통합 개요 | 5-domain BFF federation | any tenant |
-| 도메인 상태 | per-domain health composition | any tenant |
-| GAP 운영 (계정 · 감사 · 운영자) | operator-token surface | always |
-| **WMS 운영** | direct domain call, inventory read-model | **active tenant = acme-corp** |
-| **Finance 운영** | account/balances/transactions | **active tenant = acme-corp** |
-| **SCM 운영** | gateway-routed PO + inventory-visibility | **active tenant = globex-corp** |
-| **ERP 운영** | as-of masterdata reads | **active tenant = globex-corp** |
+| 운영자 통합 개요 / 도메인 상태 | BFF federation + health | any |
+| GAP 운영 (계정·감사·운영자) | operator-token surface | always |
+| **WMS 운영** | direct domain call, inventory read-model | **acme-corp** |
+| **Finance 운영** | account / balances / transactions | **acme-corp** |
+| **SCM 운영** | gateway-routed PO + inventory-visibility | **globex-corp** |
+| **ERP 운영** | as-of masterdata reads | **globex-corp** |
 
-The per-domain ops pages call the domains **directly** with the active-tenant
-**assumed** token (ADR-MONO-020 D4 `getDomainFacingToken()`). Their base URLs
-default to `*.local` (`shared/config/env.ts`), so with Traefik + the per-project
-composes up they work with **no console override**.
+## Why an overlay (not `pnpm *:up`)
 
----
+The per-project `docker-compose.yml` files are **infrastructure only** — the
+application services (GAP auth/account/admin, the 5 producers, console-bff,
+console-web) run as containers ONLY via the `federation-hardening-e2e` harness
+(or as host JVMs via `bootRun`). `pnpm gap:up` etc. start just DBs/redis/kafka.
 
-## 1. Prerequisites (one-time)
+The fed-e2e harness already runs the full app stack, but it was built for the
+**BFF overview/health** legs + GAP, so it lacks two things the per-domain ops
+pages need:
 
-1. **Docker** running (Rancher Desktop or Docker Desktop).
-2. **`*.local` hosts entries** — run as **Administrator**:
-   ```powershell
-   .\scripts\dev-setup.ps1        # Windows
-   ./scripts/dev-setup.sh         # macOS/Linux (sudo)
-   ```
-   Registers `console.local`, `gap.local`, `wms.local`, `scm.local`,
-   `finance.local`, `erp.local` (+ others) → `127.0.0.1`.
-3. **Git Bash** on PATH (Windows) — the `pnpm console-demo:*` scripts invoke
-   `bash`. On Windows you may instead run the native PowerShell scripts directly
-   (see below).
+1. **The SCM gateway** — the SCM ops client calls `scm.local/api/v1/procurement/po`
+   + `/api/v1/inventory-visibility/snapshot`; only the gateway maps those
+   (`/api/v1/...` → `/api/...`) to the producers. The base runs the scm services
+   directly, no gateway.
+2. **console-web per-domain ops base URLs** — the base leaves
+   `WMS_ADMIN_BASE_URL` / `SCM_GATEWAY_BASE_URL` / `FINANCE_BASE_URL` /
+   `ERP_BASE_URL` unset, so they default to `*.local` (unreachable on the bridge
+   network).
 
----
+`docker-compose.federation-e2e.demo.yml` adds exactly these two (CI base compose
+byte-unchanged). The per-domain ops clients use the **assumed / active-tenant
+token** (ADR-MONO-020 D4 `getDomainFacingToken`); the scm gateway + producers
+**dual-accept** the signed `entitled_domains` claim (ADR-MONO-019 §D5,
+`TenantClaimValidator`), so a globex-corp token (`entitled_domains=[scm,erp]`)
+passes.
 
-## 2. One command
+## 1. Base harness must be UP first
+
+The demo overlay sits on top of the running fed-e2e base. Bring the base up via
+the harness (it builds + runs ~20 containers — see the CI workflow
+`.github/workflows/federation-hardening-e2e*.yml` for the authoritative
+build+seed sequence, or the compose header in
+`tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml`).
+
+> The base seeds: GAP operators (incl. **`multi-operator`**, N:M-assigned to
+> acme-corp + globex-corp) + acme finance account + wms inventory + globex
+> scm-inventory. GAP runs `SPRING_PROFILES_ACTIVE=e2e` so the globex-corp
+> `[scm,erp]` subscription (account-service Flyway `migration-dev/V0021`) is
+> present.
+
+`console-demo:up` **detects** the base (checks `auth-service` is running) and
+stops with guidance if it is absent.
+
+## 2. Enable the demo
 
 ```bash
 pnpm console-demo:up
 ```
 
-(Windows-native alternative — identical behaviour:)
-```powershell
-.\scripts\console-demo-up.ps1
-```
+(Windows-native:  `.\scripts\console-demo-up.ps1`)
 
-This runs, in order, **health-gating between phases**:
+This:
+1. builds the scm gateway-service jar (`gradlew … gateway-service:bootJar`),
+2. `docker compose -p federation-hardening-e2e -f <base> -f <demo> up -d --build scm-gateway console-web`
+   (adds the gateway, recreates console-web with the 4 ops base URLs; restarts
+   the gateway once if its JWKS startup-probe missed the recreate window),
+3. seeds the **globex-corp delta** — SCM purchase-orders + ERP masters — so the
+   globex ops pages render non-empty (the base already has globex scm-inventory).
 
-1. `traefik:up` (creates/joins `traefik-net`).
-2. **GAP** with `SPRING_PROFILES_ACTIVE=e2e` → wait healthy → seed operators.
-   - The `e2e` profile loads `db/migration-dev/V0021` (globex-corp `[scm,erp]`)
-     **in addition to** the always-loaded `db/migration/V0020` (acme-corp
-     `[finance,wms]`). Both demo customers therefore exist with their
-     `entitled_domains` subscriptions. The datasource is env-driven, so the
-     per-project GAP compose DB wiring is unaffected.
-3. **wms / scm / finance / erp** → wait healthy → seed per-domain read-models.
-4. **console** (console-bff + console-web) → wait healthy.
+Flags: `NO_BUILD=1` (skip jar+image build), `NO_SEED=1` (overlay only),
+`HEALTH_TIMEOUT=180`. Re-seed only: `pnpm console-demo:seed`.
 
-Flags:
+## 3. Walkthrough
 
-| Flag (sh env / ps1 switch) | Effect |
-|---|---|
-| `NO_BUILD=1` / `-NoBuild` | skip image (re)build (faster re-runs) |
-| `NO_SEED=1` / `-NoSeed` | bring up services only |
-| `HEALTH_TIMEOUT=240` / `-HealthTimeoutSec 240` | per-phase health-wait timeout |
-
-Re-seed only (idempotent): `pnpm console-demo:seed`.
-
----
-
-## 3. Demo walkthrough
-
-Open **http://console.local** → login:
+Open **http://localhost:3000** → login:
 
 ```
 multi-operator@example.com  /  devpassword123!
 ```
 
-`multi-operator` is N:M-assigned to **both** customer tenants. The tenant
-switcher (top bar) lists `acme-corp` and `globex-corp`.
+> **Use `multi-operator`.** super-admin (`*`) and acme-operator are NOT entitled
+> to scm/erp — their SCM/ERP ops pages correctly show "테넌트 스코프가 부여되어
+> 있지 않습니다" (the catalog-eligibility gate). That message means *wrong
+> operator/tenant for that domain*, not a bug.
 
-1. **Active tenant `acme-corp`** (`entitled_domains=[finance,wms]`):
-   - 통합 개요 + 도메인 상태 render.
-   - **Finance 운영** → account `…a200` balance 5,000.00 KRW.
-   - **WMS 운영** → inventory snapshot row (`DEMO-LOC-01` / `DEMO-SKU-01`, 100 on-hand).
-   - GAP 운영 → accounts / audit / operators.
-   - SCM 운영 / ERP 운영 → **gated** ("이 화면을 조회할 권한이 없습니다") — acme-corp is not entitled to scm/erp. This is correct (entitlement-trust).
-2. **Switch active tenant → `globex-corp`** (`entitled_domains=[scm,erp]`):
-   - **SCM 운영** → PO `PO-DEMO-001` + inventory-visibility snapshot (`SKU-DEMO-001`, qty 42).
-   - **ERP 운영** → department/cost-center/job-grade/employee masters.
-   - Finance / WMS now gate — the active-tenant re-scope flipped the
-     entitlement. **This A↔B flip IS the live ADR-MONO-020 proof.**
+1. **Active tenant `acme-corp`** (`[finance,wms]`): 통합 개요 + 도메인 상태;
+   **Finance 운영** (account balance) + **WMS 운영** (inventory snapshot); GAP 운영.
+   SCM/ERP gate (not entitled — correct).
+2. **Switch active tenant → `globex-corp`** (`[scm,erp]`): **SCM 운영** (PO
+   `PO-DEMO-001` + inventory-visibility snapshot) + **ERP 운영** (department /
+   cost-center / job-grade / employee). Finance/WMS now gate. **This A↔B flip is
+   the live ADR-MONO-020 active-tenant scoping proof.**
 
-> A single operator+tenant entitled to all 5 at once is intentionally **not**
-> seeded (it needs a new GAP Flyway migration — a follow-up). The 2-tenant
-> switch covers all four non-GAP domains AND showcases active-tenant scoping.
+Disable the overlay: `pnpm console-demo:down` (removes `scm-gateway`; the fed-e2e
+base harness is untouched).
 
-Tear down: `pnpm console-demo:down` (add `VOLUMES=1` / `-Volumes` for a full
-data reset).
+## 4. Seed bundle
 
----
+`scripts/console-demo/seed/` — rows reuse the proven fed-e2e fixtures, tenant-
+scoped for the demo. On the fed-e2e stack the base harness applies most; the
+overlay script additionally applies the **globex delta**:
 
-## 4. Seed manifest
+| File | fed-e2e target | applied by |
+|---|---|---|
+| `03-erp.sql` (globex masters) | `federation-hardening-e2e-mysql-1` `erp_db` | `console-demo:up` |
+| `06-scm-procurement.sql` (globex PO) | `federation-hardening-e2e-scm-postgres-1` `scm_procurement` | `console-demo:up` |
+| `01,02,04,05,07` | (base harness) | the fed-e2e seed sequence |
 
-`scripts/console-demo/seed/` (row content reuses the proven
-`tests/federation-hardening-e2e/fixtures/*.sql`, re-targeted per-project):
-
-| File | Container | DB | User |
-|---|---|---|---|
-| `01-gap.sql` | `gap-mysql` | auth_db + admin_db | root / `rootpass` |
-| `02-finance.sql` | `finance-platform-mysql` | finance_db | root / `root` |
-| `03-erp.sql` | `erp-platform-mysql` | erp_db | root / `root` |
-| `04-wms-master.sql` | `wms-postgres` | master_db | postgres / `postgres` |
-| `05-wms-admin.sql` | `wms-postgres` | admin_db | postgres / `postgres` |
-| `06-scm-procurement.sql` | `scm-platform-postgres` | scm_procurement | scm / `scm` |
-| `07-scm-inventory.sql` | `scm-platform-postgres` | scm_inventory_visibility | scm / `scm` |
-
-Customers/entitlements (`acme-corp`/`globex-corp` subscriptions) come from GAP
-account-service Flyway, NOT these files. All seeds are idempotent.
-
----
+All idempotent (`INSERT IGNORE` / `ON CONFLICT DO NOTHING`).
 
 ## 5. Troubleshooting
 
-### ⚠ Host memory / OOM cascade (Windows)
+- **`console-demo:up` says "base not running"** — bring up the fed-e2e harness
+  first (§1). The overlay only adds the gateway + console env; it does not boot
+  the base.
+- **SCM/ERP ops "테넌트 스코프가 부여되어 있지 않습니다"** — you are not logged in
+  as `multi-operator`, or the active tenant is acme-corp (not entitled to
+  scm/erp). Switch to globex-corp / log in as multi-operator.
+- **SCM ops "일시적으로 불러올 수 없습니다" (degraded)** — `scm-gateway` not
+  healthy (`docker logs federation-hardening-e2e-scm-gateway-1`). The gateway
+  has a 30s JWKS startup probe; if the base was mid-recreate it fail-fasts —
+  re-run `pnpm console-demo:up` (the script restarts it once).
+- **WMS ops alerts section degraded** — the WMS alerts read-model is NOT seeded
+  (only inventory is). The inventory section is the WMS ops proof; alerts is a
+  documented follow-up.
+- **Host memory / OOM** — the base harness is ~20 containers + JVMs; the overlay
+  adds one more JVM (the gateway). See `CLAUDE.md` → "Session Size / JDT.LS OOM
+  Cascade" + project memory `env_jdtls_oom_cascade`.
 
-This stack is **~25 containers including 5+ JVM services**. On this Windows host
-that can approach the Windows commit limit and trigger the documented JDT.LS /
-`errno=1455` OOM cascade (see `CLAUDE.md` → "Session Size / JDT.LS OOM Cascade"
-and project memory `env_jdtls_oom_cascade`). If the host is memory-constrained:
+## 6. What this is NOT
 
-- **Bring up a SUBSET.** GAP + one domain + console is enough to demo that
-  domain. e.g. for the Finance demo:
-  ```bash
-  pnpm traefik:up
-  SPRING_PROFILES_ACTIVE=e2e pnpm gap:up        # wait healthy, then seed 01-gap.sql
-  pnpm finance:up                                # wait healthy, then seed 02-finance.sql
-  pnpm console:up
-  ```
-- Close other JVM-heavy apps (IDE language servers) before bring-up.
-- Prefer Rancher Desktop with an adequate memory allocation.
-
-### A per-domain ops page shows "권한이 없습니다" (403)
-
-The active tenant does not entitle that domain. Switch tenants (acme→finance/wms,
-globex→scm/erp). If a domain gates for the *entitled* tenant, the GAP `e2e`
-profile may not have loaded (globex needs it) — confirm GAP came up with
-`SPRING_PROFILES_ACTIVE=e2e`.
-
-### A per-domain ops page shows "일시적으로 불러올 수 없습니다" (degraded)
-
-The domain service/gateway is not reachable or the read-model is unseeded.
-- Confirm the domain is healthy: `pnpm <domain>:ps`.
-- Confirm Traefik routes the hostname: `curl -H 'Host: scm.local' http://localhost/...`.
-- Re-apply seeds: `pnpm console-demo:seed`.
-- **WMS 운영 alerts section** specifically may stay degraded — the WMS alerts
-  read-model is **not** seeded by this demo (only inventory is). The inventory
-  section is the WMS ops proof; seeding alerts is a follow-up.
-
-### Stale console image (missing recent FE work)
-
-Rebuild: `pnpm console-demo:up` (default `--build`) or
-`docker compose --project-directory projects/platform-console up -d --build`.
-
-### SCM 운영 404 on `/api/v1/procurement/po`
-
-The console targets the **scm gateway** (`scm.local`), which maps
-`/api/v1/procurement/**` and `/api/v1/inventory-visibility/**` to the services.
-Confirm `scm-platform-gateway` is up and routed (not just the services).
-
----
-
-## 6. What this demo is NOT
-
-- Not a CI job — the `federation-hardening-e2e` harness remains the CI federation
-  gate. This is a local-dev demo.
-- Not a single-tenant all-5 view (follow-up — needs a GAP demo-tenant migration).
-- Not fan-platform / ecommerce (outside the 5-domain console federation).
+- Not a Traefik `*.local` dev environment (that requires `bootRun` host JVMs —
+  far heavier; the fed-e2e bridge net + container DNS is used instead).
+- Not a CI job — the fed-e2e harness remains the CI federation gate; this overlay
+  is local-demo-only and leaves the CI base compose byte-unchanged.
+- Not a single-tenant all-5 view (the `multi-operator` 2-tenant switch covers all
+  domains; a single all-5-entitled tenant would need a new GAP Flyway migration).

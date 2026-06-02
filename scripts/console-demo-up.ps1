@@ -1,143 +1,97 @@
 # =============================================================================
 # console-demo-up.ps1 — TASK-MONO-170
-# One-command full 5-domain platform-console local-dev DEMO bring-up (Windows).
+# Enable the per-domain ops DEMO on the federation-hardening-e2e stack (Windows).
 #
-# Orders: Traefik -> GAP (e2e profile) -> seed GAP -> wms/scm/finance/erp ->
-#         seed read-models -> console. Health-gates between phases. Idempotent.
+# The federation-hardening-e2e harness already runs all 5 domains' producers +
+# GAP + console-bff + console-web as CONTAINERS (the per-project `*:up` composes
+# are infra-only; app services run via that harness or bootRun). This script
+# adds — as an ADDITIVE overlay, leaving the CI base compose byte-unchanged —
+# the two things the per-domain ops pages need beyond the BFF overview/health
+# legs the base wires:
+#   1. scm-gateway (the SCM ops page calls the gateway /api/v1/{procurement,
+#      inventory-visibility}/** paths — the base runs the scm services directly,
+#      no gateway).
+#   2. console-web per-domain ops base URLs (the base leaves them unset → they
+#      default to *.local, unreachable on the bridge net) → container DNS.
+# Then it seeds the globex-corp per-domain rows (SCM PO + ERP masters) so the
+# globex ops pages render non-empty (the base seeds acme finance + wms inventory
+# + globex scm-inventory; this adds the globex SCM-PO + ERP delta).
 #
-# Prereqs (the preflight checks + instructs):
-#   1. Docker running (Rancher Desktop / Docker Desktop).
-#   2. *.local hosts entries — run (Administrator):  .\scripts\dev-setup.ps1
-#   3. The shared traefik-net network — created by `pnpm traefik:up` (this
-#      script runs it for you).
+# PREREQUISITE: the federation-hardening-e2e base stack must already be UP
+#   (auth/account/admin/console-bff/console-web + the 5 producers + DBs). Bring
+#   it up via the harness — see docs/guides/console-fullstack-local-dev.md.
+#   This script DETECTS it and stops with guidance if absent.
 #
-# Usage (from repo root):   pnpm console-demo:up    (or)   .\scripts\console-demo-up.ps1
-#
-# ⚠ HOST RISK: this brings up ~25 containers incl. 5+ JVM services. On this
-#   Windows host that can approach the commit limit (see CLAUDE.md "Session Size
-#   / JDT.LS OOM Cascade" + docs/guides/console-fullstack-local-dev.md
-#   troubleshooting). If memory-constrained, bring up a SUBSET (GAP + one domain
-#   + console) — see the runbook.
+# Usage (repo root):  pnpm console-demo:up   (or)   .\scripts\console-demo-up.ps1
 # =============================================================================
 [CmdletBinding()]
-param(
-    # Skip the docker image (re)build (faster re-runs once images exist).
-    [switch]$NoBuild,
-    # Skip the demo seed step (services only).
-    [switch]$NoSeed,
-    # Per-phase health-wait timeout (seconds).
-    [int]$HealthTimeoutSec = 240
-)
+param([switch]$NoBuild, [switch]$NoSeed, [int]$HealthTimeoutSec = 180)
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $SeedDir = Join-Path $PSScriptRoot 'console-demo\seed'
-$BuildArg = if ($NoBuild) { @() } else { @('--build') }
+$DockerDir = Join-Path $RepoRoot 'tests\federation-hardening-e2e\docker'
+$Base = Join-Path $DockerDir 'docker-compose.federation-e2e.yml'
+$Demo = Join-Path $DockerDir 'docker-compose.federation-e2e.demo.yml'
+$Proj = 'federation-hardening-e2e'
 
-function Write-Phase($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
-function Write-Ok($msg)    { Write-Host "[OK]   $msg" -ForegroundColor Green }
-function Write-Warn($msg)  { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
-function Write-Err($msg)   { Write-Host "[ERR]  $msg" -ForegroundColor Red }
+function Write-Phase($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
+function Write-Ok($m)    { Write-Host "[OK]   $m" -ForegroundColor Green }
+function Write-Err($m)   { Write-Host "[ERR]  $m" -ForegroundColor Red }
 
-# --- preflight -------------------------------------------------------------
-function Test-Preflight {
-    Write-Phase 'Preflight'
-    try { docker info *> $null } catch { Write-Err 'Docker is not running. Start Rancher/Docker Desktop and retry.'; exit 1 }
-    Write-Ok 'Docker reachable.'
+# --- preflight: base harness must be running ------------------------------
+Write-Phase 'Preflight — federation-hardening-e2e base must be UP'
+try { docker info *> $null } catch { Write-Err 'Docker is not running.'; exit 1 }
+$authUp = docker ps --filter "name=federation-hardening-e2e-auth-service-1" --filter "status=running" --format '{{.Names}}'
+if (-not $authUp) {
+    Write-Err 'federation-hardening-e2e base stack is NOT running (auth-service absent).'
+    Write-Host '       Bring the base harness up first (it builds + runs the 5 producers + GAP +'
+    Write-Host '       console). See docs/guides/console-fullstack-local-dev.md § "Base harness".'
+    exit 1
+}
+Write-Ok 'Base harness detected.'
 
-    $hostsFile = "$env:WINDIR\System32\drivers\etc\hosts"
-    $needed = @('console.local', 'gap.local', 'wms.local', 'scm.local', 'finance.local', 'erp.local')
-    $content = Get-Content $hostsFile -Raw -ErrorAction SilentlyContinue
-    $missing = $needed | Where-Object { $content -notmatch "(?m)^[^#]*\b$([regex]::Escape($_))\b" }
-    if ($missing.Count -gt 0) {
-        Write-Warn "Missing hosts entries: $($missing -join ', ')"
-        Write-Warn 'Run (Administrator):  .\scripts\dev-setup.ps1   then re-run this script.'
-        exit 1
-    }
-    Write-Ok 'All *.local hosts entries present.'
+# --- build the scm gateway jar (Dockerfile expects build/libs/*.jar) ------
+if (-not $NoBuild) {
+    Write-Phase 'Build scm gateway-service jar'
+    & (Join-Path $RepoRoot 'gradlew.bat') ':projects:scm-platform:apps:gateway-service:bootJar' --no-daemon -q
+    if ($LASTEXITCODE -ne 0) { Write-Err 'gateway bootJar failed.'; exit 1 }
+    Write-Ok 'gateway-service.jar built.'
 }
 
-# --- health wait -----------------------------------------------------------
-# Polls `docker inspect` health status for a container until healthy or timeout.
-function Wait-Healthy([string[]]$Containers, [int]$TimeoutSec) {
-    foreach ($c in $Containers) {
-        $deadline = (Get-Date).AddSeconds($TimeoutSec)
-        Write-Host "       waiting for $c ..." -NoNewline
-        while ($true) {
-            $state = (docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $c 2>$null)
-            if ($state -eq 'healthy' -or $state -eq 'running') { Write-Host " $state" -ForegroundColor Green; break }
-            if ((Get-Date) -gt $deadline) { Write-Host ''; Write-Err "$c not healthy within ${TimeoutSec}s (state=$state). Check: docker logs $c"; exit 1 }
-            Start-Sleep -Seconds 3
-            Write-Host '.' -NoNewline
-        }
+# --- bring up the overlay (scm-gateway + console-web ops env) -------------
+Write-Phase 'Overlay — scm-gateway + console-web per-domain ops base URLs'
+$buildArg = if ($NoBuild) { @() } else { @('--build') }
+docker compose -p $Proj -f $Base -f $Demo up -d @buildArg scm-gateway console-web | Out-Host
+
+# scm-gateway has a JWKS startup probe (fail-fast). If the dependency chain was
+# disturbed by the recreate, the probe can miss its window — restart once.
+Write-Host '       waiting for scm-gateway health ...' -NoNewline
+$deadline = (Get-Date).AddSeconds($HealthTimeoutSec); $restarted = $false
+while ($true) {
+    $h = docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$Proj-scm-gateway-1" 2>$null
+    if ($h -eq 'healthy') { Write-Host ' healthy' -ForegroundColor Green; break }
+    if (($h -eq 'exited' -or $h -eq 'unhealthy') -and -not $restarted) {
+        Write-Host ' (probe missed window — restarting once)' -ForegroundColor Yellow
+        docker start "$Proj-scm-gateway-1" *> $null; $restarted = $true; $deadline = (Get-Date).AddSeconds($HealthTimeoutSec)
     }
+    if ((Get-Date) -gt $deadline) { Write-Host ''; Write-Err "scm-gateway not healthy. Check: docker logs $Proj-scm-gateway-1"; exit 1 }
+    Start-Sleep 4; Write-Host '.' -NoNewline
 }
 
-# --- seed apply (idempotent) ----------------------------------------------
-# $args: container, kind ('mysql'|'psql'), db, user, password, seedFile
-function Invoke-Seed([string]$Container, [string]$Kind, [string]$Db, [string]$User, [string]$Password, [string]$SeedFile) {
-    $path = Join-Path $SeedDir $SeedFile
-    if (-not (Test-Path $path)) { Write-Err "seed file not found: $path"; exit 1 }
-    Write-Host "       seeding $Container/$Db <- $SeedFile" -NoNewline
-    if ($Kind -eq 'mysql') {
-        Get-Content $path -Raw | docker exec -i $Container mysql -u root "-p$Password" $Db
-    } else {
-        # psql: PGPASSWORD via env; -v ON_ERROR_STOP=0 so idempotent re-runs that
-        # hit ON CONFLICT/IGNORE rows do not abort the script.
-        Get-Content $path -Raw | docker exec -i -e "PGPASSWORD=$Password" $Container psql -U $User -d $Db -v ON_ERROR_STOP=0
-    }
-    if ($LASTEXITCODE -ne 0) { Write-Host ''; Write-Warn "$SeedFile apply returned exit $LASTEXITCODE (often benign on a re-run — verify in the runbook)." }
-    else { Write-Host ' done' -ForegroundColor Green }
-}
-
-# ---------------------------------------------------------------------------
-Test-Preflight
-
-Write-Phase 'Traefik'
-pnpm --dir $RepoRoot traefik:up | Out-Host
-
-Write-Phase 'GAP (SPRING_PROFILES_ACTIVE=e2e — loads acme-corp + globex-corp demo customers)'
-# The e2e profile adds db/migration-dev (globex-corp V0021) on top of the
-# default db/migration (acme-corp V0020). datasource is env-driven so the
-# per-project gap compose DB wiring is unaffected.
-$env:SPRING_PROFILES_ACTIVE = 'e2e'
-docker compose --project-directory (Join-Path $RepoRoot 'projects/global-account-platform') up -d @BuildArg | Out-Host
-Wait-Healthy @('gap-mysql') $HealthTimeoutSec
-# GAP service container names follow the gap compose; health-gate the auth/admin
-# services by their compose service health (best-effort — adjust names if your
-# compose differs).
-Wait-Healthy @('gap-mysql') $HealthTimeoutSec
-
+# --- seed the globex-corp per-domain delta (SCM PO + ERP masters) ---------
 if (-not $NoSeed) {
-    Write-Phase 'Seed — GAP operators + multi-operator N:M assignments'
-    Invoke-Seed 'gap-mysql' 'mysql' '' 'root' 'rootpass' '01-gap.sql'
+    Write-Phase 'Seed — globex-corp delta (SCM purchase-orders + ERP masters)'
+    Get-Content (Join-Path $SeedDir '03-erp.sql') -Raw | docker exec -i "$Proj-mysql-1" mysql -uroot -prootpass erp_db 2>$null
+    Get-Content (Join-Path $SeedDir '06-scm-procurement.sql') -Raw | docker exec -i "$Proj-scm-postgres-1" psql -U scm -d scm_procurement -v ON_ERROR_STOP=0 *> $null
+    Write-Ok 'globex SCM-PO + ERP seeds applied (idempotent).'
 }
-
-Write-Phase 'Domains — wms / scm / finance / erp'
-docker compose --project-directory (Join-Path $RepoRoot 'projects/wms-platform') up -d @BuildArg | Out-Host
-docker compose --project-directory (Join-Path $RepoRoot 'projects/scm-platform') up -d @BuildArg | Out-Host
-docker compose --project-directory (Join-Path $RepoRoot 'projects/finance-platform') up -d @BuildArg | Out-Host
-docker compose --project-directory (Join-Path $RepoRoot 'projects/erp-platform') up -d @BuildArg | Out-Host
-Wait-Healthy @('wms-postgres', 'scm-platform-postgres', 'finance-platform-mysql', 'erp-platform-mysql') $HealthTimeoutSec
-
-if (-not $NoSeed) {
-    Write-Phase 'Seed — per-domain read-models (acme-corp: finance/wms; globex-corp: scm/erp)'
-    Invoke-Seed 'finance-platform-mysql' 'mysql' 'finance_db' 'root' 'root' '02-finance.sql'
-    Invoke-Seed 'erp-platform-mysql'     'mysql' 'erp_db'     'root' 'root' '03-erp.sql'
-    Invoke-Seed 'wms-postgres'           'psql'  'master_db'  'postgres' 'postgres' '04-wms-master.sql'
-    Invoke-Seed 'wms-postgres'           'psql'  'admin_db'   'postgres' 'postgres' '05-wms-admin.sql'
-    Invoke-Seed 'scm-platform-postgres'  'psql'  'scm_procurement'           'scm' 'scm' '06-scm-procurement.sql'
-    Invoke-Seed 'scm-platform-postgres'  'psql'  'scm_inventory_visibility'  'scm' 'scm' '07-scm-inventory.sql'
-}
-
-Write-Phase 'Console (console-bff + console-web)'
-docker compose --project-directory (Join-Path $RepoRoot 'projects/platform-console') up -d @BuildArg | Out-Host
-Wait-Healthy @('platform-console-web') $HealthTimeoutSec
 
 Write-Phase 'Ready'
-Write-Ok 'Open http://console.local'
+Write-Ok 'Open http://localhost:3000'
 Write-Host '       Login:   multi-operator@example.com  /  devpassword123!'
-Write-Host '       Demo:    active tenant acme-corp  -> Finance 운영 + WMS 운영 live'
-Write-Host '                switch to  globex-corp    -> SCM 운영 + ERP 운영 live'
-Write-Host '       GAP 운영 (계정/감사/운영자) is always available.'
-Write-Host '       See docs/guides/console-fullstack-local-dev.md for the full walkthrough.'
+Write-Host '       Demo:    active tenant acme-corp   -> Finance 운영 + WMS 운영 live'
+Write-Host '                switch to  globex-corp     -> SCM 운영 + ERP 운영 live'
+Write-Host '       GAP 운영 (계정/감사/운영자) always available. (Do NOT log in as'
+Write-Host '       super-admin / acme-operator for the scm/erp screens — not entitled.)'
+Write-Host '       Walkthrough: docs/guides/console-fullstack-local-dev.md'

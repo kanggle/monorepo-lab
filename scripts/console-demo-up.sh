@@ -1,106 +1,77 @@
 #!/usr/bin/env bash
 # =============================================================================
 # console-demo-up.sh — TASK-MONO-170
-# One-command full 5-domain platform-console local-dev DEMO bring-up (POSIX).
-# POSIX peer of console-demo-up.ps1 (the Windows-primary script). Same ordering:
-# Traefik -> GAP (e2e profile) -> seed GAP -> wms/scm/finance/erp -> seed
-# read-models -> console. Health-gates between phases. Idempotent.
+# Enable the per-domain ops DEMO on the federation-hardening-e2e stack (POSIX).
+# POSIX peer of console-demo-up.ps1.
 #
-# Prereqs: Docker running; *.local hosts entries (./scripts/dev-setup.sh);
-#          traefik-net (this script runs `pnpm traefik:up`).
-# Usage:   pnpm console-demo:up   (or)   ./scripts/console-demo-up.sh
-# Flags:   NO_BUILD=1  NO_SEED=1  HEALTH_TIMEOUT=240  (env vars)
+# The fed-e2e harness already runs all 5 domains' producers + GAP + console as
+# containers. This adds — as an ADDITIVE overlay (CI base compose byte-unchanged)
+# — scm-gateway + console-web per-domain ops base URLs, then seeds the
+# globex-corp SCM-PO + ERP delta so the globex ops pages render non-empty.
 #
-# ⚠ HOST RISK: ~25 containers incl. 5+ JVMs. See
-#   docs/guides/console-fullstack-local-dev.md for the subset-bring-up fallback.
+# PREREQUISITE: the federation-hardening-e2e base stack must already be UP.
+#   See docs/guides/console-fullstack-local-dev.md § "Base harness". This script
+#   detects it and stops with guidance if absent.
+#
+# Usage:  pnpm console-demo:up   (or)   ./scripts/console-demo-up.sh
+# Flags:  NO_BUILD=1  NO_SEED=1  HEALTH_TIMEOUT=180
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SEED_DIR="$SCRIPT_DIR/console-demo/seed"
-HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-240}"
-
-build_arg=( --build ); [ "${NO_BUILD:-0}" = "1" ] && build_arg=()
+DOCKER_DIR="$REPO_ROOT/tests/federation-hardening-e2e/docker"
+BASE="$DOCKER_DIR/docker-compose.federation-e2e.yml"
+DEMO="$DOCKER_DIR/docker-compose.federation-e2e.demo.yml"
+PROJ='federation-hardening-e2e'
+HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"
 
 phase() { printf '\n=== %s ===\n' "$1"; }
 ok()    { printf '[OK]   %s\n' "$1"; }
-warn()  { printf '[WARN] %s\n' "$1"; }
 err()   { printf '[ERR]  %s\n' "$1" >&2; }
 
-dc() { docker compose --project-directory "$REPO_ROOT/$1" "${@:2}"; }
+phase 'Preflight — federation-hardening-e2e base must be UP'
+docker info >/dev/null 2>&1 || { err 'Docker is not running.'; exit 1; }
+if [ -z "$(docker ps --filter "name=${PROJ}-auth-service-1" --filter "status=running" --format '{{.Names}}')" ]; then
+  err "federation-hardening-e2e base stack is NOT running (auth-service absent)."
+  echo '       Bring the base harness up first. See docs/guides/console-fullstack-local-dev.md § "Base harness".'
+  exit 1
+fi
+ok 'Base harness detected.'
 
-preflight() {
-  phase 'Preflight'
-  docker info >/dev/null 2>&1 || { err 'Docker is not running.'; exit 1; }
-  ok 'Docker reachable.'
-}
+if [ "${NO_BUILD:-0}" != "1" ]; then
+  phase 'Build scm gateway-service jar'
+  "$REPO_ROOT/gradlew" :projects:scm-platform:apps:gateway-service:bootJar --no-daemon -q
+  ok 'gateway-service.jar built.'
+fi
 
-wait_healthy() {
-  local timeout="$1"; shift
-  for c in "$@"; do
-    local deadline=$(( $(date +%s) + timeout ))
-    printf '       waiting for %s ...' "$c"
-    while true; do
-      local state
-      state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$c" 2>/dev/null || echo missing)"
-      if [ "$state" = healthy ] || [ "$state" = running ]; then printf ' %s\n' "$state"; break; fi
-      if [ "$(date +%s)" -gt "$deadline" ]; then printf '\n'; err "$c not healthy within ${timeout}s (state=$state). Check: docker logs $c"; exit 1; fi
-      sleep 3; printf '.'
-    done
-  done
-}
+phase 'Overlay — scm-gateway + console-web per-domain ops base URLs'
+build_arg=( --build ); [ "${NO_BUILD:-0}" = "1" ] && build_arg=()
+docker compose -p "$PROJ" -f "$BASE" -f "$DEMO" up -d "${build_arg[@]}" scm-gateway console-web
 
-# args: container kind(mysql|psql) db user password seedfile
-seed() {
-  local container="$1" kind="$2" db="$3" user="$4" pw="$5" file="$6"
-  local path="$SEED_DIR/$file"
-  [ -f "$path" ] || { err "seed file not found: $path"; exit 1; }
-  printf '       seeding %s/%s <- %s\n' "$container" "$db" "$file"
-  if [ "$kind" = mysql ]; then
-    docker exec -i "$container" mysql -u root "-p${pw}" "$db" < "$path" || warn "$file apply returned non-zero (often benign on re-run)."
-  else
-    docker exec -i -e "PGPASSWORD=$pw" "$container" psql -U "$user" -d "$db" -v ON_ERROR_STOP=0 < "$path" || warn "$file apply returned non-zero (often benign on re-run)."
+printf '       waiting for scm-gateway health ...'
+deadline=$(( $(date +%s) + HEALTH_TIMEOUT )); restarted=0
+while true; do
+  h="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${PROJ}-scm-gateway-1" 2>/dev/null || echo missing)"
+  if [ "$h" = healthy ]; then printf ' healthy\n'; break; fi
+  if { [ "$h" = exited ] || [ "$h" = unhealthy ]; } && [ "$restarted" = 0 ]; then
+    printf ' (probe missed window — restarting once)\n'; docker start "${PROJ}-scm-gateway-1" >/dev/null; restarted=1; deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
   fi
-}
-
-preflight
-
-phase 'Traefik'
-pnpm --dir "$REPO_ROOT" traefik:up
-
-phase 'GAP (SPRING_PROFILES_ACTIVE=e2e — acme-corp + globex-corp demo customers)'
-SPRING_PROFILES_ACTIVE=e2e dc projects/global-account-platform up -d "${build_arg[@]}"
-wait_healthy "$HEALTH_TIMEOUT" gap-mysql
+  if [ "$(date +%s)" -gt "$deadline" ]; then printf '\n'; err "scm-gateway not healthy. Check: docker logs ${PROJ}-scm-gateway-1"; exit 1; fi
+  sleep 4; printf '.'
+done
 
 if [ "${NO_SEED:-0}" != "1" ]; then
-  phase 'Seed — GAP operators + multi-operator N:M assignments'
-  seed gap-mysql mysql '' root rootpass 01-gap.sql
+  phase 'Seed — globex-corp delta (SCM purchase-orders + ERP masters)'
+  docker exec -i "${PROJ}-mysql-1" mysql -uroot -prootpass erp_db < "$SEED_DIR/03-erp.sql" 2>/dev/null || true
+  docker exec -i "${PROJ}-scm-postgres-1" psql -U scm -d scm_procurement -v ON_ERROR_STOP=0 < "$SEED_DIR/06-scm-procurement.sql" >/dev/null 2>&1 || true
+  ok 'globex SCM-PO + ERP seeds applied (idempotent).'
 fi
-
-phase 'Domains — wms / scm / finance / erp'
-dc projects/wms-platform     up -d "${build_arg[@]}"
-dc projects/scm-platform     up -d "${build_arg[@]}"
-dc projects/finance-platform up -d "${build_arg[@]}"
-dc projects/erp-platform     up -d "${build_arg[@]}"
-wait_healthy "$HEALTH_TIMEOUT" wms-postgres scm-platform-postgres finance-platform-mysql erp-platform-mysql
-
-if [ "${NO_SEED:-0}" != "1" ]; then
-  phase 'Seed — per-domain read-models'
-  seed finance-platform-mysql mysql finance_db root root 02-finance.sql
-  seed erp-platform-mysql     mysql erp_db     root root 03-erp.sql
-  seed wms-postgres           psql  master_db  postgres postgres 04-wms-master.sql
-  seed wms-postgres           psql  admin_db   postgres postgres 05-wms-admin.sql
-  seed scm-platform-postgres  psql  scm_procurement          scm scm 06-scm-procurement.sql
-  seed scm-platform-postgres  psql  scm_inventory_visibility scm scm 07-scm-inventory.sql
-fi
-
-phase 'Console (console-bff + console-web)'
-dc projects/platform-console up -d "${build_arg[@]}"
-wait_healthy "$HEALTH_TIMEOUT" platform-console-web
 
 phase 'Ready'
-ok 'Open http://console.local'
+ok 'Open http://localhost:3000'
 echo '       Login:   multi-operator@example.com  /  devpassword123!'
 echo '       Demo:    acme-corp -> Finance/WMS 운영 ; switch globex-corp -> SCM/ERP 운영 ; GAP always.'
+echo '       (Do NOT use super-admin / acme-operator for scm/erp — not entitled.)'
 echo '       Walkthrough: docs/guides/console-fullstack-local-dev.md'

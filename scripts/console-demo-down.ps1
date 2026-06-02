@@ -1,35 +1,20 @@
 # =============================================================================
 # console-demo-down.ps1 — TASK-MONO-170
-# Tear down the full console demo stack (all 6 compose projects + Traefik).
-# Reverse order of console-demo-up.ps1. Volumes preserved by default.
+# Remove the per-domain ops DEMO overlay from the federation-hardening-e2e stack.
+# Stops + removes the scm-gateway overlay container. Does NOT tear down the
+# fed-e2e BASE harness (that is the harness's own lifecycle). console-web reverts
+# to its base env the next time the base is brought up without the demo overlay.
 #
-# Usage:  pnpm console-demo:down   (or)   .\scripts\console-demo-down.ps1 [-Volumes]
-#   -Volumes   also remove named volumes (wipes seeded data — full reset).
+# Usage:  pnpm console-demo:down   (or)   .\scripts\console-demo-down.ps1
 # =============================================================================
 [CmdletBinding()]
-param([switch]$Volumes)
-
+param()
 $ErrorActionPreference = 'Continue'
-$RepoRoot = Split-Path -Parent $PSScriptRoot
-$DownArgs = if ($Volumes) { @('down', '-v') } else { @('down') }
+$Proj = 'federation-hardening-e2e'
 
-function Write-Phase($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
+Write-Host "=== removing scm-gateway demo overlay container ===" -ForegroundColor Cyan
+docker rm -f "$Proj-scm-gateway-1" 2>&1 | Out-Host
 
-$projects = @(
-    'projects/platform-console',
-    'projects/erp-platform',
-    'projects/finance-platform',
-    'projects/scm-platform',
-    'projects/wms-platform',
-    'projects/global-account-platform'
-)
-foreach ($p in $projects) {
-    Write-Phase "down: $p"
-    docker compose --project-directory (Join-Path $RepoRoot $p) @DownArgs | Out-Host
-}
-
-Write-Phase 'down: Traefik'
-pnpm --dir $RepoRoot traefik:down | Out-Host
-
-Write-Host "`n[OK] console demo stack stopped." -ForegroundColor Green
-if (-not $Volumes) { Write-Host '     (volumes preserved — re-run console-demo:up to resume; add -Volumes for a full data reset)' }
+Write-Host "[OK] demo overlay removed (scm-gateway)." -ForegroundColor Green
+Write-Host "     The fed-e2e base harness is untouched. console-web keeps its overlay env"
+Write-Host "     until the base is recreated without the demo overlay (or the harness restarts it)."

@@ -1,35 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
 # console-demo-down.sh — TASK-MONO-170
-# Tear down the full console demo stack (6 compose projects + Traefik).
-# POSIX peer of console-demo-down.ps1. Reverse order. Volumes preserved unless
-# VOLUMES=1.
+# Remove the per-domain ops DEMO overlay from the federation-hardening-e2e stack.
+# Stops + removes the scm-gateway overlay container. Does NOT tear down the
+# fed-e2e BASE harness (that is the harness's own lifecycle).
 #
 # Usage:  pnpm console-demo:down   (or)   ./scripts/console-demo-down.sh
-# Flags:  VOLUMES=1  also removes named volumes (full data reset).
 # =============================================================================
 set -uo pipefail
+PROJ='federation-hardening-e2e'
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+printf '=== removing scm-gateway demo overlay container ===\n'
+docker rm -f "${PROJ}-scm-gateway-1" 2>/dev/null || true
 
-down_args=( down ); [ "${VOLUMES:-0}" = "1" ] && down_args=( down -v )
-
-phase() { printf '\n=== %s ===\n' "$1"; }
-
-for p in \
-  projects/platform-console \
-  projects/erp-platform \
-  projects/finance-platform \
-  projects/scm-platform \
-  projects/wms-platform \
-  projects/global-account-platform; do
-  phase "down: $p"
-  docker compose --project-directory "$REPO_ROOT/$p" "${down_args[@]}" || true
-done
-
-phase 'down: Traefik'
-pnpm --dir "$REPO_ROOT" traefik:down || true
-
-printf '\n[OK] console demo stack stopped.\n'
-[ "${VOLUMES:-0}" = "1" ] || printf '     (volumes preserved; VOLUMES=1 for a full data reset)\n'
+printf '[OK] demo overlay removed (scm-gateway).\n'
+printf '     The fed-e2e base harness is untouched. console-web keeps its overlay env\n'
+printf '     until the base is recreated without the demo overlay.\n'
