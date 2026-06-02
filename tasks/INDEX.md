@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-172-project-overview-reality-alignment-10th.md` — **REVIEW** (impl complete, awaiting merge + close chore). `docs/project-overview.md` reality-alignment 10회째 (MONO-141/148/168 패턴) — 9회째(MONO-168, 2026-06-02) snapshot 이후 머지분 반영. surgical edits 7곳: header 갱신 시점(→2026-06-03) + §2.1 wms(read-model 42P18 BE-331/332 + outbound 전제층 BE-333/334) + §2.4 scm(console-ops-demo read-consumer 정합 SCM-BE-020/MONO-171/SCM-BE-021) + §2.6 console(MONO-170 full-stack 데모 = 8-fix drift wave 의 sender + "머지+CI green ≠ 런타임 federation 정합" 메타) + §6 build(frontend Docker 캐시 PC-FE-035/FE-072) + §7 ADR-020 행(D6 step4 = MONO-169 의도적 비실행 disposition → 사실상 완료) + §9 Phase 8+ 행(잔여=0, deferred=outbound IT). no decisions, docs-only. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

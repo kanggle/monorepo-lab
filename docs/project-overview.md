@@ -1,7 +1,7 @@
 # Project Overview — monorepo-lab
 
 > **목적**: 본 monorepo 전체 (플랫폼 전략 + 5 프로젝트 + 공유 인프라) 의 단일 진입 스냅샷.
-> **갱신 시점**: 2026-06-02 (마지막 의미 있는 변화: Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28 + **post-Phase-8 multi-tenant SaaS 실체화** 2026-05-31~06-02: ADR-MONO-019/020/021 ACCEPTED [customer-tenant entitlement-trust + operator N:M assume-tenant + `account_type` claim] + console overview consolidation [PC-FE-034] + console-web PR CI gate [MONO-166] + internal-system trait rules [MONO-167]).
+> **갱신 시점**: 2026-06-03 (마지막 의미 있는 변화: Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28 + **post-Phase-8 multi-tenant SaaS 실체화** 2026-05-31~06-02: ADR-MONO-019/020/021 ACCEPTED [customer-tenant entitlement-trust + operator N:M assume-tenant + `account_type` claim] + console overview consolidation [PC-FE-034] + console-web PR CI gate [MONO-166] + internal-system trait rules [MONO-167] + **console full-stack 로컬 데모 [MONO-170] 가 표면화한 런타임 producer↔consumer drift 청소 wave** 2026-06-02~03: ADR-MONO-020 D6 step4 "의도적 비실행" disposition [MONO-169 → ADR-020 사실상 완료] + SCM/WMS 런타임 federation 정합 8-fix [ERP-BE-006 / SCM-BE-020 decimal-string 계약 / MONO-171 seed UUID / BE-331·BE-332 read-model 42P18 PostgreSQL 쿼리 class / BE-333·BE-334 outbound 기동·security 전제층 / SCM-BE-021 read-model 422→500 관측성] + frontend Docker 빌드 캐시 최적화 [PC-FE-035 / FE-072, 60~82% 빌드시간↓]).
 > **위치**: `docs/project-overview.md` — `docs/adr/` (결정 기록) · `docs/guides/` (휴먼 워크플로우 가이드) 와 sibling.
 
 ---
@@ -38,6 +38,7 @@
 
 - **architecture override**: `admin-service` 만 sibling 의 Hexagonal 에서 **Layered** 로 승격 (PROJECT.md § Overrides + service architecture.md 에 근거 명시). read-side / 단순 CRUD write surface 가 port/adapter 비용 정당화 못 함.
 - **ID provider**: GAP OIDC RS256 + `tenant_id=wms` claim ([specs/integration/gap-integration.md](../projects/wms-platform/specs/integration/gap-integration.md)).
+- **런타임 정합 (2026-06-03, MONO-170 데모 표면화)**: `admin-service` read-model 의 nullable temporal `:p IS NULL` 가드가 PostgreSQL `42P18`(could not determine data type) 로 unfiltered 쿼리 시 500 → `CAST(:p AS string)` 일괄 수정 (alerts BE-331 + 전 `@Query` audit BE-332 = wms 7 repo). `outbound-service` non-standalone 기동 복구 (BE-333 `@ConditionalOnMissingBean` by-type 빈충돌 exclude + V4 Flyway 정본 교정 / BE-334 `SecurityConfig` `@ConditionalOnWebApplication(SERVLET)`). 미배포 outbound IT 전체 green+CI 배선은 저-ROI 로 deferred.
 
 ### 2.2 [global-account-platform](../projects/global-account-platform/PROJECT.md) (GAP) — SaaS Identity / IdP (v1 ✅)
 
@@ -99,6 +100,7 @@
 
 - **v2 deferred**: `supplier-service`, `demand-planning-service`, `logistics-service`, `settlement-service`, `notification-service`, `admin-service`
 - **wms 와의 차별점**: wms = 단일 창고 내부 동선 (한 노드). scm = 노드들의 그래프 (조달 → 운송 → 정산).
+- **콘솔 운영 read consumer 런타임 정합 (2026-06-02~03, MONO-170 데모 표면화)**: `procurement` PO read 의 decimal 필드가 Jackson number → 콘솔 `z.string()` parse-fail = decimal-string 계약 위반 → `@JsonFormat(shape=STRING)` (SCM-BE-020); `inventory-visibility` globex 시드 non-UUID id 불변식 위반 (MONO-171) + corrupt read-model 재구성이 무로깅 `422` 로 둔갑 → `ReadModelCorruptException` → `500`+log 재정정 (SCM-BE-021). 이로써 SCM 운영 카드가 acme/globex 양 테넌트 풀 렌더.
 
 ### 2.5 [fan-platform](../projects/fan-platform/PROJECT.md) — K-pop 아티스트↔팬 커뮤니티 (v1 ✅ 풀스택)
 
@@ -123,6 +125,7 @@
 - **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → GAP 백엔드-only IdP 회귀.
 - **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — 5/5 federated backend domains (`gap` + `wms` + `scm` + `finance` + `erp`) `available:true`. console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
 - **Phase 8 + multi-tenant 활성화 (2026-05-25~06-02)**: federation hardening (cross-product e2e + observability trace federation + isolation regression, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) + **런타임 entitlement-trust active-tenant 전환** (ADR-MONO-019/020 — console active-tenant switcher → assume-tenant A↔B GREEN, MONO-158~162) + **overview 화면 통폐합** (PC-FE-034 — 통합 개요 콘솔 홈 승격 / GAP-only 개요 = GAP-card drill-down / ERP 운영 nav 추가) + **console-web PR CI gate 편입** (MONO-166 — unit/tsc/lint).
+- **full-stack 로컬 데모 + 런타임 drift 청소 (2026-06-02~03, [MONO-170](../tasks/done/TASK-MONO-170-console-fullstack-local-dev-demo.md))**: 콘솔을 5/5 도메인 per-domain 운영 화면으로 실제 구동한 첫 full-stack 로컬 데모가 **producer↔consumer 런타임 drift 8건**을 표면화 → 전수 청소 (ERP-BE-006 effectivePeriod nesting / SCM-BE-020 decimal-string / MONO-171 seed / BE-331·332 read-model 42P18 / BE-333·334 outbound 전제층 / SCM-BE-021 422→500). 메타: 머지+CI GREEN ≠ 런타임 federation 정합 — full-stack 데모 구동이 mock/slice 테스트가 못 잡는 cross-service 계약·쿼리·시드 drift 의 sender. federation scm leg 경로는 MONO-162 에서 이미 정합.
 - **service map**:
 
 | Service | Type | 책임 |
@@ -298,6 +301,8 @@ traits/<declared-trait>.md for each trait (if present)
 
 **CI**: [.github/workflows/ci.yml](../.github/workflows/ci.yml) — `dorny/paths-filter@v3` 기반 path-filtered build (TASK-MONO-045 적용). chore PR ~19초 (baseline 15분 대비 47x).
 
+**Frontend Docker 빌드 캐시 (2026-06-02, PC-FE-035 / FE-072)**: Next.js standalone Docker 빌드에 BuildKit `.next/cache` + pnpm store 캐시 마운트 — console-web 229→91s (60%↓), ecommerce web-store/admin-dashboard 445→79s (82%↓); 이미지 크기 불변. (fan-platform-web 은 Dockerfile 미보유 = 대상 외; 공유 base Dockerfile 추출은 미착수 nicety.)
+
 ---
 
 ## 7. 주요 ADR / 결정
@@ -327,7 +332,7 @@ traits/<declared-trait>.md for each trait (if present)
 | [ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) | ACCEPTED (2026-05-20) | console-bff architecture — D1-D8 (skeleton / Operator Overview / Domain Health / per-domain credential / tenant pass-through / cross-tenant deny / per-domain attribution / MVP scope). |
 | [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) | ACCEPTED (2026-05-25) | platform-console Phase 8 federation hardening — D1-D8 cross-product e2e + observability federation + multi-tenant isolation regression. |
 | [ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md) | ACCEPTED (2026-05-31) | customer-tenant model + 런타임 entitlement-trust — 고객 테넌트가 `entitled_domains` 로 도메인 접근 통제 (acme-corp/globex 시드; BE-322/324/325 + PC-BE-007 BFF pass-through + MONO-154 런타임 증명). |
-| [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) | ACCEPTED (2026-05-31) | operator↔customer N:M assignment + active-tenant 토큰 스코핑 — assume-tenant RFC 8693 exchange (BE-326 dual-read + BE-327 + MONO-158~162 D4 A↔B switch GREEN). 잔여=D6 step4 legacy read cleanup (user-gated). |
+| [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) | ACCEPTED (2026-05-31, 사실상 완료 2026-06-02) | operator↔customer N:M assignment + active-tenant 토큰 스코핑 — assume-tenant RFC 8693 exchange (BE-326 dual-read + BE-327 + MONO-158~162 D4 A↔B switch GREEN). D6 step4 legacy read cleanup = **MONO-169 로 "의도적 비실행" disposition** (V0030 net-zero + `'*'` assignment-비표현 → dual-read steady state; 제거 시 전 운영자 회귀) → ADR-020 사실상 완료. |
 | [ADR-MONO-021](adr/ADR-MONO-021-account-type-claim-source.md) | ACCEPTED (2026-06-02) | `account_type` (CONSUMER\|OPERATOR) OIDC claim source — `auth_db.credentials` denormalize (BE-329 컬럼+토큰주입 / BE-330 provisioning / INT-024 e2e). gateway 403-on-absent 해소. |
 | GAP [ADR-001](../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
 | GAP [ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
@@ -366,7 +371,7 @@ traits/<declared-trait>.md for each trait (if present)
 | 6. 새 도메인 부트스트랩 (finance + erp) | ✅ **COMPLETE 2026-05-19/20** (ADR-MONO-008 / ADR-MONO-016) | Template downstream 첫 2회 CONFIRMED — finance v1 + erp v1 monorepo+standalone 양쪽 종결 |
 | 7. platform-console federation (console-bff) | ✅ **LIVE 2026-05-20** ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md)) | console-bff skeleton + Operator Overview + Domain Health — 5/5 backend domains federated |
 | 8. federation hardening (cross-product e2e + observability + isolation) | ✅ **COMPLETE 2026-05-28** ([ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) + [ADR-MONO-007a](adr/ADR-MONO-007a-trace-layer.md)) | cross-product e2e (MONO-139/140) + **D4 observability federation** (MONO-142~147: VictoriaTraces stack → propagation gate → unified 62-span trace → per-leg `bff.domain`/`bff.route` attribution) + **D5 multi-tenant isolation regression** (PC-BE-006 console-bff + ERP-BE-004 erp) — 8/8 Playwright specs PASS |
-| 8+. multi-tenant SaaS 실체화 (post-Phase-8) | ✅ **COMPLETE 2026-05-31~06-02** ([ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md)/[020](adr/ADR-MONO-020-operator-multitenant-assignment.md)/[021](adr/ADR-MONO-021-account-type-claim-source.md)) | customer-tenant entitlement-trust 런타임 (BE-322~325 / MONO-154) + operator↔customer N:M assignment + assume-tenant RFC8693 (BE-326/327 / MONO-158~162 A↔B GREEN) + `account_type` OIDC claim (BE-329/330 / INT-024) + console overview consolidation (PC-FE-034) + console-web PR CI gate (MONO-166) + internal-system trait rules (MONO-167). 잔여=ADR-020 D6 step4 legacy read cleanup (user-gated) |
+| 8+. multi-tenant SaaS 실체화 (post-Phase-8) | ✅ **COMPLETE 2026-05-31~06-02** ([ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md)/[020](adr/ADR-MONO-020-operator-multitenant-assignment.md)/[021](adr/ADR-MONO-021-account-type-claim-source.md)) | customer-tenant entitlement-trust 런타임 (BE-322~325 / MONO-154) + operator↔customer N:M assignment + assume-tenant RFC8693 (BE-326/327 / MONO-158~162 A↔B GREEN) + `account_type` OIDC claim (BE-329/330 / INT-024) + console overview consolidation (PC-FE-034) + console-web PR CI gate (MONO-166) + internal-system trait rules (MONO-167). ADR-020 D6 step4 = MONO-169 "의도적 비실행" disposition (사실상 완료). **MONO-170 full-stack 데모 → 런타임 producer↔consumer drift 8-fix 청소 (ERP-BE-006/SCM-BE-020/MONO-171/BE-331·332/BE-333·334/SCM-BE-021)** + frontend Docker 빌드 캐시 (PC-FE-035/FE-072). 잔여=0 (deferred=미배포 outbound IT overhaul) |
 | 9. Ongoing sync | 🔮 Future | 라이브러리 개선의 monorepo → template 주기 sync (ADR-MONO-003b § D3 cadence) |
 
 **Phase 5 LAUNCH**: COMPLETE. Template sync cadence = [ADR-MONO-003b § D3](adr/ADR-MONO-003b-phase-5-launch-criteria.md) (월 1회 또는 on-demand). ADR-MONO-003 SUPERSEDED-on-launch — historical reference only.
