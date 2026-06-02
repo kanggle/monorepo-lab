@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-334-outbound-securityconfig-web-conditional.md` — Make outbound `SecurityConfig` `@ConditionalOnWebApplication(SERVLET)` so a `webEnvironment=NONE` `@SpringBootTest` loads (the `securityFilterChain` bean needs `HttpSecurity`, servlet-web only). BE-333 follow-up — step 1 (context-load prerequisite) of the outbound IT-suite repair; production/web security unchanged. `:check` green. **Deferred (user decision — low ROI, undeployed service)**: full outbound `integrationTest` green + CI wiring — further per-test issues remain (test-data FK seeds in SagaSweeper/Tms ITs, IdempotencyFilterRedisIT 409). 분석=Opus 4.8 / 구현 권장=Opus (직접).
 
 ## in-progress
 
