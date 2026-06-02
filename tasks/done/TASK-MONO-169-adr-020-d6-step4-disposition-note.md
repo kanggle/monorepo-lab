@@ -8,7 +8,7 @@ ADR-MONO-020 D6 Step 4 (legacy single-value read cleanup) disposition — record
 
 # Status
 
-review
+done
 
 # Owner
 
