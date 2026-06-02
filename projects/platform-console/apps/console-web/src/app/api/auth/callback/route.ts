@@ -7,11 +7,14 @@ import {
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
   ID_TOKEN_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   tokenCookieOpts,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
+import { homeTenantFromAccessToken } from '@/shared/lib/jwt';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -162,6 +165,11 @@ export async function GET(req: Request) {
       jar.delete(REFRESH_COOKIE);
       jar.delete(OPERATOR_COOKIE);
       jar.delete(ID_TOKEN_COOKIE);
+      // No partial authed state: also drop any prior active-tenant selection
+      // (+ its coupled assumed token) so a failed login never leaves a stale
+      // tenant pointing at a now-unauthenticated session (TASK-PC-FE-036).
+      jar.delete(TENANT_COOKIE);
+      jar.delete(ASSUMED_TOKEN_COOKIE);
       if (
         err instanceof OperatorExchangeError &&
         err.reason === 'fail_closed'
@@ -174,6 +182,27 @@ export async function GET(req: Request) {
         env.NEXT_PUBLIC_APP_URL,
         'operator_exchange_unavailable',
       );
+    }
+
+    // --- Default the active tenant to the operator's home tenant ----------
+    // TASK-PC-FE-036: without this the active-tenant cookie is unset on first
+    // load, so the tenant-scoped overviews (운영자 통합 개요 / 도메인 상태)
+    // gate with "select a tenant" even though the switcher shows a tenant —
+    // a confusing UI/server mismatch. A real-customer operator's GAP OIDC
+    // access token already carries `tenant_id=<home>` (+ entitled_domains), so
+    // defaulting the active tenant to it makes the overviews work immediately
+    // via the base token (no assume-tenant needed — getDomainFacingToken falls
+    // back to the base access token, which is already scoped to the home
+    // tenant; switching to a NON-home assigned tenant still drives the
+    // assume-tenant exchange via /api/tenant). The platform sentinel '*' has
+    // no single home tenant → left unset (the operator explicitly selects a
+    // customer; the switcher renders an unselected placeholder for them).
+    const homeTenant = homeTenantFromAccessToken(data.access_token);
+    if (homeTenant) {
+      jar.set(TENANT_COOKIE, homeTenant, {
+        ...tokenCookieOpts,
+        maxAge: data.expires_in,
+      });
     }
 
     logger.info('oidc_login_success', { requestId });

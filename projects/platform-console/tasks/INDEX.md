@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-036-overview-first-load-active-tenant-default.md` — **REVIEW** (impl PR open; console-web bugfix; bundled per `feedback_pr_bundling`). 운영자 통합 개요(`/dashboards/overview`)+도메인 상태 개요(`/dashboards/health`) **첫 로드 NO_ACTIVE_TENANT 게이트가 스위처엔 테넌트 선택돼 보이는데 뜨는** 모순 수정(라이브 사용 중 사용자 보고). RC 2건: ① OAuth 콜백이 `console_active_tenant` 미설정 → 전 운영자 첫 로드 게이트 ② 스위처가 `activeTenant ?? tenants[0]` 로 미설정을 첫 테넌트 "선택됨"으로 위장. **픽스 (A)** 콜백이 로그인 토큰 `tenant_id`(=home, `'*'` 아님)로 `TENANT_COOKIE` 기본설정 → 실고객 운영자 첫 로드 즉시 작동(base 토큰이 home scope, **assume 불필요**; 비-home assigned 전환은 `/api/tenant` assume-tenant 유지=ADR-020 D4 불변) **(B)** `'*'` 플랫폼 운영자는 home 없음 → 스위처가 `tenants[0]` 대신 **정직한 placeholder("테넌트 선택…")**. neue `shared/lib/jwt.ts`(verification-free claim read, authz 아님). 콜백 실패경로도 TENANT+ASSUMED 쿠키 clear(no partial state). **로컬 선검증: vitest 779/779 + tsc rc=0 + lint clean.** 앱 producer/BFF/contract/ADR 무변경. 분석=Opus 4.8 / 구현 권장=Opus 4.8.
 
 ## done
 

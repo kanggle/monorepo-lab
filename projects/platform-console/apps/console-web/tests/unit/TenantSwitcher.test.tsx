@@ -31,6 +31,36 @@ describe('TenantSwitcher (multi-tenant)', () => {
     expect(screen.queryByTestId('tenant-select')).not.toBeInTheDocument();
   });
 
+  it('renders an UNSELECTED placeholder when no active tenant (no silent default to tenants[0]) — TASK-PC-FE-036', () => {
+    wrap(
+      <TenantSwitcher
+        tenants={['acme-corp', 'globex-corp']}
+        activeTenant={null}
+      />,
+    );
+    const select = screen.getByTestId('tenant-select') as HTMLSelectElement;
+    // The bug: defaulting to tenants[0] showed a tenant as "selected" while the
+    // server had no active-tenant cookie → overviews gated. Honest fix = the
+    // select sits on the empty placeholder, NOT on the first tenant.
+    expect(select.value).toBe('');
+    expect(select.value).not.toBe('acme-corp');
+    expect(screen.getByRole('option', { name: '테넌트 선택…' })).toBeDisabled();
+  });
+
+  it('selects the active tenant when one is set (no placeholder)', () => {
+    wrap(
+      <TenantSwitcher
+        tenants={['acme-corp', 'globex-corp']}
+        activeTenant="globex-corp"
+      />,
+    );
+    const select = screen.getByTestId('tenant-select') as HTMLSelectElement;
+    expect(select.value).toBe('globex-corp');
+    expect(
+      screen.queryByRole('option', { name: '테넌트 선택…' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('switches the active tenant via the /api/tenant route on change', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, activeTenant: 'scm' }), {
