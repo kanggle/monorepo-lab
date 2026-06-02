@@ -10,7 +10,7 @@ Enable the **per-domain ops DEMO** (WMS · SCM · Finance · ERP 운영) on the 
 
 # Status
 
-ready
+done
 
 # Owner
 
