@@ -16,12 +16,18 @@
 -- Re-runnable: ON CONFLICT DO NOTHING.
 -- =============================================================================
 
+-- NOTE: id / node_id / last_event_id MUST be valid UUID strings — the producer
+-- writes them as UUIDs and the read-model reconstructors parse them with
+-- UUID.fromString(...). Non-UUID ids → IllegalArgumentException → unlogged 422 on
+-- /snapshot + /staleness (TASK-MONO-171). Distinct UUID namespace from the fed-e2e
+-- fixture (different DB); node id consistent across the three tables.
+
 -- source node (FK target for snapshots)
 INSERT INTO inventory_nodes (
     id, tenant_id, node_type, node_external_id, name, status,
     created_at, updated_at
 ) VALUES (
-    'demo-node-globex-01', 'globex-corp', 'WMS_WAREHOUSE', 'GLOBEX-WH-01',
+    'de300000-0000-4000-8000-000000000001', 'globex-corp', 'WMS_WAREHOUSE', 'GLOBEX-WH-01',
     'Globex Demo Warehouse', 'ACTIVE', NOW(), NOW()
 )
 ON CONFLICT (id) DO NOTHING;
@@ -31,8 +37,8 @@ INSERT INTO inventory_snapshots (
     id, node_id, sku, quantity, tenant_id,
     last_event_id, last_event_at, version, updated_at
 ) VALUES (
-    'demo-snapshot-globex-01', 'demo-node-globex-01', 'SKU-DEMO-001', 42.000,
-    'globex-corp', 'demo-event-001', NOW(), 0, NOW()
+    'de300000-0000-4000-8000-000000000002', 'de300000-0000-4000-8000-000000000001', 'SKU-DEMO-001', 42.000,
+    'globex-corp', 'de300000-0000-4000-8000-000000000003', NOW(), 0, NOW()
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -41,7 +47,7 @@ INSERT INTO node_staleness (
     node_id, tenant_id, last_event_at, last_event_id,
     staleness_status, last_checked_at
 ) VALUES (
-    'demo-node-globex-01', 'globex-corp', NOW(), 'demo-event-001',
+    'de300000-0000-4000-8000-000000000001', 'globex-corp', NOW(), 'de300000-0000-4000-8000-000000000003',
     'FRESH', NOW()
 )
 ON CONFLICT (node_id) DO NOTHING;

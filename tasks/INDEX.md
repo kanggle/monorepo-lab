@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-171-inventory-visibility-globex-seed-uuid-conformance.md` — Fix the globex inventory-visibility demo seed so `node_id`/`last_event_id`/snapshot `id` are valid **UUID** strings. The fed-e2e + console-demo seeds used human-readable ids (`e2e-node-globex-01`, …) that the read-model `toDomain` reconstructors parse with `UUID.fromString(...)` → `IllegalArgumentException` → an **unlogged 422 VALIDATION_ERROR** on `/snapshot` + `/staleness` for the globex tenant (the remaining blocker keeping SCM 운영 degraded after SCM-BE-020 fixed the procurement leg). DATA-ONLY (two `.sql` seeds); no producer/contract/ADR change. Surfaced by MONO-170. 분석=Opus 4.8 / 구현 권장=Opus (직접 — 확정 root cause, 라이브 재시드 검증).
 
 ## in-progress
 
