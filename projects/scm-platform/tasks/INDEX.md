@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-020-procurement-decimal-string-contract-conformance.md` — **REVIEW (2026-06-03, impl on `task/scm-be-ops-response-contract-conformance`)**. procurement-service PO response **contract conformance**: `PurchaseOrderResponse.totalAmount` + line `quantity`/`unitPrice`/`receivedQuantity` were `BigDecimal` → Jackson default JSON **number**, violating `procurement-api.md` which quotes them as decimal **strings** (`"125000.00"`); the platform-console PC-FE-008 consumer parses `z.string()` → SCM 운영 PO list `200`→parse-fail (`scm_ok`→`scm_error`). **Surfaced by TASK-MONO-170** live demo. Fix = `@JsonFormat(shape=STRING)` on the 4 decimal fields + slice-test regression assertion (`$.data.content[0].totalAmount`/`lines[].quantity`/`unitPrice` = `instanceOf(String.class)` through real Jackson/MockMvc). **NO domain/persistence/auth/contract/ADR change.** `:check` GREEN. **OUT OF SCOPE (separate task)**: the same demo surfaced an inventory-visibility-service **`422 VALIDATION_ERROR`** on `/snapshot`+`/staleness` (globex) — a DISTINCT runtime `IllegalArgumentException` (handler maps to 422 but doesn't log it; 200 to the BFF leg, 422 to the ops/gateway path; `TenantClaimExtractor` confirmed not the cause per BE-019). Needs token-based reproduction. SCM 운영 renders fully only after BOTH. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

@@ -2,6 +2,7 @@ package com.example.scmplatform.procurement.presentation.dto;
 
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,6 +15,13 @@ public record PurchaseOrderResponse(
         String supplierId,
         String buyerAccountId,
         PoStatus status,
+        // procurement-api.md serialises monetary/quantity decimals as STRINGS
+        // (e.g. "125000.00") to preserve scale/precision — NOT JSON numbers.
+        // Jackson's default BigDecimal serialisation is a number; @JsonFormat
+        // STRING brings the wire shape into contract conformance (the
+        // platform-console PC-FE-008 consumer parses these as z.string()).
+        // (TASK-SCM-BE-020.)
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         BigDecimal totalAmount,
         String currency,
         Instant submittedAt,
@@ -30,8 +38,11 @@ public record PurchaseOrderResponse(
             int lineNo,
             String sku,
             String supplierSku,
+            @JsonFormat(shape = JsonFormat.Shape.STRING)
             BigDecimal quantity,
+            @JsonFormat(shape = JsonFormat.Shape.STRING)
             BigDecimal unitPrice,
+            @JsonFormat(shape = JsonFormat.Shape.STRING)
             BigDecimal receivedQuantity
     ) {
     }
