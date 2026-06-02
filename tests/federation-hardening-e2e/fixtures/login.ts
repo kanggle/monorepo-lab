@@ -111,9 +111,16 @@ async function driveOidcPkceLogin(
     // Step 4 — submit. SAS authenticates, 302s back through /oauth2/authorize →
     // redirect_uri (console-web /api/auth/callback). Callback does token +
     // operator-token-exchange, sets production HttpOnly cookies, 302s to `/`.
-    // Next.js page.tsx redirect()s to /dashboards.
+    // Next.js root page.tsx redirect()s to /dashboards/overview (TASK-PC-FE-034
+    // promoted the consolidated 통합 개요 to the console home — the redirect
+    // target moved from /dashboards to /dashboards/overview; this fixture's
+    // exact-match waitForURL must follow it, else global setup times out and the
+    // whole suite goes RED — caught by TASK-MONO-173 since federation-e2e is
+    // nightly, not PR-gated, so the PC-FE-034 merge did not surface it).
     await Promise.all([
-      page.waitForURL(`${DEFAULTS.consoleOrigin}/dashboards`, { timeout: 30_000 }),
+      page.waitForURL(`${DEFAULTS.consoleOrigin}/dashboards/overview`, {
+        timeout: 30_000,
+      }),
       page.click('button[type="submit"]'),
     ]);
 

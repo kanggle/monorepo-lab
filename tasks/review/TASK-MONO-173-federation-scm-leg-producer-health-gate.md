@@ -41,6 +41,7 @@ A producer-side error on the scm leg (PO-list parse failure, or inventory-visibi
 
 - **(A)** `tests/federation-hardening-e2e/specs/scm-golden-path.spec.ts` — replace the MVP-relaxed (URL + heading only) body with: assert no error panel (`scm-degraded` / `scm-not-eligible` / `scm-forbidden` / `scm-ratelimited` absent), assert `scm-po-table` visible + `PO-E2E-001` row text visible. (The PO seed `seed-scm.sql` is `tenant_id='*'`, explicitly "minimum shape to satisfy scm-golden-path.spec.ts" — so `'*'` returns it. The page renders `ScmOpsScreen` only if PO **and** snapshot **and** staleness all returned 200; `'*'` snapshot is 0 rows → `scm-snap-empty`, still non-degraded.)
 - **(B)** `tests/federation-hardening-e2e/specs/tenant-switch-rescope.spec.ts` — after the globex switch, add a scm-specific assertion: `operator-overview-card-scm` `data-status='ok'` (+ `operator-overview-card-scm-degraded` count 0). The generic `assertEntitlement(not-forbidden)` stays for the other domains; only scm is tightened to `ok`.
+- **(C) DISCOVERED PREREQUISITE** `tests/federation-hardening-e2e/fixtures/login.ts` — the validation run surfaced a **pre-existing global-setup regression** that blocked the ENTIRE suite (not just scm): the OIDC PKCE login fixture waited (exact-match) for `${consoleOrigin}/dashboards`, but **TASK-PC-FE-034 promoted the consolidated 통합 개요 to the console home** so the root `page.tsx` now `redirect('/dashboards/overview')`. The post-login URL no longer equals `/dashboards` → `waitForURL` 30s timeout → `globalSetup` fails → all 8 specs error before running. Undetected because federation-hardening-e2e is nightly (not PR-gated), so the PC-FE-034 merge never ran it. Fix = update the fixture's `waitForURL` to `/dashboards/overview` (+ correct the stale comment). One-line; a hard prerequisite to validate (A)/(B) at all, hence folded into this task.
 
 ## Out of Scope
 
@@ -52,7 +53,8 @@ A producer-side error on the scm leg (PO-list parse failure, or inventory-visibi
 
 - [x] **AC-1** `scm-golden-path.spec.ts` asserts `scm-po-table` + `PO-E2E-001` visible and the absence of every scm error panel; a PO-leg degrade (SCM-BE-020-class) would fail it.
 - [x] **AC-2** `tenant-switch-rescope.spec.ts` globex side requires `operator-overview-card-scm` `data-status='ok'`; a snapshot-422 degrade (MONO-171/SCM-BE-021-class) would fail it. The acme side + all forbidden assertions are unchanged.
-- [ ] **AC-3** Diff confined to the two spec files (+ task lifecycle). No production/spec/ADR change. Validated by a `workflow_dispatch` run of `federation-hardening-e2e.yml` on the task branch — suite GREEN with the tightened assertions (the legs are healthy post-MONO-171/SCM-BE-021), proving the assertions hold on the real stack (not just stricter-on-paper). — **pending validation run**
+- [ ] **AC-3** Diff confined to the three federation-e2e files (2 specs + login fixture) (+ task lifecycle). No production/spec/ADR change. Validated by a `workflow_dispatch` run of `federation-hardening-e2e.yml` on the task branch — suite GREEN with the tightened assertions (the legs are healthy post-MONO-171/SCM-BE-021), proving the assertions hold on the real stack (not just stricter-on-paper). — **pending validation run**
+- [ ] **AC-4** (discovered) `login.ts` `waitForURL` follows the PC-FE-034 home move (`/dashboards/overview`); `globalSetup` completes and all 8 specs run (the first two `workflow_dispatch` attempts failed here identically, proving a persistent regression, not a flake).
 
 # Related Specs
 
@@ -74,9 +76,9 @@ A producer-side error on the scm leg (PO-list parse failure, or inventory-visibi
 
 # Definition of Done
 
-- [ ] (A) scm-golden-path + (B) tenant-switch-rescope globex side hardened.
+- [x] (A) scm-golden-path + (B) tenant-switch-rescope globex side hardened + (C) login.ts fixture `waitForURL` follows PC-FE-034 home move.
 - [ ] `workflow_dispatch` federation-hardening-e2e run on the branch GREEN (assertions hold on the real stack).
-- [ ] Diff confined; no production/spec/ADR change.
+- [ ] Diff confined (3 federation-e2e files); no production/spec/ADR change.
 - [ ] Task md + root `tasks/INDEX.md` updated.
 - [ ] Reviewed + merged (3-dim verified).
 
