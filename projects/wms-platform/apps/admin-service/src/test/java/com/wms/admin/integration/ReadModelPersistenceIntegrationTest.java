@@ -24,6 +24,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -151,6 +154,50 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         var reloaded = alertRepo.findById(id).orElseThrow();
         assertThat(reloaded.getAcknowledgedBy()).isEqualTo("ops-1");
         assertThat(reloaded.getAcknowledgedAt()).isEqualTo(NOW.plusSeconds(60));
+    }
+
+    /**
+     * Regression (TASK-BE-331): the alerts dashboard query with ALL filters
+     * null — exactly what the platform-console WMS 운영 page sends — must run
+     * against real PostgreSQL without `42P18 could not determine data type of
+     * parameter` (a 500). Mirrors the controller's default sort
+     * ({@code detectedAt,desc}). This path is invisible to the WebMvc slice
+     * test (mocked repository) and the integration suite is excluded from CI
+     * `check`, so the bug shipped — the fix CASTs the nullable temporal bounds.
+     */
+    @Test
+    void alertLog_search_allNullFilters_doesNotFailPgTypeInference() {
+        UUID id = UUID.randomUUID();
+        alertRepo.save(new AlertLogEntity(id, "LOW_STOCK",
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+                10, 5, NOW, NOW));
+
+        Page<AlertLogEntity> result = alertRepo.search(
+                null, null, null, null, null,
+                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "detectedAt")));
+
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).anyMatch(a -> a.getId().equals(id));
+    }
+
+    /**
+     * Regression (TASK-BE-331): the adjustments dashboard query carries the
+     * identical nullable-temporal pattern (occurredAtFrom/To) and the same
+     * latent 42P18 — pinned here against real PostgreSQL with all-null filters.
+     */
+    @Test
+    void adjustmentAudit_search_allNullFilters_doesNotFailPgTypeInference() {
+        UUID id = UUID.randomUUID();
+        auditRepo.save(new AdjustmentAuditEntity(id,
+                UUID.randomUUID(), UUID.randomUUID(), null, UUID.randomUUID(),
+                "AVAILABLE", -5, "LOSS", "lost", "actor", NOW, NOW));
+
+        Page<AdjustmentAuditEntity> result = auditRepo.search(
+                null, null, null, null, null, null, null,
+                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "occurredAt")));
+
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).anyMatch(a -> a.getId().equals(id));
     }
 
     @Test
