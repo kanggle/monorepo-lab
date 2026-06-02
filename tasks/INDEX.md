@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-169-adr-020-d6-step4-disposition-note.md` — **REVIEW** (impl PR open; doc-only ADR disposition). ADR-MONO-020 D6 Step 4(legacy single-value read cleanup) = **의도적 비실행** 기록(§3.3 item 4 + §6 additive 노트). 증거 3건: ① production `operator_tenant_assignment` 행 0개(`V0030` net-zero + 백필 마이그레이션 부재 → 전 운영자가 legacy read로만 해결, 제거 시 전원 회귀) ② `'*'` 플랫폼 sentinel = assignment 비표현 설계(`TenantScopeResolver` short-circuit → legacy read 구조상 영구) ③ legacy home tenant = net-zero base. 실행 trigger=실 SaaS 전-운영자 assignment 백필 + `'*'` 재설계. §2 D6 결정 테이블 byte-unchanged(status 기록, 결정 reversal 아님 — HARDSTOP-04 clean). ADR-020 = steps 0-3 done + step 4 dispositioned → 사실상 완료. 분석=Opus 4.8 / 구현 권장=Opus 4.8.
 
 ## done
 
