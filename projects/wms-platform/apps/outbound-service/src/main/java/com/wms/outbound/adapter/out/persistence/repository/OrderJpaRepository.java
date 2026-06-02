@@ -17,6 +17,10 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
 
     boolean existsByOrderNo(String orderNo);
 
+    // CAST(:p AS string) on the nullable temporal IS-NULL guards (both queries) —
+    // PostgreSQL 42P18 fix: a bare `:requiredShipAfter IS NULL` binds an untyped
+    // null PostgreSQL cannot type on an unfiltered call → 500. Same as
+    // AlertLogRepository (TASK-BE-331); the >=/<= keeps temporal typing. TASK-BE-332.
     @Query("""
             SELECT o FROM OrderEntity o
             WHERE (:status IS NULL OR o.status = :status)
@@ -24,10 +28,10 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
               AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId)
               AND (:source IS NULL OR o.source = :source)
               AND (:orderNo IS NULL OR o.orderNo = :orderNo)
-              AND (:requiredShipAfter IS NULL OR o.requestedShipDate >= :requiredShipAfter)
-              AND (:requiredShipBefore IS NULL OR o.requestedShipDate <= :requiredShipBefore)
-              AND (:createdAfter IS NULL OR o.createdAt >= :createdAfter)
-              AND (:createdBefore IS NULL OR o.createdAt <= :createdBefore)
+              AND (CAST(:requiredShipAfter AS string) IS NULL OR o.requestedShipDate >= :requiredShipAfter)
+              AND (CAST(:requiredShipBefore AS string) IS NULL OR o.requestedShipDate <= :requiredShipBefore)
+              AND (CAST(:createdAfter AS string) IS NULL OR o.createdAt >= :createdAfter)
+              AND (CAST(:createdBefore AS string) IS NULL OR o.createdAt <= :createdBefore)
             ORDER BY o.updatedAt DESC
             """)
     List<OrderEntity> findFiltered(@Param("status") String status,
@@ -48,10 +52,10 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
               AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId)
               AND (:source IS NULL OR o.source = :source)
               AND (:orderNo IS NULL OR o.orderNo = :orderNo)
-              AND (:requiredShipAfter IS NULL OR o.requestedShipDate >= :requiredShipAfter)
-              AND (:requiredShipBefore IS NULL OR o.requestedShipDate <= :requiredShipBefore)
-              AND (:createdAfter IS NULL OR o.createdAt >= :createdAfter)
-              AND (:createdBefore IS NULL OR o.createdAt <= :createdBefore)
+              AND (CAST(:requiredShipAfter AS string) IS NULL OR o.requestedShipDate >= :requiredShipAfter)
+              AND (CAST(:requiredShipBefore AS string) IS NULL OR o.requestedShipDate <= :requiredShipBefore)
+              AND (CAST(:createdAfter AS string) IS NULL OR o.createdAt >= :createdAfter)
+              AND (CAST(:createdBefore AS string) IS NULL OR o.createdAt <= :createdBefore)
             """)
     long countFiltered(@Param("status") String status,
                        @Param("warehouseId") UUID warehouseId,

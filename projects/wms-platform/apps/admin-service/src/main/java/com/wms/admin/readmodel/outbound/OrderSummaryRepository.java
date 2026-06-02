@@ -10,13 +10,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderSummaryRepository extends JpaRepository<OrderSummaryEntity, UUID> {
 
+    // CAST(:p AS string) on the nullable temporal IS-NULL guards — PostgreSQL
+    // 42P18 fix (untyped null on an unfiltered call → 500). Same as
+    // AlertLogRepository (TASK-BE-331); the >=/<= keeps temporal typing. TASK-BE-332.
     @Query("SELECT o FROM OrderSummaryEntity o "
             + "WHERE (:warehouseId IS NULL OR o.warehouseId = :warehouseId) "
             + "AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId) "
             + "AND (:status IS NULL OR o.status = :status) "
             + "AND (:sagaState IS NULL OR o.sagaState = :sagaState) "
-            + "AND (:requiredShipDateFrom IS NULL OR o.requiredShipDate >= :requiredShipDateFrom) "
-            + "AND (:requiredShipDateTo IS NULL OR o.requiredShipDate <= :requiredShipDateTo)")
+            + "AND (CAST(:requiredShipDateFrom AS string) IS NULL OR o.requiredShipDate >= :requiredShipDateFrom) "
+            + "AND (CAST(:requiredShipDateTo AS string) IS NULL OR o.requiredShipDate <= :requiredShipDateTo)")
     Page<OrderSummaryEntity> search(@Param("warehouseId") UUID warehouseId,
                                     @Param("customerPartnerId") UUID customerPartnerId,
                                     @Param("status") String status,

@@ -15,6 +15,8 @@ import com.wms.admin.readmodel.master.WarehouseRefEntity;
 import com.wms.admin.readmodel.master.WarehouseRefRepository;
 import com.wms.admin.readmodel.outbound.OrderSummaryEntity;
 import com.wms.admin.readmodel.outbound.OrderSummaryRepository;
+import com.wms.admin.readmodel.outbound.ShipmentSummaryEntity;
+import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
 import com.wms.admin.readmodel.throughput.ThroughputDailyId;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
@@ -62,6 +64,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     @Autowired AdjustmentAuditRepository auditRepo;
     @Autowired AlertLogRepository alertRepo;
     @Autowired ThroughputInboundDailyRepository throughputInboundRepo;
+    @Autowired ShipmentSummaryRepository shipmentRepo;
 
     @Test
     void warehouseRef_roundTrip() {
@@ -198,6 +201,55 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).anyMatch(a -> a.getId().equals(id));
+    }
+
+    /**
+     * Regression (TASK-BE-332): the order-summary dashboard query with ALL
+     * filters null must run against real PostgreSQL without `42P18` (the nullable
+     * temporal `requiredShipDate` bound). Same class as BE-331 AlertLog.
+     */
+    @Test
+    void orderSummary_search_allNullFilters_doesNotFailPgTypeInference() {
+        UUID orderId = UUID.randomUUID();
+        orderRepo.save(new OrderSummaryEntity(orderId, "ORD-1", UUID.randomUUID(), null, null,
+                "RECEIVED", "WEBHOOK_ERP", LocalDate.of(2026, 5, 15), 2, null, NOW, null, NOW));
+
+        Page<OrderSummaryEntity> result =
+                orderRepo.search(null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).anyMatch(o -> o.getOrderId().equals(orderId));
+    }
+
+    /**
+     * Regression (TASK-BE-332): the asn-summary dashboard query with ALL filters
+     * null (nullable temporal `expectedArriveDate`). Same class as BE-331.
+     */
+    @Test
+    void asnSummary_search_allNullFilters_doesNotFailPgTypeInference() {
+        UUID asnId = UUID.randomUUID();
+        asnRepo.save(new AsnSummaryEntity(asnId, "ASN-001", UUID.randomUUID(), null, null,
+                "CREATED", "MANUAL", LocalDate.of(2026, 5, 12), 3, NOW, null, NOW));
+
+        Page<AsnSummaryEntity> result =
+                asnRepo.search(null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).anyMatch(a -> a.getAsnId().equals(asnId));
+    }
+
+    /**
+     * Regression (TASK-BE-332): the shipment-summary dashboard query with ALL
+     * filters null (nullable temporal `shippedAt`). Same class as BE-331.
+     */
+    @Test
+    void shipmentSummary_search_allNullFilters_doesNotFailPgTypeInference() {
+        UUID shipmentId = UUID.randomUUID();
+        shipmentRepo.save(new ShipmentSummaryEntity(shipmentId, UUID.randomUUID(), "ORD-1",
+                UUID.randomUUID(), "SH-1", "CARRIER-A", "TRK-1", NOW, 5, NOW));
+
+        Page<ShipmentSummaryEntity> result =
+                shipmentRepo.search(null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).anyMatch(s -> s.getShipmentId().equals(shipmentId));
     }
 
     @Test
