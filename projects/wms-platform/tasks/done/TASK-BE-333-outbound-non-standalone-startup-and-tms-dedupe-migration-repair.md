@@ -8,7 +8,7 @@ TASK-BE-333
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -51,10 +51,10 @@ backend-engineer (outbound-service app config + one Flyway migration — no doma
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `OutboundServiceApplication` excludes `OutboxAutoConfiguration`; no `outboxPublisher` `BeanDefinitionOverrideException` on a non-standalone context load (verified — the 6 outbound ITs that previously failed at bean-override now load their context; the remaining failures are the deferred web-env issues, NOT bean-override / NOT Flyway).
-- [ ] **AC-2** `V4`'s `tms_request_dedupe` matches the canonical `(request_id, sent_at, response_snapshot)` schema; the Flyway chain no longer fails with `column "sent_at" does not exist` (verified — no Flyway error in the post-fix IT run).
-- [ ] **AC-3** `:outbound-service:check` (the CI gate) green — confirms the two fixes don't regress the existing unit/slice suite.
-- [ ] **AC-4** Diff confined to `OutboundServiceApplication.java` + `V4__init_packing_shipping_tables.sql` (+ task lifecycle). No domain/contract/ADR change.
+- [x] **AC-1** `OutboundServiceApplication` excludes `OutboxAutoConfiguration`; no `outboxPublisher` `BeanDefinitionOverrideException` on a non-standalone context load (verified — 6 outbound ITs now load+pass; remaining failures are the deferred web-env issues, NOT bean-override / NOT Flyway).
+- [x] **AC-2** `V4`'s `tms_request_dedupe` matches the canonical `(request_id, sent_at, response_snapshot)` schema; the Flyway chain no longer fails with `column "sent_at" does not exist` (verified — no Flyway error in the post-fix IT run).
+- [x] **AC-3** `:outbound-service:check` (the CI gate) green locally + CI "Build & Test (JDK 21, Linux)" 2m44s pass (20 checks total).
+- [x] **AC-4** Diff confined to `OutboundServiceApplication.java` + `V4__init_packing_shipping_tables.sql` (+ task lifecycle). No domain/contract/ADR change.
 
 # Remaining (deferred follow-up — needs a dedicated task)
 
@@ -82,11 +82,11 @@ Outbound's `integrationTest` suite has additional independent pre-existing failu
 
 # Definition of Done
 
-- [ ] Bean exclude + V4 migration reconciled.
-- [ ] `:check` green; bean-override + Flyway errors eliminated (verified in IT run).
-- [ ] Diff confined; no domain/contract/ADR change.
-- [ ] Task md + `INDEX.md` updated, incl. the deferred IT-suite/CI follow-up.
-- [ ] Ready for review.
+- [x] Bean exclude + V4 migration reconciled.
+- [x] `:check` green; bean-override + Flyway errors eliminated (verified in IT run).
+- [x] Diff confined; no domain/contract/ADR change.
+- [x] Task md + `INDEX.md` updated, incl. the deferred IT-suite/CI follow-up.
+- [x] Reviewed + merged (impl PR #1045 squash `23de0560`, 3-dim verified).
 
 ---
 
