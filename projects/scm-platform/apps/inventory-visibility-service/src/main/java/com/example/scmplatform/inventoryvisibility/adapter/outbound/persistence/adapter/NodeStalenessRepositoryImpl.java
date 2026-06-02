@@ -36,9 +36,11 @@ public class NodeStalenessRepositoryImpl implements NodeStalenessRepository {
     }
 
     private NodeStaleness toDomain(NodeStalenessJpaEntity e) {
-        UUID lastEventId = e.getLastEventId() != null ? UUID.fromString(e.getLastEventId()) : null;
+        UUID lastEventId = e.getLastEventId() != null
+                ? ReadModelIds.requireUuid(e.getLastEventId(), "node_staleness.last_event_id")
+                : null;
         return new NodeStaleness(
-                NodeId.of(UUID.fromString(e.getNodeId())),
+                NodeId.of(ReadModelIds.requireUuid(e.getNodeId(), "node_staleness.node_id")),
                 e.getTenantId(),
                 e.getLastEventAt(),
                 lastEventId,

@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -46,7 +45,7 @@ public class InventoryNodeRepositoryImpl implements InventoryNodeRepository {
 
     private InventoryNode toDomain(InventoryNodeJpaEntity e) {
         return new InventoryNode(
-                NodeId.of(UUID.fromString(e.getId())),
+                NodeId.of(ReadModelIds.requireUuid(e.getId(), "inventory_nodes.id")),
                 e.getTenantId(),
                 e.getNodeExternalId(),
                 NodeType.valueOf(e.getNodeType().name()),

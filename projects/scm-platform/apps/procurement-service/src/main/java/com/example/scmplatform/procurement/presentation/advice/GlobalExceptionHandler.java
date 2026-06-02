@@ -151,6 +151,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
+        // Logged at warn for parity with handleIllegalState below — a 422 should
+        // still leave a diagnostic trail (TASK-SCM-BE-021).
+        log.warn("illegal argument at controller boundary", e);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
     }

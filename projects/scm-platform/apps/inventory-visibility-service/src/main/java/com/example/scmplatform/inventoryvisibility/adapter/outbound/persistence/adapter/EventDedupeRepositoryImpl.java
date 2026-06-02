@@ -51,7 +51,7 @@ public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDe
 
     private EventDedupeRecord toDomain(EventDedupeJpaEntity e) {
         return EventDedupeRecord.of(
-                UUID.fromString(e.getEventId()),
+                ReadModelIds.requireUuid(e.getEventId(), "event_dedupe.event_id"),
                 e.getTenantId(),
                 e.getProcessedAt(),
                 e.getSourceTopic()
