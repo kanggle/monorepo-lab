@@ -19,7 +19,13 @@ interface Props {
 export function TenantSwitcher({ tenants, activeTenant }: Props) {
   const selectId = useId();
   const switchTenant = useTenantSwitch();
-  const [selected, setSelected] = useState(activeTenant ?? tenants[0] ?? '');
+  // No active tenant ⇒ render an UNSELECTED placeholder, never a silent
+  // default to `tenants[0]` (TASK-PC-FE-036). Defaulting to tenants[0] made the
+  // switcher show a tenant as "selected" while the server had no active-tenant
+  // cookie, so the tenant-scoped overviews gated with "select a tenant" —
+  // a confusing UI/server mismatch. The placeholder keeps the switcher honest;
+  // the operator picks a customer, which sets the cookie via /api/tenant.
+  const [selected, setSelected] = useState(activeTenant ?? '');
 
   if (tenants.length === 0) return null;
 
@@ -55,6 +61,11 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
         data-testid="tenant-select"
         className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
+        {selected === '' && (
+          <option value="" disabled>
+            테넌트 선택…
+          </option>
+        )}
         {tenants.map((t) => (
           <option key={t} value={t}>
             {t}
