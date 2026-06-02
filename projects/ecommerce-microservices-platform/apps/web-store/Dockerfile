@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:20-alpine AS base
 
 FROM base AS builder
@@ -9,14 +10,24 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web-store/package.json apps/web-store/
 COPY apps/admin-dashboard/package.json apps/admin-dashboard/
 COPY packages/ packages/
-RUN pnpm install --frozen-lockfile
+# pnpm store cache mount — persists the content-addressable store across builds
+# so a lockfile change (deps-layer cache miss) re-links from cache instead of
+# re-downloading. No effect on the image (store lives only in the mount).
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 COPY apps/web-store/ apps/web-store/
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_TOSS_CLIENT_KEY
 ENV NEXT_PUBLIC_TOSS_CLIENT_KEY=$NEXT_PUBLIC_TOSS_CLIENT_KEY
-RUN pnpm --filter web-store build
+# .next/cache mount — persists Next.js's incremental webpack/SWC compile cache
+# across builds. The `COPY apps/web-store/` layer is invalidated on every source
+# change, so without this `pnpm build` always recompiles cold; the mount turns
+# source-only rebuilds into incremental compiles. NOT copied into the runner
+# image (only .next/standalone + .next/static are), so image size is unchanged.
+RUN --mount=type=cache,target=/app/apps/web-store/.next/cache \
+    pnpm --filter web-store build
 RUN mkdir -p /app/apps/web-store/public
 
 FROM base AS runner

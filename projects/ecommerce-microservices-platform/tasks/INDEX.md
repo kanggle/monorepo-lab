@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-072 | **REVIEW** (impl PR open; build-infra; bundled spec-less per `feedback_pr_bundling`). ecommerce 프런트(`web-store`+`admin-dashboard`) Docker 빌드 최적화 — `# syntax=docker/dockerfile:1` + BuildKit 캐시 마운트 2건(`deps`: pnpm store, `builder`: 앱별 `.next/cache` `/app/apps/<app>/.next/cache`). runner 스테이지 무변경(standalone/static/public만, `.next/cache` 미복사 → 이미지 크기 불변). **실측 2026-06-02 (web-store, buildx --provenance=false): cold 445s → warm(소스 1줄) 79s (~82%↓, 366s 절감) → 무변경 4s.** platform-console TASK-PC-FE-035(console-web, 60%↓) 검증 패턴의 이식. 앱 소스/HTTP API/이벤트/컨트랙트/spec/ADR 무변경(diff=Dockerfile×2+task+INDEX). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. | web-store, admin-dashboard | code, deploy, test |
 
 ## done
 
