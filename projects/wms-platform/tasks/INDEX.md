@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-331-admin-dashboard-nullable-temporal-filter-pg-type-inference.md` — Fix the PostgreSQL `42P18 could not determine data type of parameter` **500** on the unfiltered `GET /dashboard/alerts` (+ identical latent defect on `/dashboard/adjustments`). `AlertLogRepository.search` / `AdjustmentAuditRepository.search` bind a nullable **temporal** bound in a bare `:p IS NULL` that PostgreSQL cannot type → 500 → platform-console WMS 운영 section degraded (the alerts leg failure drops the whole `Promise.all` section). Fix = `CAST(:p AS string)` on the temporal IS-NULL guards (query text only; no schema/entity/contract change). Undetected because the WebMvc slice mocks the repo and the real-PG integration suite is excluded from CI `check`. Surfaced by MONO-170. 분석=Opus 4.8 / 구현 권장=Opus (직접 — real-PostgreSQL integrationTest 실증).
 
 ## in-progress
 
