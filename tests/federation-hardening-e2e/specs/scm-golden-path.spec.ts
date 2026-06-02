@@ -15,6 +15,17 @@ import { test, expect } from '@playwright/test';
  * The seeded PO (seed-scm.sql): po_number=PO-E2E-001.
  *
  * Degrade path = MVP out-of-scope per ADR-018 D3.
+ *
+ * TASK-MONO-173 NOTE: an attempt to harden this to assert the PO list renders
+ * (not degraded) was reverted — the SUPER_ADMIN `tenant_id='*'` /scm section
+ * DEGRADES on this stack (the inventory-visibility snapshot/staleness leg does
+ * not cleanly return for `'*'`), and the seed data is split (PO is tenant `'*'`,
+ * inventory is `globex-corp`), so no single tenant context renders BOTH the PO
+ * list AND the snapshot. Gating the PO-leg producer class (SCM-BE-020 decimal
+ * parse) cleanly needs a globex-scoped PO seed + a globex-context render — a
+ * deferred follow-up. The MONO-171/SCM-BE-021 snapshot-422 class IS gated:
+ * `tenant-switch-rescope.spec.ts` now requires the globex scm overview card to
+ * be `data-status='ok'` (validated GREEN). See TASK-MONO-173 § Out of Scope.
  */
 test.describe('SCM golden-path (purchase order list)', () => {
   test('navigates to SCM purchase orders page and renders seed PO row', async ({

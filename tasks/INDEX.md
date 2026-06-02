@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-173-federation-scm-leg-producer-health-gate.md` — **REVIEW** (impl complete + validated GREEN on real stack, awaiting merge + close chore). Hardens the federation-hardening-e2e **scm leg** gate against the MONO-171/SCM-BE-021 producer-side snapshot-422 class + fixes a pre-existing global-setup regression the validation surfaced. **FINAL deliverables (post-validation):** **(B)** `tenant-switch-rescope.spec.ts` globex side tightens entitled scm from *not-forbidden* to `data-status='ok'` (catches MONO-171/SCM-BE-021 inventory-visibility `/snapshot` 422 → card degraded, which the generic not-forbidden assertion tolerated) — **validated GREEN**; **(C)** `login.ts` fixture `waitForURL` follows the **PC-FE-034 console-home move** (`/dashboards`→`/dashboards/overview`) — a pre-existing regression that had the WHOLE nightly suite RED at `globalSetup` (undetected since federation-e2e is nightly, not PR-gated; PC-FE-034 merge never ran it). **(A) ATTEMPTED → REVERTED → deferred**: the `scm-golden-path` PO-list assertion FAILED validation — the SUPER_ADMIN `tenant_id='*'` /scm section degrades on the inventory leg, and the seed is split (PO=`'*'`, inventory=`globex-corp`) so no single context renders both; gating the PO-leg (SCM-BE-020) class cleanly needs a globex PO seed + globex-context render → separate follow-up. **Validation: `workflow_dispatch` run 26854063736 — login fix + B passed (9/10, only the A attempt failed); A reverted → re-validating GREEN.** Diff = 2 federation-e2e files (tenant-switch-rescope + login.ts; scm-golden-path net-reverted to MVP). Local tsc clean. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
