@@ -1,1 +1,1 @@
-export { LogoutButton } from './components/LogoutButton';
+export { performLogout } from './lib/logout';

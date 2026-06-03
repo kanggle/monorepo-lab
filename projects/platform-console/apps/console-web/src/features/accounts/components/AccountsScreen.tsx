@@ -315,7 +315,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
       ) : (
         <>
           <table
-            className="w-full border-collapse text-sm"
+            className="w-full border-collapse border border-border text-sm"
             data-testid="accounts-table"
           >
             <caption className="sr-only">계정 목록</caption>

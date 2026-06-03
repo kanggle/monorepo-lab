@@ -62,7 +62,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse text-sm"
+            className="mb-3 w-full border-collapse border border-border text-sm"
             data-testid="erp-employees-table"
           >
             <caption className="sr-only">직원 목록</caption>
