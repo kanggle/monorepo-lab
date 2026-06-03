@@ -236,7 +236,7 @@ export function ScmOpsScreen({
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse text-sm"
+            className="mb-3 w-full border-collapse border border-border text-sm"
             data-testid="scm-po-table"
           >
             <caption className="sr-only">발주 목록</caption>
@@ -340,7 +340,7 @@ export function ScmOpsScreen({
         </p>
       ) : (
         <table
-          className="mb-8 w-full border-collapse text-sm"
+          className="mb-8 w-full border-collapse border border-border text-sm"
           data-testid="scm-snap-table"
         >
           <caption className="sr-only">재고 가시성 스냅샷</caption>
@@ -440,7 +440,7 @@ export function ScmOpsScreen({
             {skuQ.data.data.totalQuantity ?? '—'}
           </p>
           <table
-            className="w-full border-collapse text-sm"
+            className="w-full border-collapse border border-border text-sm"
             data-testid="scm-sku-table"
           >
             <caption className="sr-only">SKU별 노드 분포</caption>
@@ -495,7 +495,7 @@ export function ScmOpsScreen({
         </p>
       ) : (
         <table
-          className="w-full border-collapse text-sm"
+          className="w-full border-collapse border border-border text-sm"
           data-testid="scm-staleness-table"
         >
           <caption className="sr-only">노드 신선도</caption>

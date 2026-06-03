@@ -61,7 +61,7 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse text-sm"
+            className="mb-3 w-full border-collapse border border-border text-sm"
             data-testid="erp-businesspartners-table"
           >
             <caption className="sr-only">거래처 목록</caption>

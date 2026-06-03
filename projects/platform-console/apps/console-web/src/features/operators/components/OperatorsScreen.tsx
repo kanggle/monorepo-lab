@@ -431,7 +431,7 @@ export function OperatorsScreen({
           ) : (
             <>
               <table
-                className="w-full border-collapse text-sm"
+                className="w-full border-collapse border border-border text-sm"
                 data-testid="operators-table"
               >
                 <caption className="sr-only">운영자 목록</caption>

@@ -1,12 +1,33 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
-import { isAuthenticated, getActiveTenant } from '@/shared/lib/session';
+import {
+  isAuthenticated,
+  getActiveTenant,
+  getIdToken,
+  getAccessToken,
+} from '@/shared/lib/session';
+import { decodeJwtPayload } from '@/shared/lib/jwt';
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants, TenantSwitcher } from '@/features/tenant';
-import { LogoutButton } from '@/features/auth';
 import { ThemeToggle } from '@/shared/ui/ThemeToggle';
+import { AccountMenu } from '@/shared/ui/AccountMenu';
 import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
+
+/**
+ * The signed-in operator's display identity for the account menu. Read
+ * verification-free from the GAP OIDC `id_token` (falling back to the access
+ * token, then a generic label) — DISPLAY ONLY, never an authorization input
+ * (§ 2.1; the `id_token` is not a credential). TASK-PC-FE-041.
+ */
+function accountDisplayLabel(idToken: string | null, accessToken: string | null): string {
+  const claims = decodeJwtPayload(idToken) ?? decodeJwtPayload(accessToken);
+  const pick = (k: string): string | null => {
+    const v = claims?.[k];
+    return typeof v === 'string' && v.trim() !== '' ? v : null;
+  };
+  return pick('email') ?? pick('preferred_username') ?? pick('sub') ?? '운영자';
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +59,10 @@ export default async function ConsoleLayout({
   if (!(await isAuthenticated())) redirect('/login');
 
   const activeTenant = await getActiveTenant();
+  const accountLabel = accountDisplayLabel(
+    await getIdToken(),
+    await getAccessToken(),
+  );
   let tenants: string[] = [];
   try {
     const catalog = await getCatalog();
@@ -57,7 +82,7 @@ export default async function ConsoleLayout({
           <div className="flex items-center gap-3">
             <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
             <ThemeToggle />
-            <LogoutButton />
+            <AccountMenu accountLabel={accountLabel} />
           </div>
         </div>
       </header>
