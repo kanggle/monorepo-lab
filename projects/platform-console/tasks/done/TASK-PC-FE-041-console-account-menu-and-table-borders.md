@@ -8,7 +8,7 @@ TASK-PC-FE-041
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -53,11 +53,11 @@ The console matches the Vercel data-table aesthetic (bounded, bordered tables) a
 
 # Acceptance Criteria
 
-- [ ] **AC-1** Every `console-web` `<table>` renders with an outer `border border-border` frame (17 tables; verified by `next build` + visual). No data/markup/testid change; existing table data-testids intact.
-- [ ] **AC-2** The top bar no longer shows a bare 로그아웃 button; it shows a kebab (⋮) trigger (`account-menu-trigger`). Clicking it opens a `role="menu"` dropdown with 아이디 / 계정 설정 / 로그아웃; clicking outside or pressing Escape closes it (verified by `AccountMenu.test.tsx`).
-- [ ] **AC-3** The 로그아웃 menu item keeps `data-testid="logout-button"` and runs the unchanged `performLogout()` (POST `/api/auth/logout` → navigate to `logoutUrl`); 계정 설정 links to `/account`; 아이디 shows the decoded identity (verified by `AccountMenu.test.tsx`).
-- [ ] **AC-4** `/account` renders read-only operator identity from the token claims + active tenant, with a `/operators` self-service link; resilient when claims/tenant are absent (no crash, graceful fallback label). No mutation affordance.
-- [ ] **AC-5** `decodeJwtPayload` is null-safe and `readJwtClaim` behaviour is preserved (`jwt.test.ts`). `pnpm test` + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success.
+- [x] **AC-1** Every `console-web` `<table>` renders with an outer `border border-border` frame (17 tables; verified by `next build` + visual). No data/markup/testid change; existing table data-testids intact.
+- [x] **AC-2** The top bar no longer shows a bare 로그아웃 button; it shows a kebab (⋮) trigger (`account-menu-trigger`). Clicking it opens a `role="menu"` dropdown with 아이디 / 계정 설정 / 로그아웃; clicking outside or pressing Escape closes it (verified by `AccountMenu.test.tsx`).
+- [x] **AC-3** The 로그아웃 menu item keeps `data-testid="logout-button"` and runs the unchanged `performLogout()` (POST `/api/auth/logout` → navigate to `logoutUrl`); 계정 설정 links to `/account`; 아이디 shows the decoded identity (verified by `AccountMenu.test.tsx`).
+- [x] **AC-4** `/account` renders read-only operator identity from the token claims + active tenant, with a `/operators` self-service link; resilient when claims/tenant are absent (no crash, graceful fallback label). No mutation affordance.
+- [x] **AC-5** `decodeJwtPayload` is null-safe and `readJwtClaim` behaviour is preserved (`jwt.test.ts`). `pnpm test` + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success.
 
 # Related Specs
 
@@ -85,12 +85,12 @@ The console matches the Vercel data-table aesthetic (bounded, bordered tables) a
 
 # Definition of Done
 
-- [ ] (A) 17 tables bordered + (B) kebab account menu replacing the logout button + (C) read-only `/account` page + `performLogout` extraction + `decodeJwtPayload`.
-- [ ] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
-- [ ] Local federation-e2e `console-web` rebuilt + restarted (live at :3000).
-- [ ] No API/route/contract change; diff confined to console-web presentation + the new account page + tests.
-- [ ] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (impl PR, 3-dim verified; all CI GREEN).
+- [x] (A) 17 tables bordered + (B) kebab account menu replacing the logout button + (C) read-only `/account` page + `performLogout` extraction + `decodeJwtPayload`.
+- [x] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
+- [x] Local federation-e2e `console-web` rebuilt + restarted (live at :3000).
+- [x] No API/route/contract change; diff confined to console-web presentation + the new account page + tests.
+- [x] Task md + `INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1061 squash `671bfdb6`, 3-dim verified; all CI GREEN, no transient).
 
 ---
 
