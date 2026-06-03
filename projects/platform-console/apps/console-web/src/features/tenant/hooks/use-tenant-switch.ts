@@ -34,6 +34,17 @@ export function useTenantSwitch() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['catalog'] });
       qc.invalidateQueries({ queryKey: ['session'] });
+      // TASK-PC-FE-044 — tenant-scoped LIST queries (`['operators']` MONO-175,
+      // `['audit']` PC-FE-043) are seeded from the server render (initialData +
+      // staleTime 30s + refetchOnMount false) and keyed WITHOUT a tenant slot,
+      // so router.refresh() alone leaves the previous tenant's cached list in
+      // place (React Query ignores the new initialData for an existing key).
+      // Invalidating forces the mounted query to refetch through the proxy with
+      // the now-current active-tenant cookie -> the list re-scopes. Omitting
+      // them was the stale-list defect (운영자 관리 / 감사·보안 showed identical
+      // rows across tenants).
+      qc.invalidateQueries({ queryKey: ['operators'] });
+      qc.invalidateQueries({ queryKey: ['audit'] });
       router.refresh();
     },
   });
