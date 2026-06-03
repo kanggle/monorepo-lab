@@ -8,7 +8,7 @@ TASK-PC-FE-040
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -78,7 +78,7 @@ Selecting a tenant immediately re-evaluates the page the operator is on against 
 - [x] Local federation-e2e `console-web` rebuilt + restarted (live at :3000).
 - [x] No API/route/contract change; diff confined to the tenant feature + test.
 - [x] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified) — pending close chore.
+- [x] Reviewed + merged (impl PR #1059 squash `0220c57f`, 3-dim verified; all CI GREEN, no transient).
 
 ---
 
