@@ -8,7 +8,7 @@ federation-hardening-e2e — harden the **scm leg** gate so the MONO-171/SCM-BE-
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -77,10 +77,10 @@ A producer-side error on the scm leg (PO-list parse failure, or inventory-visibi
 # Definition of Done
 
 - [x] (B) tenant-switch-rescope globex scm `data-status='ok'` + (C) login.ts fixture `waitForURL` follows PC-FE-034 home move. (A) attempted → reverted (infeasible on current seed; deferred).
-- [ ] `workflow_dispatch` federation-hardening-e2e run on the branch GREEN (after the A revert) — re-validating.
+- [x] `workflow_dispatch` federation-hardening-e2e run on the branch GREEN (after the A revert) — run 26854672567 = **10/10 passed**.
 - [x] Diff confined (2 federation-e2e files: tenant-switch-rescope + login.ts; scm-golden-path net-reverted); no production/spec/ADR change.
 - [x] Task md + root `tasks/INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] Reviewed + merged (impl PR #1053 squash `0e94c037`, 3-dim verified; federation-e2e validated GREEN via workflow_dispatch run 26854672567).
 
 ---
 
