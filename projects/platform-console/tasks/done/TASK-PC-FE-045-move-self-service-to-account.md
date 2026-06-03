@@ -8,7 +8,7 @@ Move **셀프서비스(내 비밀번호 변경 + 내 프로필)를 운영자 관
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -52,10 +52,10 @@ frontend-engineer (console-web only — project-internal)
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `/account`(계정 설정)에서 내 비밀번호 변경 + 내 기본 finance 계정 변경이 동작(폼 렌더 + `me/password`·`me/profile` 호출).
-- [ ] **AC-2** `/operators`(운영자 관리)에 내 비밀번호/내 프로필 폼이 더 이상 없음(남 관리 기능만 잔류; 타-운영자 프로필 편집 다이얼로그는 유지).
-- [ ] **AC-3** `/account` 의 역방향 "운영자 관리로 이동" 셀프서비스 안내 블록 제거(신원 read-only dl 유지).
-- [ ] **AC-4** console `pnpm test` GREEN(OperatorsScreen 셀프-폼 단언 갱신 + account 신규), `tsc`/`lint`/`build` GREEN.
+- [x] **AC-1** `/account`(계정 설정)에서 내 비밀번호 변경 + 내 기본 finance 계정 변경이 동작(폼 렌더 + `me/password`·`me/profile` 호출).
+- [x] **AC-2** `/operators`(운영자 관리)에 내 비밀번호/내 프로필 폼이 더 이상 없음(남 관리 기능만 잔류; 타-운영자 프로필 편집 다이얼로그는 유지).
+- [x] **AC-3** `/account` 의 역방향 "운영자 관리로 이동" 셀프서비스 안내 블록 제거(신원 read-only dl 유지).
+- [x] **AC-4** console `pnpm test` GREEN(OperatorsScreen 셀프-폼 단언 갱신 + account 신규), `tsc`/`lint`/`build` GREEN.
 
 # Related Specs
 
@@ -78,11 +78,11 @@ frontend-engineer (console-web only — project-internal)
 
 # Definition of Done
 
-- [ ] AccountSelfService 신규 + account page 승격 + operators page/OperatorsScreen 정리.
-- [ ] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
-- [ ] Local 재빌드+재기동; 계정 설정 셀프서비스 동작 + 운영자 관리 셀프 폼 부재 확인.
-- [ ] Task md + `projects/platform-console/tasks/INDEX.md` 갱신.
-- [ ] Reviewed + merged.
+- [x] AccountSelfService 신규 + account page 승격 + operators page/OperatorsScreen 정리.
+- [x] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
+- [x] Local 재빌드+재기동; 계정 설정 셀프서비스 동작 + 운영자 관리 셀프 폼 부재 확인.
+- [x] Task md + `projects/platform-console/tasks/INDEX.md` 갱신.
+- [x] Reviewed + merged (impl PR #1077 squash `092ee931`, 3-dim verified).
 
 ---
 
