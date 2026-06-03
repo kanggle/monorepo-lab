@@ -8,7 +8,7 @@ Scope **운영자 관리(operator list)** to the active (switched) tenant — cr
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -59,11 +59,11 @@ Selecting a tenant in the switcher re-scopes the 운영자 관리 list to operat
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `GET /api/admin/operators?tenantId=X` returns operators whose home tenant == X OR who are assigned to X; `status`/paging/sort preserved (unit + live).
-- [ ] **AC-2** A non-platform caller requesting a tenant outside their effective scope (home ∪ assignments) → `403 TENANT_SCOPE_DENIED` (unit test).
-- [ ] **AC-3** A platform (`'*'`) caller listing `'*'` → unscoped cross-tenant list (existing behavior preserved; unit test routes to `findOperatorsPage`).
-- [ ] **AC-4** console-web sends the active tenant as `tenantId`; switching acme↔globex re-scopes 운영자 관리 (acme=2 / globex=1 in the demo).
-- [ ] **AC-5** admin-service unit tests green (`OperatorQueryServiceTest` + `OperatorAdminControllerTest`); console `pnpm test` green; `tsc`/`lint`/`build` green; admin-service boots healthy (validates the `@Query`). Contract updated.
+- [x] **AC-1** `GET /api/admin/operators?tenantId=X` returns operators whose home tenant == X OR who are assigned to X; `status`/paging/sort preserved (unit + GAP Testcontainers IT GREEN).
+- [x] **AC-2** A non-platform caller requesting a tenant outside their effective scope (home ∪ assignments) → `403 TENANT_SCOPE_DENIED` (unit test).
+- [x] **AC-3** A platform (`'*'`) caller listing `'*'` → unscoped cross-tenant list (existing behavior preserved; unit test routes to `findOperatorsPage`).
+- [x] **AC-4** console-web sends the active tenant as `tenantId`; switching acme↔globex re-scopes 운영자 관리 (acme=2 / globex=1 in the demo). [live]
+- [x] **AC-5** admin-service unit tests green (`OperatorQueryServiceTest` + `OperatorAdminControllerTest`); console `pnpm test` 790/790; `tsc`/`lint`/`build` green; admin-service boots healthy (validates the `@Query`); GAP Testcontainers IT GREEN. Contract updated.
 
 # Related Specs
 
@@ -89,12 +89,12 @@ Selecting a tenant in the switcher re-scopes the 운영자 관리 list to operat
 
 # Definition of Done
 
-- [ ] Producer (repository/port/adapter/use-case/controller) + contract + console consumer + unit tests.
-- [ ] admin-service unit tests + console `pnpm test`/`tsc`/`lint`/`build` green; admin-service boots healthy.
-- [ ] Local admin-service + console-web rebuilt + recreated (live :3000); acme=2 / globex=1 operators.
-- [ ] One atomic cross-project PR (admin-service + GAP contract + console).
-- [ ] Task md + root `tasks/INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified; all CI GREEN).
+- [x] Producer (repository/port/adapter/use-case/controller) + contract + console consumer + unit tests.
+- [x] admin-service unit tests + console `pnpm test`/`tsc`/`lint`/`build` green; admin-service boots healthy.
+- [x] Local admin-service + console-web rebuilt + recreated (live :3000); acme=2 / globex=1 operators.
+- [x] One atomic cross-project PR (admin-service + GAP contract + console) — PR #1069.
+- [x] Task md + root `tasks/INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1069 squash `a0f26940`, 3-dim verified; all CI GREEN incl GAP Testcontainers IT, no transient).
 
 ---
 
