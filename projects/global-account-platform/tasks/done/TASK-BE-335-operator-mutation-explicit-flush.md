@@ -8,7 +8,7 @@ Fix **운영자 정지/활성화·비밀번호·프로파일 변경이 `200`을 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -46,10 +46,10 @@ backend-engineer (admin-service)
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `changeStatus`/`changePasswordHash`/`changeFinanceDefaultAccountId` 가 `saveAndFlush` 로 dirty UPDATE 를 메인 tx 내에서 flush.
-- [ ] **AC-2** Testcontainers IT: 운영자 정지 → 재조회 `status=SUSPENDED` + `version` 증가(영속 회귀 게이트).
-- [ ] **AC-3** 데모 라이브 재현 해소: globex 운영자 정지 → DB `status=SUSPENDED`, `version=1`. [live]
-- [ ] **AC-4** admin-service `:test` GREEN; admin-service healthy; GAP Testcontainers IT GREEN.
+- [x] **AC-1** `changeStatus`/`changePasswordHash`/`changeFinanceDefaultAccountId` 가 `saveAndFlush` 로 dirty UPDATE 를 메인 tx 내에서 flush.
+- [x] **AC-2** 회귀 게이트 = **단위 테스트** `JpaAdminOperatorAdapterFlushTest`(3 메서드 `saveAndFlush` 호출 단언 + plain `save` 미호출 단언). **변경 사유**: Testcontainers IT 환경은 이 버그를 재현하지 않음(IT 메인 tx 는 정상 flush — 기존 `changeMyPassword` re-query IT 가 옛 `save` 로도 GREEN) → re-query IT 는 게이트가 못 됨. saveAndFlush 호출을 직접 단언하는 단위 게이트가 env-독립적이고 정확. `OperatorAdminIntegrationTest` 도 GREEN(회귀 없음).
+- [x] **AC-3** 데모 라이브 재현 해소: globex 운영자 정지 → DB `status=SUSPENDED`, `version=1` (직접 재현 확인). [live]
+- [x] **AC-4** admin-service `:test` GREEN(신규 flush 단위 + OperatorAdminIntegrationTest); admin-service healthy; GAP Testcontainers IT GREEN(CI).
 
 # Related Specs
 
@@ -63,20 +63,20 @@ backend-engineer (admin-service)
 
 # Failure Scenarios
 
-- flush 가 readOnly 로 막히면 IT 가 RED(현재 데모 재현과 동일) → 회귀 게이트로 방지.
+- 누군가 `saveAndFlush`→`save` 로 되돌리면 단위 게이트(`JpaAdminOperatorAdapterFlushTest`)가 RED → 회귀 방지. (Testcontainers IT 는 버그 미재현이라 게이트 못 됨 — AC-2 참조.)
 
 # Test Requirements
 
-- admin-service Testcontainers IT(정지 영속 + version 증가). `./gradlew :projects:global-account-platform:apps:admin-service:test`.
+- admin-service 단위 게이트 `JpaAdminOperatorAdapterFlushTest`(3 메서드 saveAndFlush 호출 단언; IT 환경은 버그 미재현이라 단위 게이트가 정확) + `OperatorAdminIntegrationTest` 회귀. `./gradlew :projects:global-account-platform:apps:admin-service:test`.
 - Local: admin-service(host bootJar→image) 재빌드+재기동; 직접 재현(로그인 토큰 + PATCH /status)으로 `status=SUSPENDED`/`version=1` 확인.
 
 # Definition of Done
 
-- [ ] 어댑터 3 메서드 saveAndFlush + IT.
-- [ ] admin-service `:test` GREEN; healthy; GAP IT GREEN.
-- [ ] Local 재빌드+재기동; 정지 영속 확인.
-- [ ] Task md + `projects/global-account-platform/tasks/INDEX.md` 갱신.
-- [ ] Reviewed + merged.
+- [x] 어댑터 3 메서드 saveAndFlush + 단위 회귀 테스트.
+- [x] admin-service `:test` GREEN; healthy; GAP IT GREEN(CI).
+- [x] Local 재빌드+재기동; 정지 영속 확인(globex-1 SUSPENDED/version=1).
+- [x] Task md + `projects/global-account-platform/tasks/INDEX.md` 갱신.
+- [x] Reviewed + merged (impl PR #1075 squash `e76f2ed2`, 3-dim verified).
 
 ---
 
