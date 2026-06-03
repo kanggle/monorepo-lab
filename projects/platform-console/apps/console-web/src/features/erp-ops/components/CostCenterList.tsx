@@ -56,7 +56,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse border border-border text-sm"
+            className="mb-3 data-table"
             data-testid="erp-costcenters-table"
           >
             <caption className="sr-only">비용센터 목록</caption>

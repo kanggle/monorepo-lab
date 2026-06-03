@@ -409,7 +409,7 @@ export function AuditScreen({
           ) : (
             <>
               <table
-                className="w-full border-collapse border border-border text-sm"
+                className="data-table"
                 data-testid="audit-table"
               >
                 <caption className="sr-only">감사 로그 통합 조회 결과</caption>

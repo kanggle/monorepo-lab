@@ -64,7 +64,7 @@ export function DepartmentList({ initial }: DepartmentListProps) {
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse border border-border text-sm"
+            className="mb-3 data-table"
             data-testid="erp-departments-table"
           >
             <caption className="sr-only">부서 목록</caption>
