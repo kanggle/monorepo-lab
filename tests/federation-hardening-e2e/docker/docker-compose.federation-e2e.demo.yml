@@ -29,6 +29,62 @@ name: federation-hardening-e2e
 
 services:
   # ---------------------------------------------------------------------------
+  # redpanda — TASK-MONO-174. A real single-node Kafka broker for the DEMO so
+  # the GAP transactional-outbox relay (admin/account/auth) actually SENDS
+  # instead of blocking 60s per send against the base's DNS-only placeholder
+  # (alpine `sleep infinity`, KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999). The 60s
+  # `kafkaTemplate.send().get()` block — held inside the outbox transaction —
+  # starves admin-service's HikariCP pool, so the synchronous meta-audit INSERT
+  # on every audit READ stalls → the console 감사·보안 leg times out (5s) →
+  # degraded. A reachable broker removes the block; dev-container mode +
+  # auto-create lets the outbox drain (events flow end-to-end as a bonus).
+  #
+  # Base CI compose stays byte-unchanged (overlay-only invariant, TASK-MONO-170);
+  # CI keeps the placeholder (its specs never exercise event paths).
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --default-log-level=warn
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+      - --set
+      - redpanda.auto_create_topics_enabled=true
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health 2>/dev/null | grep -qE 'Healthy:\\s+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+
+  # auth/account/admin — point the outbox relay at the real broker (overrides
+  # the base x-gap-service-env anchor's KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999).
+  auth-service:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      redpanda: { condition: service_healthy }
+
+  account-service:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      redpanda: { condition: service_healthy }
+
+  admin-service:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      redpanda: { condition: service_healthy }
+
+  # ---------------------------------------------------------------------------
   # scm-gateway — Spring Cloud Gateway (scm edge). Routes the console SCM ops
   # paths to the base's scm producers. entitlement-trust dual-accept at the
   # gateway (TenantClaimValidator) passes the globex assumed token
