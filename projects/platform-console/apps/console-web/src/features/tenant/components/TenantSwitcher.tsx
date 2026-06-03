@@ -32,10 +32,10 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
   if (tenants.length === 1) {
     return (
       <span
-        className="text-sm text-primary-foreground/80"
+        className="text-sm text-muted-foreground"
         data-testid="tenant-single"
       >
-        테넌트: <strong>{tenants[0]}</strong>
+        테넌트: <strong className="text-foreground">{tenants[0]}</strong>
       </span>
     );
   }
@@ -49,7 +49,7 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
     <div className="flex items-center gap-2">
       <label
         htmlFor={selectId}
-        className="text-sm text-primary-foreground/80"
+        className="text-sm text-muted-foreground"
       >
         테넌트
       </label>

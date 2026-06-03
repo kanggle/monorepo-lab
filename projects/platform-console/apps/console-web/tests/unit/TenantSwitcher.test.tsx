@@ -4,6 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TenantSwitcher } from '@/features/tenant';
 
+// TASK-PC-FE-040: the switch now calls router.refresh() on success to re-run
+// the current route's server components with the re-scoped (assumed) token, so
+// the viewed page re-applies the new tenant's entitlement gate in place. Mock
+// next/navigation's useRouter (no App Router context in jsdom) + spy refresh.
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshMock, push: vi.fn(), replace: vi.fn() }),
+}));
+
 function wrap(ui: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -15,6 +24,7 @@ function wrap(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  refreshMock.mockClear();
 });
 
 describe('TenantSwitcher (multi-tenant)', () => {
@@ -88,6 +98,11 @@ describe('TenantSwitcher (multi-tenant)', () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       tenant: 'scm',
     });
+
+    // TASK-PC-FE-040: on a successful switch the current route's server
+    // components are refreshed so the viewed page re-applies the new tenant's
+    // entitlement gate in place.
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
   });
 
   it('surfaces an error when the switch is rejected (cross-tenant 403)', async () => {
@@ -105,5 +120,8 @@ describe('TenantSwitcher (multi-tenant)', () => {
     await userEvent.selectOptions(screen.getByTestId('tenant-select'), 'scm');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('전환 실패');
+    // A rejected switch must NOT refresh the view (no re-apply on a failed
+    // assume-tenant — fail-closed; the operator stays on the prior tenant).
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });
