@@ -136,7 +136,10 @@ async function callGapAdmin<T>(
         'An idempotency key is required for this action',
       );
     }
-    headers['X-Operator-Reason'] = reason;
+    // TASK-MONO-176: percent-encode so a non-Latin-1 reason (e.g. Korean)
+    // does not make `fetch()` throw on the ByteString header; the producer
+    // (OperatorReasonDecodingFilter) decodes it back to the original UTF-8.
+    headers['X-Operator-Reason'] = encodeURIComponent(reason);
     headers['Idempotency-Key'] = opts.idempotencyKey;
   }
 
@@ -435,7 +438,8 @@ export async function exportAccount(
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
           'X-Tenant-Id': tenant,
-          'X-Operator-Reason': trimmed,
+          // TASK-MONO-176: percent-encode (ByteString header safety); producer decodes.
+          'X-Operator-Reason': encodeURIComponent(trimmed),
           'X-Request-Id': requestId,
         },
         cache: 'no-store',

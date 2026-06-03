@@ -144,7 +144,11 @@ async function callGapOperators<T>(
         'An operator reason is required for this action',
       );
     }
-    headers['X-Operator-Reason'] = reason;
+    // TASK-MONO-176: HTTP header values are ByteStrings (ISO-8859-1); a
+    // non-Latin-1 reason (e.g. Korean) makes `fetch()` throw before sending.
+    // Percent-encode so the wire header is ASCII; the producer
+    // (OperatorReasonDecodingFilter) decodes it back to the original UTF-8.
+    headers['X-Operator-Reason'] = encodeURIComponent(reason);
   }
   // Idempotency-Key is ONLY ever set when the caller supplies one — and the
   // ONLY caller that supplies it is `create` (the matrix). roles/status/

@@ -144,7 +144,10 @@ describe('POST /api/operators proxy (create) — reason + idempotency', () => {
     expect(res.status).toBe(201);
     const h = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('operator entered reason');
+    // TASK-MONO-176: percent-encoded on the wire to GAP; round-trips.
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe(
+      'operator entered reason',
+    );
     expect(h['Idempotency-Key']).toBe('idem-1');
   });
 
@@ -212,7 +215,7 @@ describe('POST /api/operators/[id]/roles proxy — reason ONLY (no key)', () => 
     expect(res.status).toBe(200);
     const h = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('remove all roles');
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('remove all roles');
     expect(h['Idempotency-Key']).toBeUndefined();
   });
 

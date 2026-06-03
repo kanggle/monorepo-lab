@@ -220,7 +220,12 @@ describe('operators-api — PER-ENDPOINT HEADER MATRIX (the key correctness risk
     const [, init] = fetchMock.mock.calls[0];
     expect((init as RequestInit).method).toBe('POST');
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('onboarding new support operator');
+    // TASK-MONO-176: the reason is percent-encoded on the wire (ByteString
+    // header safety); it round-trips via decodeURIComponent.
+    expect(h['X-Operator-Reason']).toBe('onboarding%20new%20support%20operator');
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe(
+      'onboarding new support operator',
+    );
     expect(h['Idempotency-Key']).toBe('idem-create-1');
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body).toMatchObject({
@@ -228,6 +233,36 @@ describe('operators-api — PER-ENDPOINT HEADER MATRIX (the key correctness risk
       tenantId: 'wms',
       password: SECRET_PW,
     });
+  });
+
+  it('CREATE with a non-ASCII (Korean) reason percent-encodes it so fetch does not throw on the ByteString header — TASK-MONO-176', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(CREATE_201, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // The bug: a raw Korean reason in the X-Operator-Reason header made
+    // undici fetch throw `TypeError: Cannot convert argument to a ByteString`
+    // (surfaced as "operators unavailable"). Encoding it keeps the header ASCII.
+    await createOperator(
+      {
+        email: 'globex-1@test.com',
+        displayName: 'Globex One',
+        password: SECRET_PW,
+        roles: ['SUPPORT_READONLY'],
+        tenantId: 'globex-corp',
+      },
+      '테스트 1',
+      'idem-create-ko',
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    // ASCII-only on the wire …
+    expect(/^[\x00-\x7F]*$/.test(h['X-Operator-Reason'])).toBe(true);
+    expect(h['X-Operator-Reason']).toBe(encodeURIComponent('테스트 1'));
+    // … and the original Korean text round-trips for the producer.
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('테스트 1');
   });
 
   it('EDIT-ROLES sends X-Operator-Reason and asserts Idempotency-Key is ABSENT', async () => {
@@ -245,7 +280,7 @@ describe('operators-api — PER-ENDPOINT HEADER MATRIX (the key correctness risk
     const [, init] = fetchMock.mock.calls[0];
     expect((init as RequestInit).method).toBe('PATCH');
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('role realignment');
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('role realignment');
     // CONTRACT FIDELITY: the producer does NOT list Idempotency-Key here.
     expect(h['Idempotency-Key']).toBeUndefined();
     expect('Idempotency-Key' in h).toBe(false);
@@ -283,7 +318,7 @@ describe('operators-api — PER-ENDPOINT HEADER MATRIX (the key correctness risk
     const [, init] = fetchMock.mock.calls[0];
     expect((init as RequestInit).method).toBe('PATCH');
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('policy violation');
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('policy violation');
     // CONTRACT FIDELITY: the producer does NOT list Idempotency-Key here.
     expect(h['Idempotency-Key']).toBeUndefined();
     expect('Idempotency-Key' in h).toBe(false);
