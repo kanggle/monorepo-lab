@@ -291,7 +291,7 @@ export function WmsOpsScreen({
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse border border-border text-sm"
+            className="mb-3 data-table"
             data-testid="wms-inv-table"
           >
             <caption className="sr-only">재고 스냅샷</caption>
@@ -397,7 +397,7 @@ export function WmsOpsScreen({
         </p>
       ) : (
         <table
-          className="w-full border-collapse border border-border text-sm"
+          className="data-table"
           data-testid="wms-alerts-table"
         >
           <caption className="sr-only">알림 목록</caption>

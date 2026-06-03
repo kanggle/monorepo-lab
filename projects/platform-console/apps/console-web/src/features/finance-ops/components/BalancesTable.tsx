@@ -36,7 +36,7 @@ export function BalancesTable({ balances }: BalancesTableProps) {
   }
   return (
     <table
-      className="mb-6 w-full border-collapse border border-border text-sm"
+      className="mb-6 data-table"
       data-testid="finance-balances-table"
     >
       <caption className="sr-only">잔액</caption>

@@ -48,3 +48,28 @@ html, body { height: 100%; }
 body {
   @apply bg-background text-foreground antialiased;
 }
+
+/*
+ * TASK-PC-FE-042 — rounded, bordered data tables (Vercel look). One shared
+ * class for all 17 console tables instead of 17 wrappers.
+ *
+ * `border-collapse` cannot round its corners (the collapsed-border model
+ * ignores `border-radius`), so the table uses `border-separate` +
+ * `border-spacing-0` + `overflow-hidden` to clip the rounded outer frame. The
+ * separate-borders model ignores per-row (`<tr>`) borders, so the horizontal
+ * dividers move from the rows to the cells' bottom border (header underline +
+ * a line between each row); the last row drops its divider so the rounded
+ * bottom corners stay clean. No vertical gridlines.
+ */
+@layer components {
+  .data-table {
+    @apply w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-border text-sm;
+  }
+  .data-table thead th,
+  .data-table tbody td {
+    @apply border-b border-border;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+}

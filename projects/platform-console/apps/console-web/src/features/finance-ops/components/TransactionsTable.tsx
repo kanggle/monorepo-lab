@@ -177,7 +177,7 @@ export function TransactionsTable({
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse border border-border text-sm"
+            className="mb-3 data-table"
             data-testid="finance-txns-table"
           >
             <caption className="sr-only">거래 목록</caption>

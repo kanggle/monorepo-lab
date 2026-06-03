@@ -55,7 +55,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
       ) : (
         <>
           <table
-            className="mb-3 w-full border-collapse border border-border text-sm"
+            className="mb-3 data-table"
             data-testid="erp-jobgrades-table"
           >
             <caption className="sr-only">직급 목록 (displayOrder 오름차순)</caption>

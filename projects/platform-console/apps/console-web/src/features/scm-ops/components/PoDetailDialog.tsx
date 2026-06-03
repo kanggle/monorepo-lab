@@ -128,7 +128,7 @@ export function PoDetailDialog({ open, po, onClose }: PoDetailDialogProps) {
           </p>
         ) : (
           <table
-            className="w-full border-collapse border border-border text-sm"
+            className="data-table"
             data-testid="scm-po-lines"
           >
             <caption className="sr-only">PO 라인</caption>
