@@ -1,17 +1,23 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAuthenticated, getActiveTenant } from '@/shared/lib/session';
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants, TenantSwitcher } from '@/features/tenant';
 import { LogoutButton } from '@/features/auth';
 import { ThemeToggle } from '@/shared/ui/ThemeToggle';
+import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Authenticated console shell layout.
+ * Authenticated console shell layout (Vercel-style — TASK-PC-FE-039).
+ *
+ * Layout: a full-width sticky top bar holds only the brand + the **tenant
+ * switcher** (+ theme toggle / logout account controls); the section
+ * navigation lives in a **left sidebar** ({@link ConsoleSidebarNav}). The
+ * sidebar is `hidden md:block` (desktop ops console; a mobile drawer is a
+ * deferred follow-up — the top bar controls stay visible on all sizes).
  *
  * Server-side session guard: no GAP access-token cookie → redirect to
  * `/login` (no client-side token juggling — frontend-app.md
@@ -44,97 +50,10 @@ export default async function ConsoleLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-6">
-            <span className="text-sm font-semibold tracking-tight text-foreground">
-              Platform Console
-            </span>
-            <nav aria-label="콘솔 내비게이션">
-              <ul className="flex items-center gap-4 text-sm">
-                <li>
-                  <Link
-                    href="/dashboards/overview"
-                    data-testid="nav-dashboards"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    개요
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/dashboards/health"
-                    data-testid="nav-domain-health"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    도메인 상태
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/console"
-                    data-testid="nav-catalog"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    카탈로그
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/audit"
-                    data-testid="nav-audit"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    감사 · 보안
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/operators"
-                    data-testid="nav-operators"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    운영자 관리
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/wms"
-                    data-testid="nav-wms"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    WMS 운영
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/scm"
-                    data-testid="nav-scm"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    SCM 운영
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/finance"
-                    data-testid="nav-finance"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Finance 운영
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/erp"
-                    data-testid="nav-erp"
-                    className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    ERP 운영
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-          </div>
+        <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
+          <span className="text-sm font-semibold tracking-tight text-foreground">
+            Platform Console
+          </span>
           <div className="flex items-center gap-3">
             <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
             <ThemeToggle />
@@ -142,9 +61,14 @@ export default async function ConsoleLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        {children}
-      </main>
+      <div className="flex flex-1">
+        <aside className="hidden w-56 shrink-0 border-r border-border md:block">
+          <ConsoleSidebarNav />
+        </aside>
+        <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

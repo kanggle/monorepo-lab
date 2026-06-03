@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-039-vercel-left-sidebar-nav.md` — **REVIEW** (impl complete + 로컬 재배포 GREEN, awaiting merge + close chore). 사용자 요청 "상단 메뉴를 Vercel처럼 왼쪽 사이드바로, 테넌트 선택만 상단에". PC-FE-038(retheme) 위 셸 구조 재배치: **신규 `ConsoleSidebarNav.tsx`(client `usePathname` 활성 하이라이트, 그룹 개요/관리/도메인운영)** + `(console)/layout.tsx`를 full-width 상단바(브랜드+테넌트스위처+테마토글+로그아웃) ↕ `flex` [`aside w-56 border-r hidden md:block` | `main`]로 재구성. **data-testid(`nav-*` 9개)+href 전부 보존**(data-driven 리스트로 이동) → e2e/unit 셀렉터 무영향. nav guard 테스트(domain-health-nav)를 새 소스(ConsoleSidebarNav)+layout-wiring 단언으로 갱신. 토글/로그아웃은 계정 컨트롤이라 상단 우측 유지(모바일 사용성; mobile drawer는 deferred). **검증**: vitest **781/781** + `tsc --noEmit` exit0 + `next lint` clean + `next build` 성공; **로컬 federation-e2e console-web 컨테이너 재빌드+재시작(live :3000)**. diff=console-web shell layer only. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
