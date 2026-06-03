@@ -2,5 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * TASK-PC-FE-038 — Vercel-style design tokens (Geist neutrals).
+ * CSS variables so the retheme propagates through the semantic Tailwind
+ * classes the components already use (bg-background / text-foreground /
+ * border-border / …). `.dark` flips the palette; next-themes sets the class
+ * on <html> (system default + toggle). Dormant `dark:` variants in feature
+ * components activate automatically once `.dark` is present.
+ *
+ * HSL channel triples (consumed via hsl(var(--token)) in tailwind.config.ts).
+ */
+@layer base {
+  :root {
+    --background: 0 0% 100%;        /* #ffffff */
+    --foreground: 0 0% 9%;          /* #171717 near-black */
+    --border: 0 0% 92%;             /* #ebebeb hairline */
+    --muted: 0 0% 96%;              /* #f5f5f5 subtle surface */
+    --muted-foreground: 0 0% 45%;   /* #737373 secondary text */
+    --primary: 0 0% 9%;             /* high-contrast action (black) */
+    --primary-foreground: 0 0% 98%; /* #fafafa */
+    --accent: 0 0% 96%;             /* hover surface */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 72% 51%;       /* red */
+    --destructive-foreground: 0 0% 98%;
+    --ring: 0 0% 9%;                /* focus ring (neutral, high-contrast) */
+  }
+
+  .dark {
+    --background: 0 0% 4%;          /* #0a0a0a */
+    --foreground: 0 0% 93%;         /* #ededed */
+    --border: 0 0% 18%;             /* #2e2e2e */
+    --muted: 0 0% 10%;              /* #1a1a1a */
+    --muted-foreground: 0 0% 63%;   /* #a1a1a1 */
+    --primary: 0 0% 93%;            /* high-contrast action (near-white) */
+    --primary-foreground: 0 0% 4%;
+    --accent: 0 0% 12%;             /* #1f1f1f hover surface */
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --ring: 0 0% 83%;
+  }
+}
+
 html, body { height: 100%; }
-body { @apply bg-background text-foreground; }
+body {
+  @apply bg-background text-foreground antialiased;
+}
