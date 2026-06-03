@@ -3,6 +3,8 @@ package com.example.admin.infrastructure.persistence.rbac;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -46,4 +48,31 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
 
     /** Pagination for {@code GET /api/admin/operators} with optional status filter. */
     Page<AdminOperatorJpaEntity> findByStatus(String status, Pageable pageable);
+
+    /**
+     * TASK-MONO-175 / ADR-MONO-020 — tenant-scoped operator listing for
+     * {@code GET /api/admin/operators?tenantId=X}. Returns operators that belong
+     * to tenant {@code tenantId} = their HOME tenant ({@code admin_operators.tenant_id})
+     * OR an ASSIGNED tenant ({@code operator_tenant_assignment} — D1 N:M, BE-326).
+     * {@code status} is an optional filter ({@code null} → no filter). Sort +
+     * paging come from the {@link Pageable}. An explicit {@code countQuery} is
+     * supplied so the EXISTS-subquery page count is derived correctly.
+     */
+    @Query(value = """
+            SELECT o FROM AdminOperatorJpaEntity o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND ( o.tenantId = :tenantId
+                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+            """,
+            countQuery = """
+            SELECT COUNT(o) FROM AdminOperatorJpaEntity o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND ( o.tenantId = :tenantId
+                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+            """)
+    Page<AdminOperatorJpaEntity> findByTenantScope(@Param("tenantId") String tenantId,
+                                                   @Param("status") String status,
+                                                   Pageable pageable);
 }

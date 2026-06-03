@@ -59,6 +59,19 @@ public interface AdminOperatorPort {
     OperatorPage findOperatorsPage(String statusFilter, int page, int size);
 
     /**
+     * TASK-MONO-175 / ADR-MONO-020 — tenant-scoped paginated listing: operators
+     * whose HOME tenant ({@code admin_operators.tenant_id}) equals {@code tenantId}
+     * OR who have an ASSIGNED tenant ({@code operator_tenant_assignment}) equal to
+     * {@code tenantId}. Sorted by {@code createdAt DESC}. Used by
+     * {@code GET /api/admin/operators} when scoping to a specific (non-platform)
+     * tenant; the unscoped {@link #findOperatorsPage} is used for the platform
+     * ({@code '*'}) cross-tenant view.
+     *
+     * @param statusFilter null/blank → no filter
+     */
+    OperatorPage findOperatorsPageByTenant(String tenantId, String statusFilter, int page, int size);
+
+    /**
      * Persist a new operator row + flush. On {@code (tenant_id, email)} unique
      * constraint collision, throws {@link OperatorEmailConflictException}
      * directly (matches the legacy
