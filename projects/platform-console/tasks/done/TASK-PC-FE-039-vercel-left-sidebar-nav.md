@@ -8,7 +8,7 @@ TASK-PC-FE-039
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -76,7 +76,7 @@ The console reads like a Vercel dashboard: a minimal full-width top bar (brand +
 - [x] Local federation-e2e `console-web` container rebuilt + restarted (live at :3000).
 - [x] No route/data-testid/API change; diff confined to console-web shell + task lifecycle (+ nav guard test update).
 - [x] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified) — pending close chore.
+- [x] Reviewed + merged (impl PR #1057 squash `5ec37d67`, 3-dim verified; gateway-master E2E transient Docker-Hub timeout rerun→GREEN pre-merge).
 
 ---
 
