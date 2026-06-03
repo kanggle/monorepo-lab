@@ -17,9 +17,12 @@ function wrap(ui: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={qc}>{ui}</QueryClientProvider>,
-  );
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>{ui}</QueryClientProvider>,
+    ),
+  };
 }
 
 beforeEach(() => {
@@ -103,6 +106,42 @@ describe('TenantSwitcher (multi-tenant)', () => {
     // components are refreshed so the viewed page re-applies the new tenant's
     // entitlement gate in place.
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it('invalidates the tenant-scoped list queries (operators + audit) on a successful switch — TASK-PC-FE-044', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, activeTenant: 'globex-corp' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { qc } = wrap(
+      <TenantSwitcher
+        tenants={['acme-corp', 'globex-corp']}
+        activeTenant="acme-corp"
+      />,
+    );
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+
+    await userEvent.selectOptions(
+      screen.getByTestId('tenant-select'),
+      'globex-corp',
+    );
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+
+    // The stale-list fix: operators + audit (server-seeded, no tenant in the
+    // key) MUST be invalidated so the mounted list refetches under the new
+    // active tenant — alongside the pre-existing catalog + session keys.
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      (c) => (c[0] as { queryKey: unknown[] }).queryKey[0],
+    );
+    expect(invalidatedKeys).toContain('operators');
+    expect(invalidatedKeys).toContain('audit');
+    expect(invalidatedKeys).toContain('catalog');
+    expect(invalidatedKeys).toContain('session');
   });
 
   it('surfaces an error when the switch is rejected (cross-tenant 403)', async () => {

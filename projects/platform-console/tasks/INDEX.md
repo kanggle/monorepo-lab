@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-044-tenant-switch-invalidate-operators-audit.md` — **REVIEW (2026-06-04)**. MONO-175 + PC-FE-043 의 잔여 클라이언트-캐시 결함. **RC**: 운영자 관리/감사 목록이 테넌트 전환 후에도 직전 테넌트 목록을 표시(라이브: globex 가 acme 와 동일한 2명). `useTenantSwitch` 가 전환 성공 시 `['catalog']`+`['session']` 만 invalidate 하고 tenant-scoped LIST 쿼리 `['operators']`(키에 테넌트 슬롯 없음)·`['audit']`(슬롯 있으나 AuditScreen 이 미주입 → null)를 누락. seeded 쿼리(initialData+staleTime 30s+refetchOnMount false)라 `router.refresh` 의 새 `initial` 을 동일 키에서 무시 → stale. **FIX**: `onSuccess` 에 `qc.invalidateQueries(['operators'])`+`(['audit'])` 추가(PC-FE-040 의 invalidate-on-switch 메커니즘 완성) → mounted 쿼리가 새 활성-테넌트 쿠키로 프록시 재요청. **검증**: `TenantSwitcher.test.tsx` 신규(전환 시 operators+audit+catalog+session invalidate 단언) + vitest **791/791** + tsc exit0 + lint clean. diff=`use-tenant-switch.ts` + test only. **메타: 서버측 테넌트 스코핑 추가 시 클라 React Query 의 테넌트 차원(invalidate 목록 또는 키)도 함께 갱신 필수 — seeded 쿼리는 router.refresh 의 새 initial 을 동일 키에서 무시.** 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
