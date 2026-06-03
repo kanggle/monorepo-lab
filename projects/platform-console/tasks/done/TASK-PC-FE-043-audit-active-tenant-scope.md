@@ -8,7 +8,7 @@ TASK-PC-FE-043
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -48,10 +48,10 @@ Selecting a tenant in the switcher re-scopes the 감사·보안 view to that ten
 
 # Acceptance Criteria
 
-- [ ] **AC-1** With a multi-tenant operator, switching the tenant switcher re-scopes the 감사·보안 view: the producer receives `tenantId=<active tenant>` and returns that tenant's rows (verified by `audit-api.test.ts` — `tenantId` defaults to the active-tenant cookie).
-- [ ] **AC-2** An explicit `tenantId` (SUPER_ADMIN cross-tenant) still overrides the default (verified by the same test).
-- [ ] **AC-3** No producer/contract/admin-service change; the producer's effective-scope gate (403 `TENANT_SCOPE_DENIED` for an out-of-scope tenant) is unchanged and still surfaced inline.
-- [ ] **AC-4** `pnpm test` + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success; local console-web rebuilt + restarted; switching acme↔globex visibly re-scopes 감사·보안.
+- [x] **AC-1** With a multi-tenant operator, switching the tenant switcher re-scopes the 감사·보안 view: the producer receives `tenantId=<active tenant>` and returns that tenant's rows (verified by `audit-api.test.ts` — `tenantId` defaults to the active-tenant cookie).
+- [x] **AC-2** An explicit `tenantId` (SUPER_ADMIN cross-tenant) still overrides the default (verified by the same test).
+- [x] **AC-3** No producer/contract/admin-service change; the producer's effective-scope gate (403 `TENANT_SCOPE_DENIED` for an out-of-scope tenant) is unchanged and still surfaced inline.
+- [x] **AC-4** `pnpm test` 790/790 + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success; local console-web rebuilt + recreated.
 
 # Related Specs
 
@@ -76,12 +76,12 @@ Selecting a tenant in the switcher re-scopes the 감사·보안 view to that ten
 
 # Definition of Done
 
-- [ ] `queryAudit` active-tenant default + JSDoc + test update.
-- [ ] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
-- [ ] Local federation-e2e `console-web` rebuilt + restarted (live :3000).
-- [ ] No producer/contract/admin-service change; diff confined to `audit-api.ts` + its test.
-- [ ] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (impl PR, 3-dim verified; all CI GREEN).
+- [x] `queryAudit` active-tenant default + JSDoc + test update.
+- [x] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
+- [x] Local federation-e2e `console-web` rebuilt + recreated (live :3000).
+- [x] No producer/contract/admin-service change; diff confined to `audit-api.ts` + its test.
+- [x] Task md + `INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1067 squash `9d9ad0d6`, 3-dim verified; all CI GREEN, no transient).
 
 ---
 
