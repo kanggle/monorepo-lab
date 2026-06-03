@@ -365,48 +365,20 @@ describe('OperatorsScreen — change-status suspend (reason+confirm)', () => {
   });
 });
 
-describe('OperatorsScreen — self change-password', () => {
-  it('blocks when new != confirm and submits when matching + policy ok', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
+// TASK-PC-FE-045: self change-password / my-profile moved to /account
+// (AccountSelfService). See AccountSelfService.test.tsx. OperatorsScreen now
+// asserts these self forms are ABSENT (it is 남 관리 only).
+describe('OperatorsScreen — self-service forms moved to /account (TASK-PC-FE-045)', () => {
+  it('no longer renders the self change-password or my-profile forms', () => {
     render(
       <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
       { wrapper: wrapper() },
     );
-
-    await user.type(
-      screen.getByTestId('change-password-current'),
-      'Old1!pass',
-    );
-    await user.type(
-      screen.getByTestId('change-password-new'),
-      'New2@word!',
-    );
-    await user.type(
-      screen.getByTestId('change-password-confirm'),
-      'Different1!',
-    );
-    expect(
-      screen.getByTestId('change-password-confirm-error'),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('change-password-submit')).toBeDisabled();
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    await user.clear(screen.getByTestId('change-password-confirm'));
-    await user.type(
-      screen.getByTestId('change-password-confirm'),
-      'New2@word!',
-    );
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    expect(screen.getByTestId('change-password-submit')).toBeEnabled();
-    await user.click(screen.getByTestId('change-password-submit'));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/operators/me/password',
-        expect.objectContaining({ method: 'POST' }),
-      ),
-    );
+    expect(screen.queryByTestId('change-password-form')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('my-profile-form')).not.toBeInTheDocument();
+    // 남 관리 surface stays.
+    expect(screen.getByTestId('create-operator-form')).toBeInTheDocument();
+    expect(screen.getByTestId('operators-table')).toBeInTheDocument();
   });
 });
 

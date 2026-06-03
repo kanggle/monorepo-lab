@@ -6,6 +6,8 @@
  * surface; per-endpoint header matrix; reason+confirm-gated mutations).
  */
 export { OperatorsScreen } from './components/OperatorsScreen';
+// TASK-PC-FE-045: self-service (내 비밀번호 / 내 프로필) lives on /account now.
+export { AccountSelfService } from './components/AccountSelfService';
 export { getOperatorsListState } from './api/operators-state';
 export type { OperatorsListState } from './api/operators-state';
 export type {

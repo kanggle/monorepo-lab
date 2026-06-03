@@ -8,8 +8,6 @@ import {
   useCreateOperator,
   useEditOperatorRoles,
   useChangeOperatorStatus,
-  useChangeOwnPassword,
-  useUpdateOwnProfile,
   useSetOperatorProfile,
 } from '../hooks/use-operators';
 import {
@@ -22,8 +20,6 @@ import {
 } from '../api/types';
 import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 import { CreateOperatorForm } from './CreateOperatorForm';
-import { ChangePasswordForm } from './ChangePasswordForm';
-import { MyProfileForm } from './MyProfileForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 
@@ -79,10 +75,6 @@ export interface OperatorsScreenProps {
   tenantOptions?: string[];
   /** True ⇒ this operator is platform-scope → may offer `*` on create. */
   isPlatformOperator?: boolean;
-  /** TASK-PC-FE-016 — server-rendered initial value for the self update-
-   *  profile form (`operatorContext.defaultAccountId` from the catalog
-   *  registry; null when never set). Passed verbatim to {@link MyProfileForm}. */
-  initialDefaultAccountId?: string | null;
   /** TASK-PC-FE-017 — caller's own `operatorId` (when derivable). When set,
    *  the per-row "Profile 편집" button is disabled on the self row (UX gate;
    *  the producer's `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` is
@@ -94,7 +86,6 @@ export function OperatorsScreen({
   initial,
   tenantOptions = [],
   isPlatformOperator = false,
-  initialDefaultAccountId = null,
   selfOperatorId = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
@@ -112,8 +103,6 @@ export function OperatorsScreen({
   const create = useCreateOperator();
   const editRoles = useEditOperatorRoles();
   const changeStatus = useChangeOperatorStatus();
-  const changePw = useChangeOwnPassword();
-  const updateProfile = useUpdateOwnProfile();
   const setProfile = useSetOperatorProfile();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -180,26 +169,6 @@ export function OperatorsScreen({
         )
       : create.error
         ? '운영자 생성에 실패했습니다.'
-        : null;
-
-  const pwError =
-    changePw.error instanceof ApiError
-      ? messageForCode(
-          (changePw.error as ApiError).code,
-          changePw.error.message,
-        )
-      : changePw.error
-        ? '비밀번호 변경에 실패했습니다.'
-        : null;
-
-  const updateProfileError =
-    updateProfile.error instanceof ApiError
-      ? messageForCode(
-          (updateProfile.error as ApiError).code,
-          updateProfile.error.message,
-        )
-      : updateProfile.error
-        ? '프로파일 저장에 실패했습니다.'
         : null;
 
   const setProfileError =
@@ -352,25 +321,6 @@ export function OperatorsScreen({
             onSubmitDraft={openCreate}
             serverError={createError}
             pending={create.isPending}
-          />
-
-          <ChangePasswordForm
-            onSubmit={(currentPassword, newPassword) =>
-              changePw.mutate({ currentPassword, newPassword })
-            }
-            serverError={pwError}
-            pending={changePw.isPending}
-            succeeded={changePw.isSuccess}
-          />
-
-          <MyProfileForm
-            initial={initialDefaultAccountId}
-            onSubmit={(defaultAccountId) =>
-              updateProfile.mutate({ defaultAccountId })
-            }
-            serverError={updateProfileError}
-            pending={updateProfile.isPending}
-            succeeded={updateProfile.isSuccess}
           />
 
           <form
