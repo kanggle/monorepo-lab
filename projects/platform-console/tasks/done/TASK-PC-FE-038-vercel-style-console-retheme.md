@@ -8,7 +8,7 @@ TASK-PC-FE-038
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -82,7 +82,7 @@ The console reads as a Vercel-style product: Geist font, high-contrast minimalis
 - [x] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
 - [x] No behaviour/routing/data-testid/API change; diff confined to console-web presentation layer + task lifecycle.
 - [x] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (3-dim verified) — pending close chore.
+- [x] Reviewed + merged (impl PR #1055 squash `8d38c3df`, 3-dim verified).
 
 ---
 
