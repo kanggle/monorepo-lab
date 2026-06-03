@@ -149,7 +149,7 @@ class OperatorAdminControllerTest {
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
                 false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
-        when(queryService.listOperators(any(), anyInt(), anyInt()))
+        when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
         mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
@@ -166,7 +166,7 @@ class OperatorAdminControllerTest {
                 "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
                 false, null, Instant.parse("2026-01-01T00:00:00Z"),
                 "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000");
-        when(queryService.listOperators(any(), anyInt(), anyInt()))
+        when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
         mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
@@ -183,7 +183,7 @@ class OperatorAdminControllerTest {
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-2", "two@example.com", "Two", "ACTIVE", List.of("SUPPORT_LOCK"),
                 false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
-        when(queryService.listOperators(any(), anyInt(), anyInt()))
+        when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
         String body = mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))
@@ -200,7 +200,7 @@ class OperatorAdminControllerTest {
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-3", "three@example.com", "Three", "ACTIVE", List.of("SUPPORT_LOCK"),
                 false, null, Instant.parse("2026-01-01T00:00:00Z"), "   ");
-        when(queryService.listOperators(any(), anyInt(), anyInt()))
+        when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
         String body = mockMvc.perform(get("/api/admin/operators").header("Authorization", bearer()))

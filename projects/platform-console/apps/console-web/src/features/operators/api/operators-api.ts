@@ -291,6 +291,14 @@ export async function listOperators(
 ): Promise<OperatorPage> {
   const qs = new URLSearchParams();
   if (params.status) qs.set('status', params.status);
+  // TASK-MONO-175: scope the operator list to the ACTIVE tenant so 운영자 관리
+  // follows the tenant switcher (the producer scopes by the `tenantId` query
+  // param — home ∪ assignment — and gates it against the caller's effective
+  // scope; mirror of the audit `tenantId` pattern). The same active tenant is
+  // also sent as `X-Tenant-Id` by `callGapOperators`; when none is selected
+  // that call blocks with NO_ACTIVE_TENANT before any fetch.
+  const tenant = await getActiveTenant();
+  if (tenant) qs.set('tenantId', tenant);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(Math.min(100, Math.max(1, params.size ?? 20))));
   return callGapOperators(

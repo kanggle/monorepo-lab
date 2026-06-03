@@ -69,14 +69,23 @@ public class OperatorAdminController {
         return ResponseEntity.ok(toResponse(summary));
     }
 
+    /**
+     * TASK-MONO-175 / ADR-MONO-020 — {@code tenantId} query param added (mirror
+     * the audit endpoint). Omitted → the caller's home tenant; a value within the
+     * caller's effective scope → that tenant's operators (home ∪ assignment);
+     * {@code *} → cross-tenant (SUPER_ADMIN only). An out-of-scope tenant →
+     * {@code 403 TENANT_SCOPE_DENIED} (thrown by {@link OperatorQueryService}).
+     */
     @GetMapping("/operators")
     @RequiresPermission(Permission.OPERATOR_MANAGE)
     public ResponseEntity<OperatorListResponse> listOperators(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String tenantId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
 
-        OperatorPage result = queryService.listOperators(status, page, size);
+        String callerOperatorId = OperatorContextHolder.require().operatorId();
+        OperatorPage result = queryService.listOperators(status, page, size, callerOperatorId, tenantId);
         List<OperatorSummaryResponse> items = new ArrayList<>(result.content().size());
         for (OperatorSummary s : result.content()) {
             items.add(toResponse(s));

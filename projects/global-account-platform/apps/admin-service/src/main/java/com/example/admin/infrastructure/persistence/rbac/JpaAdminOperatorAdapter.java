@@ -74,6 +74,19 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public OperatorPage findOperatorsPageByTenant(String tenantId, String statusFilter, int page, int size) {
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        PageRequest pageable = PageRequest.of(page, size, sort);
+        String status = (statusFilter == null || statusFilter.isBlank()) ? null : statusFilter;
+        Page<AdminOperatorJpaEntity> rows =
+                operatorRepository.findByTenantScope(tenantId, status, pageable);
+        List<OperatorView> content = new ArrayList<>(rows.getNumberOfElements());
+        for (AdminOperatorJpaEntity e : rows.getContent()) content.add(toView(e));
+        return new OperatorPage(content, rows.getTotalElements(), rows.getNumber(),
+                rows.getSize(), rows.getTotalPages());
+    }
+
+    @Override
     public OperatorView createOperator(NewOperator row) {
         AdminOperatorJpaEntity entity = AdminOperatorJpaEntity.create(
                 row.operatorId(), row.email(), row.passwordHash(), row.displayName(),

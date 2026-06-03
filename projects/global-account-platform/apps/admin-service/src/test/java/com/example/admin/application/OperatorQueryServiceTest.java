@@ -1,8 +1,10 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorUnauthorizedException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.AdminOperatorTotpPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +24,9 @@ import static com.example.admin.application.OperatorUseCaseTestSupport.operator;
 import static com.example.admin.application.OperatorUseCaseTestSupport.role;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,8 +38,24 @@ class OperatorQueryServiceTest {
 
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminOperatorTotpPort totpPort;
+    @Mock TenantScopeResolver tenantScopeResolver;
 
     @InjectMocks OperatorQueryService service;
+
+    /**
+     * TASK-MONO-175 — default caller for the list tests: a platform-scope
+     * ({@code '*'}) operator listing {@code '*'} → routes to the unscoped
+     * {@code findOperatorsPage} (the path the legacy list tests mock). LENIENT
+     * strictness leaves this unused for the getCurrentOperator tests.
+     */
+    @BeforeEach
+    void stubPlatformCaller() {
+        AdminOperatorPort.OperatorView caller =
+                operator(99L, "super", "super@ex.com", "ACTIVE", "*", null);
+        when(operatorPort.findByOperatorId("super")).thenReturn(Optional.of(caller));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(eq(99L), eq("*")))
+                .thenReturn(Set.of("*"));
+    }
 
     @Test
     @DisplayName("현재 운영자 조회 시 role 목록이 포함된 summary 를 반환한다")
@@ -74,7 +94,7 @@ class OperatorQueryServiceTest {
                 .thenReturn(Map.of(1L, List.of("SUPPORT_LOCK")));
         when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
 
-        OperatorQueryService.OperatorPage result = service.listOperators(null, 0, 20);
+        OperatorQueryService.OperatorPage result = service.listOperators(null, 0, 20, "super", "*");
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).roles()).containsExactly("SUPPORT_LOCK");
@@ -90,7 +110,7 @@ class OperatorQueryServiceTest {
         when(operatorPort.bulkLoadRoleNamesByOperator(anyCollection())).thenReturn(Map.of());
         when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
 
-        OperatorQueryService.OperatorPage result = service.listOperators("SUSPENDED", 0, 20);
+        OperatorQueryService.OperatorPage result = service.listOperators("SUSPENDED", 0, 20, "super", "*");
 
         assertThat(result.content()).isEmpty();
         verify(operatorPort, never()).findOperatorsPage(eq(null), org.mockito.ArgumentMatchers.anyInt(),
@@ -111,11 +131,52 @@ class OperatorQueryServiceTest {
                 .thenReturn(Map.of(1L, List.of("SUPER_ADMIN"), 2L, List.of("SUPPORT_LOCK")));
         when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
 
-        OperatorQueryService.OperatorPage result = service.listOperators(null, 0, 20);
+        OperatorQueryService.OperatorPage result = service.listOperators(null, 0, 20, "super", "*");
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0).financeDefaultAccountId()).isEqualTo("acc-uuid-7");
         assertThat(result.content().get(1).financeDefaultAccountId()).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-175: 활성 테넌트로 스코핑 — home==X OR assignment(X) operator 만 (audit 미러)")
+    void listOperators_scopes_to_active_tenant_home_or_assignment() {
+        // caller = multi-operator (home=acme, effective={acme,globex}); requested globex.
+        AdminOperatorPort.OperatorView caller =
+                operator(5L, "multi", "multi@ex.com", "ACTIVE", "acme-corp", null);
+        when(operatorPort.findByOperatorId("multi")).thenReturn(Optional.of(caller));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(eq(5L), eq("acme-corp")))
+                .thenReturn(Set.of("acme-corp", "globex-corp"));
+        AdminOperatorPort.OperatorView opG =
+                operator(7L, "g-op", "g@ex.com", "ACTIVE", "globex-corp", null);
+        when(operatorPort.findOperatorsPageByTenant(eq("globex-corp"), eq(null), eq(0), eq(20)))
+                .thenReturn(new AdminOperatorPort.OperatorPage(List.of(opG), 1L, 0, 20, 1));
+        when(operatorPort.bulkLoadRoleNamesByOperator(anyCollection()))
+                .thenReturn(Map.of(7L, List.of("SUPPORT_LOCK")));
+        when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
+
+        OperatorQueryService.OperatorPage result =
+                service.listOperators(null, 0, 20, "multi", "globex-corp");
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).operatorId()).isEqualTo("g-op");
+        // scoped path used, NOT the unscoped cross-tenant findOperatorsPage.
+        verify(operatorPort, never()).findOperatorsPage(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-175: effective scope 밖 테넌트 요청은 TenantScopeDenied (403)")
+    void listOperators_rejects_tenant_outside_effective_scope() {
+        // caller home=acme, no globex assignment → effective={acme}; requests globex.
+        AdminOperatorPort.OperatorView caller =
+                operator(5L, "acme-op", "a@ex.com", "ACTIVE", "acme-corp", null);
+        when(operatorPort.findByOperatorId("acme-op")).thenReturn(Optional.of(caller));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(eq(5L), eq("acme-corp")))
+                .thenReturn(Set.of("acme-corp"));
+
+        assertThatThrownBy(() -> service.listOperators(null, 0, 20, "acme-op", "globex-corp"))
+                .isInstanceOf(TenantScopeDeniedException.class);
+        verify(operatorPort, never()).findOperatorsPageByTenant(any(), any(), anyInt(), anyInt());
     }
 
     @Test
