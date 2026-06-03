@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - `X-Tenant-Id` is the active-tenant cookie value (never empty);
  *   - filter / `source` / pagination params are serialised correctly;
  *   - `size` is client-capped ≤ 100 (pre-empts the producer 422);
- *   - `tenantId` query is sent ONLY when explicitly passed (SUPER_ADMIN);
+ *   - `tenantId` query defaults to the active tenant (TASK-PC-FE-043); an
+ *     explicit `tenantId` overrides (SUPER_ADMIN cross-tenant);
  *   - **NO `X-Operator-Reason` and NO `Idempotency-Key`** are ever sent
  *     (read-only — the FE-002 mutation scaffolding must NOT leak here);
  *   - no-operator-token ⇒ 401 with NO fetch (no silent GAP-token fallback);
@@ -207,17 +208,20 @@ describe('audit-api — filter / source / pagination serialization + size cap', 
     expect(url.searchParams.get('size')).toBe('100');
   });
 
-  it('omits tenantId unless explicitly supplied (SUPER_ADMIN cross-tenant only)', async () => {
+  it('defaults tenantId to the active-tenant cookie; an explicit tenantId overrides (TASK-PC-FE-043)', async () => {
     // Fresh Response per call — a Response body can only be read once.
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
       Promise.resolve(jsonResponse(PAGE_200)),
     );
     vi.stubGlobal('fetch', fetchMock);
 
+    // No explicit tenantId → scoped to the active tenant (cookie = 'wms'), so
+    // the audit view follows the tenant switcher (not the operator home).
     await queryAudit({ source: 'admin' });
     let url = new URL(String(fetchMock.mock.calls[0][0]));
-    expect(url.searchParams.has('tenantId')).toBe(false);
+    expect(url.searchParams.get('tenantId')).toBe('wms');
 
+    // Explicit tenantId (SUPER_ADMIN cross-tenant) overrides the default.
     await queryAudit({ source: 'admin', tenantId: 'other-tenant' });
     url = new URL(String(fetchMock.mock.calls[1][0]));
     expect(url.searchParams.get('tenantId')).toBe('other-tenant');

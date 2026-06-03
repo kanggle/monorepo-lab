@@ -30,9 +30,14 @@ import {
  * Tenant invariant (§ 2.4 / multi-tenant): the operator's selected active
  * tenant is always sent as `X-Tenant-Id` (`getActiveTenant()`). When none
  * is selected the call is blocked with `400 NO_ACTIVE_TENANT` — never an
- * empty header (no cross-tenant leak). The `tenantId` *query* param is sent
- * ONLY when the caller explicitly passes one (SUPER_ADMIN cross-tenant);
- * the api layer never fabricates it.
+ * empty header (no cross-tenant leak). The `tenantId` *query* param — which
+ * is what `AuditQueryUseCase` actually scopes the query by (admin-service does
+ * NOT read `X-Tenant-Id` for audit) — **defaults to the active tenant**
+ * (TASK-PC-FE-043) so the 감사·보안 view follows the tenant switcher. The
+ * producer enforces the dual-read effective-scope gate (home ∪ assignments —
+ * TASK-BE-249/BE-326), rejecting an out-of-scope tenant with 403
+ * `TENANT_SCOPE_DENIED`. An explicit `params.tenantId` (SUPER_ADMIN
+ * cross-tenant) overrides the default.
  *
  * READ-ONLY invariant (§ 2.4.2): this slice performs NO mutation. There is
  * NO `X-Operator-Reason` and NO `Idempotency-Key` on this call — carrying
@@ -58,8 +63,9 @@ const AUDIT_PATH = '/api/admin/audit';
  * pre-empt the producer `422 VALIDATION_ERROR` (task Edge Case / AC):
  *   - `size` is hard-capped to AUDIT_MAX_PAGE_SIZE (≤ 100);
  *   - `from > to` is rejected here (no fetch) with `422 AUDIT_RANGE_INVALID`.
- * Only the explicitly-supplied filters are serialised; `tenantId` is sent
- * ONLY when the caller passes it (explicit SUPER_ADMIN cross-tenant).
+ * Only the explicitly-supplied filters are serialised; `tenantId` is set when
+ * present (the caller — `queryAudit` — defaults it to the active tenant, so it
+ * is normally present; absent only if no active tenant, which is blocked upstream).
  */
 function buildQuery(params: AuditQueryParams): string {
   const from = params.from?.trim();
@@ -125,7 +131,13 @@ export async function queryAudit(
   }
 
   // Client guards (from ≤ to, size ≤ 100) — may throw 422 before any fetch.
-  const query = buildQuery(params);
+  // TASK-PC-FE-043: default the audit query SCOPE to the active tenant so the
+  // 감사·보안 view follows the tenant switcher (the producer scopes by the
+  // `tenantId` query param, NOT `X-Tenant-Id`, and gates it against the
+  // operator's dual-read effective scope). An explicit `params.tenantId`
+  // (SUPER_ADMIN cross-tenant) overrides. `tenant` is non-null here (the
+  // NO_ACTIVE_TENANT guard above already returned otherwise).
+  const query = buildQuery({ ...params, tenantId: params.tenantId ?? tenant });
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
