@@ -9,10 +9,10 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50',
+    'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50',
   secondary:
-    'border border-border bg-background hover:bg-muted disabled:opacity-50',
-  ghost: 'hover:bg-muted disabled:opacity-50',
+    'border border-border bg-background text-foreground hover:bg-accent disabled:opacity-50',
+  ghost: 'text-foreground hover:bg-accent disabled:opacity-50',
 };
 
 /** Accessible button primitive (native <button>, visible focus ring). */

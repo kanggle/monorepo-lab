@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-038-vercel-style-console-retheme.md` — **REVIEW** (impl complete + 로컬 검증 GREEN, awaiting merge + close chore). 사용자 요청 "콘솔 UI를 Vercel 스타일로". 결정(2026-06-03): **다크+라이트(system+토글) + 토큰+폰트+앤셜폴리시**. **구현**: ⑴ 디자인 토큰을 CSS 변수화(`globals.css` `:root`/`.dark` Vercel/Geist neutrals: light bg#fff/fg#171717/border#ebebeb · dark bg#0a0a0a/fg#ededed/border#2e2e2e) + `tailwind.config.ts` `darkMode:'class'` + `hsl(var(--token))` + accent/ring 추가 → **기존 시맨틱 클래스 통해 전 화면 전파**(컴포넌트 재작성 0); ⑵ Geist Sans/Mono(`geist` 패키지) `app/layout.tsx`; ⑶ next-themes ThemeProvider(system default+toggle, pre-hydration 무FOUC+`suppressHydrationWarning`) + ThemeToggle(`data-testid="theme-toggle"`); ⑷ **앤셜**: topbar `bg-primary`(다크모드 흰바 버그)→Vercel `sticky top-0 bg-background/80 backdrop-blur border-b`, nav `text-muted-foreground hover:text-foreground hover:bg-accent` + 토글 추가; ⑸ Button/login hover·ring-offset 폴리시. **컴포넌트의 잠든 `dark:` 변형(amber/green/red 상태 배지)이 `.dark`로 자동 활성**. **검증**: `tsc --noEmit` exit0 + vitest **780/780** + `next lint` clean + `next build` 성공(/login 109kB<180kB 예산); **데이터-testid/route/API 무변경**(unit nav 테스트가 라우팅 로직만 단언, chrome 클래스 미단언 — brittle 0). 신규 dep=`geist`+`next-themes`(소형). diff=console-web presentation layer only. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

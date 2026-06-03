@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 import './globals.css';
+import { ThemeProvider } from '@/shared/ui/ThemeProvider';
 import { QueryProvider } from '@/shared/ui/QueryProvider';
 import { WebVitals } from '@/shared/observability/web-vitals';
 
@@ -18,10 +21,16 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-full">
-        <QueryProvider>{children}</QueryProvider>
-        <WebVitals />
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full font-sans">
+        <ThemeProvider>
+          <QueryProvider>{children}</QueryProvider>
+          <WebVitals />
+        </ThemeProvider>
       </body>
     </html>
   );
