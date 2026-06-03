@@ -105,7 +105,13 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "admin_operators row not found for internalId=" + operatorInternalId));
         entity.changeStatus(newStatus, at);
-        operatorRepository.save(entity);
+        // TASK-BE-335: saveAndFlush (NOT save) — force the managed-entity dirty
+        // UPDATE to flush WITHIN this transaction. The request's main tx skips
+        // the commit-time auto-flush (readOnly flush-mode / OSIV), which silently
+        // dropped this UPDATE while the request still returned 200 (the
+        // REQUIRES_NEW audit row + an IDENTITY-immediate create masked it).
+        // An explicit flush executes even under FlushMode.MANUAL.
+        operatorRepository.saveAndFlush(entity);
     }
 
     @Override
@@ -114,7 +120,7 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "admin_operators row not found for internalId=" + operatorInternalId));
         entity.changePasswordHash(newPasswordHash, at);
-        operatorRepository.save(entity);
+        operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
     }
 
     @Override
@@ -123,7 +129,7 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "admin_operators row not found for internalId=" + operatorInternalId));
         entity.changeFinanceDefaultAccountId(newValue, at);
-        operatorRepository.save(entity);
+        operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
     }
 
     // ---------- Roles ----------

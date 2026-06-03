@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-335-operator-mutation-explicit-flush.md` — **REVIEW (2026-06-04)**. 사용자 "정지 했는데 status active" 진단. **RC(재현됨)**: `PATCH /api/admin/operators/{id}/status` 가 `ACTIVE→SUSPENDED` 로 **200** + 감사행 기록인데 `admin_operators.status` 는 ACTIVE 그대로 + `version=0`(UPDATE 한 번도 안 일어남). 직접 재현(운영자 로그인 토큰+curl, 콘솔 무관)으로 확정. **메커니즘**: managed-entity dirty UPDATE 가 commit-time auto-flush 에 의존하는데 데모 런타임 메인 tx 가 flush 를 안 함(readOnly flush-mode/OSIV; `e2e` 프로파일 특정 — Testcontainers IT 환경에선 정상이라 `changeMyPassword` IT 가 GREEN 이었음). 생성(`@GeneratedValue(IDENTITY)` 즉시 INSERT)·감사(`@Transactional(REQUIRES_NEW)`)는 살아남아 버그를 가림. 메인 tx 자체는 commit 됨(생성 INSERT 영속이 증거)이라 **명시 flush** 면 영속. **FIX**: `JpaAdminOperatorAdapter` 의 `changeStatus`/`changePasswordHash`/`changeFinanceDefaultAccountId` `save`→`saveAndFlush`(FlushMode.MANUAL 에서도 명시 flush 수행; MySQL readOnly 힌트 비차단). **검증**: 신규 `JpaAdminOperatorAdapterFlushTest`(saveAndFlush 호출 단언 = 회귀 게이트) + `OperatorAdminIntegrationTest` GREEN; **라이브 재현 해소 — globex-1 정지 → `status=SUSPENDED, version=1`**. diff=어댑터 3줄 + 단위테스트 + task. **메타: ① 200 응답·감사행만으로 영속 단정 금지(version/updated_at 확인 필수). ② IDENTITY INSERT 는 같은 tx 의 flush 결함을 가린다 — UPDATE 경로가 진짜 신호. ③ Testcontainers IT(re-query)가 통과해도 데모(e2e profile/OSIV)에선 깨질 수 있음 → env-독립 명시 flush 가 robust. ④ readOnly flush-mode 정확한 출처 추적은 별도 후속.** [[project_platform_console_adr_013]] 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
