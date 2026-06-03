@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-176-operator-reason-header-encoding.md` — **REVIEW (2026-06-04)**. 사용자 "감사이유 적었는데 왜 안돼?"(한글 사유 운영자 생성 실패) 진단. **RC**: HTTP 헤더 값은 ByteString(ISO-8859-1)이라 console 이 운영자-입력 한글 사유를 `X-Operator-Reason` 헤더에 RAW 로 실으면 Node undici `fetch()` 가 전송 전 `TypeError: ...ByteString`(U+D14C=53580) throw → generic catch → `OperatorsUnavailableError`('NETWORK_ERROR') → UI "operators unavailable"(요청이 admin 에 안 닿음, DB 무변경; 읽기 전용 audit 은 사유 헤더 없어 정상). **FIX(cross-project)**: ⑴ console `operators-api.ts`+`accounts-api.ts`(mutation+export 3지점) `X-Operator-Reason`=`encodeURIComponent(reason)`(ASCII-only). ⑵ admin-service 신규 `OperatorReasonDecodingFilter`(`@Component OncePerRequestFilter`+`HttpServletRequestWrapper`) — `X-Operator-Reason` percent-decode(UTF-8, 관대) → 모든 `/api/admin/**` 컨트롤러가 디코드값 수신(컨트롤러 무수정, 단일 지점, 미래 안전). ⑶ contract `admin-api.md` 인코딩 노트. **검증**: console vitest **792/792**(한글 사유 인코딩+round-trip 신규, 기존 reason 단언 round-trip 갱신)+tsc0+lint clean; admin-service `OperatorReasonDecodingFilterTest` GREEN. diff=console 2 api + admin 필터/테스트 + contract + task. **메타: 운영자-입력 자유 텍스트를 HTTP 헤더로 나르면 비-ASCII 에서 클라 `fetch` 가 전송 전 throw — percent-encode(client)+단일 필터 decode(server)로 헤더 매트릭스 유지하며 해소. 단일 필터=컨트롤러 무수정+미래 경로 자동 커버.** [[project_platform_console_adr_013]] 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

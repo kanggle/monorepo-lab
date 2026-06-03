@@ -6,6 +6,8 @@ base path: `/api/admin`
 
 모든 요청에 필수: `X-Operator-Reason` 헤더 (감사 사유)
 
+> **인코딩 (TASK-MONO-176)**: `X-Operator-Reason` 값은 **percent-encoded (UTF-8, `encodeURIComponent`)** 로 전송된다. HTTP 헤더 값은 ByteString(ISO-8859-1)이라 한글 등 비-Latin-1 사유를 RAW 로 실으면 클라이언트 `fetch()` 가 전송 전 throw 한다. 서비스는 수신 시 percent-decode(UTF-8) 하여 원문 사유를 `admin_actions.reason` 에 저장한다(percent-escape 없는 ASCII 값은 그대로 round-trip). 디코드는 모든 `/api/admin/**` 컨트롤러에 대해 단일 필터(`OperatorReasonDecodingFilter`)에서 수행된다.
+
 ---
 
 ## Authentication

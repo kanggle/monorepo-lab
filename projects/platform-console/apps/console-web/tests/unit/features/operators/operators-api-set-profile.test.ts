@@ -115,7 +115,7 @@ describe('operators-api setOperatorProfile — call shape + AC-7 header-matrix-d
     expect((init as RequestInit).method).toBe('PATCH');
 
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('clear it');
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('clear it'); // TASK-MONO-176: encoded on wire
     // AC-7 header-matrix-drift defense holds for the `null` case too.
     expect(h['Idempotency-Key']).toBeUndefined();
     expect('Idempotency-Key' in h).toBe(false);

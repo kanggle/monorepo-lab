@@ -147,7 +147,11 @@ describe('accounts-api — mutations carry reason + idempotency-key', () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers['X-Operator-Reason']).toBe('fraud investigation');
+    // TASK-MONO-176: reason percent-encoded on the wire (ByteString header
+    // safety); round-trips via decodeURIComponent.
+    expect(decodeURIComponent(headers['X-Operator-Reason'])).toBe(
+      'fraud investigation',
+    );
     expect(headers['Idempotency-Key']).toBe('idem-key-1');
     expect(headers['Idempotency-Key'].length).toBeGreaterThan(0);
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
@@ -241,7 +245,10 @@ describe('accounts-api — mutations carry reason + idempotency-key', () => {
     await exportAccount('acc-1', 'gdpr portability request');
     const [, init] = fetchMock.mock.calls[0];
     const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers['X-Operator-Reason']).toBe('gdpr portability request');
+    // TASK-MONO-176: percent-encoded on the wire; round-trips.
+    expect(decodeURIComponent(headers['X-Operator-Reason'])).toBe(
+      'gdpr portability request',
+    );
     expect(headers.Authorization).toBe('Bearer OPERATOR-TOKEN');
   });
 });

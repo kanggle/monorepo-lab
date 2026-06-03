@@ -125,7 +125,10 @@ describe('POST /api/accounts/[id]/lock proxy', () => {
     expect(res.status).toBe(200);
     const [, init] = fetchMock.mock.calls[0];
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('operator entered reason');
+    // TASK-MONO-176: percent-encoded on the wire to GAP; round-trips.
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe(
+      'operator entered reason',
+    );
     expect(h['Idempotency-Key']).toBe('idem-1');
   });
 
