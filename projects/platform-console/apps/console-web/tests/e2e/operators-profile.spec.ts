@@ -15,7 +15,8 @@ import { test, expect } from '@playwright/test';
  * any tenant).
  *
  * Scenario:
- *   1. navigate to /operators
+ *   1. navigate to /account (TASK-PC-FE-045: self-service MyProfileForm moved
+ *      here from /operators — 계정 설정 = 내 것)
  *   2. enter the seeded finance account UUID into MyProfileForm
  *   3. click Save → success message visible
  *   4. navigate to /dashboards/overview
@@ -38,7 +39,7 @@ test.describe('@e2e operators profile — finance default account self-serve', (
   test('operator can self-set finance default account → overview shows ok', async ({
     page,
   }) => {
-    await page.goto('/operators');
+    await page.goto('/account'); // TASK-PC-FE-045: self profile lives on 계정 설정
 
     const input = page.getByTestId('my-profile-default-account-id');
     await expect(input).toBeVisible();

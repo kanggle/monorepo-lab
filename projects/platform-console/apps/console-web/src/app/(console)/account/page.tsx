@@ -1,21 +1,26 @@
-import Link from 'next/link';
 import { getActiveTenant, getIdToken, getAccessToken } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
+import { AccountSelfService } from '@/features/operators';
+import { getCatalog } from '@/features/catalog';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * 계정 설정 — TASK-PC-FE-041. A **read-only** account page reached from the
- * top-bar account menu (⋮ → 계정 설정). It surfaces the signed-in operator's
- * own identity, decoded **verification-free** from the GAP OIDC `id_token` /
- * access-token cookies (display only, NEVER an authorization input — § 2.1;
- * the `id_token` is not a credential), plus the current active tenant.
+ * 계정 설정 — TASK-PC-FE-041 (read-only identity) + TASK-PC-FE-045 (self-
+ * service). Reached from the top-bar account menu (⋮ → 계정 설정). It surfaces
+ * the signed-in operator's own identity, decoded **verification-free** from the
+ * GAP OIDC `id_token` / access-token cookies (display only, NEVER an
+ * authorization input — § 2.1; the `id_token` is not a credential), plus the
+ * current active tenant.
  *
- * No mutation here: the operator's editable self-service profile (default
- * finance account, password) already lives in `/operators` (내 프로필 /
- * `me/profile` + `me/password`, § 2.4.3); this page links there. Credentials
- * and profile identity are owned by GAP (the IdP). No new API / route /
- * contract — claims-only, so it works regardless of tenant selection.
+ * TASK-PC-FE-045: the operator's editable SELF-service (내 비밀번호 변경 +
+ * 내 기본 finance 계정 = `me/password` + `me/profile`, § 2.4.3) now lives HERE
+ * (was on `/operators`), so 계정 설정 = 내 것 and 운영자 관리 = 남 관리 (AWS/GCP
+ * console split). The forms are a client island ({@link AccountSelfService});
+ * the initial default-finance-account value is read from the operator-scoped
+ * registry (`getCatalog()`), identical to the prior `/operators` derivation.
+ * API / proxy / endpoints are unchanged. Credentials + profile identity are
+ * owned by GAP (the IdP).
  */
 function strClaim(claims: Record<string, unknown> | null, key: string): string | null {
   const v = claims?.[key];
@@ -45,6 +50,20 @@ export default async function AccountPage() {
   ]);
   const idClaims = decodeJwtPayload(idToken);
   const accessClaims = decodeJwtPayload(accessToken);
+
+  // TASK-PC-FE-045: initial default-finance-account for the self profile form,
+  // read from the operator-scoped registry (moved verbatim from the prior
+  // /operators derivation). Registry unavailable ⇒ empty input + active set
+  // flow (the producer is authoritative; this is only the seed value).
+  let initialDefaultAccountId: string | null = null;
+  try {
+    const catalog = await getCatalog();
+    initialDefaultAccountId =
+      catalog.products.find((p) => p.productKey === 'finance')?.operatorContext
+        ?.defaultAccountId ?? null;
+  } catch {
+    initialDefaultAccountId = null;
+  }
 
   const accountId =
     strClaim(idClaims, 'preferred_username') ??
@@ -104,19 +123,15 @@ export default async function AccountPage() {
         </Row>
       </dl>
 
-      <div className="mt-6 rounded-lg border border-border bg-muted px-4 py-4 text-sm text-muted-foreground">
-        <p className="mb-2 font-medium text-foreground">프로필 편집</p>
-        <p className="mb-3">
-          기본 finance 계정·비밀번호 등 셀프서비스 프로필은 운영자 관리
-          화면의 “내 프로필”에서 변경할 수 있습니다.
+      <div className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-foreground">
+          셀프서비스
+        </h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          본인 계정의 비밀번호와 기본 finance 계정을 직접 변경합니다. (다른
+          운영자 관리는 운영자 관리 메뉴에서 수행합니다.)
         </p>
-        <Link
-          href="/operators"
-          data-testid="account-to-operators"
-          className="inline-block text-sm font-medium text-foreground underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          운영자 관리로 이동
-        </Link>
+        <AccountSelfService initialDefaultAccountId={initialDefaultAccountId} />
       </div>
     </section>
   );
