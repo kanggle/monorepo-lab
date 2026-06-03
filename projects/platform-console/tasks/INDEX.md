@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-040-tenant-switch-refresh-current-view.md` — **REVIEW** (impl complete + 로컬 재배포 GREEN, awaiting merge + close chore). 사용자 요청 "테넌트 선택 시 현재 보고있는 메뉴에서 테넌트 권한에 따라 다시 적용". **RC**: `useTenantSwitch` 가 성공 시 react-query `['catalog']`/`['session']`만 invalidate — 권한-게이트 도메인 뷰는 **서버 컴포넌트**(active-tenant 쿠키+assumed token)라 클라 쿼리 invalidate 로는 현재 화면 stale. **FIX**: onSuccess 에 `useRouter().refresh()` 추가 → 현재 라우트 서버 컴포넌트 재실행(assume-tenant 가 토큰 re-scope) → in-place 재평가(entitled→데이터/non-entitled→forbidden). +PC-FE-038 retheme 잔재 수정(TenantSwitcher label/single `text-primary-foreground/80`[옛 다크바]→`text-muted-foreground`). 테스트: `TenantSwitcher.test.tsx` 에 `next/navigation` useRouter 모킹 + refresh 성공시-호출/에러시-미호출 단언. **검증**: vitest **781/781** + tsc exit0 + lint clean + build 성공; 로컬 console-web 재빌드+재시작(live :3000). diff=tenant feature + test only. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
