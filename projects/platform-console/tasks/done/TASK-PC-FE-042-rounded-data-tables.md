@@ -8,7 +8,7 @@ TASK-PC-FE-042
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -49,10 +49,10 @@ Every console data table renders as a rounded, bordered card (outer `border-bord
 
 # Acceptance Criteria
 
-- [ ] **AC-1** Every console `<table>` renders with `rounded-lg` corners on its `border-border` outer frame (verified by `next build` + visual at `:3000`).
-- [ ] **AC-2** Horizontal dividers are preserved (header underline + a line between each row) and there are still no vertical gridlines; the last row has no divider under it (clean rounded bottom).
-- [ ] **AC-3** No markup-structure change — only the `<table>` className and `globals.css`; all table `data-testid`s and the row/cell content are unchanged (existing unit/e2e selectors intact).
-- [ ] **AC-4** `pnpm test` + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success.
+- [x] **AC-1** Every console `<table>` renders with `rounded-lg` corners on its `border-border` outer frame (verified by `next build` + visual at `:3000`).
+- [x] **AC-2** Horizontal dividers are preserved (header underline + a line between each row) and there are still no vertical gridlines; the last row has no divider under it (clean rounded bottom).
+- [x] **AC-3** No markup-structure change — only the `<table>` className and `globals.css`; all table `data-testid`s and the row/cell content are unchanged (existing unit/e2e selectors intact).
+- [x] **AC-4** `pnpm test` + `tsc --noEmit` exit 0 + `next lint` clean + `next build` success.
 
 # Related Specs
 
@@ -75,12 +75,12 @@ Every console data table renders as a rounded, bordered card (outer `border-bord
 
 # Definition of Done
 
-- [ ] `.data-table` component class + 17 table className swaps.
-- [ ] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
-- [ ] Local federation-e2e `console-web` rebuilt + restarted (live at :3000).
-- [ ] No API/route/contract/markup-structure change; diff confined to `globals.css` + the 17 `<table>` tags.
-- [ ] Task md + `INDEX.md` updated.
-- [ ] Reviewed + merged (impl PR, 3-dim verified; all CI GREEN).
+- [x] `.data-table` component class + 17 table className swaps.
+- [x] `pnpm test` + `tsc --noEmit` + `next lint` + `next build` green.
+- [x] Local federation-e2e `console-web` rebuilt + restarted (live at :3000).
+- [x] No API/route/contract/markup-structure change; diff confined to `globals.css` + the 17 `<table>` tags.
+- [x] Task md + `INDEX.md` updated.
+- [x] Reviewed + merged (impl PR #1063 squash `a6287aa2`, 3-dim verified; all CI GREEN, no transient).
 
 ---
 
