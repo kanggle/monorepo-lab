@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-045-move-self-service-to-account.md` — **REVIEW (2026-06-04)**. 사용자 "운영자관리에 내 비밀번호변경이 왜 있나" → 셀프서비스(내 것)와 남 관리 분리. **RC**: 셀프 엔드포인트가 operator 네임스페이스(`me/*`)라 PC-FE-004 가 `OperatorsScreen` 에 내 비밀번호·내 프로필 폼을 남 관리와 함께 얹음; PC-FE-041 계정 설정은 읽기 전용 + 역방향 링크만 → "계정 설정 메뉴인데 비밀번호는 운영자 관리에서" 역설. **FIX(UI routing-hierarchy only, API 불변)**: 신규 `AccountSelfService` client island(`useChangeOwnPassword`+`useUpdateOwnProfile`) → `/account` 승격(읽기 전용+셀프서비스, `getCatalog` finance defaultAccountId seed, 역방향 링크 제거); `/operators`+`OperatorsScreen` 에서 self 폼/훅/`initialDefaultAccountId` prop 제거(create/roles/status/타-운영자 프로필=남 관리 잔류). **검증**: OperatorsScreen(self 폼 부재 단언) + `AccountSelfService.test.tsx` 신규 3 + e2e `operators-profile` self 시나리오 `/account` 이전; vitest **795/795** + tsc0 + lint clean. diff=account/operators page + OperatorsScreen + AccountSelfService(신규) + index barrel + 테스트. **메타: 셀프서비스(내 것)와 관리(남 것)는 분리 화면이어야(AWS/GCP) — 엔드포인트 네임스페이스가 UI 배치를 잘못 유도했던 케이스. API/proxy 불변.** [[project_platform_console_adr_013]] 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

@@ -8,7 +8,7 @@ Move **셀프서비스(내 비밀번호 변경 + 내 프로필)를 운영자 관
 
 # Status
 
-ready
+review
 
 # Owner
 
