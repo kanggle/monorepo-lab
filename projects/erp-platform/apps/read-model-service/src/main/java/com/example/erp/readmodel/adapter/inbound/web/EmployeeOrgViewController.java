@@ -6,6 +6,7 @@ import com.example.erp.readmodel.application.QueryEmployeeOrgViewUseCase;
 import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
+import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -60,8 +61,13 @@ public class EmployeeOrgViewController {
         parseAsOf(asOf); // validates format (point-in-time parity, E2)
         MasterStatus statusFilter = parseStatus(status);
 
-        EmployeeOrgViewPage result = useCase.list(statusFilter, departmentId, page,
-                Math.min(size, MAX_SIZE));
+        // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
+        OrgScope orgScope = readGate.orgScope(jwt);
+        List<String> orgScopeRootIds = orgScope.isPlatform()
+                ? null : List.copyOf(orgScope.roots());
+
+        EmployeeOrgViewPage result = useCase.list(statusFilter, departmentId, orgScopeRootIds,
+                page, Math.min(size, MAX_SIZE));
         List<EmployeeOrgViewResponse> data = result.content().stream()
                 .map(EmployeeOrgViewResponse::from)
                 .toList();
@@ -78,7 +84,12 @@ public class EmployeeOrgViewController {
         readGate.requireRead(jwt);
         parseAsOf(asOf);
 
-        EmployeeOrgView view = useCase.getOne(id);
+        // org_scope read filter (TASK-ERP-BE-008): out-of-scope → 404 (no leak).
+        OrgScope orgScope = readGate.orgScope(jwt);
+        List<String> orgScopeRootIds = orgScope.isPlatform()
+                ? null : List.copyOf(orgScope.roots());
+
+        EmployeeOrgView view = useCase.getOne(id, orgScopeRootIds);
         EmployeeOrgViewResponse data = EmployeeOrgViewResponse.from(view);
         return ResponseEntity.ok(ApiEnvelope.of(data, view.unresolved()));
     }

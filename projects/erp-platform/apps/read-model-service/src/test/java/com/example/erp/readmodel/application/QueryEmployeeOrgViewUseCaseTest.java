@@ -136,6 +136,134 @@ class QueryEmployeeOrgViewUseCaseTest {
         assertThat(result.content().get(0).department().code()).isEqualTo("S");
     }
 
+    // ── org_scope read filter (TASK-ERP-BE-008) ──
+
+    @Test
+    void listWithOrgScopeNarrowsToSubtreeUnion() {
+        // org_scope=[sales-root] expands to its subtree; the list is filtered to it.
+        EmployeeProjection emp = EmployeeProjection.of(
+                "emp-1", "E-1001", "홍길동", "sales-east", null, null,
+                MasterStatus.ACTIVE, null, null, T0, "e");
+        when(departmentRepository.findSubtreeIds("sales-root", 32))
+                .thenReturn(List.of("sales-root", "sales-east"));
+        when(employeeRepository.findPage(MasterStatus.ACTIVE,
+                List.of("sales-root", "sales-east"), 0, 20)).thenReturn(List.of(emp));
+        when(employeeRepository.count(MasterStatus.ACTIVE, List.of("sales-root", "sales-east")))
+                .thenReturn(1L);
+        when(departmentRepository.findAllByIds(any())).thenReturn(Map.of("sales-east",
+                DepartmentProjection.of("sales-east", "SE", "영업동부", "sales-root",
+                        MasterStatus.ACTIVE, null, null, T0, "e")));
+        lenient().when(departmentRepository.findById("sales-root")).thenReturn(Optional.of(
+                DepartmentProjection.of("sales-root", "SR", "영업", null,
+                        MasterStatus.ACTIVE, null, null, T0, "e")));
+        lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
+        lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
+
+        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null,
+                List.of("sales-root"), 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(1L);
+        assertThat(result.content()).hasSize(1);
+    }
+
+    @Test
+    void listWithExplicitAndOrgScopeFiltersIntersect() {
+        // ?departmentId=sales (→ {sales-root,sales-east,sales-west}) ∩ org_scope=[sales-east]
+        // (→ {sales-east}) = {sales-east} only.
+        when(departmentRepository.findSubtreeIds("sales-root", 32))
+                .thenReturn(List.of("sales-root", "sales-east", "sales-west"));
+        when(departmentRepository.findSubtreeIds("sales-east", 32))
+                .thenReturn(List.of("sales-east"));
+        when(employeeRepository.findPage(MasterStatus.ACTIVE, List.of("sales-east"), 0, 20))
+                .thenReturn(List.of());
+        when(employeeRepository.count(MasterStatus.ACTIVE, List.of("sales-east")))
+                .thenReturn(0L);
+
+        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, "sales-root",
+                List.of("sales-east"), 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(0L);
+    }
+
+    @Test
+    void listWithNullOrgScopeIsNetZeroNoNarrowing() {
+        // org_scope=null → the department filter is null (no narrowing), exactly
+        // the BE-007 behavior.
+        EmployeeProjection emp = EmployeeProjection.of(
+                "emp-1", "E-1001", "홍길동", null, null, null,
+                MasterStatus.ACTIVE, null, null, T0, "e");
+        when(employeeRepository.findPage(MasterStatus.ACTIVE, null, 0, 20))
+                .thenReturn(List.of(emp));
+        when(employeeRepository.count(MasterStatus.ACTIVE, null)).thenReturn(1L);
+        lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
+        lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
+
+        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null, null, 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(1L);
+    }
+
+    @Test
+    void listWithEmptyOrgScopeZeroScopeYieldsEmptyPage() {
+        // explicit org_scope=[] (zero-scope) expands to {} → empty filter → empty page.
+        when(employeeRepository.findPage(MasterStatus.ACTIVE, List.of(), 0, 20))
+                .thenReturn(List.of());
+        when(employeeRepository.count(MasterStatus.ACTIVE, List.of())).thenReturn(0L);
+
+        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null, List.of(), 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(0L);
+        assertThat(result.content()).isEmpty();
+    }
+
+    @Test
+    void getOneInOrgScopeResolves() {
+        EmployeeProjection emp = EmployeeProjection.of(
+                "emp-1", "E-1001", "홍길동", "sales-east", null, null,
+                MasterStatus.ACTIVE, null, null, T0, "e");
+        when(employeeRepository.findById("emp-1")).thenReturn(Optional.of(emp));
+        when(departmentRepository.findSubtreeIds("sales-root", 32))
+                .thenReturn(List.of("sales-root", "sales-east"));
+        when(departmentRepository.findAllByIds(List.of("sales-east"))).thenReturn(Map.of(
+                "sales-east", DepartmentProjection.of("sales-east", "SE", "동부", "sales-root",
+                        MasterStatus.ACTIVE, null, null, T0, "e")));
+        when(departmentRepository.findById("sales-root")).thenReturn(Optional.of(
+                DepartmentProjection.of("sales-root", "SR", "영업", null,
+                        MasterStatus.ACTIVE, null, null, T0, "e")));
+        lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
+        lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
+
+        EmployeeOrgView view = useCase.getOne("emp-1", List.of("sales-root"));
+
+        assertThat(view.id()).isEqualTo("emp-1");
+    }
+
+    @Test
+    void getOneOutOfOrgScopeThrowsNotFound() {
+        // Employee's department (eng-platform) is outside org_scope=[sales-root] → 404.
+        EmployeeProjection emp = EmployeeProjection.of(
+                "emp-1", "E-1001", "홍길동", "eng-platform", null, null,
+                MasterStatus.ACTIVE, null, null, T0, "e");
+        when(employeeRepository.findById("emp-1")).thenReturn(Optional.of(emp));
+        when(departmentRepository.findSubtreeIds("sales-root", 32))
+                .thenReturn(List.of("sales-root", "sales-east"));
+
+        assertThatThrownBy(() -> useCase.getOne("emp-1", List.of("sales-root")))
+                .isInstanceOf(ReadModelNotFoundException.class);
+    }
+
+    @Test
+    void getOneUnprojectedDepartmentConservativelyExcludedUnderScope() {
+        // Department not (yet) projected → cannot prove in-scope → 404 (E5 conservative).
+        EmployeeProjection emp = EmployeeProjection.of(
+                "emp-1", "E-1001", "홍길동", null, null, null,
+                MasterStatus.ACTIVE, null, null, T0, "e");
+        when(employeeRepository.findById("emp-1")).thenReturn(Optional.of(emp));
+
+        assertThatThrownBy(() -> useCase.getOne("emp-1", List.of("sales-root")))
+                .isInstanceOf(ReadModelNotFoundException.class);
+    }
+
     @Test
     void departmentPathWalkTerminatesOnCycleViaVisitedGuard() {
         // Defensive: dept-a -> dept-b -> dept-a (a malformed cycle). The walk

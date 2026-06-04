@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -53,5 +54,41 @@ class ReadAuthorizationGateTest {
     void nullJwtDenied() {
         assertThatThrownBy(() -> gate.requireRead(null))
                 .isInstanceOf(ReadAccessDeniedException.class);
+    }
+
+    // ── org_scope extraction (TASK-ERP-BE-008) ──
+
+    @Test
+    void absentOrgScopeIsPlatformNetZero() {
+        OrgScope scope = gate.orgScope(jwt(Map.of("scope", "erp.read", "sub", "u")));
+        assertThat(scope.isPlatform()).isTrue();
+    }
+
+    @Test
+    void wildcardOrgScopeIsPlatformNetZero() {
+        OrgScope scope = gate.orgScope(
+                jwt(Map.of("org_scope", List.of("*"), "sub", "u")));
+        assertThat(scope.isPlatform()).isTrue();
+    }
+
+    @Test
+    void boundedOrgScopeCarriesRoots() {
+        OrgScope scope = gate.orgScope(
+                jwt(Map.of("org_scope", List.of("sales-root", "eng-root"), "sub", "u")));
+        assertThat(scope.isPlatform()).isFalse();
+        assertThat(scope.roots()).containsExactlyInAnyOrder("sales-root", "eng-root");
+    }
+
+    @Test
+    void explicitEmptyOrgScopeIsZeroScopeNotPlatform() {
+        OrgScope scope = gate.orgScope(
+                jwt(Map.of("org_scope", List.of(), "sub", "u")));
+        assertThat(scope.isPlatform()).isFalse();
+        assertThat(scope.roots()).isEmpty();
+    }
+
+    @Test
+    void nullJwtOrgScopeIsPlatform() {
+        assertThat(gate.orgScope(null).isPlatform()).isTrue();
     }
 }
