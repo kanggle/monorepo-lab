@@ -8,7 +8,7 @@ TASK-PC-FE-048
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -52,12 +52,12 @@ frontend-engineer (console-web only — project-internal; + spec §2.4.8 rescope
 
 # Acceptance Criteria
 
-- [ ] **AC-1** 4개 마스터 각각 create/update/retire 가 콘솔에서 동작 — 올바른 same-origin POST → upstream(create POST / update PATCH / retire POST) + 멱등키; retire 는 reason(body) 필수.
-- [ ] **AC-2** credential 불변(getDomainFacingToken, X-Operator-Reason 미생성 — 부서와 동일, test 단언).
-- [ ] **AC-3** FK 입력(employee 의 부서/직급/비용센터, cost-center 의 부서)은 드롭다운(섹션 목록), partnerType 은 static select(CUSTOMER/SUPPLIER/BOTH).
-- [ ] **AC-4** §2.4.8 read-only 단언이 5개 마스터 write 로 rescope(부서-만-write carve-out 제거); `erp-api.test.ts` proxy-walk/export 단언 갱신.
-- [ ] **AC-5** 에러(409 DUPLICATE/REFERENCE_VIOLATION[job-grade/cost-center]/422 EFFECTIVE/403 PERMISSION) inline.
-- [ ] **AC-6** console `pnpm test`/`tsc`/`lint`/`build` GREEN.
+- [x] **AC-1** 4개 마스터 각각 create/update/retire 가 콘솔에서 동작 — 올바른 same-origin POST → upstream(create POST / update PATCH / retire POST) + 멱등키; retire 는 reason(body) 필수.
+- [x] **AC-2** credential 불변(getDomainFacingToken, X-Operator-Reason 미생성 — 부서와 동일, test 단언).
+- [x] **AC-3** FK 입력(employee 의 부서/직급/비용센터, cost-center 의 부서)은 드롭다운(섹션 목록), partnerType 은 static select(CUSTOMER/SUPPLIER/BOTH).
+- [x] **AC-4** §2.4.8 read-only 단언이 5개 마스터 write 로 rescope(부서-만-write carve-out 제거); `erp-api.test.ts` proxy-walk/export 단언 갱신.
+- [x] **AC-5** 에러(409 DUPLICATE/REFERENCE_VIOLATION[job-grade/cost-center]/422 EFFECTIVE/403 PERMISSION) inline.
+- [x] **AC-6** console `pnpm test`/`tsc`/`lint`/`build` GREEN.
 
 # Related Specs
 
@@ -83,11 +83,11 @@ frontend-engineer (console-web only — project-internal; + spec §2.4.8 rescope
 
 # Definition of Done
 
-- [ ] 4 마스터 api/hooks/proxy + generic dialog + List gate + spec rescope + ADR note + tests.
-- [ ] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
-- [ ] Local 재빌드+재기동 + 라이브 스모크.
-- [ ] Task md + INDEX 갱신.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] 4 마스터 api/hooks/proxy + generic dialog + List gate + spec rescope + ADR note + tests.
+- [x] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
+- [x] Local 재빌드+재기동 + 라이브 스모크.
+- [x] Task md + INDEX 갱신.
+- [x] Reviewed + merged (impl PR #1087 squash `bb07d9af`, 3-dim verified: state=MERGED + tip=`bb07d9af` + pre-merge failing required=0, Frontend unit/E2E + Build&Test GREEN). 라이브 스모크가 producer 필수필드 불일치(cost-center.departmentId/employee FK 3개/job-grade.displayOrder/business-partner.paymentTerms) 적발 → config required + payment-terms composite 추가 후 재검증(dept/job-grade/business-partner 201 영속; cost-center/employee 의 data-scope 는 운영자 org_scope='*'[BE-337]로 충족, 스모크 client_credentials 토큰만 미보유). console-web 재빌드+재기동(/erp 307).
 
 ---
 
