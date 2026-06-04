@@ -710,6 +710,14 @@ tenant_id)`.
 No cross-service inbound master-event consumption in v1 (masterdata-service
 is a leaf — the `read-model-service` v2 will be the inbound consumer).
 
+> **[Note — TASK-ERP-BE-007, 2026-06-04]** The inbound consumer now exists as a
+> first increment: `read-model-service` (`rest-api` + `event-consumer`)
+> subscribes to `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1`
+> to project the integrated employee org-view. `masterdata-service` itself is
+> **unchanged** — it remains the leaf producer (no inbound consumption here); the
+> consumer is a separate deployable. See
+> [`read-model-service/architecture.md`](../read-model-service/architecture.md).
+
 ---
 
 ## Observability
