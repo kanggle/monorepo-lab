@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-177-project-overview-reality-alignment-11th.md` — **REVIEW (2026-06-05, impl PR open)**. `docs/project-overview.md` reality-alignment (11th) — 10th(MONO-172, 2026-06-03) 이후 arc 정합 7 surgical edit: header 2026-06-05 + §2.2 GAP org_scope authz 출처(BE-336/337/338/339) + §2.6 console erp write parity/read 카드/org_scope UI/active-tenant 스코핑/self-service/redpanda + §2.8 erp **read-model-service 라이브화**(ERP-BE-007 — v2-deferred 사실오류 교정, 서비스맵 추가 + v1.1 라이브 note + org_scope 소비 ERP-BE-008) + §7 ADR-020 D3 amendment 행 + §9 Phase 8+ 행. docs-only. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
