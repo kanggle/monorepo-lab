@@ -131,11 +131,23 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
                 selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType);
 
+        // TASK-BE-336: propagate the client's REGISTERED scopes into the
+        // domain-facing token's `scope` claim (was Set.of() — empty). This is
+        // the scope-based delegation model (ADR-MONO-020 / ADR-001): the
+        // platform-console-web client is granted `erp.write` (V0023) so the
+        // assumed token can carry it, letting erp masterdata-service authorize a
+        // department WRITE (WRITE = erp.write ∨ operator-role; entitlement-trust
+        // widens READ only — ADR-MONO-019 § D5). The erp tenant gate still
+        // rejects the write on a non-erp tenant, so carrying erp.write on a
+        // non-erp assumed token is inert (no over-grant). The base
+        // authorization_code token is unchanged (the console requests only
+        // openid/profile/email/tenant.read at authorize) — write capability
+        // rides ONLY in the tenant-scoped assumed token (least-privilege).
         DefaultOAuth2TokenContext.Builder contextBuilder = DefaultOAuth2TokenContext.builder()
                 .registeredClient(registeredClient)
                 .principal(clientPrincipal)
                 .authorizationServerContext(AuthorizationServerContextHolder.getContext())
-                .authorizedScopes(Set.of())
+                .authorizedScopes(registeredClient.getScopes())
                 .tokenType(OAuth2TokenType.ACCESS_TOKEN)
                 .authorizationGrantType(AuthorizationGrantType.TOKEN_EXCHANGE)
                 .authorizationGrant(resolvedGrant);
