@@ -107,4 +107,8 @@ export const apiClient = {
     apiFetch<T>(path, { ...opts, method: 'GET' }),
   post: <T = unknown>(path: string, body?: unknown, opts: ApiRequestOptions = {}) =>
     apiFetch<T>(path, { ...opts, method: 'POST', body }),
+  // PUT — used by the org-scope set proxy (TASK-PC-FE-050), whose route
+  // handler is PUT-only (full-replace of the assignment's org_scope).
+  put: <T = unknown>(path: string, body?: unknown, opts: ApiRequestOptions = {}) =>
+    apiFetch<T>(path, { ...opts, method: 'PUT', body }),
 };

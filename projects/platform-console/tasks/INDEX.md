@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-050-console-operator-org-scope-setting-ui.md` — **READY (2026-06-05)**. 콘솔 운영자 `org_scope` 설정 UI — `features/operators` 에 reason-gated "조직 스코프" 다이얼로그(부서 picker[erp departments 재사용] + 전체/선택/차단 tri-state) + GAP admin proxy(GET assignments / PUT org-scope). **선행 = TASK-BE-339**(GAP admin API, 머지 필수 — 런타임 호출). org_scope end-to-end 루프 완결(설정→저장/전파[BE-338/339]→소비[ERP-BE-008]→read 카드[PC-FE-049]). 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-050-console-operator-org-scope-setting-ui.md` — **REVIEW (2026-06-05, impl PR open)**. 콘솔 운영자 `org_scope` 설정 UI — `features/operators` 에 reason-gated `OrgScopeDialog`(부서 picker[erp departments `/api/erp/masterdata/departments` 재사용, retired 제외] + **전체(null)/선택([ids])/차단([]) tri-state** + degrade 수동입력 fallback + 미배정 안내) + GAP admin proxy(`assignments` **GET-only** / `org-scope` **PUT-only**) + 성공 시 `['operators']`+`['erp-ops','read-model']` invalidate. 선행 TASK-BE-339(머지됨 `031f86ed`). 분석=Opus 4.8 / 구현=frontend-engineer(Opus dispatch)+dispatcher 독립 재검증(scope=console-web only · tsc 0 · 신규 24 테스트 GREEN[tri-state payload·degrade·retired-excluded] · 4-gate CI=MONO-166).
 
 ## done
 
