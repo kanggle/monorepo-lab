@@ -72,6 +72,21 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     private static final String CLAIM_ACCOUNT_TYPE = "account_type";
 
     /**
+     * TASK-BE-337: the {@code org_scope} data-scope claim the erp masterdata-service
+     * reads (the set of department ids the actor may act under; {@code "*"} =
+     * platform-wide). Injected ONLY on the assume-tenant operator token as the v1
+     * gateway-enrichment bridge — erp's authorization data-scope gate fail-closes a
+     * human-operator token with no {@code org_scope} (per-operator
+     * organizational-membership scoping is v2; erp masterdata-service
+     * architecture.md E6 point 3). The tenant gate already isolates cross-tenant, so
+     * {@code "*"} here means "all departments of the ASSUMED tenant" — the right
+     * scope for a tenant-administering operator. Mirrors the
+     * {@code client_credentials → "*"} machine-token default. Only erp consumes this
+     * claim (no cross-domain effect).
+     */
+    private static final String CLAIM_ORG_SCOPE = "org_scope";
+
+    /**
      * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
      * issuance time. Autowired by constructor injection.
      */
@@ -267,6 +282,18 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // OPERATOR while acting for a customer). Carried on the grant from the operator's
         // validated subject token (AssumeTenantAuthenticationProvider). Mirrors tenant.
         injectAccountType(context, operatorAccountType);
+
+        // TASK-BE-337: gateway-enrichment data-scope for the assume-tenant operator.
+        // erp masterdata-service's data-scope gate (E6) fail-closes a human-operator
+        // token that carries no org_scope on any targeted (non-null department) write
+        // — which is every department create/update/retire/move-parent. Per-operator
+        // organizational-membership scoping is v2 (architecture.md E6 point 3); the v1
+        // bridge is platform-wide "*" WITHIN the assumed tenant (the tenant gate
+        // isolates cross-tenant). Mirrors the documented client_credentials → "*"
+        // default. Only the assume-tenant (operator) token gets it — the base
+        // authorization_code token still carries no org_scope (least-privilege).
+        context.getClaims().claim(CLAIM_ORG_SCOPE, java.util.List.of("*"));
+        log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope=[*] (v1 operator data-scope bridge)");
 
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         populateEntitledDomains(context, selectedTenantId);
