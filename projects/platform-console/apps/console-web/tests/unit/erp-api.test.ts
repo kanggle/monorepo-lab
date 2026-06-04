@@ -100,6 +100,11 @@ import {
   getCostCenterById,
   listBusinessPartners,
   getBusinessPartnerById,
+  // TASK-PC-FE-046 — department write PILOT.
+  createDepartment,
+  updateDepartment,
+  retireDepartment,
+  moveDepartmentParent,
 } from '@/features/erp-ops/api/erp-api';
 import {
   ApiError,
@@ -357,11 +362,10 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
       expect(h['X-Operator-Reason']).toBeUndefined();
       expect(h['Content-Type']).toBeUndefined();
     }
-    // The api module exports ONLY read functions — no erp write
-    // (`POST .../departments` / `PATCH .../{id}` / `POST .../retire`
-    // / `POST .../move-parent` — 16 mutation endpoints), no v2
-    // approval-service / read-model-service / future admin-service
-    // surface.
+    // The api module exports the 10 read functions PLUS the four
+    // department WRITE PILOT functions (TASK-PC-FE-046 / § 2.4.8) —
+    // and NOTHING else (no v2 approval-service / read-model-service /
+    // future admin-service surface).
     const mod = await import('@/features/erp-ops/api/erp-api');
     const exported = Object.keys(mod).sort();
     expect(exported).toEqual(
@@ -376,17 +380,34 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         'listDepartments',
         'listEmployees',
         'listJobGrades',
+        // department write PILOT — the ONLY mutation functions.
+        'createDepartment',
+        'updateDepartment',
+        'retireDepartment',
+        'moveDepartmentParent',
       ].sort(),
     );
-    // None of the exports look like a mutation (no create/patch/
-    // retire/move/post/put/delete in the symbol name).
-    for (const name of exported) {
-      expect(/(create|patch|retire|move|post|put|delete|write|update)/i.test(name))
-        .toBe(false);
+    // The ONLY mutation-named exports are the four DEPARTMENT writes.
+    // The other four masters (employees / job-grades / cost-centers /
+    // business-partners) have NO write function — pinned so the pilot
+    // does not silently leak write to another master.
+    const mutationNamed = exported.filter((name) =>
+      /(create|retire|move|update|write|post|put|delete|patch)/i.test(name),
+    );
+    expect(mutationNamed.sort()).toEqual(
+      [
+        'createDepartment',
+        'updateDepartment',
+        'retireDepartment',
+        'moveDepartmentParent',
+      ].sort(),
+    );
+    for (const name of mutationNamed) {
+      expect(/department/i.test(name)).toBe(true);
     }
   });
 
-  it('the proxy directory exposes ONLY GET route handlers (no mutation route at all)', async () => {
+  it('the proxy directory: ONLY the department master has write routes; the four other masters stay GET-only', async () => {
     const proxyRoot = path.resolve(__dirname, '../../src/app/api/erp');
     function walk(p: string): string[] {
       const out: string[] = [];
@@ -400,23 +421,175 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     const tsFiles = walk(proxyRoot).filter((f) => f.endsWith('.ts'));
     expect(tsFiles.length).toBeGreaterThan(0);
 
-    let routeFiles = 0;
+    let nonDeptRouteFiles = 0;
+    let deptWriteRouteFiles = 0;
     for (const f of tsFiles) {
       const src = readFileSync(f, 'utf8');
       // `_proxy.ts` itself is the shared error mapper — no route
       // handler exports.
       if (path.basename(f) === '_proxy.ts') continue;
-      // Each route handler MUST export GET only — no POST/PUT/
-      // PATCH/DELETE handlers (§ 2.4.8 read-only proxy).
-      expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
-      expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
-      expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
-      expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
-      expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
-      routeFiles += 1;
+      const norm = f.replace(/\\/g, '/');
+      const isDepartment = /\/masterdata\/departments(\/|$)/.test(norm);
+      if (isDepartment) {
+        // Department routes (write PILOT): may export POST (the
+        // same-origin write proxy). They never export PUT / DELETE.
+        // PATCH is never a same-origin handler (the typed client has
+        // only get/post — the upstream PATCH is set inside the api fn).
+        expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
+        if (/export\s+async\s+function\s+POST\b/.test(src)) {
+          deptWriteRouteFiles += 1;
+        }
+      } else {
+        // The four other masters MUST export GET only — no mutation
+        // route at all (§ 2.4.8 read-only for the non-department
+        // masters; pinned so the pilot does not leak write).
+        expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
+        nonDeptRouteFiles += 1;
+      }
     }
-    // 5 list + 5 detail = 10 route files.
-    expect(routeFiles).toBe(10);
+    // employees / job-grades / cost-centers / business-partners ×
+    // {list, detail} = 8 GET-only route files.
+    expect(nonDeptRouteFiles).toBe(8);
+    // department: create (departments/route) + update
+    // (departments/[id]/route) + retire + move-parent = 4 POST routes.
+    expect(deptWriteRouteFiles).toBe(4);
+  });
+});
+
+// ===========================================================================
+// 2b. Department WRITE PILOT (TASK-PC-FE-046 / § 2.4.8 *Department write
+//     binding (PILOT)*) — method/headers/body wiring + credential reuse.
+// ===========================================================================
+
+describe('erp-api — department WRITE PILOT (§ 2.4.8 Department write binding)', () => {
+  const MUTATION_BODY = {
+    data: {
+      id: 'dept-1',
+      code: 'DEPT-001',
+      name: 'Sales',
+      parentId: null,
+      status: 'ACTIVE',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+    meta: { timestamp: 'x' },
+  };
+
+  beforeEach(() => {
+    cookieJar.clear();
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+  });
+
+  function lastCall(fetchMock: ReturnType<typeof vi.fn>) {
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    return {
+      url: String(url),
+      init: init as RequestInit,
+      headers: (init as RequestInit).headers as Record<string, string>,
+      body: JSON.parse(String((init as RequestInit).body ?? '{}')),
+    };
+  }
+
+  it('create → POST + Idempotency-Key + body; GAP OIDC token, NEVER operator token / X-Operator-Reason / X-Tenant-Id', async () => {
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
+    const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createDepartment(
+      { code: 'DEPT-001', name: 'Sales', parentId: null },
+      'idem-create-1',
+    );
+    expect(DepartmentSchema.parse(result).code).toBe('DEPT-001');
+
+    const { url, init, headers, body } = lastCall(fetchMock);
+    expect(init.method).toBe('POST');
+    expect(url).toBe('http://erp.local/api/erp/masterdata/departments');
+    expect(headers['Idempotency-Key']).toBe('idem-create-1');
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(headers.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(headers['X-Operator-Reason']).toBeUndefined();
+    expect(headers['X-Tenant-Id']).toBeUndefined();
+    expect(body).toMatchObject({ code: 'DEPT-001', name: 'Sales' });
+    // Credential reuse: the domain-facing GAP token, NEVER the
+    // operator token (the #569 invariant is GAP-domain-scoped).
+    expect(getDomainFacingSpy).toHaveBeenCalled();
+    expect(getOperatorSpy).not.toHaveBeenCalled();
+  });
+
+  it('update → upstream PATCH + Idempotency-Key; no reason header (no producer slot)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await updateDepartment('dept-1', { name: 'Sales (renamed)' }, 'idem-upd-1');
+
+    const { url, init, headers, body } = lastCall(fetchMock);
+    expect(init.method).toBe('PATCH');
+    expect(url).toBe('http://erp.local/api/erp/masterdata/departments/dept-1');
+    expect(headers['Idempotency-Key']).toBe('idem-upd-1');
+    expect(headers['X-Operator-Reason']).toBeUndefined();
+    expect(body).toMatchObject({ name: 'Sales (renamed)' });
+  });
+
+  it('retire → POST .../retire with reason in BODY (producer slot), Idempotency-Key, no reason header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await retireDepartment('dept-1', { reason: '조직 개편' }, 'idem-ret-1');
+
+    const { url, init, headers, body } = lastCall(fetchMock);
+    expect(init.method).toBe('POST');
+    expect(url).toBe(
+      'http://erp.local/api/erp/masterdata/departments/dept-1/retire',
+    );
+    expect(headers['Idempotency-Key']).toBe('idem-ret-1');
+    // reason lives in the BODY (producer slot), never the header.
+    expect(body.reason).toBe('조직 개편');
+    expect(headers['X-Operator-Reason']).toBeUndefined();
+  });
+
+  it('move-parent → POST .../move-parent with newParentId/effectiveFrom/reason in body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await moveDepartmentParent(
+      'dept-1',
+      { newParentId: 'dept-9', effectiveFrom: '2026-07-01', reason: '재배치' },
+      'idem-move-1',
+    );
+
+    const { url, init, headers, body } = lastCall(fetchMock);
+    expect(init.method).toBe('POST');
+    expect(url).toBe(
+      'http://erp.local/api/erp/masterdata/departments/dept-1/move-parent',
+    );
+    expect(headers['Idempotency-Key']).toBe('idem-move-1');
+    expect(body).toMatchObject({
+      newParentId: 'dept-9',
+      effectiveFrom: '2026-07-01',
+      reason: '재배치',
+    });
+  });
+
+  it('surfaces the mutation-only producer errors (409 duplicate / 422 effective-period / 403 permission) as ApiError', async () => {
+    for (const [code, status] of [
+      ['MASTERDATA_DUPLICATE_KEY', 409],
+      ['MASTERDATA_EFFECTIVE_PERIOD_INVALID', 422],
+      ['PERMISSION_DENIED', 403],
+    ] as const) {
+      const fetchMock = vi.fn().mockResolvedValue(erpError(code, status));
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(
+        createDepartment({ code: 'D', name: 'N' }, 'k'),
+      ).rejects.toBeInstanceOf(ApiError);
+    }
   });
 });
 

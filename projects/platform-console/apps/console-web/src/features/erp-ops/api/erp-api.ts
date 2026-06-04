@@ -25,6 +25,10 @@ import {
   type BusinessPartner,
   type ErpListQueryParams,
   type ErpDetailQueryParams,
+  type CreateDepartmentInput,
+  type UpdateDepartmentInput,
+  type RetireDepartmentInput,
+  type MoveDepartmentParentInput,
   ERP_DEFAULT_PAGE_SIZE,
   ERP_MAX_PAGE_SIZE,
 } from './types';
@@ -71,16 +75,22 @@ import {
  * `X-Tenant-Id` to erp; the tenant rides inside the GAP OIDC token.
  * erp rejects cross-tenant producer-side (`403 TENANT_FORBIDDEN`).
  *
- * READ-ONLY (§ 2.4.8, NORMATIVE): every call is a pure GET. There
- * is NO mutation anywhere — NO `Idempotency-Key`, NO `X-Operator-
- * Reason`, NO body, NO erp write call (the 16 mutation endpoints —
- * 5×`POST` create / 5×`PATCH` / 5×`POST /retire` / 1×`POST .../move-
- * parent` — are operator-domain mutation, NOT operator-parity), NO
- * v2 `approval-service` / `read-model-service` / future
- * `admin-service` surface. Carrying the FE-007 alert-ack OR the GAP
- * § 2.4.1 mutation scaffolding here is a defect (tests assert their
- * absence). This client exposes only 10 read functions: for each of
- * 5 masters, a `list*(params)` and a `get*ById(id, params?)`.
+ * READ + DEPARTMENT WRITE PILOT (§ 2.4.8): the 10 read functions
+ * (for each of 5 masters a `list*(params)` + a `get*ById(id, params?)`)
+ * are pure `GET` — NO `Idempotency-Key`, NO `X-Operator-Reason`, NO
+ * body (a test pins their absence on the read path). The **department**
+ * master additionally exposes a WRITE PILOT (TASK-PC-FE-046):
+ * `createDepartment` / `updateDepartment` / `retireDepartment` /
+ * `moveDepartmentParent` (consuming the UNCHANGED producer
+ * `masterdata-api.md` § Department mutations). The OTHER FOUR masters
+ * remain read-only — NO write function exists for them (a test pins
+ * that absence). erp writes carry an `Idempotency-Key` + a JSON body;
+ * `reason` rides in the body ONLY where the producer has a slot
+ * (retire / move-parent) — the console NEVER sends `X-Operator-Reason`
+ * (erp does not read it). The v2 `approval-service` /
+ * `read-model-service` / future `admin-service` surfaces stay out of
+ * scope. Carrying the FE-007 alert-ack OR the GAP § 2.4.1 mutation
+ * scaffolding (X-Operator-Reason) here is a defect (tests assert it).
  *
  * E3 ASOF THREAD-THROUGH (§ 2.4.8, CORE INVARIANT): the `asOf`
  * query parameter MUST thread through every list / detail call to
@@ -141,6 +151,18 @@ interface CallOptions {
   /** Sanitised path shape for logging (no record id / no PII —
    *  e.g. `/api/erp/masterdata/departments/{id}`). */
   logPath: string;
+  /** HTTP method. Defaults to `GET` (the read surface). The
+   *  department write PILOT (TASK-PC-FE-046, § 2.4.8) supplies
+   *  `POST` / `PATCH`. Reads NEVER set this (the "pure GET" test
+   *  pins their method = GET, no body, no mutation headers). */
+  method?: 'GET' | 'POST' | 'PATCH';
+  /** JSON request body for a mutation (department write PILOT only).
+   *  Undefined on reads — a test asserts reads carry no body. */
+  body?: unknown;
+  /** `Idempotency-Key` header value — REQUIRED on every department
+   *  mutation (E1 / transactional T1), generated console-side per
+   *  attempt. Undefined on reads (asserted absent on the read path). */
+  idempotencyKey?: string;
 }
 
 /**
@@ -229,17 +251,31 @@ async function callErp<T>(
     'X-Request-Id': requestId,
     // NOTE: deliberately NO `X-Tenant-Id` — erp resolves tenant
     // from the JWT `tenant_id` claim (§ 2.4.8 reuse of the § 2.4.5
-    // divergence).
-    // NOTE: read-only — NO `Idempotency-Key`, NO `X-Operator-Reason`,
-    // NO `Content-Type` (no body).
+    // divergence) — UNCHANGED for the department write PILOT.
+    // NOTE: NEVER `X-Operator-Reason` — erp has no producer slot for
+    // it (that is a GAP/admin-service concept). The department write
+    // `reason` rides in the BODY where the producer has a slot
+    // (retire / move-parent), § 2.4.8.
   };
+  const method = opts.method ?? 'GET';
+  // Department write PILOT (§ 2.4.8): mutations carry an
+  // `Idempotency-Key` (E1 / transactional T1) + a JSON body. Reads
+  // set NEITHER — the "every read is a pure GET" test pins their
+  // absence on the read path.
+  if (opts.idempotencyKey !== undefined) {
+    headers['Idempotency-Key'] = opts.idempotencyKey;
+  }
+  if (opts.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.ERP_TIMEOUT_MS);
   try {
     const res = await fetch(`${env.ERP_BASE_URL}${opts.path}`, {
-      method: 'GET',
+      method,
       headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       cache: 'no-store',
       signal: controller.signal,
     });
@@ -429,6 +465,110 @@ export async function getDepartmentById(
         meta: (json as { meta?: unknown })?.meta ?? {},
       }).data;
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 1b. departments — WRITE PILOT (TASK-PC-FE-046 / § 2.4.8 *Department
+//   write binding (PILOT)*). The FIRST erp console write. Consumes the
+//   UNCHANGED producer `masterdata-api.md` § Department mutations:
+//     POST  /api/erp/masterdata/departments              (create)
+//     PATCH /api/erp/masterdata/departments/{id}          (update)
+//     POST  /api/erp/masterdata/departments/{id}/retire   (retire)
+//     POST  /api/erp/masterdata/departments/{id}/move-parent (move-parent)
+//   Each carries an `Idempotency-Key` (generated console-side per
+//   attempt). `reason` rides in the BODY only where the producer has a
+//   slot (retire required / move-parent optional) — NEVER an
+//   `X-Operator-Reason` header (erp does not read it). The other four
+//   masters have NO write functions (a test pins that absence).
+// ---------------------------------------------------------------------------
+
+/** Parses a department mutation response envelope (`{ data, meta }`)
+ *  into the `Department` — same tolerant shape as `getDepartmentById`. */
+function parseDepartmentData(json: unknown): Department {
+  const env = (json ?? {}) as { data?: unknown };
+  return DepartmentDetailResponseSchema.parse({
+    data: env.data,
+    meta: (json as { meta?: unknown })?.meta ?? {},
+  }).data;
+}
+
+export async function createDepartment(
+  input: CreateDepartmentInput,
+  idempotencyKey: string,
+): Promise<Department> {
+  return callErp(
+    {
+      path: '/api/erp/masterdata/departments',
+      logPath: '/api/erp/masterdata/departments',
+      method: 'POST',
+      idempotencyKey,
+      body: {
+        code: input.code,
+        name: input.name,
+        ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        ...(input.effectiveFrom ? { effectiveFrom: input.effectiveFrom } : {}),
+      },
+    },
+    parseDepartmentData,
+  );
+}
+
+export async function updateDepartment(
+  id: string,
+  input: UpdateDepartmentInput,
+  idempotencyKey: string,
+): Promise<Department> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/departments/${encodeURIComponent(id)}`,
+      logPath: '/api/erp/masterdata/departments/{id}',
+      method: 'PATCH',
+      idempotencyKey,
+      body: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.effectiveFrom ? { effectiveFrom: input.effectiveFrom } : {}),
+      },
+    },
+    parseDepartmentData,
+  );
+}
+
+export async function retireDepartment(
+  id: string,
+  input: RetireDepartmentInput,
+  idempotencyKey: string,
+): Promise<Department> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/departments/${encodeURIComponent(id)}/retire`,
+      logPath: '/api/erp/masterdata/departments/{id}/retire',
+      method: 'POST',
+      idempotencyKey,
+      body: { reason: input.reason },
+    },
+    parseDepartmentData,
+  );
+}
+
+export async function moveDepartmentParent(
+  id: string,
+  input: MoveDepartmentParentInput,
+  idempotencyKey: string,
+): Promise<Department> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/departments/${encodeURIComponent(id)}/move-parent`,
+      logPath: '/api/erp/masterdata/departments/{id}/move-parent',
+      method: 'POST',
+      idempotencyKey,
+      body: {
+        newParentId: input.newParentId,
+        effectiveFrom: input.effectiveFrom,
+        ...(input.reason ? { reason: input.reason } : {}),
+      },
+    },
+    parseDepartmentData,
   );
 }
 

@@ -4,7 +4,10 @@
  * Allowed Dependencies). erp operations section, TASK-PC-FE-010 —
  * the FOURTH NON-GAP federated domain and the FIRST
  * internal-system-primary confirmation (ADR-MONO-013 Phase 6).
- * STRICTLY READ-ONLY.
+ * READ + DEPARTMENT WRITE PILOT (TASK-PC-FE-046 — § 2.4.8 *Department
+ * write binding (PILOT)*): the department master is writable
+ * (create / update / retire / move-parent); the other four masters
+ * stay read-only.
  *
  * Auth (console-integration-contract § 2.4.8 — REUSE of the § 2.4.5
  * per-domain credential rule, NOT re-derived): this feature's
@@ -34,6 +37,12 @@ export { EffectivePeriodBadge } from './components/EffectivePeriodBadge';
 export { RetiredReferenceBadge } from './components/RetiredReferenceBadge';
 export { DepartmentList } from './components/DepartmentList';
 export { DepartmentDetail } from './components/DepartmentDetail';
+// TASK-PC-FE-046 — department write PILOT.
+export { DepartmentWriteDialog } from './components/DepartmentWriteDialog';
+export type {
+  DeptWriteMode,
+  DeptWriteRequest,
+} from './components/DepartmentWriteDialog';
 export { EmployeeList } from './components/EmployeeList';
 export { EmployeeDetail } from './components/EmployeeDetail';
 export { JobGradeList } from './components/JobGradeList';
@@ -59,6 +68,14 @@ export {
   businessPartnerDetailKey,
 } from './api/erp-state';
 export { useAsOf } from './hooks/use-erp-ops';
+// TASK-PC-FE-046 — department write PILOT mutation hooks (the ONLY erp
+// mutation hooks; the other four masters have none).
+export {
+  useCreateDepartment,
+  useUpdateDepartment,
+  useRetireDepartment,
+  useMoveDepartmentParent,
+} from './hooks/use-erp-ops';
 export type {
   Department,
   DepartmentListResponse,
@@ -80,6 +97,10 @@ export type {
   ErpMeta,
   ErpListQueryParams,
   ErpDetailQueryParams,
+  CreateDepartmentInput,
+  UpdateDepartmentInput,
+  RetireDepartmentInput,
+  MoveDepartmentParentInput,
 } from './api/types';
 export {
   isRetired,
