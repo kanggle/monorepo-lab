@@ -8,7 +8,7 @@ TASK-PC-FE-046
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -54,13 +54,13 @@ frontend-engineer (console-web only — project-internal; spec = console-integra
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (spec-first)** §2.4.8 *Department write binding (PILOT)* + ADR-MONO-016 §D3.1 amendment 가 코드보다 먼저 랜딩(같은 PR 내 선행 커밋). read-only bullet 은 4개 마스터로 rescope.
-- [ ] **AC-2 (create/update/retire/move-parent)** 콘솔 부서 화면에서 4개 작업 모두 동작 — 각각 올바른 same-origin POST → 올바른 upstream method(create POST / update PATCH / retire POST / move-parent POST) + `Idempotency-Key` 동반.
-- [ ] **AC-3 (credential 불변)** 4개 write 전부 GAP OIDC 도메인 토큰(`getDomainFacingToken`) 사용, `getOperatorToken` 절대 미사용, `X-Tenant-Id` 미전송 (read 와 동일 — test 단언).
-- [ ] **AC-4 (reason 정직성)** retire 는 reason 필수(≤256, body), move-parent reason 옵션(≤256, body), create/update 는 reason 필드 없음 + `X-Operator-Reason` 헤더 미생성(producer slot 없음).
-- [ ] **AC-5 (나머지 4개 read-only 회귀-게이트)** employees/job-grades/cost-centers/business-partners 는 write affordance/route/fn 부재 — test 로 단언(기존 read-only 단언을 4개 마스터로 rescope, 부서만 예외).
-- [ ] **AC-6 (에러 정직)** 409(DUPLICATE_KEY/REFERENCE_VIOLATION/PARENT_CYCLE/IDEMPOTENCY_KEY_CONFLICT/CONCURRENT_MODIFICATION)/422(EFFECTIVE_PERIOD_INVALID)/400(IDEMPOTENCY_KEY_REQUIRED)/403(PERMISSION_DENIED) 가 inline-actionable 로 표면화(크래시 없음). 403 은 pre-judge 없이 producer 권위로.
-- [ ] **AC-7 (CI)** console `pnpm test` GREEN(rescope+신규), `tsc`/`lint`/`build` GREEN.
+- [x] **AC-1 (spec-first)** §2.4.8 *Department write binding (PILOT)* + ADR-MONO-016 §D3.1 amendment 가 코드보다 먼저 랜딩(같은 PR 내 선행 커밋). read-only bullet 은 4개 마스터로 rescope.
+- [x] **AC-2 (create/update/retire/move-parent)** 콘솔 부서 화면에서 4개 작업 모두 동작 — 각각 올바른 same-origin POST → 올바른 upstream method(create POST / update PATCH / retire POST / move-parent POST) + `Idempotency-Key` 동반.
+- [x] **AC-3 (credential 불변)** 4개 write 전부 GAP OIDC 도메인 토큰(`getDomainFacingToken`) 사용, `getOperatorToken` 절대 미사용, `X-Tenant-Id` 미전송 (read 와 동일 — test 단언).
+- [x] **AC-4 (reason 정직성)** retire 는 reason 필수(≤256, body), move-parent reason 옵션(≤256, body), create/update 는 reason 필드 없음 + `X-Operator-Reason` 헤더 미생성(producer slot 없음).
+- [x] **AC-5 (나머지 4개 read-only 회귀-게이트)** employees/job-grades/cost-centers/business-partners 는 write affordance/route/fn 부재 — test 로 단언(기존 read-only 단언을 4개 마스터로 rescope, 부서만 예외).
+- [x] **AC-6 (에러 정직)** 409(DUPLICATE_KEY/REFERENCE_VIOLATION/PARENT_CYCLE/IDEMPOTENCY_KEY_CONFLICT/CONCURRENT_MODIFICATION)/422(EFFECTIVE_PERIOD_INVALID)/400(IDEMPOTENCY_KEY_REQUIRED)/403(PERMISSION_DENIED) 가 inline-actionable 로 표면화(크래시 없음). 403 은 pre-judge 없이 producer 권위로.
+- [x] **AC-7 (CI)** console `pnpm test` GREEN(rescope+신규), `tsc`/`lint`/`build` GREEN.
 
 # Related Specs
 
@@ -96,11 +96,11 @@ frontend-engineer (console-web only — project-internal; spec = console-integra
 
 # Definition of Done
 
-- [ ] spec(§2.4.8 + ADR-016 §D3.1) 선행 커밋 + 코드 + 테스트.
-- [ ] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
-- [ ] Local 재빌드+재기동; 부서 4개 작업 라이브 동작 + DB 영속 확인 + 나머지 4개 마스터 write affordance 부재 확인.
-- [ ] Task md + `projects/platform-console/tasks/INDEX.md` 갱신.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] spec(§2.4.8 + ADR-016 §D3.1) 선행 커밋 + 코드 + 테스트.
+- [x] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
+- [x] Local 재빌드+재기동; 부서 4개 작업 라이브 동작 + DB 영속 확인 + 나머지 4개 마스터 write affordance 부재 확인.
+- [x] Task md + `projects/platform-console/tasks/INDEX.md` 갱신.
+- [x] Reviewed + merged (impl PR #1079 squash `64d5f403`, 3-dim verified: state=MERGED + tip=`64d5f403` + pre-merge failing required=0). 라이브 producer 스모크 CREATE 201/UPDATE 200/RETIRE 200 RETIRED.
 
 ---
 
