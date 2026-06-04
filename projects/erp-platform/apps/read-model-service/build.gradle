@@ -1,0 +1,123 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.example.erp.readmodel'
+
+// -------------------------------------------------------------------------
+// erp-platform read-model-service (TASK-ERP-BE-007).
+//
+// First increment of the erp integrated read model: consumes
+// masterdata-service's 4 master-change topics (department / employee /
+// jobgrade / costcenter .changed.v1), maintains denormalized MySQL projection
+// tables, and serves a read-only employee org-view REST API. Hexagonal,
+// rest-api + event-consumer (CQRS read-model — same documented dual-type
+// exception as scm inventory-visibility-service). No outbox, no event
+// publication (E5 terminal projection).
+//
+// Source sets:
+// * `test`             — unit + slice tests (default).
+// * `integrationTest`  — Testcontainers-backed integration tests
+//                         (MySQL + Kafka + MockWebServer JWKS). Tagged
+//                         @Tag("integration"); excluded from `test` so
+//                         `./gradlew check` stays Docker-free.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // Kafka — inbound consumer (4 masterdata topics), manual ACK + retry + DLT
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Database — MySQL (mirrors masterdata-service's engine choice)
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Structured logging (prod profile)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // Shared libs (java-messaging for the canonical envelope + dedupe contract;
+    // its outbox auto-config is excluded — read-model is no-outbox, E5 terminal).
+    implementation project(':libs:java-common')
+    implementation project(':libs:java-web')
+    implementation project(':libs:java-messaging')
+    implementation project(':libs:java-observability')
+    implementation project(':libs:java-security')
+
+    // Test (unit + slice)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.assertj:assertj-core'
+
+    // JWT signing helper used by validator unit tests and the integration suite.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+
+    // Shared Testcontainers base utilities (DockerAvailableCondition etc.)
+    testImplementation testFixtures(project(':libs:java-test-support'))
+
+    // Testcontainers (integration tests, @Tag("integration"))
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:mysql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // MockWebServer for the JWKS stand-in.
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+    }
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'read-model-service.jar'
+}
+
+// Default `test` task: unit + slice only. Excludes Docker-dependent tests so
+// `./gradlew check` stays fast and Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY @Tag("integration") tests.
+// Not wired into `check` so the fast feedback loop stays Docker-free.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+}

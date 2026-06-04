@@ -104,6 +104,9 @@ services:
       MYSQL_USER: ${MYSQL_USER:-erp}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
       REDIS_HOST: redis
+      # Kafka broker for the transactional outbox relay (TASK-ERP-BE-007 added
+      # the broker below; before this the relay had no broker locally).
+      KAFKA_BOOTSTRAP: kafka:9092
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
     depends_on:
@@ -111,12 +114,57 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
       - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
       - "traefik.http.routers.erp-platform.entrypoints=web"
       - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
+    networks:
+      - erp-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # read-model-service — TASK-ERP-BE-007 active. Integrated read model: consumes
+  # masterdata-service's 4 master-change topics and serves a read-only employee
+  # org-view REST API (rest-api + event-consumer, CQRS read-model, E5 terminal).
+  # Own MySQL database erp_read_model_db (created by the mysql initdb script).
+  # Not gateway-routed in v1 (no Traefik label) — reached internally / via
+  # console-bff once wired; the read API is internal-only (E7).
+  # ---------------------------------------------------------------------------
+  read-model-service:
+    image: erp-platform/read-model-service:local
+    container_name: erp-platform-read-model
+    build:
+      context: ./apps/read-model-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: erp_read_model_db
+      MYSQL_USER: ${MYSQL_USER:-erp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
+      KAFKA_BOOTSTRAP: kafka:9092
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - erp-platform-net
       - traefik-net
@@ -149,6 +197,9 @@ services:
       - "--collation-server=utf8mb4_unicode_ci"
     volumes:
       - mysql-data:/var/lib/mysql
+      # Create read-model-service's own database (erp_read_model_db) on first
+      # init in addition to MYSQL_DATABASE=erp_db (TASK-ERP-BE-007 CQRS store).
+      - ./infra/mysql-initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
       interval: 10s
@@ -180,9 +231,46 @@ services:
     networks:
       - erp-platform-net
 
+  # ---------------------------------------------------------------------------
+  # Kafka 3.7 — single-broker KRaft mode. Master-change event bus: outbox relay
+  # target for masterdata-service's erp.masterdata.*.changed.v1 topics, consumed
+  # by read-model-service (TASK-ERP-BE-007 introduced the broker — the erp
+  # compose previously had none, so the relay never drained locally). expose:
+  # only — no host port (Local Network Convention). Mirrors scm-platform's block.
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: erp-platform-kafka
+    restart: unless-stopped
+    expose:
+      - "9092"
+    environment:
+      # KRaft mode (no Zookeeper)
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server kafka:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    networks:
+      - erp-platform-net
+
 volumes:
   mysql-data:
   redis-data:
+  kafka-data:
 
 networks:
   erp-platform-net:
