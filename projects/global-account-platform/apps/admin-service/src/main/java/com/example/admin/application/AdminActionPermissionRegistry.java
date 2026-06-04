@@ -59,6 +59,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.TENANT_UPDATE, "TENANT");
         // TASK-BE-306 — self-serve operator profile mutation
         map.put(ActionCode.OPERATOR_PROFILE_UPDATE, "OPERATOR");
+        // TASK-BE-339 — per-assignment org_scope set/clear
+        map.put(ActionCode.OPERATOR_ORG_SCOPE_UPDATE, "OPERATOR");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -109,7 +111,9 @@ public class AdminActionPermissionRegistry {
             case GDPR_DELETE -> Permission.ACCOUNT_LOCK;
             case DATA_EXPORT -> Permission.AUDIT_READ;
             // TASK-BE-083 — all operator management mutations gate on the same permission key.
-            case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE -> Permission.OPERATOR_MANAGE;
+            // TASK-BE-339 — org_scope set/clear is an operator management mutation too.
+            case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE,
+                 OPERATOR_ORG_SCOPE_UPDATE -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;

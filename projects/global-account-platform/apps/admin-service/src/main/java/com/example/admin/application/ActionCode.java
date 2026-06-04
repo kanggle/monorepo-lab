@@ -35,6 +35,11 @@ public enum ActionCode {
     // row, not the audit detail column — R4/A3 invariant: audit subject is *that the
     // value changed*, not the value itself).
     OPERATOR_PROFILE_UPDATE,
+    // TASK-BE-339 (ADR-MONO-020 D3 amendment follow-up): operator per-assignment
+    // org_scope set/clear (PUT /api/admin/operators/{operatorId}/assignments/{tenantId}/org-scope).
+    // target_type=OPERATOR, target_id=external operator_id (UUID v7),
+    // target_tenant_id=path tenantId (the active tenant), permission_used=operator.manage.
+    OPERATOR_ORG_SCOPE_UPDATE,
     // TASK-BE-250: tenant lifecycle management (SUPER_ADMIN only).
     // target_type=TENANT, target_id=tenantId, tenant_id='*' (platform scope),
     // target_tenant_id=affected tenantId, permission_used=tenant.manage.

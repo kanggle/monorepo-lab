@@ -166,6 +166,11 @@ public class RequiresPermissionAspect {
             if ("createTenant".equals(name)) return ActionCode.TENANT_CREATE;
             if ("updateTenant".equals(name)) return ActionCode.TENANT_UPDATE;
         }
+        // TASK-BE-339 — operator org_scope management controller.
+        if ("OperatorOrgScopeController".equals(simple)) {
+            if ("setOrgScope".equals(name)) return ActionCode.OPERATOR_ORG_SCOPE_UPDATE;
+            // listAssignments is a read; fall through to null
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;

@@ -30,6 +30,8 @@ import com.example.admin.application.exception.OperatorUnauthorizedException;
 import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
+import com.example.admin.application.exception.TenantScopeMismatchException;
+import com.example.admin.application.exception.AssignmentNotFoundException;
 import com.example.admin.presentation.dto.EnrollmentRequiredResponse;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -64,6 +66,20 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTenantScopeDenied(TenantScopeDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("TENANT_SCOPE_DENIED", e.getMessage()));
+    }
+
+    // TASK-BE-339 — org_scope management: path tenantId != active X-Tenant-Id.
+    @ExceptionHandler(TenantScopeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTenantScopeMismatch(TenantScopeMismatchException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("TENANT_SCOPE_MISMATCH", e.getMessage()));
+    }
+
+    // TASK-BE-339 — org_scope management: no assignment row for (operator, tenant).
+    @ExceptionHandler(AssignmentNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAssignmentNotFound(AssignmentNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("ASSIGNMENT_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
