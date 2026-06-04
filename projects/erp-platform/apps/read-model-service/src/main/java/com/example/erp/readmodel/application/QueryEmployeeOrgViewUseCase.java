@@ -54,19 +54,59 @@ public class QueryEmployeeOrgViewUseCase {
     /** Single employee org-view; 404 {@code MASTERDATA_NOT_FOUND} on a projection miss. */
     @Transactional(readOnly = true)
     public EmployeeOrgView getOne(String employeeId) {
+        return getOne(employeeId, null);
+    }
+
+    /**
+     * Single employee org-view with an optional {@code org_scope} read filter
+     * (TASK-ERP-BE-008). When {@code orgScopeRootIds} is non-null (a bounded
+     * operator scope), an employee whose resolved department is NOT within the
+     * union of those subtree-roots is reported as a <b>404
+     * {@code MASTERDATA_NOT_FOUND}</b> — the data-scope boundary does not leak
+     * the employee's existence (architecture.md § Multi-tenancy; symmetric with
+     * masterdata-service's write deny). {@code null} = no narrowing (net-zero).
+     *
+     * <p>Conservative exclusion (E5): an employee whose department is not (yet)
+     * projected cannot be proved in-scope, so it is treated as out-of-scope
+     * (404) under a bounded scope — never fabricated as visible.
+     */
+    @Transactional(readOnly = true)
+    public EmployeeOrgView getOne(String employeeId, List<String> orgScopeRootIds) {
         EmployeeProjection employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ReadModelNotFoundException(employeeId));
+        if (orgScopeRootIds != null
+                && !isWithinOrgScope(employee.departmentId(), orgScopeRootIds)) {
+            // Out of the operator's org_scope subtree → 404 (do not leak existence).
+            throw new ReadModelNotFoundException(employeeId);
+        }
         return assemble(employee);
     }
 
     /** Paginated employee org-view list (status + optional department-subtree filter). */
     @Transactional(readOnly = true)
     public EmployeeOrgViewPage list(MasterStatus status, String departmentId, int page, int size) {
+        return list(status, departmentId, null, page, size);
+    }
+
+    /**
+     * Paginated employee org-view list with the {@code org_scope} read filter
+     * (TASK-ERP-BE-008). The optional explicit {@code departmentId} subtree
+     * filter is composed (intersected) with the operator's {@code org_scope}
+     * subtree-root expansion: the resulting page is the employees whose
+     * department is in BOTH (when both are present). {@code orgScopeRootIds ==
+     * null} = no org_scope narrowing (net-zero, BE-007 behavior); a non-null but
+     * empty/zero-scope expands to an empty id set → an empty page (fail-closed).
+     */
+    @Transactional(readOnly = true)
+    public EmployeeOrgViewPage list(MasterStatus status, String departmentId,
+                                    List<String> orgScopeRootIds, int page, int size) {
         MasterStatus effectiveStatus = status == null ? MasterStatus.ACTIVE : status;
-        List<String> subtreeIds = null;
+        List<String> explicitSubtree = null;
         if (departmentId != null && !departmentId.isBlank()) {
-            subtreeIds = departmentRepository.findSubtreeIds(departmentId, departmentPathMaxDepth);
+            explicitSubtree = departmentRepository.findSubtreeIds(departmentId, departmentPathMaxDepth);
         }
+        List<String> orgScopeSubtree = expandOrgScope(orgScopeRootIds);
+        List<String> subtreeIds = intersectFilters(explicitSubtree, orgScopeSubtree);
         List<EmployeeProjection> employees =
                 employeeRepository.findPage(effectiveStatus, subtreeIds, page, size);
         long total = employeeRepository.count(effectiveStatus, subtreeIds);
@@ -188,5 +228,63 @@ public class QueryEmployeeOrgViewUseCase {
             depth++;
         }
         return new ArrayList<>(reversed);
+    }
+
+    // ------------------------------------------------------------------------
+    // org_scope read filter (TASK-ERP-BE-008)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Expands {@code org_scope} subtree-roots → the union of their descendant
+     * department ids over {@code department_proj.parent_id} (mirrors
+     * masterdata-service's write-side subtree containment, but using the
+     * read-model's own projection). {@code null} → {@code null} (no narrowing,
+     * net-zero); a bounded scope with no/empty roots → an empty list (matches
+     * nothing — zero-scope fail-closed). A root not (yet) projected contributes
+     * only itself (best-effort; never fabricates ids it cannot see).
+     */
+    private List<String> expandOrgScope(List<String> orgScopeRootIds) {
+        if (orgScopeRootIds == null) {
+            return null;
+        }
+        Set<String> union = new LinkedHashSet<>();
+        for (String root : orgScopeRootIds) {
+            if (root != null && !root.isBlank()) {
+                union.addAll(departmentRepository.findSubtreeIds(root, departmentPathMaxDepth));
+            }
+        }
+        return new ArrayList<>(union);
+    }
+
+    /**
+     * Intersects the explicit {@code ?departmentId=} subtree filter with the
+     * {@code org_scope} subtree filter. Either may be {@code null} (= not
+     * applied). When both are present the result is their intersection (the
+     * operator sees only the requested subtree AND only within their scope).
+     */
+    private List<String> intersectFilters(List<String> explicit, List<String> orgScope) {
+        if (explicit == null) {
+            return orgScope;
+        }
+        if (orgScope == null) {
+            return explicit;
+        }
+        Set<String> intersection = new LinkedHashSet<>(explicit);
+        intersection.retainAll(new HashSet<>(orgScope));
+        return new ArrayList<>(intersection);
+    }
+
+    /**
+     * {@code true} iff {@code departmentId} is within the union of the
+     * {@code org_scope} subtree-roots' subtrees. A null/unprojected department
+     * is NOT within a bounded scope (conservative exclusion, E5 — cannot prove
+     * in-scope).
+     */
+    private boolean isWithinOrgScope(String departmentId, List<String> orgScopeRootIds) {
+        if (departmentId == null) {
+            return false;
+        }
+        List<String> expanded = expandOrgScope(orgScopeRootIds);
+        return expanded != null && expanded.contains(departmentId);
     }
 }

@@ -6,8 +6,10 @@ import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
+import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAccessDeniedException;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -22,7 +24,9 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,6 +51,13 @@ class EmployeeOrgViewControllerSliceTest {
     @MockitoBean
     ReadAuthorizationGate readGate;
 
+    @BeforeEach
+    void platformScopeByDefault() {
+        // Default = platform scope (no org_scope narrowing); the controller maps
+        // this to a null orgScopeRootIds passed to the use case (net-zero).
+        lenient().when(readGate.orgScope(any())).thenReturn(OrgScope.platform());
+    }
+
     private EmployeeOrgView resolvedView() {
         return new EmployeeOrgView.Builder("emp-1", "E-1001", "홍길동", MasterStatus.ACTIVE,
                 LocalDate.parse("2026-01-01"), null)
@@ -60,7 +71,7 @@ class EmployeeOrgViewControllerSliceTest {
 
     @Test
     void getOneReturnsEnvelopeWithWarningAndResolvedRefs() throws Exception {
-        when(useCase.getOne("emp-1")).thenReturn(resolvedView());
+        when(useCase.getOne("emp-1", null)).thenReturn(resolvedView());
 
         mockMvc.perform(get("/api/erp/read-model/employees/emp-1"))
                 .andExpect(status().isOk())
@@ -81,7 +92,7 @@ class EmployeeOrgViewControllerSliceTest {
                 .costCenter(new EmployeeOrgView.CostCenterRef("cc-1", "CC-100", "cc"), false)
                 .jobGrade(null, true)
                 .build();
-        when(useCase.getOne("emp-2")).thenReturn(view);
+        when(useCase.getOne("emp-2", null)).thenReturn(view);
 
         mockMvc.perform(get("/api/erp/read-model/employees/emp-2"))
                 .andExpect(status().isOk())
@@ -93,7 +104,7 @@ class EmployeeOrgViewControllerSliceTest {
 
     @Test
     void getOneProjectionMissReturns404() throws Exception {
-        when(useCase.getOne("ghost")).thenThrow(new ReadModelNotFoundException("ghost"));
+        when(useCase.getOne("ghost", null)).thenThrow(new ReadModelNotFoundException("ghost"));
 
         mockMvc.perform(get("/api/erp/read-model/employees/ghost"))
                 .andExpect(status().isNotFound())
@@ -102,7 +113,7 @@ class EmployeeOrgViewControllerSliceTest {
 
     @Test
     void listReturnsPagedEnvelopeWithWarning() throws Exception {
-        when(useCase.list(eq(MasterStatus.ACTIVE), any(), anyInt(), anyInt()))
+        when(useCase.list(eq(MasterStatus.ACTIVE), any(), isNull(), anyInt(), anyInt()))
                 .thenReturn(new EmployeeOrgViewPage(List.of(resolvedView()), 0, 20, 1L));
 
         mockMvc.perform(get("/api/erp/read-model/employees?page=0&size=20"))
