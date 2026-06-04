@@ -125,14 +125,17 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(state.businessPartners).toBeNull();
     // TASK-PC-FE-049: org-view is also null when not eligible.
     expect(state.employeeOrgViews).toBeNull();
+    // TASK-PC-FE-051: approval legs also absent (no fabricated call).
+    expect(state.approvalRequests).toBeNull();
+    expect(state.approvalInbox).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds all 5 masters + read-model org-view in parallel (GAP OIDC token)', async () => {
+  it('eligible → seeds all 5 masters + read-model org-view + approval legs in parallel (GAP OIDC token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Each call must return a FRESH Response (Response bodies are
-    // one-shot; the 6 parallel legs would otherwise share a
-    // consumed body and the second leg onward would throw).
+    // one-shot; the parallel legs would otherwise share a consumed
+    // body and the second leg onward would throw).
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
       Promise.resolve(jsonResponse(listEnv())),
     );
@@ -148,8 +151,12 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(state.businessPartners).not.toBeNull();
     // TASK-PC-FE-049: read-model org-view seeded.
     expect(state.employeeOrgViews).not.toBeNull();
-    // TASK-PC-FE-049: six legs (5 masterdata + 1 read-model org-view).
-    expect(fetchMock.mock.calls.length).toBe(6);
+    // TASK-PC-FE-051: approval requests + inbox seeded.
+    expect(state.approvalRequests).not.toBeNull();
+    expect(state.approvalInbox).not.toBeNull();
+    // 8 legs: 5 masterdata + 1 read-model org-view (FE-049) + 2 approval
+    // (FE-051 — requests list + inbox).
+    expect(fetchMock.mock.calls.length).toBe(8);
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;
       expect(h.Authorization).toBe('Bearer GAP-ACCESS');
@@ -157,7 +164,7 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     }
   });
 
-  it('eligible + asOf → asOf threads through to EVERY leg verbatim (E3 CORE invariant)', async () => {
+  it('eligible + asOf → asOf threads through to every masterdata/read-model leg verbatim (E3 CORE invariant); approval legs are exempt (no asOf concept)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Fresh Response per call (one-shot body).
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
@@ -166,11 +173,17 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     vi.stubGlobal('fetch', fetchMock);
 
     await getErpSectionState(true, '2025-01-01');
-    // TASK-PC-FE-049: 6 legs (5 masterdata + 1 read-model org-view).
-    expect(fetchMock.mock.calls.length).toBe(6);
+    // 8 legs total (6 asOf-bearing + 2 approval).
+    expect(fetchMock.mock.calls.length).toBe(8);
     for (const [url] of fetchMock.mock.calls) {
       const u = new URL(String(url));
-      expect(u.searchParams.get('asOf')).toBe('2025-01-01');
+      if (u.pathname.includes('/approval/')) {
+        // approval-service has no asOf (single-stage workflow, not an
+        // effective-dated master read) — exempt from the E3 thread-through.
+        expect(u.searchParams.get('asOf')).toBeNull();
+      } else {
+        expect(u.searchParams.get('asOf')).toBe('2025-01-01');
+      }
     }
   });
 
@@ -216,8 +229,9 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     // degrade (any-other-error → degrade), NOT a retry storm.
     expect(state.degraded).toBe(true);
     // Each leg attempted exactly once (no retry from a 429 honour;
-    // Promise.all 6 → 6 fetches max; TASK-PC-FE-049 adds the read-model leg).
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
+    // 6 asOf legs + 2 approval legs = 8 fetches max — TASK-PC-FE-049 adds
+    // the read-model leg, TASK-PC-FE-051 the 2 approval legs).
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(8);
     for (const [, init] of fetchMock.mock.calls) {
       expect((init as RequestInit).method).toBe('GET');
     }

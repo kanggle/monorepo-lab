@@ -123,3 +123,36 @@ export function employeeOrgViewDetailKey(
 ) {
   return [ERP_KEY, 'read-model', 'employees', 'detail', id, asOf ?? null] as const;
 }
+
+// ---------------------------------------------------------------------------
+// approval workflow (TASK-PC-FE-051) — list / detail / inbox keys. The
+// mutations (create + 4 transitions) invalidate the `approval` prefix so
+// list + detail + inbox all refetch on success.
+// ---------------------------------------------------------------------------
+
+export const APPROVAL_PREFIX = 'approval';
+
+export function approvalListKey(
+  status: string | undefined,
+  role: string | undefined,
+  page: number,
+  size: number,
+) {
+  return [
+    ERP_KEY,
+    APPROVAL_PREFIX,
+    'list',
+    status ?? null,
+    role ?? null,
+    page,
+    size,
+  ] as const;
+}
+
+export function approvalDetailKey(id: string) {
+  return [ERP_KEY, APPROVAL_PREFIX, 'detail', id] as const;
+}
+
+export function approvalInboxKey(page: number, size: number) {
+  return [ERP_KEY, APPROVAL_PREFIX, 'inbox', page, size] as const;
+}

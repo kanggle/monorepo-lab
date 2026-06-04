@@ -161,6 +161,9 @@ export default async function ErpPage({
       initialBusinessPartners={state.businessPartners}
       // TASK-PC-FE-049 — read-model employee org-view (read-only).
       initialEmployeeOrgViews={state.employeeOrgViews}
+      // TASK-PC-FE-051 — approval workflow (결재함) first-page snapshots.
+      initialApprovalRequests={state.approvalRequests}
+      initialApprovalInbox={state.approvalInbox}
       // TASK-PC-FE-046/048 — erp masterdata write across all 5 masters.
       // Eligible operators see the write affordances; the producer's E6
       // fail-CLOSED authz is the authority (a 403 is surfaced inline — the
