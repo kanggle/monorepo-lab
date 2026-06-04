@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError } from '@/shared/api/errors';
-import type { Department } from '../api/types';
+import { isRetired, type Department } from '../api/types';
 import {
   useCreateDepartment,
   useUpdateDepartment,
@@ -43,6 +43,14 @@ export interface DeptWriteRequest {
 export interface DepartmentWriteDialogProps {
   request: DeptWriteRequest;
   onClose: () => void;
+  /** TASK-PC-FE-047: existing departments for the parent picker (create's
+   *  상위 부서 + move-parent's 새 상위 부서). The operator selects an existing
+   *  department instead of typing a raw UUID. Passed by `DepartmentList` from
+   *  its loaded rows (current page — sufficient at the pilot's scale; a full-
+   *  list fetch is a future enhancement). Retired departments are excluded as
+   *  parent options (the producer rejects parenting under a retired master);
+   *  move-parent additionally excludes the target itself. */
+  departments?: Department[];
 }
 
 /** Generates an Idempotency-Key (E1 / T1). Mirrors the operators
@@ -87,12 +95,20 @@ function errorMessage(err: unknown): string {
 export function DepartmentWriteDialog({
   request,
   onClose,
+  departments = [],
 }: DepartmentWriteDialogProps) {
   const { mode, target } = request;
   const create = useCreateDepartment();
   const update = useUpdateDepartment();
   const retire = useRetireDepartment();
   const move = useMoveDepartmentParent();
+
+  // TASK-PC-FE-047: active (non-retired) departments offered as parent
+  // options. move-parent additionally excludes the target itself (a
+  // department cannot be its own parent; the producer also rejects deeper
+  // cycles with MASTERDATA_PARENT_CYCLE).
+  const parentOptions = departments.filter((d) => !isRetired(d.effectivePeriod));
+  const moveParentOptions = parentOptions.filter((d) => d.id !== target?.id);
 
   // create
   const [code, setCode] = useState('');
@@ -255,15 +271,22 @@ export function DepartmentWriteDialog({
                   htmlFor="erp-dept-parent-id"
                   className="block text-sm font-medium text-foreground"
                 >
-                  상위 부서 ID (선택 — 비우면 최상위)
+                  상위 부서 (선택 — 비우면 최상위)
                 </label>
-                <input
+                <select
                   id="erp-dept-parent-id"
                   data-testid="erp-dept-parent-id"
                   value={parentId}
                   onChange={(e) => setParentId(e.target.value)}
                   className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                />
+                >
+                  <option value="">— 최상위 (상위 없음) —</option>
+                  {parentOptions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.code} · {d.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
             <div className="mt-4">
@@ -293,15 +316,22 @@ export function DepartmentWriteDialog({
                 htmlFor="erp-dept-new-parent-id"
                 className="block text-sm font-medium text-foreground"
               >
-                새 상위 부서 ID (비우면 최상위로 승격)
+                새 상위 부서 (비우면 최상위로 승격)
               </label>
-              <input
+              <select
                 id="erp-dept-new-parent-id"
                 data-testid="erp-dept-new-parent-id"
                 value={newParentId}
                 onChange={(e) => setNewParentId(e.target.value)}
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
+              >
+                <option value="">— 최상위로 승격 (상위 없음) —</option>
+                {moveParentOptions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.code} · {d.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="mt-4">
               <label
