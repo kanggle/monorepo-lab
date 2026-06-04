@@ -105,6 +105,12 @@ import {
   updateDepartment,
   retireDepartment,
   moveDepartmentParent,
+  // TASK-PC-FE-048 — the other four masters' writes.
+  createEmployee,
+  createJobGrade,
+  createCostCenter,
+  createBusinessPartner,
+  retireEmployee,
 } from '@/features/erp-ops/api/erp-api';
 import {
   ApiError,
@@ -362,14 +368,16 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
       expect(h['X-Operator-Reason']).toBeUndefined();
       expect(h['Content-Type']).toBeUndefined();
     }
-    // The api module exports the 10 read functions PLUS the four
-    // department WRITE PILOT functions (TASK-PC-FE-046 / § 2.4.8) —
-    // and NOTHING else (no v2 approval-service / read-model-service /
-    // future admin-service surface).
+    // The api module exports the 10 read functions PLUS the write
+    // functions for ALL FIVE masters (TASK-PC-FE-046 department pilot →
+    // TASK-PC-FE-048 the other four). Each master has create/update/retire;
+    // department additionally has move-parent (hierarchy-specific). No v2
+    // approval-service / read-model-service / future admin-service surface.
     const mod = await import('@/features/erp-ops/api/erp-api');
     const exported = Object.keys(mod).sort();
     expect(exported).toEqual(
       [
+        // 10 reads
         'getBusinessPartnerById',
         'getCostCenterById',
         'getDepartmentById',
@@ -380,34 +388,45 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         'listDepartments',
         'listEmployees',
         'listJobGrades',
-        // department write PILOT — the ONLY mutation functions.
+        // department writes (+ move-parent)
         'createDepartment',
         'updateDepartment',
         'retireDepartment',
         'moveDepartmentParent',
+        // employee writes
+        'createEmployee',
+        'updateEmployee',
+        'retireEmployee',
+        // job-grade writes
+        'createJobGrade',
+        'updateJobGrade',
+        'retireJobGrade',
+        // cost-center writes
+        'createCostCenter',
+        'updateCostCenter',
+        'retireCostCenter',
+        // business-partner writes
+        'createBusinessPartner',
+        'updateBusinessPartner',
+        'retireBusinessPartner',
       ].sort(),
     );
-    // The ONLY mutation-named exports are the four DEPARTMENT writes.
-    // The other four masters (employees / job-grades / cost-centers /
-    // business-partners) have NO write function — pinned so the pilot
-    // does not silently leak write to another master.
-    const mutationNamed = exported.filter((name) =>
-      /(create|retire|move|update|write|post|put|delete|patch)/i.test(name),
-    );
-    expect(mutationNamed.sort()).toEqual(
-      [
-        'createDepartment',
-        'updateDepartment',
-        'retireDepartment',
-        'moveDepartmentParent',
-      ].sort(),
-    );
-    for (const name of mutationNamed) {
-      expect(/department/i.test(name)).toBe(true);
+    // Every master has create + update + retire (department also move-parent).
+    for (const master of [
+      'Department',
+      'Employee',
+      'JobGrade',
+      'CostCenter',
+      'BusinessPartner',
+    ]) {
+      expect(exported).toContain(`create${master}`);
+      expect(exported).toContain(`update${master}`);
+      expect(exported).toContain(`retire${master}`);
     }
+    expect(exported).toContain('moveDepartmentParent');
   });
 
-  it('the proxy directory: ONLY the department master has write routes; the four other masters stay GET-only', async () => {
+  it('the proxy directory: every master exposes create/update/retire POST routes; no PUT/PATCH/DELETE handlers', async () => {
     const proxyRoot = path.resolve(__dirname, '../../src/app/api/erp');
     function walk(p: string): string[] {
       const out: string[] = [];
@@ -421,44 +440,25 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     const tsFiles = walk(proxyRoot).filter((f) => f.endsWith('.ts'));
     expect(tsFiles.length).toBeGreaterThan(0);
 
-    let nonDeptRouteFiles = 0;
-    let deptWriteRouteFiles = 0;
+    let postRouteFiles = 0;
+    let getRouteFiles = 0;
     for (const f of tsFiles) {
       const src = readFileSync(f, 'utf8');
-      // `_proxy.ts` itself is the shared error mapper — no route
-      // handler exports.
       if (path.basename(f) === '_proxy.ts') continue;
-      const norm = f.replace(/\\/g, '/');
-      const isDepartment = /\/masterdata\/departments(\/|$)/.test(norm);
-      if (isDepartment) {
-        // Department routes (write PILOT): may export POST (the
-        // same-origin write proxy). They never export PUT / DELETE.
-        // PATCH is never a same-origin handler (the typed client has
-        // only get/post — the upstream PATCH is set inside the api fn).
-        expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
-        if (/export\s+async\s+function\s+POST\b/.test(src)) {
-          deptWriteRouteFiles += 1;
-        }
-      } else {
-        // The four other masters MUST export GET only — no mutation
-        // route at all (§ 2.4.8 read-only for the non-department
-        // masters; pinned so the pilot does not leak write).
-        expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
-        expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
-        nonDeptRouteFiles += 1;
-      }
+      // Same-origin handlers are GET or POST only — the upstream PATCH on
+      // update is set inside the api fn, never a PATCH route handler. PUT /
+      // DELETE are never used.
+      expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
+      expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
+      if (/export\s+async\s+function\s+POST\b/.test(src)) postRouteFiles += 1;
+      if (/export\s+async\s+function\s+GET\b/.test(src)) getRouteFiles += 1;
     }
-    // employees / job-grades / cost-centers / business-partners ×
-    // {list, detail} = 8 GET-only route files.
-    expect(nonDeptRouteFiles).toBe(8);
-    // department: create (departments/route) + update
-    // (departments/[id]/route) + retire + move-parent = 4 POST routes.
-    expect(deptWriteRouteFiles).toBe(4);
+    // 5 masters × {list GET, detail GET} = 10 GET route files.
+    expect(getRouteFiles).toBe(10);
+    // POST routes: 5 masters × {create on list route, update on [id] route,
+    // retire on [id]/retire route} = 15, + department move-parent = 16.
+    expect(postRouteFiles).toBe(16);
   });
 });
 
@@ -590,6 +590,96 @@ describe('erp-api — department WRITE PILOT (§ 2.4.8 Department write binding)
         createDepartment({ code: 'D', name: 'N' }, 'k'),
       ).rejects.toBeInstanceOf(ApiError);
     }
+  });
+});
+
+// ===========================================================================
+// 2c. The OTHER FOUR masters WRITE (TASK-PC-FE-048) — method/path/idempotency
+//     + credential reuse (the shared callErp wire mechanics are already pinned
+//     by the department write describe; this guards the per-master fns/paths).
+// ===========================================================================
+
+describe('erp-api — employees/job-grades/cost-centers/business-partners WRITE (§ 2.4.8)', () => {
+  const MUTATION_BODY = {
+    data: {
+      id: 'm-1',
+      code: 'C-1',
+      employeeNumber: 'EMP-1',
+      name: 'X',
+      partnerType: 'CUSTOMER',
+      status: 'ACTIVE',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+    meta: { timestamp: 'x' },
+  };
+
+  beforeEach(() => {
+    cookieJar.clear();
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+  });
+
+  function lastCall(fetchMock: ReturnType<typeof vi.fn>) {
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    return {
+      url: String(url),
+      init: init as RequestInit,
+      headers: (init as RequestInit).headers as Record<string, string>,
+    };
+  }
+
+  it('create on each master → POST to its collection path + Idempotency-Key; GAP token, no X-Operator-Reason', async () => {
+    const cases: Array<[() => Promise<unknown>, string]> = [
+      [
+        () =>
+          createEmployee(
+            { employeeNumber: 'EMP-1', name: '홍길동' },
+            'idem-emp',
+          ),
+        'http://erp.local/api/erp/masterdata/employees',
+      ],
+      [
+        () => createJobGrade({ code: 'G3', name: '사원' }, 'idem-jg'),
+        'http://erp.local/api/erp/masterdata/job-grades',
+      ],
+      [
+        () => createCostCenter({ code: 'CC-1', name: '영업CC' }, 'idem-cc'),
+        'http://erp.local/api/erp/masterdata/cost-centers',
+      ],
+      [
+        () =>
+          createBusinessPartner(
+            { code: 'BP-1', name: 'ACME', partnerType: 'CUSTOMER' },
+            'idem-bp',
+          ),
+        'http://erp.local/api/erp/masterdata/business-partners',
+      ],
+    ];
+    for (const [call, expectedUrl] of cases) {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY, 201));
+      vi.stubGlobal('fetch', fetchMock);
+      await call();
+      const { url, init, headers } = lastCall(fetchMock);
+      expect(init.method).toBe('POST');
+      expect(url).toBe(expectedUrl);
+      expect(headers['Idempotency-Key']).toBeTruthy();
+      expect(headers.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+      expect(headers.Authorization).not.toContain('OP-MUST-NOT-USE');
+      expect(headers['X-Operator-Reason']).toBeUndefined();
+      expect(headers['X-Tenant-Id']).toBeUndefined();
+    }
+  });
+
+  it('retire → POST .../{id}/retire with reason in BODY (producer slot), no reason header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY));
+    vi.stubGlobal('fetch', fetchMock);
+    await retireEmployee('emp-1', '퇴직', 'idem-ret');
+    const { url, init, headers } = lastCall(fetchMock);
+    expect(init.method).toBe('POST');
+    expect(url).toBe('http://erp.local/api/erp/masterdata/employees/emp-1/retire');
+    expect(headers['Idempotency-Key']).toBe('idem-ret');
+    expect(headers['X-Operator-Reason']).toBeUndefined();
+    expect(JSON.parse(String(init.body)).reason).toBe('퇴직');
   });
 });
 

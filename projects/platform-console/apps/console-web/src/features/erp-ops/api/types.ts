@@ -437,3 +437,144 @@ export function isRetired(
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Additional masters WRITE inputs (TASK-PC-FE-048 — employees / job-grades /
+// cost-centers / business-partners write parity, generalising the
+// TASK-PC-FE-046 department pilot to all 5 masters). Consume the UNCHANGED
+// producer `masterdata-api.md` § <master> create/update/retire bodies. retire
+// is uniform across every master (`{ reason }`). `reason` rides in the body
+// only on retire (the producer's only reason slot for these masters); create/
+// update never send `X-Operator-Reason` (erp does not read it). Each mutation
+// carries an `Idempotency-Key` (E1 / T1).
+// ---------------------------------------------------------------------------
+
+/** Shared retire body — identical across every master. */
+export const ErpRetireBodySchema = z.object({
+  reason: z.string().min(1).max(256),
+  idempotencyKey: z.string().min(1),
+});
+
+/** Optional payment-terms sub-object (BusinessPartner — confidential). */
+const PaymentTermsSchema = z
+  .object({
+    termDays: z.number().int().nonnegative().optional(),
+    method: z.string().optional(),
+  })
+  .passthrough();
+
+// Employee -------------------------------------------------------------------
+export interface CreateEmployeeInput {
+  employeeNumber: string;
+  name: string;
+  departmentId?: string | null;
+  costCenterId?: string | null;
+  jobGradeId?: string | null;
+  effectiveFrom?: string;
+}
+export interface UpdateEmployeeInput {
+  name?: string;
+  departmentId?: string | null;
+  costCenterId?: string | null;
+  jobGradeId?: string | null;
+  effectiveFrom?: string;
+}
+export const CreateEmployeeBodySchema = z.object({
+  employeeNumber: z.string().min(1).max(64),
+  name: z.string().min(1).max(256),
+  departmentId: z.string().min(1).nullable().optional(),
+  costCenterId: z.string().min(1).nullable().optional(),
+  jobGradeId: z.string().min(1).nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+export const UpdateEmployeeBodySchema = z.object({
+  name: z.string().min(1).max(256).optional(),
+  departmentId: z.string().min(1).nullable().optional(),
+  costCenterId: z.string().min(1).nullable().optional(),
+  jobGradeId: z.string().min(1).nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+
+// JobGrade -------------------------------------------------------------------
+export interface CreateJobGradeInput {
+  code: string;
+  name: string;
+  displayOrder?: number;
+  effectiveFrom?: string;
+}
+export interface UpdateJobGradeInput {
+  name?: string;
+  displayOrder?: number;
+  effectiveFrom?: string;
+}
+export const CreateJobGradeBodySchema = z.object({
+  code: z.string().min(1).max(64),
+  name: z.string().min(1).max(256),
+  displayOrder: z.number().int().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+export const UpdateJobGradeBodySchema = z.object({
+  name: z.string().min(1).max(256).optional(),
+  displayOrder: z.number().int().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+
+// CostCenter -----------------------------------------------------------------
+export interface CreateCostCenterInput {
+  code: string;
+  name: string;
+  departmentId?: string | null;
+  effectiveFrom?: string;
+}
+export interface UpdateCostCenterInput {
+  name?: string;
+  departmentId?: string | null;
+  effectiveFrom?: string;
+}
+export const CreateCostCenterBodySchema = z.object({
+  code: z.string().min(1).max(64),
+  name: z.string().min(1).max(256),
+  departmentId: z.string().min(1).nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+export const UpdateCostCenterBodySchema = z.object({
+  name: z.string().min(1).max(256).optional(),
+  departmentId: z.string().min(1).nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+
+// BusinessPartner ------------------------------------------------------------
+export interface CreateBusinessPartnerInput {
+  code: string;
+  name: string;
+  partnerType: string;
+  paymentTerms?: { termDays?: number; method?: string } | null;
+  effectiveFrom?: string;
+}
+export interface UpdateBusinessPartnerInput {
+  name?: string;
+  partnerType?: string;
+  paymentTerms?: { termDays?: number; method?: string } | null;
+  effectiveFrom?: string;
+}
+export const CreateBusinessPartnerBodySchema = z.object({
+  code: z.string().min(1).max(64),
+  name: z.string().min(1).max(256),
+  partnerType: z.string().min(1),
+  paymentTerms: PaymentTermsSchema.nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});
+export const UpdateBusinessPartnerBodySchema = z.object({
+  name: z.string().min(1).max(256).optional(),
+  partnerType: z.string().min(1).optional(),
+  paymentTerms: PaymentTermsSchema.nullable().optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+});

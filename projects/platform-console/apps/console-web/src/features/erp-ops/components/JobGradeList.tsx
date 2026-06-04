@@ -6,30 +6,56 @@ import {
   isRetired,
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  type CreateJobGradeInput,
+  type UpdateJobGradeInput,
   type JobGradeListResponse,
   type ErpListQueryParams,
 } from '../api/types';
-import { useJobGrades } from '../hooks/use-erp-ops';
+import {
+  useJobGrades,
+  useCreateJobGrade,
+  useUpdateJobGrade,
+  useRetireJobGrade,
+} from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
+import { useMasterWrite, type MasterWriteController } from './MasterWriteDialog';
+import { JOB_GRADE_WRITE_CONFIG } from './master-write-configs';
 
 /**
- * Job-grades list (TASK-PC-FE-010 / § 2.4.8) — paginated table.
- * Producer orders by `displayOrder` asc; the consumer respects the
- * producer order (no client-side re-sort that would override).
- *
- * E2 honesty: retired rows rendered visually distinct but NEVER
- * hidden.
+ * Job-grades list (TASK-PC-FE-010 / § 2.4.8) — paginated, producer-ordered by
+ * `displayOrder` asc (no client re-sort). E2 honesty: retired rows visually
+ * distinct but NEVER hidden. WRITE (TASK-PC-FE-048): 직급 추가 + per-row
+ * 수정/폐기 when `writable`.
  */
 export interface JobGradeListProps {
   initial?: JobGradeListResponse;
+  writable?: boolean;
 }
 
-export function JobGradeList({ initial }: JobGradeListProps) {
+export function JobGradeList({ initial, writable = false }: JobGradeListProps) {
   const [query, setQuery] = useState<ErpListQueryParams>({
     page: 0,
     size: initial?.meta.size ?? 20,
   });
   const q = useJobGrades(query, initial);
+  const create = useCreateJobGrade();
+  const update = useUpdateJobGrade();
+  const retire = useRetireJobGrade();
+  const controller: MasterWriteController = {
+    pending: create.isPending || update.isPending || retire.isPending,
+    error: create.error ?? update.error ?? retire.error ?? null,
+    create: (values, idem) =>
+      create.mutateAsync({ input: values as unknown as CreateJobGradeInput, idempotencyKey: idem }),
+    update: (id, values, idem) =>
+      update.mutateAsync({ id, input: values as unknown as UpdateJobGradeInput, idempotencyKey: idem }),
+    retire: (id, reason, idem) => retire.mutateAsync({ id, reason, idempotencyKey: idem }),
+  };
+  const { openCreate, openUpdate, openRetire, dialog } = useMasterWrite(
+    controller,
+    JOB_GRADE_WRITE_CONFIG,
+    'erp-jobgrade',
+  );
+
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
@@ -39,12 +65,23 @@ export function JobGradeList({ initial }: JobGradeListProps) {
 
   return (
     <section aria-labelledby="erp-jobgrades-heading">
-      <h2
-        id="erp-jobgrades-heading"
-        className="mb-3 text-lg font-medium text-foreground"
-      >
-        직급 (job-grades)
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          id="erp-jobgrades-heading"
+          className="text-lg font-medium text-foreground"
+        >
+          직급 (job-grades)
+        </h2>
+        {writable && (
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            data-testid="erp-jobgrade-create"
+          >
+            직급 추가
+          </Button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p
           className="mb-6 text-sm text-muted-foreground"
@@ -54,10 +91,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
         </p>
       ) : (
         <>
-          <table
-            className="mb-3 data-table"
-            data-testid="erp-jobgrades-table"
-          >
+          <table className="mb-3 data-table" data-testid="erp-jobgrades-table">
             <caption className="sr-only">직급 목록 (displayOrder 오름차순)</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -66,6 +100,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
                 <th scope="col" className="p-2">정렬 (displayOrder)</th>
                 <th scope="col" className="p-2">상태</th>
                 <th scope="col" className="p-2">유효기간</th>
+                {writable && <th scope="col" className="p-2">작업</th>}
               </tr>
             </thead>
             <tbody>
@@ -92,6 +127,27 @@ export function JobGradeList({ initial }: JobGradeListProps) {
                     <td className="p-2">
                       <EffectivePeriodBadge period={g.effectivePeriod} />
                     </td>
+                    {writable && (
+                      <td className="p-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="secondary"
+                            onClick={() => openUpdate(g.id, `${g.code} · ${g.name}`)}
+                            data-testid={`erp-jobgrade-edit-${i}`}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => openRetire(g.id, `${g.code} · ${g.name}`)}
+                            data-testid={`erp-jobgrade-retire-${i}`}
+                            className="text-destructive"
+                          >
+                            폐기
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -105,10 +161,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
               variant="secondary"
               disabled={(query.page ?? 0) <= 0}
               onClick={() =>
-                setQuery((s) => ({
-                  ...s,
-                  page: Math.max(0, (s.page ?? 0) - 1),
-                }))
+                setQuery((s) => ({ ...s, page: Math.max(0, (s.page ?? 0) - 1) }))
               }
               data-testid="erp-jobgrades-prev"
             >
@@ -123,9 +176,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
             <Button
               variant="secondary"
               disabled={page + 1 >= totalPages}
-              onClick={() =>
-                setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))
-              }
+              onClick={() => setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))}
               data-testid="erp-jobgrades-next"
             >
               다음
@@ -133,6 +184,7 @@ export function JobGradeList({ initial }: JobGradeListProps) {
           </nav>
         </>
       )}
+      {writable && dialog}
     </section>
   );
 }

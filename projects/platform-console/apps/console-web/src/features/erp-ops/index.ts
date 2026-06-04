@@ -43,6 +43,25 @@ export type {
   DeptWriteMode,
   DeptWriteRequest,
 } from './components/DepartmentWriteDialog';
+// TASK-PC-FE-048 — generic master write dialog (the other four masters).
+export {
+  MasterWriteDialog,
+  useMasterWrite,
+} from './components/MasterWriteDialog';
+export type {
+  MasterFieldDef,
+  MasterFieldKind,
+  MasterWriteConfig,
+  MasterWriteController,
+  MasterWriteRequest,
+  MasterOption,
+} from './components/MasterWriteDialog';
+export {
+  EMPLOYEE_WRITE_CONFIG,
+  JOB_GRADE_WRITE_CONFIG,
+  COST_CENTER_WRITE_CONFIG,
+  BUSINESS_PARTNER_WRITE_CONFIG,
+} from './components/master-write-configs';
 export { EmployeeList } from './components/EmployeeList';
 export { EmployeeDetail } from './components/EmployeeDetail';
 export { JobGradeList } from './components/JobGradeList';
@@ -76,6 +95,21 @@ export {
   useRetireDepartment,
   useMoveDepartmentParent,
 } from './hooks/use-erp-ops';
+// TASK-PC-FE-048 — the other four masters' write mutation hooks.
+export {
+  useCreateEmployee,
+  useUpdateEmployee,
+  useRetireEmployee,
+  useCreateJobGrade,
+  useUpdateJobGrade,
+  useRetireJobGrade,
+  useCreateCostCenter,
+  useUpdateCostCenter,
+  useRetireCostCenter,
+  useCreateBusinessPartner,
+  useUpdateBusinessPartner,
+  useRetireBusinessPartner,
+} from './hooks/use-erp-ops';
 export type {
   Department,
   DepartmentListResponse,
@@ -101,6 +135,14 @@ export type {
   UpdateDepartmentInput,
   RetireDepartmentInput,
   MoveDepartmentParentInput,
+  CreateEmployeeInput,
+  UpdateEmployeeInput,
+  CreateJobGradeInput,
+  UpdateJobGradeInput,
+  CreateCostCenterInput,
+  UpdateCostCenterInput,
+  CreateBusinessPartnerInput,
+  UpdateBusinessPartnerInput,
 } from './api/types';
 export {
   isRetired,

@@ -686,14 +686,12 @@ E3 with `[effectiveFrom, effectiveTo)` half-open semantics). There is
 `PROJECT.md` § v1 OUT); this section was originally **strictly
 read-only** across all 5 masters, closest to the FE-008 scm and
 FE-009 finance precedents. **As of TASK-PC-FE-046 the department
-master carries a WRITE pilot** (create / update / retire /
-move-parent) that consumes the *existing* `masterdata-service`
-department mutation endpoints — **not** a new `admin-service` (those
-stay v2-deferred) — sanctioned by ADR-MONO-016 § D3.1 (amended). The
-other four masters (employees / job-grades / cost-centers /
-business-partners) **remain read-only**; their writes are deferred to
-follow-up tasks. The normative department mutation matrix is in
-*Department write binding (PILOT)* below. The producer
+master gained a WRITE pilot, and TASK-PC-FE-048 extended write to ALL
+FIVE masters** (each: create / update / retire; department additionally
+move-parent) — consuming the *existing* `masterdata-service` mutation
+endpoints, **not** a new `admin-service` (those stay v2-deferred) —
+sanctioned by ADR-MONO-016 § D3.1 (amended). The normative mutation
+matrix is in *Masterdata write binding* below. The producer
 contract is **authoritative and unchanged** — this section only states
 the consumer obligation and points at the owning erp spec. This
 binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
@@ -778,34 +776,36 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   call is ever fabricated; erp rejects cross-tenant producer-side
   regardless (`403 TENANT_FORBIDDEN`, never weakened here).
 
-- **Read-only binding for the four non-department masters (normative —
-  no mutation scaffolding at all)**: employees / job-grades /
-  cost-centers / business-partners carry **no** mutation anywhere —
-  **no** `Idempotency-Key`, **no** `X-Operator-Reason`, **no** confirm
-  dialogs, **no** write call, **no** v2 `approval-service` /
-  `read-model-service` / future `admin-service` / `notification-service`
-  / `permission-service` surface. Carrying the FE-007 alert-ack
-  mutation scaffolding **or** the GAP § 2.4.1 mutation scaffolding
-  (reason / idempotency / destructive-confirm) into any of these four
-  is a **defect** (asserted absent by test — same read discipline as
-  §§ 2.4.2 / 2.4.4 / 2.4.6 / 2.4.7). Every call to these four masters
-  — and every department **read** — is a pure `GET`. The **department**
-  master is the **single carve-out** (the write pilot below); on the
-  read surface the producer-side `IDEMPOTENCY_KEY_REQUIRED` /
-  `IDEMPOTENCY_KEY_CONFLICT` (409) and `MASTERDATA_DUPLICATE_KEY` /
-  `MASTERDATA_REFERENCE_VIOLATION` / `MASTERDATA_PARENT_CYCLE` (409) +
-  `MASTERDATA_EFFECTIVE_PERIOD_INVALID` (422) remain **mutation-only**
-  per `masterdata-api.md` — reads never hit them (recorded, not
-  invented).
+- **Read surface (normative)**: every master's `list` + `detail` is a
+  pure `GET` — **no** `Idempotency-Key`, **no** `X-Operator-Reason`,
+  **no** body on the read path (asserted by test). The producer-side
+  `IDEMPOTENCY_KEY_REQUIRED` / `IDEMPOTENCY_KEY_CONFLICT` (409) /
+  `MASTERDATA_DUPLICATE_KEY` / `MASTERDATA_REFERENCE_VIOLATION` /
+  `MASTERDATA_PARENT_CYCLE` (409) + `MASTERDATA_EFFECTIVE_PERIOD_INVALID`
+  (422) are **mutation-only** — the read path never hits them. The v2
+  `approval-service` / `read-model-service` / future `admin-service` /
+  `notification-service` / `permission-service` surfaces stay out of
+  scope.
 
-- **Department write binding (PILOT — TASK-PC-FE-046; ADR-MONO-016
-  § D3.1 amended)**: the **department** master exposes the four
-  `masterdata-service` department mutations as a console write surface
-  — the **first** erp console write, the pilot that proves the
-  reason+confirm+idempotency pattern before the remaining four masters
-  follow. It consumes the **unchanged** producer `masterdata-api.md`
-  § Department (request/response/error tables remain canonical there).
-  Normative mutation matrix:
+- **Masterdata write binding (TASK-PC-FE-046 department pilot →
+  TASK-PC-FE-048 all 5 masters; ADR-MONO-016 § D3.1 amended)**: each of
+  the five masters exposes its `masterdata-service` mutations as a
+  console write surface — **create / update / retire** for every master,
+  plus **move-parent** for department (hierarchy-specific). It consumes
+  the **unchanged** producer `masterdata-api.md` § <master>
+  (request/response/error tables remain canonical there). The wire
+  contract is **uniform** across masters: a same-origin `POST` to the
+  collection (create) / `POST .../{id}` → upstream `PATCH` (update) /
+  `POST .../{id}/retire` (retire); every mutation carries an
+  `Idempotency-Key`; `reason` rides in the **body** ONLY on retire (the
+  producer's reason slot for the four non-department masters) and on
+  department retire/move-parent — `create`/`update` have no producer
+  reason slot, so the console **MUST NOT** fabricate an
+  `X-Operator-Reason` header (erp does not read it). FK fields
+  (employee → department/job-grade/cost-center; cost-center →
+  department) are entity-selector dropdowns, not raw-UUID inputs
+  (TASK-PC-FE-047). The normative department mutation matrix (the
+  template every master follows):
 
   | Operation | Same-origin proxy (console) | Upstream (`masterdata-service`) | `Idempotency-Key` | `reason` (body) | effective-dating |
   |---|---|---|---|---|---|

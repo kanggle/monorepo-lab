@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { listBusinessPartners } from '@/features/erp-ops/api/erp-api';
+import {
+  listBusinessPartners,
+  createBusinessPartner,
+} from '@/features/erp-ops/api/erp-api';
+import { CreateBusinessPartnerBodySchema } from '@/features/erp-ops/api/types';
 import {
   buildListParams,
   mapErpError,
@@ -9,10 +13,9 @@ import {
 export const runtime = 'nodejs';
 
 /**
- * Same-origin erp business-partners LIST read proxy (read-only —
- * GET). GAP OIDC access token attached server-side. E3 `?asOf=`
- * threaded through verbatim. Confidential financial details
- * (`paymentTerms`) never logged.
+ * Same-origin erp business-partners LIST read proxy (GET) + CREATE proxy
+ * (POST — TASK-PC-FE-048). Confidential financial details (`paymentTerms`)
+ * never logged. Create carries an `Idempotency-Key`; `partnerType` required.
  */
 export async function GET(req: Request) {
   const requestId = newRequestId();
@@ -20,6 +23,29 @@ export async function GET(req: Request) {
     const params = buildListParams(req);
     const result = await listBusinessPartners(params);
     return NextResponse.json(result);
+  } catch (err) {
+    return mapErpError(err, requestId);
+  }
+}
+
+export async function POST(req: Request) {
+  const requestId = newRequestId();
+  let body: ReturnType<typeof CreateBusinessPartnerBodySchema.parse>;
+  try {
+    body = CreateBusinessPartnerBodySchema.parse(await req.json());
+  } catch {
+    return NextResponse.json(
+      {
+        code: 'VALIDATION_ERROR',
+        message: 'invalid create-business-partner body',
+      },
+      { status: 400 },
+    );
+  }
+  try {
+    const { idempotencyKey, ...input } = body;
+    const result = await createBusinessPartner(input, idempotencyKey);
+    return NextResponse.json(result, { status: 201 });
   } catch (err) {
     return mapErpError(err, requestId);
   }
