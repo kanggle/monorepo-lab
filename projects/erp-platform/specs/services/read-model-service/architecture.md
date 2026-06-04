@@ -290,10 +290,17 @@ requires **both** branches to fail (fail-closed; entitlement only *widens*).
 GAP is the entitlement authority). Both the decode validator and the
 `TenantClaimEnforcer` filter dual-accept independently.
 
-Per-operator `org_scope` data-scope (E6) is **not** applied to the read-model list
-in this increment: the list is tenant-scoped (single erp tenant). Subtree-scoped
-read filtering is a follow-up aligned with the masterdata-service `org_scope`
-data-scope evolution (architecture.md E6 point 3 v2 membership-derived scope).
+Per-operator `org_scope` data-scope (E6) was **not** applied in the BE-007 first
+increment (the list was tenant-scoped only). **TASK-ERP-BE-008 (ADR-MONO-020 D3
+amendment 2026-06-05)** adds the symmetric **read filter**: when the JWT carries a
+non-`"*"` `org_scope` (department subtree-root ids — membership-derived per
+`operator_tenant_assignment.org_scope`, TASK-BE-338), the org-view list/detail is
+filtered to employees whose resolved department is within ANY scoped subtree
+(roots expanded → descendants via `department_proj.parent_id`, mirroring
+masterdata-service's `RoleScopeAuthorizationAdapter` subtree containment). `"*"` /
+absent `org_scope` = no read narrowing (net-zero — every BE-007 caller is
+unaffected). This keeps the read-model's data-scope symmetric with the write
+gate: an operator scoped to a subtree both writes and *sees* only that subtree.
 
 ## Mandatory Rule mapping (rules/domains/erp.md)
 

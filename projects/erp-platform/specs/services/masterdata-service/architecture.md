@@ -478,6 +478,23 @@ Single un-bypassable application path:
    assumed tenant). This unblocks the console erp department write pilot
    (TASK-PC-FE-046) until v2 membership-derived subtree scoping lands; the
    per-subtree fail-closed default (point below) is otherwise unchanged.
+
+   **v2 membership-derived (TASK-BE-338 / TASK-ERP-BE-008, ADR-MONO-020 D3
+   amendment 2026-06-05)** — supersedes the `["*"]` bridge for the
+   assume-tenant operator token: GAP injects the operator's **actual**
+   `org_scope` from the per-assignment source
+   (`operator_tenant_assignment.org_scope`, admin-service — `NULL ⟺ ["*"]`
+   = whole tenant, net-zero). The claim carries department **subtree-root**
+   ids (NOT the expanded set — GAP does not know erp's department tree).
+   `RoleScopeAuthorizationAdapter` therefore **expands each root → its
+   descendants via the `department` hierarchy** and authorizes when the
+   target department is within ANY scoped subtree (replacing the flat
+   `dataScopeDepartmentIds.contains(target)` exact-match). `"*"` remains the
+   platform-wide bypass (machine tokens + unscoped assignments). The
+   fail-CLOSED default (no `org_scope` + non-null target → `DATA_SCOPE_FORBIDDEN`)
+   is unchanged. The subtree walk terminates on the producer's parent-cycle
+   invariant (§ Department — `MASTERDATA_PARENT_CYCLE`); depth-bounded
+   defensively.
 4. **Fail-CLOSED default** — if the JWT lacks a recognizable role/scope,
    the decision is `DENY`. There is no allow-by-default codepath.
 
