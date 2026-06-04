@@ -88,6 +88,9 @@ describe('MasterWriteDialog (generic) via JobGradeList', () => {
 
     await user.type(screen.getByTestId('erp-jobgrade-field-code'), 'G4');
     await user.type(screen.getByTestId('erp-jobgrade-field-name'), '대리');
+    // displayOrder is REQUIRED on job-grade create (producer @NotNull).
+    expect(screen.getByTestId('erp-jobgrade-write-submit')).toBeDisabled();
+    await user.type(screen.getByTestId('erp-jobgrade-field-displayOrder'), '40');
     expect(screen.getByTestId('erp-jobgrade-write-submit')).toBeEnabled();
 
     await user.click(screen.getByTestId('erp-jobgrade-write-submit'));

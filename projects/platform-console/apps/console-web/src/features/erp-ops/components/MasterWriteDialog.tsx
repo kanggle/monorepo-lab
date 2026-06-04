@@ -20,7 +20,15 @@ import { ApiError } from '@/shared/api/errors';
  * retire hooks) so this component stays decoupled from the per-master hooks.
  */
 
-export type MasterFieldKind = 'text' | 'number' | 'date' | 'select';
+export type MasterFieldKind =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'select'
+  | 'payment-terms';
+
+/** Method enum for BusinessPartner paymentTerms (producer enum). */
+const PAYMENT_METHODS = ['BANK_TRANSFER', 'CREDIT_CARD', 'CASH', 'CHECK'];
 
 export interface MasterFieldDef {
   key: string;
@@ -142,20 +150,42 @@ export function MasterWriteDialog({
     return [];
   }
 
+  /** A field is "filled" — for payment-terms BOTH sub-inputs must be set. */
+  function fieldFilled(f: MasterFieldDef): boolean {
+    if (f.kind === 'payment-terms') {
+      return (
+        (values[`${f.key}.termDays`] ?? '').trim() !== '' &&
+        (values[`${f.key}.method`] ?? '').trim() !== ''
+      );
+    }
+    return (values[f.key] ?? '').trim() !== '';
+  }
+
   // Required-field validation (create) / at-least-one (update) / reason (retire).
   const requiredOk =
     mode === 'create'
-      ? fields.filter((f) => f.required).every((f) => (values[f.key] ?? '').trim() !== '')
+      ? fields.filter((f) => f.required).every(fieldFilled)
       : mode === 'update'
-        ? fields.some((f) => (values[f.key] ?? '').trim() !== '')
+        ? fields.some(fieldFilled)
         : reason.trim() !== '';
   const canConfirm = !controller.pending && requiredOk;
 
   /** Builds the wire body from the field values — omits empty optionals;
-   *  coerces number fields. */
+   *  coerces number fields; assembles the nested paymentTerms object. */
   function buildBody(): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     for (const f of fields) {
+      if (f.kind === 'payment-terms') {
+        const termDays = (values[`${f.key}.termDays`] ?? '').trim();
+        const method = (values[`${f.key}.method`] ?? '').trim();
+        if (termDays !== '' || method !== '') {
+          body[f.key] = {
+            ...(termDays !== '' ? { termDays: Number(termDays) } : {}),
+            ...(method !== '' ? { method } : {}),
+          };
+        }
+        continue;
+      }
       const raw = (values[f.key] ?? '').trim();
       if (raw === '') continue; // omit empty (optional / unchanged)
       body[f.key] = f.kind === 'number' ? Number(raw) : raw;
@@ -217,7 +247,31 @@ export function MasterWriteDialog({
                   {f.label}
                   {f.required ? <span aria-hidden="true"> *</span> : null}
                 </label>
-                {f.kind === 'select' ? (
+                {f.kind === 'payment-terms' ? (
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      data-testid={`${id}-termDays`}
+                      type="number"
+                      placeholder="결제일수 (예: 30)"
+                      value={values[`${f.key}.termDays`] ?? ''}
+                      onChange={(e) => setField(`${f.key}.termDays`, e.target.value)}
+                      className="w-1/2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <select
+                      data-testid={`${id}-method`}
+                      value={values[`${f.key}.method`] ?? ''}
+                      onChange={(e) => setField(`${f.key}.method`, e.target.value)}
+                      className="w-1/2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    >
+                      <option value="">— 결제수단 —</option>
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : f.kind === 'select' ? (
                   <select
                     id={id}
                     data-testid={id}
