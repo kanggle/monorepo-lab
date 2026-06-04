@@ -217,6 +217,7 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
         <DepartmentWriteDialog
           request={pending}
           onClose={() => setPending(null)}
+          departments={rows}
         />
       )}
     </section>

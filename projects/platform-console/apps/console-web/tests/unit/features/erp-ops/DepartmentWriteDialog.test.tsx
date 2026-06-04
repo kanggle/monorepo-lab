@@ -141,6 +141,79 @@ describe('DepartmentWriteDialog (부서 write PILOT)', () => {
   });
 });
 
+describe('DepartmentWriteDialog — parent picker dropdown (TASK-PC-FE-047)', () => {
+  const SALES: Department = {
+    id: 'dept-sales',
+    code: 'SALES',
+    name: '영업본부',
+    parentId: null,
+    status: 'ACTIVE',
+    effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+  };
+  const RETIRED: Department = {
+    id: 'dept-old',
+    code: 'OLD',
+    name: '폐지본부',
+    parentId: null,
+    status: 'RETIRED',
+    effectivePeriod: { effectiveFrom: '2025-01-01', effectiveTo: '2025-12-31' },
+  };
+
+  it('create: parent is a <select> listing active departments (retired excluded); selecting one sends parentId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(deptResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(
+      <DepartmentWriteDialog
+        request={{ mode: 'create' }}
+        onClose={() => {}}
+        departments={[SALES, RETIRED]}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const select = screen.getByTestId('erp-dept-parent-id') as HTMLSelectElement;
+    expect(select.tagName).toBe('SELECT');
+    // active department is an option; retired is excluded.
+    expect(
+      screen.getByRole('option', { name: /SALES · 영업본부/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: /OLD · 폐지본부/ }),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByTestId('erp-dept-code'), 'TEAM-A');
+    await user.type(screen.getByTestId('erp-dept-name'), 'A팀');
+    await user.selectOptions(select, 'dept-sales');
+    await user.click(screen.getByTestId('erp-dept-write-submit'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.parentId).toBe('dept-sales');
+  });
+
+  it('move-parent: the dropdown excludes the target department itself', () => {
+    render(
+      <DepartmentWriteDialog
+        request={{ mode: 'move-parent', target: SALES }}
+        onClose={() => {}}
+        departments={[SALES, DEPT]}
+      />,
+      { wrapper: wrapper() },
+    );
+    const select = screen.getByTestId('erp-dept-new-parent-id');
+    expect(select.tagName).toBe('SELECT');
+    // the OTHER department is selectable; the target itself is NOT.
+    expect(
+      screen.getByRole('option', { name: /DEPT-001/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: /SALES · 영업본부/ }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('DepartmentList — writable gate (only the department master gets write)', () => {
   const INITIAL = {
     data: [DEPT],
