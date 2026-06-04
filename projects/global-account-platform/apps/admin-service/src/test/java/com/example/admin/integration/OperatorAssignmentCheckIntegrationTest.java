@@ -112,11 +112,17 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("BE-338: legacy home tenant (no explicit row) → assigned=true + orgScope=null (net-zero)")
+    @DisplayName("BE-338: legacy home tenant (no explicit row) → assigned=true + orgScope ABSENT (net-zero, ⟺ [\"*\"])")
     void homeTenant_orgScopeNull() throws Exception {
+        // admin-service serializes with @JsonInclude(NON_NULL), so a null orgScope is
+        // OMITTED from the JSON — NOT rendered as `"orgScope": null`. Absent ⟺ null ⟺
+        // ["*"] (net-zero): the auth-service AdminAssignmentClient parses an absent/null
+        // orgScope to null → TenantClaimTokenCustomizer injects ["*"]. doesNotExist() is
+        // the correct net-zero assertion (the prior .value(nullValue()) required the path
+        // to exist, which the NON_NULL omission breaks → PathNotFoundException).
         check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
-                .andExpect(jsonPath("$.orgScope").value(org.hamcrest.Matchers.nullValue()));
+                .andExpect(jsonPath("$.orgScope").doesNotExist());
     }
 
     @Test

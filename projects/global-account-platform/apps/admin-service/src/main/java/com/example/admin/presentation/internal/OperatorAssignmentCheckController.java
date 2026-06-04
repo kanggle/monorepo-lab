@@ -44,12 +44,16 @@ public class OperatorAssignmentCheckController {
      *
      * <p>TASK-BE-338 (ADR-MONO-020 D3 amendment): {@code orgScope} is the selected
      * assignment's per-assignment data-scope (department subtree-root ids).
-     * {@code null} ⟺ {@code ["*"]} = whole tenant (net-zero) — returned when the
-     * column is unset, when there is no explicit assignment row (legacy
+     * A {@code null} orgScope ⟺ {@code ["*"]} = whole tenant (net-zero) — applies
+     * when the column is unset, when there is no explicit assignment row (legacy
      * home-tenant / platform-scope), and for every {@code assigned=false} case.
-     * The field is ADDITIVE: the {@code assigned} verdict + status codes are
-     * byte-unchanged from TASK-BE-327; an older auth-service that ignores
-     * {@code orgScope} defaults it to {@code ["*"]} (graceful).
+     * Because admin-service serializes with {@code @JsonInclude(NON_NULL)}, a null
+     * orgScope is **OMITTED** from the JSON (the field is simply absent — NOT
+     * rendered as {@code "orgScope": null}). The field is ADDITIVE: the
+     * {@code assigned} verdict + status codes are byte-unchanged from TASK-BE-327;
+     * the auth-service {@code AdminAssignmentClient} parses an absent/null/non-list
+     * orgScope to {@code null} → {@code TenantClaimTokenCustomizer} injects
+     * {@code ["*"]} (graceful net-zero).
      */
     @GetMapping("/check")
     public ResponseEntity<AssignmentCheckResponse> check(
