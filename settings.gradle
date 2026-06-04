@@ -93,7 +93,12 @@ include(
     // TASK-ERP-BE-007: read-model-service first increment — masterdata change
     // event consumer + integrated employee org-view read API (rest-api +
     // event-consumer, CQRS read-model; ADR-MONO-016 §D3 forward-decl realised).
-    'projects:erp-platform:apps:read-model-service'
+    'projects:erp-platform:apps:read-model-service',
+    // TASK-ERP-BE-009: approval-service first increment — Approval Workflow
+    // bounded context (ApprovalRequest aggregate + single-stage state machine +
+    // no-self-approval + idempotent transitions + immutable audit + masterdata
+    // subject ref-check; rest-api producer; ADR-MONO-016 §D3 forward-decl realised).
+    'projects:erp-platform:apps:approval-service'
 )
 
 // Project: platform-console

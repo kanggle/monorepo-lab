@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-009-approval-service-bootstrap-first-increment.md` — **READY (2026-06-05)**. approval-service 부트스트랩 — 결재 워크플로 first increment (ERP v2 pillar, ADR-016 §D3 forward-declaration 집행, read-model ERP-BE-007 선례). 단일 Hexagonal `rest-api` (`apps/approval-service/`, `com.example.erp.approval`): `ApprovalRequest` 상태기계(DRAFT→SUBMITTED→APPROVED|REJECTED|WITHDRAWN, single-stage) + 권한결재자(E3, 자기결재 금지 I4 SoD) + 멱등전이(E4) + 불변감사(E8/A7) + masterdata subject ref-check(E1) + outbox `erp.approval.*.v1` + REST + 기본 inbox. erp 첫 실 도메인 로직(상태기계) — read-model E5 와 대비. deploy 배선(settings.gradle/CI/docker-compose) atomic 동반. v2-deferred=multi-stage/위임/IN_REVIEW/콘솔 parity. spec=architecture.md+approval-api.md+erp-approval-events.md(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-009-approval-service-bootstrap-first-increment.md` — **REVIEW (2026-06-05, impl PR open)**. approval-service 부트스트랩 first increment — erp 첫 실 도메인 로직(workflow 상태기계) 서비스. `apps/approval-service/`(75 파일, `com.example.erp.approval`, Hexagonal `rest-api`): `ApprovalStateMachine`(pure, finalized-guard 최우선→`APPROVAL_ALREADY_FINALIZED`, legal-edge→`APPROVAL_STATUS_TRANSITION_INVALID`, 전이 우회 불가) + `ApprovalRequest` aggregate(submit/approve/reject/withdraw; route 자기결재 차단→`APPROVAL_ROUTE_INVALID`, 비권한자→`APPROVAL_NOT_AUTHORIZED_APPROVER`) + `ApprovalApplicationService`(단일 @Transactional: 전이+audit append-only+outbox 원자 A7/A10 fail-closed) + DB 멱등(claim-before-execute idempotency_keys, replay/충돌) + `MasterDataRestAdapter`(E1 subject ref-check, RETIRED/404→submit 거부 DRAFT 보존) + outbox `erp.approval.{submitted,approved,rejected,withdrawn}.v1` + REST 8 + GlobalExceptionHandler(5 코드) + RS256+entitlement-trust dual-accept. deploy 배선 atomic: settings.gradle include + ci.yml erp `:check`/`:integrationTest`(+read-model latent-gap 백필) + docker-compose `/api/erp/approval` priority=100. 분석=Opus 4.8 / 구현=backend-engineer(Opus dispatch)+dispatcher 독립 재검증(scope=approval-service+배선 only · `:check` BUILD SUCCESSFUL 52 unit/slice · 상태기계 가드 코드 확인 · IT @Tag integration CI Linux 게이트). v2-deferred=multi-stage/위임/IN_REVIEW/콘솔 parity.
 
 ## done
 
