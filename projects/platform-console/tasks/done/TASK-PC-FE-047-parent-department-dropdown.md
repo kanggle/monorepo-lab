@@ -8,7 +8,7 @@ TASK-PC-FE-047
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -48,10 +48,10 @@ create/move-parent 다이얼로그에서 상위 부서를 드롭다운으로 선
 
 # Acceptance Criteria
 
-- [ ] **AC-1** create 다이얼로그 상위 부서 = `<select>` (기본 "최상위", 옵션 = active 부서 `code · name`); 선택 시 body `parentId` = 선택 부서 id, 미선택 시 null.
-- [ ] **AC-2** move-parent 다이얼로그 새 상위 부서 = `<select>`; 대상 부서 자신 옵션에서 제외; 미선택 시 최상위 승격(null).
-- [ ] **AC-3** retired 부서는 상위 옵션에서 제외.
-- [ ] **AC-4** console `pnpm test` GREEN(기존 다이얼로그 테스트 보존 + 드롭다운 신규), `tsc`/`lint`/`build` GREEN.
+- [x] **AC-1** create 다이얼로그 상위 부서 = `<select>` (기본 "최상위", 옵션 = active 부서 `code · name`); 선택 시 body `parentId` = 선택 부서 id, 미선택 시 null.
+- [x] **AC-2** move-parent 다이얼로그 새 상위 부서 = `<select>`; 대상 부서 자신 옵션에서 제외; 미선택 시 최상위 승격(null).
+- [x] **AC-3** retired 부서는 상위 옵션에서 제외.
+- [x] **AC-4** console `pnpm test` GREEN(기존 다이얼로그 테스트 보존 + 드롭다운 신규), `tsc`/`lint`/`build` GREEN.
 
 # Related Specs
 
@@ -75,11 +75,11 @@ create/move-parent 다이얼로그에서 상위 부서를 드롭다운으로 선
 
 # Definition of Done
 
-- [ ] DepartmentWriteDialog select 교체 + DepartmentList 전달 + 테스트.
-- [ ] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
-- [ ] Local 재빌드+재기동 확인.
-- [ ] Task md + INDEX 갱신.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] DepartmentWriteDialog select 교체 + DepartmentList 전달 + 테스트.
+- [x] console `pnpm test`/`tsc`/`lint`/`build` GREEN.
+- [x] Local 재빌드+재기동 확인.
+- [x] Task md + INDEX 갱신.
+- [x] Reviewed + merged (impl PR #1085 squash `ba838f46`, 3-dim verified: state=MERGED + tip=`ba838f46` + pre-merge failing required=0, Frontend unit/E2E + Build&Test GREEN). 라이브: console-web 재빌드+재기동(이미지 06:52 UTC, /erp 307 serving).
 
 ---
 
