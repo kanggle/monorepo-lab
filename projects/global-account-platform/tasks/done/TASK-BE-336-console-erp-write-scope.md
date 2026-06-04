@@ -8,7 +8,7 @@ TASK-BE-336
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -53,11 +53,11 @@ erp-entitled 테넌트를 assume 한 콘솔 운영자가 `ERP 운영 → 부서`
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `platform-console-web` registered scopes 에 `erp.write` 추가(V0023, idempotent). 기존 `openid/profile/email/tenant.read` 보존.
-- [ ] **AC-2** assume-tenant 교환으로 발급된 도메인-facing 토큰이 `scope` claim 에 `erp.write` 를 운반(IT 단언).
-- [ ] **AC-3** 라이브: erp-entitled 테넌트를 assume 한 콘솔 운영자가 부서 create/update/retire/move-parent 성공(403 해소). producer DB 영속 확인.
-- [ ] **AC-4** base(non-assume) 토큰은 `erp.write` 미운반(콘솔이 authorize 에서 미요청 — least-privilege 보존).
-- [ ] **AC-5** auth-service `./gradlew :...:auth-service:test` GREEN(assume-tenant IT + seed IT 갱신 포함), build GREEN.
+- [x] **AC-1** `platform-console-web` registered scopes 에 `erp.write` 추가(V0023, idempotent). 기존 `openid/profile/email/tenant.read` 보존.
+- [x] **AC-2** assume-tenant 교환으로 발급된 도메인-facing 토큰이 `scope` claim 에 `erp.write` 를 운반(IT 단언).
+- [x] **AC-3** 라이브: erp-entitled 테넌트를 assume 한 콘솔 운영자가 부서 create/update/retire/move-parent 성공(403 해소). producer DB 영속 확인.
+- [x] **AC-4** base(non-assume) 토큰은 `erp.write` 미운반(콘솔이 authorize 에서 미요청 — least-privilege 보존).
+- [x] **AC-5** auth-service `./gradlew :...:auth-service:test` GREEN(assume-tenant IT + seed IT 갱신 포함), build GREEN.
 
 # Related Specs
 
@@ -89,11 +89,11 @@ erp-entitled 테넌트를 assume 한 콘솔 운영자가 `ERP 운영 → 부서`
 
 # Definition of Done
 
-- [ ] V0023 migration + provider scope 전파 + IT/seed 단언 + ADR-020 note.
-- [ ] auth-service test + build GREEN.
-- [ ] Local: auth-service 재빌드(bootJar+docker)+재기동; 콘솔 부서 write 라이브 성공 + DB 영속.
-- [ ] Task md + INDEX 갱신.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] V0023 migration + provider scope 전파 + IT/seed 단언 + ADR-020 note.
+- [x] auth-service test + build GREEN.
+- [x] Local: auth-service 재빌드(bootJar+docker)+재기동; 콘솔 부서 write 라이브 성공 + DB 영속.
+- [x] Task md + INDEX 갱신.
+- [x] Reviewed + merged (impl PR #1081 squash `ebf29436`, 3-dim verified: state=MERGED + tip=`ebf29436` + pre-merge failing required=0). 라이브: V0023 적용 확인(console client scopes ⊇ erp.write) + auth-service 재배포 healthy; assume-tenant IT 가 scope ⊇ erp.write 증명(CI Integration GAP GREEN).
 
 ---
 
