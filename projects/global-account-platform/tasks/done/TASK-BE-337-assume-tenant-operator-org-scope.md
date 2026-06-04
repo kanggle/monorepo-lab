@@ -8,7 +8,7 @@ TASK-BE-337
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -51,11 +51,11 @@ erp-entitled 테넌트를 assume 한 콘솔 운영자가 부서 create/update/re
 
 # Acceptance Criteria
 
-- [ ] **AC-1** assume-tenant 교환 토큰이 `org_scope` claim 에 `*` 운반(IT 단언). account_type/entitled_domains/scope(erp.write) 모두 보존.
-- [ ] **AC-2** base(authorization_code) 토큰은 `org_scope` 미운반(least-privilege).
-- [ ] **AC-3** 라이브: erp-entitled 테넌트(globex 등) assume 후 콘솔 부서 create/update/retire/move-parent 성공(DATA_SCOPE_FORBIDDEN 해소) + DB 영속.
-- [ ] **AC-4** erp 코드/테스트 불변 — org_scope 를 erp 만 소비, MONO-161 entitlement-trust READ-overview invariant 보존(토큰이 정상 org_scope 운반이라 erp 로직 무변경).
-- [ ] **AC-5** auth-service test + build GREEN.
+- [x] **AC-1** assume-tenant 교환 토큰이 `org_scope` claim 에 `*` 운반(IT 단언). account_type/entitled_domains/scope(erp.write) 모두 보존.
+- [x] **AC-2** base(authorization_code) 토큰은 `org_scope` 미운반(least-privilege).
+- [x] **AC-3** 라이브: erp-entitled 테넌트(globex 등) assume 후 콘솔 부서 create/update/retire/move-parent 성공(DATA_SCOPE_FORBIDDEN 해소) + DB 영속.
+- [x] **AC-4** erp 코드/테스트 불변 — org_scope 를 erp 만 소비, MONO-161 entitlement-trust READ-overview invariant 보존(토큰이 정상 org_scope 운반이라 erp 로직 무변경).
+- [x] **AC-5** auth-service test + build GREEN.
 
 # Related Specs
 
@@ -84,11 +84,11 @@ erp-entitled 테넌트를 assume 한 콘솔 운영자가 부서 create/update/re
 
 # Definition of Done
 
-- [ ] org_scope 주입 + IT 단언 + ADR-020/erp architecture.md note.
-- [ ] auth-service test + build GREEN.
-- [ ] Local: auth-service 재배포 + 콘솔 부서 write 라이브 성공 + DB 영속.
-- [ ] Task md + INDEX 갱신.
-- [ ] Reviewed + merged (3-dim verified).
+- [x] org_scope 주입 + IT 단언 + ADR-020/erp architecture.md note.
+- [x] auth-service test + build GREEN.
+- [x] Local: auth-service 재배포 + 콘솔 부서 write 라이브 성공 + DB 영속.
+- [x] Task md + INDEX 갱신.
+- [x] Reviewed + merged (impl PR #1083 squash `ef1d20d8`, 3-dim verified: state=MERGED + tip=`ef1d20d8` + pre-merge failing required=0, Integration GAP IT `org_scope ⊇ *` GREEN 3m13s). 라이브: auth-service bootJar→docker 재배포(이미지 06:12 UTC / jar 06:09 = BE-337 빌드, healthy). recreate 시 Windows volume-spec/Hyper-V transient → stop+rm 후 fresh `up` 으로 회복.
 
 ---
 
