@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-049-console-erp-integrated-org-view-card.md` — **콘솔 ERP "통합 조회" 카드 — impl PR open**. 분석=Opus 4.8 / 구현=frontend-engineer(Sonnet dispatch) + dispatcher 독립 재검증. TASK-ERP-BE-007 이 라이브화한 read-model-service employee org-view(직원+부서경로+비용센터+직급, masterdata 이벤트 구독 투영)를 콘솔이 소비 — event-propagation payoff 가시화. **cross-project (1 atomic PR)**: ① **erp docker-compose `erp.local` path 라우팅**(`PathPrefix(/api/erp/read-model)`→read-model-service priority=100, 나머지→masterdata catch-all priority=1) — read-model-service 가 Traefik 라벨 부재로 도달 불가였던 BE-007 갭 해소(dispatcher 직접) ② console-web read-model API client(`listEmployeeOrgViews`/`getEmployeeOrgView`, read-only) + 동일출처 GET proxy 2종 + `EmployeeOrgViewCard`(부서경로 breadcrumb + `meta.warning` eventually-consistent 배너 + 미해소 참조 "동기화 중" 배지) + erp-state 6번째 fan-out leg + page thread + use-erp-ops 훅 + index export ③ console-integration-contract §2.4.8 read-model read surface note(dispatcher 직접). **dispatcher 독립 재검증**: scope=platform-console+erp-platform only · read-model proxy **GET-only**(POST/PATCH/PUT/DELETE 핸들러 0) · credential 불변(getOperatorToken/X-Operator-Reason 미사용=기존 GAP OIDC domain-facing) · org-view fn=list/detail 둘뿐(write 0) · `tsc --noEmit` exit 0 · vitest 71 targeted(EmployeeOrgViewCard 11 포함)+full 845 pass · lint/build GREEN · `docker compose config -q` exit 0. **⚠️ 정직 gap**: AC-1/AC-2 라이브 스모크(erp.local path 라우팅 + 브라우저 전파 루프 가시)는 close 후 dispatcher 재배포 스모크. follow-up=business-partner+풀 통합조회(ERP-BE v2) / per-operator org_scope read 필터 / gateway-service 활성 시 라우팅 인수.
 
 ## done
 
