@@ -99,6 +99,17 @@ public class OperatorTenantAssignmentJpaEntity {
         return create(operatorId, tenantId, grantedAt, grantedBy, permissionSetId, null);
     }
 
+    /**
+     * TASK-BE-339 — set/clear the per-assignment data-scope on a managed entity.
+     * {@code null} clears the column (⟺ {@code ["*"]} net-zero); {@code []} is
+     * an explicit zero-scope; a non-empty list is the verbatim subtree-root ids.
+     * Used by the org_scope management surface ({@code PUT .../org-scope}) via
+     * {@code saveAndFlush} so the dirty UPDATE is flushed explicitly (BE-335).
+     */
+    public void setOrgScope(List<String> orgScope) {
+        this.orgScope = orgScope;
+    }
+
     public static class PK implements Serializable {
         private Long operatorId;
         private String tenantId;

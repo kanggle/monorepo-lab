@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -48,5 +49,30 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
         return repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
                 .map(OperatorTenantAssignmentJpaEntity::getOrgScope)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AssignmentView> findAssignment(Long operatorInternalId, String tenantId) {
+        if (operatorInternalId == null || tenantId == null || tenantId.isBlank()) {
+            return Optional.empty();
+        }
+        return repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
+                .map(e -> new AssignmentView(e.getTenantId(), e.getOrgScope(), e.getPermissionSetId()));
+    }
+
+    @Override
+    @Transactional
+    public void updateOrgScope(Long operatorInternalId, String tenantId, List<String> orgScope) {
+        // The caller (use case) has already verified the row exists; if a
+        // concurrent delete removed it, treat as a no-op (the use case's
+        // ASSIGNMENT_NOT_FOUND gate is the authoritative pre-check).
+        repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
+                .ifPresent(entity -> {
+                    entity.setOrgScope(orgScope);
+                    // BE-335 lesson: explicit flush — a dirty UPDATE must be
+                    // flushed, never deferred to commit-time auto-flush.
+                    repository.saveAndFlush(entity);
+                });
     }
 }
