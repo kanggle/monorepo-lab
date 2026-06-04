@@ -8,6 +8,10 @@ import {
   listBusinessPartners,
   listEmployeeOrgViews,
 } from './erp-api';
+import {
+  listApprovalRequests,
+  listApprovalInbox,
+} from './approval-api';
 import type {
   DepartmentListResponse,
   EmployeeListResponse,
@@ -17,6 +21,7 @@ import type {
   EmployeeOrgViewListResponse,
   ErpListQueryParams,
 } from './types';
+import type { ApprovalListResponse } from './approval-types';
 
 /**
  * Server-side erp operations section state for the `(console)/erp`
@@ -78,6 +83,13 @@ export interface ErpSectionState {
    *  failed individually (the section overall may still be
    *  non-degraded — the masterdata legs are independent). */
   employeeOrgViews: EmployeeOrgViewListResponse | null;
+  /** TASK-PC-FE-051 — approval workflow first-page snapshots
+   *  (requests list + the caller's inbox). `null` when the leg failed
+   *  individually OR the approval-service is not yet reachable (the
+   *  section overall may still render — the approval legs are
+   *  independent / best-effort, NOT a hard section degrade). */
+  approvalRequests: ApprovalListResponse | null;
+  approvalInbox: ApprovalListResponse | null;
   /** True when the operator is not erp-eligible (no erp
    *  product/tenant in their registry) — actionable block, no erp
    *  call fabricated. */
@@ -96,6 +108,8 @@ const EMPTY: ErpSectionState = {
   costCenters: null,
   businessPartners: null,
   employeeOrgViews: null,
+  approvalRequests: null,
+  approvalInbox: null,
   notEligible: false,
   forbidden: false,
   degraded: false,
@@ -136,6 +150,19 @@ export async function getErpSectionState(
   // card's own controls later.
   const orgViewParams = { page: 0, size: 20, ...(asOf ? { asOf } : {}) };
 
+  // TASK-PC-FE-051 — approval legs are best-effort / independent: a single
+  // approval failure (e.g. the approval-service not yet reachable, or a
+  // transient error) must NOT degrade the masterdata section. They are
+  // caught to `null` here so the section still renders; the client hooks
+  // re-fetch behind the proxy and surface their own inline errors. A 401
+  // would already be raised by the masterdata legs (shared GAP session).
+  const approvalRequestsP = listApprovalRequests({ page: 0, size: 20 }).catch(
+    () => null,
+  );
+  const approvalInboxP = listApprovalInbox({ page: 0, size: 20 }).catch(
+    () => null,
+  );
+
   try {
     const [
       departments,
@@ -155,6 +182,10 @@ export async function getErpSectionState(
         // boundary as the other legs via the shared catch block).
         listEmployeeOrgViews(orgViewParams),
       ]);
+    const [approvalRequests, approvalInbox] = await Promise.all([
+      approvalRequestsP,
+      approvalInboxP,
+    ]);
     return {
       departments,
       employees,
@@ -162,6 +193,8 @@ export async function getErpSectionState(
       costCenters,
       businessPartners,
       employeeOrgViews,
+      approvalRequests,
+      approvalInbox,
       notEligible: false,
       forbidden: false,
       degraded: false,

@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-051-console-approval-inbox-parity-slice.md` — **REVIEW (2026-06-05, impl PR open)**. 콘솔 결재함 parity slice — approval-service(ERP-BE-009) 조회/제출/승인 UI. `features/erp-ops`: `ApprovalScreen`(list+status 필터+inbox+detail history 타임라인) + create dialog + 4 전이 액션(상태기계 가시성 `allowedTransitionsFor`: DRAFT→submit/withdraw, SUBMITTED→approve/reject/withdraw, terminal→없음) + reason-required dialog(reject/withdraw) + Idempotency-Key(전이당 `crypto.randomUUID`) + `approval-error.ts`(403 not-authorized-approver/409 transition·finalized/422 route-invalid→inline, 크래시 0) + erp approval proxy(requests GET+POST / detail GET / transition POST-only allow-list / inbox GET, 토큰=`getDomainFacingToken` server-only). 선행 ERP-BE-009(`575bc9bf`). 분석=Opus 4.8 / 구현=frontend-engineer(Opus dispatch)+dispatcher 독립 재검증(scope=console-web only · tsc 0 · 신규 51 테스트 GREEN[proxy 메서드 매트릭스·상태기계·reason·에러 inline] · 4-gate CI=MONO-166).
 
 ## done
 

@@ -15,6 +15,8 @@ import { JobGradeList } from './JobGradeList';
 import { CostCenterList } from './CostCenterList';
 import { BusinessPartnerList } from './BusinessPartnerList';
 import { EmployeeOrgViewCard } from './EmployeeOrgViewCard';
+import { ApprovalScreen } from './ApprovalScreen';
+import type { ApprovalListResponse } from '../api/approval-types';
 import type { MasterOption } from './MasterWriteDialog';
 
 /**
@@ -36,6 +38,9 @@ export interface ErpOpsScreenProps {
   initialBusinessPartners: BusinessPartnerListResponse | null;
   /** TASK-PC-FE-049: read-model employee org-view initial snapshot. */
   initialEmployeeOrgViews?: EmployeeOrgViewListResponse | null;
+  /** TASK-PC-FE-051: approval workflow first-page snapshots. */
+  initialApprovalRequests?: ApprovalListResponse | null;
+  initialApprovalInbox?: ApprovalListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
 }
@@ -62,6 +67,8 @@ export function ErpOpsScreen({
   initialCostCenters,
   initialBusinessPartners,
   initialEmployeeOrgViews,
+  initialApprovalRequests,
+  initialApprovalInbox,
   mastersWritable = false,
 }: ErpOpsScreenProps) {
   const departments = toOptions(initialDepartments);
@@ -78,6 +85,19 @@ export function ErpOpsScreen({
           ? '부서·직원·직급·비용센터·거래처 마스터를 조회하고 등록/수정/폐기할 수 있습니다 (TASK-PC-FE-048). 권한이 없는 작업은 실행 시 안내됩니다.'
           : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용). erp 운영 표면을 콘솔 안에서 조회합니다.'}
       </p>
+
+      {/* TASK-PC-FE-051 — in-section nav (the 결재함 entry + master/통합 조회). */}
+      <nav aria-label="ERP 섹션 이동" className="mb-4 flex flex-wrap gap-3 text-sm">
+        <a href="#erp-departments-heading" className="underline" data-testid="erp-nav-masters">
+          마스터
+        </a>
+        <a href="#erp-orgview-heading" className="underline" data-testid="erp-nav-orgview">
+          통합 조회
+        </a>
+        <a href="#approval-heading" className="underline" data-testid="erp-nav-approval">
+          결재함
+        </a>
+      </nav>
 
       <AsOfPicker />
 
@@ -107,6 +127,12 @@ export function ErpOpsScreen({
       {/* TASK-PC-FE-049 — integrated read-model org-view card (read-only). */}
       <EmployeeOrgViewCard
         initial={initialEmployeeOrgViews ?? undefined}
+      />
+
+      {/* TASK-PC-FE-051 — approval workflow (결재함) section. */}
+      <ApprovalScreen
+        initialRequests={initialApprovalRequests ?? undefined}
+        initialInbox={initialApprovalInbox ?? undefined}
       />
     </section>
   );

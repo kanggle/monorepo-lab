@@ -460,11 +460,15 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
       if (/export\s+async\s+function\s+GET\b/.test(src)) getRouteFiles += 1;
     }
     // 5 masters × {list GET, detail GET} = 10 GET route files (masterdata)
-    // + TASK-PC-FE-049: 2 read-model GET routes = 12 total GET route files.
-    expect(getRouteFiles).toBe(12);
+    // + TASK-PC-FE-049: 2 read-model GET routes = 12
+    // + TASK-PC-FE-051: 3 approval GET routes (requests list, requests/[id]
+    //   detail, inbox) = 15 total GET route files.
+    expect(getRouteFiles).toBe(15);
     // POST routes: 5 masters × {create on list route, update on [id] route,
-    // retire on [id]/retire route} = 15, + department move-parent = 16.
-    expect(postRouteFiles).toBe(16);
+    // retire on [id]/retire route} = 15, + department move-parent = 16
+    // + TASK-PC-FE-051: 2 approval POST routes (requests create, the
+    //   [id]/[transition] dynamic transition route) = 18.
+    expect(postRouteFiles).toBe(18);
   });
 });
 

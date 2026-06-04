@@ -33,6 +33,13 @@
  */
 export { ErpOpsScreen } from './components/ErpOpsScreen';
 export { EmployeeOrgViewCard } from './components/EmployeeOrgViewCard';
+// TASK-PC-FE-051 — approval workflow (결재함).
+export {
+  ApprovalScreen,
+  ApprovalDetail,
+  ApprovalCreateDialog,
+} from './components/ApprovalScreen';
+export { approvalErrorMessage } from './components/approval-error';
 export { AsOfPicker } from './components/AsOfPicker';
 export { EffectivePeriodBadge } from './components/EffectivePeriodBadge';
 export { RetiredReferenceBadge } from './components/RetiredReferenceBadge';
@@ -90,6 +97,49 @@ export {
   employeeOrgViewDetailKey,
 } from './api/erp-state';
 export { useAsOf, useEmployeeOrgViews } from './hooks/use-erp-ops';
+// TASK-PC-FE-051 — approval workflow query + mutation hooks.
+export {
+  useApprovalRequests,
+  useApprovalInbox,
+  useApprovalRequest,
+  useCreateApproval,
+  useSubmitApproval,
+  useApproveApproval,
+  useRejectApproval,
+  useWithdrawApproval,
+} from './hooks/use-erp-ops';
+export type {
+  CreateApprovalArgs,
+  ApprovalTransitionArgs,
+} from './hooks/use-erp-ops';
+// TASK-PC-FE-051 — approval types + helpers.
+export type {
+  ApprovalRequest,
+  ApprovalSummary,
+  ApprovalHistoryEntry,
+  ApprovalListResponse,
+  ApprovalDetailResponse,
+  ApprovalListQueryParams,
+  ApprovalInboxQueryParams,
+  ApprovalStatus,
+  ApprovalSubjectType,
+  ApprovalTransition,
+  CreateApprovalInput,
+} from './api/approval-types';
+export {
+  ApprovalRequestSchema,
+  ApprovalSummarySchema,
+  ApprovalHistoryEntrySchema,
+  ApprovalListResponseSchema,
+  ApprovalDetailResponseSchema,
+  APPROVAL_STATUSES,
+  APPROVAL_SUBJECT_TYPES,
+  APPROVAL_TRANSITIONS,
+  TERMINAL_APPROVAL_STATUSES,
+  allowedTransitionsFor,
+  isTerminalApprovalStatus,
+  transitionRequiresReason,
+} from './api/approval-types';
 // TASK-PC-FE-046 — department write PILOT mutation hooks (the ONLY erp
 // mutation hooks; the other four masters have none).
 export {
