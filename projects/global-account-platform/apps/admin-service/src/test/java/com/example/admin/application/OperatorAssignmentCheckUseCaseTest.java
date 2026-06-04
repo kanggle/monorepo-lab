@@ -1,6 +1,7 @@
 package com.example.admin.application;
 
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -43,6 +45,9 @@ class OperatorAssignmentCheckUseCaseTest {
 
     @Mock
     private TenantScopeResolver tenantScopeResolver;
+
+    @Mock
+    private OperatorTenantAssignmentPort assignmentPort;
 
     @InjectMocks
     private OperatorAssignmentCheckUseCase useCase;
@@ -109,5 +114,65 @@ class OperatorAssignmentCheckUseCaseTest {
     void blankTenant_failClosed() {
         assertThat(useCase.isAssigned(OIDC_SUBJECT, "  ")).isFalse();
         verify(operatorPort, never()).findByOidcSubject(any());
+    }
+
+    // ── TASK-BE-338: org_scope on the check result ──────────────────────────────
+
+    @Test
+    @DisplayName("BE-338: assigned + 설정된 org_scope → Result.orgScope=그 값")
+    void assigned_withPopulatedOrgScope() {
+        when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
+                .thenReturn(Optional.of(operator("acme-corp", "ACTIVE", 7L)));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(7L, "acme-corp"))
+                .thenReturn(Set.of("acme-corp", "globex"));
+        when(assignmentPort.findOrgScope(7L, "globex")).thenReturn(List.of("dept-sales"));
+
+        OperatorAssignmentCheckUseCase.Result result = useCase.check(OIDC_SUBJECT, "globex");
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).containsExactly("dept-sales");
+    }
+
+    @Test
+    @DisplayName("BE-338: assigned + org_scope 미설정(NULL) → Result.orgScope=null (net-zero → '*')")
+    void assigned_withNullOrgScope_netZero() {
+        when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
+                .thenReturn(Optional.of(operator("acme-corp", "ACTIVE", 7L)));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(7L, "acme-corp"))
+                .thenReturn(Set.of("acme-corp"));
+        when(assignmentPort.findOrgScope(7L, "acme-corp")).thenReturn(null);
+
+        OperatorAssignmentCheckUseCase.Result result = useCase.check(OIDC_SUBJECT, "acme-corp");
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-338: '*' platform-scope → Result.orgScope=null (no explicit row), findOrgScope 미조회")
+    void platformScope_orgScopeNull() {
+        when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
+                .thenReturn(Optional.of(operator("*", "ACTIVE", 99L)));
+
+        OperatorAssignmentCheckUseCase.Result result = useCase.check(OIDC_SUBJECT, "acme-corp");
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).isNull();
+        verify(assignmentPort, never()).findOrgScope(anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("BE-338: not-assigned → Result.orgScope=null, findOrgScope 미조회")
+    void notAssigned_orgScopeNull() {
+        when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
+                .thenReturn(Optional.of(operator("acme-corp", "ACTIVE", 7L)));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(7L, "acme-corp"))
+                .thenReturn(Set.of("acme-corp"));
+
+        OperatorAssignmentCheckUseCase.Result result = useCase.check(OIDC_SUBJECT, "globex");
+
+        assertThat(result.assigned()).isFalse();
+        assertThat(result.orgScope()).isNull();
+        verify(assignmentPort, never()).findOrgScope(anyLong(), anyString());
     }
 }

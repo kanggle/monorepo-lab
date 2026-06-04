@@ -12,6 +12,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -109,14 +111,14 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
     }
 
     @Override
-    public boolean isAssigned(String oidcSubject, String tenantId) {
-        Supplier<Boolean> supplier = () -> doCheck(oidcSubject, tenantId);
-        Supplier<Boolean> retrying = Retry.decorateSupplier(retry, supplier);
-        Supplier<Boolean> resilient = CircuitBreaker.decorateSupplier(circuitBreaker, retrying);
+    public AssignmentResult resolveAssignment(String oidcSubject, String tenantId) {
+        Supplier<AssignmentResult> supplier = () -> doCheck(oidcSubject, tenantId);
+        Supplier<AssignmentResult> retrying = Retry.decorateSupplier(retry, supplier);
+        Supplier<AssignmentResult> resilient = CircuitBreaker.decorateSupplier(circuitBreaker, retrying);
 
-        boolean assigned;
+        AssignmentResult result;
         try {
-            assigned = resilient.get();
+            result = resilient.get();
         } catch (RuntimeException e) {
             // FAIL-CLOSED: any failure (4xx incl. not-assigned, 5xx, circuit-open,
             // timeout, IO) denies the assumed token. Do NOT translate to a soft
@@ -129,17 +131,17 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
                     "assignment check failed — admin-service unavailable or denied (fail-closed)", e);
         }
 
-        if (!assigned) {
+        if (!result.assigned()) {
             // Explicit {assigned:false} → operator not assigned to the selected tenant.
             throw new AssumeTenantDeniedException(
                     "operator is not assigned to the selected tenant");
         }
-        return true;
+        return result;
     }
 
     @SuppressWarnings("unchecked")
-    private boolean doCheck(String oidcSubject, String tenantId) {
-        // admin-service returns { "assigned": true|false }.
+    private AssignmentResult doCheck(String oidcSubject, String tenantId) {
+        // admin-service returns { "assigned": true|false, "orgScope": [...]|null }.
         Map<String, Object> body = restClient().get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/operator-assignments/check")
@@ -154,6 +156,28 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
             throw new IllegalStateException("admin assignment-check returned no body");
         }
         Object assigned = body.get("assigned");
-        return assigned instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(assigned));
+        boolean isAssigned = assigned instanceof Boolean b
+                ? b : Boolean.parseBoolean(String.valueOf(assigned));
+        // TASK-BE-338: parse the additive orgScope field. Absent/null/non-list →
+        // null (the customizer defaults null → ["*"], net-zero). An older admin
+        // that omits the field is handled gracefully (null). Non-string elements
+        // are skipped (defensive; admin sends a string array).
+        return new AssignmentResult(isAssigned, parseOrgScope(body.get("orgScope")));
+    }
+
+    private static List<String> parseOrgScope(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            // absent / null / non-list → unset → caller defaults to ["*"].
+            return null;
+        }
+        List<String> orgScope = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element != null) {
+                orgScope.add(String.valueOf(element));
+            }
+        }
+        // A present (possibly empty) array is carried verbatim — [] = explicit
+        // zero-scope (distinct from null/unset).
+        return orgScope;
     }
 }

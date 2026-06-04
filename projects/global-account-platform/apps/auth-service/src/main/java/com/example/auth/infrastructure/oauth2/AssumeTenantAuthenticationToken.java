@@ -4,6 +4,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 import java.util.Collections;
+import java.util.List;
 
 /**
  * TASK-BE-327 (ADR-MONO-020 § 3.3 step 2, D2) — the assume-tenant token-exchange
@@ -25,6 +26,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String selectedTenantId;
     private final String selectedTenantType;
     private final String operatorAccountType;
+    private final List<String> orgScope;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -63,6 +65,26 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            String selectedTenantId,
                                            String selectedTenantType,
                                            String operatorAccountType) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId,
+                selectedTenantType, operatorAccountType, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-BE-338, ADR-MONO-020 D3 amendment) —
+     * additionally carries the resolved per-assignment {@code org_scope} (the
+     * department subtree-root ids the operator may act under within the assumed
+     * tenant). Rides the same {@code getAuthorizationGrant()} copy path as
+     * {@code selectedTenantType} / {@code operatorAccountType}. {@code null} ⟺
+     * {@code ["*"]} = whole tenant (net-zero) — the customizer maps
+     * {@code null}/empty → {@code ["*"]}.
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           String operatorAccountType,
+                                           List<String> orgScope) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
@@ -70,6 +92,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
         this.selectedTenantId = selectedTenantId;
         this.selectedTenantType = selectedTenantType;
         this.operatorAccountType = operatorAccountType;
+        this.orgScope = orgScope;
         setAuthenticated(false);
     }
 
@@ -110,5 +133,17 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public String getOperatorAccountType() {
         return operatorAccountType;
+    }
+
+    /**
+     * TASK-BE-338 (ADR-MONO-020 D3 amendment) — the resolved per-assignment
+     * {@code org_scope} (department subtree-root ids), carried from the
+     * admin-service assignment-check result so the customizer injects the ACTUAL
+     * data-scope instead of the hardcoded {@code ["*"]} (TASK-BE-337 v1 bridge).
+     * {@code null} ⟺ {@code ["*"]} = whole tenant (net-zero). Null on the
+     * converter-side token (resolved by the provider).
+     */
+    public List<String> getOrgScope() {
+        return orgScope;
     }
 }

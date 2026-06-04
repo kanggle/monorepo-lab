@@ -72,17 +72,21 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     private static final String CLAIM_ACCOUNT_TYPE = "account_type";
 
     /**
-     * TASK-BE-337: the {@code org_scope} data-scope claim the erp masterdata-service
-     * reads (the set of department ids the actor may act under; {@code "*"} =
-     * platform-wide). Injected ONLY on the assume-tenant operator token as the v1
-     * gateway-enrichment bridge — erp's authorization data-scope gate fail-closes a
-     * human-operator token with no {@code org_scope} (per-operator
-     * organizational-membership scoping is v2; erp masterdata-service
-     * architecture.md E6 point 3). The tenant gate already isolates cross-tenant, so
-     * {@code "*"} here means "all departments of the ASSUMED tenant" — the right
-     * scope for a tenant-administering operator. Mirrors the
-     * {@code client_credentials → "*"} machine-token default. Only erp consumes this
-     * claim (no cross-domain effect).
+     * TASK-BE-337 / TASK-BE-338: the {@code org_scope} data-scope claim the erp
+     * masterdata-service reads (the department subtree-root ids the actor may act
+     * under; {@code "*"} = whole tenant). Injected ONLY on the assume-tenant
+     * operator token.
+     *
+     * <p>TASK-BE-338 (ADR-MONO-020 D3 amendment) replaced the TASK-BE-337 hardcoded
+     * {@code ["*"]} v1 bridge with the <b>membership-derived</b> value: the
+     * per-assignment {@code org_scope} carried on the grant from the admin-service
+     * assignment-check ({@code operator_tenant_assignment.org_scope}). NET-ZERO: a
+     * null/empty org_scope → {@code ["*"]} = whole tenant (byte-identical to BE-337);
+     * a present non-empty list is injected verbatim. The tenant gate already
+     * isolates cross-tenant, so org_scope governs only the department subtree WITHIN
+     * the assumed tenant. Only erp consumes this claim (no cross-domain effect — it
+     * expands the subtree roots → descendants for its containment check,
+     * TASK-ERP-BE-008).
      */
     private static final String CLAIM_ORG_SCOPE = "org_scope";
 
@@ -258,10 +262,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String selectedTenantId = null;
         String selectedTenantType = null;
         String operatorAccountType = null;
+        java.util.List<String> orgScope = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             operatorAccountType = grant.getOperatorAccountType();
+            orgScope = grant.getOrgScope();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -283,17 +289,24 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // validated subject token (AssumeTenantAuthenticationProvider). Mirrors tenant.
         injectAccountType(context, operatorAccountType);
 
-        // TASK-BE-337: gateway-enrichment data-scope for the assume-tenant operator.
-        // erp masterdata-service's data-scope gate (E6) fail-closes a human-operator
-        // token that carries no org_scope on any targeted (non-null department) write
-        // — which is every department create/update/retire/move-parent. Per-operator
-        // organizational-membership scoping is v2 (architecture.md E6 point 3); the v1
-        // bridge is platform-wide "*" WITHIN the assumed tenant (the tenant gate
-        // isolates cross-tenant). Mirrors the documented client_credentials → "*"
-        // default. Only the assume-tenant (operator) token gets it — the base
-        // authorization_code token still carries no org_scope (least-privilege).
-        context.getClaims().claim(CLAIM_ORG_SCOPE, java.util.List.of("*"));
-        log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope=[*] (v1 operator data-scope bridge)");
+        // TASK-BE-338 (ADR-MONO-020 D3 amendment): membership-derived data-scope —
+        // the v2 replacement for the TASK-BE-337 hardcoded ["*"] bridge. The
+        // per-assignment org_scope (department subtree-root ids) is carried on the
+        // grant from the admin-service assignment-check result. NET-ZERO: a
+        // null/empty org_scope (unset assignment, legacy home-tenant, platform-scope,
+        // or an older admin that omits the field) injects ["*"] = whole tenant —
+        // byte-identical to the BE-337 behavior. A present non-empty list is injected
+        // verbatim (erp expands the subtree roots → descendants for its containment
+        // check — TASK-ERP-BE-008). The tenant gate already isolates cross-tenant, so
+        // org_scope governs only the department subtree WITHIN the assumed tenant.
+        // Only the assume-tenant (operator) token gets org_scope — the base
+        // authorization_code token still carries none (least-privilege). Only erp
+        // consumes the claim (no cross-domain effect).
+        java.util.List<String> effectiveOrgScope =
+                (orgScope == null || orgScope.isEmpty()) ? java.util.List.of("*") : orgScope;
+        context.getClaims().claim(CLAIM_ORG_SCOPE, effectiveOrgScope);
+        log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope={} "
+                + "(membership-derived; null/empty → [*] net-zero)", effectiveOrgScope);
 
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         populateEntitledDomains(context, selectedTenantId);

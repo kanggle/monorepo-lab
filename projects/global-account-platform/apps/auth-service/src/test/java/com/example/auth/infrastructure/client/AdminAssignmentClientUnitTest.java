@@ -78,6 +78,63 @@ class AdminAssignmentClientUnitTest {
         assertThat(client.isAssigned(SUBJECT, TENANT)).isTrue();
     }
 
+    // ── TASK-BE-338: orgScope parsing ───────────────────────────────────────────
+
+    @Test
+    @DisplayName("BE-338: orgScope 배열 파싱 → AssignmentResult.orgScope=[dept-sales]")
+    void parsesOrgScope_populated() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"orgScope\":[\"dept-sales\",\"dept-ops\"]}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).containsExactly("dept-sales", "dept-ops");
+    }
+
+    @Test
+    @DisplayName("BE-338 net-zero: orgScope=null → AssignmentResult.orgScope=null (→ [*])")
+    void parsesOrgScope_null() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"orgScope\":null}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-338 graceful: orgScope 필드 부재(구버전 admin) → orgScope=null (→ [*])")
+    void parsesOrgScope_absent() {
+        stubAssigned(true); // body = {"assigned":true} — no orgScope field
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-338: orgScope=[] (명시적 zero-scope) → [] (null 과 구분)")
+    void parsesOrgScope_emptyArray() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"orgScope\":[]}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.orgScope()).isNotNull().isEmpty();
+    }
+
     @Test
     @DisplayName("Authorization: Bearer JWT 첨부 + query 파라미터 전달")
     void attachesBearerAndParams() {
