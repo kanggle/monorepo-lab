@@ -787,6 +787,26 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   `notification-service` / `permission-service` surfaces stay out of
   scope.
 
+- **Integrated read-model binding (TASK-PC-FE-049 — read-only; ADR-MONO-016
+  § D3 read-model-service first increment)**: the console renders the erp
+  **employee org-view** (employee + resolved department-hierarchy path +
+  cost center + job grade) by consuming the **read-model-service** read API
+  — `GET /api/erp/read-model/employees` [+ `/{id}`], request/response/error
+  owned by [`read-model-api.md`](../../../erp-platform/specs/contracts/http/read-model-api.md)
+  (authoritative). **Strictly read-only** (erp E5 — the read-model holds no
+  domain logic and re-emits nothing); there is **no** mutation surface on
+  this binding. Credential is **unchanged** from the read binding (same
+  server-side GAP OIDC domain-facing token; never `getOperatorToken()`).
+  The read-model is **eventually consistent** with `masterdata-service` (the
+  authoritative source of record) — every response carries `meta.warning:
+  "Eventually-consistent read-model"`; an org-view referencing a
+  not-yet-projected master returns that reference `null` + `meta.unresolved`,
+  surfaced as a "동기화 중" badge, **never fabricated**. `?asOf` (E3) threads
+  through verbatim. **Routing**: in v1 (gateway-service deferred) `erp.local`
+  routes `/api/erp/read-model/**` to read-model-service via a path-prefix
+  Traefik router (priority over the masterdata catch-all); the single-base
+  `ERP_BASE_URL` console model is unchanged.
+
 - **Masterdata write binding (TASK-PC-FE-046 department pilot →
   TASK-PC-FE-048 all 5 masters; ADR-MONO-016 § D3.1 amended)**: each of
   the five masters exposes its `masterdata-service` mutations as a

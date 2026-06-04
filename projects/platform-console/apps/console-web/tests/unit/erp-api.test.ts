@@ -368,16 +368,18 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
       expect(h['X-Operator-Reason']).toBeUndefined();
       expect(h['Content-Type']).toBeUndefined();
     }
-    // The api module exports the 10 read functions PLUS the write
+    // The api module exports the 10 masterdata read functions + 2
+    // read-model read functions (TASK-PC-FE-049) PLUS the write
     // functions for ALL FIVE masters (TASK-PC-FE-046 department pilot →
     // TASK-PC-FE-048 the other four). Each master has create/update/retire;
     // department additionally has move-parent (hierarchy-specific). No v2
-    // approval-service / read-model-service / future admin-service surface.
+    // approval-service / future admin-service surface; read-model is
+    // read-only (E5 — no write function).
     const mod = await import('@/features/erp-ops/api/erp-api');
     const exported = Object.keys(mod).sort();
     expect(exported).toEqual(
       [
-        // 10 reads
+        // 10 masterdata reads
         'getBusinessPartnerById',
         'getCostCenterById',
         'getDepartmentById',
@@ -388,6 +390,9 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         'listDepartments',
         'listEmployees',
         'listJobGrades',
+        // TASK-PC-FE-049: 2 read-model reads (READ-ONLY, no write)
+        'listEmployeeOrgViews',
+        'getEmployeeOrgView',
         // department writes (+ move-parent)
         'createDepartment',
         'updateDepartment',
@@ -454,8 +459,9 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
       if (/export\s+async\s+function\s+POST\b/.test(src)) postRouteFiles += 1;
       if (/export\s+async\s+function\s+GET\b/.test(src)) getRouteFiles += 1;
     }
-    // 5 masters × {list GET, detail GET} = 10 GET route files.
-    expect(getRouteFiles).toBe(10);
+    // 5 masters × {list GET, detail GET} = 10 GET route files (masterdata)
+    // + TASK-PC-FE-049: 2 read-model GET routes = 12 total GET route files.
+    expect(getRouteFiles).toBe(12);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16.
     expect(postRouteFiles).toBe(16);

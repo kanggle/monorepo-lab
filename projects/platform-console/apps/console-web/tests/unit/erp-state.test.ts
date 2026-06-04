@@ -123,13 +123,15 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(state.jobGrades).toBeNull();
     expect(state.costCenters).toBeNull();
     expect(state.businessPartners).toBeNull();
+    // TASK-PC-FE-049: org-view is also null when not eligible.
+    expect(state.employeeOrgViews).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds all 5 masters in parallel (GAP OIDC token)', async () => {
+  it('eligible → seeds all 5 masters + read-model org-view in parallel (GAP OIDC token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Each call must return a FRESH Response (Response bodies are
-    // one-shot; the 5 parallel legs would otherwise share a
+    // one-shot; the 6 parallel legs would otherwise share a
     // consumed body and the second leg onward would throw).
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
       Promise.resolve(jsonResponse(listEnv())),
@@ -144,8 +146,10 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(state.jobGrades).not.toBeNull();
     expect(state.costCenters).not.toBeNull();
     expect(state.businessPartners).not.toBeNull();
-    // Five legs fetched in parallel.
-    expect(fetchMock.mock.calls.length).toBe(5);
+    // TASK-PC-FE-049: read-model org-view seeded.
+    expect(state.employeeOrgViews).not.toBeNull();
+    // TASK-PC-FE-049: six legs (5 masterdata + 1 read-model org-view).
+    expect(fetchMock.mock.calls.length).toBe(6);
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;
       expect(h.Authorization).toBe('Bearer GAP-ACCESS');
@@ -162,7 +166,8 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     vi.stubGlobal('fetch', fetchMock);
 
     await getErpSectionState(true, '2025-01-01');
-    expect(fetchMock.mock.calls.length).toBe(5);
+    // TASK-PC-FE-049: 6 legs (5 masterdata + 1 read-model org-view).
+    expect(fetchMock.mock.calls.length).toBe(6);
     for (const [url] of fetchMock.mock.calls) {
       const u = new URL(String(url));
       expect(u.searchParams.get('asOf')).toBe('2025-01-01');
@@ -211,8 +216,8 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     // degrade (any-other-error → degrade), NOT a retry storm.
     expect(state.degraded).toBe(true);
     // Each leg attempted exactly once (no retry from a 429 honour;
-    // Promise.all 5 → 5 fetches max).
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(5);
+    // Promise.all 6 → 6 fetches max; TASK-PC-FE-049 adds the read-model leg).
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
     for (const [, init] of fetchMock.mock.calls) {
       expect((init as RequestInit).method).toBe('GET');
     }

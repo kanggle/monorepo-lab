@@ -122,6 +122,122 @@ export const ErpMetaSchema = z
 export type ErpMeta = z.infer<typeof ErpMetaSchema>;
 
 // ---------------------------------------------------------------------------
+// read-model meta — extends the base meta with `warning` (required,
+// always present) and optional `unresolved` (only when ≥ 1 reference
+// is not yet projected). Both fields MUST be tolerated by the consumer
+// regardless of presence (eventually-consistent, E5).
+// ---------------------------------------------------------------------------
+
+/** erp read-model success-meta (TASK-PC-FE-049 — `read-model-api.md`):
+ *  extends `ErpMetaSchema` with the required `warning` (always
+ *  "Eventually-consistent read-model") and the optional `unresolved`
+ *  array (field names whose master event has not yet been consumed).
+ *  Schema is TOLERANT: unknown fields pass through; `warning` is
+ *  optional at the schema level so an absent value does not throw. */
+export const ReadModelMetaSchema = z
+  .object({
+    timestamp: z.string().optional(),
+    page: z.number().int().nonnegative().optional(),
+    size: z.number().int().positive().optional(),
+    totalElements: z.number().int().nonnegative().optional(),
+    warning: z.string().optional(),
+    unresolved: z.array(z.string()).optional(),
+  })
+  .passthrough();
+export type ReadModelMeta = z.infer<typeof ReadModelMetaSchema>;
+
+// ---------------------------------------------------------------------------
+// EmployeeOrgView — read-model projection (TASK-PC-FE-049).
+//   GET /api/erp/read-model/employees (?page=&size=&asOf=&departmentId=&status=)
+//   GET /api/erp/read-model/employees/{id} (?asOf=)
+// Fields derived verbatim from `read-model-api.md` § EmployeeOrgView.
+// A `null` on department / costCenter / jobGrade means the projected
+// master event has not yet been consumed (eventually-consistent, E5).
+// NEVER fabricate a non-null value for an unresolved reference.
+// ---------------------------------------------------------------------------
+
+export const DepartmentPathNodeSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+  })
+  .passthrough();
+export type DepartmentPathNode = z.infer<typeof DepartmentPathNodeSchema>;
+
+export const DepartmentRefSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    path: z.array(DepartmentPathNodeSchema),
+  })
+  .passthrough();
+export type DepartmentRef = z.infer<typeof DepartmentRefSchema>;
+
+export const CostCenterRefSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+  })
+  .passthrough();
+export type CostCenterRef = z.infer<typeof CostCenterRefSchema>;
+
+export const JobGradeRefSchema = z
+  .object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    displayOrder: z.number().int().optional(),
+  })
+  .passthrough();
+export type JobGradeRef = z.infer<typeof JobGradeRefSchema>;
+
+export const EmployeeOrgViewSchema = z
+  .object({
+    id: z.string(),
+    employeeNumber: z.string(),
+    name: z.string(),
+    // free-string for tolerance (ACTIVE / RETIRED / future)
+    status: z.string(),
+    effectivePeriod: EffectivePeriodSchema,
+    department: DepartmentRefSchema.nullable(),
+    costCenter: CostCenterRefSchema.nullable(),
+    jobGrade: JobGradeRefSchema.nullable(),
+  })
+  .passthrough();
+export type EmployeeOrgView = z.infer<typeof EmployeeOrgViewSchema>;
+
+export const EmployeeOrgViewListResponseSchema = z.object({
+  data: z.array(EmployeeOrgViewSchema),
+  meta: ReadModelMetaSchema,
+});
+export type EmployeeOrgViewListResponse = z.infer<
+  typeof EmployeeOrgViewListResponseSchema
+>;
+
+export const EmployeeOrgViewDetailResponseSchema = z.object({
+  data: EmployeeOrgViewSchema,
+  meta: ReadModelMetaSchema,
+});
+export type EmployeeOrgViewDetailResponse = z.infer<
+  typeof EmployeeOrgViewDetailResponseSchema
+>;
+
+/** Query params for the read-model employee org-view list.
+ *  Extends `ErpListQueryParams` with `departmentId` (subtree filter)
+ *  and `status` (`ACTIVE | RETIRED`; default `ACTIVE`). `asOf` (E3)
+ *  threads through verbatim. */
+export interface OrgViewListQueryParams {
+  asOf?: string;
+  page?: number;
+  size?: number;
+  departmentId?: string;
+  status?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Department — list + detail (E3 point-in-time read; parentId for
 // hierarchical structure).
 //   GET /api/erp/masterdata/departments (?asOf=&active=&parentId=&page=&size=)
