@@ -80,9 +80,11 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void seed() {
-        // Home tenant = acme-corp; assignment row → globex.
+        // Home tenant = acme-corp; assignment row → globex with a populated
+        // org_scope subtree (TASK-BE-338). The acme-corp home tenant itself has
+        // NO explicit assignment row → org_scope resolves to null (net-zero).
         seedOperator(OP_UUID, OP_SUBJECT, "acme-corp", "assign-op@example.com");
-        seedAssignment(OP_UUID, "globex");
+        seedAssignment(OP_UUID, "globex", "[\"dept-sales\"]");
         // Platform-scope operator.
         seedOperator(SUPER_UUID, SUPER_SUBJECT, "*", "super-assign@example.com");
     }
@@ -99,6 +101,28 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     void assignedTenant_assigned() throws Exception {
         check(OP_SUBJECT, "globex").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true));
+    }
+
+    @Test
+    @DisplayName("BE-338: seeded org_scope subtree → assigned=true + orgScope=[dept-sales]")
+    void assignedTenant_returnsOrgScope() throws Exception {
+        check(OP_SUBJECT, "globex").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.orgScope[0]").value("dept-sales"));
+    }
+
+    @Test
+    @DisplayName("BE-338: legacy home tenant (no explicit row) → assigned=true + orgScope ABSENT (net-zero, ⟺ [\"*\"])")
+    void homeTenant_orgScopeNull() throws Exception {
+        // admin-service serializes with @JsonInclude(NON_NULL), so a null orgScope is
+        // OMITTED from the JSON — NOT rendered as `"orgScope": null`. Absent ⟺ null ⟺
+        // ["*"] (net-zero): the auth-service AdminAssignmentClient parses an absent/null
+        // orgScope to null → TenantClaimTokenCustomizer injects ["*"]. doesNotExist() is
+        // the correct net-zero assertion (the prior .value(nullValue()) required the path
+        // to exist, which the NON_NULL omission breaks → PathNotFoundException).
+        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.orgScope").doesNotExist());
     }
 
     @Test
@@ -145,12 +169,12 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
-    private void seedAssignment(String operatorUuid, String assignedTenant) {
+    private void seedAssignment(String operatorUuid, String assignedTenant, String orgScopeJson) {
         jdbcTemplate.update("""
                 INSERT IGNORE INTO operator_tenant_assignment
-                  (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
-                SELECT o.id, ?, NOW(6), NULL, NULL
+                  (operator_id, tenant_id, granted_at, granted_by, permission_set_id, org_scope)
+                SELECT o.id, ?, NOW(6), NULL, NULL, CAST(? AS JSON)
                   FROM admin_operators o WHERE o.operator_id = ?
-                """, assignedTenant, operatorUuid);
+                """, assignedTenant, orgScopeJson, operatorUuid);
     }
 }

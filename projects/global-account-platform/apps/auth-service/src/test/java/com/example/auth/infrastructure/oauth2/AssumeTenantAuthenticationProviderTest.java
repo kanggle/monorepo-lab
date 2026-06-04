@@ -117,7 +117,8 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("assigned → mint short-lived access token, NO refresh token")
     void assigned_mintsAccessTokenNoRefresh() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.isAssigned(OIDC_SUBJECT, SELECTED_TENANT)).thenReturn(true);
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256")
                 .subject(OIDC_SUBJECT)
@@ -147,7 +148,8 @@ class AssumeTenantAuthenticationProviderTest {
                 .expiresAt(Instant.now().plusSeconds(300))
                 .build();
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
-        when(operatorAssignmentPort.isAssigned(OIDC_SUBJECT, SELECTED_TENANT)).thenReturn(true);
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256").subject(OIDC_SUBJECT)
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
@@ -166,6 +168,52 @@ class AssumeTenantAuthenticationProviderTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-338: resolved org_scope carried onto the resolved grant")
+    void carriesResolvedOrgScope_onResolvedGrant() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(
+                        true, java.util.List.of("dept-sales")));
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        provider.authenticate(exchange());
+
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        Object grant = captor.getValue().getAuthorizationGrant();
+        assertThat(grant).isInstanceOf(AssumeTenantAuthenticationToken.class);
+        assertThat(((AssumeTenantAuthenticationToken) grant).getOrgScope())
+                .containsExactly("dept-sales");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-338 net-zero: null org_scope carried as null (customizer → [*])")
+    void carriesNullOrgScope_netZero() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        provider.authenticate(exchange());
+
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        AssumeTenantAuthenticationToken grant =
+                (AssumeTenantAuthenticationToken) captor.getValue().getAuthorizationGrant();
+        assertThat(grant.getOrgScope()).isNull();
+    }
+
+    @Test
     @DisplayName("subject token 무효 → invalid_grant (admin 미호출, mint 없음)")
     void invalidSubjectToken_invalidGrant_noAdminCall() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN))
@@ -176,7 +224,7 @@ class AssumeTenantAuthenticationProviderTest {
                 .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getErrorCode())
                         .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
 
-        verify(operatorAssignmentPort, never()).isAssigned(any(), any());
+        verify(operatorAssignmentPort, never()).resolveAssignment(any(), any());
         verify(tokenGenerator, never()).generate(any());
     }
 
@@ -184,7 +232,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("assignment-denied (not assigned) → no token, invalid_grant")
     void assignmentDenied_noToken() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.isAssigned(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
 
         assertThatThrownBy(() -> provider.authenticate(exchange()))
@@ -200,7 +248,7 @@ class AssumeTenantAuthenticationProviderTest {
     void adminUnavailable_failClosedDeny() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
         // The port wraps admin-down / timeout / circuit-open into AssumeTenantDeniedException.
-        when(operatorAssignmentPort.isAssigned(eq(OIDC_SUBJECT), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(eq(OIDC_SUBJECT), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException(
                         "assignment check failed — admin-service unavailable (fail-closed)",
                         new RuntimeException("connection refused")));

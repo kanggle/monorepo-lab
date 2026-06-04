@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -33,5 +34,19 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
             }
         }
         return tenantIds;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> findOrgScope(Long operatorInternalId, String tenantId) {
+        if (operatorInternalId == null || tenantId == null || tenantId.isBlank()) {
+            // No explicit assignment row → null ⟺ ["*"] (net-zero default).
+            return null;
+        }
+        // null when no explicit assignment row OR the column is unset (NULL).
+        // An explicit empty list ([]) is returned verbatim (zero-scope, NOT widened).
+        return repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
+                .map(OperatorTenantAssignmentJpaEntity::getOrgScope)
+                .orElse(null);
     }
 }

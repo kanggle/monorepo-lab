@@ -73,7 +73,8 @@ class OperatorAssignmentInternalChainSliceTest {
     @Test
     @DisplayName("유효 GAP JWT(Bearer) → 200 {assigned:true}")
     void validBearerJwt_returns200() throws Exception {
-        given(checkUseCase.isAssigned(eq(SUB), eq("acme-corp"))).willReturn(true);
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new com.example.admin.application.OperatorAssignmentCheckUseCase.Result(true, null));
         Jwt jwt = Jwt.withTokenValue("good-jwt")
                 .header("alg", "RS256")
                 .subject("auth-service-client")

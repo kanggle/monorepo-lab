@@ -42,9 +42,11 @@ import java.util.Set;
  *       base GAP OIDC token). Extract {@code sub} (account_id). Any validation
  *       failure → {@code invalid_grant} (fail-closed).</li>
  *   <li><b>Fail-CLOSED assignment gate</b>: call
- *       {@link OperatorAssignmentPort#isAssigned} (admin-service). Any failure
- *       (not-assigned / admin down / timeout / circuit-open) throws
- *       {@link AssumeTenantDeniedException} → {@code invalid_grant}, no token.</li>
+ *       {@link OperatorAssignmentPort#resolveAssignment} (admin-service). Any
+ *       failure (not-assigned / admin down / timeout / circuit-open) throws
+ *       {@link AssumeTenantDeniedException} → {@code invalid_grant}, no token. The
+ *       result also carries the per-assignment {@code org_scope} (TASK-BE-338)
+ *       which rides onto the resolved grant for the customizer to inject.</li>
  *   <li><b>Mint</b> through the shared {@link OAuth2TokenGenerator} +
  *       {@link TenantClaimTokenCustomizer} so the assumed token has the SAME
  *       {@code iss}/kid as the login token. The selected tenant +
@@ -114,8 +116,14 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // --- 2. FAIL-CLOSED assignment gate (admin-service). ---
         // ANY failure (not-assigned / admin down / timeout / circuit-open) throws
         // AssumeTenantDeniedException → invalid_grant. NOT fail-soft.
+        // TASK-BE-338: the result ALSO carries the selected assignment's org_scope
+        // (subtree-root ids; null ⟺ ["*"] net-zero) which rides onto the resolved
+        // grant for the customizer to inject.
+        java.util.List<String> orgScope;
         try {
-            operatorAssignmentPort.isAssigned(oidcSubject, selectedTenantId);
+            OperatorAssignmentPort.AssignmentResult assignment =
+                    operatorAssignmentPort.resolveAssignment(oidcSubject, selectedTenantId);
+            orgScope = assignment.orgScope();
         } catch (AssumeTenantDeniedException e) {
             log.debug("assume-tenant: assignment gate denied (fail-closed): {}", e.getMessage());
             throw invalidGrant("operator is not assigned to the selected tenant");
@@ -127,9 +135,12 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // JwtGenerator copies verbatim into the JwtEncodingContext — unlike
         // arbitrary context.put() attributes, which it does NOT copy. We rebuild the
         // grant carrying the resolved tenant_type so it survives the copy.
+        // TASK-BE-338: carry the resolved org_scope (null ⟺ ["*"] net-zero) on the
+        // grant so the customizer's assume-tenant branch injects the ACTUAL
+        // data-scope rather than the hardcoded ["*"] (TASK-BE-337 bridge).
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType, orgScope);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is

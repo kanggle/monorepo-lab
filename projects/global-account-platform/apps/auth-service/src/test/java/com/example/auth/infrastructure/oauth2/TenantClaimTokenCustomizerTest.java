@@ -578,6 +578,13 @@ class TenantClaimTokenCustomizerTest {
                 tenantId, tenantType, operatorAccountType);
     }
 
+    private AssumeTenantAuthenticationToken assumeGrant(
+            String tenantId, String tenantType, String operatorAccountType, List<String> orgScope) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, tenantType, operatorAccountType, orgScope);
+    }
+
     @Test
     @DisplayName("assume-tenant: PRESERVES the operator's account_type=OPERATOR on the assumed token")
     void assumeTenant_preservesOperatorAccountType() {
@@ -637,6 +644,69 @@ class TenantClaimTokenCustomizerTest {
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
         assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
         assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-338 (ADR-MONO-020 D3 amendment) — membership-derived org_scope
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-338: assume-tenant org_scope 미설정(null grant) → org_scope=[*] (net-zero, BE-337 동작 보존)")
+    void assumeTenant_nullOrgScope_injectsStar_netZero() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        // 2-arg grant → orgScope is null (the pre-BE-338 net-zero shape).
+        when(context.getAuthorizationGrant()).thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
+    }
+
+    @Test
+    @DisplayName("BE-338: assume-tenant 설정된 org_scope → 그 값 verbatim 주입")
+    void assumeTenant_populatedOrgScope_injectsValue() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                        List.of("dept-sales", "dept-ops")));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("erp"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("org_scope"))
+                .containsExactly("dept-sales", "dept-ops");
+    }
+
+    @Test
+    @DisplayName("BE-338: assume-tenant org_scope=[] (빈 배열) → [*] (net-zero default)")
+    void assumeTenant_emptyOrgScope_injectsStar() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR", List.of()));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("erp"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // An empty list at the claim layer is treated as net-zero → ["*"] (the
+        // customizer's safe default; an explicit [] zero-scope is preserved at the
+        // admin/claim source, but the assume-tenant injection defaults empty → [*]).
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
     }
 
     @Test

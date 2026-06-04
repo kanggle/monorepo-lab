@@ -8,9 +8,12 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -52,6 +55,15 @@ public class OperatorTenantAssignmentJpaEntity {
     @Column(name = "permission_set_id")
     private Long permissionSetId;
 
+    // TASK-BE-338 / ADR-MONO-020 D3 amendment — per-assignment data-scope: the
+    // department SUBTREE-ROOT ids the operator may act under within the assigned
+    // tenant. NULL ⟺ ["*"] = whole tenant (net-zero default); [] = explicit
+    // zero-scope (NOT widened to ["*"]). Mapped as a MySQL JSON array. Only erp
+    // consumes the propagated org_scope (subtree expansion happens there).
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "org_scope")
+    private List<String> orgScope;
+
     /**
      * Sole factory.
      *
@@ -61,17 +73,30 @@ public class OperatorTenantAssignmentJpaEntity {
      * @param grantedBy       internal BIGINT id of the granting operator, or {@code null}
      * @param permissionSetId per-assignment permission set ({@code admin_roles.id}),
      *                        or {@code null} to inherit operator-level roles
+     * @param orgScope        per-assignment data-scope (department subtree-root ids),
+     *                        or {@code null} for the whole tenant ({@code ["*"]} net-zero)
      */
     public static OperatorTenantAssignmentJpaEntity create(Long operatorId, String tenantId,
                                                            Instant grantedAt, Long grantedBy,
-                                                           Long permissionSetId) {
+                                                           Long permissionSetId, List<String> orgScope) {
         OperatorTenantAssignmentJpaEntity e = new OperatorTenantAssignmentJpaEntity();
         e.operatorId = operatorId;
         e.tenantId = tenantId;
         e.grantedAt = grantedAt;
         e.grantedBy = grantedBy;
         e.permissionSetId = permissionSetId;
+        e.orgScope = orgScope;
         return e;
+    }
+
+    /**
+     * Net-zero overload — {@code orgScope = null} ⟺ {@code ["*"]} (whole tenant).
+     * Preserves the pre-BE-338 5-arg call sites.
+     */
+    public static OperatorTenantAssignmentJpaEntity create(Long operatorId, String tenantId,
+                                                           Instant grantedAt, Long grantedBy,
+                                                           Long permissionSetId) {
+        return create(operatorId, tenantId, grantedAt, grantedBy, permissionSetId, null);
     }
 
     public static class PK implements Serializable {

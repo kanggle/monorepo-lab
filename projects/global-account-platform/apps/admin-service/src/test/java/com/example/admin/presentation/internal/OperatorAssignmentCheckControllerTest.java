@@ -47,21 +47,38 @@ class OperatorAssignmentCheckControllerTest {
     private OperatorAssignmentCheckUseCase checkUseCase;
 
     @Test
-    @DisplayName("assigned=true → 200 {assigned:true}")
-    void assignedTrue() throws Exception {
-        given(checkUseCase.isAssigned(eq(SUB), eq("acme-corp"))).willReturn(true);
+    @DisplayName("assigned=true + org_scope 설정 → 200 {assigned:true, orgScope:[...]}")
+    void assignedTrue_withOrgScope() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, java.util.List.of("dept-sales")));
 
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", SUB)
                         .param("tenantId", "acme-corp"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.assigned").value(true));
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.orgScope[0]").value("dept-sales"));
     }
 
     @Test
-    @DisplayName("assigned=false (미할당/unknown/non-ACTIVE 모두) → 200 {assigned:false}")
+    @DisplayName("assigned=true + org_scope 미설정(NULL) → 200 {assigned:true, orgScope:null} (net-zero)")
+    void assignedTrue_nullOrgScope() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.orgScope").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    @DisplayName("assigned=false (미할당/unknown/non-ACTIVE 모두) → 200 {assigned:false, orgScope:null}")
     void assignedFalse() throws Exception {
-        given(checkUseCase.isAssigned(eq(SUB), eq("globex"))).willReturn(false);
+        given(checkUseCase.check(eq(SUB), eq("globex")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(false, null));
 
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", SUB)

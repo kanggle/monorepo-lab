@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * TASK-BE-327 (ADR-MONO-020 § 3.3 step 2, D2): internal read surface that
  * authorizes the auth-service assume-tenant exchange. auth-service calls this
@@ -34,20 +36,38 @@ public class OperatorAssignmentCheckController {
     /**
      * GET /internal/operator-assignments/check?oidcSubject=&tenantId=
      *
-     * <p>Returns {@code {assigned: true|false}} per the operator's effective
-     * tenant scope (legacy home ∪ assignments; {@code '*'} platform → true).
-     * Never leaks operator existence vs unassigned beyond the boolean: an unknown
-     * subject, a non-ACTIVE operator, and an unassigned tenant all return
-     * {@code {assigned:false}} with HTTP 200.
+     * <p>Returns {@code {assigned: true|false, orgScope: [...]|null}} per the
+     * operator's effective tenant scope (legacy home ∪ assignments; {@code '*'}
+     * platform → true). Never leaks operator existence vs unassigned beyond the
+     * boolean: an unknown subject, a non-ACTIVE operator, and an unassigned tenant
+     * all return {@code {assigned:false}} with HTTP 200.
+     *
+     * <p>TASK-BE-338 (ADR-MONO-020 D3 amendment): {@code orgScope} is the selected
+     * assignment's per-assignment data-scope (department subtree-root ids).
+     * A {@code null} orgScope ⟺ {@code ["*"]} = whole tenant (net-zero) — applies
+     * when the column is unset, when there is no explicit assignment row (legacy
+     * home-tenant / platform-scope), and for every {@code assigned=false} case.
+     * Because admin-service serializes with {@code @JsonInclude(NON_NULL)}, a null
+     * orgScope is **OMITTED** from the JSON (the field is simply absent — NOT
+     * rendered as {@code "orgScope": null}). The field is ADDITIVE: the
+     * {@code assigned} verdict + status codes are byte-unchanged from TASK-BE-327;
+     * the auth-service {@code AdminAssignmentClient} parses an absent/null/non-list
+     * orgScope to {@code null} → {@code TenantClaimTokenCustomizer} injects
+     * {@code ["*"]} (graceful net-zero).
      */
     @GetMapping("/check")
     public ResponseEntity<AssignmentCheckResponse> check(
             @RequestParam String oidcSubject,
             @RequestParam String tenantId) {
-        boolean assigned = checkUseCase.isAssigned(oidcSubject, tenantId);
-        return ResponseEntity.ok(new AssignmentCheckResponse(assigned));
+        OperatorAssignmentCheckUseCase.Result result = checkUseCase.check(oidcSubject, tenantId);
+        return ResponseEntity.ok(new AssignmentCheckResponse(result.assigned(), result.orgScope()));
     }
 
-    /** {@code {"assigned": true|false}} — TASK-BE-327 assignment-check response. */
-    public record AssignmentCheckResponse(boolean assigned) {}
+    /**
+     * {@code {"assigned": true|false, "orgScope": [...]|null}} — TASK-BE-327
+     * assignment-check response, extended ADDITIVELY by TASK-BE-338 with the
+     * selected assignment's {@code orgScope} ({@code null} ⟺ {@code ["*"]}
+     * net-zero).
+     */
+    public record AssignmentCheckResponse(boolean assigned, List<String> orgScope) {}
 }

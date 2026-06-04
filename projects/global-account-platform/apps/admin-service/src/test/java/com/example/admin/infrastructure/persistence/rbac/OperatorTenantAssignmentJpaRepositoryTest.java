@@ -112,6 +112,40 @@ class OperatorTenantAssignmentJpaRepositoryTest {
     }
 
     @Test
+    @DisplayName("BE-338: org_scope JSON round-trip — null(미설정) + populated 배열")
+    void orgScope_jsonRoundTrip() {
+        Long opId = saveOperator("op4@example.com");
+
+        // null org_scope (net-zero default) via the 5-arg overload.
+        repo.saveAndFlush(OperatorTenantAssignmentJpaEntity.create(opId, "wms", Instant.now(), null, null));
+        // populated org_scope (subtree-root id array).
+        repo.saveAndFlush(OperatorTenantAssignmentJpaEntity.create(
+                opId, "scm", Instant.now(), null, null, List.of("dept-sales", "dept-ops")));
+
+        OperatorTenantAssignmentJpaEntity wms =
+                repo.findByOperatorIdAndTenantId(opId, "wms").orElseThrow();
+        assertThat(wms.getOrgScope()).as("unset org_scope → null (net-zero)").isNull();
+
+        OperatorTenantAssignmentJpaEntity scm =
+                repo.findByOperatorIdAndTenantId(opId, "scm").orElseThrow();
+        assertThat(scm.getOrgScope()).containsExactly("dept-sales", "dept-ops");
+    }
+
+    @Test
+    @DisplayName("BE-338: org_scope [] (명시적 zero-scope) round-trip — NULL 과 구분")
+    void orgScope_emptyArray_distinctFromNull() {
+        Long opId = saveOperator("op5@example.com");
+
+        repo.saveAndFlush(OperatorTenantAssignmentJpaEntity.create(
+                opId, "finance", Instant.now(), null, null, List.of()));
+
+        OperatorTenantAssignmentJpaEntity row =
+                repo.findByOperatorIdAndTenantId(opId, "finance").orElseThrow();
+        // Explicit empty array is preserved as [] (NOT widened to null/["*"]).
+        assertThat(row.getOrgScope()).isNotNull().isEmpty();
+    }
+
+    @Test
     @DisplayName("다른 오퍼레이터의 배정은 제외")
     void findByOperatorId_excludesOtherOperators() {
         Long opA = saveOperator("opA@example.com");

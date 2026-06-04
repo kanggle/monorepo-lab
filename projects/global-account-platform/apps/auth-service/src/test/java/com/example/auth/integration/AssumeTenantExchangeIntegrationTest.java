@@ -183,7 +183,8 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("happy: assigned + subscription → tenant_id=selected + entitled_domains, NO refresh_token, same iss")
     void happyPath() throws Exception {
-        when(operatorAssignmentPort.isAssigned(anyString(), eq(SELECTED_TENANT))).thenReturn(true);
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         stubEntitledDomains("finance", "wms");
 
         String base = mintBaseToken("assume-op-001");
@@ -209,10 +210,10 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
                 .as("assumed token scope must include the delegated erp.write")
                 .contains("erp.write");
 
-        // TASK-BE-337: the assumed operator token carries org_scope=[*] (the v1
-        // gateway-enrichment data-scope bridge) so erp masterdata-service's
-        // data-scope gate admits a targeted department WRITE (per-operator
-        // org-membership scoping is v2). Mirrors client_credentials → "*".
+        // TASK-BE-337 → TASK-BE-338 net-zero: this operator's resolveAssignment
+        // returns a null org_scope (unset assignment), so the customizer injects
+        // org_scope=[*] (whole tenant) — byte-identical to the BE-337 v1 bridge.
+        // A populated org_scope is asserted in populatedOrgScope_carriedAsClaim.
         assertThat(assumed.get("org_scope")).as("assumed token must carry org_scope").isNotNull();
         assertThat(assumed.get("org_scope").toString()).contains("*");
 
@@ -222,9 +223,29 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("BE-338: assigned + 설정된 org_scope → assumed token org_scope=그 값 (AC-5)")
+    void populatedOrgScope_carriedAsClaim() throws Exception {
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(
+                        true, java.util.List.of("dept-sales")));
+        stubEntitledDomains("erp");
+
+        String base = mintBaseToken("assume-op-007");
+        MvcResult result = assumeTenant(base, SELECTED_TENANT);
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(
+                objectMapper.readTree(result.getResponse().getContentAsString())
+                        .get("access_token").asText());
+        // The membership-derived org_scope is carried VERBATIM (not the ["*"] bridge).
+        assertThat(assumed.get("org_scope")).isNotNull();
+        assertThat(assumed.get("org_scope").toString()).contains("dept-sales").doesNotContain("*");
+    }
+
+    @Test
     @DisplayName("denied: assignment-denied → no token, invalid_grant (AC-2)")
     void deniedPath() throws Exception {
-        when(operatorAssignmentPort.isAssigned(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
 
         String base = mintBaseToken("assume-op-002");
@@ -237,7 +258,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("admin-unavailable → fail-CLOSED deny, invalid_grant (AC-2)")
     void adminUnavailable_failClosed() throws Exception {
-        when(operatorAssignmentPort.isAssigned(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException("admin-service unavailable (fail-closed)",
                         new RuntimeException("connection refused")));
 
@@ -251,7 +272,8 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("account-unavailable → fail-SOFT: token issued WITHOUT entitled_domains (AC-3)")
     void accountUnavailable_failSoft() throws Exception {
-        when(operatorAssignmentPort.isAssigned(anyString(), eq(SELECTED_TENANT))).thenReturn(true);
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         // account /internal/tenant-domain-subscriptions returns 503 → fail-soft.
         wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
                 .willReturn(WireMock.aResponse().withStatus(503)));
