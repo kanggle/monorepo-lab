@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-008-org-scope-subtree-containment-and-read-filter.md` — **erp `org_scope` 소비 — masterdata subtree containment + read-model read 필터 (BE-337 `["*"]` 브리지의 v2 erp 측)**. 분석=Opus 4.8 / 구현 권장=Opus. ADR-MONO-020 D3 amendment(2026-06-05) + masterdata architecture.md E6 point 3 v2(spec PR 동반) 실행: 운영자 토큰 `org_scope`=부서 subtree-root(TASK-BE-338 도출) → masterdata `RoleScopeAuthorizationAdapter` 가 root 를 자기 부서트리로 **descendant 확장**(현재 flat `contains`→subtree-aware) + read-model `ReadAuthorizationGate`/query 가 동일 subtree 로 org-view **read 필터**(write·read 데이터-스코프 대칭). `"*"`/미설정=현행(net-zero, bypass). **BE-338 net-zero 라 순서 무관.** claim 은 root 만(GAP 이 erp 트리 모름), erp 가 자기 트리로 확장. 사용자 "per-operator org_scope" 선택.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-008-org-scope-subtree-containment-and-read-filter.md` — **erp `org_scope` 소비 — masterdata subtree containment + read-model read 필터 — impl PR open**. 분석=Opus 4.8 / 구현=backend-engineer(Opus dispatch)+dispatcher 독립 재검증. ADR-MONO-020 D3 amendment(2026-06-05) + masterdata architecture.md E6 point 3 v2 실행: 운영자 토큰 `org_scope`=부서 subtree-root(BE-338 도출) → masterdata `RoleScopeAuthorizationAdapter` flat `contains`→**subtree-aware `isWithinScopedSubtree`**(target→조상 walk via `DepartmentRepository.ancestors`, depth-bound+cycle-break E1; target==root exact-match shortcut; `isPlatformScope()` `["*"]` bypass + empty→`DENY_SCOPE` fail-closed 불변) + read-model `OrgScope` VO + `ReadAuthorizationGate.orgScope(jwt)`(absent/`"*"`→platform=net-zero, explicit `[]` via hasClaim→zero-scope) + `QueryEmployeeOrgViewUseCase` list/getOne 가 subtree(roots→descendants via `findSubtreeIds`) 필터, `?departmentId=` 와 합성; out-of-scope detail→**404 MASTERDATA_NOT_FOUND**(누설 방지), 미투영 dept→보수적 제외(E5). write·read 데이터-스코프 **대칭**. **dispatcher 독립 재검증**: scope=erp masterdata+read-model only · `isPlatformScope` bypass 보존 · 조상-walk subtree(L122-136) · platform/absent→no narrowing · `:check --rerun-tasks` BUILD SUCCESSFUL(masterdata 62 + read-model 67, 0 failures). **⚠️ IT(@Tag integration, Testcontainers MySQL+Kafka)**=CI Linux 권위 게이트(subtree write 200/403 + scoped list 좁힘 + out-of-scope detail 404 + net-zero), 로컬 미실행. 사용자 "per-operator org_scope" 선택.
 
 ## done
 
