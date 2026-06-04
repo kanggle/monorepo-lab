@@ -5,6 +5,7 @@ import type {
   CostCenterListResponse,
   DepartmentListResponse,
   EmployeeListResponse,
+  EmployeeOrgViewListResponse,
   JobGradeListResponse,
 } from '../api/types';
 import { AsOfPicker } from './AsOfPicker';
@@ -13,6 +14,7 @@ import { EmployeeList } from './EmployeeList';
 import { JobGradeList } from './JobGradeList';
 import { CostCenterList } from './CostCenterList';
 import { BusinessPartnerList } from './BusinessPartnerList';
+import { EmployeeOrgViewCard } from './EmployeeOrgViewCard';
 import type { MasterOption } from './MasterWriteDialog';
 
 /**
@@ -32,6 +34,8 @@ export interface ErpOpsScreenProps {
   initialJobGrades: JobGradeListResponse | null;
   initialCostCenters: CostCenterListResponse | null;
   initialBusinessPartners: BusinessPartnerListResponse | null;
+  /** TASK-PC-FE-049: read-model employee org-view initial snapshot. */
+  initialEmployeeOrgViews?: EmployeeOrgViewListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
 }
@@ -57,6 +61,7 @@ export function ErpOpsScreen({
   initialJobGrades,
   initialCostCenters,
   initialBusinessPartners,
+  initialEmployeeOrgViews,
   mastersWritable = false,
 }: ErpOpsScreenProps) {
   const departments = toOptions(initialDepartments);
@@ -97,6 +102,11 @@ export function ErpOpsScreen({
       <BusinessPartnerList
         initial={initialBusinessPartners ?? undefined}
         writable={mastersWritable}
+      />
+
+      {/* TASK-PC-FE-049 — integrated read-model org-view card (read-only). */}
+      <EmployeeOrgViewCard
+        initial={initialEmployeeOrgViews ?? undefined}
       />
     </section>
   );

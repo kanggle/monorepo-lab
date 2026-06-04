@@ -103,3 +103,23 @@ export function businessPartnerDetailKey(
 ) {
   return [ERP_KEY, 'business-partners', 'detail', id, asOf ?? null] as const;
 }
+
+// ---------------------------------------------------------------------------
+// read-model — employee org-view (TASK-PC-FE-049)
+// ---------------------------------------------------------------------------
+
+export function employeeOrgViewsListKey(
+  asOf: string | undefined,
+  page: number,
+  size: number,
+  filters?: { departmentId?: string; status?: string },
+) {
+  return [ERP_KEY, 'read-model', 'employees', 'list', asOf ?? null, page, size, filters ?? null] as const;
+}
+
+export function employeeOrgViewDetailKey(
+  id: string,
+  asOf: string | undefined,
+) {
+  return [ERP_KEY, 'read-model', 'employees', 'detail', id, asOf ?? null] as const;
+}

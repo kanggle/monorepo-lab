@@ -6,6 +6,7 @@ import {
   listJobGrades,
   listCostCenters,
   listBusinessPartners,
+  listEmployeeOrgViews,
 } from './erp-api';
 import type {
   DepartmentListResponse,
@@ -13,6 +14,7 @@ import type {
   JobGradeListResponse,
   CostCenterListResponse,
   BusinessPartnerListResponse,
+  EmployeeOrgViewListResponse,
   ErpListQueryParams,
 } from './types';
 
@@ -71,6 +73,11 @@ export interface ErpSectionState {
   jobGrades: JobGradeListResponse | null;
   costCenters: CostCenterListResponse | null;
   businessPartners: BusinessPartnerListResponse | null;
+  /** TASK-PC-FE-049 — read-model employee org-view first-page
+   *  snapshot. Eventually-consistent (E5); `null` when the leg
+   *  failed individually (the section overall may still be
+   *  non-degraded — the masterdata legs are independent). */
+  employeeOrgViews: EmployeeOrgViewListResponse | null;
   /** True when the operator is not erp-eligible (no erp
    *  product/tenant in their registry) — actionable block, no erp
    *  call fabricated. */
@@ -88,6 +95,7 @@ const EMPTY: ErpSectionState = {
   jobGrades: null,
   costCenters: null,
   businessPartners: null,
+  employeeOrgViews: null,
   notEligible: false,
   forbidden: false,
   degraded: false,
@@ -122,14 +130,30 @@ export async function getErpSectionState(
   };
   if (asOf) params.asOf = asOf;
 
+  // read-model org-view params (TASK-PC-FE-049): same asOf; `status`
+  // not specified → producer default (ACTIVE). `departmentId` not
+  // filtered at the section seed level — operator can filter via the
+  // card's own controls later.
+  const orgViewParams = { page: 0, size: 20, ...(asOf ? { asOf } : {}) };
+
   try {
-    const [departments, employees, jobGrades, costCenters, businessPartners] =
-      await Promise.all([
+    const [
+      departments,
+      employees,
+      jobGrades,
+      costCenters,
+      businessPartners,
+      employeeOrgViews,
+    ] = await Promise.all([
         listDepartments(params),
         listEmployees(params),
         listJobGrades(params),
         listCostCenters(params),
         listBusinessPartners(params),
+        // read-model leg — eventually consistent; a failure on this
+        // leg alone degrades the whole section (same resilience
+        // boundary as the other legs via the shared catch block).
+        listEmployeeOrgViews(orgViewParams),
       ]);
     return {
       departments,
@@ -137,6 +161,7 @@ export async function getErpSectionState(
       jobGrades,
       costCenters,
       businessPartners,
+      employeeOrgViews,
       notEligible: false,
       forbidden: false,
       degraded: false,
@@ -187,4 +212,6 @@ export {
   costCenterDetailKey,
   businessPartnersListKey,
   businessPartnerDetailKey,
+  employeeOrgViewsListKey,
+  employeeOrgViewDetailKey,
 } from './erp-keys';

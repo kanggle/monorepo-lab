@@ -32,6 +32,7 @@
  * force-fit the finance account-id-driven shape.
  */
 export { ErpOpsScreen } from './components/ErpOpsScreen';
+export { EmployeeOrgViewCard } from './components/EmployeeOrgViewCard';
 export { AsOfPicker } from './components/AsOfPicker';
 export { EffectivePeriodBadge } from './components/EffectivePeriodBadge';
 export { RetiredReferenceBadge } from './components/RetiredReferenceBadge';
@@ -85,8 +86,10 @@ export {
   costCenterDetailKey,
   businessPartnersListKey,
   businessPartnerDetailKey,
+  employeeOrgViewsListKey,
+  employeeOrgViewDetailKey,
 } from './api/erp-state';
-export { useAsOf } from './hooks/use-erp-ops';
+export { useAsOf, useEmployeeOrgViews } from './hooks/use-erp-ops';
 // TASK-PC-FE-046 — department write PILOT mutation hooks (the ONLY erp
 // mutation hooks; the other four masters have none).
 export {
@@ -126,6 +129,16 @@ export type {
   BusinessPartner,
   BusinessPartnerListResponse,
   BusinessPartnerDetailResponse,
+  // TASK-PC-FE-049 — read-model org-view types.
+  EmployeeOrgView,
+  EmployeeOrgViewListResponse,
+  EmployeeOrgViewDetailResponse,
+  DepartmentRef,
+  CostCenterRef,
+  JobGradeRef,
+  DepartmentPathNode,
+  ReadModelMeta,
+  OrgViewListQueryParams,
   EffectivePeriod,
   Audit,
   ErpMeta,
@@ -150,4 +163,9 @@ export {
   KNOWN_MASTER_STATUSES,
   KNOWN_EMPLOYMENT_STATUSES,
   KNOWN_PARTNER_TYPES,
+  // TASK-PC-FE-049 — read-model org-view schemas.
+  EmployeeOrgViewSchema,
+  EmployeeOrgViewListResponseSchema,
+  EmployeeOrgViewDetailResponseSchema,
+  ReadModelMetaSchema,
 } from './api/types';

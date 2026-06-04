@@ -33,8 +33,11 @@ import {
   type BusinessPartnerListResponse,
   BusinessPartnerSchema,
   type BusinessPartner,
+  EmployeeOrgViewListResponseSchema,
+  type EmployeeOrgViewListResponse,
   type ErpListQueryParams,
   type ErpDetailQueryParams,
+  type OrgViewListQueryParams,
   type CreateDepartmentInput,
   type UpdateDepartmentInput,
   type MoveDepartmentParentInput,
@@ -61,6 +64,7 @@ import {
   employeesListKey,
   jobGradeDetailKey,
   jobGradesListKey,
+  employeeOrgViewsListKey,
   normaliseAsOf,
 } from '../api/erp-keys';
 
@@ -502,6 +506,58 @@ export function useBusinessPartner(
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 6. read-model — employee org-view (TASK-PC-FE-049, READ-ONLY)
+//   GET /api/erp/read-model/employees
+// No mutation hook exists (E5 — read-model has no write surface).
+// ---------------------------------------------------------------------------
+
+async function fetchEmployeeOrgViewsList(
+  params: OrgViewListQueryParams,
+): Promise<EmployeeOrgViewListResponse> {
+  const qs = new URLSearchParams();
+  if (params.asOf) qs.set('asOf', params.asOf);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))));
+  if (params.departmentId) qs.set('departmentId', params.departmentId);
+  if (params.status) qs.set('status', params.status);
+  const raw = await apiClient.get<unknown>(
+    `/api/erp/read-model/employees?${qs.toString()}`,
+  );
+  return EmployeeOrgViewListResponseSchema.parse(raw);
+}
+
+export function useEmployeeOrgViews(
+  paramsIn: OrgViewListQueryParams = {},
+  initial?: EmployeeOrgViewListResponse,
+) {
+  const asOf = useThreadedAsOf(paramsIn.asOf);
+  const params: OrgViewListQueryParams = { ...paramsIn, asOf };
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.departmentId &&
+    !params.status;
+  return useQuery({
+    queryKey: employeeOrgViewsListKey(
+      asOf,
+      params.page ?? 0,
+      clampSize(params.size),
+      {
+        departmentId: params.departmentId,
+        status: params.status,
+      },
+    ),
+    queryFn: () => fetchEmployeeOrgViewsList(params),
+    initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 15_000 : 0,
+    refetchOnMount: seeded ? false : true,
     refetchOnWindowFocus: false,
     refetchInterval: false,
     retry: false,
