@@ -2,7 +2,7 @@
 name: erp-platform
 domain: erp
 traits: [internal-system, transactional, audit-heavy]
-service_types: [rest-api]
+service_types: [rest-api, event-consumer]
 compliance: []
 data_sensitivity: confidential
 scale_tier: startup
@@ -58,13 +58,16 @@ taxonomy_version: 0.1
 |---|---|---|
 | `gateway-service` | rest-api | 엣지 라우팅, GAP RS256 JWT 검증 (OAuth2 Resource Server), `tenant_id=erp` 게이트, internal-only 경계 강제 |
 | `masterdata-service` | rest-api | 조직 마스터데이터(부서/직원/직급/비용센터/거래처) 라이프사이클 — 참조 무결성, 유효기간, 불변 audit_log. 첫 service skeleton 의 1차 대상 (TASK-ERP-BE-001). |
+| `read-model-service` | rest-api + event-consumer | 통합 조회 read model **첫 증분** (TASK-ERP-BE-007) — masterdata 의 `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1` 4 토픽 구독 → projection 투영 → employee org-view(부서경로+비용센터+직급) read-only REST. 도메인 로직 미보유(E5). v2 풀 통합조회는 아래 v2 항목으로 잔존. |
+
+> **frontmatter `service_types` 에 `event-consumer` 추가 (TASK-ERP-BE-007)** — ADR-MONO-016 §D2 의 조건부("`rest-api` minimum **+ `event-consumer` if the integrated read model subscribes to domain events**")가 read-model-service 첫 증분으로 충족되어 발현. read-model-service 는 단일 deployable 에 `rest-api`(read-only 조회) + `event-consumer`(masterdata 이벤트 구독)를 결합한다(scm `inventory-visibility-service` 선례 — "read exactly one service-type file" 의 문서화 예외, 양 service-type 파일 모두 읽음). masterdata-service 는 여전히 `rest-api` 단일(outbox≠event-consumer).
 
 ### v2 (deferred — 별도 부트스트랩 task)
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
 | `approval-service` | rest-api | 결재 워크플로 (1~2단계 라우팅, 상태기계, 대결/위임, 결재함) — ADR-016 §D3 v2 (룰 라이브러리가 `internal-system` 을 작은 범위에서 먼저 소화한 후) |
-| `read-model-service` | rest-api | 통합 조회 read model (다른 도메인 사실 read-only 합성·이벤트 구독 투영; 도메인 로직 미보유) |
+| `read-model-service` (풀 통합조회) | rest-api + event-consumer | 첫 증분(employee org-view, TASK-ERP-BE-007)은 위 v1 표에서 활성. **잔여 v2** = business-partner + 결재/권한 등 전 도메인 사실 합성 + per-operator `org_scope` read 필터(membership-derived). |
 | `permission-service` | rest-api | 권한 매트릭스 / 데이터 범위 / SSO 신원 ↔ 내부 권한 매핑 |
 | `notification-service` | event-consumer | 결재 상신·승인·반려, 마스터 변경, 권한 변경 알림 fanout |
 | `admin-service` | rest-api | 운영 콘솔 백엔드 (예외 결재 검토, 권한 이상, 마스터 충돌 큐) |
@@ -101,11 +104,12 @@ curl -u erp-platform-internal-services-client:erp-dev \
 - 모든 마스터 변경의 불변 audit_log (E2).
 - GAP RS256 OAuth2 Resource Server + `tenant_id=erp` fail-closed 게이트 + internal-only 경계.
 - 결재 워크플로 1~2단계 모델 (forward-decl — 실 결재 service 는 v2 approval-service) + 통합 read model 책임 경계 선언.
+- `read-model-service` 통합 조회 **첫 증분** (TASK-ERP-BE-007) — masterdata 이벤트 4 토픽 구독 → employee org-view(부서경로+비용센터+직급) read-only 투영. 마스터 변경 전파 루프를 닫는다(E5 read-only).
 - `gateway-service` 엣지 라우팅 (masterdata-service 활성화와 함께).
 
 **v1 OUT (v2 deferred)**:
 - 결재 워크플로 풀 구현 (다단 라우팅·대결·위임·결재함) → `approval-service` (v2, ADR-016 §D3).
-- 통합 read model 실 구현 (다른 도메인 이벤트 구독·합성) → `read-model-service` (v2).
+- 통합 read model **풀** 구현 (business-partner + 전 도메인 사실 합성 + per-operator `org_scope` read 필터) → `read-model-service` v2 잔여. 첫 증분(employee org-view, masterdata 이벤트 구독)은 v1 IN (TASK-ERP-BE-007).
 - 별도 permission-service / notification-service / admin-service.
 - 인사 깊이(급여/근태/평가) — erp 는 7축상 도메인 로직 미보유; 인사 깊이는 별 도메인.
 - BI / 분석 / 대시보드 깊이 — platform-console parity slice 가 운영 view 제공 (ADR-013).
@@ -117,7 +121,7 @@ curl -u erp-platform-internal-services-client:erp-dev \
 
 - **mes / groupware / accounting-system / scm** (도메인) — § Domain Rationale 참조. 공장 실행·사내 협업·회계 원장·공급망 흐름은 erp 의 primary 책임이 아니다. mes 는 7축상 명시적 드롭(재제안 금지).
 - **integration-heavy** (trait) — taxonomy 정의가 **외부** 벤더 다중 연동(PG/통신사/배송사 3+)을 강조. erp 의 "통합" 은 **내부 cross-service 이벤트 구독/조회** 라 loose fit — 선언하지 않고 통합 read model 경계를 도메인 룰 E5 + architecture 레벨에서 표현한다 (ADR-016 §D2 caveat).
-- **read-heavy** (trait) — 통합 read model 의 CQRS read side 가 있으나 v1 핵심 워크로드가 대량 읽기 트래픽이 아니다. v2 read-model-service 도입 시 trait 추가 검토.
+- **read-heavy** (trait) — 통합 read model 의 CQRS read side 가 있으나(TASK-ERP-BE-007 read-model-service 첫 증분 활성) v1 핵심 워크로드가 대량 읽기 트래픽이 아니다 — 사내 운영자 조회 규모. **계속 미선언**(read-model-service 첫 증분은 읽기-무거움이 아님). 풀 통합조회(v2)가 대량 read 트래픽 축이 되면 그때 trait 추가 검토.
 - **multi-tenant** (trait) — GAP 의 `tenant_id=erp` claim 은 수신하나, erp-platform 내부에서 다수 organization 을 격리하는 SaaS 가 아님 (단일 사내 기간계 운영). GAP 가 multi-tenant IdP 역할.
 - **regulated** (trait) — 규제 준수가 시스템 설계를 좌우하는 도메인(finance/의료/공공)이 아니다. 사내 거버넌스는 `audit-heavy` + `internal-system` 으로 커버.
 - **event-driven** — taxonomy 의 11 trait 에 없는 분류 (HARDSTOP-02 회피). 이벤트 흐름은 `transactional` trait + 도메인 룰로 커버.

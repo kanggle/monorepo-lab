@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-007-read-model-service-org-view-first-increment.md` — **erp `read-model-service` 첫 증분 (event-propagation 수신 고리)**. 분석=Opus 4.8 / 구현 권장=Opus (신규 event-driven 서비스 부트스트랩 — Hexagonal + consumer 멱등/dedupe/DLT + dual-accept 보안 + CQRS read-model 경계). **발견**: masterdata producer 측은 이미 완성(5 마스터 → `erp.masterdata.*.changed.v1` 발행), 빠진 건 **소비자**(계약 "v1 consumers = none"). read-model-service 가 ADR-016 §D3 + masterdata architecture.md 에서 forward-declared → 신규 ADR 불요, 신규 서비스 architecture.md 만 HARDSTOP-09 gate(이 spec PR 충족). **첫 증분**: 4 토픽(department/employee/jobgrade/costcenter) 구독 + `processed_events` dedupe + 4 MySQL projection + 읽기 시점 employee org-view(부서경로+비용센터+직급) read-only REST 2종 + entitlement-trust dual-accept + erp docker-compose **Kafka 브로커 신설**(현재 부재). 청사진=scm `inventory-visibility-service`(rest-api+event-consumer, EventDedupe, no-outbox Cat C). **spec PR (this)**: task→ready/ + read-model-service spec 3종(architecture/read-model-api/read-model-subscriptions) + PROJECT.md(frontmatter `service_types:[rest-api,event-consumer]` + Service Map) + ADR-016 §D3 amendment + erp-masterdata-events.md consumer note + masterdata architecture.md forward-ref + INDEX. follow-up=① console "통합 조회" 카드 ② business-partner+풀 통합조회 ③ per-operator org_scope read 필터 ④ read-model IT 를 erp Integration CI job 편입.
 
 ## in-progress
 

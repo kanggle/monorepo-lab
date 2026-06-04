@@ -39,6 +39,17 @@ consumers:
 
 This contract is the v1 forward interface for those v2 consumers.
 
+> **[Amendment — TASK-ERP-BE-007, 2026-06-04]** The **first consumer now
+> exists**: `read-model-service` (first increment) subscribes to 4 of the 5
+> topics — `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1`
+> — to project the integrated **employee org-view** (read-only, E5). The
+> `businesspartner` topic stays unconsumed in this increment (not part of the
+> org-view). The producer side is **unchanged** by this — `read-model-service`
+> consumes this contract verbatim; the consumer-side rules it follows are in
+> [`read-model-subscriptions.md`](read-model-subscriptions.md). "v1 consumers =
+> none" remains the historical record of the producer-only bootstrap;
+> `read-model-service` is the first realisation of the forward interface.
+
 ---
 
 ## Envelope (libs/java-messaging standard)
