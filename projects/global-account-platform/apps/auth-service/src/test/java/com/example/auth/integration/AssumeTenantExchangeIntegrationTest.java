@@ -209,6 +209,13 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
                 .as("assumed token scope must include the delegated erp.write")
                 .contains("erp.write");
 
+        // TASK-BE-337: the assumed operator token carries org_scope=[*] (the v1
+        // gateway-enrichment data-scope bridge) so erp masterdata-service's
+        // data-scope gate admits a targeted department WRITE (per-operator
+        // org-membership scoping is v2). Mirrors client_credentials → "*".
+        assertThat(assumed.get("org_scope")).as("assumed token must carry org_scope").isNotNull();
+        assertThat(assumed.get("org_scope").toString()).contains("*");
+
         // Same iss as the base login token (federation invariant, AC-5).
         JsonNode basePayload = decodeJwtPayload(base);
         assertThat(assumed.get("iss").asText()).isEqualTo(basePayload.get("iss").asText());

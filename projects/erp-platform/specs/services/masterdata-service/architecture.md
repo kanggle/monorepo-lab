@@ -469,7 +469,15 @@ Single un-bypassable application path:
    gateway enrichment described in `specs/integration/gap-integration.md`
    § "sub claim of client_credentials tokens"). For human operators
    (v2 user-flow), the claim is resolved from the user's organizational
-   membership.
+   membership. **v1 bridge (TASK-BE-337)**: the console **assume-tenant
+   operator token** (`account_type=OPERATOR`, ADR-MONO-020 D4) is enriched
+   by GAP (`TenantClaimTokenCustomizer.customizeForAssumeTenant`) with
+   `org_scope=["*"]` — the same platform-wide default as
+   `client_credentials`, scoped WITHIN the already-tenant-gated request
+   (the tenant gate isolates cross-tenant, so `*` = all departments of the
+   assumed tenant). This unblocks the console erp department write pilot
+   (TASK-PC-FE-046) until v2 membership-derived subtree scoping lands; the
+   per-subtree fail-closed default (point below) is otherwise unchanged.
 4. **Fail-CLOSED default** — if the JWT lacks a recognizable role/scope,
    the decision is `DENY`. There is no allow-by-default codepath.
 
