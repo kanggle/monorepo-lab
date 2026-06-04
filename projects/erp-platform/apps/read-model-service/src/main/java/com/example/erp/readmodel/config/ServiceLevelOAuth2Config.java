@@ -1,0 +1,73 @@
+package com.example.erp.readmodel.config;
+
+import com.example.erp.readmodel.config.security.AllowedIssuersValidator;
+import com.example.erp.readmodel.config.security.TenantClaimValidator;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Service-level Resource Server JWT decoder. Mirrors the (v1-deferred) erp
+ * gateway-service validator chain so any direct call gets the same
+ * {@link AllowedIssuersValidator} + {@link TenantClaimValidator} verdict
+ * (architecture.md § Security — defense-in-depth). RS256 only (GAP JWKS).
+ *
+ * <p>The decode-time {@link TenantClaimValidator} applies the entitlement-trust
+ * dual-accept gate at JWT decode (independent of the {@code TenantClaimEnforcer}
+ * filter); both must dual-accept so a domain-entitled cross-tenant token
+ * survives decode before the filter's already-correct dual-accept runs.
+ */
+@Configuration
+public class ServiceLevelOAuth2Config {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Value("${erpplatform.oauth2.allowed-issuers}")
+    private String allowedIssuersCsv;
+
+    @Value("${erpplatform.oauth2.required-tenant-id:erp}")
+    private String requiredTenantId;
+
+    @Bean
+    @ConditionalOnMissingBean(JwtDecoder.class)
+    public JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        decoder.setJwtValidator(jwtTokenValidator());
+        return decoder;
+    }
+
+    @Bean
+    public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
+        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
+        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
+        validators.add(new JwtTimestampValidator());
+        validators.add(new AllowedIssuersValidator(allowedIssuers));
+        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(JwtValidators.createDefault());
+        return new DelegatingOAuth2TokenValidator<>(validators);
+    }
+
+    private static List<String> parseCsv(String csv) {
+        List<String> out = new ArrayList<>();
+        if (csv == null) return out;
+        for (String part : csv.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                out.add(trimmed);
+            }
+        }
+        return out;
+    }
+}

@@ -53,6 +53,13 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2s
 
+  # Kafka — outbox relay target (libs/java-messaging OutboxPollingScheduler).
+  # Until TASK-ERP-BE-007 wired a local broker into docker-compose, this fell
+  # back to the Spring Boot default (localhost:9092) with no broker present, so
+  # the relay never drained. KAFKA_BOOTSTRAP now points at the compose broker.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+
   # Standard OAuth2 Resource Server backed by GAP's JWKS.
   security:
     oauth2:

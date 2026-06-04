@@ -89,7 +89,11 @@ include(
 // yet — TASK-ERP-BE-001 implements it. This bootstrap intentionally resets the
 // libs/ churn clock (ADR-MONO-003a § D2.1, recorded in ADR-MONO-016 § 3.3).
 include(
-    'projects:erp-platform:apps:masterdata-service'
+    'projects:erp-platform:apps:masterdata-service',
+    // TASK-ERP-BE-007: read-model-service first increment — masterdata change
+    // event consumer + integrated employee org-view read API (rest-api +
+    // event-consumer, CQRS read-model; ADR-MONO-016 §D3 forward-decl realised).
+    'projects:erp-platform:apps:read-model-service'
 )
 
 // Project: platform-console

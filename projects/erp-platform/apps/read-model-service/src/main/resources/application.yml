@@ -1,0 +1,104 @@
+# -----------------------------------------------------------------------------
+# erp-platform read-model-service — TASK-ERP-BE-007.
+#
+# Integrated read model (first increment). Consumes masterdata-service's 4
+# master-change topics, projects denormalized MySQL tables, serves a read-only
+# employee org-view REST API. No outbox / no event publication (E5 terminal).
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: erp-platform-read-model-service
+
+  datasource:
+    # Own read store — separate database from masterdata-service's erp_db (CQRS).
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_read_model_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:erp}
+    password: ${MYSQL_PASSWORD:erp}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    # V1__init.sql (MySQL) owns the projection schema; Hibernate validates only.
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Kafka consumer — 4 masterdata topics. Manual ACK; values are read as String
+  # and parsed with the service ObjectMapper (blueprint: inventory-visibility).
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+    consumer:
+      group-id: erp-read-model-v1
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS (RS256), mirrors
+  # masterdata-service's chain (same erp tenant gate).
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.erp.readmodel: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} userId=%X{userId:-}]"
+
+erpplatform:
+  oauth2:
+    # Keep byte-identical to masterdata-service's allowed-issuers (cross-service
+    # issuer drift guard — SAS issuer + legacy global-account-platform D2-b).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
+  readmodel:
+    # Defensive depth-bound for the department ancestry walk (producer
+    # guarantees no parent-cycle; this is a belt-and-braces termination cap).
+    department-path-max-depth: ${ERP_DEPARTMENT_PATH_MAX_DEPTH:32}
