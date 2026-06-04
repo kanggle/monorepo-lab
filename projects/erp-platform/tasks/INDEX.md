@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-009-approval-service-bootstrap-first-increment.md` — **READY (2026-06-05)**. approval-service 부트스트랩 — 결재 워크플로 first increment (ERP v2 pillar, ADR-016 §D3 forward-declaration 집행, read-model ERP-BE-007 선례). 단일 Hexagonal `rest-api` (`apps/approval-service/`, `com.example.erp.approval`): `ApprovalRequest` 상태기계(DRAFT→SUBMITTED→APPROVED|REJECTED|WITHDRAWN, single-stage) + 권한결재자(E3, 자기결재 금지 I4 SoD) + 멱등전이(E4) + 불변감사(E8/A7) + masterdata subject ref-check(E1) + outbox `erp.approval.*.v1` + REST + 기본 inbox. erp 첫 실 도메인 로직(상태기계) — read-model E5 와 대비. deploy 배선(settings.gradle/CI/docker-compose) atomic 동반. v2-deferred=multi-stage/위임/IN_REVIEW/콘솔 parity. spec=architecture.md+approval-api.md+erp-approval-events.md(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
