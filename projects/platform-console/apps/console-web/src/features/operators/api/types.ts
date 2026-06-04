@@ -176,6 +176,79 @@ export interface OperatorMutationReason {
   reason: string;
 }
 
+// --- org-scope assignments (TASK-PC-FE-050 / TASK-BE-339) -----------------
+
+/**
+ * Per-(operator, active-tenant) assignment row carrier (TASK-BE-339,
+ * admin-api.md § `GET /api/admin/operators/{operatorId}/assignments` +
+ * § `PUT .../assignments/{tenantId}/org-scope`). The active tenant is
+ * always sent as `X-Tenant-Id`; the producer scopes the response to it
+ * and returns 0 or 1 rows (`home-tenant-only` operator → empty array →
+ * org_scope 부적용 / 전체).
+ *
+ * `orgScope` is field-level `@JsonInclude(NON_NULL)` on BOTH the GET list
+ * item AND the PUT response — the producer OMITS the key when the column
+ * is `NULL` (미설정 ⟺ `["*"]` net-zero / 전체). The console parses an
+ * ABSENT key to `null` (전체), an explicit `[]` to `[]` (차단 / zero-scope,
+ * distinct from null per BE-338 fail-closed), and a populated array to the
+ * department subtree-root ids. `null` ≠ `[]` — the tri-state must be
+ * unambiguous end-to-end.
+ *
+ * `permissionSetId` is also `@JsonInclude(NON_NULL)` (omitted when the
+ * assignment inherits the operator-level role) — parsed to `null` when
+ * absent. v1 reads it for display only (the PUT touches org_scope alone).
+ *
+ * `.passthrough()` tolerates a future sibling field on the row without a
+ * crash (forward-compat read posture; the org-scope tri-state is the only
+ * field this task writes).
+ */
+export const OperatorAssignmentSchema = z
+  .object({
+    tenantId: z.string(),
+    // ABSENT key (NON_NULL omit) ⇒ null (전체 / net-zero). An explicit
+    // `[]` (차단 / zero-scope) survives — it is NOT coerced to null.
+    orgScope: z.array(z.string()).nullable().optional(),
+    permissionSetId: z.number().int().nullable().optional(),
+  })
+  .passthrough()
+  .transform((row) => ({
+    tenantId: row.tenantId,
+    // Normalise the absent/undefined NON_NULL omission to an explicit
+    // `null` (전체) so downstream code never has to distinguish
+    // `undefined` (absent key) from `null`. An explicit `[]` is preserved.
+    orgScope: row.orgScope ?? null,
+    permissionSetId: row.permissionSetId ?? null,
+  }));
+export type OperatorAssignment = z.infer<typeof OperatorAssignmentSchema>;
+
+/** `GET .../assignments` envelope — `{ assignments: [...] }` (0 or 1 rows
+ *  for the active tenant). */
+export const OperatorAssignmentsResponseSchema = z.object({
+  assignments: z.array(OperatorAssignmentSchema),
+});
+export type OperatorAssignmentsResponse = z.infer<
+  typeof OperatorAssignmentsResponseSchema
+>;
+
+/**
+ * `PUT .../assignments/{tenantId}/org-scope` request body. The producer
+ * preserves the three-way semantics verbatim:
+ *   - `null`  → clear (전체 / net-zero ⟺ `["*"]`); column `NULL`.
+ *   - `[]`    → explicit zero-scope (차단; distinct from `null`).
+ *   - `[ids]` → department subtree-root ids (producer trims · rejects blank
+ *               · dedupes order-preserving · ≤ 256; GAP does NOT verify the
+ *               ids exist in erp — ERP-BE-008 验证 at consume time).
+ */
+export interface SetOrgScopeInput {
+  /** `null` clears (전체); `[]` is explicit 차단; `[ids]` is the subtree set. */
+  readonly orgScope: string[] | null;
+}
+
+/** `PUT` response — the updated assignment (same shape as a GET item; the
+ *  `orgScope` key is again NON_NULL-omitted when cleared → parsed to null). */
+export const SetOrgScopeResultSchema = OperatorAssignmentSchema;
+export type SetOrgScopeResult = z.infer<typeof SetOrgScopeResultSchema>;
+
 // --- update-profile (PATCH .../me/profile) — self, 204 No Content ---------
 
 /**

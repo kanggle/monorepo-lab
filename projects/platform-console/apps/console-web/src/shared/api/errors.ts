@@ -418,6 +418,13 @@ const MESSAGES: Record<string, string> = {
   PASSWORD_POLICY_VIOLATION:
     '새 비밀번호가 정책을 충족하지 않습니다 (10자 이상, 영문·숫자·특수문자 각 1자 이상).',
   PASSWORD_CONFIRM_MISMATCH: '새 비밀번호와 확인 입력이 일치하지 않습니다.',
+  // --- operator org_scope (TASK-PC-FE-050 / TASK-BE-339) -----------------
+  TENANT_SCOPE_MISMATCH:
+    '자기 활성 테넌트 밖의 배정은 편집할 수 없습니다. 테넌트를 다시 선택한 뒤 시도하세요.',
+  ASSIGNMENT_NOT_FOUND:
+    '이 테넌트에 대상 운영자의 명시 배정이 없습니다. (org_scope 는 배정 행에만 설정할 수 있습니다.)',
+  INVALID_REQUEST:
+    '입력한 부서 ID가 올바르지 않습니다 (빈 값 포함 또는 256개 초과).',
   // --- wms operations (TASK-PC-FE-007 / §2.4.5) --------------------------
   FORBIDDEN: '이 작업을 수행할 권한이 없습니다. (역할 확인 필요)',
   NOT_FOUND: '대상을 찾을 수 없습니다.',

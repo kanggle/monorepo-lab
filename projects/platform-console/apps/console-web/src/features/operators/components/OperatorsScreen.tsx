@@ -22,6 +22,7 @@ import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 import { CreateOperatorForm } from './CreateOperatorForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
+import { OrgScopeDialog } from './OrgScopeDialog';
 
 /**
  * GAP operators-management surface (TASK-PC-FE-004 — Phase 2 slice 3, the
@@ -127,6 +128,21 @@ export function OperatorsScreen({
             (o: OperatorSummary) => o.operatorId === profileEditOperatorId,
           ) ?? null),
     [page, profileEditOperatorId],
+  );
+  // TASK-PC-FE-050 — org_scope (데이터-스코프) dialog target, tracked by
+  // operatorId (reactive against the live list query, same posture as the
+  // profile-edit dialog).
+  const [orgScopeOperatorId, setOrgScopeOperatorId] = useState<string | null>(
+    null,
+  );
+  const orgScopeFor = useMemo<OperatorSummary | null>(
+    () =>
+      orgScopeOperatorId === null
+        ? null
+        : (page?.content.find(
+            (o: OperatorSummary) => o.operatorId === orgScopeOperatorId,
+          ) ?? null),
+    [page, orgScopeOperatorId],
   );
 
   const activeMutation = useMemo(() => {
@@ -472,6 +488,15 @@ export function OperatorsScreen({
                           >
                             프로파일 편집
                           </Button>
+                          {/* TASK-PC-FE-050 — org_scope (데이터-스코프) per the
+                              active tenant's assignment row. */}
+                          <Button
+                            variant="secondary"
+                            onClick={() => setOrgScopeOperatorId(op.operatorId)}
+                            data-testid={`action-org-scope-${op.operatorId}`}
+                          >
+                            조직 스코프
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -618,6 +643,18 @@ export function OperatorsScreen({
             );
           }}
           onCancel={() => setProfileEditOperatorId(null)}
+        />
+      )}
+
+      {/* TASK-PC-FE-050 — org_scope (데이터-스코프) dialog. Reads the active-
+          tenant assignment row + sets/clears its org_scope (tri-state
+          전체/선택/차단). Mounted only when a target operator is chosen. */}
+      {orgScopeFor && (
+        <OrgScopeDialog
+          open
+          operatorId={orgScopeFor.operatorId}
+          operatorLabel={orgScopeFor.email || orgScopeFor.operatorId}
+          onClose={() => setOrgScopeOperatorId(null)}
         />
       )}
     </section>

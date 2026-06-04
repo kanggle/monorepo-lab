@@ -120,6 +120,32 @@ export const AdminUpdateProfileBodySchema = z
   .strict();
 export type AdminUpdateProfileBody = z.infer<typeof AdminUpdateProfileBodySchema>;
 
+/**
+ * set-org-scope: the tri-state `orgScope` value + the audit `reason`
+ * (TASK-PC-FE-050 / TASK-BE-339). The same-origin body carries `reason`
+ * (mirror of /roles + /status — the client supplies the reason-capture
+ * gate's value; the api layer forwards it as `X-Operator-Reason`). NO
+ * `idempotencyKey` per the producer matrix (idempotent full-replace PUT).
+ *
+ * `orgScope` is a discriminated tri-state:
+ *   - `null`  → clear (전체 / net-zero ⟺ `["*"]`).
+ *   - `[]`    → explicit zero-scope (차단; distinct from null).
+ *   - `[ids]` → subtree-root ids — each a non-empty trimmed string, ≤ 256
+ *               entries (the producer is the final authority; this is the
+ *               UX fail-fast at the same-origin boundary).
+ * `.strict()` rejects unknown top-level keys.
+ */
+export const SetOrgScopeBodySchema = z
+  .object({
+    orgScope: z.union([
+      z.null(),
+      z.array(z.string().trim().min(1)).max(256),
+    ]),
+    reason: z.string(),
+  })
+  .strict();
+export type SetOrgScopeBody = z.infer<typeof SetOrgScopeBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(
