@@ -38,6 +38,14 @@ import {
   type CreateDepartmentInput,
   type UpdateDepartmentInput,
   type MoveDepartmentParentInput,
+  type CreateEmployeeInput,
+  type UpdateEmployeeInput,
+  type CreateJobGradeInput,
+  type UpdateJobGradeInput,
+  type CreateCostCenterInput,
+  type UpdateCostCenterInput,
+  type CreateBusinessPartnerInput,
+  type UpdateBusinessPartnerInput,
   ERP_DEFAULT_PAGE_SIZE,
   ERP_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -597,5 +605,229 @@ export function useMoveDepartmentParent() {
       return DepartmentSchema.parse(raw);
     },
     onSuccess: () => invalidateDepartments(qc),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Additional masters WRITE mutations (TASK-PC-FE-048 — employees / job-grades /
+// cost-centers / business-partners create/update/retire). Same shape as the
+// department mutation hooks: same-origin POST proxy (the route forwards with
+// the correct upstream method), entity-schema parse, prefix invalidation on
+// success. retire takes a bare reason string (the producer's only reason slot
+// for these masters).
+// ---------------------------------------------------------------------------
+
+function invalidateMaster(
+  qc: ReturnType<typeof useQueryClient>,
+  master: string,
+) {
+  qc.invalidateQueries({ queryKey: [ERP_KEY, master] });
+}
+
+// employees ------------------------------------------------------------------
+export function useCreateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      input: CreateEmployeeInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        '/api/erp/masterdata/employees',
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return EmployeeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'employees'),
+  });
+}
+export function useUpdateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      input: UpdateEmployeeInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/employees/${encodeURIComponent(args.id)}`,
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return EmployeeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'employees'),
+  });
+}
+export function useRetireEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      reason: string;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/employees/${encodeURIComponent(args.id)}/retire`,
+        { reason: args.reason, idempotencyKey: args.idempotencyKey },
+      );
+      return EmployeeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'employees'),
+  });
+}
+
+// job-grades -----------------------------------------------------------------
+export function useCreateJobGrade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      input: CreateJobGradeInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        '/api/erp/masterdata/job-grades',
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return JobGradeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'job-grades'),
+  });
+}
+export function useUpdateJobGrade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      input: UpdateJobGradeInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/job-grades/${encodeURIComponent(args.id)}`,
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return JobGradeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'job-grades'),
+  });
+}
+export function useRetireJobGrade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      reason: string;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/job-grades/${encodeURIComponent(args.id)}/retire`,
+        { reason: args.reason, idempotencyKey: args.idempotencyKey },
+      );
+      return JobGradeSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'job-grades'),
+  });
+}
+
+// cost-centers ---------------------------------------------------------------
+export function useCreateCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      input: CreateCostCenterInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        '/api/erp/masterdata/cost-centers',
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return CostCenterSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'cost-centers'),
+  });
+}
+export function useUpdateCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      input: UpdateCostCenterInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/cost-centers/${encodeURIComponent(args.id)}`,
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return CostCenterSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'cost-centers'),
+  });
+}
+export function useRetireCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      reason: string;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/cost-centers/${encodeURIComponent(args.id)}/retire`,
+        { reason: args.reason, idempotencyKey: args.idempotencyKey },
+      );
+      return CostCenterSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'cost-centers'),
+  });
+}
+
+// business-partners ----------------------------------------------------------
+export function useCreateBusinessPartner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      input: CreateBusinessPartnerInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        '/api/erp/masterdata/business-partners',
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return BusinessPartnerSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'business-partners'),
+  });
+}
+export function useUpdateBusinessPartner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      input: UpdateBusinessPartnerInput;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/business-partners/${encodeURIComponent(args.id)}`,
+        { ...args.input, idempotencyKey: args.idempotencyKey },
+      );
+      return BusinessPartnerSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'business-partners'),
+  });
+}
+export function useRetireBusinessPartner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      reason: string;
+      idempotencyKey: string;
+    }) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/erp/masterdata/business-partners/${encodeURIComponent(args.id)}/retire`,
+        { reason: args.reason, idempotencyKey: args.idempotencyKey },
+      );
+      return BusinessPartnerSchema.parse(raw);
+    },
+    onSuccess: () => invalidateMaster(qc, 'business-partners'),
   });
 }

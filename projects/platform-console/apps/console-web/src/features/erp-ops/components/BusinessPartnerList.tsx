@@ -7,35 +7,60 @@ import {
   KNOWN_MASTER_STATUSES,
   KNOWN_PARTNER_TYPES,
   labelForUnknownEnum,
+  type CreateBusinessPartnerInput,
+  type UpdateBusinessPartnerInput,
   type BusinessPartnerListResponse,
   type ErpListQueryParams,
 } from '../api/types';
-import { useBusinessPartners } from '../hooks/use-erp-ops';
+import {
+  useBusinessPartners,
+  useCreateBusinessPartner,
+  useUpdateBusinessPartner,
+  useRetireBusinessPartner,
+} from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
+import { useMasterWrite, type MasterWriteController } from './MasterWriteDialog';
+import { BUSINESS_PARTNER_WRITE_CONFIG } from './master-write-configs';
 
 /**
- * Business-partners list (TASK-PC-FE-010 / § 2.4.8) — paginated
- * table. `paymentTerms` is intentionally NOT rendered in the
- * list view (it is a detail-only confidential financial element);
- * the detail view renders a redacted summary the operator can
- * inspect.
- *
- * E2 honesty: retired rows rendered visually distinct but NEVER
- * hidden.
- *
- * Confidential / audit-heavy: nothing about these records is
- * logged (the api module only logs status + sanitised path).
+ * Business-partners list (TASK-PC-FE-010 / § 2.4.8) — paginated;
+ * `paymentTerms` is detail-only (confidential). E2 honesty: retired rows
+ * visually distinct but NEVER hidden. WRITE (TASK-PC-FE-048): 거래처 추가 +
+ * per-row 수정/폐기 when `writable`; `partnerType` is a static select.
+ * (v1: `paymentTerms` not editable from this flat dialog — a follow-up.)
  */
 export interface BusinessPartnerListProps {
   initial?: BusinessPartnerListResponse;
+  writable?: boolean;
 }
 
-export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
+export function BusinessPartnerList({
+  initial,
+  writable = false,
+}: BusinessPartnerListProps) {
   const [query, setQuery] = useState<ErpListQueryParams>({
     page: 0,
     size: initial?.meta.size ?? 20,
   });
   const q = useBusinessPartners(query, initial);
+  const create = useCreateBusinessPartner();
+  const update = useUpdateBusinessPartner();
+  const retire = useRetireBusinessPartner();
+  const controller: MasterWriteController = {
+    pending: create.isPending || update.isPending || retire.isPending,
+    error: create.error ?? update.error ?? retire.error ?? null,
+    create: (values, idem) =>
+      create.mutateAsync({ input: values as unknown as CreateBusinessPartnerInput, idempotencyKey: idem }),
+    update: (id, values, idem) =>
+      update.mutateAsync({ id, input: values as unknown as UpdateBusinessPartnerInput, idempotencyKey: idem }),
+    retire: (id, reason, idem) => retire.mutateAsync({ id, reason, idempotencyKey: idem }),
+  };
+  const { openCreate, openUpdate, openRetire, dialog } = useMasterWrite(
+    controller,
+    BUSINESS_PARTNER_WRITE_CONFIG,
+    'erp-businesspartner',
+  );
+
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
@@ -45,12 +70,23 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
 
   return (
     <section aria-labelledby="erp-businesspartners-heading">
-      <h2
-        id="erp-businesspartners-heading"
-        className="mb-3 text-lg font-medium text-foreground"
-      >
-        거래처 (business-partners)
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          id="erp-businesspartners-heading"
+          className="text-lg font-medium text-foreground"
+        >
+          거래처 (business-partners)
+        </h2>
+        {writable && (
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            data-testid="erp-businesspartner-create"
+          >
+            거래처 추가
+          </Button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p
           className="mb-6 text-sm text-muted-foreground"
@@ -72,6 +108,7 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
                 <th scope="col" className="p-2">유형</th>
                 <th scope="col" className="p-2">상태</th>
                 <th scope="col" className="p-2">유효기간</th>
+                {writable && <th scope="col" className="p-2">작업</th>}
               </tr>
             </thead>
             <tbody>
@@ -105,6 +142,27 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
                     <td className="p-2">
                       <EffectivePeriodBadge period={p.effectivePeriod} />
                     </td>
+                    {writable && (
+                      <td className="p-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="secondary"
+                            onClick={() => openUpdate(p.id, `${p.code} · ${p.name}`)}
+                            data-testid={`erp-businesspartner-edit-${i}`}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => openRetire(p.id, `${p.code} · ${p.name}`)}
+                            data-testid={`erp-businesspartner-retire-${i}`}
+                            className="text-destructive"
+                          >
+                            폐기
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -118,10 +176,7 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
               variant="secondary"
               disabled={(query.page ?? 0) <= 0}
               onClick={() =>
-                setQuery((s) => ({
-                  ...s,
-                  page: Math.max(0, (s.page ?? 0) - 1),
-                }))
+                setQuery((s) => ({ ...s, page: Math.max(0, (s.page ?? 0) - 1) }))
               }
               data-testid="erp-businesspartners-prev"
             >
@@ -136,9 +191,7 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
             <Button
               variant="secondary"
               disabled={page + 1 >= totalPages}
-              onClick={() =>
-                setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))
-              }
+              onClick={() => setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))}
               data-testid="erp-businesspartners-next"
             >
               다음
@@ -146,6 +199,7 @@ export function BusinessPartnerList({ initial }: BusinessPartnerListProps) {
           </nav>
         </>
       )}
+      {writable && dialog}
     </section>
   );
 }

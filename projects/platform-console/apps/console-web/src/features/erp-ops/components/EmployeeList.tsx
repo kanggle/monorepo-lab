@@ -7,36 +7,71 @@ import {
   KNOWN_EMPLOYMENT_STATUSES,
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  type CreateEmployeeInput,
+  type UpdateEmployeeInput,
   type EmployeeListResponse,
   type ErpListQueryParams,
 } from '../api/types';
-import { useEmployees } from '../hooks/use-erp-ops';
+import {
+  useEmployees,
+  useCreateEmployee,
+  useUpdateEmployee,
+  useRetireEmployee,
+} from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
+import {
+  useMasterWrite,
+  type MasterWriteController,
+  type MasterWriteDialogProps,
+} from './MasterWriteDialog';
+import { EMPLOYEE_WRITE_CONFIG } from './master-write-configs';
 
 /**
  * Employees list (TASK-PC-FE-010 / § 2.4.8) — paginated table.
  *
- * E2 honesty: retired (master status `RETIRED` OR `effectiveTo` in
- * the past) AND `SEPARATED` employees are rendered visually
- * distinct but **NEVER hidden** at the consumer.
+ * E2 honesty: retired (master status `RETIRED` OR `effectiveTo` in the past)
+ * AND `SEPARATED` employees are rendered visually distinct but NEVER hidden.
+ * Confidential: `name` is rendered to the DOM but never logged.
  *
- * Confidential: this component does render employee `name` to the
- * DOM (the operator UI surfaces it) but the api module logs
- * nothing — no name / contact / employeeNumber appears in any
- * structured log. The test asserts the log-spy invariant.
- *
- * STRICTLY READ-ONLY — no mutation affordance.
+ * WRITE (TASK-PC-FE-048): when `writable`, gains 직원 추가 + per-row 수정/폐기
+ * via the generic `<MasterWriteDialog>`. FK fields (부서/비용센터/직급) are
+ * dropdowns sourced from `optionSources` (the section's loaded lists).
  */
 export interface EmployeeListProps {
   initial?: EmployeeListResponse;
+  writable?: boolean;
+  optionSources?: MasterWriteDialogProps['optionSources'];
 }
 
-export function EmployeeList({ initial }: EmployeeListProps) {
+export function EmployeeList({
+  initial,
+  writable = false,
+  optionSources,
+}: EmployeeListProps) {
   const [query, setQuery] = useState<ErpListQueryParams>({
     page: 0,
     size: initial?.meta.size ?? 20,
   });
   const q = useEmployees(query, initial);
+  const create = useCreateEmployee();
+  const update = useUpdateEmployee();
+  const retire = useRetireEmployee();
+  const controller: MasterWriteController = {
+    pending: create.isPending || update.isPending || retire.isPending,
+    error: create.error ?? update.error ?? retire.error ?? null,
+    create: (values, idem) =>
+      create.mutateAsync({ input: values as unknown as CreateEmployeeInput, idempotencyKey: idem }),
+    update: (id, values, idem) =>
+      update.mutateAsync({ id, input: values as unknown as UpdateEmployeeInput, idempotencyKey: idem }),
+    retire: (id, reason, idem) => retire.mutateAsync({ id, reason, idempotencyKey: idem }),
+  };
+  const { openCreate, openUpdate, openRetire, dialog } = useMasterWrite(
+    controller,
+    EMPLOYEE_WRITE_CONFIG,
+    'erp-employee',
+    optionSources,
+  );
+
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
@@ -46,12 +81,23 @@ export function EmployeeList({ initial }: EmployeeListProps) {
 
   return (
     <section aria-labelledby="erp-employees-heading">
-      <h2
-        id="erp-employees-heading"
-        className="mb-3 text-lg font-medium text-foreground"
-      >
-        직원 (employees)
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          id="erp-employees-heading"
+          className="text-lg font-medium text-foreground"
+        >
+          직원 (employees)
+        </h2>
+        {writable && (
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            data-testid="erp-employee-create"
+          >
+            직원 추가
+          </Button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p
           className="mb-6 text-sm text-muted-foreground"
@@ -61,10 +107,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
         </p>
       ) : (
         <>
-          <table
-            className="mb-3 data-table"
-            data-testid="erp-employees-table"
-          >
+          <table className="mb-3 data-table" data-testid="erp-employees-table">
             <caption className="sr-only">직원 목록</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -74,6 +117,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
                 <th scope="col" className="p-2">고용상태</th>
                 <th scope="col" className="p-2">부서</th>
                 <th scope="col" className="p-2">유효기간</th>
+                {writable && <th scope="col" className="p-2">작업</th>}
               </tr>
             </thead>
             <tbody>
@@ -114,6 +158,31 @@ export function EmployeeList({ initial }: EmployeeListProps) {
                     <td className="p-2">
                       <EffectivePeriodBadge period={e.effectivePeriod} />
                     </td>
+                    {writable && (
+                      <td className="p-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              openUpdate(e.id, `${e.employeeNumber} · ${e.name}`)
+                            }
+                            data-testid={`erp-employee-edit-${i}`}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              openRetire(e.id, `${e.employeeNumber} · ${e.name}`)
+                            }
+                            data-testid={`erp-employee-retire-${i}`}
+                            className="text-destructive"
+                          >
+                            폐기
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -127,10 +196,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
               variant="secondary"
               disabled={(query.page ?? 0) <= 0}
               onClick={() =>
-                setQuery((s) => ({
-                  ...s,
-                  page: Math.max(0, (s.page ?? 0) - 1),
-                }))
+                setQuery((s) => ({ ...s, page: Math.max(0, (s.page ?? 0) - 1) }))
               }
               data-testid="erp-employees-prev"
             >
@@ -145,9 +211,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
             <Button
               variant="secondary"
               disabled={page + 1 >= totalPages}
-              onClick={() =>
-                setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))
-              }
+              onClick={() => setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))}
               data-testid="erp-employees-next"
             >
               다음
@@ -155,6 +219,7 @@ export function EmployeeList({ initial }: EmployeeListProps) {
           </nav>
         </>
       )}
+      {writable && dialog}
     </section>
   );
 }

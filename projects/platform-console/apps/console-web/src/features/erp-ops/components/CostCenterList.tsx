@@ -6,31 +6,66 @@ import {
   isRetired,
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  type CreateCostCenterInput,
+  type UpdateCostCenterInput,
   type CostCenterListResponse,
   type ErpListQueryParams,
 } from '../api/types';
-import { useCostCenters } from '../hooks/use-erp-ops';
+import {
+  useCostCenters,
+  useCreateCostCenter,
+  useUpdateCostCenter,
+  useRetireCostCenter,
+} from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
+import {
+  useMasterWrite,
+  type MasterWriteController,
+  type MasterWriteDialogProps,
+} from './MasterWriteDialog';
+import { COST_CENTER_WRITE_CONFIG } from './master-write-configs';
 
 /**
- * Cost-centers list (TASK-PC-FE-010 / § 2.4.8) — paginated table.
- * Cost-centers reference departments; this list surfaces the
- * raw `departmentId` (the detail view resolves it to a name +
- * retired-reference badge if the ref is broken).
- *
- * E2 honesty: retired rows rendered visually distinct but NEVER
- * hidden.
+ * Cost-centers list (TASK-PC-FE-010 / § 2.4.8) — paginated; references a
+ * department. E2 honesty: retired rows visually distinct but NEVER hidden.
+ * WRITE (TASK-PC-FE-048): 비용센터 추가 + per-row 수정/폐기 when `writable`; the
+ * 부서 FK is a dropdown sourced from `optionSources.departments`.
  */
 export interface CostCenterListProps {
   initial?: CostCenterListResponse;
+  writable?: boolean;
+  optionSources?: MasterWriteDialogProps['optionSources'];
 }
 
-export function CostCenterList({ initial }: CostCenterListProps) {
+export function CostCenterList({
+  initial,
+  writable = false,
+  optionSources,
+}: CostCenterListProps) {
   const [query, setQuery] = useState<ErpListQueryParams>({
     page: 0,
     size: initial?.meta.size ?? 20,
   });
   const q = useCostCenters(query, initial);
+  const create = useCreateCostCenter();
+  const update = useUpdateCostCenter();
+  const retire = useRetireCostCenter();
+  const controller: MasterWriteController = {
+    pending: create.isPending || update.isPending || retire.isPending,
+    error: create.error ?? update.error ?? retire.error ?? null,
+    create: (values, idem) =>
+      create.mutateAsync({ input: values as unknown as CreateCostCenterInput, idempotencyKey: idem }),
+    update: (id, values, idem) =>
+      update.mutateAsync({ id, input: values as unknown as UpdateCostCenterInput, idempotencyKey: idem }),
+    retire: (id, reason, idem) => retire.mutateAsync({ id, reason, idempotencyKey: idem }),
+  };
+  const { openCreate, openUpdate, openRetire, dialog } = useMasterWrite(
+    controller,
+    COST_CENTER_WRITE_CONFIG,
+    'erp-costcenter',
+    optionSources,
+  );
+
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
@@ -40,12 +75,23 @@ export function CostCenterList({ initial }: CostCenterListProps) {
 
   return (
     <section aria-labelledby="erp-costcenters-heading">
-      <h2
-        id="erp-costcenters-heading"
-        className="mb-3 text-lg font-medium text-foreground"
-      >
-        비용센터 (cost-centers)
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          id="erp-costcenters-heading"
+          className="text-lg font-medium text-foreground"
+        >
+          비용센터 (cost-centers)
+        </h2>
+        {writable && (
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            data-testid="erp-costcenter-create"
+          >
+            비용센터 추가
+          </Button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p
           className="mb-6 text-sm text-muted-foreground"
@@ -55,10 +101,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
         </p>
       ) : (
         <>
-          <table
-            className="mb-3 data-table"
-            data-testid="erp-costcenters-table"
-          >
+          <table className="mb-3 data-table" data-testid="erp-costcenters-table">
             <caption className="sr-only">비용센터 목록</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -67,6 +110,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
                 <th scope="col" className="p-2">상태</th>
                 <th scope="col" className="p-2">소속 부서</th>
                 <th scope="col" className="p-2">유효기간</th>
+                {writable && <th scope="col" className="p-2">작업</th>}
               </tr>
             </thead>
             <tbody>
@@ -93,6 +137,27 @@ export function CostCenterList({ initial }: CostCenterListProps) {
                     <td className="p-2">
                       <EffectivePeriodBadge period={c.effectivePeriod} />
                     </td>
+                    {writable && (
+                      <td className="p-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="secondary"
+                            onClick={() => openUpdate(c.id, `${c.code} · ${c.name}`)}
+                            data-testid={`erp-costcenter-edit-${i}`}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => openRetire(c.id, `${c.code} · ${c.name}`)}
+                            data-testid={`erp-costcenter-retire-${i}`}
+                            className="text-destructive"
+                          >
+                            폐기
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -106,10 +171,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
               variant="secondary"
               disabled={(query.page ?? 0) <= 0}
               onClick={() =>
-                setQuery((s) => ({
-                  ...s,
-                  page: Math.max(0, (s.page ?? 0) - 1),
-                }))
+                setQuery((s) => ({ ...s, page: Math.max(0, (s.page ?? 0) - 1) }))
               }
               data-testid="erp-costcenters-prev"
             >
@@ -124,9 +186,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
             <Button
               variant="secondary"
               disabled={page + 1 >= totalPages}
-              onClick={() =>
-                setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))
-              }
+              onClick={() => setQuery((s) => ({ ...s, page: (s.page ?? 0) + 1 }))}
               data-testid="erp-costcenters-next"
             >
               다음
@@ -134,6 +194,7 @@ export function CostCenterList({ initial }: CostCenterListProps) {
           </nav>
         </>
       )}
+      {writable && dialog}
     </section>
   );
 }

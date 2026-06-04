@@ -29,6 +29,14 @@ import {
   type UpdateDepartmentInput,
   type RetireDepartmentInput,
   type MoveDepartmentParentInput,
+  type CreateEmployeeInput,
+  type UpdateEmployeeInput,
+  type CreateJobGradeInput,
+  type UpdateJobGradeInput,
+  type CreateCostCenterInput,
+  type UpdateCostCenterInput,
+  type CreateBusinessPartnerInput,
+  type UpdateBusinessPartnerInput,
   ERP_DEFAULT_PAGE_SIZE,
   ERP_MAX_PAGE_SIZE,
 } from './types';
@@ -718,5 +726,250 @@ export async function getBusinessPartnerById(
         meta: (json as { meta?: unknown })?.meta ?? {},
       }).data;
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 6. additional masters WRITE (TASK-PC-FE-048 — employees / job-grades /
+//   cost-centers / business-partners create/update/retire, generalising the
+//   department pilot to all 5 masters). Same hardened callErp (method/body/
+//   idempotencyKey); `reason` rides in the body on retire only (NEVER an
+//   X-Operator-Reason header); credential = GAP OIDC domain-facing token
+//   (unchanged). Producer `masterdata-api.md` § <master> is canonical.
+// ---------------------------------------------------------------------------
+
+function parseEmployeeData(json: unknown): Employee {
+  const env = (json ?? {}) as { data?: unknown };
+  return EmployeeDetailResponseSchema.parse({
+    data: env.data,
+    meta: (json as { meta?: unknown })?.meta ?? {},
+  }).data;
+}
+function parseJobGradeData(json: unknown): JobGrade {
+  const env = (json ?? {}) as { data?: unknown };
+  return JobGradeDetailResponseSchema.parse({
+    data: env.data,
+    meta: (json as { meta?: unknown })?.meta ?? {},
+  }).data;
+}
+function parseCostCenterData(json: unknown): CostCenter {
+  const env = (json ?? {}) as { data?: unknown };
+  return CostCenterDetailResponseSchema.parse({
+    data: env.data,
+    meta: (json as { meta?: unknown })?.meta ?? {},
+  }).data;
+}
+function parseBusinessPartnerData(json: unknown): BusinessPartner {
+  const env = (json ?? {}) as { data?: unknown };
+  return BusinessPartnerDetailResponseSchema.parse({
+    data: env.data,
+    meta: (json as { meta?: unknown })?.meta ?? {},
+  }).data;
+}
+
+/** Drops undefined keys so optional fields are omitted from the wire body
+ *  (a `PATCH` with `{ name: undefined }` would otherwise serialize nothing
+ *  meaningful; the producer wants only the changed fields). */
+function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
+// employees ------------------------------------------------------------------
+export async function createEmployee(
+  input: CreateEmployeeInput,
+  idempotencyKey: string,
+): Promise<Employee> {
+  return callErp(
+    {
+      path: '/api/erp/masterdata/employees',
+      logPath: '/api/erp/masterdata/employees',
+      method: 'POST',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseEmployeeData,
+  );
+}
+export async function updateEmployee(
+  id: string,
+  input: UpdateEmployeeInput,
+  idempotencyKey: string,
+): Promise<Employee> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/employees/${encodeURIComponent(id)}`,
+      logPath: '/api/erp/masterdata/employees/{id}',
+      method: 'PATCH',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseEmployeeData,
+  );
+}
+export async function retireEmployee(
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<Employee> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/employees/${encodeURIComponent(id)}/retire`,
+      logPath: '/api/erp/masterdata/employees/{id}/retire',
+      method: 'POST',
+      idempotencyKey,
+      body: { reason },
+    },
+    parseEmployeeData,
+  );
+}
+
+// job-grades -----------------------------------------------------------------
+export async function createJobGrade(
+  input: CreateJobGradeInput,
+  idempotencyKey: string,
+): Promise<JobGrade> {
+  return callErp(
+    {
+      path: '/api/erp/masterdata/job-grades',
+      logPath: '/api/erp/masterdata/job-grades',
+      method: 'POST',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseJobGradeData,
+  );
+}
+export async function updateJobGrade(
+  id: string,
+  input: UpdateJobGradeInput,
+  idempotencyKey: string,
+): Promise<JobGrade> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/job-grades/${encodeURIComponent(id)}`,
+      logPath: '/api/erp/masterdata/job-grades/{id}',
+      method: 'PATCH',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseJobGradeData,
+  );
+}
+export async function retireJobGrade(
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<JobGrade> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/job-grades/${encodeURIComponent(id)}/retire`,
+      logPath: '/api/erp/masterdata/job-grades/{id}/retire',
+      method: 'POST',
+      idempotencyKey,
+      body: { reason },
+    },
+    parseJobGradeData,
+  );
+}
+
+// cost-centers ---------------------------------------------------------------
+export async function createCostCenter(
+  input: CreateCostCenterInput,
+  idempotencyKey: string,
+): Promise<CostCenter> {
+  return callErp(
+    {
+      path: '/api/erp/masterdata/cost-centers',
+      logPath: '/api/erp/masterdata/cost-centers',
+      method: 'POST',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseCostCenterData,
+  );
+}
+export async function updateCostCenter(
+  id: string,
+  input: UpdateCostCenterInput,
+  idempotencyKey: string,
+): Promise<CostCenter> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/cost-centers/${encodeURIComponent(id)}`,
+      logPath: '/api/erp/masterdata/cost-centers/{id}',
+      method: 'PATCH',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseCostCenterData,
+  );
+}
+export async function retireCostCenter(
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<CostCenter> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/cost-centers/${encodeURIComponent(id)}/retire`,
+      logPath: '/api/erp/masterdata/cost-centers/{id}/retire',
+      method: 'POST',
+      idempotencyKey,
+      body: { reason },
+    },
+    parseCostCenterData,
+  );
+}
+
+// business-partners ----------------------------------------------------------
+export async function createBusinessPartner(
+  input: CreateBusinessPartnerInput,
+  idempotencyKey: string,
+): Promise<BusinessPartner> {
+  return callErp(
+    {
+      path: '/api/erp/masterdata/business-partners',
+      logPath: '/api/erp/masterdata/business-partners',
+      method: 'POST',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseBusinessPartnerData,
+  );
+}
+export async function updateBusinessPartner(
+  id: string,
+  input: UpdateBusinessPartnerInput,
+  idempotencyKey: string,
+): Promise<BusinessPartner> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/business-partners/${encodeURIComponent(id)}`,
+      logPath: '/api/erp/masterdata/business-partners/{id}',
+      method: 'PATCH',
+      idempotencyKey,
+      body: compact({ ...input }),
+    },
+    parseBusinessPartnerData,
+  );
+}
+export async function retireBusinessPartner(
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<BusinessPartner> {
+  return callErp(
+    {
+      path: `/api/erp/masterdata/business-partners/${encodeURIComponent(id)}/retire`,
+      logPath: '/api/erp/masterdata/business-partners/{id}/retire',
+      method: 'POST',
+      idempotencyKey,
+      body: { reason },
+    },
+    parseBusinessPartnerData,
   );
 }
