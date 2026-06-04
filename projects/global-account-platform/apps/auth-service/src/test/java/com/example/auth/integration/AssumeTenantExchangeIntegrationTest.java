@@ -200,6 +200,15 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         assertThat(assumed.get("entitled_domains")).isNotNull();
         assertThat(assumed.get("entitled_domains").toString()).contains("finance").contains("wms");
 
+        // TASK-BE-336: the assumed (domain-facing) token carries the console
+        // client's REGISTERED scopes — including erp.write (V0023) — so erp
+        // masterdata-service can authorize a department WRITE (WRITE =
+        // erp.write ∨ operator-role; entitlement-trust widens READ only).
+        assertThat(assumed.get("scope")).as("assumed token must carry a scope claim").isNotNull();
+        assertThat(assumed.get("scope").toString())
+                .as("assumed token scope must include the delegated erp.write")
+                .contains("erp.write");
+
         // Same iss as the base login token (federation invariant, AC-5).
         JsonNode basePayload = decodeJwtPayload(base);
         assertThat(assumed.get("iss").asText()).isEqualTo(basePayload.get("iss").asText());

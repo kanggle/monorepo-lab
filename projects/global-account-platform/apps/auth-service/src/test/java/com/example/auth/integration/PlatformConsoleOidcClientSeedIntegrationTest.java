@@ -265,9 +265,12 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
         // Redirect uri per console-registry-api.md / multi-tenancy.md.
         assertThat(client.getRedirectUris()).contains(CONSOLE_REDIRECT_URI);
 
-        // Scopes per contract.
+        // Scopes per contract. TASK-BE-336 (V0023): erp.write is granted as a
+        // delegated domain-write scope so the assume-tenant token can carry it
+        // and erp masterdata-service authorizes a department WRITE (the console
+        // is a privileged delegate; entitlement-trust widens READ only).
         assertThat(client.getScopes())
-                .contains("openid", "profile", "email", "tenant.read");
+                .contains("openid", "profile", "email", "tenant.read", "erp.write");
 
         // Rotation (not reuse) — consistent with demo-spa-client public lineage.
         assertThat(client.getTokenSettings().isReuseRefreshTokens())
