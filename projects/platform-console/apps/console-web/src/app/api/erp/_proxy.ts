@@ -11,12 +11,20 @@ import { newRequestId } from '@/shared/lib/logger';
  * GAP-domain-scoped — the § 2.4.5 rule reused, NOT re-derived).
  * Mirrors the FE-009 finance `_proxy` shape for the flat envelope.
  *
- * STRICTLY READ-ONLY: these proxies expose ONLY GET routes — there
- * is NO mutation route (no erp write — `POST .../departments`,
- * `PATCH .../{id}`, `POST .../retire`, `POST .../move-parent`; no
- * Idempotency-Key, no X-Operator-Reason, no request body, no v2
- * approval-service / read-model-service / future admin-service
- * surface).
+ * READ + DEPARTMENT WRITE PILOT (TASK-PC-FE-046 / § 2.4.8 *Department
+ * write binding (PILOT)*): the four non-department masters expose ONLY
+ * GET routes (no mutation). The **department** master additionally
+ * exposes four same-origin POST write routes (create / update / retire
+ * / move-parent) — each carrying a console-generated `Idempotency-Key`
+ * and a body; `reason` rides in the body where the producer has a slot
+ * (retire / move-parent), NEVER an `X-Operator-Reason` header (erp does
+ * not read it). The v2 approval-service / read-model-service / future
+ * admin-service surfaces stay out of scope. The mutation-only producer
+ * errors (`409 MASTERDATA_DUPLICATE_KEY` / `_REFERENCE_VIOLATION` /
+ * `_PARENT_CYCLE` / `IDEMPOTENCY_KEY_CONFLICT` / `CONCURRENT_MODIFICATION`;
+ * `422 _EFFECTIVE_PERIOD_INVALID`; `400 IDEMPOTENCY_KEY_REQUIRED`) pass
+ * through `mapErpError` inline-actionably for the department write
+ * routes (unreachable on every read route).
  *
  *   - 401 → 401 (the client api-client triggers a WHOLE-SESSION
  *     re-login; no partial authed state — NOT a per-section

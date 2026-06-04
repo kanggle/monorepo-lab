@@ -44,7 +44,7 @@ frontend-engineer (console-web only — project-internal; spec = console-integra
 - **hooks**: `hooks/use-erp-ops.ts` — 4 mutation 훅 + `invalidateDepartments`(`['erp-ops','departments']` prefix).
 - **proxy**: same-origin POST route 4개 — `departments/route.ts`(GET+POST create), `departments/[id]/route.ts`(GET+POST update→upstream PATCH), `departments/[id]/retire/route.ts`(POST), `departments/[id]/move-parent/route.ts`(POST). `app/api/erp/_proxy.ts` — body 스키마(zod).
 - **ui**: 신규 `DepartmentWriteDialog.tsx`(create/update/retire/move-parent, confirm + 조건부 reason + 멱등키 생성) + `DepartmentList.tsx` 에 "부서 추가" 버튼 + per-row 수정/이동/폐기 action(`writable` prop gate). `ErpOpsScreen.tsx`/`erp/page.tsx` 에 부서 writable 배선 + read-only 카피 수정. `index.ts` export.
-- **test**: `erp-api.test.ts` 2개 단언 rescope(부서 write fn/route 허용, 나머지 4개 read-only 유지) + write-call 단언. `erp-proxy.test.ts` 부서 write route 테스트. 신규 `erp-department-write.test.tsx`. e2e `erp-department-write.spec.ts`(@e2e, nightly).
+- **test**: `erp-api.test.ts` 2개 단언 rescope(부서 write fn/route 허용, 나머지 4개 read-only 유지) + write-call 단언. `erp-proxy.test.ts` 부서 write route 테스트. 신규 `erp-department-write.test.tsx`. **e2e 는 범위 밖** — platform-console nightly 하네스 compose 에 erp producer(`masterdata-service`) 가 없어(grep 확인) erp-write e2e 를 띄울 producer 가 없음 → functional 게이트는 federation 데모 라이브 스모크(메모리 ⓛ).
 
 ## Out of Scope
 
@@ -89,8 +89,8 @@ frontend-engineer (console-web only — project-internal; spec = console-integra
 
 - `erp-api.test.ts`: (a) "every read is a pure GET" 보존; (b) export-name 단언 → 부서 write 4개 fn 허용 + 나머지 마스터 mutation-fn 부재; (c) proxy-walk → 부서 route POST/PATCH 허용 + 나머지 마스터 GET-only; (d) write-call 단언(create POST + Idempotency-Key + body, update→PATCH upstream, retire/move-parent reason body, getDomainFacingToken 사용/getOperatorToken 미사용).
 - `erp-proxy.test.ts`: 부서 4개 write route — 올바른 upstream method/path + Idempotency-Key 전달 + reason body 전달 + 401/403/409/422 매핑.
-- 신규 `erp-department-write.test.tsx`: 다이얼로그 — create/update confirm(reason 없음), retire/move-parent reason 필수 gate, 멱등키 생성, mutation POST 호출.
-- e2e `erp-department-write.spec.ts`(@e2e): 부서 생성 → 목록 반영(nightly).
+- 신규 `erp-department-write.test.tsx`: 다이얼로그 — create/update confirm(reason 없음), retire/move-parent reason 필수 gate, 멱등키 생성, mutation POST 호출 + DepartmentList writable gate(부서만 write affordance, 나머지 미노출).
+- e2e: platform-console nightly 하네스에 erp producer 미시드 → erp-write e2e 범위 밖. functional 게이트 = federation 데모 라이브 스모크.
 - `pnpm test` + `tsc` + `lint` + `build`.
 - Local: console-web 재빌드+재기동; ERP 운영 → 부서에서 생성/수정/폐기/이동 라이브 스모크 + **DB 영속 확인**(머지+CI GREEN≠기능작동 — 인증·write 플로우는 라이브 엔드포인트 직접타격까지 실증).
 

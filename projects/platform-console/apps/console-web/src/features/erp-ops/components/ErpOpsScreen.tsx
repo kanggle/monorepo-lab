@@ -48,6 +48,10 @@ export interface ErpOpsScreenProps {
   initialJobGrades: JobGradeListResponse | null;
   initialCostCenters: CostCenterListResponse | null;
   initialBusinessPartners: BusinessPartnerListResponse | null;
+  /** TASK-PC-FE-046: enable the department write PILOT (create /
+   *  update / retire / move-parent). The other four masters stay
+   *  read-only regardless. */
+  departmentsWritable?: boolean;
 }
 
 export function ErpOpsScreen({
@@ -56,6 +60,7 @@ export function ErpOpsScreen({
   initialJobGrades,
   initialCostCenters,
   initialBusinessPartners,
+  departmentsWritable = false,
 }: ErpOpsScreenProps) {
   return (
     <section aria-labelledby="erp-heading">
@@ -63,14 +68,17 @@ export function ErpOpsScreen({
         ERP 운영
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용). erp
-        운영 표면을 콘솔 안에서 조회합니다. 마스터 등록/수정/폐기
-        작업은 콘솔 범위가 아닙니다.
+        {departmentsWritable
+          ? '부서 마스터는 등록/수정/폐기/상위이동이 가능합니다 (TASK-PC-FE-046 파일럿). 직원·직급·비용센터·거래처는 조회 전용입니다. 권한이 없는 작업은 실행 시 안내됩니다.'
+          : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용). erp 운영 표면을 콘솔 안에서 조회합니다.'}
       </p>
 
       <AsOfPicker />
 
-      <DepartmentList initial={initialDepartments ?? undefined} />
+      <DepartmentList
+        initial={initialDepartments ?? undefined}
+        writable={departmentsWritable}
+      />
       <EmployeeList initial={initialEmployees ?? undefined} />
       <JobGradeList initial={initialJobGrades ?? undefined} />
       <CostCenterList initial={initialCostCenters ?? undefined} />

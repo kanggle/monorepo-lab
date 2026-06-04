@@ -159,6 +159,11 @@ export default async function ErpPage({
       initialJobGrades={state.jobGrades}
       initialCostCenters={state.costCenters}
       initialBusinessPartners={state.businessPartners}
+      // TASK-PC-FE-046 — department write PILOT. Eligible operators see
+      // the write affordances; the producer's E6 fail-CLOSED authz is
+      // the authority (a 403 is surfaced inline — the console never
+      // pre-judges write authority). § 2.4.8 *Department write binding*.
+      departmentsWritable
     />
   );
 }

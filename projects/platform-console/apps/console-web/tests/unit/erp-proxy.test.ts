@@ -75,6 +75,11 @@ import { GET as ccListGET } from '@/app/api/erp/masterdata/cost-centers/route';
 import { GET as ccDetailGET } from '@/app/api/erp/masterdata/cost-centers/[id]/route';
 import { GET as bpListGET } from '@/app/api/erp/masterdata/business-partners/route';
 import { GET as bpDetailGET } from '@/app/api/erp/masterdata/business-partners/[id]/route';
+// TASK-PC-FE-046 — department write PILOT proxy routes.
+import { POST as deptCreatePOST } from '@/app/api/erp/masterdata/departments/route';
+import { POST as deptUpdatePOST } from '@/app/api/erp/masterdata/departments/[id]/route';
+import { POST as deptRetirePOST } from '@/app/api/erp/masterdata/departments/[id]/retire/route';
+import { POST as deptMovePOST } from '@/app/api/erp/masterdata/departments/[id]/move-parent/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(
@@ -385,5 +390,180 @@ describe('GET /api/erp/masterdata/job-grades + cost-centers + business-partners 
     expect(
       new URL(String(fetchMock.mock.calls[0][0])).searchParams.get('asOf'),
     ).toBe('2025-01-01');
+  });
+});
+
+// ===========================================================================
+// Department WRITE PILOT proxy routes (TASK-PC-FE-046 / § 2.4.8 *Department
+// write binding (PILOT)*). Same-origin POST → correct UPSTREAM method,
+// GAP OIDC token, Idempotency-Key forwarded, reason in body where the
+// producer has a slot, mutation-only errors mapped.
+// ===========================================================================
+
+const DEPT_MUTATION_ENV = DEPT_DETAIL_ENV;
+
+describe('department WRITE PILOT proxy routes', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+  });
+
+  it('create: POST → upstream POST .../departments + Idempotency-Key + body (GAP token, no operator token / X-Operator-Reason)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_MUTATION_ENV, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await deptCreatePOST(
+      new Request('http://console.local/api/erp/masterdata/departments', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DEPT-001',
+          name: 'Sales',
+          idempotencyKey: 'idem-1',
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect((init as RequestInit).method).toBe('POST');
+    expect(String(url)).toBe('http://erp.local/api/erp/masterdata/departments');
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['Idempotency-Key']).toBe('idem-1');
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body).toMatchObject({ code: 'DEPT-001', name: 'Sales' });
+    expect(body.idempotencyKey).toBeUndefined(); // stripped before upstream
+  });
+
+  it('create: rejects an invalid body with 400 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await deptCreatePOST(
+      new Request('http://console.local/api/erp/masterdata/departments', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'no code, no idem-key' }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('update: same-origin POST → upstream PATCH .../{id}', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_MUTATION_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deptUpdatePOST(
+      new Request('http://console.local/api/erp/masterdata/departments/dept-1', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Renamed', idempotencyKey: 'idem-2' }),
+      }),
+      { params: Promise.resolve({ id: 'dept-1' }) },
+    );
+    const [url, init] = fetchMock.mock.calls[0];
+    expect((init as RequestInit).method).toBe('PATCH');
+    expect(String(url)).toBe(
+      'http://erp.local/api/erp/masterdata/departments/dept-1',
+    );
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h['Idempotency-Key']).toBe('idem-2');
+    expect(h['X-Operator-Reason']).toBeUndefined();
+  });
+
+  it('retire: POST .../retire with reason in BODY (producer slot)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_MUTATION_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deptRetirePOST(
+      new Request(
+        'http://console.local/api/erp/masterdata/departments/dept-1/retire',
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason: '조직 개편', idempotencyKey: 'idem-3' }),
+        },
+      ),
+      { params: Promise.resolve({ id: 'dept-1' }) },
+    );
+    const [url, init] = fetchMock.mock.calls[0];
+    expect((init as RequestInit).method).toBe('POST');
+    expect(String(url)).toBe(
+      'http://erp.local/api/erp/masterdata/departments/dept-1/retire',
+    );
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h['Idempotency-Key']).toBe('idem-3');
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.reason).toBe('조직 개편');
+  });
+
+  it('retire: 409 MASTERDATA_REFERENCE_VIOLATION maps through (inline-actionable)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(erpError('MASTERDATA_REFERENCE_VIOLATION', 409));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await deptRetirePOST(
+      new Request(
+        'http://console.local/api/erp/masterdata/departments/dept-1/retire',
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason: 'x', idempotencyKey: 'k' }),
+        },
+      ),
+      { params: Promise.resolve({ id: 'dept-1' }) },
+    );
+    expect(res.status).toBe(409);
+  });
+
+  it('move-parent: POST .../move-parent with newParentId/effectiveFrom/reason', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_MUTATION_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deptMovePOST(
+      new Request(
+        'http://console.local/api/erp/masterdata/departments/dept-1/move-parent',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            newParentId: 'dept-9',
+            effectiveFrom: '2026-07-01',
+            idempotencyKey: 'idem-4',
+          }),
+        },
+      ),
+      { params: Promise.resolve({ id: 'dept-1' }) },
+    );
+    const [url, init] = fetchMock.mock.calls[0];
+    expect((init as RequestInit).method).toBe('POST');
+    expect(String(url)).toBe(
+      'http://erp.local/api/erp/masterdata/departments/dept-1/move-parent',
+    );
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body).toMatchObject({
+      newParentId: 'dept-9',
+      effectiveFrom: '2026-07-01',
+    });
+    expect(body.idempotencyKey).toBeUndefined();
+  });
+
+  it('move-parent: 403 PERMISSION_DENIED maps through (console never pre-judges authority)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(erpError('PERMISSION_DENIED', 403));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await deptMovePOST(
+      new Request(
+        'http://console.local/api/erp/masterdata/departments/dept-1/move-parent',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            newParentId: null,
+            effectiveFrom: '2026-07-01',
+            idempotencyKey: 'k',
+          }),
+        },
+      ),
+      { params: Promise.resolve({ id: 'dept-1' }) },
+    );
+    expect(res.status).toBe(403);
   });
 });
