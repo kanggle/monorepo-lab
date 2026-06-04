@@ -376,10 +376,13 @@ jobs:
         # excluded from default :test/:check tasks (see masterdata-service
         # build.gradle). Docker-backed integrationTest is invoked separately
         # on dev environments / erp-integration-tests job below.
-        # TASK-ERP-BE-001: masterdata-service
+        # TASK-ERP-BE-001: masterdata-service / TASK-ERP-BE-007: read-model-service
+        # TASK-ERP-BE-009: approval-service
         run: >-
           ./gradlew
           :projects:erp-platform:apps:masterdata-service:check
+          :projects:erp-platform:apps:read-model-service:check
+          :projects:erp-platform:apps:approval-service:check
           --no-daemon --stacktrace
 
       - name: Build and check platform-console backend (Docker-free)
@@ -1132,6 +1135,8 @@ jobs:
         run: >-
           ./gradlew
           :projects:erp-platform:apps:masterdata-service:integrationTest
+          :projects:erp-platform:apps:read-model-service:integrationTest
+          :projects:erp-platform:apps:approval-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload erp integration test reports on failure

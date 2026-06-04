@@ -1,0 +1,36 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.datasource.* (MySQL Testcontainer),
+# spring.security.oauth2.resourceserver.jwt.jwk-set-uri (MockWebServer JWKS),
+# and erpplatform.approval.masterdata.base-url (WireMock masterdata stub) via
+# @DynamicPropertySource. H2 is FORBIDDEN — slice tests stub the service layer;
+# integration tests use real MySQL.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+outbox:
+  polling:
+    enabled: false
+    interval-ms: 200
+    batch-size: 50
+
+erpplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    required-tenant-id: erp
+  approval:
+    idempotency:
+      ttl-seconds: 86400
+    masterdata:
+      base-url: ${ERP_MASTERDATA_BASE_URL:http://localhost:0}
+      connect-timeout-ms: 2000
+      read-timeout-ms: 3000

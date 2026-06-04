@@ -1,0 +1,117 @@
+# -----------------------------------------------------------------------------
+# erp-platform approval-service — TASK-ERP-BE-009.
+#
+# Approval Workflow bounded context (first increment). Owns the ApprovalRequest
+# aggregate + single-stage state machine, no-self-approval (E3/I4), idempotent
+# transitions (E4), immutable audit (E8/A7), and a synchronous masterdata
+# subject reference-integrity check on submit (E1). Publishes the four approval
+# transition events through the transactional outbox. MySQL erp_db (separate
+# tables from masterdata-service; no shared-table JOIN).
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: erp-platform-approval-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:erp}
+    password: ${MYSQL_PASSWORD:erp}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  # Kafka — outbox relay target (libs/java-messaging OutboxPollingScheduler).
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+
+  # Standard OAuth2 Resource Server backed by GAP's JWKS.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.erp.approval: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} actorId=%X{actorId:-}]"
+
+erpplatform:
+  oauth2:
+    # Keep byte-identical to masterdata-service's allowed-issuers (cross-service
+    # issuer drift guard — SAS issuer + legacy global-account-platform D2-b).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
+  approval:
+    idempotency:
+      # Idempotency store TTL (≥ 24h, architecture.md § Idempotency, FIN-BE-004
+      # final form). DB-table primary inside the mutation Tx.
+      ttl-seconds: ${ERP_IDEMPOTENCY_TTL_SECONDS:86400}
+    masterdata:
+      # masterdata-service base URL for the submit-time subject reference-integrity
+      # check (E1, ADR-MONO-005 Category B synchronous call).
+      base-url: ${ERP_MASTERDATA_BASE_URL:http://masterdata-service:8080}
+      connect-timeout-ms: ${ERP_MASTERDATA_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${ERP_MASTERDATA_READ_TIMEOUT_MS:3000}
+
+# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
+# / unit runs disable it (no Kafka) via application-test.yml.
+outbox:
+  polling:
+    enabled: ${OUTBOX_POLLING_ENABLED:true}
+    interval-ms: 1000
+    batch-size: 50
