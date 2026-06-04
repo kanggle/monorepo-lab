@@ -8,7 +8,7 @@ TASK-ERP-BE-007
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -110,13 +110,19 @@ masterdata 변경 이벤트가 통합 read model 로 전파되어, 운영자가 
 
 # Definition of Done
 
-- [ ] service skeleton + 4 consumer + dedupe + 4 projection(Flyway) + read API 2종 + security + Dockerfile + settings.gradle/build.gradle.
-- [ ] erp docker-compose Kafka broker 신설 + read-model-service 활성 + masterdata relay 배선; `docker compose config -q` exit 0.
-- [ ] spec 3종 + PROJECT.md(frontmatter `service_types:[rest-api,event-consumer]` + Service Map) + ADR-016 §D3 amendment + erp-masterdata-events.md consumer note + masterdata architecture.md forward-ref.
-- [ ] unit+slice `:check` GREEN; IT CI Linux GREEN(로컬 Docker host-dependent 정직 flag).
-- [ ] Local 재배포 + 라이브 스모크(masterdata 변경→read-model org-view resolved).
-- [ ] Task md + INDEX 갱신.
-- [ ] Reviewed + merged (3-dim: state=MERGED + origin/main tip=squash + pre-merge failing required=0). `git mv ready→review→done` re-stage 확인.
+- [x] service skeleton + 4 consumer + dedupe + 4 projection(Flyway) + read API 2종 + security + Dockerfile + settings.gradle/build.gradle. (impl PR #1090 squash `e35d429c`)
+- [x] erp docker-compose Kafka broker(bitnami KRaft) 신설 + read-model-service 활성 + masterdata relay `KAFKA_BOOTSTRAP` 배선 + `erp_read_model_db` initdb; `docker compose config -q` exit 0(dispatcher 재검증).
+- [x] spec 3종 + PROJECT.md(frontmatter `service_types:[rest-api,event-consumer]` + Service Map) + ADR-016 §D3 amendment + erp-masterdata-events.md consumer note + masterdata architecture.md forward-ref. (spec PR #1089 squash `04723776`)
+- [x] unit+slice `:check` GREEN(55 tests, dispatcher `--rerun-tasks` 독립 재실행 BUILD SUCCESSFUL); **IT CI Linux GREEN** — "Integration (erp-platform, Testcontainers)" job 1m23s PASS = 실 Kafka+MySQL+JWKS consume→project→read 루프·dedupe·DLT·unresolved·RETIRED+asOf·보안 4분기 end-to-end 기능 게이트.
+- [ ] **Local 재배포 + 라이브 스모크 — 미실행(정직 flag, follow-up).** 사유: 가동 중(45h)인 `federation-hardening-e2e` 스택이 `erp.local` traefik 라우터·shared net 점유 → erp-platform compose 병행 기동 시 라우터 충돌로 e2e 환경 손상 위험. **CI Integration IT 가 동일 consume→project→read 경로를 실 브로커로 이미 검증**(MONO-170 류 런타임 drift 의 기능 경로가 CI 로 커버됨 — green-wash 아님). compose 런타임 배선은 `config -q` 검증 + 입증된 scm `inventory-visibility-service` 패턴 미러. 풀 스택 라이브 스모크는 별도 follow-up.
+- [x] Task md + INDEX 갱신.
+- [x] Reviewed + merged (3-dim: state=MERGED + mergeCommit `e35d429c` + origin/main tip 일치 + pre-merge failing required=0[19 pass/1 skipping]). `git mv ready→review→done` re-stage 확인(spec PR ready 진입 + impl PR review + close chore done).
+
+---
+
+## done
+
+**DONE (2026-06-04, 3-dim verified).** erp `read-model-service` 첫 증분 — 마스터 변경 이벤트 전파의 **비어 있던 소비자 고리**를 닫음. 3-PR sequence (erp INDEX 엄격 PR Separation Rule): **spec PR #1089** (squash `04723776`, markdown-only: read-model-service architecture.md + read-model-api.md + read-model-subscriptions.md + task→ready + PROJECT.md frontmatter `[rest-api]`→`[rest-api,event-consumer]` + Service Map + ADR-016 §D3 additive amendment + erp-masterdata-events.md consumer note + masterdata architecture.md forward-ref) → **impl PR #1090** (squash `e35d429c`, 신규 `apps/read-model-service` Hexagonal rest-api+event-consumer: 4 `@KafkaListener`[department/employee/jobgrade/costcenter `.changed.v1`] + `@RetryableTopic` 3-retry+DLT + `processed_events` dedupe T8 + 4 MySQL projection[`erp_read_model_db`] + 읽기 시점 employee org-view[부서 ancestry path walk+비용센터+직급] + read-only REST 2종[`?asOf`/`departmentId` subtree] + entitlement-trust dual-accept[decode+filter 독립 게이트] + READ gate fail-closed + GlobalExceptionHandler; erp docker-compose bitnami/kafka KRaft 브로커 신설[부재였음]+masterdata `KAFKA_BOOTSTRAP` 배선+`erp_read_model_db` initdb; **no-outbox/no-publish E5 terminal** — `OutboxAutoConfiguration` exclude) → **close chore (this)**. **구현=backend-engineer(Opus dispatch) + dispatcher 독립 재검증**(BE-001 패턴): scope=erp-platform+settings.gradle only(leak 0) · masterdata/settings additive · E5 main publish/outbox grep=0(`KafkaTemplate`=`@RetryableTopic` DLT plumbing뿐) · `:check --rerun-tasks` BUILD SUCCESSFUL(55 unit+slice, compileTestJava 포함 IT compile) · `docker compose config -q` exit 0. **기능 게이트 = CI "Integration (erp-platform, Testcontainers)" 1m23s PASS**(실 Kafka+MySQL+JWKS end-to-end). **3-dim**: (a) impl PR #1090 state=MERGED + mergeCommit `e35d429c`; (b) `git log origin/main` tip `e35d429c` 일치; (c) pre-merge `gh pr checks 1090` failing required=0(19 pass/1 skipping). 청사진=scm `inventory-visibility-service`(rest-api+event-consumer read-model, EventDedupe, no-outbox ADR-MONO-005 Cat C) — MySQL/E-rule/org-view 적응. **메타**: ① **producer 는 이미 완성(BE-001), 강화 지점은 비어 있던 소비자**("v1 consumers = none") — 조사 없이 producer 부터 손댔으면 중복 작업; forward-decl(ADR-016 §D3) 실행이라 신규 ADR 불요·신규 서비스 architecture.md 만 HARDSTOP-09 gate. ② **OutboxAutoConfiguration exclude** — lib `processed_events`(event_id,event_type,processed_at) ↔ spec `processed_events`(event_id,topic,aggregate_id,processed_at) 테이블명 충돌 + `ddl-auto=validate` 공존 불가 → no-outbox 서비스는 lib outbox auto-config 제외하고 spec-shaped dedupe 단독 소유. ③ **라이브 스모크 정직 deferral** — 가동 중 e2e 스택의 `erp.local` 라우터 충돌 위험으로 미실행, CI IT 가 기능 경로 커버. **잔여 follow-up**: ① console "통합 조회" 카드(read API 소비, TASK-PC-FE) ② business-partner+풀 통합조회+per-operator org_scope read 필터(v2) ③ 풀 스택 로컬 라이브 스모크.
 
 ---
 
