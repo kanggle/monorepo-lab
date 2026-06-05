@@ -560,6 +560,11 @@ export const DelegationFactSchema = z
     reason: z.string().optional(),
     // NON_NULL-absent: ABSENT while ACTIVE.
     revokedAt: z.string().optional(),
+    // NON_NULL-absent: scope of the grant — GLOBAL (blanket) | REQUEST (one request);
+    // ABSENT when only a revoke was seen out-of-order (scope unknown — BE-018).
+    scope: z.string().optional(),
+    // NON_NULL-absent: the target approvalRequestId — present only when scope=REQUEST.
+    scopeRequestId: z.string().optional(),
   })
   .passthrough();
 export type DelegationFact = z.infer<typeof DelegationFactSchema>;

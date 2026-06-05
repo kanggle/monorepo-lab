@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 /**
- * `<DelegationFactCard>` component test (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
+ * `<DelegationFactCard>` component test (TASK-PC-FE-055 + TASK-PC-FE-056 — ADR-MONO-013 §D3.1).
  *
  * Headline assertions:
  *   - **meta.warning banner**: when the response carries `meta.warning`,
@@ -18,6 +18,8 @@ import type { ReactNode } from 'react';
  *   - **proxy GET-only**: the route modules for list + detail export only `GET`
  *     (no POST/PATCH/DELETE exports — AC-3).
  *   - **READ-ONLY**: no create/revoke buttons anywhere in the card (AC-4).
+ *   - **scope column** (TASK-PC-FE-056 AC-1): REQUEST→"특정 건"+scopeRequestId,
+ *     GLOBAL→"전체", scope absent→"—" no crash, unknown→verbatim.
  */
 
 vi.mock('next/navigation', () => ({
@@ -63,13 +65,44 @@ const REVOKED_FACT: DelegationFactListResponse['data'][number] = {
 };
 
 /** Row with ALL optional fields absent (out-of-order revoke-before-grant
- *  scenario: validFrom absent, validTo absent, reason absent). */
+ *  scenario: validFrom absent, validTo absent, reason absent, scope ABSENT). */
 const ALL_ABSENT_FACT: DelegationFactListResponse['data'][number] = {
   grantId: 'dgr-003',
   status: 'REVOKED',
   delegatorId: 'emp-A-003',
   delegateId: 'emp-D-003',
-  // validFrom, validTo, reason, revokedAt all ABSENT
+  // validFrom, validTo, reason, revokedAt, scope all ABSENT
+};
+
+/** REQUEST-scoped fact: delegate acts for one specific approval request. */
+const REQUEST_SCOPED_FACT: DelegationFactListResponse['data'][number] = {
+  grantId: 'dgr-004',
+  status: 'ACTIVE',
+  delegatorId: 'emp-A-004',
+  delegateId: 'emp-D-004',
+  validFrom: '2026-06-01T00:00:00Z',
+  scope: 'REQUEST',
+  scopeRequestId: 'appr-77',
+};
+
+/** GLOBAL-scoped fact: delegate acts for ALL approvals of delegator. */
+const GLOBAL_SCOPED_FACT: DelegationFactListResponse['data'][number] = {
+  grantId: 'dgr-005',
+  status: 'ACTIVE',
+  delegatorId: 'emp-A-005',
+  delegateId: 'emp-D-005',
+  validFrom: '2026-06-01T00:00:00Z',
+  scope: 'GLOBAL',
+};
+
+/** Fact with an unknown/future scope value — free-string tolerance. */
+const UNKNOWN_SCOPE_FACT: DelegationFactListResponse['data'][number] = {
+  grantId: 'dgr-006',
+  status: 'ACTIVE',
+  delegatorId: 'emp-A-006',
+  delegateId: 'emp-D-006',
+  validFrom: '2026-06-01T00:00:00Z',
+  scope: 'FUTURE_SCOPE',
 };
 
 function makeListResp(
@@ -315,5 +348,65 @@ describe('<DelegationFactCard> — read-only, no write affordances (AC-4)', () =
     for (const btn of buttons) {
       expect(btn.textContent).toMatch(/조회|초기화|이전|다음/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — scope column (TASK-PC-FE-056 AC-1)
+// ---------------------------------------------------------------------------
+
+describe('<DelegationFactCard> — scope column (AC-1 PC-FE-056)', () => {
+  it('REQUEST scope fact shows "특정 건" and the scopeRequestId', () => {
+    const initial = makeListResp([REQUEST_SCOPED_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+
+    const scopeCell = screen.getByTestId('delegation-fact-scope-0');
+    expect(scopeCell.textContent).toContain('특정 건');
+    expect(scopeCell.textContent).toContain('appr-77');
+  });
+
+  it('GLOBAL scope fact shows "전체"', () => {
+    const initial = makeListResp([GLOBAL_SCOPED_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+
+    const scopeCell = screen.getByTestId('delegation-fact-scope-0');
+    expect(scopeCell.textContent).toContain('전체');
+    expect(scopeCell.textContent).not.toContain('특정 건');
+  });
+
+  it('scope absent fact shows "—" and does not crash', () => {
+    const initial = makeListResp([ALL_ABSENT_FACT]);
+    expect(() =>
+      render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() }),
+    ).not.toThrow();
+
+    const scopeCell = screen.getByTestId('delegation-fact-scope-0');
+    expect(scopeCell.textContent).toBe('—');
+  });
+
+  it('unknown (future) scope value is rendered verbatim', () => {
+    const initial = makeListResp([UNKNOWN_SCOPE_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+
+    const scopeCell = screen.getByTestId('delegation-fact-scope-0');
+    expect(scopeCell.textContent).toContain('FUTURE_SCOPE');
+  });
+
+  it('GLOBAL fact does NOT show scopeRequestId (not present)', () => {
+    const initial = makeListResp([GLOBAL_SCOPED_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+
+    const scopeCell = screen.getByTestId('delegation-fact-scope-0');
+    // scopeRequestId absent for GLOBAL → no id displayed
+    expect(scopeCell.textContent).not.toContain('appr-');
+  });
+
+  it('renders scope column for all rows in a mixed list', () => {
+    const initial = makeListResp([REQUEST_SCOPED_FACT, GLOBAL_SCOPED_FACT, ALL_ABSENT_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+
+    expect(screen.getByTestId('delegation-fact-scope-0').textContent).toContain('특정 건');
+    expect(screen.getByTestId('delegation-fact-scope-1').textContent).toContain('전체');
+    expect(screen.getByTestId('delegation-fact-scope-2').textContent).toBe('—');
   });
 });

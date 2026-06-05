@@ -174,6 +174,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                 <th scope="col" className="p-2">상태</th>
                 <th scope="col" className="p-2">위임자</th>
                 <th scope="col" className="p-2">대행자</th>
+                <th scope="col" className="p-2">범위</th>
                 <th scope="col" className="p-2">유효시작</th>
                 <th scope="col" className="p-2">유효종료</th>
                 <th scope="col" className="p-2">사유</th>
@@ -193,6 +194,10 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                   </td>
                   <td className="p-2 text-sm">{fact.delegatorId}</td>
                   <td className="p-2 text-sm">{fact.delegateId}</td>
+                  {/* scope: NON_NULL-absent → graceful "—" (BE-018) */}
+                  <td className="p-2 text-sm" data-testid={`delegation-fact-scope-${i}`}>
+                    <ScopeCell scope={fact.scope} scopeRequestId={fact.scopeRequestId} />
+                  </td>
                   {/* validFrom: NON_NULL-absent → graceful "—" */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-validFrom-${i}`}>
                     {fact.validFrom ?? '—'}
@@ -248,6 +253,38 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
       )}
     </section>
   );
+}
+
+/** Scope cell for delegation facts — GLOBAL / REQUEST / absent / unknown. */
+function ScopeCell({
+  scope,
+  scopeRequestId,
+}: {
+  scope: string | undefined;
+  scopeRequestId: string | undefined;
+}) {
+  if (scope === undefined) return <>—</>;
+  if (scope === 'GLOBAL') {
+    return (
+      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800 dark:bg-blue-950/60 dark:text-blue-100">
+        전체
+      </span>
+    );
+  }
+  if (scope === 'REQUEST') {
+    return (
+      <>
+        <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-xs text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100">
+          특정 건
+        </span>
+        {scopeRequestId && (
+          <> · <code className="text-xs font-mono">{scopeRequestId}</code></>
+        )}
+      </>
+    );
+  }
+  // Unknown future scope value — render verbatim (free-string tolerance).
+  return <>{scope}</>;
 }
 
 /** Status badge for delegation facts — ACTIVE / REVOKED. */
