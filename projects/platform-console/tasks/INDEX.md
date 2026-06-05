@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-052-console-notification-bell-slice.md` — 콘솔 notification-bell slice. TASK-ERP-BE-011 이 라이브화한 notification-service in-app inbox(`/api/erp/notifications` 3 endpoint)를 콘솔 shell 이 소비: 헤더 알림 벨(unread badge) + 드롭다운(recipient-scoped 최근 알림) + 행 클릭 시 멱등 mark-read + `sourceId` → `/erp?approval=<id>` deep-link. `approval(event) → notification(fan-out) → 콘솔 벨` 루프의 사용자-가시 종단 완결 — PC-FE-051 결재함의 알림 짝. 신규 `features/notifications`(types absent-`readAt`/api server-only/keys/hooks/`NotificationBell`) + erp notifications proxy(GET / {id} GET / {id}/read POST) + `(console)/layout.tsx` 헤더 wiring. **핵심 정직 요건**: 벨은 전역 affordance 이나 v1 source=erp inbox → 비-erp 운영자/503/timeout 시 shell 안 깨고 silent empty/inert degrade(integration-heavy). spec: §2.4.8 *Notification inbox binding* blockquote + read-model/approval/notification 라이브 정합. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (UI slice — approval read proxy+AccountMenu dropdown 선례 재사용; mark-read 자연 멱등, Idempotency-Key 없음). 사용자 "콘솔 notification-bell slice" 선택(2026-06-05).
 
 ## in-progress
 
