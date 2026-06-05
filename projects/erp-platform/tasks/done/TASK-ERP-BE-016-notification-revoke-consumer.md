@@ -8,7 +8,7 @@ TASK-ERP-BE-016
 
 # Status
 
-ready
+done
 
 # Owner
 
