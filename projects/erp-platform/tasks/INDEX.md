@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-012-approval-multi-stage-in-review.md` — approval-service **v2.0**: 다단계 결재선(1~N) + `IN_REVIEW` 상태 (ADR-016 §D3 approval forward-declaration 2번째 증분). ERP-BE-009 단일단계 상태기계를 순서있는 N단계로 확장: 비최종 단계 승인→`IN_REVIEW`(전진), 최종→`APPROVED`; per-stage authz(현 단계 결재자만, 순서강제); 어느 단계 reject→`REJECTED`, 기안자 withdraw→`WITHDRAWN`. **하위호환**: 기존 단일-approver=1단계, 콘솔 create `approverId` 수용; Flyway backfill 1-stage. **이벤트 consumer 무변경**: `approved`=최종단계-only(terminal-once 보존), 비최종=audit만 무발화, payload `currentStage`/`totalStages` 가산(unknown-field tolerant). spec=architecture.md §v2.0 amendment + approval-api.md + erp-approval-events.md + ADR-016 §D3 amendment. **대결/위임=v2.1 분리**(독립 권한위양 모델). 분석=Opus 4.8 / 구현 권장=Opus (복합 상태기계 + 하위호환 마이그레이션 + per-stage authz + 이벤트 진화). 사용자 "approval v2(#1)" 선택(2026-06-05).
 
 ## in-progress
 

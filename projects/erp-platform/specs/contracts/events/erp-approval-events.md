@@ -39,6 +39,36 @@ leaf in this increment. Forward consumers:
 
 This contract is the forward interface for those v2 consumers.
 
+> **v2.0 AMENDMENT (TASK-ERP-BE-012 — multi-stage routing + `IN_REVIEW`;
+> additive + backward-compatible, consumers UNCHANGED).** The approval state
+> machine now supports 1~N stages (architecture.md § v2.0 amendment). Effect on
+> this event contract — **deliberately minimal to keep the v2 consumers
+> (`notification-service` TASK-ERP-BE-011, `read-model-service` TASK-ERP-BE-010)
+> working without change**:
+> - **Same four topics, no new topic.** `erp.approval.delegated.v1` stays
+>   v2.1-deferred (delegation).
+> - **`erp.approval.approved.v1` fires ONLY on the FINAL-stage approval**
+>   (`* → APPROVED`, terminal). An **intermediate-stage approval** (a non-final
+>   stage approving, advancing the request to `IN_REVIEW`) writes its immutable
+>   audit row but **emits NO outbox event** — there is no bus signal for a stage
+>   advance in v2.0 (the next stage's approver is surfaced by the inbox, not an
+>   event; event-driven stage-advance fan-out is v2.1). This **preserves the
+>   terminal-once contract** (§ Consumer rules): a request still emits `submitted`
+>   then exactly one terminal event (`approved` XOR `rejected` XOR `withdrawn`).
+> - **Additive payload fields** on every approval payload: **`currentStage`**
+>   (0-based index of the stage the event pertains to) + **`totalStages`** (the
+>   route length). These are additive; existing consumers deserialize with
+>   unknown-property tolerance (Spring Boot `FAIL_ON_UNKNOWN_PROPERTIES=false`) and
+>   ignore them → **no consumer change required**. `submitted` carries
+>   `currentStage = 0` (stage 0 pending); `approved` carries the final stage index.
+> - **`approverId`** in a payload = the **relevant stage's** approver (`submitted`
+>   → stage 0's; `approved` → the final stage's). For a 1-stage (legacy /
+>   single-approver) request this is the single approver — fully backward-compatible.
+>
+> The single-stage (N=1) request is the strict subset: `submitted` then one
+> terminal event, `currentStage`/`totalStages` = `0`/`1`. Consumers that never read
+> the new fields behave identically to the v1.0 contract.
+
 ---
 
 ## Envelope (libs/java-messaging standard)
