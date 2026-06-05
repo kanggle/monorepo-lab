@@ -227,6 +227,8 @@ whom" (delegation) read-only, alongside the org-view + approval facts.
   "validFrom": "<ISO-8601 UTC; ABSENT if only a revoke (out-of-order) was seen>",
   "validTo":   "<ISO-8601 UTC; ABSENT = open-ended, or revoke-before-grant>",
   "reason":    "<≤512; ABSENT when none>",
+  "scope":     "GLOBAL | REQUEST; ABSENT if only a revoke (out-of-order) was seen — TASK-ERP-BE-018",
+  "scopeRequestId": "<approvalRequestId; present only when scope=REQUEST; ABSENT for GLOBAL>",
   "revokedAt": "<ISO-8601 UTC; ABSENT while ACTIVE>" }
 ```
 - `delegatorId` / `delegateId` are opaque employee ids (no subject ref is resolved —
@@ -234,6 +236,13 @@ whom" (delegation) read-only, alongside the org-view + approval facts.
 - `validFrom`/`validTo`/`revokedAt`/`reason` are ABSENT (NON_NULL) when not
   applicable — an out-of-order revoke-before-grant leaves the validity window
   ABSENT (never fabricated, E5).
+- **`scope`/`scopeRequestId` (TASK-ERP-BE-018)** project the per-request scoping
+  added by the producer (`erp-approval-events.md` § v2.3 / approval-service v2.3):
+  `scope=GLOBAL` (blanket — D acts for A on any request) or `scope=REQUEST`
+  (narrowed to the one `scopeRequestId`). They are grant-time immutable, projected
+  from the `delegated` event and preserved across a later `revoke`; both are ABSENT
+  (NON_NULL) when only a revoke was seen out-of-order (scope unknown — never
+  fabricated, E5). `scopeRequestId` is ABSENT for a `GLOBAL` grant.
 
 ### GET /api/erp/read-model/delegations
 

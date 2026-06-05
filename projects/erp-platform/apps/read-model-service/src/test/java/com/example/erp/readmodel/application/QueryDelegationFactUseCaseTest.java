@@ -59,7 +59,7 @@ class QueryDelegationFactUseCaseTest {
 
     private DelegationFactProjection grant(String delegatorId) {
         return DelegationFactProjection.ofGranted("dgr-1", delegatorId, "emp-d",
-                FROM, TO, "vacation", FROM, "evt-1");
+                FROM, TO, "vacation", FROM, "evt-1", "GLOBAL", null);
     }
 
     private EmployeeProjection emp(String id, String deptId) {

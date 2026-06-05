@@ -46,11 +46,14 @@ public class ApplyDelegationFactUseCase {
             if (existing == null) {
                 delegationRepository.save(DelegationFactProjection.ofGranted(
                         id, cmd.delegatorId(), cmd.delegateId(), cmd.validFrom(),
-                        cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId()));
+                        cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId(),
+                        cmd.scope(), cmd.scopeRequestId()));
             } else {
-                // Sticky-terminal: applyGrant is a status no-op on a REVOKED row.
+                // Sticky-terminal: applyGrant is a status no-op on a REVOKED row, but
+                // scope (like the validity window) is filled unconditionally.
                 existing.applyGrant(cmd.delegatorId(), cmd.delegateId(), cmd.validFrom(),
-                        cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId());
+                        cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId(),
+                        cmd.scope(), cmd.scopeRequestId());
                 delegationRepository.save(existing);
             }
         } else {

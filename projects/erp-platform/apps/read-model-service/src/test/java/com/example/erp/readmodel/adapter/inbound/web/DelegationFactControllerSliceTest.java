@@ -58,9 +58,11 @@ class DelegationFactControllerSliceTest {
     }
 
     private DelegationFactProjection activeGrant() {
+        // REQUEST-scoped grant: both scope + scopeRequestId present.
         return DelegationFactProjection.ofGranted("dgr-1", "emp-a", "emp-d",
                 Instant.parse("2026-06-01T00:00:00Z"), Instant.parse("2026-06-30T00:00:00Z"),
-                "vacation", Instant.parse("2026-06-01T00:00:00Z"), "evt-1");
+                "vacation", Instant.parse("2026-06-01T00:00:00Z"), "evt-1",
+                "REQUEST", "appr-1");
     }
 
     @Test
@@ -76,8 +78,26 @@ class DelegationFactControllerSliceTest {
                 .andExpect(jsonPath("$.data.validFrom").exists())
                 .andExpect(jsonPath("$.data.validTo").exists())
                 .andExpect(jsonPath("$.data.revokedAt").doesNotExist())
+                // AC-2: a REQUEST grant exposes scope + scopeRequestId.
+                .andExpect(jsonPath("$.data.scope").value("REQUEST"))
+                .andExpect(jsonPath("$.data.scopeRequestId").value("appr-1"))
                 .andExpect(jsonPath("$.meta.warning").value("Eventually-consistent read-model"))
                 .andExpect(jsonPath("$.meta.unresolved").doesNotExist());
+    }
+
+    @Test
+    void getOneGlobalGrantOmitsScopeRequestId() throws Exception {
+        DelegationFactProjection global = DelegationFactProjection.ofGranted("dgr-g", "emp-a",
+                "emp-d", Instant.parse("2026-06-01T00:00:00Z"),
+                Instant.parse("2026-06-30T00:00:00Z"), "vacation",
+                Instant.parse("2026-06-01T00:00:00Z"), "evt-1", "GLOBAL", null);
+        when(useCase.getOne("dgr-g", null)).thenReturn(global);
+
+        mockMvc.perform(get("/api/erp/read-model/delegations/dgr-g"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scope").value("GLOBAL"))
+                // NON_NULL → scopeRequestId ABSENT for a GLOBAL grant.
+                .andExpect(jsonPath("$.data.scopeRequestId").doesNotExist());
     }
 
     @Test
@@ -93,7 +113,9 @@ class DelegationFactControllerSliceTest {
                 .andExpect(jsonPath("$.data.revokedAt").exists())
                 // Out-of-order revoke leaves the window absent; here grant came first
                 // so validFrom present — but validFrom/validTo are NON_NULL when absent.
-                .andExpect(jsonPath("$.data.validFrom").doesNotExist());
+                .andExpect(jsonPath("$.data.validFrom").doesNotExist())
+                // NON_NULL → a revoke-only row's scope is ABSENT (unknown).
+                .andExpect(jsonPath("$.data.scope").doesNotExist());
     }
 
     @Test

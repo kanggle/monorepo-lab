@@ -115,6 +115,32 @@ source of record (`masterdata-service`).
 > (delegation-fact endpoints) + `erp-approval-events.md` § v2.2 (the revoke
 > producer leg).
 
+> **[Amendment — TASK-ERP-BE-018] delegation scope projection (v1.3).** The
+> `delegation_fact_proj` projection is extended with two grant-time fields —
+> `scope` (`GLOBAL`|`REQUEST`) + `scopeRequestId` — projected from the
+> `erp.approval.delegated.v1` payload's per-request scoping
+> (`erp-approval-events.md` § v2.3 / approval-service v2.3, TASK-ERP-BE-017),
+> closing the producer-only forward gap that BE-017 left (the producer emits the
+> fields; until now nothing projected them). The fields surface on the
+> `GET /api/erp/read-model/delegations` list + `/{grantId}` detail
+> ([`read-model-api.md`](../../contracts/http/read-model-api.md) § Delegation
+> facts) so an operator can see "blanket vs one-request" delegation. **scope is
+> grant-time immutable metadata** — projected exactly like the validity window:
+> the `delegated` handler **always** (re)stamps `scope`/`scopeRequestId` (even onto
+> a sticky-terminal REVOKED row — a late grant fills a revoke-before-grant row's
+> ABSENT scope while the status stays REVOKED), and the `revoked` handler **never**
+> restates them (the revoke payload carries neither). A grant never seen leaves
+> `scope` ABSENT (unknown, honest — E5 no fabrication). Migration V4 adds the two
+> nullable columns + `ck_delegation_fact_proj_scope CHECK (scope IS NULL OR scope IN
+> ('GLOBAL','REQUEST'))` — §16: the value set is DB-pinned (NULL allowed for a
+> revoke-only row); no coherence CHECK (the producer already enforces
+> scope↔scopeRequestId). The ACTIVE/REVOKED/sticky-terminal/dedupe/org_scope logic
+> + the consumer group + the topics are **byte-unchanged** (additive field
+> projection only). **Still no re-emission (E5 terminal).** The console scope
+> display is the forward follow-up (TASK-PC-FE-056). Spec: this amendment +
+> `read-model-subscriptions.md` § Delegation + `read-model-api.md` § Delegation
+> facts + `erp-approval-events.md` § v2.3.
+
 ## Architecture Style Rationale
 
 Hexagonal chosen because:
@@ -262,7 +288,8 @@ approval_fact_proj(approval_request_id PK, status, subject_type, subject_id,
                 last_reason, last_event_at, last_event_id)   -- BE-010
 delegation_fact_proj(grant_id PK, delegator_id, delegate_id, valid_from,
                 valid_to, status, reason, revoked_at, last_event_at,
-                last_event_id, tenant_id)                    -- BE-015
+                last_event_id, tenant_id,
+                scope, scope_request_id)                      -- BE-015; scope* BE-018
 processed_events(event_id VARCHAR PK, topic, aggregate_id, processed_at)
 ```
 

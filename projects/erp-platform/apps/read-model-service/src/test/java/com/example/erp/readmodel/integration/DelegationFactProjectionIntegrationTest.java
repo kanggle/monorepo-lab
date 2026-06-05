@@ -2,6 +2,9 @@ package com.example.erp.readmodel.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -14,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
@@ -29,6 +33,9 @@ class DelegationFactProjectionIntegrationTest extends AbstractReadModelIntegrati
     private static final String TO = "2026-06-30T00:00:00Z";
 
     private final HttpClient http = HttpClient.newHttpClient();
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private HttpResponse<String> getDelegation(String id, String token) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
@@ -258,5 +265,86 @@ class DelegationFactProjectionIntegrationTest extends AbstractReadModelIntegrati
 
         Thread.sleep(3000);
         assertThat(delegationFactJpa.findById(grantId)).isEmpty();
+    }
+
+    // ------------------------------------------------------------------------
+    // TASK-ERP-BE-018 — scope projection
+    // ------------------------------------------------------------------------
+
+    @Test
+    void delegatedRequestProjectsScopeAndScopeRequestId_globalLeavesScopeRequestIdNull()
+            throws Exception {
+        String requestGrant = newId();
+        String globalGrant = newId();
+        publish(TOPIC_DELEGATED, requestGrant, delegationEnvelope(newId(),
+                "erp.approval.delegated", requestGrant, "emp-a", "emp-d", FROM, TO, "vacation",
+                "REQUEST", "appr-1"));
+        publish(TOPIC_DELEGATED, globalGrant, delegationEnvelope(newId(),
+                "erp.approval.delegated", globalGrant, "emp-a", "emp-d", FROM, TO, "vacation",
+                "GLOBAL", null));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            assertThat(delegationFactJpa.findById(requestGrant)).get().satisfies(e -> {
+                assertThat(e.getScope()).isEqualTo("REQUEST");
+                assertThat(e.getScopeRequestId()).isEqualTo("appr-1");
+            });
+            assertThat(delegationFactJpa.findById(globalGrant)).get().satisfies(e -> {
+                assertThat(e.getScope()).isEqualTo("GLOBAL");
+                assertThat(e.getScopeRequestId()).isNull();
+            });
+        });
+
+        // Read surface: REQUEST exposes both; GLOBAL omits scopeRequestId (NON_NULL).
+        String token = erpReadToken();
+        JsonNode requestBody = objectMapper.readTree(getDelegation(requestGrant, token).body());
+        assertThat(requestBody.at("/data/scope").asText()).isEqualTo("REQUEST");
+        assertThat(requestBody.at("/data/scopeRequestId").asText()).isEqualTo("appr-1");
+
+        JsonNode globalBody = objectMapper.readTree(getDelegation(globalGrant, token).body());
+        assertThat(globalBody.at("/data/scope").asText()).isEqualTo("GLOBAL");
+        assertThat(globalBody.at("/data/scopeRequestId").isMissingNode()).isTrue();
+    }
+
+    @Test
+    void outOfOrderRevokeThenGrantFillsScopeWithoutRevertingStatus() throws Exception {
+        String grantId = newId();
+        // Revoke arrives first → scope ABSENT (NULL), status REVOKED.
+        publish(TOPIC_DELEGATION_REVOKED, grantId, delegationEnvelope(newId(),
+                "erp.approval.delegation.revoked", grantId, "emp-a", "emp-d",
+                null, null, "back"));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                assertThat(delegationFactJpa.findById(grantId)).get().satisfies(e -> {
+                    assertThat(e.getStatus()).isEqualTo("REVOKED");
+                    assertThat(e.getScope()).isNull();
+                }));
+
+        // Late delegated(REQUEST) → fills scope, status stays REVOKED (applyGrant
+        // sets scope unconditionally, outside the sticky-terminal guard).
+        publish(TOPIC_DELEGATED, grantId, delegationEnvelope(newId(),
+                "erp.approval.delegated", grantId, "emp-a", "emp-d", FROM, TO, "vacation",
+                "REQUEST", "appr-1"));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                assertThat(delegationFactJpa.findById(grantId)).get().satisfies(e -> {
+                    assertThat(e.getStatus()).isEqualTo("REVOKED");
+                    assertThat(e.getScope()).isEqualTo("REQUEST");
+                    assertThat(e.getScopeRequestId()).isEqualTo("appr-1");
+                }));
+    }
+
+    @Test
+    void checkConstraintRejectsBogusScope() {
+        // §16/§17: the DB CHECK pins the scope value set. MySQL surfaces a CHECK
+        // violation as SQLState HY000 / error 3819 → Spring UncategorizedSQLException
+        // (NOT DataIntegrityViolationException) → assert the common DataAccessException
+        // parent + the constraint name.
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO delegation_fact_proj "
+                        + "(grant_id, status, last_event_at, last_event_id, tenant_id, scope) "
+                        + "VALUES (?, 'ACTIVE', ?, ?, 'erp', 'BOGUS')",
+                newId(), Instant.now(), newId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("ck_delegation_fact_proj_scope");
     }
 }
