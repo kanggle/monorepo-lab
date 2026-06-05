@@ -352,11 +352,20 @@ export async function listApprovalInbox(
 // writes — create + the 4 transitions (each carries an Idempotency-Key).
 // ---------------------------------------------------------------------------
 
-/** `POST /api/erp/approval/requests` — create a DRAFT request. */
+/** `POST /api/erp/approval/requests` — create a DRAFT request.
+ * v2.0: when `input.approverIds` is a non-empty array, sends the
+ * multi-stage body (`approverIds`); otherwise sends the legacy
+ * single-approver body (`approverId`). Exactly one is forwarded. */
 export async function createApprovalRequest(
   input: CreateApprovalInput,
   idempotencyKey: string,
 ): Promise<ApprovalRequest> {
+  // Build the approver payload — multi-stage (v2.0) vs legacy (v1).
+  const approverPayload =
+    input.approverIds && input.approverIds.length > 0
+      ? { approverIds: input.approverIds }
+      : { approverId: input.approverId };
+
   return callApproval(
     {
       path: '/api/erp/approval/requests',
@@ -367,7 +376,7 @@ export async function createApprovalRequest(
         subjectType: input.subjectType,
         subjectId: input.subjectId,
         title: input.title,
-        approverId: input.approverId,
+        ...approverPayload,
         ...(input.reason ? { reason: input.reason } : {}),
       },
     },

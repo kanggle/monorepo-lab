@@ -158,7 +158,7 @@ describe('ApprovalScreen — list + inbox', () => {
     expect(screen.getByTestId('approval-inbox-empty')).toBeInTheDocument();
   });
 
-  it('the status filter is present with all 5 statuses', () => {
+  it('the status filter is present with all 6 statuses (incl. IN_REVIEW)', () => {
     render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
@@ -166,6 +166,7 @@ describe('ApprovalScreen — list + inbox', () => {
     expect(sel.tagName).toBe('SELECT');
     expect(screen.getByRole('option', { name: '승인됨' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '반려됨' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '검토중' })).toBeInTheDocument();
   });
 });
 
@@ -319,7 +320,7 @@ describe('ApprovalDetail — inline error mapping (graceful, no crash)', () => {
 // ===========================================================================
 
 describe('ApprovalScreen — create dialog', () => {
-  it('gates required fields then POSTs /requests with an Idempotency-Key', async () => {
+  it('single-stage: gates required fields then POSTs /requests with approverId + Idempotency-Key (legacy)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT }, 201));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
@@ -331,7 +332,8 @@ describe('ApprovalScreen — create dialog', () => {
     expect(screen.getByTestId('approval-create-submit')).toBeDisabled();
     await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-1');
     await user.type(screen.getByTestId('approval-create-title'), '조직개편');
-    await user.type(screen.getByTestId('approval-create-approverId'), 'emp-a');
+    // The first approver row is testid approval-create-approver-0 (replaces old approval-create-approverId).
+    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-a');
     expect(screen.getByTestId('approval-create-submit')).toBeEnabled();
     await user.click(screen.getByTestId('approval-create-submit'));
     await waitFor(() =>
@@ -345,12 +347,222 @@ describe('ApprovalScreen — create dialog', () => {
       (c) => String(c[0]) === '/api/erp/approval/requests',
     )!;
     const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    // 1-stage → legacy approverId (backward-compat, AC-4).
     expect(body).toMatchObject({
       subjectType: 'DEPARTMENT',
       subjectId: 'dept-1',
       title: '조직개편',
       approverId: 'emp-a',
     });
+    expect(body.approverIds).toBeUndefined();
     expect(typeof body.idempotencyKey).toBe('string');
+  });
+
+  it('multi-stage: adding a 2nd row and submitting sends approverIds (not approverId)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-1');
+    await user.type(screen.getByTestId('approval-create-title'), '다단계 결재');
+    // Fill row 0.
+    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-a');
+    // Add a second stage row.
+    await user.click(screen.getByTestId('approval-create-add-stage'));
+    // Row 1 should now be present.
+    expect(screen.getByTestId('approval-create-approver-1')).toBeInTheDocument();
+    await user.type(screen.getByTestId('approval-create-approver-1'), 'emp-b');
+    expect(screen.getByTestId('approval-create-submit')).toBeEnabled();
+    await user.click(screen.getByTestId('approval-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]) === '/api/erp/approval/requests',
+        ),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]) === '/api/erp/approval/requests',
+    )!;
+    const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    // 2-stage → approverIds (v2.0), NOT approverId.
+    expect(body.approverIds).toEqual(['emp-a', 'emp-b']);
+    expect(body.approverId).toBeUndefined();
+    expect(typeof body.idempotencyKey).toBe('string');
+  });
+
+  it('remove-stage button disabled when only 1 row; enabled with 2 rows', async () => {
+    const user = userEvent.setup();
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    // 1 row: remove button disabled.
+    expect(screen.getByTestId('approval-create-remove-stage-0')).toBeDisabled();
+    // Add a row.
+    await user.click(screen.getByTestId('approval-create-add-stage'));
+    // Now both rows are removable.
+    expect(screen.getByTestId('approval-create-remove-stage-0')).toBeEnabled();
+    expect(screen.getByTestId('approval-create-remove-stage-1')).toBeEnabled();
+    // Remove row 1.
+    await user.click(screen.getByTestId('approval-create-remove-stage-1'));
+    expect(screen.queryByTestId('approval-create-approver-1')).not.toBeInTheDocument();
+  });
+});
+
+// ===========================================================================
+// IN_REVIEW status badge.
+// ===========================================================================
+
+describe('ApprovalScreen — IN_REVIEW status badge', () => {
+  it('IN_REVIEW badge shows "검토중" label in the list', () => {
+    const IN_REVIEW_LIST: ApprovalListResponse = {
+      data: [
+        {
+          id: 'appr-inreview',
+          status: 'IN_REVIEW',
+          subjectType: 'DEPARTMENT',
+          subjectId: 'dept-1',
+          title: '검토중 결재',
+          approverId: 'emp-b',
+          submitterId: 'emp-s',
+          createdAt: '2026-06-05T00:00:00Z',
+          submittedAt: '2026-06-05T01:00:00Z',
+        },
+      ],
+      meta: { page: 0, size: 20, totalElements: 1 },
+    };
+    render(<ApprovalScreen initialRequests={IN_REVIEW_LIST} initialInbox={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } }} />, {
+      wrapper: wrapper(),
+    });
+    const badge = screen.getByTestId('approval-status-badge');
+    expect(badge).toHaveAttribute('data-status', 'IN_REVIEW');
+    expect(badge.textContent).toBe('검토중');
+  });
+
+  it('IN_REVIEW status filter option is present', () => {
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByRole('option', { name: '검토중' })).toBeInTheDocument();
+  });
+});
+
+// ===========================================================================
+// detail — multi-stage timeline + IN_REVIEW + history delegation.
+// ===========================================================================
+
+const MULTI_STAGE: ApprovalRequest = {
+  id: 'appr-multi',
+  status: 'IN_REVIEW',
+  subjectType: 'DEPARTMENT',
+  subjectId: 'dept-1',
+  title: '다단계 결재',
+  approverId: 'emp-b',
+  submitterId: 'emp-s',
+  history: [
+    {
+      transition: 'SUBMITTED',
+      actor: 'emp-s',
+      at: '2026-06-05T01:00:00Z',
+      stage: 0,
+    },
+    {
+      transition: 'APPROVED',
+      actor: 'emp-delegate',
+      at: '2026-06-05T02:00:00Z',
+      stage: 0,
+      actingForApproverId: 'emp-a',
+    },
+  ],
+  stages: [
+    { stageIndex: 0, approverId: 'emp-a', status: 'APPROVED' },
+    { stageIndex: 1, approverId: 'emp-b', status: 'PENDING' },
+  ],
+  currentStage: 1,
+  totalStages: 2,
+  createdAt: '2026-06-05T00:00:00Z',
+  submittedAt: '2026-06-05T01:00:00Z',
+};
+
+describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () => {
+  it('renders IN_REVIEW badge on detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
+    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-detail')).toBeInTheDocument(),
+    );
+    await waitFor(() => {
+      const badge = screen.getByTestId('approval-status-badge');
+      expect(badge).toHaveAttribute('data-status', 'IN_REVIEW');
+      expect(badge.textContent).toBe('검토중');
+    });
+  });
+
+  it('renders the stage-progress timeline with currentStage highlighted', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
+    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-stages')).toBeInTheDocument(),
+    );
+    // Stage 0 approved (not current) → testid approval-stage-0.
+    expect(screen.getByTestId('approval-stage-0')).toBeInTheDocument();
+    // Stage 1 current → testid approval-stage-current.
+    expect(screen.getByTestId('approval-stage-current')).toBeInTheDocument();
+    // "현재" marker should be present.
+    expect(screen.getByTestId('approval-stage-current').textContent).toContain('현재');
+  });
+
+  it('shows "k/N 단계" summary in the heading', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
+    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-stages')).toBeInTheDocument(),
+    );
+    // currentStage=1 → "2/2 단계" (1-based display of 0-based index).
+    expect(screen.getByText(/2\/2 단계/)).toBeInTheDocument();
+  });
+
+  it('history shows stage annotation + delegation marker', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
+    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-history')).toBeInTheDocument(),
+    );
+    // History entry 1 has stage=0 and actingForApproverId=emp-a.
+    const delegated = await screen.findByTestId('approval-history-delegated-1');
+    expect(delegated.textContent).toContain('emp-a');
+    expect(delegated.textContent).toContain('대결');
+    // Stage annotation visible in history entry 0.
+    expect(screen.getByTestId('approval-history-0').textContent).toContain('1단계');
+  });
+
+  it('detail WITHOUT stages falls back to approverId (no crash — degrade)', async () => {
+    // A legacy/single-stage response with NO stages field.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: SUBMITTED })));
+    render(<ApprovalDetail id="appr-sub" onClose={() => {}} />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-detail')).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      // No stages timeline; falls back to single approverId display.
+      expect(screen.queryByTestId('approval-stages')).not.toBeInTheDocument(),
+    );
+    // The fallback approverId is rendered.
+    expect(screen.getByTestId('approval-approverId')).toBeInTheDocument();
+    expect(screen.getByTestId('approval-approverId').textContent).toBe('emp-a');
   });
 });

@@ -270,6 +270,71 @@ describe('approval-api — reads (GET; query forwarding; NON_NULL parsing)', () 
     // The SUBMITTED history entry carries no reason (NON_NULL).
     expect(d.history[0].reason).toBeUndefined();
   });
+
+  it('v2.0: parses a detail with stages/currentStage/totalStages + history stage + actingForApproverId', async () => {
+    const MULTI_DETAIL = {
+      data: {
+        id: 'appr-multi',
+        status: 'IN_REVIEW',
+        subjectType: 'DEPARTMENT',
+        subjectId: 'dept-1',
+        title: '다단계',
+        approverId: 'emp-b',
+        submitterId: 'emp-s',
+        history: [
+          {
+            transition: 'SUBMITTED',
+            actor: 'emp-s',
+            at: '2026-06-05T01:00:00Z',
+            stage: 0,
+          },
+          {
+            transition: 'APPROVED',
+            actor: 'emp-delegate',
+            at: '2026-06-05T02:00:00Z',
+            stage: 0,
+            actingForApproverId: 'emp-a',
+          },
+        ],
+        stages: [
+          { stageIndex: 0, approverId: 'emp-a', status: 'APPROVED' },
+          { stageIndex: 1, approverId: 'emp-b', status: 'PENDING' },
+        ],
+        currentStage: 1,
+        totalStages: 2,
+        createdAt: '2026-06-05T00:00:00Z',
+        submittedAt: '2026-06-05T01:00:00Z',
+      },
+      meta: { timestamp: 'x' },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(MULTI_DETAIL)));
+    const d = await getApprovalRequest('appr-multi');
+    expect(d.status).toBe('IN_REVIEW');
+    expect(d.stages).toHaveLength(2);
+    expect(d.stages![0]).toMatchObject({ stageIndex: 0, approverId: 'emp-a', status: 'APPROVED' });
+    expect(d.stages![1]).toMatchObject({ stageIndex: 1, approverId: 'emp-b', status: 'PENDING' });
+    expect(d.currentStage).toBe(1);
+    expect(d.totalStages).toBe(2);
+    // History entry with stage + actingForApproverId.
+    expect(d.history[0].stage).toBe(0);
+    expect(d.history[0].actingForApproverId).toBeUndefined();
+    expect(d.history[1].stage).toBe(0);
+    expect(d.history[1].actingForApproverId).toBe('emp-a');
+    // ApprovalRequestSchema parse does not throw.
+    const { ApprovalRequestSchema } = await import('@/features/erp-ops/api/approval-types');
+    expect(() => ApprovalRequestSchema.parse(MULTI_DETAIL.data)).not.toThrow();
+  });
+
+  it('v2.0: parses a detail WITHOUT stages/currentStage (legacy/absent) — no throw', async () => {
+    // Identical to DRAFT_DETAIL which has no stages fields — already tested above.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(DRAFT_DETAIL)));
+    const d = await getApprovalRequest('appr-1');
+    expect(d.stages).toBeUndefined();
+    expect(d.currentStage).toBeUndefined();
+    expect(d.totalStages).toBeUndefined();
+    // No throw — optional fields absent.
+    expect(() => d).not.toThrow();
+  });
 });
 
 // ===========================================================================
@@ -282,7 +347,7 @@ describe('approval-api — create + transitions (Idempotency-Key + X-Operator-Re
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
   });
 
-  it('create → POST /requests + Idempotency-Key + body; NO X-Operator-Reason (create has no reason echo)', async () => {
+  it('create (legacy approverId) → POST /requests + Idempotency-Key + body; NO X-Operator-Reason', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DRAFT_DETAIL, 201));
     vi.stubGlobal('fetch', fetchMock);
     await createApprovalRequest(
@@ -295,6 +360,7 @@ describe('approval-api — create + transitions (Idempotency-Key + X-Operator-Re
     expect(headers['Idempotency-Key']).toBe('idem-create');
     expect(headers['Content-Type']).toBe('application/json');
     expect(headers['X-Operator-Reason']).toBeUndefined();
+    // Legacy single-approver: sends approverId (NOT approverIds).
     expect(body).toMatchObject({
       subjectType: 'DEPARTMENT',
       subjectId: 'dept-1',
@@ -302,6 +368,27 @@ describe('approval-api — create + transitions (Idempotency-Key + X-Operator-Re
       approverId: 'emp-a',
       reason: 'r',
     });
+    expect(body.approverIds).toBeUndefined();
+  });
+
+  it('create (multi-stage approverIds) → body contains approverIds, NOT approverId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DRAFT_DETAIL, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    await createApprovalRequest(
+      {
+        subjectType: 'DEPARTMENT',
+        subjectId: 'dept-1',
+        title: 'Multi',
+        approverIds: ['emp-a', 'emp-b'],
+      },
+      'idem-multi',
+    );
+    const { body, headers } = lastCall(fetchMock);
+    expect(headers['Idempotency-Key']).toBe('idem-multi');
+    // Multi-stage: sends approverIds (NOT approverId).
+    expect(body.approverIds).toEqual(['emp-a', 'emp-b']);
+    expect(body.approverId).toBeUndefined();
+    expect(body.subjectType).toBe('DEPARTMENT');
   });
 
   it('submit → POST /{id}/submit + Idempotency-Key; empty body; NO X-Operator-Reason', async () => {
