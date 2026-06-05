@@ -92,6 +92,65 @@ All implementation tasks targeting this service must follow this declaration,
 > remains the deferred frontier. The v1.0 single-stage path is the N=1 special case
 > (a strict subset — backward-compatible, regression-gated).
 
+> **v2.1 AMENDMENT (TASK-ERP-BE-013 — 대결/위임 delegation/substitution; the THIRD
+> and FINAL increment of the ADR-MONO-016 § D3 approval forward-declaration).**
+> Layered on the v2.0 multi-stage base, this realises the `rules/domains/erp.md`
+> L40/L116/L131 delegation rules (대결자 = an absent approver's authorized
+> substitute; a stage transition may be performed by the stage approver **or their
+> active delegate**; delegation grants are authz-affecting changes that MUST be
+> immutably audited + operationally queryable). Additive + backward-compatible.
+>
+> - **`DelegationGrant`** — a new aggregate `(id, tenant_id, delegator_id [A],
+>   delegate_id [D], valid_from, valid_to? (open-ended allowed), reason,
+>   status [ACTIVE|REVOKED], created_at/by, revoked_at/by?)`. A **standing,
+>   windowed** grant: while ACTIVE and `now ∈ [valid_from, valid_to ?? +∞]`, D may
+>   act for A at **any** stage where A is the approver. **Self-delegation (A == D)
+>   → `DELEGATION_INVALID`**; `valid_to < valid_from` → `DELEGATION_INVALID`.
+>   No transitive chaining (a delegate's own grants do not cascade — 1-hop).
+> - **Transition-time resolution** — `approve`/`reject` resolve the acting
+>   principal against the **current stage's** approver A: `actor == A` → direct;
+>   else an **active grant `A → actor`** → the actor acts as A's delegate
+>   (`onBehalfOf = A`); neither → `APPROVAL_NOT_AUTHORIZED_APPROVER` (fail-closed).
+>   The aggregate records **both** `actor` (D) and `onBehalfOf` (A) on the audit
+>   row; the current-stage-approver-equals-`onBehalfOf` invariant (T4/SoD) is
+>   preserved. **Delegation cannot bypass Separation of Duties**: the effective
+>   actor (D) MUST NOT be the request's submitter (self-approval-via-delegation →
+>   refused). `withdraw` stays **submitter-only** (delegation covers approver
+>   duties only, never withdraw).
+> - **Audit (L131)** — grant create + revoke each write an **immutable audit row**
+>   (actor + timestamp + before/after + reason) in the same Tx as the grant state
+>   change; operationally queryable. Every delegated transition's audit row carries
+>   `actor` (D) + `onBehalfOf` (A) so the delegation is traceable.
+> - **Events** — grant create emits the **new** topic `erp.approval.delegated.v1`
+>   (`rules/domains/erp.md` L101 catalog-named; `aggregateType = DelegationGrant`).
+>   This is a **producer-only forward interface** — the existing consumers
+>   (`read-model-service` BE-010, `notification-service` BE-011) do **not** subscribe
+>   to it, and the four existing transition topics are **unchanged**, so consumers
+>   are UNCHANGED. Transition events (`approved`/`rejected`) gain an additive
+>   `actingForApproverId` field (= `onBehalfOf` when a delegate acted; ABSENT when
+>   the approver acted themselves; NON_NULL → ignored by existing consumers).
+>   Grant **revoke** is audited only (no separate event in v2.1).
+> - **REST (additive)** — `POST /api/erp/approval/delegations` (create A→D,
+>   `Idempotency-Key`) + `POST /api/erp/approval/delegations/{id}/revoke` (reason)
+>   + `GET /api/erp/approval/delegations` (the caller's grants as delegator + as
+>   delegate, scope-aware). Create/revoke require `erp.write` (own grants / admin);
+>   list requires `erp.read`.
+> - **New error codes** — `DELEGATION_INVALID` (422 — self-delegation / invalid
+>   window) + `DELEGATION_NOT_FOUND` (404 — revoke of an unknown grant), registered
+>   in `platform/error-handling.md` erp section before use.
+> - **Persistence** — new `delegation_grant` table + active-grant lookup index;
+>   Flyway `V3__delegation.sql` (pure-additive — no change to existing data).
+>
+> **Still v2.2-deferred (named, not designed here)**: per-request / per-route
+> delegation (this increment is a standing grant covering all stages where A is
+> the approver), automatic absence detection (OOO/leave-driven auto-delegation),
+> transitive/chained delegation, a `read-model`/`notification` consumer of
+> `erp.approval.delegated.v1` (the "you have been delegated" notification — a
+> separate increment), and the console delegation UI (a separate PC-FE task).
+> **This increment COMPLETES the ADR-MONO-016 § D3 approval forward-declaration**
+> (단계/대결/위임): BE-009 single-stage → BE-012 multi-stage + `IN_REVIEW` →
+> BE-013 delegation.
+
 ---
 
 ## Identity
@@ -890,10 +949,14 @@ read-model-service precedent); these are **not** designed in depth in this docum
 - ~~**`IN_REVIEW` intermediate state**~~ — **REALISED in v2.0** (TASK-ERP-BE-012):
   the `(IN_REVIEW →)` of the erp.md state-machine language; reached when a
   non-final stage of a multi-stage route is approved.
-- **대결 / 위임 (delegation / substitution)** — an absent approver's delegate; the
-  `erp.approval.delegated` event (erp.md § Internal Event Catalog). **v2.1** — a
-  distinct authority-delegation model layered on the v2.0 multi-stage base (the
-  immediate next increment).
+- ~~**대결 / 위임 (delegation / substitution)**~~ — **REALISED in v2.1**
+  (TASK-ERP-BE-013, § v2.1 amendment): a standing windowed `DelegationGrant`
+  (A→D) lets an absent approver's delegate act at the approver's stage; the
+  `erp.approval.delegated.v1` event (erp.md § Internal Event Catalog) is emitted on
+  grant create; transitions carry `onBehalfOf` audit + `actingForApproverId`.
+  **v2.2-deferred sub-parts**: per-request/per-route delegation, automatic absence
+  detection, transitive/chained delegation, a `read-model`/`notification` consumer
+  of `erp.approval.delegated.v1`, and the console delegation UI.
 - **Event-driven fan-out of stage advances** — emitting an event when a
   multi-stage request advances to `IN_REVIEW` so `notification-service` can notify
   the next stage's approver. **v2.1** — in v2.0 the next approver is surfaced by
