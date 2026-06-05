@@ -130,7 +130,8 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
     }
 
     @Test
-    @DisplayName("AC-1: revoke → REVOKED + audit; unknown id → 404 DELEGATION_NOT_FOUND")
+    @DisplayName("AC-1: revoke → REVOKED + audit + revoked.v1 outbox (TASK-ERP-BE-015); "
+            + "unknown id → 404 DELEGATION_NOT_FOUND")
     void revokeAndNotFound() throws Exception {
         String grantId = createGrant("emp-a", "emp-d", FROM, TO, "k-dg-create-rev");
         mockMvc.perform(post("/api/erp/approval/delegations/" + grantId + "/revoke")
@@ -144,11 +145,29 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 "SELECT COUNT(*) FROM approval_audit_log WHERE aggregate_id = ? AND action = ?",
                 Long.class, grantId, "approval.delegation.revoked");
         assertThat(revokedAudit).isEqualTo(1L);
-        // revoke emits NO event (v2.1 — audited only).
+        // The create still produced exactly one delegated.v1 (unchanged).
         Long delegatedOutbox = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, grantId, "erp.approval.delegated");
-        assertThat(delegatedOutbox).isEqualTo(1L);   // only the create event
+        assertThat(delegatedOutbox).isEqualTo(1L);
+        // TASK-ERP-BE-015: an actual ACTIVE→REVOKED transition writes the revoke event
+        // to the outbox inside the same Tx (A7).
+        Long revokedOutbox = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                Long.class, grantId, "erp.approval.delegation.revoked");
+        assertThat(revokedOutbox).isEqualTo(1L);
+
+        // Idempotent re-revoke: not a transition → no second revoke event, no second audit.
+        mockMvc.perform(post("/api/erp/approval/delegations/" + grantId + "/revoke")
+                        .header("Authorization", "Bearer " + token("emp-a", "erp.write"))
+                        .header("Idempotency-Key", "k-dg-revoke-again")
+                        .contentType("application/json").content("{\"reason\":\"again\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REVOKED"));
+        Long revokedOutboxAfter = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                Long.class, grantId, "erp.approval.delegation.revoked");
+        assertThat(revokedOutboxAfter).isEqualTo(1L);
 
         mockMvc.perform(post("/api/erp/approval/delegations/dgr-missing/revoke")
                         .header("Authorization", "Bearer " + token("emp-a", "erp.write"))

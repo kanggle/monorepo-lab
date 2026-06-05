@@ -208,6 +208,85 @@ avoid existence leak, mirroring the org-view detail rule), 401 `UNAUTHORIZED`,
 
 ---
 
+## Delegation facts (v1.2 — TASK-ERP-BE-015)
+
+The integrated read model also projects **delegation facts** — the latest state of
+each delegation grant (consumed from `erp.approval.delegated.v1` +
+`erp.approval.delegation.revoked.v1`,
+[`read-model-subscriptions.md`](../events/read-model-subscriptions.md) § v1.2).
+**Read-only projections** (E5): latest fact only — the authoritative grant state +
+audit history live on `approval-service`. The surface answers "who may act for
+whom" (delegation) read-only, alongside the org-view + approval facts.
+
+`DelegationFact`:
+```json
+{ "grantId": "dgr-...",
+  "status": "ACTIVE|REVOKED",
+  "delegatorId": "emp-A-...",
+  "delegateId": "emp-D-...",
+  "validFrom": "<ISO-8601 UTC; ABSENT if only a revoke (out-of-order) was seen>",
+  "validTo":   "<ISO-8601 UTC; ABSENT = open-ended, or revoke-before-grant>",
+  "reason":    "<≤512; ABSENT when none>",
+  "revokedAt": "<ISO-8601 UTC; ABSENT while ACTIVE>" }
+```
+- `delegatorId` / `delegateId` are opaque employee ids (no subject ref is resolved —
+  a console drill-down resolves display names via the org-view if needed).
+- `validFrom`/`validTo`/`revokedAt`/`reason` are ABSENT (NON_NULL) when not
+  applicable — an out-of-order revoke-before-grant leaves the validity window
+  ABSENT (never fabricated, E5).
+
+### GET /api/erp/read-model/delegations
+
+Paginated delegation-fact list, **scope-aware** (E6) — same READ gate +
+**org_scope subtree filter** as the org-view / approval facts, here on the
+**delegator's department** (the `delegatorId` is an employee id resolved to its
+department; `["*"]`/unset = all, net-zero).
+
+**Headers**: `Authorization` (req)
+
+**Query**:
+- `delegatorId` — optional, filter to one delegator (A)
+- `delegateId` — optional, filter to one delegate (D)
+- `status` — optional, enum `ACTIVE | REVOKED`
+- `activeAt` — optional ISO-8601 UTC instant; matches grants ACTIVE at that
+  instant (`status=ACTIVE ∧ validFrom ≤ t ∧ (validTo null ∨ t ≤ validTo)`)
+- `page` — optional, default `0`
+- `size` — optional, default `20`, ≤ `100`
+
+**200**:
+```json
+{ "data": [ <DelegationFact>, ... ],
+  "meta": { "page": 0, "size": 20, "totalElements": 7,
+            "timestamp": "<ISO-8601>",
+            "warning": "Eventually-consistent read-model" } }
+```
+
+**Errors**: 400 `VALIDATION_ERROR` (bad status/activeAt/page/size), 401
+`UNAUTHORIZED`, 403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`.
+
+### GET /api/erp/read-model/delegations/{grantId}
+
+Single delegation fact (latest state). For the full grant audit history, consumers
+use `approval-service` (source of record).
+
+**Headers**: `Authorization` (req)
+
+**Path**: `grantId` — the delegation grant id.
+
+**200**:
+```json
+{ "data": <DelegationFact>,
+  "meta": { "timestamp": "<ISO-8601>",
+            "warning": "Eventually-consistent read-model" } }
+```
+
+**Errors**: 404 `MASTERDATA_NOT_FOUND` (no delegation-fact projection for the id — a
+projection miss is not fabricated; out-of-scope delegator also surfaces as 404 to
+avoid existence leak, mirroring the approval-fact / org-view detail rule), 401
+`UNAUTHORIZED`, 403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`.
+
+---
+
 ## Notes
 
 - The read-model is **eventually consistent** with `masterdata-service`. Every

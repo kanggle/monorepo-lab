@@ -79,6 +79,9 @@ public abstract class AbstractReadModelIntegrationTest {
     protected static final String TOPIC_APPROVAL_REJECTED = "erp.approval.rejected.v1";
     protected static final String TOPIC_APPROVAL_WITHDRAWN = "erp.approval.withdrawn.v1";
 
+    protected static final String TOPIC_DELEGATED = "erp.approval.delegated.v1";
+    protected static final String TOPIC_DELEGATION_REVOKED = "erp.approval.delegation.revoked.v1";
+
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
             new MySQLContainer<>(DockerImageName.parse("mysql:8.0"))
@@ -139,7 +142,9 @@ public abstract class AbstractReadModelIntegrationTest {
                     new NewTopic(TOPIC_APPROVAL_SUBMITTED, 1, (short) 1),
                     new NewTopic(TOPIC_APPROVAL_APPROVED, 1, (short) 1),
                     new NewTopic(TOPIC_APPROVAL_REJECTED, 1, (short) 1),
-                    new NewTopic(TOPIC_APPROVAL_WITHDRAWN, 1, (short) 1)
+                    new NewTopic(TOPIC_APPROVAL_WITHDRAWN, 1, (short) 1),
+                    new NewTopic(TOPIC_DELEGATED, 1, (short) 1),
+                    new NewTopic(TOPIC_DELEGATION_REVOKED, 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() != null
@@ -179,6 +184,8 @@ public abstract class AbstractReadModelIntegrationTest {
     @Autowired protected ProcessedEventJpaRepository processedEventJpa;
     @Autowired protected com.example.erp.readmodel.adapter.outbound.persistence.jpa
             .ApprovalFactProjJpaRepository approvalFactJpa;
+    @Autowired protected com.example.erp.readmodel.adapter.outbound.persistence.jpa
+            .DelegationFactProjJpaRepository delegationFactJpa;
     @Autowired protected ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------------
@@ -296,6 +303,47 @@ public abstract class AbstractReadModelIntegrationTest {
             return objectMapper.writeValueAsString(env);
         } catch (Exception e) {
             throw new IllegalStateException("approval envelope serialise failed", e);
+        }
+    }
+
+    /**
+     * Builds a delegation event envelope (erp-approval-events.md § v2.1/v2.2). The
+     * {@code delegated} payload carries the validity window
+     * ({@code validFrom}/{@code validTo}); the {@code revoked} payload does not.
+     * Pass {@code validFrom}/{@code validTo} null for a revoke envelope.
+     */
+    protected String delegationEnvelope(String eventId, String eventType, String grantId,
+                                        String delegatorId, String delegateId,
+                                        String validFrom, String validTo, String reason) {
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("grantId", grantId);
+        payload.put("delegatorId", delegatorId);
+        payload.put("delegateId", delegateId);
+        if (validFrom != null) {
+            payload.put("validFrom", validFrom);
+        }
+        if (validTo != null) {
+            payload.put("validTo", validTo);
+        }
+        if (reason != null) {
+            payload.put("reason", reason);
+        }
+        payload.put("tenantId", "erp");
+        payload.put("occurredAt", Instant.now().toString());
+        payload.put("actor", delegatorId);
+        java.util.Map<String, Object> env = new java.util.LinkedHashMap<>();
+        env.put("eventId", eventId);
+        env.put("eventType", eventType);
+        env.put("occurredAt", Instant.now().toString());
+        env.put("tenantId", "erp");
+        env.put("source", "erp-platform-approval-service");
+        env.put("aggregateType", "DelegationGrant");
+        env.put("aggregateId", grantId);
+        env.put("payload", payload);
+        try {
+            return objectMapper.writeValueAsString(env);
+        } catch (Exception e) {
+            throw new IllegalStateException("delegation envelope serialise failed", e);
         }
     }
 

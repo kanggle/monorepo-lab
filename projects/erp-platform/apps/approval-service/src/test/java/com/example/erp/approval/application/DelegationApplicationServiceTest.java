@@ -30,6 +30,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -117,18 +118,20 @@ class DelegationApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("revoke → REVOKED + audit + NO event")
+    @DisplayName("revoke → REVOKED + audit + revoked event (TASK-ERP-BE-015), no delegated event")
     void revoke() {
         when(repo.findById("dgr-1", TENANT)).thenReturn(Optional.of(grant()));
         var view = service.revokeDelegation(new RevokeDelegationCommand(A, "dgr-1", "no longer away"));
         assertThat(view.status()).isEqualTo("REVOKED");
         verify(repo).save(any(DelegationGrant.class));
         verify(auditLogRepository).append(any(ApprovalAuditLog.class));
+        // TASK-ERP-BE-015: an actual ACTIVE→REVOKED transition emits the revoke event.
+        verify(eventPublisher).publishRevoked(any(DelegationGrant.class), eq("emp-a"));
         verify(eventPublisher, never()).publishDelegated(any(), any());
     }
 
     @Test
-    @DisplayName("revoke idempotent: already REVOKED → no second audit, no save")
+    @DisplayName("revoke idempotent: already REVOKED → no second audit, no save, NO revoke event")
     void revokeIdempotent() {
         DelegationGrant already = grant();
         already.revoke("emp-a", NOW);
@@ -137,6 +140,8 @@ class DelegationApplicationServiceTest {
         assertThat(view.status()).isEqualTo("REVOKED");
         verify(repo, never()).save(any());
         verify(auditLogRepository, never()).append(any());
+        // Idempotent re-revoke is not a transition → no re-emission (transition-once).
+        verify(eventPublisher, never()).publishRevoked(any(), any());
     }
 
     @Test

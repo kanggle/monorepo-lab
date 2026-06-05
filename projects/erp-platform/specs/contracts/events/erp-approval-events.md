@@ -99,6 +99,40 @@ This contract is the forward interface for those v2 consumers.
 > Consumers that read none of the v2.0/v2.1 additive fields and ignore the new
 > topic behave **identically to the v1.0 contract**.
 
+> **v2.2 AMENDMENT (TASK-ERP-BE-015 — delegation REVOKE event; additive, the four
+> transition topics + the `delegated` topic UNCHANGED).** The v2.1 "grant revoke
+> is audited only — no event" rule is **superseded**: a delegation grant **revoke**
+> now emits a NEW topic so the read model can reflect the cancellation (a
+> create-only projection cannot see a manual revoke).
+> - **A NEW topic `erp.approval.delegation.revoked.v1`**, emitted when a
+>   `DelegationGrant` is **revoked** (an actual ACTIVE→REVOKED transition only — an
+>   idempotent re-revoke of an already-REVOKED grant does **not** re-emit).
+>   `aggregateType = "DelegationGrant"`, `aggregateId = <grantId>`, partition key =
+>   `grantId` (same aggregate/partition as `erp.approval.delegated.v1`, so a
+>   consumer sees grant + revoke on one partition → per-grant ordering). The event
+>   is written inside the same `@Transactional` outbox boundary as the revoke audit
+>   row (atomic; A7). Payload:
+>   ```json
+>   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
+>     "reason": "<≤512; ABSENT when none>", "tenantId": "erp",
+>     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the revoker>" }
+>   ```
+>   The validity window (`validFrom`/`validTo`) is **NOT** in the revoke payload (a
+>   revoke does not restate the window — the read model keeps what the `delegated`
+>   event projected). `reason` follows `@JsonInclude(NON_NULL)` (ABSENT when none).
+> - **The four transition topics (`submitted`/`approved`/`rejected`/`withdrawn`)
+>   and `erp.approval.delegated.v1` are byte-unchanged.** The grant-create path,
+>   the SoD/resolver, and the transition payloads (incl. `actingForApproverId`) are
+>   not touched.
+> - **Consumer**: `read-model-service` (TASK-ERP-BE-015) subscribes to BOTH
+>   `erp.approval.delegated.v1` (grant) and `erp.approval.delegation.revoked.v1`
+>   (revoke) → projects a `delegation_fact_proj` (ACTIVE/REVOKED), closing the
+>   delegation read-model loop ([`read-model-subscriptions.md`](read-model-subscriptions.md)
+>   § Delegation). `notification-service` does **not** consume the revoke topic (a
+>   revoke notification is a future increment).
+>
+> Consumers that ignore the new topic behave identically to the v2.1 contract.
+
 ---
 
 ## Envelope (libs/java-messaging standard)

@@ -129,7 +129,19 @@ All implementation tasks targeting this service must follow this declaration,
 >   are UNCHANGED. Transition events (`approved`/`rejected`) gain an additive
 >   `actingForApproverId` field (= `onBehalfOf` when a delegate acted; ABSENT when
 >   the approver acted themselves; NON_NULL → ignored by existing consumers).
->   Grant **revoke** is audited only (no separate event in v2.1).
+>   ~~Grant **revoke** is audited only (no separate event in v2.1).~~
+>   **[Superseded by TASK-ERP-BE-015]** Grant **revoke** now emits a NEW topic
+>   `erp.approval.delegation.revoked.v1` (on an actual ACTIVE→REVOKED transition
+>   only — an idempotent re-revoke does not re-emit), inside the same revoke
+>   `@Transactional` outbox boundary as the audit row (A7). `aggregateType =
+>   DelegationGrant`, partition key = `grantId`; payload = grantId / delegatorId /
+>   delegateId / reason? / tenantId / occurredAt / actor (no validity window — a
+>   revoke does not restate it). `read-model-service` consumes BOTH
+>   `erp.approval.delegated.v1` + `...delegation.revoked.v1` →
+>   `delegation_fact_proj` (BE-015); `notification-service` does not consume the
+>   revoke topic (revoke notification = future). The four transition topics +
+>   `erp.approval.delegated.v1` are byte-unchanged. Contract:
+>   [`erp-approval-events.md`](../../contracts/events/erp-approval-events.md) § v2.2.
 > - **REST (additive)** — `POST /api/erp/approval/delegations` (create A→D,
 >   `Idempotency-Key`) + `POST /api/erp/approval/delegations/{id}/revoke` (reason)
 >   + `GET /api/erp/approval/delegations` (the caller's grants as delegator + as
@@ -144,9 +156,12 @@ All implementation tasks targeting this service must follow this declaration,
 > **Still v2.2-deferred (named, not designed here)**: per-request / per-route
 > delegation (this increment is a standing grant covering all stages where A is
 > the approver), automatic absence detection (OOO/leave-driven auto-delegation),
-> transitive/chained delegation, a `read-model`/`notification` consumer of
-> `erp.approval.delegated.v1` (the "you have been delegated" notification — a
-> separate increment), and the console delegation UI (a separate PC-FE task).
+> transitive/chained delegation, and the console delegation read-view UI (a
+> separate PC-FE task). The `read-model` consumer of the delegation events is
+> **REALISED in TASK-ERP-BE-015** (`delegation_fact_proj` ACTIVE/REVOKED); the
+> `notification` "you have been delegated" consumer is **REALISED in
+> TASK-ERP-BE-014** (delegate notification on grant create; a revoke notification
+> stays deferred).
 > **This increment COMPLETES the ADR-MONO-016 § D3 approval forward-declaration**
 > (단계/대결/위임): BE-009 single-stage → BE-012 multi-stage + `IN_REVIEW` →
 > BE-013 delegation.
@@ -955,8 +970,12 @@ read-model-service precedent); these are **not** designed in depth in this docum
   `erp.approval.delegated.v1` event (erp.md § Internal Event Catalog) is emitted on
   grant create; transitions carry `onBehalfOf` audit + `actingForApproverId`.
   **v2.2-deferred sub-parts**: per-request/per-route delegation, automatic absence
-  detection, transitive/chained delegation, a `read-model`/`notification` consumer
-  of `erp.approval.delegated.v1`, and the console delegation UI.
+  detection, transitive/chained delegation, and the console delegation read-view
+  UI. The `read-model` consumer of the delegation events is **REALISED in
+  TASK-ERP-BE-015** (`delegation_fact_proj` ACTIVE/REVOKED + a NEW
+  `erp.approval.delegation.revoked.v1` producer leg, superseding the v2.1
+  audit-only revoke); the `notification` "you have been delegated" consumer is
+  **REALISED in TASK-ERP-BE-014**.
 - **Event-driven fan-out of stage advances** — emitting an event when a
   multi-stage request advances to `IN_REVIEW` so `notification-service` can notify
   the next stage's approver. **v2.1** — in v2.0 the next approver is surfaced by

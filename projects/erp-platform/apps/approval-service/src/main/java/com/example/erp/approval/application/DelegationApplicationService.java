@@ -24,7 +24,9 @@ import java.util.List;
  * Delegation grant lifecycle use cases (TASK-ERP-BE-013, 대결/위임). Each mutation
  * is one {@code @Transactional} boundary: the grant state change + an immutable
  * audit row (L131) commit atomically; create also writes the
- * {@code erp.approval.delegated.v1} outbox event (A7). Audit-fail-closed (A10).
+ * {@code erp.approval.delegated.v1} outbox event, and revoke (an actual
+ * ACTIVE→REVOKED transition) writes the {@code erp.approval.delegation.revoked.v1}
+ * outbox event (TASK-ERP-BE-015) — both A7. Audit-fail-closed (A10).
  *
  * <p>Create / revoke require {@code erp.write} (own grants / operator); list
  * requires {@code erp.read}. The delegator A of a created grant = the caller's
@@ -74,12 +76,16 @@ public class DelegationApplicationService {
                         "delegation grant not found: " + cmd.id()));
 
         // Idempotent — a no-op repeat revoke audits nothing new (the grant is
-        // already REVOKED; the first revoke captured the audit). No event on revoke.
+        // already REVOKED; the first revoke captured the audit). The
+        // erp.approval.delegation.revoked.v1 outbox event (TASK-ERP-BE-015) is
+        // emitted ONLY on an actual ACTIVE→REVOKED transition, inside this same
+        // @Transactional boundary (audit row + outbox event commit atomically; A7).
         boolean changed = grant.revoke(actor.actorId(), now);
         if (changed) {
             DelegationGrant saved = delegationGrantRepository.save(grant);
             appendAudit(saved, "approval.delegation.revoked", actor.actorId(),
                     "ACTIVE", "REVOKED", cmd.reason(), now);
+            eventPublisher.publishRevoked(saved, actor.actorId());
             return DelegationGrantView.from(saved);
         }
         return DelegationGrantView.from(grant);
