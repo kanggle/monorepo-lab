@@ -45,8 +45,12 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 > source type + `NotificationType.DELEGATION_GRANTED` + an `ApprovalDelegatedConsumer`,
 > while the four transition consumers + `ApprovalEvent` + the existing
 > `NotifyOnApprovalCommand` path stay **byte-unchanged**. `NotificationType` /
-> `SourceRef.SourceType` are `@Enumerated(STRING)` so the new enum values need **no
-> Flyway migration**. Grant **revoke** still emits no event (audit only), so there
+> `SourceRef.SourceType` are `@Enumerated(STRING)` (VARCHAR(32)), so the columns need
+> no type change — **but** the V1 `ck_notification_type` / `ck_notification_source_type`
+> CHECK constraints pin the allowed value set, so **V2 extends both allow-lists**
+> (`DELEGATION_GRANTED` / `DELEGATION`). The Docker-free `:check` slice does not
+> exercise the DB CHECK, so this was caught only by the Testcontainers IT. Grant
+> **revoke** still emits no event (audit only), so there
 > is no revoke notification. This realises the § Out-of-Scope "Delegation
 > notifications" row as an additive increment — **no new ADR** (a forward-declared
 > topic's Nth consumer; this amendment is authored before implementation,
@@ -645,8 +649,8 @@ processed_events(event_id VARCHAR PK, topic, aggregate_id, processed_at)
 ```
 
 - `type` ∈ {`APPROVAL_SUBMITTED`, `APPROVED`, `REJECTED`, `WITHDRAWN`,
-  `DELEGATION_GRANTED`} (`@Enumerated(STRING)`, length 32 — the BE-014 value adds
-  no migration).
+  `DELEGATION_GRANTED`} (`@Enumerated(STRING)`, length 32 — V2 extends the
+  `ck_notification_type` CHECK allow-list for the BE-014 value).
 - `source_type` ∈ {`APPROVAL` (→ `source_id = approvalRequestId`), `DELEGATION`
   (→ `source_id = grantId`, TASK-ERP-BE-014)} — opaque back-reference; the
   authoritative state is in `approval-service`.

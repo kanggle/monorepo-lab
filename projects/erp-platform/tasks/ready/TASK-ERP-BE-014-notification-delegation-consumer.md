@@ -4,7 +4,7 @@ TASK-ERP-BE-014
 
 # Title
 
-**notification-service delegation-granted 알림 — `erp.approval.delegated.v1` 소비 (approval delegation leg 완결).** ERP-BE-013 이 발행하나 아무도 구독하지 않던 신규 `erp.approval.delegated.v1`(producer-only forward 토픽)을 notification-service 가 5번째 consumer 로 구독 → 위임받은 결재자(`delegateId`)에게 "결재 권한 위임됨" in-app 알림. 기존 4 approval-transition consumer 경로는 **byte-unchanged** 보존하고 평행 additive 경로(`DelegationEvent` render + `NotifyOnDelegationCommand` + `RecipientResolver`/`NotificationFactory` overload + `SourceRef.delegation` + `ApprovalDelegatedConsumer`)만 추가. `NotificationType.DELEGATION_GRANTED` 신규(enum STRING → Flyway 불필요). terminal consumer(no outbox / no re-emit) 불변. delegation 이벤트 소비자 고리(approval→notification delegated leg) 완결.
+**notification-service delegation-granted 알림 — `erp.approval.delegated.v1` 소비 (approval delegation leg 완결).** ERP-BE-013 이 발행하나 아무도 구독하지 않던 신규 `erp.approval.delegated.v1`(producer-only forward 토픽)을 notification-service 가 5번째 consumer 로 구독 → 위임받은 결재자(`delegateId`)에게 "결재 권한 위임됨" in-app 알림. 기존 4 approval-transition consumer 경로는 **byte-unchanged** 보존하고 평행 additive 경로(`DelegationEvent` render + `NotifyOnDelegationCommand` + `RecipientResolver`/`NotificationFactory` overload + `SourceRef.delegation` + `ApprovalDelegatedConsumer`)만 추가. `NotificationType.DELEGATION_GRANTED` 신규(enum STRING; V2 Flyway 가 `ck_notification_type`/`ck_notification_source_type` CHECK allow-list 확장 — 컬럼 타입 변경 없음). terminal consumer(no outbox / no re-emit) 불변. delegation 이벤트 소비자 고리(approval→notification delegated leg) 완결.
 
 # Status
 
@@ -42,7 +42,7 @@ approval-service 가 발행하나 소비자가 없던 `erp.approval.delegated.v1
 - **신규 consumer** `ApprovalDelegatedConsumer` — `erp.approval.delegated.v1` 구독, consumer group `erp-notification-v1`(기존과 동일), @RetryableTopic 3-retry+DLT + manual ACK + `processed_events` dedupe(T8) + invalid envelope→즉시 DLT. partition key=`grantId`(per-grant ordering).
 - **recipient 해소(delegate)** delegation 이벤트의 수신자 = `payload.delegateId`(위임받은 사람). `RecipientResolver.resolve(DelegationEvent)` overload 추가(기존 `resolve(ApprovalEvent)` 불변). `delegateId` null/blank → invalid → DLT(전달 불가).
 - **신규 render 모델** `DelegationEvent`(pure record: eventId, tenantId, grantId, delegatorId, delegateId, validFrom, validTo?, reason?). `NotificationFactory.from(DelegationEvent,…)` overload — title "결재 권한 위임됨" + body(delegatorId, validFrom, validTo[없으면 "무기한"], reason if present) + `SourceRef.delegation(grantId)`.
-- **`NotificationType.DELEGATION_GRANTED`** enum 값 추가(`@Enumerated(STRING)` length 32 — DDL/Flyway 불필요). 기존 ApprovalEvent 경유 exhaustive switch(`RecipientResolver`/`NotificationFactory`)에는 방어적 `case DELEGATION_GRANTED -> throw IllegalStateException`(ApprovalEvent 는 이 타입을 절대 안 실음 — 컴파일 안전).
+- **`NotificationType.DELEGATION_GRANTED`** enum 값 추가(`@Enumerated(STRING)` length 32 — 컬럼 타입 변경 불필요지만 **V1 CHECK 제약(`ck_notification_type`/`ck_notification_source_type`)이 값 집합을 고정**하므로 **V2 마이그레이션으로 두 allow-list 확장**[`DELEGATION_GRANTED`/`DELEGATION`]; Docker-free `:check`는 DB CHECK 미실행이라 Testcontainers IT만 포착). 기존 ApprovalEvent 경유 exhaustive switch(`RecipientResolver`/`NotificationFactory`)에는 방어적 `case DELEGATION_GRANTED -> throw IllegalStateException`(ApprovalEvent 는 이 타입을 절대 안 실음 — 컴파일 안전).
 - **`SourceRef.SourceType.DELEGATION`** + `SourceRef.delegation(grantId)` 팩토리(기존 `APPROVAL`/`approval()` 불변).
 - **application** `NotifyOnDelegationCommand(DelegationEvent, topic)` + `NotifyOnApprovalEventUseCase.handle(NotifyOnDelegationCommand)` overload — 기존 `handle(NotifyOnApprovalCommand)` 의 persist/deliver/dedupe 시퀀스를 private helper 로 추출해 공유(기존 handle 동작 byte-identical: dedupe→recipient→render→Notification 영속→IN_APP delivery DELIVERED→dedupe provenance→metrics). dedupe provenance aggregateId=`grantId`.
 - **mapper** `EnvelopeToCommandMapper.mapDelegation(rawValue, topic)` → `NotifyOnDelegationCommand`(tenantId=erp 불변식 + grantId/delegatorId/delegateId/validFrom 필수 검증, recipient field=delegateId 부재→invalid DLT). 기존 `map(...)` byte-unchanged(envelope DTO `ApprovalEventEnvelope` 재사용 — 범용 envelope+payload-map).
@@ -63,7 +63,7 @@ approval-service 가 발행하나 소비자가 없던 `erp.approval.delegated.v1
 - [ ] **AC-3** 기존 4 approval consumer 경로 **byte-unchanged**: `ApprovalEvent`/`NotifyOnApprovalCommand`/`map(...)`/기존 `handle(NotifyOnApprovalCommand)` 외부 동작 불변(기존 unit/IT 그대로 통과). `RecipientResolver.resolve(ApprovalEvent)`/`NotificationFactory.from(ApprovalEvent)` 결과 동일.
 - [ ] **AC-4** terminal consumer 불변: publish/outbox/재발행 0(grep 게이트; `OutboxAutoConfiguration` exclude 유지). delegation 경로도 도메인 로직 0(recipient 해소+렌더만).
 - [ ] **AC-5** body 렌더: `delegatorId`, `validFrom` 항상; `validTo` 없으면 "무기한"(open-ended) 표기; `reason` present 일 때만 포함(NON_NULL absent 관용). ids-only(이름 해소 없음, no fabrication).
-- [ ] **AC-6** `./gradlew :projects:erp-platform:apps:notification-service:check` GREEN(unit; integrationTest 는 check 제외). IT(@Tag integration) delegation→inbox + dedupe 케이스 CI Linux(Testcontainers MySQL+Kafka). H2 미사용. Flyway 마이그레이션 추가 0(enum STRING).
+- [ ] **AC-6** `./gradlew :projects:erp-platform:apps:notification-service:check` GREEN(unit; integrationTest 는 check 제외). IT(@Tag integration) delegation→inbox + dedupe 케이스 CI Linux(Testcontainers MySQL+Kafka). H2 미사용. **V2 Flyway 마이그레이션**(CHECK allow-list 확장; 컬럼 타입/테이블 추가는 없음).
 
 # Related Specs
 
@@ -94,7 +94,7 @@ approval-service 가 발행하나 소비자가 없던 `erp.approval.delegated.v1
 
 - unit: RecipientResolver(delegation→delegate) + NotificationFactory(delegation title/body, validTo 무기한, reason absent) + UseCase(delegation happy + dedupe-skip, 기존 approval handle 동작 불변 회귀) + mapper(mapDelegation valid / delegateId null→invalid). 기존 unit 전량 통과(byte-unchanged 경로).
 - IT: `NotificationEndToEndIntegrationTest` 에 (a) delegation publish→consume→Notification(recipient=delegate, type=DELEGATION_GRANTED, sourceId=grantId) + (b) 동일 eventId 2회→1건(dedupe) 추가. topic pre-create 에 delegated 추가. H2 forbidden.
-- `./gradlew :projects:erp-platform:apps:notification-service:check` GREEN. publish/outbox grep 0. Flyway 추가 0.
+- `./gradlew :projects:erp-platform:apps:notification-service:check` GREEN. publish/outbox grep 0. V2 Flyway(CHECK allow-list 확장)는 Testcontainers IT 가 권위 검증.
 
 # Definition of Done
 
@@ -108,4 +108,4 @@ approval-service 가 발행하나 소비자가 없던 `erp.approval.delegated.v1
 
 ---
 
-분석=Opus 4.8 / 구현 권장=Opus (event-driven consumer 추가 — 평행 additive 경로 설계[기존 4-consumer byte-unchanged 보존] + recipient/render/mapper overload + dedupe/DLT/Category C 재사용 + enum exhaustive-switch 안전). 사용자 "delegated-event 소비자 고리" 선택(notification leg 우선). 메타: ① **새 aggregate-fact 토픽의 N번째 소비자 = 평행 additive 경로**(기존 ApprovalEvent/command/mapper/factory/resolver byte-unchanged, 신규 DelegationEvent 짝 추가) — ERP-BE-010/011 first-increment + ERP-BE-013 "신규 fact=신규 토픽" 의 소비측 짝. ② enum exhaustive switch(default 없음)가 새 타입 누락을 컴파일 차단 → 방어적 case 로 의도 명시. ③ Flyway 불필요(`@Enumerated(STRING)` length 32). read-model delegation projection 은 별 후속(ERP-BE-015 후보). [[project_monorepo_template_strategy]] [[project_platform_console_adr_013]] [[feedback_spring_boot_diagnostic_patterns]]
+분석=Opus 4.8 / 구현 권장=Opus (event-driven consumer 추가 — 평행 additive 경로 설계[기존 4-consumer byte-unchanged 보존] + recipient/render/mapper overload + dedupe/DLT/Category C 재사용 + enum exhaustive-switch 안전). 사용자 "delegated-event 소비자 고리" 선택(notification leg 우선). 메타: ① **새 aggregate-fact 토픽의 N번째 소비자 = 평행 additive 경로**(기존 ApprovalEvent/command/mapper/factory/resolver byte-unchanged, 신규 DelegationEvent 짝 추가) — ERP-BE-010/011 first-increment + ERP-BE-013 "신규 fact=신규 토픽" 의 소비측 짝. ② enum exhaustive switch(default 없음)가 새 타입 누락을 컴파일 차단 → 방어적 case 로 의도 명시. ③ **`@Enumerated(STRING)` 컬럼 길이가 맞아도 ≠ 마이그레이션 불필요** — enum 컬럼의 **CHECK 제약(allow-list)**이 값 집합을 고정하면 V2 로 확장해야 함. Docker-free `:check` slice 는 DB CHECK 미실행이라 미포착, **Testcontainers IT(권위 게이트)가 적발**(CI RED `ck_notification_source_type` violated → V2 추가). [[feedback_spring_boot_diagnostic_patterns]] §14/§15 류. read-model delegation projection 은 별 후속(ERP-BE-015 후보). [[project_monorepo_template_strategy]] [[project_platform_console_adr_013]] [[feedback_spring_boot_diagnostic_patterns]]
