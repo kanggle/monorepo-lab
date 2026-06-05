@@ -60,12 +60,29 @@ public class ApprovalAction {
     @Column(name = "stage")
     private Integer stage;
 
+    /**
+     * When a delegate performed this transition on a stage approver's behalf
+     * (TASK-ERP-BE-013, 대결/위임), this is the stage approver A the {@code actor}
+     * (delegate D) acted for; {@code null} when the approver acted themselves (or
+     * for submit/withdraw). Records the delegation in the immutable history.
+     */
+    @Column(name = "on_behalf_of", length = 64)
+    private String onBehalfOf;
+
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
     public static ApprovalAction of(String tenantId, String approvalRequestId,
                                     ApprovalStatus transition, String actor,
                                     String reason, Integer stage, Instant occurredAt) {
+        return of(tenantId, approvalRequestId, transition, actor, reason, stage, null,
+                occurredAt);
+    }
+
+    public static ApprovalAction of(String tenantId, String approvalRequestId,
+                                    ApprovalStatus transition, String actor,
+                                    String reason, Integer stage, String onBehalfOf,
+                                    Instant occurredAt) {
         ApprovalAction a = new ApprovalAction();
         a.tenantId = tenantId;
         a.approvalRequestId = approvalRequestId;
@@ -73,6 +90,7 @@ public class ApprovalAction {
         a.actor = actor;
         a.reason = reason;
         a.stage = stage;
+        a.onBehalfOf = onBehalfOf;
         a.occurredAt = occurredAt;
         return a;
     }

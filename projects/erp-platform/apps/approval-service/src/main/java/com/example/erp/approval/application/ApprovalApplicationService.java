@@ -16,6 +16,9 @@ import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.authorization.AuthorizationDecision;
 import com.example.erp.approval.domain.authorization.RequiredScope;
+import com.example.erp.approval.domain.delegation.DelegationResolution;
+import com.example.erp.approval.domain.delegation.DelegationResolver;
+import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalNotAuthorizedApproverException;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRequestNotFoundException;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRouteInvalidException;
 import com.example.erp.approval.domain.error.ApprovalErrors.DataScopeForbiddenException;
@@ -38,6 +41,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * approval-service application service — the SINGLE {@code @Transactional}
@@ -69,6 +73,7 @@ public class ApprovalApplicationService {
     private final ApprovalEventPublisher eventPublisher;
     private final MasterDataPort masterDataPort;
     private final AuthorizationPort authorizationPort;
+    private final DelegationResolver delegationResolver;
     private final ClockPort clock;
     private final ObjectMapper objectMapper;
 
@@ -135,7 +140,7 @@ public class ApprovalApplicationService {
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
         recordTransition(saved, ApprovalStatus.SUBMITTED, actor.actorId(), null,
-                before, saved.getCurrentStageIndex(), now);
+                before, saved.getCurrentStageIndex(), null, now);
         eventPublisher.publishSubmitted(saved, actor.actorId());
         return view(saved);
     }
@@ -150,18 +155,22 @@ public class ApprovalApplicationService {
 
         ApprovalStatus before = request.getStatus();
         int actingStage = request.getCurrentStageIndex();
-        request.approve(actor.actorId(), route, now);
+        // TASK-ERP-BE-013 — resolve the acting principal against the current stage's
+        // approver: direct, active delegate, or fail-closed (not authorized).
+        String onBehalfOf = resolveActingApprover(request, route, actor, now);
+        request.approve(actor.actorId(), route, onBehalfOf, now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
         // The action records the stage that approved (APPROVED action), even when
-        // the resulting state is IN_REVIEW (intermediate stage advance).
+        // the resulting state is IN_REVIEW (intermediate stage advance). onBehalfOf
+        // (= A) is recorded when a delegate acted (대결).
         recordTransition(saved, ApprovalStatus.APPROVED, actor.actorId(), cmd.reason(),
-                before, actingStage, now);
+                before, actingStage, onBehalfOf, now);
         // erp-approval-events.md § v2.0: approved.v1 fires ONLY on the FINAL-stage
         // approval (→ APPROVED). An intermediate-stage approval (→ IN_REVIEW)
         // writes the audit row but emits NO outbox event (terminal-once preserved).
         if (saved.getStatus() == ApprovalStatus.APPROVED) {
-            eventPublisher.publishApproved(saved, actor.actorId(), cmd.reason());
+            eventPublisher.publishApproved(saved, actor.actorId(), cmd.reason(), onBehalfOf);
         }
         return view(saved);
     }
@@ -176,12 +185,14 @@ public class ApprovalApplicationService {
 
         ApprovalStatus before = request.getStatus();
         int actingStage = request.getCurrentStageIndex();
-        request.reject(actor.actorId(), route, cmd.reason(), now);
+        // TASK-ERP-BE-013 — same delegate resolution as approve (대결 reject).
+        String onBehalfOf = resolveActingApprover(request, route, actor, now);
+        request.reject(actor.actorId(), route, onBehalfOf, cmd.reason(), now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
         recordTransition(saved, ApprovalStatus.REJECTED, actor.actorId(), cmd.reason(),
-                before, actingStage, now);
-        eventPublisher.publishRejected(saved, actor.actorId(), cmd.reason());
+                before, actingStage, onBehalfOf, now);
+        eventPublisher.publishRejected(saved, actor.actorId(), cmd.reason(), onBehalfOf);
         return view(saved);
     }
 
@@ -198,7 +209,7 @@ public class ApprovalApplicationService {
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
         recordTransition(saved, ApprovalStatus.WITHDRAWN, actor.actorId(), cmd.reason(),
-                before, actingStage, now);
+                before, actingStage, null, now);
         eventPublisher.publishWithdrawn(saved, actor.actorId(), cmd.reason());
         return view(saved);
     }
@@ -312,13 +323,55 @@ public class ApprovalApplicationService {
      */
     private void recordTransition(ApprovalRequest request, ApprovalStatus action,
                                   String actor, String reason, ApprovalStatus before,
-                                  int stage, Instant now) {
+                                  int stage, String onBehalfOf, Instant now) {
         requestRepository.appendAction(ApprovalAction.of(
-                request.getTenantId(), request.getId(), action, actor, reason, stage, now));
+                request.getTenantId(), request.getId(), action, actor, reason, stage,
+                onBehalfOf, now));
         auditLogRepository.append(ApprovalAuditLog.of(
                 "evt-" + UuidV7.randomString(), request.getTenantId(), request.getId(),
                 auditAction(action), actor, snapshotJson(before),
                 snapshotJson(request.getStatus()), reason, now));
+    }
+
+    /**
+     * Resolve the acting principal of an approve/reject against the current stage's
+     * approver A (TASK-ERP-BE-013, architecture.md § v2.1). Returns {@code null}
+     * for a direct action (actor IS the approver) or the approver A when an active
+     * delegate acts. A non-approver with no active grant → fail-closed
+     * {@code APPROVAL_NOT_AUTHORIZED_APPROVER}. <b>Separation of Duties</b>: a
+     * delegate who is the request's submitter is refused (no self-approval via
+     * delegation). The aggregate re-validates the effective approver against the
+     * stage (independent gate). Only meaningful from SUBMITTED/IN_REVIEW; the
+     * finalized/illegal-edge guards in the aggregate take precedence (this resolves
+     * the stage approver only when the transition is otherwise legal).
+     */
+    private String resolveActingApprover(ApprovalRequest request, ApprovalRoute route,
+                                         ActorContext actor, Instant now) {
+        // Only SUBMITTED/IN_REVIEW have a meaningful current-stage approver; for a
+        // finalized or pre-submit request let the aggregate raise the precise
+        // status error (do not mask it with an authz error).
+        if (request.isFinalized() || request.getStatus() == ApprovalStatus.DRAFT) {
+            return null;
+        }
+        String stageApprover = route.approverAt(request.getCurrentStageIndex()).approverId();
+        DelegationResolution resolution =
+                delegationResolver.resolve(stageApprover, actor.actorId(), actor.tenantId(), now);
+        if (!resolution.authorized()) {
+            throw new ApprovalNotAuthorizedApproverException(
+                    "principal '" + actor.actorId() + "' is not the current stage ("
+                            + request.getCurrentStageIndex() + ") approver '" + stageApprover
+                            + "' and holds no active delegation for them");
+        }
+        // SoD — a delegate (effective actor D) who is the request's submitter may not
+        // approve via delegation (self-approval-via-delegation is refused). A direct
+        // approver can never be the submitter (route construction forbids it).
+        if (resolution.isDelegated()
+                && Objects.equals(actor.actorId(), request.getSubmitterId())) {
+            throw new ApprovalNotAuthorizedApproverException(
+                    "delegate '" + actor.actorId() + "' is the request's submitter — "
+                            + "self-approval via delegation is refused (Separation of Duties)");
+        }
+        return resolution.onBehalfOf();
     }
 
     private static String auditAction(ApprovalStatus transition) {

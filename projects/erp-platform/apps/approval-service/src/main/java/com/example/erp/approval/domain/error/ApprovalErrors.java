@@ -95,4 +95,19 @@ public final class ApprovalErrors {
             super("IDEMPOTENCY_STORE_UNAVAILABLE", message);
         }
     }
+
+    // ---- 422 (delegation grant malformed: self-delegation / invalid window) ----
+    // TASK-ERP-BE-013 (대결/위임). error-handling.md § Approval Workflow [domain: erp].
+    public static final class DelegationInvalidException extends ApprovalDomainException {
+        public DelegationInvalidException(String message) {
+            super("DELEGATION_INVALID", message);
+        }
+    }
+
+    // ---- 404 (delegation grant not found for the caller's tenant) ----
+    public static final class DelegationNotFoundException extends ApprovalDomainException {
+        public DelegationNotFoundException(String message) {
+            super("DELEGATION_NOT_FOUND", message);
+        }
+    }
 }

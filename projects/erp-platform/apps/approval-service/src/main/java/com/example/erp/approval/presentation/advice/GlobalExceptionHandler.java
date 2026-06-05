@@ -35,6 +35,8 @@ public class GlobalExceptionHandler {
             Map.entry("APPROVAL_ALREADY_FINALIZED", HttpStatus.CONFLICT),
             Map.entry("APPROVAL_NOT_AUTHORIZED_APPROVER", HttpStatus.FORBIDDEN),
             Map.entry("APPROVAL_ROUTE_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("DELEGATION_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("DELEGATION_NOT_FOUND", HttpStatus.NOT_FOUND),
             Map.entry("PERMISSION_DENIED", HttpStatus.FORBIDDEN),
             Map.entry("DATA_SCOPE_FORBIDDEN", HttpStatus.FORBIDDEN),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN),
