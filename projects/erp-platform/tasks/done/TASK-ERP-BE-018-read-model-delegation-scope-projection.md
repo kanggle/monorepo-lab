@@ -8,7 +8,7 @@ TASK-ERP-BE-018
 
 # Status
 
-ready
+done
 
 # Owner
 
