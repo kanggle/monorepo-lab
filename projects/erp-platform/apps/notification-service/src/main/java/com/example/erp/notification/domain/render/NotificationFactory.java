@@ -56,13 +56,40 @@ public final class NotificationFactory {
                 createdAt);
     }
 
+    /**
+     * Builds the in-app notification for a delegation-revoked event
+     * (TASK-ERP-BE-016). Parallel to the {@link DelegationEvent} overload — the
+     * recipient is the delegate (who loses the authority); the body names the
+     * delegator + reason (when present). Ids-only display (E5 spirit).
+     */
+    public Notification from(DelegationRevokedEvent event, Recipient recipient, String id,
+                             Instant createdAt) {
+        return Notification.create(
+                id,
+                event.tenantId(),
+                recipient.employeeId(),
+                event.type(),
+                "위임 권한 회수됨",
+                revokedBody(event),
+                SourceRef.delegation(event.grantId()),
+                createdAt);
+    }
+
+    private String revokedBody(DelegationRevokedEvent event) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("grantId=").append(event.grantId());
+        sb.append(", delegatorId=").append(event.delegatorId());
+        event.reasonOpt().ifPresent(r -> sb.append(", reason=").append(r));
+        return sb.toString();
+    }
+
     private String title(ApprovalEvent event) {
         return switch (event.type()) {
             case APPROVAL_SUBMITTED -> "결재 요청 도착";
             case APPROVAL_APPROVED -> "결재 승인됨";
             case APPROVAL_REJECTED -> "결재 반려됨";
             case APPROVAL_WITHDRAWN -> "결재 회수됨";
-            case DELEGATION_GRANTED -> throw delegationOnApprovalPath();
+            case DELEGATION_GRANTED, DELEGATION_REVOKED -> throw delegationOnApprovalPath();
         };
     }
 
@@ -89,7 +116,7 @@ public final class NotificationFactory {
                 appendFinalizedAt(sb, event);
                 event.reasonOpt().ifPresent(r -> sb.append(", reason=").append(r));
             }
-            case DELEGATION_GRANTED -> throw delegationOnApprovalPath();
+            case DELEGATION_GRANTED, DELEGATION_REVOKED -> throw delegationOnApprovalPath();
         }
         return sb.toString();
     }

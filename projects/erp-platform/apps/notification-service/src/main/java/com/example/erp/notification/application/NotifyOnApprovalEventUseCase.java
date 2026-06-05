@@ -2,6 +2,7 @@ package com.example.erp.notification.application;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
 import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationRevokedCommand;
 import com.example.erp.notification.application.port.outbound.ClockPort;
 import com.example.erp.notification.application.port.outbound.IdGeneratorPort;
 import com.example.erp.notification.application.port.outbound.NotificationChannelPort;
@@ -15,6 +16,7 @@ import com.example.erp.notification.domain.recipient.Recipient;
 import com.example.erp.notification.domain.recipient.RecipientResolver;
 import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
+import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 import com.example.erp.notification.domain.notification.repository.NotificationRepository;
 import com.example.erp.notification.domain.render.NotificationFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -103,6 +105,26 @@ public class NotifyOnApprovalEventUseCase {
     @Transactional
     public void handle(NotifyOnDelegationCommand command) {
         DelegationEvent event = command.event();
+        if (skipIfDuplicate(event.eventId(), command.topic())) {
+            return;
+        }
+        Recipient recipient = recipientResolver.resolve(event);
+        Instant now = clock.now();
+        Notification notification = factory.from(event, recipient,
+                idGenerator.newNotificationId(), now);
+        dispatch(notification, recipient, event.eventId(), event.type(), event.tenantId(),
+                command.topic(), event.grantId(), now);
+    }
+
+    /**
+     * Delegation-revoked consume boundary (TASK-ERP-BE-016). Same sequence as the
+     * granted handler (shared {@link #dispatch}); the recipient is the delegate
+     * (who loses the authority) and the dedupe provenance aggregate id is the
+     * {@code grantId}.
+     */
+    @Transactional
+    public void handle(NotifyOnDelegationRevokedCommand command) {
+        DelegationRevokedEvent event = command.event();
         if (skipIfDuplicate(event.eventId(), command.topic())) {
             return;
         }

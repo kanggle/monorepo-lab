@@ -91,4 +91,27 @@ class NotificationFactoryTest {
         assertThat(n.body()).contains("validTo=무기한");
         assertThat(n.body()).doesNotContain("reason=");
     }
+
+    // ---- TASK-ERP-BE-016: delegation-revoked rendering ----
+
+    @Test
+    void revokedRendersTitleDelegatorAndReason() {
+        Notification n = factory.from(
+                new DelegationRevokedEvent("evt-r", "erp", "dgr-1", "emp-A", "emp-D", "휴가 복귀"),
+                new Recipient("emp-D"), "ntf-r1", now);
+        assertThat(n.title()).isEqualTo("위임 권한 회수됨");
+        assertThat(n.recipientId()).isEqualTo("emp-D");
+        assertThat(n.type()).isEqualTo(NotificationType.DELEGATION_REVOKED);
+        assertThat(n.source().sourceType()).isEqualTo(SourceRef.SourceType.DELEGATION);
+        assertThat(n.source().sourceId()).isEqualTo("dgr-1");
+        assertThat(n.body()).contains("grantId=dgr-1", "delegatorId=emp-A", "reason=휴가 복귀");
+    }
+
+    @Test
+    void revokedWithoutReasonOmitsReason() {
+        Notification n = factory.from(
+                new DelegationRevokedEvent("evt-r", "erp", "dgr-1", "emp-A", "emp-D", null),
+                new Recipient("emp-D"), "ntf-r2", now);
+        assertThat(n.body()).doesNotContain("reason=");
+    }
 }

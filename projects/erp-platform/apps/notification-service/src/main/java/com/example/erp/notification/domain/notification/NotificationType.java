@@ -20,5 +20,11 @@ public enum NotificationType {
      * transition events; it is mapped via {@code DelegationEvent}, not
      * {@code ApprovalEvent}.
      */
-    DELEGATION_GRANTED
+    DELEGATION_GRANTED,
+    /**
+     * {@code erp.approval.delegation.revoked.v1} → notify the delegate that their
+     * delegated authority was revoked (TASK-ERP-BE-016). Mapped via
+     * {@code DelegationRevokedEvent} (the revoke payload has no validity window).
+     */
+    DELEGATION_REVOKED
 }

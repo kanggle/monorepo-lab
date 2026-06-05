@@ -128,8 +128,11 @@ This contract is the forward interface for those v2 consumers.
 >   `erp.approval.delegated.v1` (grant) and `erp.approval.delegation.revoked.v1`
 >   (revoke) → projects a `delegation_fact_proj` (ACTIVE/REVOKED), closing the
 >   delegation read-model loop ([`read-model-subscriptions.md`](read-model-subscriptions.md)
->   § Delegation). `notification-service` does **not** consume the revoke topic (a
->   revoke notification is a future increment).
+>   § Delegation). **`notification-service` also consumes the revoke topic
+>   (TASK-ERP-BE-016)** → notifies the delegate "위임 권한 회수됨"
+>   ([`notification-subscriptions.md`](notification-subscriptions.md) § Consumed
+>   topic — delegation, row 2). Both consumers are additive; the producer side is
+>   unchanged.
 >
 > Consumers that ignore the new topic behave identically to the v2.1 contract.
 

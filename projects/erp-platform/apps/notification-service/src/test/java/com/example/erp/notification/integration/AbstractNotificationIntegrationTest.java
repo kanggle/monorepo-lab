@@ -73,6 +73,7 @@ public abstract class AbstractNotificationIntegrationTest {
     protected static final String TOPIC_REJECTED = "erp.approval.rejected.v1";
     protected static final String TOPIC_WITHDRAWN = "erp.approval.withdrawn.v1";
     protected static final String TOPIC_DELEGATED = "erp.approval.delegated.v1";
+    protected static final String TOPIC_DELEGATION_REVOKED = "erp.approval.delegation.revoked.v1";
 
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
@@ -131,7 +132,8 @@ public abstract class AbstractNotificationIntegrationTest {
                     new NewTopic(TOPIC_APPROVED, 1, (short) 1),
                     new NewTopic(TOPIC_REJECTED, 1, (short) 1),
                     new NewTopic(TOPIC_WITHDRAWN, 1, (short) 1),
-                    new NewTopic(TOPIC_DELEGATED, 1, (short) 1)
+                    new NewTopic(TOPIC_DELEGATED, 1, (short) 1),
+                    new NewTopic(TOPIC_DELEGATION_REVOKED, 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() != null
@@ -273,6 +275,37 @@ public abstract class AbstractNotificationIntegrationTest {
             return objectMapper.writeValueAsString(env);
         } catch (Exception e) {
             throw new IllegalStateException("delegation envelope serialise failed", e);
+        }
+    }
+
+    /**
+     * Builds a delegation-revoked event envelope (erp-approval-events.md § v2.2
+     * amendment; TASK-ERP-BE-016). No validity window. {@code reason} omitted when
+     * null (NON_NULL).
+     */
+    protected String delegationRevokedEnvelope(String eventId, String grantId, String delegatorId,
+                                               String delegateId, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("grantId", grantId);
+        payload.put("delegatorId", delegatorId);
+        payload.put("delegateId", delegateId);
+        if (reason != null) payload.put("reason", reason);
+        payload.put("tenantId", "erp");
+        payload.put("occurredAt", Instant.now().toString());
+        payload.put("actor", delegatorId);
+        Map<String, Object> env = new LinkedHashMap<>();
+        env.put("eventId", eventId);
+        env.put("eventType", "erp.approval.delegation.revoked");
+        env.put("occurredAt", Instant.now().toString());
+        env.put("tenantId", "erp");
+        env.put("source", "erp-platform-approval-service");
+        env.put("aggregateType", "DelegationGrant");
+        env.put("aggregateId", grantId);
+        env.put("payload", payload);
+        try {
+            return objectMapper.writeValueAsString(env);
+        } catch (Exception e) {
+            throw new IllegalStateException("revoked envelope serialise failed", e);
         }
     }
 

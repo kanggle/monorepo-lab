@@ -2,6 +2,7 @@ package com.example.erp.notification.application;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
 import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationRevokedCommand;
 import com.example.erp.notification.application.port.outbound.ClockPort;
 import com.example.erp.notification.application.port.outbound.IdGeneratorPort;
 import com.example.erp.notification.application.port.outbound.NotificationChannelPort;
@@ -16,6 +17,7 @@ import com.example.erp.notification.domain.notification.repository.NotificationR
 import com.example.erp.notification.domain.recipient.RecipientResolver;
 import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
+import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 import com.example.erp.notification.domain.render.NotificationFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -166,6 +168,47 @@ class NotifyOnApprovalEventUseCaseTest {
     void duplicateDelegationEventIsSkippedWithoutMutation() {
         when(dedupeService.isDuplicate("evt-d")).thenReturn(true);
         useCase.handle(delegationCommand());
+
+        verify(notificationRepository, never()).save(any());
+        verify(deliveryRepository, never()).save(any());
+        verify(dedupeService, never()).markProcessed(any(), any(), any());
+        verify(metrics).dedupeSkipped();
+    }
+
+    // ---- TASK-ERP-BE-016: delegation-revoked handler ----
+
+    private NotifyOnDelegationRevokedCommand revokedCommand() {
+        DelegationRevokedEvent event = new DelegationRevokedEvent("evt-r", "erp", "dgr-1",
+                "emp-A", "emp-D", "휴가 복귀");
+        return new NotifyOnDelegationRevokedCommand(event, "erp.approval.delegation.revoked.v1");
+    }
+
+    @Test
+    void revokedNotifiesDelegateAndDeliversInApp() {
+        when(dedupeService.isDuplicate("evt-r")).thenReturn(false);
+        when(clock.now()).thenReturn(now);
+        when(idGenerator.newNotificationId()).thenReturn("ntf-r");
+        when(idGenerator.newDeliveryId()).thenReturn("dlv-r");
+        when(inAppChannel.channel()).thenReturn(DeliveryChannel.IN_APP);
+        when(inAppChannel.deliver(any())).thenReturn(NotificationChannelPort.DeliveryOutcome.ofDelivered());
+
+        useCase.handle(revokedCommand());
+
+        ArgumentCaptor<Notification> notif = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(notif.capture());
+        assertThat(notif.getValue().recipientId()).isEqualTo("emp-D");
+        assertThat(notif.getValue().type()).isEqualTo(NotificationType.DELEGATION_REVOKED);
+        assertThat(notif.getValue().source().sourceId()).isEqualTo("dgr-1");
+
+        verify(dedupeService).markProcessed("evt-r", "erp.approval.delegation.revoked.v1", "dgr-1");
+        verify(metrics).dispatched(NotificationType.DELEGATION_REVOKED);
+        verify(metrics).deliveryStatus(DeliveryStatus.DELIVERED);
+    }
+
+    @Test
+    void duplicateRevokedEventIsSkippedWithoutMutation() {
+        when(dedupeService.isDuplicate("evt-r")).thenReturn(true);
+        useCase.handle(revokedCommand());
 
         verify(notificationRepository, never()).save(any());
         verify(deliveryRepository, never()).save(any());

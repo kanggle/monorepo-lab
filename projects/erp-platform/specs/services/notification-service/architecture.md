@@ -57,6 +57,23 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 > HARDSTOP-09 satisfied). The `read-model-service` delegation projection remains a
 > separate later increment.
 
+> **v1.2 AMENDMENT (TASK-ERP-BE-016 — delegation-revoked notification; additive,
+> the five existing consumers UNCHANGED).** Once TASK-ERP-BE-015 added the
+> producer event `erp.approval.delegation.revoked.v1` (emitted on an ACTIVE→REVOKED
+> transition), this increment adds the **sixth consumer**: consume it → resolve the
+> **delegate** (`payload.delegateId`, who LOSES the authority) → render a "위임 권한
+> 회수됨" notification → persist + deliver in-app. The revoke payload has **no
+> validity window** (`grantId` / `delegatorId` / `delegateId` / `reason?`), so it
+> uses a separate render model `DelegationRevokedEvent` + a
+> `NotifyOnDelegationRevokedCommand` + a `RecipientResolver`/`NotificationFactory`
+> overload + `NotificationType.DELEGATION_REVOKED` + an
+> `ApprovalDelegationRevokedConsumer`, while the four transition consumers + the
+> delegated consumer + `ApprovalEvent`/`DelegationEvent` stay **byte-unchanged**.
+> `NotificationType` is `@Enumerated(STRING)` so **V3 extends the
+> `ck_notification_type` CHECK allow-list** for `DELEGATION_REVOKED` (the ERP-BE-014
+> lesson applied up-front; `source_type DELEGATION` already allowed by V2). This is
+> the revoke symmetry of the v1.1 grant notification — **no new ADR**.
+
 ---
 
 ## Identity
@@ -74,7 +91,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 | Deployable unit | `apps/notification-service/` |
 | Data store | MySQL `erp_db` (same instance as `masterdata-service` / `approval-service`, **separate tables** `notification` / `notification_delivery` / `processed_events`; no shared tables, no cross-service JOIN) |
 | Event publication | **None** — notification-service is a terminal consumer. It runs **no transactional outbox** and publishes **no** `erp.notification.*` topic (`rules/domains/erp.md` § Internal Event Catalog has **no** `erp.notification.*` entry — notification is a CONSUMER, not a producer). `OutboxAutoConfiguration` is **excluded**, see § Outbox + audit_log invariants |
-| Event consumption | Kafka topics from `approval-service` (same project): the 4 transition topics `erp.approval.{submitted,approved,rejected,withdrawn}.v1` + `erp.approval.delegated.v1` (TASK-ERP-BE-014 — delegation-granted, `aggregateType = DelegationGrant`); `processed_events` dedupe, T8; consumer group `erp-notification-v1` |
+| Event consumption | Kafka topics from `approval-service` (same project): the 4 transition topics `erp.approval.{submitted,approved,rejected,withdrawn}.v1` + `erp.approval.delegated.v1` (TASK-ERP-BE-014 — delegation-granted) + `erp.approval.delegation.revoked.v1` (TASK-ERP-BE-016 — delegation-revoked); both delegation topics `aggregateType = DelegationGrant`; `processed_events` dedupe, T8; consumer group `erp-notification-v1` |
 
 ### Service Type Composition
 
@@ -89,6 +106,7 @@ documented exception as `read-model-service` / scm `inventory-visibility-service
   - `erp.approval.rejected.v1`  → notify the **submitter** (반려 통지 + reason)
   - `erp.approval.withdrawn.v1` → notify the **approver** (회수 통지 + reason — the pending approver is told it was withdrawn)
   - `erp.approval.delegated.v1` → notify the **delegate** ("결재 권한 위임됨" — TASK-ERP-BE-014; parallel path, different aggregate/payload shape)
+  - `erp.approval.delegation.revoked.v1` → notify the **delegate** ("위임 권한 회수됨" — TASK-ERP-BE-016; parallel path, revoke payload has no validity window)
 - `rest-api` for synchronous **read-only** in-app inbox queries + a single
   idempotent mark-read mutation (the recipient reads / clears their own inbox).
   There is **no notification-creating REST** — notifications are created **only**
@@ -240,7 +258,7 @@ com.example.erp.notification/
 │   ├── notification/
 │   │   ├── Notification.java               ← aggregate (recipient, type, title, body, source, read, createdAt)
 │   │   ├── NotificationId.java
-│   │   ├── NotificationType.java           ← enum: APPROVAL_SUBMITTED, APPROVED, REJECTED, WITHDRAWN, DELEGATION_GRANTED
+│   │   ├── NotificationType.java           ← enum: APPROVAL_SUBMITTED, APPROVED, REJECTED, WITHDRAWN, DELEGATION_GRANTED, DELEGATION_REVOKED
 │   │   ├── SourceRef.java                  ← VO (sourceType=APPROVAL|DELEGATION + sourceId=approvalRequestId|grantId)
 │   │   └── repository/NotificationRepository.java   ← outbound port
 │   ├── delivery/
@@ -347,6 +365,7 @@ message. `RecipientResolver` is a pure module.
 | `erp.approval.rejected.v1` | `REJECTED` | `payload.submitterId` | "결재 반려됨" | `approvalRequestId`, `approverId`, `finalizedAt`, **`reason` (required)** |
 | `erp.approval.withdrawn.v1` | `WITHDRAWN` | `payload.approverId` | "결재 회수됨" | `approvalRequestId`, `submitterId`, `finalizedAt`, **`reason` (required)** |
 | `erp.approval.delegated.v1` | `DELEGATION_GRANTED` | `payload.delegateId` | "결재 권한 위임됨" | `delegatorId`, `validFrom`, `validTo` (ABSENT → "무기한"), `reason` if present (TASK-ERP-BE-014) |
+| `erp.approval.delegation.revoked.v1` | `DELEGATION_REVOKED` | `payload.delegateId` | "위임 권한 회수됨" | `delegatorId`, `reason` if present (no validity window — TASK-ERP-BE-016) |
 
 Rules:
 
@@ -466,6 +485,7 @@ a set-to-true is naturally idempotent).
 - Consumer group: `erp-notification-v1`
 - 4 transition topics from `approval-service` (same project):
   `erp.approval.{submitted,approved,rejected,withdrawn}.v1`
+  + `erp.approval.delegation.revoked.v1` (TASK-ERP-BE-016 — delegation-revoked; parallel path, recipient = `delegateId`)
   + `erp.approval.delegated.v1` (TASK-ERP-BE-014 — delegation-granted; parallel
   mapper path, `aggregateType = DelegationGrant`, recipient = `delegateId`).
 - Manual ACK mode.
@@ -649,8 +669,9 @@ processed_events(event_id VARCHAR PK, topic, aggregate_id, processed_at)
 ```
 
 - `type` ∈ {`APPROVAL_SUBMITTED`, `APPROVED`, `REJECTED`, `WITHDRAWN`,
-  `DELEGATION_GRANTED`} (`@Enumerated(STRING)`, length 32 — V2 extends the
-  `ck_notification_type` CHECK allow-list for the BE-014 value).
+  `DELEGATION_GRANTED`, `DELEGATION_REVOKED`} (`@Enumerated(STRING)`, length 32 —
+  V2 extends the `ck_notification_type` CHECK allow-list for `DELEGATION_GRANTED`,
+  V3 for `DELEGATION_REVOKED`).
 - `source_type` ∈ {`APPROVAL` (→ `source_id = approvalRequestId`), `DELEGATION`
   (→ `source_id = grantId`, TASK-ERP-BE-014)} — opaque back-reference; the
   authoritative state is in `approval-service`.
@@ -704,7 +725,7 @@ A dedicated `data-model.md` is a low-priority follow-up if the model grows
 | 12 | mark-read of an already-read notification | idempotent no-op 200 (`read` stays true, `read_at` unchanged) |
 | 13 | External (non-internal-network) traffic at ingress | rejected at Traefik / network layer (`EXTERNAL_TRAFFIC_REJECTED` on a surfaced debug path) |
 | 14 | Dispatch-trace / `processed_events` append fails | whole consume Tx fails (A7 atomicity) — event NOT acked, redelivered; no "notification without recorded dispatch" |
-| 15 | Delegation event with null/blank `delegateId` (TASK-ERP-BE-014) | invalid envelope → immediate `erp.approval.delegated.v1.DLT`, no retry (no recipient to deliver to) |
+| 15 | Delegation event (granted or revoked) with null/blank `delegateId` (TASK-ERP-BE-014/016) | invalid envelope → immediate `<topic>.DLT`, no retry (no recipient to deliver to) |
 | 16 | Delegation `validTo` absent (open-ended grant) | body renders "무기한" (NON_NULL absent, not an error) |
 
 ---
@@ -823,12 +844,12 @@ read-model / approval precedent); these are **not** designed in depth here:
   (department/employee/jobgrade/costcenter changes). v2.
 - **Permission-change notifications** — consuming `erp.permission.*` (owned by v2
   `permission-service`). v2.
-- ~~**Delegation notifications** — consuming `erp.approval.delegated.v1`~~ →
-  **DONE (TASK-ERP-BE-014, 2026-06-06)** — the delegate is notified on grant
-  create (§ v1.1 amendment + § Recipient resolution). The `read-model-service`
-  delegation **projection** ("who may act for whom" query) remains a separate
-  later increment; a delegation **revoke** notification waits on a future
-  `erp.approval.delegation.revoked` producer event (v2.1 emits none).
+- ~~**Delegation notifications** — consuming `erp.approval.delegated.v1` /
+  `erp.approval.delegation.revoked.v1`~~ → **DONE** — the delegate is notified on
+  grant create (TASK-ERP-BE-014, § v1.1) **and** on revoke (TASK-ERP-BE-016, § v1.2,
+  after ERP-BE-015 added the revoke producer event). The `read-model-service`
+  delegation **projection** ("who may act for whom" query) shipped separately
+  (TASK-ERP-BE-015).
 - **Notification preferences / routing rules** — per-recipient opt-in/out, channel
   routing (the wms notification-service `RoutingRule` analog). v2.
 - **Digest / batching** — daily digest, coalescing. v2.
