@@ -7,6 +7,7 @@ import type {
   EmployeeListResponse,
   EmployeeOrgViewListResponse,
   JobGradeListResponse,
+  DelegationFactListResponse,
 } from '../api/types';
 import { AsOfPicker } from './AsOfPicker';
 import { DepartmentList } from './DepartmentList';
@@ -17,6 +18,7 @@ import { BusinessPartnerList } from './BusinessPartnerList';
 import { EmployeeOrgViewCard } from './EmployeeOrgViewCard';
 import { ApprovalScreen } from './ApprovalScreen';
 import { DelegationScreen } from './DelegationScreen';
+import { DelegationFactCard } from './DelegationFactCard';
 import type { ApprovalListResponse } from '../api/approval-types';
 import type { MasterOption } from './MasterWriteDialog';
 
@@ -42,6 +44,8 @@ export interface ErpOpsScreenProps {
   /** TASK-PC-FE-051: approval workflow first-page snapshots. */
   initialApprovalRequests?: ApprovalListResponse | null;
   initialApprovalInbox?: ApprovalListResponse | null;
+  /** TASK-PC-FE-055: read-model delegation-fact initial snapshot. */
+  initialDelegationFacts?: DelegationFactListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
 }
@@ -70,6 +74,7 @@ export function ErpOpsScreen({
   initialEmployeeOrgViews,
   initialApprovalRequests,
   initialApprovalInbox,
+  initialDelegationFacts,
   mastersWritable = false,
 }: ErpOpsScreenProps) {
   const departments = toOptions(initialDepartments);
@@ -88,6 +93,8 @@ export function ErpOpsScreen({
       </p>
 
       {/* TASK-PC-FE-051 — in-section nav (the 결재함 entry + master/통합 조회). */}
+      {/* TASK-PC-FE-055 — "위임 현황" nav entry (read-model delegation facts,
+           distinct from "위임(관리)" = PC-FE-054 DelegationScreen write surface). */}
       <nav aria-label="ERP 섹션 이동" className="mb-4 flex flex-wrap gap-3 text-sm">
         <a href="#erp-departments-heading" className="underline" data-testid="erp-nav-masters">
           마스터
@@ -99,7 +106,10 @@ export function ErpOpsScreen({
           결재함
         </a>
         <a href="#delegation-heading" className="underline" data-testid="erp-nav-delegation">
-          위임
+          위임(관리)
+        </a>
+        <a href="#delegation-facts-heading" className="underline" data-testid="erp-nav-delegation-facts">
+          위임 현황
         </a>
       </nav>
 
@@ -141,6 +151,12 @@ export function ErpOpsScreen({
 
       {/* TASK-PC-FE-054 — delegation grant management (위임 관리) section. */}
       <DelegationScreen />
+
+      {/* TASK-PC-FE-055 — delegation facts read-only card (위임 현황,
+           read-model-based org-scoped read, distinct from PC-FE-054 write). */}
+      <DelegationFactCard
+        initial={initialDelegationFacts ?? undefined}
+      />
     </section>
   );
 }

@@ -536,6 +536,62 @@ export function labelForUnknownEnum<T extends string>(
     : `${value} (unknown)`;
 }
 
+// ---------------------------------------------------------------------------
+// DelegationFact — read-model projection (TASK-PC-FE-055).
+//   GET /api/erp/read-model/delegations (?delegatorId=&delegateId=&status=&activeAt=&page=&size=)
+//   GET /api/erp/read-model/delegations/{grantId}
+// Fields derived verbatim from `read-model-api.md` § Delegation facts (v1.2).
+// All optional fields are NON_NULL-absent — parse tolerant (.optional() NOT
+// .nullable()). A `validTo` absent means open-ended / 무기한.
+// ---------------------------------------------------------------------------
+
+export const DelegationFactSchema = z
+  .object({
+    grantId: z.string(),
+    // free-string for tolerance (ACTIVE | REVOKED | future)
+    status: z.string(),
+    delegatorId: z.string(),
+    delegateId: z.string(),
+    // NON_NULL-absent: out-of-order revoke-before-grant → ABSENT.
+    validFrom: z.string().optional(),
+    // NON_NULL-absent: ABSENT = open-ended (무기한) or revoke-before-grant.
+    validTo: z.string().optional(),
+    // NON_NULL-absent: ABSENT when no reason was provided.
+    reason: z.string().optional(),
+    // NON_NULL-absent: ABSENT while ACTIVE.
+    revokedAt: z.string().optional(),
+  })
+  .passthrough();
+export type DelegationFact = z.infer<typeof DelegationFactSchema>;
+
+export const DelegationFactListResponseSchema = z.object({
+  data: z.array(DelegationFactSchema),
+  meta: ReadModelMetaSchema,
+});
+export type DelegationFactListResponse = z.infer<
+  typeof DelegationFactListResponseSchema
+>;
+
+export const DelegationFactDetailResponseSchema = z.object({
+  data: DelegationFactSchema,
+  meta: ReadModelMetaSchema,
+});
+export type DelegationFactDetailResponse = z.infer<
+  typeof DelegationFactDetailResponseSchema
+>;
+
+/** Query params for the read-model delegation-fact list.
+ *  `delegatorId` / `delegateId` / `status` / `activeAt` are
+ *  producer-defined filters — the console passes them verbatim. */
+export interface DelegationFactListQueryParams {
+  delegatorId?: string;
+  delegateId?: string;
+  status?: string;
+  activeAt?: string;
+  page?: number;
+  size?: number;
+}
+
 /** True if `effectiveTo` is in the past relative to `now` (default
  *  = `new Date()`). Used by E2 rendering to mark retired rows
  *  visually distinct without HIDING them. */

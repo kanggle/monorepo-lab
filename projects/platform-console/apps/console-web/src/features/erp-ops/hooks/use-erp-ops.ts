@@ -72,6 +72,8 @@ import {
   approvalInboxKey,
   DELEGATION_PREFIX,
   delegationListKey,
+  delegationFactsListKey,
+  delegationFactDetailKey,
 } from '../api/erp-keys';
 import {
   ApprovalListResponseSchema,
@@ -89,6 +91,12 @@ import {
   type DelegationListResponse,
   type CreateDelegationInput,
 } from '../api/delegation-types';
+import {
+  DelegationFactListResponseSchema,
+  type DelegationFactListResponse,
+  type DelegationFact,
+  type DelegationFactListQueryParams,
+} from '../api/types';
 
 /**
  * Client-side erp-ops hooks (architecture.md § Server vs Client
@@ -1166,5 +1174,80 @@ export function useRevokeDelegation() {
       return raw;
     },
     onSuccess: () => invalidateDelegations(qc),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// read-model — delegation facts (TASK-PC-FE-055, READ-ONLY)
+//   GET /api/erp/read-model/delegations
+//   GET /api/erp/read-model/delegations/{grantId}
+// No mutation hook exists (E5 — read-model has no write surface).
+// ---------------------------------------------------------------------------
+
+async function fetchDelegationFactsList(
+  params: DelegationFactListQueryParams,
+): Promise<DelegationFactListResponse> {
+  const qs = new URLSearchParams();
+  if (params.delegatorId) qs.set('delegatorId', params.delegatorId);
+  if (params.delegateId) qs.set('delegateId', params.delegateId);
+  if (params.status) qs.set('status', params.status);
+  if (params.activeAt) qs.set('activeAt', params.activeAt);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))));
+  const raw = await apiClient.get<unknown>(
+    `/api/erp/read-model/delegations?${qs.toString()}`,
+  );
+  return DelegationFactListResponseSchema.parse(raw);
+}
+
+export function useDelegationFacts(
+  paramsIn: DelegationFactListQueryParams = {},
+  initial?: DelegationFactListResponse,
+) {
+  const params = paramsIn;
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.delegatorId &&
+    !params.delegateId &&
+    !params.status &&
+    !params.activeAt;
+  return useQuery({
+    queryKey: delegationFactsListKey(
+      params.delegatorId,
+      params.delegateId,
+      params.status,
+      params.activeAt,
+      params.page ?? 0,
+      clampSize(params.size),
+    ),
+    queryFn: () => fetchDelegationFactsList(params),
+    initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 15_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+async function fetchDelegationFactDetail(grantId: string): Promise<DelegationFact> {
+  const raw = await apiClient.get<unknown>(
+    `/api/erp/read-model/delegations/${encodeURIComponent(grantId)}`,
+  );
+  const env = (raw ?? {}) as { data?: unknown };
+  return DelegationFactListResponseSchema.shape.data.element.parse(env.data ?? raw);
+}
+
+export function useDelegationFact(grantId: string | null) {
+  return useQuery({
+    queryKey: delegationFactDetailKey(grantId ?? ''),
+    queryFn: () => fetchDelegationFactDetail(grantId as string),
+    enabled: Boolean(grantId && grantId.trim()),
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
   });
 }

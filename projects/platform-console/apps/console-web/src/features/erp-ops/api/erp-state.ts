@@ -7,6 +7,7 @@ import {
   listCostCenters,
   listBusinessPartners,
   listEmployeeOrgViews,
+  listDelegationFacts,
 } from './erp-api';
 import {
   listApprovalRequests,
@@ -19,6 +20,7 @@ import type {
   CostCenterListResponse,
   BusinessPartnerListResponse,
   EmployeeOrgViewListResponse,
+  DelegationFactListResponse,
   ErpListQueryParams,
 } from './types';
 import type { ApprovalListResponse } from './approval-types';
@@ -90,6 +92,11 @@ export interface ErpSectionState {
    *  independent / best-effort, NOT a hard section degrade). */
   approvalRequests: ApprovalListResponse | null;
   approvalInbox: ApprovalListResponse | null;
+  /** TASK-PC-FE-055 — read-model delegation-fact first-page snapshot.
+   *  Eventually-consistent (E5); `null` when the leg failed
+   *  individually (best-effort — the section overall may still
+   *  render; the masterdata + approval legs are independent). */
+  delegationFacts: DelegationFactListResponse | null;
   /** True when the operator is not erp-eligible (no erp
    *  product/tenant in their registry) — actionable block, no erp
    *  call fabricated. */
@@ -110,6 +117,7 @@ const EMPTY: ErpSectionState = {
   employeeOrgViews: null,
   approvalRequests: null,
   approvalInbox: null,
+  delegationFacts: null,
   notEligible: false,
   forbidden: false,
   degraded: false,
@@ -162,6 +170,13 @@ export async function getErpSectionState(
   const approvalInboxP = listApprovalInbox({ page: 0, size: 20 }).catch(
     () => null,
   );
+  // TASK-PC-FE-055 — delegation-fact read-model leg is best-effort / independent:
+  // a failure on this leg (e.g. ERP-BE-015 not yet reachable) must NOT degrade
+  // the masterdata section. Caught to `null` here; client hooks re-fetch behind
+  // the proxy and surface their own inline errors.
+  const delegationFactsP = listDelegationFacts({ page: 0, size: 20 }).catch(
+    () => null,
+  );
 
   try {
     const [
@@ -182,9 +197,10 @@ export async function getErpSectionState(
         // boundary as the other legs via the shared catch block).
         listEmployeeOrgViews(orgViewParams),
       ]);
-    const [approvalRequests, approvalInbox] = await Promise.all([
+    const [approvalRequests, approvalInbox, delegationFacts] = await Promise.all([
       approvalRequestsP,
       approvalInboxP,
+      delegationFactsP,
     ]);
     return {
       departments,
@@ -195,6 +211,7 @@ export async function getErpSectionState(
       employeeOrgViews,
       approvalRequests,
       approvalInbox,
+      delegationFacts,
       notEligible: false,
       forbidden: false,
       degraded: false,
@@ -247,4 +264,6 @@ export {
   businessPartnerDetailKey,
   employeeOrgViewsListKey,
   employeeOrgViewDetailKey,
+  delegationFactsListKey,
+  delegationFactDetailKey,
 } from './erp-keys';
