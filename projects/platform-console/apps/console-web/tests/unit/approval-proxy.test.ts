@@ -169,7 +169,7 @@ describe('GET/POST /api/erp/approval/requests', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('POST create: forwards Idempotency-Key + body (idempotencyKey stripped); 201', async () => {
+  it('POST create (legacy approverId): forwards Idempotency-Key + body (idempotencyKey stripped); 201', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DETAIL, 201));
     vi.stubGlobal('fetch', fetchMock);
@@ -192,11 +192,80 @@ describe('GET/POST /api/erp/approval/requests', () => {
     expect(String(url)).toBe('http://erp.local/api/erp/approval/requests');
     expect(h['Idempotency-Key']).toBe('idem-1');
     const body = JSON.parse(String((init as RequestInit).body));
-    expect(body).toMatchObject({ subjectType: 'DEPARTMENT', subjectId: 'dept-1' });
+    expect(body).toMatchObject({ subjectType: 'DEPARTMENT', subjectId: 'dept-1', approverId: 'emp-a' });
+    expect(body.idempotencyKey).toBeUndefined();
+    expect(body.approverIds).toBeUndefined();
+  });
+
+  it('POST create (multi-stage approverIds): accepts approverIds and forwards verbatim; 201', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DETAIL, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await requestsPOST(
+      new Request('http://console.local/api/erp/approval/requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          subjectType: 'DEPARTMENT',
+          subjectId: 'dept-1',
+          title: 'Multi',
+          approverIds: ['emp-a', 'emp-b'],
+          idempotencyKey: 'idem-multi',
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String((init as RequestInit).body));
+    // approverIds forwarded; approverId absent; idempotencyKey stripped.
+    expect(body.approverIds).toEqual(['emp-a', 'emp-b']);
+    expect(body.approverId).toBeUndefined();
     expect(body.idempotencyKey).toBeUndefined();
   });
 
-  it('POST create: invalid body → 400, no upstream call', async () => {
+  it('POST create: neither approverId nor approverIds → 400 VALIDATION_ERROR', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await requestsPOST(
+      new Request('http://console.local/api/erp/approval/requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          subjectType: 'DEPARTMENT',
+          subjectId: 'dept-1',
+          title: 'T',
+          idempotencyKey: 'idem-x',
+          // Neither approverId nor approverIds provided.
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const b = await res.json();
+    expect(b.code).toBe('VALIDATION_ERROR');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('POST create: BOTH approverId AND approverIds → 400 VALIDATION_ERROR', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await requestsPOST(
+      new Request('http://console.local/api/erp/approval/requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          subjectType: 'DEPARTMENT',
+          subjectId: 'dept-1',
+          title: 'T',
+          approverId: 'emp-a',
+          approverIds: ['emp-a', 'emp-b'],
+          idempotencyKey: 'idem-x',
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('POST create: invalid body (missing required fields) → 400, no upstream call', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

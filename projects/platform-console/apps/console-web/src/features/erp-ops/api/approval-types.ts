@@ -4,6 +4,8 @@ import { z } from 'zod';
  * Feature-local types for the erp `approval-service` workflow surface
  * (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice; erp's FIRST real
  * domain-logic — the approval state machine — exposed in the console).
+ * Extended by TASK-PC-FE-053 (multi-stage approval + IN_REVIEW + delegation
+ * read-only display).
  *
  * Authoritative producer contract (do NOT redefine — consume):
  *   `erp-platform/specs/contracts/http/approval-api.md`
@@ -13,18 +15,18 @@ import { z } from 'zod';
  *     POST      /requests/{id}/{submit|approve|reject|withdraw}
  *     GET       /inbox                 (the caller's pending SUBMITTED)
  *
- * FIRST INCREMENT ONLY — single-stage state machine
- *   `DRAFT → SUBMITTED → APPROVED | REJECTED | WITHDRAWN`.
- * The `IN_REVIEW` state, multi-stage routes, delegation (대결) and inbox
- * filtering are v2-deferred (producer § v2 deferred) — the console does
- * NOT model them.
+ * v2.0 AMENDMENT — multi-stage routing + `IN_REVIEW` (TASK-ERP-BE-012):
+ *   `DRAFT → SUBMITTED → IN_REVIEW (2~N stages) → APPROVED | REJECTED | WITHDRAWN`.
+ * v2.1 AMENDMENT — delegation/대결 (TASK-ERP-BE-013):
+ *   history entry gains `actingForApproverId` when a delegate acted.
  *
  * NON_NULL absent-field convention (producer § `@JsonInclude(NON_NULL)`):
  * nullable response fields (`reason`, `submittedAt`, `finalizedAt`,
- * history-entry `reason`) are ABSENT from the JSON when unset, never
- * serialized as `null`. These parse to optional/undefined here (zod
- * `.optional()`); the UI renders an absent field as "—" / hidden, never
- * a crash (same convention as the masterdata read surface).
+ * history-entry `reason`, `stages`, `currentStage`, `actingForApproverId`)
+ * are ABSENT from the JSON when unset, never serialized as `null`. These
+ * parse to optional/undefined here (zod `.optional()`); the UI renders an
+ * absent field as "—" / hidden, never a crash (same convention as the
+ * masterdata read surface).
  *
  * TOLERANCE: `status` / `subjectType` / history `transition` are parsed
  * as free strings (a future / unknown enum value renders generically and
@@ -39,6 +41,7 @@ import { z } from 'zod';
 export const APPROVAL_STATUSES = [
   'DRAFT',
   'SUBMITTED',
+  'IN_REVIEW',
   'APPROVED',
   'REJECTED',
   'WITHDRAWN',
@@ -92,9 +95,32 @@ export const ApprovalHistoryEntrySchema = z
     // ABSENT when the transition recorded no reason (submit / optional
     // approve) — NON_NULL convention.
     reason: z.string().optional(),
+    // v2.0 — stage index (0-based) for the transition (ABSENT if not a
+    // multi-stage request or if the stage is not tracked — NON_NULL).
+    stage: z.number().int().optional(),
+    // v2.1 — when a delegate acted on behalf of the stage's approver,
+    // this carries the approver's id (ABSENT when the approver acted
+    // themselves — NON_NULL).
+    actingForApproverId: z.string().optional(),
   })
   .passthrough();
 export type ApprovalHistoryEntry = z.infer<typeof ApprovalHistoryEntrySchema>;
+
+// ---------------------------------------------------------------------------
+// ApprovalStage — one ordered stage in a multi-stage route (v2.0).
+//   `status` is free-string tolerant for future values.
+// ---------------------------------------------------------------------------
+
+export const ApprovalStageSchema = z
+  .object({
+    stageIndex: z.number().int(),
+    approverId: z.string(),
+    // Free-string tolerant: known values are "PENDING" / "APPROVED"
+    // (a future value renders generically — never throws).
+    status: z.string(),
+  })
+  .passthrough();
+export type ApprovalStage = z.infer<typeof ApprovalStageSchema>;
 
 // ---------------------------------------------------------------------------
 // ApprovalSummary — list / inbox item (trimmed, no `history`).
@@ -113,6 +139,11 @@ export const ApprovalSummarySchema = z
     createdAt: z.string(),
     // ABSENT until SUBMITTED (NON_NULL).
     submittedAt: z.string().optional(),
+    // v2.0 — multi-stage fields (ABSENT for single-stage or legacy —
+    // NON_NULL; all optional for backward-compat).
+    stages: z.array(ApprovalStageSchema).optional(),
+    currentStage: z.number().int().optional(),
+    totalStages: z.number().int().optional(),
   })
   .passthrough();
 export type ApprovalSummary = z.infer<typeof ApprovalSummarySchema>;
@@ -139,6 +170,13 @@ export const ApprovalRequestSchema = z
     submittedAt: z.string().optional(),
     // ABSENT until APPROVED/REJECTED/WITHDRAWN (NON_NULL).
     finalizedAt: z.string().optional(),
+    // v2.0 — multi-stage fields (ABSENT for single-stage or legacy —
+    // NON_NULL; all optional for backward-compat).
+    stages: z.array(ApprovalStageSchema).optional(),
+    // 0-based index of the currently pending stage; ABSENT once the
+    // request is finalized (NON_NULL).
+    currentStage: z.number().int().optional(),
+    totalStages: z.number().int().optional(),
   })
   .passthrough();
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
@@ -184,12 +222,21 @@ export interface ApprovalInboxQueryParams {
   size?: number;
 }
 
-/** `POST /requests` create body (DRAFT). `reason` optional. */
+/** `POST /requests` create body (DRAFT). `reason` optional.
+ * v2.0: `approverIds` (ordered 1~N stage list) OR legacy `approverId`
+ * (single stage). The api client guarantees exactly one is set.
+ * Both are optional in the TS interface so callers can decide which to
+ * use; the proxy validator enforces the XOR at the wire boundary. */
 export interface CreateApprovalInput {
   subjectType: string;
   subjectId: string;
   title: string;
-  approverId: string;
+  /** Legacy single-approver (1-stage route, backward-compat). Exactly
+   *  one of `approverId` / `approverIds` must be provided. */
+  approverId?: string;
+  /** Ordered multi-stage approver list (v2.0). Exactly one of
+   *  `approverId` / `approverIds` must be provided. */
+  approverIds?: string[];
   reason?: string;
 }
 
@@ -198,15 +245,34 @@ export interface CreateApprovalInput {
 // client body before forwarding to the producer.
 // ---------------------------------------------------------------------------
 
-/** `POST /api/erp/approval/requests` create proxy body. */
-export const CreateApprovalBodySchema = z.object({
-  subjectType: z.enum(APPROVAL_SUBJECT_TYPES),
-  subjectId: z.string().min(1),
-  title: z.string().min(1).max(256),
-  approverId: z.string().min(1),
-  reason: z.string().max(512).optional(),
-  idempotencyKey: z.string().min(1),
-});
+/** `POST /api/erp/approval/requests` create proxy body.
+ * v2.0: accepts EITHER `approverId` (legacy, non-blank) OR `approverIds`
+ * (non-empty array of non-blank strings). Exactly one must be present
+ * (XOR, validated by the `.refine()` guard). */
+export const CreateApprovalBodySchema = z
+  .object({
+    subjectType: z.enum(APPROVAL_SUBJECT_TYPES),
+    subjectId: z.string().min(1),
+    title: z.string().min(1).max(256),
+    // One of these two is required — see .refine() below.
+    approverId: z.string().min(1).optional(),
+    approverIds: z
+      .array(z.string().min(1))
+      .min(1)
+      .optional(),
+    reason: z.string().max(512).optional(),
+    idempotencyKey: z.string().min(1),
+  })
+  .refine(
+    (b) => {
+      const hasLegacy = typeof b.approverId === 'string' && b.approverId.length > 0;
+      const hasMulti =
+        Array.isArray(b.approverIds) && b.approverIds.length > 0;
+      // Exactly one of the two must be present (XOR).
+      return hasLegacy !== hasMulti;
+    },
+    { message: 'exactly one of approverId / approverIds must be provided' },
+  );
 
 /** Transition proxy body — `submit` / `approve` carry no required reason;
  *  `reject` / `withdraw` require a non-blank reason (E4 — 반려/회수 사유
@@ -231,6 +297,7 @@ export function isTerminalApprovalStatus(status: string): boolean {
  *  per the producer state machine:
  *    DRAFT      → submit, withdraw   (submitter)
  *    SUBMITTED  → approve, reject, withdraw
+ *    IN_REVIEW  → approve, reject, withdraw  (current stage's approver)
  *    terminal   → (none)
  *  The producer is the authority — the console pre-filters to avoid
  *  obviously-illegal calls, but a 409 from the producer is still surfaced
@@ -238,6 +305,7 @@ export function isTerminalApprovalStatus(status: string): boolean {
 export function allowedTransitionsFor(status: string): ApprovalTransition[] {
   if (status === 'DRAFT') return ['submit', 'withdraw'];
   if (status === 'SUBMITTED') return ['approve', 'reject', 'withdraw'];
+  if (status === 'IN_REVIEW') return ['approve', 'reject', 'withdraw'];
   return [];
 }
 

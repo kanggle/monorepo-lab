@@ -7,6 +7,7 @@ import {
   type ApprovalSummary,
   type ApprovalRequest,
   type ApprovalHistoryEntry,
+  type ApprovalStage,
   type ApprovalTransition,
   APPROVAL_STATUSES,
   APPROVAL_SUBJECT_TYPES,
@@ -28,25 +29,28 @@ import { approvalErrorMessage } from './approval-error';
 
 /**
  * ERP "결재함" screen (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice).
+ * Extended by TASK-PC-FE-053 (multi-stage approval + IN_REVIEW + delegation
+ * read-only display).
  *
- * Surfaces the `approval-service` single-stage state machine
- * (`DRAFT → SUBMITTED → APPROVED | REJECTED | WITHDRAWN`) in the console:
- *   - requests LIST with a status filter + the INBOX (my pending SUBMITTED);
- *   - DETAIL view (status badge + immutable history timeline; absent
- *     reason / submittedAt / finalizedAt render as "—" / hidden — NON_NULL);
- *   - CREATE dialog (subjectType / subjectId / title / approverId, optional
- *     reason; Idempotency-Key generated per attempt);
+ * Surfaces the `approval-service` state machine
+ * (`DRAFT → SUBMITTED → IN_REVIEW → APPROVED | REJECTED | WITHDRAWN`) in
+ * the console:
+ *   - requests LIST with a status filter + the INBOX (my pending);
+ *   - DETAIL view (status badge + multi-stage timeline + immutable history
+ *     timeline; absent fields render as "—" — NON_NULL);
+ *   - CREATE dialog (subjectType / subjectId / title + ordered approver
+ *     route 1~N rows, optional reason; Idempotency-Key per attempt);
  *   - state-machine transition actions (submit / approve / reject /
  *     withdraw) — only the legal-for-status actions are offered; terminal
  *     states offer none.
  *
  * Graceful errors (AC-4): every producer error code maps to an inline
  * actionable message via `approvalErrorMessage` — NO crash. The console
- * operator may not be the authorized approver: a 403
+ * operator may not be the current stage's authorized approver: a 403
  * `APPROVAL_NOT_AUTHORIZED_APPROVER` is surfaced as a clear inline notice.
  *
- * First increment only — no IN_REVIEW / multi-stage / delegation / inbox
- * filtering (the backend lacks them).
+ * Backward-compatible (AC-4): a detail response WITHOUT stages/currentStage
+ * degrades gracefully (renders the single approverId as before; no crash).
  */
 export interface ApprovalScreenProps {
   /** Optional server-seeded first-page snapshots (the section landing). */
@@ -62,6 +66,7 @@ const SUBJECT_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '작성중',
   SUBMITTED: '상신됨',
+  IN_REVIEW: '검토중',
   APPROVED: '승인됨',
   REJECTED: '반려됨',
   WITHDRAWN: '회수됨',
@@ -80,7 +85,9 @@ function StatusBadge({ status }: { status: string }) {
         ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-100'
         : status === 'SUBMITTED'
           ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-100'
-          : 'bg-muted text-muted-foreground';
+          : status === 'IN_REVIEW'
+            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-100'
+            : 'bg-muted text-muted-foreground';
   return (
     <span
       data-testid="approval-status-badge"
@@ -382,8 +389,6 @@ export function ApprovalDetail({
                 {SUBJECT_LABEL[data.subjectType] ?? data.subjectType} ·{' '}
                 {data.subjectId}
               </dd>
-              <dt className="text-muted-foreground">결재자</dt>
-              <dd>{data.approverId}</dd>
               <dt className="text-muted-foreground">기안자</dt>
               <dd>{data.submitterId}</dd>
               {data.reason ? (
@@ -403,6 +408,73 @@ export function ApprovalDetail({
                 {fmt(data.finalizedAt)}
               </dd>
             </dl>
+
+            {/* stage-progress timeline (v2.0 multi-stage) */}
+            <h3 className="mb-1 text-sm font-semibold text-foreground">
+              결재선
+              {data.stages && data.currentStage !== undefined && data.totalStages !== undefined
+                ? ` (${data.currentStage + 1}/${data.totalStages} 단계)`
+                : null}
+            </h3>
+            {data.stages && data.stages.length > 0 ? (
+              <ol
+                className="mb-4 space-y-1"
+                data-testid="approval-stages"
+              >
+                {data.stages.map((stage: ApprovalStage) => {
+                  const isCurrent =
+                    data.currentStage !== undefined &&
+                    stage.stageIndex === data.currentStage;
+                  const stageBadgeTone =
+                    stage.status === 'APPROVED'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-100'
+                      : isCurrent
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-100'
+                        : 'bg-muted text-muted-foreground';
+                  return (
+                    <li
+                      key={stage.stageIndex}
+                      data-testid={
+                        isCurrent
+                          ? 'approval-stage-current'
+                          : `approval-stage-${stage.stageIndex}`
+                      }
+                      data-stage-index={stage.stageIndex}
+                      className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${
+                        isCurrent
+                          ? 'border border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30'
+                          : ''
+                      }`}
+                    >
+                      <span className="text-muted-foreground w-10 shrink-0">
+                        {stage.stageIndex + 1}단계
+                      </span>
+                      <span className="flex-1">{stage.approverId}</span>
+                      <span
+                        className={`inline-block rounded px-1.5 py-0.5 text-xs ${stageBadgeTone}`}
+                      >
+                        {stage.status === 'APPROVED'
+                          ? '승인됨'
+                          : stage.status === 'PENDING'
+                            ? (isCurrent ? '진행중' : '대기중')
+                            : stage.status}
+                      </span>
+                      {isCurrent && (
+                        <span className="text-xs text-blue-700 dark:text-blue-300">
+                          ← 현재
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              /* Legacy / single-stage fallback — show approverId as before */
+              <dl className="mb-4 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
+                <dt className="text-muted-foreground">결재자</dt>
+                <dd data-testid="approval-approverId">{data.approverId}</dd>
+              </dl>
+            )}
 
             {/* history timeline (E4 immutable audit) */}
             <h3 className="mb-1 text-sm font-semibold text-foreground">
@@ -431,7 +503,20 @@ export function ApprovalDetail({
                     </span>{' '}
                     <span className="text-muted-foreground">
                       · {h.actor} · {h.at}
+                      {/* v2.0 — stage annotation */}
+                      {h.stage !== undefined
+                        ? ` · ${h.stage + 1}단계`
+                        : null}
                     </span>
+                    {/* v2.1 — delegation marker */}
+                    {h.actingForApproverId ? (
+                      <span
+                        className="ml-1 text-xs text-muted-foreground"
+                        data-testid={`approval-history-delegated-${i}`}
+                      >
+                        (대결: {h.actingForApproverId} 대신)
+                      </span>
+                    ) : null}
                     {h.reason ? (
                       <span
                         className="block text-xs text-muted-foreground"
@@ -623,14 +708,21 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
   );
   const [subjectId, setSubjectId] = useState('');
   const [title, setTitle] = useState('');
-  const [approverId, setApproverId] = useState('');
+  // Ordered approver route — each element is an approver id string.
+  // Starts with a single blank row (legacy-compatible: 1 row → approverId).
+  const [approverRows, setApproverRows] = useState<string[]>(['']);
   const [reason, setReason] = useState('');
   const createM = useCreateApproval();
+
+  // Trim + drop trailing blanks → cleaned list; valid if at least 1 non-blank.
+  const cleanedApprovers = approverRows
+    .map((r) => r.trim())
+    .filter((r) => r !== '');
 
   const ok =
     subjectId.trim() !== '' &&
     title.trim() !== '' &&
-    approverId.trim() !== '';
+    cleanedApprovers.length > 0;
   const canConfirm = ok && !createM.isPending;
 
   function newIdemKey(): string {
@@ -643,15 +735,37 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
     );
   }
 
+  function addApproverRow() {
+    setApproverRows((prev) => [...prev, '']);
+  }
+
+  function removeApproverRow(idx: number) {
+    setApproverRows((prev) => {
+      if (prev.length <= 1) return prev; // at least 1 row
+      return prev.filter((_, i) => i !== idx);
+    });
+  }
+
+  function setApproverRow(idx: number, value: string) {
+    setApproverRows((prev) =>
+      prev.map((v, i) => (i === idx ? value : v)),
+    );
+  }
+
   function onConfirm() {
     if (!canConfirm) return;
+    // 1 stage → legacy `approverId`; 2+ stages → `approverIds`.
+    const approverPayload =
+      cleanedApprovers.length === 1
+        ? { approverId: cleanedApprovers[0] }
+        : { approverIds: cleanedApprovers };
     createM.mutate(
       {
         input: {
           subjectType,
           subjectId: subjectId.trim(),
           title: title.trim(),
-          approverId: approverId.trim(),
+          ...approverPayload,
           ...(reason.trim() ? { reason: reason.trim() } : {}),
         },
         idempotencyKey: newIdemKey(),
@@ -732,21 +846,48 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
 
+        {/* Ordered approver route — 1~N rows (v2.0 multi-stage) */}
         <div className="mt-4">
-          <label
-            htmlFor="approval-create-approverId"
-            className="block text-sm font-medium text-foreground"
+          <p className="block text-sm font-medium text-foreground">
+            결재선 <span aria-hidden="true">*</span>
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              (순서대로 단계 결재자 입력)
+            </span>
+          </p>
+          <div className="mt-1 space-y-2">
+            {approverRows.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-xs text-muted-foreground">
+                  {idx + 1}단계
+                </span>
+                <input
+                  data-testid={`approval-create-approver-${idx}`}
+                  value={row}
+                  onChange={(e) => setApproverRow(idx, e.target.value)}
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  placeholder="emp-…"
+                />
+                <button
+                  type="button"
+                  data-testid={`approval-create-remove-stage-${idx}`}
+                  onClick={() => removeApproverRow(idx)}
+                  disabled={approverRows.length <= 1}
+                  className="rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={`${idx + 1}단계 삭제`}
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            data-testid="approval-create-add-stage"
+            onClick={addApproverRow}
+            className="mt-2 text-xs text-blue-700 hover:underline dark:text-blue-300"
           >
-            결재자 ID <span aria-hidden="true">*</span>
-          </label>
-          <input
-            id="approval-create-approverId"
-            data-testid="approval-create-approverId"
-            value={approverId}
-            onChange={(e) => setApproverId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-            placeholder="emp-…"
-          />
+            + 단계 추가
+          </button>
         </div>
 
         <div className="mt-4">

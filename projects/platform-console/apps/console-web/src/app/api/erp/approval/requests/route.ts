@@ -65,6 +65,10 @@ export async function POST(req: Request) {
     );
   }
   try {
+    // `idempotencyKey` is stripped from the forwarded input; the
+    // api client re-attaches it as the `Idempotency-Key` header.
+    // v2.0: `approverIds` (multi-stage) XOR `approverId` (legacy
+    // single-stage) — both are forwarded verbatim to the producer.
     const { idempotencyKey, ...input } = body;
     const result = await createApprovalRequest(input, idempotencyKey);
     return NextResponse.json(result, { status: 201 });
