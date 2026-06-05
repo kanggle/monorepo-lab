@@ -20,6 +20,7 @@ import com.example.erp.approval.domain.request.ApprovalSubject;
 import com.example.erp.approval.domain.request.SubjectType;
 import com.example.erp.approval.domain.request.repository.ApprovalRequestRepository;
 import com.example.erp.approval.domain.route.ApprovalRoute;
+import com.example.erp.approval.domain.route.ApprovalRouteStage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -87,6 +88,10 @@ class ApprovalApplicationServiceTest {
                 .thenAnswer(i -> i.getArgument(0));
         lenient().when(requestRepository.findActions(any(), any()))
                 .thenReturn(List.of());
+        lenient().when(requestRepository.findStages(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(requestRepository.saveStages(any()))
+                .thenAnswer(i -> i.getArgument(0));
     }
 
     private ApprovalRequest draftFor(String submitter, String approver) {
@@ -95,16 +100,49 @@ class ApprovalApplicationServiceTest {
                 ApprovalRoute.singleStage(submitter, approver), submitter, NOW);
     }
 
+    private ApprovalRequest draftFor(String submitter, List<String> approvers) {
+        return ApprovalRequest.createDraft("appr-1", TENANT,
+                new ApprovalSubject(SubjectType.DEPARTMENT, "dept-1"), "title", null,
+                ApprovalRoute.multiStage(submitter, approvers), submitter, NOW);
+    }
+
+    private void stubRoute(String submitter, List<String> approvers) {
+        when(requestRepository.loadRoute("appr-1", TENANT))
+                .thenReturn(ApprovalRoute.multiStage(submitter, approvers));
+    }
+
     // ---- create ----
 
     @Test
-    @DisplayName("create → DRAFT persisted, no event")
+    @DisplayName("create → DRAFT persisted, stages saved, no event")
     void create() {
         var view = service.createDraft(new CreateDraftCommand(
                 SUBMITTER, SubjectType.DEPARTMENT, "dept-1", "title", "r", "emp-app"));
         assertThat(view.status()).isEqualTo("DRAFT");
         verify(requestRepository).save(any(ApprovalRequest.class));
+        verify(requestRepository).saveStages(any());
         verify(eventPublisher, never()).publishSubmitted(any(), any());
+    }
+
+    @Test
+    @DisplayName("create multi-stage → totalStages reflects the route, stage rows saved")
+    void createMultiStage() {
+        var view = service.createDraft(new CreateDraftCommand(
+                SUBMITTER, SubjectType.DEPARTMENT, "dept-1", "title", null,
+                List.of("emp-app1", "emp-app2")));
+        assertThat(view.status()).isEqualTo("DRAFT");
+        assertThat(view.totalStages()).isEqualTo(2);
+        verify(requestRepository).saveStages(any());
+    }
+
+    @Test
+    @DisplayName("create with duplicate stage approver → APPROVAL_ROUTE_INVALID")
+    void createDuplicateStageApprover() {
+        assertThatThrownBy(() -> service.createDraft(new CreateDraftCommand(
+                SUBMITTER, SubjectType.DEPARTMENT, "dept-1", "title", null,
+                List.of("emp-a", "emp-a"))))
+                .isInstanceOf(ApprovalRouteInvalidException.class);
+        verify(requestRepository, never()).save(any());
     }
 
     @Test
@@ -173,11 +211,12 @@ class ApprovalApplicationServiceTest {
     // ---- approve authz (I4) ----
 
     @Test
-    @DisplayName("approve by the route approver → APPROVED + event")
+    @DisplayName("single-stage approve by the route approver → APPROVED + event")
     void approveByApprover() {
         ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
 
         var view = service.approve(new ApproveCommand(APPROVER, "appr-1", null));
 
@@ -191,12 +230,51 @@ class ApprovalApplicationServiceTest {
         ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
 
         ActorContext wrong = new ActorContext("emp-other", TENANT,
                 Set.of("erp.write"), Set.of("*"));
         assertThatThrownBy(() -> service.approve(new ApproveCommand(wrong, "appr-1", null)))
                 .isInstanceOf(ApprovalNotAuthorizedApproverException.class);
         verify(eventPublisher, never()).publishApproved(any(), any(), any());
+    }
+
+    // ---- multi-stage event-emission points (TASK-ERP-BE-012) ----
+
+    @Test
+    @DisplayName("2-stage: intermediate approve → IN_REVIEW, audit row but NO approved event")
+    void intermediateApproveEmitsNoEvent() {
+        ApprovalRequest submitted = draftFor("emp-sub", List.of("emp-app1", "emp-app2"));
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app1", "emp-app2"));
+
+        ActorContext stage0 = new ActorContext("emp-app1", TENANT, Set.of("erp.write"), Set.of("*"));
+        var view = service.approve(new ApproveCommand(stage0, "appr-1", null));
+
+        assertThat(view.status()).isEqualTo("IN_REVIEW");
+        // audit + action row written, but no outbox event on the intermediate stage.
+        verify(requestRepository).appendAction(any(ApprovalAction.class));
+        verify(auditLogRepository).append(any(ApprovalAuditLog.class));
+        verify(eventPublisher, never()).publishApproved(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("2-stage: final approve → APPROVED, approved event emitted once")
+    void finalApproveEmitsEvent() {
+        ApprovalRequest submitted = draftFor("emp-sub", List.of("emp-app1", "emp-app2"));
+        submitted.submit(NOW);
+        // advance to IN_REVIEW at stage 1 first
+        submitted.approve("emp-app1", ApprovalRoute.multiStage("emp-sub",
+                List.of("emp-app1", "emp-app2")), NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app1", "emp-app2"));
+
+        ActorContext stage1 = new ActorContext("emp-app2", TENANT, Set.of("erp.write"), Set.of("*"));
+        var view = service.approve(new ApproveCommand(stage1, "appr-1", null));
+
+        assertThat(view.status()).isEqualTo("APPROVED");
+        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), any(), any());
     }
 
     private static String eqTenant() {

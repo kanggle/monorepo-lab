@@ -35,4 +35,18 @@ public interface ApprovalRequestJpaRepository extends JpaRepository<ApprovalRequ
 
     List<ApprovalRequest> findAllByTenantIdAndApproverIdAndStatus(
             String tenantId, String approverId, ApprovalStatus status, Pageable pageable);
+
+    /**
+     * Inbox: pending requests whose CURRENT stage's approver is {@code approverId}
+     * (status ∈ {SUBMITTED, IN_REVIEW}; TASK-ERP-BE-012). {@code approver_id} is
+     * denormalized = the current stage's approver, so the membership reduces to an
+     * equality + status-in filter.
+     */
+    @Query("SELECT r FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
+            + "AND r.approverId = :approverId "
+            + "AND r.status IN (com.example.erp.approval.domain.request.ApprovalStatus.SUBMITTED, "
+            + "com.example.erp.approval.domain.request.ApprovalStatus.IN_REVIEW)")
+    List<ApprovalRequest> findInboxPending(@Param("tenantId") String tenantId,
+                                           @Param("approverId") String approverId,
+                                           Pageable pageable);
 }

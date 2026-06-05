@@ -69,7 +69,7 @@ class ApprovalRequestControllerSliceTest {
 
     private ApprovalRequestView view(String status) {
         return new ApprovalRequestView("appr-1", status, "DEPARTMENT", "dept-1",
-                "title", "emp-app", "emp-sub", null, List.of(),
+                "title", "emp-app", "emp-sub", null, List.of(), 0, 1, List.of(),
                 Instant.now(), null, null);
     }
 

@@ -21,19 +21,25 @@ import java.util.Objects;
 
 /**
  * Approval request aggregate root (architecture.md § Approval Request aggregate
- * lifecycle). Carries {@code (id, tenant_id, subject, single-stage route,
- * status, submitter, version)}. State changes happen ONLY through the
- * {@link ApprovalStateMachine}; the transition methods funnel through it so the
- * persistence adapter never observes an illegal intermediate state (T4 — no
- * direct status UPDATE).
+ * lifecycle + § v2.0 amendment). Carries {@code (id, tenant_id, subject,
+ * multi-stage route position, status, submitter, version)}. State changes happen
+ * ONLY through the {@link ApprovalStateMachine}; the transition methods funnel
+ * through it so the persistence adapter never observes an illegal intermediate
+ * state (T4 — no direct status UPDATE).
  *
  * <p>JPA annotations are the single allowed domain↔framework exception
  * (architecture.md § Boundary rules); the invariant logic is otherwise pure.
  * {@code @Version} gives optimistic locking (transactional T5).
  *
- * <p>The single-stage route is denormalized onto the aggregate as
- * {@code approverId}; {@code submitterId} is the create-time actor. Self-approval
- * is structurally forbidden at construction (see {@link ApprovalRoute}).
+ * <p>v2.0 (TASK-ERP-BE-012) — the route is an ordered 1~N stage list persisted in
+ * {@code approval_route_stage}; the aggregate tracks its position with
+ * {@code currentStageIndex} (0-based) + {@code totalStages}. The application
+ * service loads the resolved {@link ApprovalRoute} and passes it into
+ * {@link #approve}/{@link #reject} so the aggregate can authorize the CURRENT
+ * stage's approver and decide last-vs-intermediate. {@code approverId} is
+ * denormalized = the current stage's approver (read back-compat; it follows the
+ * advancing stage). Self-approval / duplicate approvers are structurally
+ * forbidden at route construction (see {@link ApprovalRoute}).
  */
 @Entity
 @Table(name = "approval_request")
@@ -73,6 +79,12 @@ public class ApprovalRequest {
     @Column(name = "status", length = 16, nullable = false)
     private ApprovalStatus status;
 
+    @Column(name = "current_stage_index", nullable = false)
+    private int currentStageIndex;
+
+    @Column(name = "total_stages", nullable = false)
+    private int totalStages;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -90,10 +102,11 @@ public class ApprovalRequest {
     private Long version;
 
     /**
-     * Create an approval request in initial state DRAFT. The route
-     * (submitter ≠ approver) is validated by {@link ApprovalRoute#singleStage}
-     * BEFORE this factory is reached — a self-approving route never produces a
-     * request.
+     * Create an approval request in initial state DRAFT with a 1~N stage route.
+     * The route (no self-approval / no duplicate / non-blank stages) is validated
+     * by {@link ApprovalRoute} BEFORE this factory is reached. {@code approverId}
+     * is denormalized = stage 0's approver; {@code totalStages} = route length;
+     * {@code currentStageIndex} = 0.
      */
     public static ApprovalRequest createDraft(String id, String tenantId,
                                               ApprovalSubject subject, String title,
@@ -114,9 +127,11 @@ public class ApprovalRequest {
         r.subjectId = subject.subjectId();
         r.title = title;
         r.creationReason = creationReason;
-        r.approverId = route.approverId();
+        r.approverId = route.approverAt(0).approverId();
         r.submitterId = submitterId;
         r.status = ApprovalStatus.DRAFT;
+        r.currentStageIndex = 0;
+        r.totalStages = route.stageCount();
         r.createdAt = now;
         r.updatedAt = now;
         return r;
@@ -126,50 +141,64 @@ public class ApprovalRequest {
         return new ApprovalSubject(subjectType, subjectId);
     }
 
-    public ApprovalRoute route() {
-        return new ApprovalRoute(new com.example.erp.approval.domain.route.Approver(approverId));
-    }
-
     public boolean isFinalized() {
         return status.isFinalized();
     }
 
     // -----------------------------------------------------------------------
     // Transitions — each funnels through ApprovalStateMachine.next(...) and
-    // applies the route/approver/reason guards in the architecture.md order.
+    // applies the per-stage approver/submitter/reason guards in the
+    // architecture.md order.
     // -----------------------------------------------------------------------
 
     /**
-     * {@code DRAFT → SUBMITTED}. The caller (submit use case) has already run
-     * the masterdata subject reference-integrity check (E1) + route validity;
-     * this method advances the state machine and stamps {@code submittedAt}.
+     * {@code DRAFT → SUBMITTED}. The caller (submit use case) has already run the
+     * masterdata subject reference-integrity check (E1) + route validity; this
+     * method advances the state machine, stamps {@code submittedAt} and resets the
+     * route position to stage 0.
      */
     public void submit(Instant now) {
-        this.status = ApprovalStateMachine.next(this.status, ApprovalCommand.SUBMIT);
+        // submit is stage-independent (isLastStage ignored).
+        this.status = ApprovalStateMachine.next(this.status, ApprovalCommand.SUBMIT, true);
+        this.currentStageIndex = 0;
         this.submittedAt = now;
         this.updatedAt = now;
     }
 
     /**
-     * {@code SUBMITTED → APPROVED}. Only the route's approver may approve
-     * (E3 / I4) — checked AFTER the legal-edge / finalized guards (so an
-     * illegal-edge / finalized request reports those, not authz).
+     * {@code SUBMITTED|IN_REVIEW → APPROVED (final stage) | IN_REVIEW (advance)}.
+     * Only the CURRENT stage's approver may approve (E3 / I4 — sequential order
+     * enforced); authorization is checked AFTER the legal-edge / finalized guards
+     * (so an illegal-edge / finalized request reports those, not authz). A
+     * non-final approval advances {@code currentStageIndex}, re-points the
+     * denormalized {@code approverId} to the next stage and leaves
+     * {@code finalizedAt} unset; the final approval stamps {@code finalizedAt}.
      */
-    public void approve(String actorId, Instant now) {
-        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.APPROVE);
-        ensureActingApprover(actorId);
-        this.status = to;
-        this.finalizedAt = now;
-        this.updatedAt = now;
+    public void approve(String actorId, ApprovalRoute route, Instant now) {
+        boolean isLastStage = route.isLastStage(this.currentStageIndex);
+        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.APPROVE, isLastStage);
+        ensureActingStageApprover(actorId, route);
+        if (to == ApprovalStatus.IN_REVIEW) {
+            this.currentStageIndex++;
+            this.approverId = route.approverAt(this.currentStageIndex).approverId();
+            this.status = ApprovalStatus.IN_REVIEW;
+            this.updatedAt = now;
+        } else {
+            this.status = ApprovalStatus.APPROVED;
+            this.finalizedAt = now;
+            this.updatedAt = now;
+        }
     }
 
     /**
-     * {@code SUBMITTED → REJECTED}. Only the route's approver may reject;
-     * {@code reason} is required (E4 — 반려 시 사유 필수).
+     * {@code SUBMITTED|IN_REVIEW → REJECTED}. Only the current stage's approver
+     * may reject; {@code reason} is required (E4 — 반려 시 사유 필수). Reject from any
+     * stage finalizes the request.
      */
-    public void reject(String actorId, String reason, Instant now) {
-        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.REJECT);
-        ensureActingApprover(actorId);
+    public void reject(String actorId, ApprovalRoute route, String reason, Instant now) {
+        // reject is stage-independent for the next-state (isLastStage ignored).
+        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.REJECT, true);
+        ensureActingStageApprover(actorId, route);
         ensureReasonPresent(reason, "reject");
         this.status = to;
         this.finalizedAt = now;
@@ -177,11 +206,11 @@ public class ApprovalRequest {
     }
 
     /**
-     * {@code DRAFT|SUBMITTED → WITHDRAWN}. Only the submitter may withdraw their
-     * own request; {@code reason} is required (E4).
+     * {@code DRAFT|SUBMITTED|IN_REVIEW → WITHDRAWN}. Only the submitter may
+     * withdraw their own request; {@code reason} is required (E4).
      */
     public void withdraw(String actorId, String reason, Instant now) {
-        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.WITHDRAW);
+        ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.WITHDRAW, true);
         ensureActingSubmitter(actorId);
         ensureReasonPresent(reason, "withdraw");
         this.status = to;
@@ -189,11 +218,17 @@ public class ApprovalRequest {
         this.updatedAt = now;
     }
 
-    private void ensureActingApprover(String actorId) {
-        if (!Objects.equals(this.approverId, actorId)) {
+    /** True iff this request is mid-route (advanced past stage 0, not finalized). */
+    public boolean isInReview() {
+        return status == ApprovalStatus.IN_REVIEW;
+    }
+
+    private void ensureActingStageApprover(String actorId, ApprovalRoute route) {
+        if (!route.isApproverAt(this.currentStageIndex, actorId)) {
             throw new ApprovalNotAuthorizedApproverException(
-                    "principal '" + actorId + "' is not the route's approver '"
-                            + this.approverId + "'");
+                    "principal '" + actorId + "' is not the current stage ("
+                            + this.currentStageIndex + ") approver '"
+                            + route.approverAt(this.currentStageIndex).approverId() + "'");
         }
     }
 

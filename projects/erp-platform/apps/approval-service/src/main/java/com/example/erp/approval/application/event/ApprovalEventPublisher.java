@@ -56,10 +56,14 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
     }
 
     /**
-     * Common approval payload (erp-approval-events.md § Payload schemas).
-     * {@code finalizedAt} ABSENT on submitted; {@code reason} ABSENT when none
-     * (a {@code null} map value is dropped by the NON_NULL serialization the
-     * envelope ObjectMapper applies — here we simply omit the key).
+     * Common approval payload (erp-approval-events.md § Payload schemas + v2.0
+     * amendment). {@code finalizedAt} ABSENT on submitted; {@code reason} ABSENT
+     * when none (a {@code null} map value is dropped — here we simply omit the
+     * key). Additive v2.0 fields {@code currentStage} (0-based) + {@code
+     * totalStages} are always present (existing consumers ignore unknown
+     * properties). {@code approverId} = the relevant stage's approver (submitted
+     * → stage 0; approved → the final stage — both = the denormalized current
+     * {@code approverId} at emit time).
      */
     private static Map<String, Object> payload(ApprovalRequest r, String actor,
                                                Instant finalizedAt, String reason) {
@@ -72,6 +76,8 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
         p.put("tenantId", r.getTenantId());
         p.put("occurredAt", Instant.now().toString());
         p.put("actor", actor);
+        p.put("currentStage", r.getCurrentStageIndex());
+        p.put("totalStages", r.getTotalStages());
         if (finalizedAt != null) {
             p.put("finalizedAt", finalizedAt.toString());
         }

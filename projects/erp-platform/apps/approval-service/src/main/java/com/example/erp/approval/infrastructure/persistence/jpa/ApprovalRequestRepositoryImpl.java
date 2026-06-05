@@ -1,9 +1,13 @@
 package com.example.erp.approval.infrastructure.persistence.jpa;
 
+import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRouteInvalidException;
 import com.example.erp.approval.domain.request.ApprovalAction;
 import com.example.erp.approval.domain.request.ApprovalRequest;
 import com.example.erp.approval.domain.request.ApprovalStatus;
 import com.example.erp.approval.domain.request.repository.ApprovalRequestRepository;
+import com.example.erp.approval.domain.route.ApprovalRoute;
+import com.example.erp.approval.domain.route.ApprovalRouteStage;
+import com.example.erp.approval.domain.route.Approver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -23,6 +27,7 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
 
     private final ApprovalRequestJpaRepository requestJpa;
     private final ApprovalActionJpaRepository actionJpa;
+    private final ApprovalRouteStageJpaRepository routeStageJpa;
 
     @Override
     public ApprovalRequest save(ApprovalRequest request) {
@@ -60,8 +65,11 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
     @Override
     public List<ApprovalRequest> findInbox(String tenantId, String approverId,
                                            int page, int size) {
-        return requestJpa.findAllByTenantIdAndApproverIdAndStatus(
-                tenantId, approverId, ApprovalStatus.SUBMITTED, PageRequest.of(page, size));
+        // Pending = current stage's approver is the caller AND status ∈
+        // {SUBMITTED, IN_REVIEW} (TASK-ERP-BE-012). approver_id is denormalized to
+        // the current stage's approver.
+        return requestJpa.findInboxPending(
+                tenantId, approverId, PageRequest.of(page, size));
     }
 
     @Override
@@ -73,5 +81,29 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
     public List<ApprovalAction> findActions(String approvalRequestId, String tenantId) {
         return actionJpa.findAllByApprovalRequestIdAndTenantIdOrderByOccurredAtAscIdAsc(
                 approvalRequestId, tenantId);
+    }
+
+    // ---- multi-stage route (TASK-ERP-BE-012) ----
+
+    @Override
+    public List<ApprovalRouteStage> saveStages(List<ApprovalRouteStage> stages) {
+        return routeStageJpa.saveAll(stages);
+    }
+
+    @Override
+    public List<ApprovalRouteStage> findStages(String requestId, String tenantId) {
+        return routeStageJpa.findAllByRequestIdAndTenantIdOrderByStageIndexAsc(requestId, tenantId);
+    }
+
+    @Override
+    public ApprovalRoute loadRoute(String requestId, String tenantId) {
+        List<Approver> approvers = findStages(requestId, tenantId).stream()
+                .map(ApprovalRouteStage::toApprover)
+                .toList();
+        if (approvers.isEmpty()) {
+            throw new ApprovalRouteInvalidException(
+                    "no route stages found for request '" + requestId + "' (E3)");
+        }
+        return new ApprovalRoute(approvers);
     }
 }

@@ -55,7 +55,7 @@ public class ApprovalRequestController {
                 idempotencyKey, req, () -> {
                     ApprovalRequestView v = service.createDraft(new CreateDraftCommand(
                             actor, ApprovalApplicationService.parseSubjectType(req.subjectType()),
-                            req.subjectId(), req.title(), req.reason(), req.approverId()));
+                            req.subjectId(), req.title(), req.reason(), req.resolveApproverIds()));
                     return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(v));
                 });
     }

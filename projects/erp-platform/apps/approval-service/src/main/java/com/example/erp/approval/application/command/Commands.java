@@ -3,6 +3,8 @@ package com.example.erp.approval.application.command;
 import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.domain.request.SubjectType;
 
+import java.util.List;
+
 /**
  * Use-case command objects ({@code {UseCase}Command} convention). Each carries
  * the {@link ActorContext} so the application service authorizes against the
@@ -13,9 +15,22 @@ public final class Commands {
     private Commands() {
     }
 
+    /**
+     * Create a 1~N stage approval request. {@code approverIds} is the ordered
+     * stage list (TASK-ERP-BE-012); a 1-element list is the legacy single-stage
+     * route. The presentation layer maps the legacy {@code approverId} body field
+     * to a 1-element list, so this command always carries the resolved list.
+     */
     public record CreateDraftCommand(ActorContext actor, SubjectType subjectType,
                                      String subjectId, String title, String reason,
-                                     String approverId) {
+                                     List<String> approverIds) {
+
+        /** Legacy single-stage convenience ctor (back-compat for callers/tests). */
+        public CreateDraftCommand(ActorContext actor, SubjectType subjectType,
+                                  String subjectId, String title, String reason,
+                                  String approverId) {
+            this(actor, subjectType, subjectId, title, reason, List.of(approverId));
+        }
     }
 
     public record SubmitCommand(ActorContext actor, String id) {

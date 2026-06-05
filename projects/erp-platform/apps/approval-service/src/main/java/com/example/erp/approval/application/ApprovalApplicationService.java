@@ -27,6 +27,7 @@ import com.example.erp.approval.domain.request.ApprovalSubject;
 import com.example.erp.approval.domain.request.SubjectType;
 import com.example.erp.approval.domain.request.repository.ApprovalRequestRepository;
 import com.example.erp.approval.domain.route.ApprovalRoute;
+import com.example.erp.approval.domain.route.ApprovalRouteStage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,18 +82,32 @@ public class ApprovalApplicationService {
         authorizeWrite(actor);
         Instant now = clock.now();
 
-        // Route validity (E3 / I4): no approver / self-approval refused at create
-        // (the route is fixed at create time per approval-api.md).
-        ApprovalRoute route = ApprovalRoute.singleStage(actor.actorId(), cmd.approverId());
+        // Route validity (E3 / I4): empty/blank/self-approval/duplicate-approver
+        // refused at create (the route is fixed at create time per approval-api.md).
+        // A 1-element list is the legacy single-stage route (backward-compatible).
+        ApprovalRoute route = ApprovalRoute.multiStage(actor.actorId(), cmd.approverIds());
         ApprovalSubject subject = new ApprovalSubject(cmd.subjectType(), cmd.subjectId());
 
+        String requestId = "appr-" + UuidV7.randomString();
         ApprovalRequest request = ApprovalRequest.createDraft(
-                "appr-" + UuidV7.randomString(), actor.tenantId(), subject,
+                requestId, actor.tenantId(), subject,
                 cmd.title(), cmd.reason(), route, actor.actorId(), now);
         ApprovalRequest saved = requestRepository.save(request);
+        persistStages(saved, route, now);
         // No event on create (a draft is not yet a workflow fact —
         // erp-approval-events.md § Topics); the first published fact is submitted.
         return view(saved);
+    }
+
+    /** Persist one approval_route_stage row per stage (ordered) at create time. */
+    private void persistStages(ApprovalRequest request, ApprovalRoute route, Instant now) {
+        List<ApprovalRouteStage> stages = new java.util.ArrayList<>(route.stageCount());
+        for (int i = 0; i < route.stageCount(); i++) {
+            stages.add(ApprovalRouteStage.of(
+                    "ars-" + UuidV7.randomString(), request.getTenantId(), request.getId(),
+                    i, route.approverAt(i).approverId(), now));
+        }
+        requestRepository.saveStages(stages);
     }
 
     // ====================================================================
@@ -119,7 +134,8 @@ public class ApprovalApplicationService {
         request.submit(now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
-        recordTransition(saved, ApprovalStatus.SUBMITTED, actor.actorId(), null, before, now);
+        recordTransition(saved, ApprovalStatus.SUBMITTED, actor.actorId(), null,
+                before, saved.getCurrentStageIndex(), now);
         eventPublisher.publishSubmitted(saved, actor.actorId());
         return view(saved);
     }
@@ -129,14 +145,24 @@ public class ApprovalApplicationService {
         ActorContext actor = cmd.actor();
         authorizeWrite(actor);
         ApprovalRequest request = loadOrThrow(cmd.id(), actor.tenantId());
+        ApprovalRoute route = requestRepository.loadRoute(cmd.id(), actor.tenantId());
         Instant now = clock.now();
 
         ApprovalStatus before = request.getStatus();
-        request.approve(actor.actorId(), now);
+        int actingStage = request.getCurrentStageIndex();
+        request.approve(actor.actorId(), route, now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
-        recordTransition(saved, ApprovalStatus.APPROVED, actor.actorId(), cmd.reason(), before, now);
-        eventPublisher.publishApproved(saved, actor.actorId(), cmd.reason());
+        // The action records the stage that approved (APPROVED action), even when
+        // the resulting state is IN_REVIEW (intermediate stage advance).
+        recordTransition(saved, ApprovalStatus.APPROVED, actor.actorId(), cmd.reason(),
+                before, actingStage, now);
+        // erp-approval-events.md § v2.0: approved.v1 fires ONLY on the FINAL-stage
+        // approval (→ APPROVED). An intermediate-stage approval (→ IN_REVIEW)
+        // writes the audit row but emits NO outbox event (terminal-once preserved).
+        if (saved.getStatus() == ApprovalStatus.APPROVED) {
+            eventPublisher.publishApproved(saved, actor.actorId(), cmd.reason());
+        }
         return view(saved);
     }
 
@@ -145,13 +171,16 @@ public class ApprovalApplicationService {
         ActorContext actor = cmd.actor();
         authorizeWrite(actor);
         ApprovalRequest request = loadOrThrow(cmd.id(), actor.tenantId());
+        ApprovalRoute route = requestRepository.loadRoute(cmd.id(), actor.tenantId());
         Instant now = clock.now();
 
         ApprovalStatus before = request.getStatus();
-        request.reject(actor.actorId(), cmd.reason(), now);
+        int actingStage = request.getCurrentStageIndex();
+        request.reject(actor.actorId(), route, cmd.reason(), now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
-        recordTransition(saved, ApprovalStatus.REJECTED, actor.actorId(), cmd.reason(), before, now);
+        recordTransition(saved, ApprovalStatus.REJECTED, actor.actorId(), cmd.reason(),
+                before, actingStage, now);
         eventPublisher.publishRejected(saved, actor.actorId(), cmd.reason());
         return view(saved);
     }
@@ -164,10 +193,12 @@ public class ApprovalApplicationService {
         Instant now = clock.now();
 
         ApprovalStatus before = request.getStatus();
+        int actingStage = request.getCurrentStageIndex();
         request.withdraw(actor.actorId(), cmd.reason(), now);
         ApprovalRequest saved = requestRepository.saveAndFlush(request);
 
-        recordTransition(saved, ApprovalStatus.WITHDRAWN, actor.actorId(), cmd.reason(), before, now);
+        recordTransition(saved, ApprovalStatus.WITHDRAWN, actor.actorId(), cmd.reason(),
+                before, actingStage, now);
         eventPublisher.publishWithdrawn(saved, actor.actorId(), cmd.reason());
         return view(saved);
     }
@@ -261,23 +292,33 @@ public class ApprovalApplicationService {
     private ApprovalRequestView view(ApprovalRequest request) {
         List<ApprovalAction> actions =
                 requestRepository.findActions(request.getId(), request.getTenantId());
-        return ApprovalRequestView.from(request, actions);
+        List<ApprovalRouteStage> stages =
+                requestRepository.findStages(request.getId(), request.getTenantId());
+        return ApprovalRequestView.from(request, actions, stages);
     }
 
     /**
      * Append the transition's history action + the immutable audit row in the
      * SAME Tx as the state change + outbox event (A7 atomicity). Audit-fail-closed
      * (A10): if the append throws, the whole transition Tx rolls back.
+     *
+     * <p>{@code action} is the command's history label ({@code SUBMITTED} /
+     * {@code APPROVED} / {@code REJECTED} / {@code WITHDRAWN}); for an
+     * intermediate-stage approve it is {@code APPROVED} (the stage approved) while
+     * the request's resulting status is {@code IN_REVIEW}. The audit
+     * {@code after_state} snapshot records the request's ACTUAL resulting status
+     * (which may be {@code IN_REVIEW}); {@code stage} is the 0-based stage that
+     * acted.
      */
-    private void recordTransition(ApprovalRequest request, ApprovalStatus transition,
+    private void recordTransition(ApprovalRequest request, ApprovalStatus action,
                                   String actor, String reason, ApprovalStatus before,
-                                  Instant now) {
+                                  int stage, Instant now) {
         requestRepository.appendAction(ApprovalAction.of(
-                request.getTenantId(), request.getId(), transition, actor, reason, now));
+                request.getTenantId(), request.getId(), action, actor, reason, stage, now));
         auditLogRepository.append(ApprovalAuditLog.of(
                 "evt-" + UuidV7.randomString(), request.getTenantId(), request.getId(),
-                auditAction(transition), actor, snapshotJson(before), snapshotJson(transition),
-                reason, now));
+                auditAction(action), actor, snapshotJson(before),
+                snapshotJson(request.getStatus()), reason, now));
     }
 
     private static String auditAction(ApprovalStatus transition) {

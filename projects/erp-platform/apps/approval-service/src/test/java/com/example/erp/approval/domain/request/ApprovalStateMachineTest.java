@@ -32,10 +32,62 @@ class ApprovalStateMachineTest {
     }
 
     @Test
-    @DisplayName("SUBMITTED + approve → APPROVED")
+    @DisplayName("SUBMITTED + approve (single-stage / last) → APPROVED")
     void submittedApprove() {
         assertThat(ApprovalStateMachine.next(ApprovalStatus.SUBMITTED, ApprovalCommand.APPROVE))
                 .isEqualTo(ApprovalStatus.APPROVED);
+    }
+
+    // ---- v2.0 stage-aware approve edges (TASK-ERP-BE-012) ----
+
+    @Test
+    @DisplayName("SUBMITTED + approve, NOT last stage → IN_REVIEW")
+    void submittedApproveIntermediate() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.SUBMITTED, ApprovalCommand.APPROVE, false))
+                .isEqualTo(ApprovalStatus.IN_REVIEW);
+    }
+
+    @Test
+    @DisplayName("SUBMITTED + approve, last stage → APPROVED")
+    void submittedApproveLast() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.SUBMITTED, ApprovalCommand.APPROVE, true))
+                .isEqualTo(ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    @DisplayName("IN_REVIEW + approve, NOT last stage → IN_REVIEW")
+    void inReviewApproveIntermediate() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.IN_REVIEW, ApprovalCommand.APPROVE, false))
+                .isEqualTo(ApprovalStatus.IN_REVIEW);
+    }
+
+    @Test
+    @DisplayName("IN_REVIEW + approve, last stage → APPROVED")
+    void inReviewApproveLast() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.IN_REVIEW, ApprovalCommand.APPROVE, true))
+                .isEqualTo(ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    @DisplayName("IN_REVIEW + reject → REJECTED (stage-independent)")
+    void inReviewReject() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.IN_REVIEW, ApprovalCommand.REJECT, false))
+                .isEqualTo(ApprovalStatus.REJECTED);
+    }
+
+    @Test
+    @DisplayName("IN_REVIEW + withdraw → WITHDRAWN (stage-independent)")
+    void inReviewWithdraw() {
+        assertThat(ApprovalStateMachine.next(ApprovalStatus.IN_REVIEW, ApprovalCommand.WITHDRAW, true))
+                .isEqualTo(ApprovalStatus.WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName("IN_REVIEW + submit → TRANSITION_INVALID")
+    void inReviewSubmitInvalid() {
+        assertThatThrownBy(() ->
+                ApprovalStateMachine.next(ApprovalStatus.IN_REVIEW, ApprovalCommand.SUBMIT, true))
+                .isInstanceOf(ApprovalStatusTransitionInvalidException.class);
     }
 
     @Test
@@ -98,6 +150,7 @@ class ApprovalStateMachineTest {
     void isFinalized() {
         assertThat(ApprovalStatus.DRAFT.isFinalized()).isFalse();
         assertThat(ApprovalStatus.SUBMITTED.isFinalized()).isFalse();
+        assertThat(ApprovalStatus.IN_REVIEW.isFinalized()).isFalse();
         assertThat(ApprovalStatus.APPROVED.isFinalized()).isTrue();
         assertThat(ApprovalStatus.REJECTED.isFinalized()).isTrue();
         assertThat(ApprovalStatus.WITHDRAWN.isFinalized()).isTrue();
