@@ -164,7 +164,7 @@ What works (gap #3 fully closed as of 2026-05-13):
 - Logs from any wms container on the bootRun network flow into VictoriaLogs.
 - Metrics from any wms container's `/actuator/prometheus` flow into VictoriaMetrics (15 s scrape interval).
 - Per-worktree isolation: two worktrees → two independent stacks, no cross-contamination.
-- **Gradle e2eTest integration** for all 4 e2e suites — `gradlew :…:e2eTest -Pobservability=on` wires the stack via named docker network. Phase 2 (TASK-MONO-066) added gateway-master live-pair; Phase 3 (TASK-MONO-067) added fan-platform live-trio + scm-platform cross-service + global-account-platform. Per-project network prefixes (`wms-` / `fan-` / `scm-` / `gap-`) prevent cross-project collisions.
+- **Gradle e2eTest integration** for all 4 e2e suites — `gradlew :…:e2eTest -Pobservability=on` wires the stack via named docker network. Phase 2 (TASK-MONO-066) added gateway-master live-pair; Phase 3 (TASK-MONO-067) added fan-platform live-trio + scm-platform cross-service + iam-platform. Per-project network prefixes (`wms-` / `fan-` / `scm-` / `iam-`) prevent cross-project collisions.
 - **`/observe` skill** — `.claude/skills/cross-cutting/observability-query/` queries LogQL + PromQL via skill-mediated bash scripts with 4-block `OBSERVE-QUERY-NN` failure remediation. Phase 2 (TASK-MONO-066).
 - **CI footprint regression** — `observability-footprint` job runs on `infra/observability/**` or `scripts/observability/**` path changes; fails if resident > 40 MiB or cold start > 30 s. Phase 3 (TASK-MONO-067).
 

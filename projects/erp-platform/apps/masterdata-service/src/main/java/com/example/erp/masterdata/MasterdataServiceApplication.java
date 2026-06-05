@@ -17,7 +17,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * short-lived cache), GAP IdP (OAuth2 Resource Server, RS256 JWKS,
  * {@code tenant_id=erp} fail-closed gate, internal-only boundary). See
  * {@code projects/erp-platform/PROJECT.md} +
- * {@code specs/integration/gap-integration.md}.
+ * {@code specs/integration/iam-integration.md}.
  */
 @SpringBootApplication
 public class MasterdataServiceApplication {

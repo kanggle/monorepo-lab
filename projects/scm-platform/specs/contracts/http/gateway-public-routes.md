@@ -23,9 +23,9 @@ exist.
 Every route under `/api/**` requires:
 
 - `Authorization: Bearer <RS256 JWT>` issued by GAP.
-- JWT signature verifies against GAP's JWKS (`http://gap.local/oauth2/jwks`).
-- `iss` claim is one of: SAS issuer URL (default `http://gap.local`), legacy
-  `global-account-platform` (D2-b deprecation window).
+- JWT signature verifies against GAP's JWKS (`http://iam.local/oauth2/jwks`).
+- `iss` claim is one of: SAS issuer URL (default `http://iam.local`), legacy
+  `iam-platform` (D2-b deprecation window).
 - `tenant_id` claim is `scm` or `*` (SUPER_ADMIN wildcard). Any other tenant
   → 403 `TENANT_FORBIDDEN`.
 
@@ -56,7 +56,7 @@ a **sanctioned external read consumer** of scm's existing read surface:
   the **already-existing** gateway chain exactly like any GAP RS256 token:
   `AllowedIssuersValidator` + `TenantClaimValidator` (`tenant_id ∈ { scm, * }`)
   + `JwtHeaderEnrichmentFilter` surfacing `X-Token-Type=user` (the human-caller
-  shape already specified in [`gap-integration.md`](../../integration/gap-integration.md)
+  shape already specified in [`iam-integration.md`](../../integration/iam-integration.md)
   Edge Case E1/E3). **No new scm OAuth client, no new gateway route, no new
   gateway code, no auth-model change** — this subsection is a reality-alignment
   acknowledgment, not a capability change.
@@ -182,7 +182,7 @@ These appear once the v2 services bootstrap (separate tasks):
 ## References
 
 - [`gateway-service/architecture.md`](../../services/gateway-service/architecture.md)
-- [`gap-integration.md`](../../integration/gap-integration.md)
+- [`iam-integration.md`](../../integration/iam-integration.md)
 - `platform/api-gateway-policy.md`
 - `platform/error-handling.md`
 - TASK-SCM-BE-001 — gateway-service bootstrap (this catalogue's authoring task)

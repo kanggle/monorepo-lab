@@ -15,7 +15,7 @@
  * never a silent in-place patch). All rows are `true` — no gap found.
  *
  * The producer paths are read-referenced from GAP
- * `global-account-platform/specs/contracts/http/admin-api.md` (unchanged,
+ * `iam/specs/contracts/http/admin-api.md` (unchanged,
  * GAP-owned). `producerSection` is the `admin-api.md` heading line for
  * traceability; `producerPath` is the path the matched feature client
  * targets (asserted against the mocked `fetch` URL).

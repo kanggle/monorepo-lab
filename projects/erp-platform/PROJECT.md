@@ -20,7 +20,7 @@ taxonomy_version: 0.1
 기존 portfolio 와의 차별점:
 
 - **scm-platform** 은 공급망 노드 간 흐름이고 trait 가 `transactional + integration-heavy + batch-heavy`, **finance-platform** 은 자금 정확성·규제 추적이 핵심이고 trait 가 `transactional + regulated + audit-heavy`. erp 는 사내 기준정보·결재·통합 조회가 핵심이고 trait 가 `internal-system + transactional + audit-heavy` — 라이브러리에 **`internal-system` 을 primary 로 처음** 가하는 신규 stress 축.
-- **global-account-platform** (GAP) 은 IdP(`saas` 도메인) — erp 는 GAP 의 **B2B_ENTERPRISE** tenant 로 합류(`tenant_id=erp`, V0018 시드).
+- **iam-platform** (GAP) 은 IdP(`saas` 도메인) — erp 는 GAP 의 **B2B_ENTERPRISE** tenant 로 합류(`tenant_id=erp`, V0018 시드).
 - **ecommerce / fan-platform** 은 B2C 판매·콘텐츠 도메인. erp 는 외부 공개 트래픽이 없는 사내 전용 시스템 — 정확한 기준정보·결재 추적·권한 경계가 시스템 가치의 중심.
 
 본 프로젝트는 **백엔드 포트폴리오** 로서 프로덕션 지향 설계(internal-system + transactional + audit-heavy 의 동시 트레이드오프)를 보여준다. v1 = backend only — frontend 는 통합 platform console 이 렌더하며([ADR-MONO-013](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) §3.3 backend-only + 콘솔 렌더; GAP/scm/finance 선례) `frontend-app` service_type 을 두지 않는다. erp 의 운영 UI 는 platform-console 의 **parity slice** (마스터 조회·결재함·통합 조회 view; ADR-MONO-013 §3 / §D7.4 parity-checklist 규율) 로 제공된다 — ADR-MONO-016 §D3.1 바인딩.
@@ -76,22 +76,22 @@ taxonomy_version: 0.1
 
 ## GAP IdP Integration
 
-`erp-platform` 은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP(SSO) 로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 erp-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=erp` claim 만 통과시킨다 (internal-system 경계 — 외부 공개 트래픽 없음).
+`erp-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP(SSO) 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 erp-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=erp` claim 만 통과시킨다 (internal-system 경계 — 외부 공개 트래픽 없음).
 
 GAP 측 인프라 (TASK-MONO-119 V0018 시드):
 - account-service V0018: `tenants` 에 `erp` row (B2B_ENTERPRISE — scm/finance 와 동일 type, 내부-서비스 모델)
 - auth-service V0018: `oauth_clients` 에 `erp-platform-internal-services-client` (client_credentials, scopes=`erp.read`/`erp.write`)
 - v1 = backend only. user-flow PKCE client 는 별도 V slot (v1 미발행 — 콘솔이 GAP public client 로 렌더, ADR-MONO-013).
-- `platform-console` (ADR-MONO-013 Model B) 은 erp 의 **external operator read consumer** 로서, GAP 자신의 `platform-console-web` 콘솔 클라이언트 토큰으로 v1-live read 표면 (`/api/erp/masterdata/{departments,employees,job-grades,cost-centers,business-partners}` list+detail 10 GET) 을 server-side 소비한다 (write/mutation + v2 services 제외). 이는 **`erp-platform-internal-services-client` 가 아니며** (해당 client 는 v1 의 유일한 erp OAuth client 로 유지·무관) — 검증 경로는 기존 GAP RS256 + `tenant_id ∈ {erp,*}` 체인 그대로, 신규 erp OAuth client / route / auth-model 변경 없음. erp 는 backend-only 를 유지하고 (no erp frontend, no erp user-flow client), 콘솔 traits (`multi-tenant`/`integration-heavy`) 는 콘솔의 것이지 erp 의 것이 아니다 (frontmatter 불변). 상세 = [specs/integration/gap-integration.md § platform-console Operator Read Consumer](specs/integration/gap-integration.md).
+- `platform-console` (ADR-MONO-013 Model B) 은 erp 의 **external operator read consumer** 로서, GAP 자신의 `platform-console-web` 콘솔 클라이언트 토큰으로 v1-live read 표면 (`/api/erp/masterdata/{departments,employees,job-grades,cost-centers,business-partners}` list+detail 10 GET) 을 server-side 소비한다 (write/mutation + v2 services 제외). 이는 **`erp-platform-internal-services-client` 가 아니며** (해당 client 는 v1 의 유일한 erp OAuth client 로 유지·무관) — 검증 경로는 기존 GAP RS256 + `tenant_id ∈ {erp,*}` 체인 그대로, 신규 erp OAuth client / route / auth-model 변경 없음. erp 는 backend-only 를 유지하고 (no erp frontend, no erp user-flow client), 콘솔 traits (`multi-tenant`/`integration-heavy`) 는 콘솔의 것이지 erp 의 것이 아니다 (frontmatter 불변). 상세 = [specs/integration/iam-integration.md § platform-console Operator Read Consumer](specs/integration/iam-integration.md).
 
 dev 환경 토큰 발급 예:
 ```
 curl -u erp-platform-internal-services-client:erp-dev \
      -d "grant_type=client_credentials&scope=erp.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
-통합 상세는 [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+통합 상세는 [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ## Local Network
 

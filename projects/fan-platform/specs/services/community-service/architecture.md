@@ -236,8 +236,8 @@ The default `test` Gradle task excludes `@Tag("integration")`; `integrationTest`
 - `platform/architecture-decision-rule.md`
 - `platform/event-driven-policy.md`
 - `platform/testing-strategy.md`
-- `projects/global-account-platform/apps/community-service` (frozen reference)
-- `projects/fan-platform/specs/integration/gap-integration.md`
+- `projects/iam-platform/apps/community-service` (frozen reference)
+- `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/services/gateway-service/architecture.md`
 - `rules/traits/transactional.md` § T4 (state machine)
 - `rules/traits/multi-tenant.md` § M2 (tenant_id everywhere)

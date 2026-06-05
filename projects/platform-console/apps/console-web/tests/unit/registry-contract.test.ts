@@ -7,7 +7,7 @@ import {
 /**
  * Contract test — the typed registry schema MUST accept the exact response
  * envelope documented in the authoritative producer contract
- * `global-account-platform/specs/contracts/http/console-registry-api.md`
+ * `iam/specs/contracts/http/console-registry-api.md`
  * (GET /api/admin/console/registry 200 OK example) and reject shape drift.
  */
 

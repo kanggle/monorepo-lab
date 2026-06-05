@@ -14,7 +14,7 @@ import java.util.Objects;
  *
  * <p>TASK-MONO-027 (D2-b deprecate window): GAP issues two flavours of access
  * token signed by the same JWKS — the SAS issuer URL (e.g.
- * {@code http://gap.local}) and the legacy {@code "global-account-platform"}
+ * {@code http://iam.local}) and the legacy {@code "iam"}
  * string. Both must validate at the ecommerce gateway while the legacy path is
  * being deprecated.
  *

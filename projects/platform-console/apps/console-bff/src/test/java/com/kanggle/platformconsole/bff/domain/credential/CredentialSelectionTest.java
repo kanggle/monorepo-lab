@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CredentialSelectionTest {
 
     private static final String OPERATOR_TOKEN = "op-tok-abc123";
-    private static final String GAP_OIDC_TOKEN = "gap-oidc-xyz789";
+    private static final String GAP_OIDC_TOKEN = "iam-oidc-xyz789";
 
     // ---- Inline stub implementation for the test ----
     // The real implementation lives in CredentialSelectionAdapter (adapter layer).

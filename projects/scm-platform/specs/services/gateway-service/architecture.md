@@ -101,7 +101,7 @@ com.example.scmplatform.gateway/
 ├── ratelimit/
 │   └── FailOpenRateLimiter.java           ← Redis fail-open wrapper + metric
 ├── security/
-│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy global-account-platform
+│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy iam-platform
 │   ├── TenantClaimValidator.java          ← dual-accept: tenant_id ∈ { scm, * } ∪ entitled_domains ∋ scm
 │   └── JwksHealthProbe.java               ← startup-time JWKS reachability probe
 └── error/
@@ -199,14 +199,14 @@ Spring Security (path not in PUBLIC_PATHS).
 ## JWT Validation
 
 Per `platform/security-rules.md` and
-[gap-integration.md](../../integration/gap-integration.md):
+[iam-integration.md](../../integration/iam-integration.md):
 
 - Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at GAP
-  (`http://gap.local/oauth2/jwks` — Edge Case E2 alignment with V0013 SQL).
+  (`http://iam.local/oauth2/jwks` — Edge Case E2 alignment with V0013 SQL).
 - Algorithm: RS256 only.
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the
-  legacy `"global-account-platform"` string (D2-b deprecation window).
+  legacy `"iam-platform"` string (D2-b deprecation window).
 - Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
   (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
   (`*` = SUPER_ADMIN platform-scope) **or** the GAP-signed `entitled_domains`
@@ -342,7 +342,7 @@ Disabled in tests via `gateway.jwks.startup-probe.enabled=false`.
 - `platform/error-handling.md`
 - `platform/service-types/rest-api.md`
 - `platform/architecture-decision-rule.md`
-- [`gap-integration.md`](../../integration/gap-integration.md)
+- [`iam-integration.md`](../../integration/iam-integration.md)
 - [`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md)
 - `projects/fan-platform/apps/gateway-service` — reference implementation
   (TASK-SCM-BE-001 explicitly directs "fan-platform 패턴 답습")

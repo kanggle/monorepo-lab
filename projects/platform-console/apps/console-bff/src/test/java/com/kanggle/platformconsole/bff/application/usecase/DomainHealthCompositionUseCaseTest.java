@@ -3,7 +3,7 @@ package com.kanggle.platformconsole.bff.application.usecase;
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
-import com.kanggle.platformconsole.bff.application.port.outbound.GapHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.IamHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
@@ -57,7 +57,7 @@ class DomainHealthCompositionUseCaseTest {
     CredentialSelectionPort credentialSelection;  // INTENTIONALLY UNUSED — invariant guard.
 
     @Mock
-    GapHealthReadPort gapPort;
+    IamHealthReadPort gapPort;
 
     @Mock
     WmsHealthReadPort wmsPort;

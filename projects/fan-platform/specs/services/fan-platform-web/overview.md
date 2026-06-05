@@ -14,7 +14,7 @@
 | Deployable unit | `web/fan-platform-web/` |
 | Bounded Context | `fan-platform-frontend` |
 | Persistent stores | none — HttpOnly JWT session cookie only (no localStorage / sessionStorage tokens) |
-| Backend dependencies | `gateway-service` (`http://fan-platform.local`), GAP IdP (`http://gap.local`) |
+| Backend dependencies | `gateway-service` (`http://fan-platform.local`), GAP IdP (`http://iam.local`) |
 
 ## Responsibilities
 

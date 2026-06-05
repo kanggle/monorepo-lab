@@ -51,8 +51,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -93,8 +93,8 @@ logging:
 erpplatform:
   oauth2:
     # Keep byte-identical to masterdata-service's allowed-issuers (cross-service
-    # issuer drift guard — SAS issuer + legacy global-account-platform D2-b).
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    # issuer drift guard — SAS issuer + legacy iam D2-b).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
   approval:
     idempotency:

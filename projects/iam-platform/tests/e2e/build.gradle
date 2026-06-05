@@ -1,0 +1,127 @@
+plugins {
+    id 'java'
+}
+
+description = 'End-to-end scenario tests driven by docker-compose.e2e.yml (TASK-BE-041c).'
+
+dependencies {
+    testImplementation platform("org.junit:junit-bom:5.10.3")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine'
+
+    testImplementation 'io.rest-assured:rest-assured:5.5.0'
+    testImplementation 'io.rest-assured:json-path:5.5.0'
+
+    testImplementation platform("org.testcontainers:testcontainers-bom:1.20.4")
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
+
+    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+    testImplementation 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.assertj:assertj-core:3.26.3'
+    testImplementation 'org.slf4j:slf4j-simple:2.0.13'
+}
+
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010 — TASK-MONO-078 Phase 2 D5 step 4):
+//
+//   - default `test` — runs `@Tag("e2e") && !@Tag("full")` (smoke + un-tagged
+//                       inside e2e umbrella). gap's historical pattern: the
+//                       default `test` task is the e2e entry point itself —
+//                       `ComposeFixture` boots docker-compose in @BeforeAll.
+//                       iam-integration-tests CI job calls this task. After
+//                       Phase 2 it skips @Tag("full") so PR-time wall-clock
+//                       shrinks (3 full class skip).
+//   - `e2eTest`      — explicit umbrella, runs `@Tag("e2e")` (smoke + full).
+//                       Phase 2 alignment with fan/scm/wms task families.
+//   - `e2eSmokeTest` — runs `@Tag("smoke")` only.
+//   - `e2eFullTest`  — runs `@Tag("full")` only. Nightly + push to main.
+//
+// All four share configuration via `baseE2eConfig` closure (timeout,
+// COMPOSE_PROJECT_NAME, observability=on wrapper, testLogging). The default
+// `test` task additionally carries `excludeTags 'full'` so it stays
+// PR-time-friendly without exercising long-running edge cases.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
+    // Long-running E2E; give each test ample time.
+    t.systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+    t.testLogging {
+        events 'passed', 'failed', 'skipped', 'standardOut', 'standardError'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+    // Surface compose project name so local reruns can clean up.
+    t.environment 'COMPOSE_PROJECT_NAME', 'iam-e2e'
+
+    // -Pobservability=on lifecycle wrapper (OpenAI Harness gap #3 Phase 3,
+    // TASK-MONO-067). GAP's e2e uses docker-compose directly (not
+    // Testcontainers Network), so the observability stack attaches to GAP's
+    // existing default network `iam-e2e_default` (auto-created by the
+    // ComposeFixture). No Java-side base class change is needed — the
+    // attach + scrape happens entirely on the docker network layer.
+    //
+    // CI does not pass this flag. When absent, no doFirst/doLast hook
+    // runs and the task behaviour is byte-identical to today.
+    if (project.hasProperty('observability') && project.property('observability') == 'on') {
+        t.doFirst {
+            // iam-e2e_default may not exist yet when the lifecycle hook fires
+            // (ComposeFixture creates it lazily in @BeforeAll). Create it
+            // pre-emptively; docker-compose will reuse the existing network.
+            exec { commandLine 'bash', '-c', 'docker network create iam-e2e_default || true' }
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/up.sh", '--network', 'iam-e2e_default' }
+        }
+        t.doLast {
+            // observability down first; the compose project's own teardown
+            // is handled by ComposeFixture's JVM shutdown hook.
+            exec { commandLine 'bash', "${rootDir}/scripts/observability/down.sh" }
+        }
+    }
+}
+
+test {
+    // gap's default `test` task stays Docker-free per the fan/scm tests/e2e
+    // pattern: all 5 e2e classes carry the `@Tag("e2e")` umbrella (via
+    // E2EBase, TASK-MONO-078), so `excludeTags 'e2e'` produces an empty test
+    // run for `./gradlew check` invocations. The actual e2e suites are run
+    // via `e2eSmokeTest` / `e2eFullTest` / `e2eTest` below.
+    //
+    // History: PR #432 (TASK-MONO-078) initially set `excludeTags 'full'`
+    // under the assumption that this `test` task was called by the
+    // iam-integration-tests CI job — that assumption proved wrong (the CI
+    // job calls each service's `:integrationTest`, not this module's `test`),
+    // and the tests/e2e module was never registered in settings.gradle
+    // anyway. TASK-MONO-080 registers the module + aligns this filter with
+    // fan/scm, restoring Docker-free `:check` semantics. Smoke / full
+    // partition is now exclusively managed by the dedicated task family.
+    useJUnitPlatform { excludeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e") (smoke + full). Phase 2 alignment with fan/scm/wms.'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eSmokeTest', Test) {
+    description = '@Tag("smoke") subset only — equivalent to default `test` in gap (ADR-MONO-010 D1/D2/D5 step 4).'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'smoke' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") subset only — nightly + push to main (ADR-MONO-010 D1/D2; Phase 3 wires the CI side).'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
+}

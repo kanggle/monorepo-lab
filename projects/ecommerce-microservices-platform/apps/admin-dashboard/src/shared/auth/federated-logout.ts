@@ -29,7 +29,7 @@ import { getToken } from 'next-auth/jwt';
 const SECURE_COOKIE = '__Secure-authjs.session-token';
 const PLAIN_COOKIE = 'authjs.session-token';
 
-const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://gap.local';
+const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://iam.local';
 const CLIENT_ID =
   process.env.ECOMMERCE_ADMIN_DASHBOARD_CLIENT_ID ??
   'ecommerce-admin-dashboard-client';

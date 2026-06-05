@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Feature-local types for the GAP operators-management surface.
  *
  * Authoritative producer contract (do NOT redefine — consume only):
- *   `global-account-platform/specs/contracts/http/admin-api.md`
+ *   `iam/specs/contracts/http/admin-api.md`
  *   §§ `GET /api/admin/operators`, `POST /api/admin/operators`,
  *      `PATCH /api/admin/operators/{operatorId}/roles`,
  *      `PATCH /api/admin/operators/{operatorId}/status`,

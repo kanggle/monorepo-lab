@@ -6,8 +6,8 @@
 > and replaced by GAP (Global Account Platform) OIDC.
 >
 > Replacement references:
-> - GAP auth contract: `projects/global-account-platform/specs/contracts/http/auth-api.md`
-> - Integration spec: `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
+> - GAP auth contract: `projects/iam-platform/specs/contracts/http/auth-api.md`
+> - Integration spec: `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`
 >
 > This file is retained for historical reference only.
 

@@ -37,10 +37,10 @@
 | `admin-service` | rest-api (Layered, ⚠️ override) | CQRS read-side (4 ProjectionConsumer × 18 source-topic) + dashboard + ops |
 
 - **architecture override**: `admin-service` 만 sibling 의 Hexagonal 에서 **Layered** 로 승격 (PROJECT.md § Overrides + service architecture.md 에 근거 명시). read-side / 단순 CRUD write surface 가 port/adapter 비용 정당화 못 함.
-- **ID provider**: GAP OIDC RS256 + `tenant_id=wms` claim ([specs/integration/gap-integration.md](../projects/wms-platform/specs/integration/gap-integration.md)).
+- **ID provider**: GAP OIDC RS256 + `tenant_id=wms` claim ([specs/integration/iam-integration.md](../projects/wms-platform/specs/integration/iam-integration.md)).
 - **런타임 정합 (2026-06-03, MONO-170 데모 표면화)**: `admin-service` read-model 의 nullable temporal `:p IS NULL` 가드가 PostgreSQL `42P18`(could not determine data type) 로 unfiltered 쿼리 시 500 → `CAST(:p AS string)` 일괄 수정 (alerts BE-331 + 전 `@Query` audit BE-332 = wms 7 repo). `outbound-service` non-standalone 기동 복구 (BE-333 `@ConditionalOnMissingBean` by-type 빈충돌 exclude + V4 Flyway 정본 교정 / BE-334 `SecurityConfig` `@ConditionalOnWebApplication(SERVLET)`). 미배포 outbound IT 전체 green+CI 배선은 저-ROI 로 deferred.
 
-### 2.2 [global-account-platform](../projects/global-account-platform/PROJECT.md) (GAP) — SaaS Identity / IdP (v1 ✅)
+### 2.2 [iam-platform](../projects/iam-platform/PROJECT.md) (GAP) — SaaS Identity / IdP (v1 ✅)
 
 - **domain**: `saas` · **traits**: `transactional`, `regulated`, `audit-heavy`, `integration-heavy`, `multi-tenant`
 - **포지션**: monorepo 의 **표준 OIDC IdP** (ADR-001 ACCEPTED). 모든 프로젝트가 GAP 의 RS256 access token 을 OAuth2 Resource Server 패턴으로 검증.
@@ -60,10 +60,10 @@
 
 - **multi-tenancy**: row-level isolation (`accounts.tenant_id`). JWT `tenant_id` claim 으로 cross-tenant 거부. 현재 등록 tenant: `wms` / `scm` / `fan-platform` / `finance` / `erp` + B2C 기본.
 - **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm/finance/erp) 가 사용자 일괄 생성.
-- **OIDC AS 운영 깊이 증명 (2026-05-09 closure)**: SAS public-client (PKCE) `refresh_token` rotation + reuse detection + `revoke` (custom converter + provider-side fallback) + 3 OAuth provider callback (Google/Kakao/Microsoft) 모두 main CI deterministic PASS. 13-cycle 미해결 9 deferred IT 회복 ([ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md), [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)). Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus 1.
+- **OIDC AS 운영 깊이 증명 (2026-05-09 closure)**: SAS public-client (PKCE) `refresh_token` rotation + reuse detection + `revoke` (custom converter + provider-side fallback) + 3 OAuth provider callback (Google/Kakao/Microsoft) 모두 main CI deterministic PASS. 13-cycle 미해결 9 deferred IT 회복 ([ADR-003](../projects/iam-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md), [ADR-004](../projects/iam-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)). Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus 1.
 - **multi-tenant SaaS 실체화 (2026-05-31~06-02, [ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md)/[020](adr/ADR-MONO-020-operator-multitenant-assignment.md)/[021](adr/ADR-MONO-021-account-type-claim-source.md))**: customer-tenant entitlement-trust (account `entitled_domains` keystone — BE-322/324/325) + operator↔customer **N:M assignment + assume-tenant RFC8693 token-exchange** (`operator_tenant_assignment` dual-read BE-326 + BE-327) + **`account_type` (CONSUMER\|OPERATOR) OIDC claim** (`credentials.account_type` denormalize, BE-329/330 + INT-024 e2e).
 - **org_scope 데이터-스코프 authz 출처/전파 (2026-06-04~05, [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) D3 amendment)**: 콘솔 도메인-write 가 3중 게이트(tenant → role/scope → **data-scope**)를 통과하도록 GAP 가 위임 scope + 데이터-스코프를 assume-tenant 토큰에 enrich — BE-336 (registered `erp.write` scope 위임 + `authorizedScopes` 전파; entitlement-trust=read visibility 와 직교한 write capability) → BE-337 (assume-tenant 토큰 `org_scope=["*"]` v1 bridge) → BE-338 (**멤버십 출처** `operator_tenant_assignment.org_scope` V0031 nullable 컬럼; `NULL ⟺ ["*"]` net-zero; 부서 subtree-root 배열) → BE-339 (admin 관리 API `GET .../operators/{id}/assignments` + `PUT .../assignments/{tenantId}/org-scope`, tenant-scope 불변식, SQL 시드 아닌 product surface 설정). erp 가 subtree-root 를 소비(ERP-BE-008), 콘솔이 설정(PC-FE-050).
-- **workload identity (2026-05-30, [ADR-005](../projects/global-account-platform/docs/adr/ADR-005-service-to-service-workload-identity.md))**: 서비스 간 인증 `X-Internal-Token` → GAP `client_credentials` JWT 무중단 전환 (BE-317~321, account/security `/internal/**` = JWT 단일).
+- **workload identity (2026-05-30, [ADR-005](../projects/iam-platform/docs/adr/ADR-005-service-to-service-workload-identity.md))**: 서비스 간 인증 `X-Internal-Token` → GAP `client_credentials` JWT 무중단 전환 (BE-317~321, account/security `/internal/**` = JWT 단일).
 
 ### 2.3 [ecommerce-microservices-platform](../projects/ecommerce-microservices-platform/PROJECT.md) — B2C 이커머스 (v1 ✅ 풀스택)
 
@@ -279,7 +279,7 @@ traits/<declared-trait>.md for each trait (if present)
 | URL | 대상 |
 |---|---|
 | `http://wms.local/` | wms-platform gateway |
-| `http://gap.local/` | global-account-platform gateway |
+| `http://iam.local/` | iam-platform gateway |
 | `http://ecommerce.local/` | ecommerce gateway |
 | `http://scm.local/` | scm-platform gateway |
 | `http://fan-platform.local/` | fan-platform gateway |
@@ -342,9 +342,9 @@ traits/<declared-trait>.md for each trait (if present)
 | [ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md) | ACCEPTED (2026-05-31) | customer-tenant model + 런타임 entitlement-trust — 고객 테넌트가 `entitled_domains` 로 도메인 접근 통제 (acme-corp/globex 시드; BE-322/324/325 + PC-BE-007 BFF pass-through + MONO-154 런타임 증명). |
 | [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) | ACCEPTED (2026-05-31, 사실상 완료 2026-06-02, D3 amendment 2026-06-05) | operator↔customer N:M assignment + active-tenant 토큰 스코핑 — assume-tenant RFC 8693 exchange (BE-326 dual-read + BE-327 + MONO-158~162 D4 A↔B switch GREEN). D6 step4 legacy read cleanup = **MONO-169 로 "의도적 비실행" disposition** (V0030 net-zero + `'*'` assignment-비표현 → dual-read steady state; 제거 시 전 운영자 회귀) → ADR-020 사실상 완료. **D3 amendment (2026-06-05)**: membership-derived **org_scope** 데이터-스코프 — `operator_tenant_assignment.org_scope` (V0031, 부서 subtree-root; `NULL ⟺ ["*"]` net-zero) 출처 (BE-338) + admin 관리 API (BE-339) + erp subtree 소비 (ERP-BE-008) + 콘솔 설정 UI (PC-FE-050); BE-336/337 위임 scope·v1 bridge 가 전제. |
 | [ADR-MONO-021](adr/ADR-MONO-021-account-type-claim-source.md) | ACCEPTED (2026-06-02) | `account_type` (CONSUMER\|OPERATOR) OIDC claim source — `auth_db.credentials` denormalize (BE-329 컬럼+토큰주입 / BE-330 provisioning / INT-024 e2e). gateway 403-on-absent 해소. |
-| GAP [ADR-001](../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
-| GAP [ADR-003](../projects/global-account-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
-| GAP [ADR-004](../projects/global-account-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
+| GAP [ADR-001](../projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
+| GAP [ADR-003](../projects/iam-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
+| GAP [ADR-004](../projects/iam-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
 
 ---
 
@@ -356,7 +356,7 @@ traits/<declared-trait>.md for each trait (if present)
 |---|---|---|
 | wms-platform | `kanggle/wms-platform` | 2026-04-28 first publish + 2026-05-09 re-sync (228 commits) |
 | ecommerce-microservices-platform | `kanggle/ecommerce-microservices-platform` | v1 frozen (GAP cutover 영역만 `PROJECT_EXCLUDE_PATHS` 차단) |
-| global-account-platform | `kanggle/global-account-platform` | 2026-05-09 first publish (153 commits) |
+| iam-platform | `kanggle/iam-platform` | 2026-05-09 first publish (153 commits) |
 | scm-platform | `kanggle/scm-platform` | 2026-05-09 first publish (140 commits) |
 | fan-platform | `kanggle/fan-platform` | 2026-05-09 first publish (147 commits) |
 | finance-platform | `kanggle/finance-platform` | 2026-05-19 Template fork CONFIRMED (TASK-MONO-116) |

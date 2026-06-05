@@ -17,7 +17,7 @@ Every request:
 
 | Header | Required | Notes |
 |---|---|---|
-| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by GAP (OIDC, ADR-001). RS256 JWT validated against GAP JWKS by both gateway and downstream service; `tenant_id=wms` enforced. See [`specs/integration/gap-integration.md`](../../integration/gap-integration.md). |
+| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by GAP (OIDC, ADR-001). RS256 JWT validated against GAP JWKS by both gateway and downstream service; `tenant_id=wms` enforced. See [`specs/integration/iam-integration.md`](../../integration/iam-integration.md). |
 | `X-Request-Id` | yes | Generated/echoed by gateway. Surfaced in logs + traces |
 | `X-Actor-Id` | yes | User id from JWT claim, set by gateway |
 | `Idempotency-Key` | yes for POST / PATCH | UUID. TTL 24h. Scope `(Idempotency-Key, method, path)` |

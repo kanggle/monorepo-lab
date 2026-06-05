@@ -3,12 +3,12 @@
 > **DEPRECATED — in-tree auth-service 폐기, GAP 위임.**
 >
 > TASK-MONO-027 / TASK-FE-067 / TASK-BE-132 으로 ecommerce 자체 auth-service 가
-> 폐기되었다. 회원가입·로그인·토큰 갱신·로그아웃은 GAP (global-account-platform)
+> 폐기되었다. 회원가입·로그인·토큰 갱신·로그아웃은 GAP (iam-platform)
 > OIDC 가 소유한다 (web-store / admin-dashboard 는 NextAuth v5 + GAP OIDC).
 >
 > 권위 있는 출처:
-> - `specs/integration/gap-integration.md`
-> - `projects/global-account-platform/specs/contracts/http/auth-api.md`
+> - `specs/integration/iam-integration.md`
+> - `projects/iam-platform/specs/contracts/http/auth-api.md`
 >
 > 아래 흐름은 폐기된 in-tree auth-service 의 과거 동작을 역사적 참고로 보존한
 > 것이며 런타임 동작을 반영하지 않는다.

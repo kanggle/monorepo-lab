@@ -25,7 +25,7 @@ include(
 
 // Project: ecommerce-microservices-platform
 // Note: apps:auth-service excluded from build by TASK-BE-132 (decommissioned).
-// Source code preserved in apps/auth-service/ for history. Replaced by GAP OIDC.
+// Source code preserved in apps/auth-service/ for history. Replaced by IAM OIDC.
 include(
     'projects:ecommerce-microservices-platform:apps:batch-worker',
     'projects:ecommerce-microservices-platform:apps:gateway-service',
@@ -40,20 +40,20 @@ include(
     'projects:ecommerce-microservices-platform:apps:user-service'
 )
 
-// Project: global-account-platform
+// Project: iam-platform (renamed from global-account-platform / alias gap — TASK-MONO-179)
 include(
-    'projects:global-account-platform:apps:account-service',
-    'projects:global-account-platform:apps:admin-service',
-    'projects:global-account-platform:apps:auth-service',
-    'projects:global-account-platform:apps:community-service',
-    'projects:global-account-platform:apps:gateway-service',
-    'projects:global-account-platform:apps:membership-service',
-    'projects:global-account-platform:apps:security-service',
-    // TASK-MONO-080: gap tests/e2e module historical 등록 누락 정정. PR #432
+    'projects:iam-platform:apps:account-service',
+    'projects:iam-platform:apps:admin-service',
+    'projects:iam-platform:apps:auth-service',
+    'projects:iam-platform:apps:community-service',
+    'projects:iam-platform:apps:gateway-service',
+    'projects:iam-platform:apps:membership-service',
+    'projects:iam-platform:apps:security-service',
+    // TASK-MONO-080: iam tests/e2e module historical 등록 누락 정정. PR #432
     // (TASK-MONO-078) 가 본 모듈의 build.gradle 을 갱신했으나 settings.gradle
-    // include 가 없어 gradle 이 인식 못 했고 nightly gap-e2e-full job 의 첫
+    // include 가 없어 gradle 이 인식 못 했고 nightly iam-e2e-full job 의 첫
     // 호출에서 fail 했음. fan/scm 패턴 답습.
-    'projects:global-account-platform:tests:e2e'
+    'projects:iam-platform:tests:e2e'
 )
 
 // Project: fan-platform

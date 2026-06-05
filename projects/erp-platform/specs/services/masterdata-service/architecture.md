@@ -466,7 +466,7 @@ Single un-bypassable application path:
    `departmentId`s the caller may read/write under). For
    `client_credentials` (machine-to-machine, internal services), the
    claim resolves to the platform-wide `*` scope (defense-in-depth
-   gateway enrichment described in `specs/integration/gap-integration.md`
+   gateway enrichment described in `specs/integration/iam-integration.md`
    § "sub claim of client_credentials tokens"). For human operators
    (v2 user-flow), the claim is resolved from the user's organizational
    membership. **v1 bridge (TASK-BE-337)**: the console **assume-tenant
@@ -584,7 +584,7 @@ system per `PROJECT.md` Out-of-Scope `multi-tenant`). GAP supplies
 
 1. **Gateway** (v1 deferred) — domain gate at JWT decode.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` (SAS issuer
-   + legacy `global-account-platform` D2-b window — byte-identical to the
+   + legacy `iam-platform` D2-b window — byte-identical to the
    future gateway's allowed-issuers) + `TenantClaimValidator`.
 3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` when
    the gate rejects (public paths skipped).
@@ -626,7 +626,7 @@ pollution).
 ## Security
 
 - **JWT (RS256)**: `oauth2-resource-server` against
-  `${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks`; RS256 only;
+  `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`.
   GAP `erp-platform-internal-services-client` (client_credentials,
   scopes `erp.read` / `erp.write`, V0018) is the v1 caller.
@@ -829,7 +829,7 @@ is a leaf — the `read-model-service` v2 will be the inbound consumer).
   `rules/traits/transactional.md`, `rules/traits/audit-heavy.md` (trait rule
   files loaded if present per `rules/README.md` resolution order)
 - `projects/erp-platform/PROJECT.md`,
-  [`gap-integration.md`](../../integration/gap-integration.md)
+  [`iam-integration.md`](../../integration/iam-integration.md)
 - [`masterdata-api.md`](../../contracts/http/masterdata-api.md) (this PR),
   [`erp-masterdata-events.md`](../../contracts/events/erp-masterdata-events.md) (this PR)
 - precedent: `projects/finance-platform/specs/services/account-service/architecture.md`

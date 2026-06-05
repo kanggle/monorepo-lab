@@ -49,8 +49,8 @@ services:
   #   environment:
   #     SERVER_PORT: "8080"
   #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
   #     OIDC_REQUIRED_TENANT_ID: finance
   #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-finance-platform-internal-services-client}
   #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-finance-dev}
@@ -104,8 +104,8 @@ services:
       MYSQL_USER: ${MYSQL_USER:-finance}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
       REDIS_HOST: redis
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       FINANCE_ACCOUNT_PII_KEY: ${FINANCE_ACCOUNT_PII_KEY:-finance-account-dev-pii-key-32bytes!!}
     depends_on:
       mysql:

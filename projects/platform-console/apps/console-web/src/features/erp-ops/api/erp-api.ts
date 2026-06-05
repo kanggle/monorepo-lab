@@ -73,7 +73,7 @@ import {
  * auth to another). erp REUSES it with the SAME outcome as wms / scm /
  * finance: the erp `masterdata-service` validates a GAP RS256 JWT
  * (ADR-001) against GAP JWKS, `tenant_id ∈ { erp, * }` enforced
- * producer-side from the JWT claim (erp `gap-integration.md` §
+ * producer-side from the JWT claim (erp `iam-integration.md` §
  * platform-console Operator Read Consumer — TASK-ERP-BE-002 merged
  * 2026-05-20). erp has NO token-exchange.
  *

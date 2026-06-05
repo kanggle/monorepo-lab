@@ -57,7 +57,7 @@
 
 ## Dependent Systems
 
-- GAP (global-account-platform) JWKS — JWT signature validation
+- GAP (iam-platform) JWKS — JWT signature validation
 - Redis — rate-limit store
 - `procurement-service`, `inventory-visibility-service` — route targets
 

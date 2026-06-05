@@ -118,7 +118,7 @@ Features compose these shared components with feature-specific configuration and
 
 ## Authentication: GAP OIDC (post TASK-FE-067)
 - Auth library: `next-auth` v5 (auth.js) configured in `src/shared/auth/auth.ts`.
-- Identity provider: `global-account-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://gap.local`).
+- Identity provider: `iam-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://iam.local`).
 - Client: `ecommerce-admin-dashboard-client` (registered in GAP V0012 seed). Confidential client + PKCE.
 - Scope: `openid profile email tenant.read ecommerce.operator`. Backend (gateway-service) asserts `tenant_id=ecommerce` via the JWT claim.
 - Account-type guard: only `account_type=OPERATOR` may sign in. A `CONSUMER` who completes the GAP flow is rejected by the `session()` callback and bounced to `/login?error=account_type_mismatch`.

@@ -22,7 +22,7 @@ served — by adding a thin **additive overlay** to the already-containerized
 The per-project `docker-compose.yml` files are **infrastructure only** — the
 application services (GAP auth/account/admin, the 5 producers, console-bff,
 console-web) run as containers ONLY via the `federation-hardening-e2e` harness
-(or as host JVMs via `bootRun`). `pnpm gap:up` etc. start just DBs/redis/kafka.
+(or as host JVMs via `bootRun`). `pnpm iam:up` etc. start just DBs/redis/kafka.
 
 The fed-e2e harness already runs the full app stack, but it was built for the
 **BFF overview/health** legs + GAP, so it lacks two things the per-domain ops

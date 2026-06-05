@@ -165,13 +165,13 @@ Do not delete this incident — keep the trail intact for future regression diag
 ### Verification (WSL2 + Rancher Desktop dockerd 29.1.3)
 
 ```
-$ DOCKER_API_VERSION=1.45 ./gradlew :projects:global-account-platform:apps:security-service:integrationTest \
+$ DOCKER_API_VERSION=1.45 ./gradlew :projects:iam-platform:apps:security-service:integrationTest \
     --tests "com.example.security.integration.SecurityServiceIntegrationTest.consumeLoginSucceededEvent"
 BUILD SUCCESSFUL in 1m 25s
 # XML: tests="1" skipped="0" failures="0" errors="0" time="5.633"
 ```
 
-[PR #255](https://github.com/kanggle/monorepo-lab/pull/255) CI all green: 12/12 jobs PASS including `Integration (global-account-platform, Testcontainers)` (60 tests / 1 failed transient / 9 skipped @Disabled — fail rate equivalent to main baseline).
+[PR #255](https://github.com/kanggle/monorepo-lab/pull/255) CI all green: 12/12 jobs PASS including `Integration (iam-platform, Testcontainers)` (60 tests / 1 failed transient / 9 skipped @Disabled — fail rate equivalent to main baseline).
 
 ### Trade-offs of the chosen path
 

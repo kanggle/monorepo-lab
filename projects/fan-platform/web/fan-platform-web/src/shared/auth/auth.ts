@@ -17,8 +17,8 @@ import { env } from '@/shared/config/env';
  * - `authorization_code` + PKCE is forced (`checks: ['pkce', 'state']`).
  *
  * See:
- *   - projects/global-account-platform/specs/features/consumer-integration-guide.md
- *   - projects/fan-platform/specs/integration/gap-integration.md
+ *   - projects/iam-platform/specs/features/consumer-integration-guide.md
+ *   - projects/fan-platform/specs/integration/iam-integration.md
  *   - .claude/skills/frontend/auth-client/SKILL.md
  */
 

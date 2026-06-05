@@ -778,7 +778,7 @@ cross-project data pollution — even though only `erp` is expected).
 ## Security
 
 - **JWT (RS256)**: `oauth2-resource-server` against
-  `${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks`; RS256 only;
+  `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`. GAP
   `erp-platform-internal-services-client` (client_credentials) + the console
   assume-tenant operator token are the v1.0 callers (E7 / I1 — SSO single auth, no
@@ -1078,7 +1078,7 @@ follow-up tasks, not this spec):
   (A2 / A3 / A6 / A7 / A10 — schema + immutability + UTC clock + atomicity +
   fail-closed audit)
 - `projects/erp-platform/PROJECT.md` (§ Service Map v2 — approval-service),
-  [`gap-integration.md`](../../integration/gap-integration.md)
+  [`iam-integration.md`](../../integration/iam-integration.md)
 - [`approval-api.md`](../../contracts/http/approval-api.md) (sibling-authored, this
   bundle), [`erp-approval-events.md`](../../contracts/events/erp-approval-events.md)
   (sibling-authored, this bundle),

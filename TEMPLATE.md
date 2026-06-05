@@ -84,13 +84,13 @@ One project in the monorepo (`wms-platform`). Focus on learning what's truly com
 
 ### Phase 3 — Third and Fourth Project ✅ (completed, 2026-05-03)
 
-`global-account-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). 4 projects co-existed at this point:
+`iam-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). 4 projects co-existed at this point:
 
 | Project | Domain | Integration style | Hostname |
 |---|---|---|---|
 | wms-platform | wms | direct-include | wms.local |
 | ecommerce-microservices-platform | ecommerce | direct-include | ecommerce.local (web/admin) |
-| global-account-platform | saas | direct-include | gap.local |
+| iam-platform | saas | direct-include | iam.local |
 | fan-platform | fan-platform | direct-include | fan-platform.local |
 
 "Rule of Three" baseline established. TASK-MONO-029~033 (공통규칙 정리 시리즈) completed the audit and stabilisation.
@@ -103,7 +103,7 @@ One project in the monorepo (`wms-platform`). Focus on learning what's truly com
 |---|---|---|---|---|
 | wms-platform | wms | transactional, integration-heavy | direct-include | wms.local |
 | ecommerce-microservices-platform | ecommerce | transactional | direct-include | ecommerce.local |
-| global-account-platform | saas | transactional, integration-heavy | direct-include | gap.local |
+| iam-platform | saas | transactional, integration-heavy | direct-include | iam.local |
 | fan-platform | fan-platform | (none mandatory) | direct-include | fan-platform.local |
 | **scm-platform** (catalyst) | **scm** | **transactional, integration-heavy, batch-heavy** | direct-include | scm.local |
 
@@ -182,7 +182,7 @@ mkdir -p projects/<new-project>/{apps,specs/{contracts/{http,events},services,fe
 touch projects/<new-project>/tasks/{backlog,ready,in-progress,review,done,archive}/.gitkeep
 ```
 
-> `specs/integration/` is created here because the `PROJECT.md` GAP IdP section references `specs/integration/gap-integration.md` (see Step 2 and §"GAP IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
+> `specs/integration/` is created here because the `PROJECT.md` GAP IdP section references `specs/integration/iam-integration.md` (see Step 2 and §"GAP IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
 
 #### 2. Write `PROJECT.md`
 
@@ -263,9 +263,9 @@ PROJECT_HOSTNAME=<new-project>.local
 # GAP OIDC (if integrating with GAP IdP)
 # OIDC_ISSUER_URL: GAP's issuer base URL — no trailing /oauth2/ path.
 #   Spring Security appends /.well-known/openid-configuration automatically.
-OIDC_ISSUER_URL=http://gap.local
+OIDC_ISSUER_URL=http://iam.local
 # JWT_JWKS_URI: explicit JWKS endpoint (avoids OpenID discovery round-trip in dev).
-JWT_JWKS_URI=http://gap.local/oauth2/jwks
+JWT_JWKS_URI=http://iam.local/oauth2/jwks
 ```
 
 #### 6. Update root `settings.gradle`
@@ -479,7 +479,7 @@ A monorepo-root `infra/traefik/docker-compose.yml` runs Traefik once, on host po
 |---|---|---|
 | `ecommerce.local` | ecommerce-microservices-platform | hostname routing |
 | `wms.local` | wms-platform | hostname routing |
-| `gap.local` | global-account-platform | hostname routing |
+| `iam.local` | iam-platform | hostname routing |
 | `fan-platform.local` | fan-platform | hostname routing |
 | `scm.local` | scm-platform | hostname routing from bootstrap |
 | `erp.local` | erp-platform | hostname routing from bootstrap |
@@ -494,7 +494,7 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
 
 ```
-127.0.0.1  ecommerce.local wms.local gap.local fan-platform.local scm.local erp.local finance.local console.local console-bff.local
+127.0.0.1  ecommerce.local wms.local iam.local fan-platform.local scm.local erp.local finance.local console.local console-bff.local
 ```
 
 (Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)
@@ -517,7 +517,7 @@ External tools that need direct TCP access to backing services use one of:
 
 ### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
-The original three projects (ecommerce, wms, global-account-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, GAP, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
+The original three projects (ecommerce, wms, iam-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, GAP, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
 
 5-digit source ports (e.g. Jaeger UI `16686` in ecommerce) are kept as-is; they remain unprefixed and continue to publish on the host because collisions with other projects are unlikely in practice.
 
@@ -636,7 +636,7 @@ When a project's standalone is frozen, the standalone `README.md` should documen
 
 ## GAP IdP Integration Pattern (New Projects)
 
-As of ADR-001 (ACCEPTED 2026-05-01), **global-account-platform (GAP) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with GAP from bootstrap.
+As of ADR-001 (ACCEPTED 2026-05-01), **iam-platform (GAP) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with GAP from bootstrap.
 
 This applies to: `fan-platform`, `wms`, `ecommerce` (post-TASK-MONO-027), and all future projects.
 
@@ -655,7 +655,7 @@ Authorization: Bearer <super-admin-token>
 }
 ```
 
-Full procedure: `projects/global-account-platform/specs/features/consumer-integration-guide.md § Phase 1`.
+Full procedure: `projects/iam-platform/specs/features/consumer-integration-guide.md § Phase 1`.
 
 ### 2. OIDC client registration (Flyway seed)
 
@@ -669,7 +669,7 @@ Typical client registration includes:
 - Redirect URIs for dev / staging / prod
 - Domain-specific scopes (e.g., `wms.inventory.read`)
 
-The seed lives in `projects/global-account-platform/apps/auth-service/src/main/resources/db/migration/`.
+The seed lives in `projects/iam-platform/apps/auth-service/src/main/resources/db/migration/`.
 
 ### 3. Gateway — OAuth2 Resource Server
 
@@ -682,11 +682,11 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL}   # http://gap.local  (dev — no trailing /oauth2/)
-          jwk-set-uri: ${JWT_JWKS_URI}     # http://gap.local/oauth2/jwks
+          issuer-uri: ${OIDC_ISSUER_URL}   # http://iam.local  (dev — no trailing /oauth2/)
+          jwk-set-uri: ${JWT_JWKS_URI}     # http://iam.local/oauth2/jwks
 ```
 
-> Use `OIDC_ISSUER_URL` (not `OIDC_ISSUER_URI`) — this aligns with the `.env.example` variable name used by all existing projects (ecommerce, fan-platform). `JWT_JWKS_URI` is the conventional env var name for the JWKS endpoint; `OIDC_JWKS_URI` is an alias that also works but less common in the codebase. Set `issuer-uri` to `http://gap.local` (no `/oauth2/` path) — Spring Security's OpenID discovery appends `/.well-known/openid-configuration` automatically; the issuer in the issued JWT must match exactly.
+> Use `OIDC_ISSUER_URL` (not `OIDC_ISSUER_URI`) — this aligns with the `.env.example` variable name used by all existing projects (ecommerce, fan-platform). `JWT_JWKS_URI` is the conventional env var name for the JWKS endpoint; `OIDC_JWKS_URI` is an alias that also works but less common in the codebase. Set `issuer-uri` to `http://iam.local` (no `/oauth2/` path) — Spring Security's OpenID discovery appends `/.well-known/openid-configuration` automatically; the issuer in the issued JWT must match exactly.
 
 Add a `TenantClaimValidator` (or equivalent) that rejects tokens with `tenant_id` != `<domain>`. Reference: `projects/ecommerce-microservices-platform/apps/gateway-service/` (post-TASK-MONO-027).
 
@@ -697,16 +697,16 @@ Add a `## GAP IdP Integration` section to the project's `PROJECT.md` (see `proje
 ```markdown
 ## GAP IdP Integration
 
-`<project>` uses [global-account-platform](../global-account-platform/PROJECT.md) (GAP)
-as the standard OIDC IdP ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)).
+`<project>` uses [iam-platform](../iam-platform/PROJECT.md) (GAP)
+as the standard OIDC IdP ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)).
 All <project> services validate GAP RS256 access tokens as OAuth2 Resource Servers and
 pass only `tenant_id=<domain>` tokens.
-Integration detail: [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+Integration detail: [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 ```
 
 ### 5. Full integration guide
 
-`projects/global-account-platform/specs/features/consumer-integration-guide.md` is the **single reference** for new consumers. It covers all 6 phases: tenant registration → OIDC client setup → gateway RS config → frontend PKCE flow → event subscription → operational checklist.
+`projects/iam-platform/specs/features/consumer-integration-guide.md` is the **single reference** for new consumers. It covers all 6 phases: tenant registration → OIDC client setup → gateway RS config → frontend PKCE flow → event subscription → operational checklist.
 
 ---
 
@@ -771,7 +771,7 @@ Project-level ADRs live in `projects/<name>/docs/adr/`. The most significant pro
 
 | ADR | Title | Status | Date |
 |---|---|---|---|
-| [GAP ADR-001](projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) | GAP as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
+| [GAP ADR-001](projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | GAP as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
 
 ---
 
@@ -790,7 +790,7 @@ bash scripts/verify-template-readiness.sh
 ./gradlew projects
 
 # Each active project has Traefik labels in docker-compose.yml
-for p in wms-platform ecommerce-microservices-platform global-account-platform fan-platform scm-platform; do
+for p in wms-platform ecommerce-microservices-platform iam-platform fan-platform scm-platform; do
   echo "=== $p ==="
   grep -A2 "traefik.enable" projects/$p/docker-compose.yml 2>/dev/null || echo "MISSING Traefik labels"
 done
@@ -835,6 +835,6 @@ A: Only when an existing standalone repo with its own `settings.gradle` + nested
 - `tasks/INDEX.md` — root task lifecycle + PR Separation Rule (authoritative)
 - `scripts/sync-portfolio.sh` — portfolio extraction tool (PROJECT_REMOTES, PROJECT_TYPES, PROJECT_EXCLUDE_PATHS)
 - `docs/adr/ADR-MONO-001-port-prefix-scaling.md` — hostname routing ADR (ACCEPTED)
-- `projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md` — GAP OIDC AS ADR (ACCEPTED)
-- `projects/global-account-platform/specs/features/consumer-integration-guide.md` — GAP consumer integration (single reference)
+- `projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md` — GAP OIDC AS ADR (ACCEPTED)
+- `projects/iam-platform/specs/features/consumer-integration-guide.md` — GAP consumer integration (single reference)
 - `docs/guides/` — human-oriented workflow guides (when present)

@@ -63,7 +63,7 @@ class OAuth2ResourceServerConfigTest {
 
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .issuer("http://gap.local")
+                .issuer("http://iam.local")
                 .subject("user-1")
                 .issuedAt(java.time.Instant.now())
                 .expiresAt(java.time.Instant.now().plusSeconds(60))
@@ -83,7 +83,7 @@ class OAuth2ResourceServerConfigTest {
 
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .issuer("http://gap.local")
+                .issuer("http://iam.local")
                 .subject("user-1")
                 .issuedAt(java.time.Instant.now())
                 .expiresAt(java.time.Instant.now().plusSeconds(60))
@@ -101,7 +101,7 @@ class OAuth2ResourceServerConfigTest {
 
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .issuer("global-account-platform")
+                .issuer("iam")
                 .subject("user-1")
                 .issuedAt(java.time.Instant.now())
                 .expiresAt(java.time.Instant.now().plusSeconds(60))
@@ -114,8 +114,8 @@ class OAuth2ResourceServerConfigTest {
 
     private static OAuth2ResourceServerConfig configWithDefaults() throws Exception {
         OAuth2ResourceServerConfig config = new OAuth2ResourceServerConfig();
-        writeField(config, "jwkSetUri", "http://gap.local/.well-known/jwks.json");
-        writeField(config, "allowedIssuersCsv", "http://gap.local,global-account-platform");
+        writeField(config, "jwkSetUri", "http://iam.local/.well-known/jwks.json");
+        writeField(config, "allowedIssuersCsv", "http://iam.local,iam");
         writeField(config, "requiredTenantId", "fan-platform");
         return config;
     }

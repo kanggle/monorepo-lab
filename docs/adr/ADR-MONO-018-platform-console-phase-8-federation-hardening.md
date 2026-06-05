@@ -189,6 +189,8 @@ ACCEPTED execution (post-ACCEPTED, sketch): `TASK-MONO-1xx` (cross-product e2e c
 
 ---
 
+> **Additive note (2026-06-06, TASK-MONO-179 project rename)** — the OIDC authority `global-account-platform` (alias `gap`) underpinning federation hardening is **renamed to `iam-platform` (alias `iam`)**; the federation-hardening decisions (D1–D8) are **unchanged** (HARDSTOP-04; pure rename). The federation-hardening-e2e harness paths/job names move to `iam-platform`/`iam`. The internal workload-client `tenant_id='global-account-platform'` and NextAuth provider id `gap` are intentionally retained (checksum-locked seeds). See ADR-MONO-013's 2026-06-06 amendment for the full rename note.
+
 ## 7. Provenance
 
 - HARDSTOP-09 #2 (`platform/hardstop-rules.md`) — mandate for an ADR + PAUSE-until-ACCEPTED on an undocumented cross-cutting architecture decision (8 axes here, across 3 sub-axes).

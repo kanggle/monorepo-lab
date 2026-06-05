@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AllowedIssuersValidatorTest {
 
     private final AllowedIssuersValidator validator =
-            new AllowedIssuersValidator(List.of("http://gap.local", "global-account-platform"));
+            new AllowedIssuersValidator(List.of("http://iam.local", "iam"));
 
     private static Jwt jwt(String iss) {
         return new Jwt("t", Instant.now(), Instant.now().plusSeconds(60),
@@ -22,8 +22,8 @@ class AllowedIssuersValidatorTest {
 
     @Test
     void allowedIssuerPasses() {
-        assertThat(validator.validate(jwt("http://gap.local")).hasErrors()).isFalse();
-        assertThat(validator.validate(jwt("global-account-platform")).hasErrors()).isFalse();
+        assertThat(validator.validate(jwt("http://iam.local")).hasErrors()).isFalse();
+        assertThat(validator.validate(jwt("iam")).hasErrors()).isFalse();
     }
 
     @Test

@@ -7,7 +7,7 @@
 # Hard invariants enforced here:
 #   - No datasource / JPA / Flyway / Redis / Kafka configuration (stateless BFF)
 #   - OAuth2 Resource Server wired to GAP JWKS (RS256)
-#   - CONSOLE_BFF_GAP_ISSUER_URL env var for GAP JWKS discovery
+#   - CONSOLE_BFF_IAM_ISSUER_URL env var for GAP JWKS discovery
 #   - /actuator/health and /actuator/prometheus are the only public endpoints
 # -----------------------------------------------------------------------------
 spring:
@@ -16,13 +16,13 @@ spring:
 
   # OAuth2 Resource Server — inbound GAP OIDC access token validation (RS256).
   # JWKS URI is derived from the GAP issuer URL (standard /.well-known/openid-configuration
-  # discovery). Override with CONSOLE_BFF_GAP_ISSUER_URL env var in production.
+  # discovery). Override with CONSOLE_BFF_IAM_ISSUER_URL env var in production.
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}
-          jwk-set-uri: ${CONSOLE_BFF_JWK_SET_URI:${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}/oauth2/jwks}
+          issuer-uri: ${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}
+          jwk-set-uri: ${CONSOLE_BFF_JWK_SET_URI:${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}/oauth2/jwks}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -63,8 +63,8 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-}]"
 
 consolebff:
-  gap:
-    issuer-url: ${CONSOLE_BFF_GAP_ISSUER_URL:http://gap.local}
+  iam:
+    issuer-url: ${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}
   # Per-domain outbound base URLs for the BFF composition adapters
   # (§ 2.4.9.1). Default = Traefik internal hostnames per Local Network
   # Convention (ADR-MONO-001). Env-overridable for tests (DynamicPropertySource)
@@ -74,8 +74,8 @@ consolebff:
   # RestClientConfig caused all 5 outbound legs to use the production hostnames
   # under the IT context (CI surface PR #672 cycle 3 — all-cards DOWNSTREAM_ERROR).
   outbound:
-    gap:
-      base-url: ${CONSOLE_BFF_OUTBOUND_GAP_BASE_URL:http://gap.local}
+    iam:
+      base-url: ${CONSOLE_BFF_OUTBOUND_IAM_BASE_URL:http://iam.local}
     wms:
       base-url: ${CONSOLE_BFF_OUTBOUND_WMS_BASE_URL:http://wms.local}
     scm:

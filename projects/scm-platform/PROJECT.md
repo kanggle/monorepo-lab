@@ -66,22 +66,22 @@ taxonomy_version: 0.1
 
 ## GAP IdP Integration
 
-`scm-platform` 은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 scm-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=scm` claim 만 통과시킨다.
+`scm-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 scm-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=scm` claim 만 통과시킨다.
 
 GAP 측 인프라 ([TASK-MONO-042](../../tasks/done/) 머지 완료):
 - account-service V0015: `tenants` 에 `scm` row (B2B_ENTERPRISE)
 - auth-service V0013: `oauth_clients` 에 `scm-platform-internal-services-client` (client_credentials, scopes=`scm.read`/`scm.write`)
 - v1 = backend only. user-flow PKCE client 는 frontend 도입 시 별도 V slot.
-- **platform-console (ADR-MONO-013 Model B) = 외부 운영자 read consumer**: scm 의 read surface(procurement PO read + inventory-visibility)를 GAP **자체** `platform-console-web` OIDC 토큰으로 server-side 소비한다 ([gap-integration.md § platform-console Operator Read Consumer](specs/integration/gap-integration.md), [gateway-public-routes.md](specs/contracts/http/gateway-public-routes.md), TASK-SCM-BE-015). scm 자신은 backend-only 유지 — scm frontend 없음, scm user-flow client 없음, single-org 불변(이 인정으로 traits 변경 없음).
+- **platform-console (ADR-MONO-013 Model B) = 외부 운영자 read consumer**: scm 의 read surface(procurement PO read + inventory-visibility)를 GAP **자체** `platform-console-web` OIDC 토큰으로 server-side 소비한다 ([iam-integration.md § platform-console Operator Read Consumer](specs/integration/iam-integration.md), [gateway-public-routes.md](specs/contracts/http/gateway-public-routes.md), TASK-SCM-BE-015). scm 자신은 backend-only 유지 — scm frontend 없음, scm user-flow client 없음, single-org 불변(이 인정으로 traits 변경 없음).
 
 dev 환경 토큰 발급 예:
 ```
 curl -u scm-platform-internal-services-client:scm-dev \
      -d "grant_type=client_credentials&scope=scm.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
-통합 상세는 [specs/integration/gap-integration.md](specs/integration/gap-integration.md) (TASK-SCM-BE-001 부트스트랩 시 작성).
+통합 상세는 [specs/integration/iam-integration.md](specs/integration/iam-integration.md) (TASK-SCM-BE-001 부트스트랩 시 작성).
 
 ## Local Network
 

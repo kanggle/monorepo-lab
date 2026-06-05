@@ -23,8 +23,8 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  * to be running.
  *
  * See:
- *   - projects/global-account-platform/specs/features/consumer-integration-guide.md § Phase 4 (PKCE)
- *   - projects/ecommerce-microservices-platform/specs/integration/gap-integration.md (TASK-MONO-027)
+ *   - projects/iam-platform/specs/features/consumer-integration-guide.md § Phase 4 (PKCE)
+ *   - projects/ecommerce-microservices-platform/specs/integration/iam-integration.md (TASK-MONO-027)
  *   - projects/fan-platform/web/fan-platform-web/src/shared/auth/auth.ts (reference pattern)
  */
 
@@ -56,7 +56,7 @@ export const authConfig: NextAuthConfig = {
       id: 'gap',
       name: 'Global Account Platform',
       type: 'oidc',
-      issuer: process.env.OIDC_ISSUER_URL ?? 'http://gap.local',
+      issuer: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
       clientId: process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',
       clientSecret: process.env.ECOMMERCE_WEB_STORE_CLIENT_SECRET ?? '',
       authorization: {

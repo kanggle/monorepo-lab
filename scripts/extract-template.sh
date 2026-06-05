@@ -455,7 +455,7 @@ Explain why each declared trait was chosen and what surface it activates.
 ## TODO: GAP IdP Integration
 
 Describe how this project integrates with the Global Account Platform (GAP) OIDC IdP.
-Reference: projects/global-account-platform/specs/features/consumer-integration-guide.md
+Reference: projects/iam-platform/specs/features/consumer-integration-guide.md
 
 ## TODO: Out of Scope
 
@@ -551,9 +551,9 @@ PROJECT_HOSTNAME=<project-name>.local
 # GAP OIDC (if integrating with GAP IdP)
 # OIDC_ISSUER_URL: GAP's issuer base URL — no trailing /oauth2/ path.
 #   Spring Security appends /.well-known/openid-configuration automatically.
-OIDC_ISSUER_URL=http://gap.local
+OIDC_ISSUER_URL=http://iam.local
 # JWT_JWKS_URI: explicit JWKS endpoint (avoids OpenID discovery round-trip in dev).
-JWT_JWKS_URI=http://gap.local/oauth2/jwks
+JWT_JWKS_URI=http://iam.local/oauth2/jwks
 ENV_EOF
 
 # tasks/INDEX.md.example — structural shell from scm-platform/tasks/INDEX.md (task list stripped)

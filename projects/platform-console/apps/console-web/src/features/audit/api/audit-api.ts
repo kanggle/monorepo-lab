@@ -151,7 +151,7 @@ export async function queryAudit(
   const timer = setTimeout(() => controller.abort(), env.AUDIT_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${env.GAP_ADMIN_API_BASE}${AUDIT_PATH}?${query}`, {
+    const res = await fetch(`${env.IAM_ADMIN_API_BASE}${AUDIT_PATH}?${query}`, {
       method: 'GET',
       headers,
       cache: 'no-store',

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * (`shared/lib/operator-token-exchange.ts`).
  *
  * Authoritative producer contract (verbatim):
- *   global-account-platform/specs/contracts/http/admin-api.md
+ *   iam/specs/contracts/http/admin-api.md
  *   § POST /api/admin/auth/token-exchange
  *   + console-integration-contract.md § 2.6 (ADR-MONO-014 fail-closed map).
  *
@@ -14,13 +14,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { ENV } = vi.hoisted(() => ({
   ENV: {
-    OIDC_ISSUER_URL: 'http://gap.local',
+    OIDC_ISSUER_URL: 'http://iam.local',
     OIDC_CLIENT_ID: 'platform-console-web',
     OIDC_REDIRECT_URI: 'http://console.local/api/auth/callback',
     OIDC_SCOPE: 'openid profile email tenant.read',
-    CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
+    CONSOLE_REGISTRY_URL: 'http://iam.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 50,
-    CONSOLE_TOKEN_EXCHANGE_URL: 'http://gap.local/api/admin/auth/token-exchange',
+    CONSOLE_TOKEN_EXCHANGE_URL: 'http://iam.local/api/admin/auth/token-exchange',
     TOKEN_EXCHANGE_TIMEOUT_MS: 50,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
@@ -83,7 +83,7 @@ describe('exchangeForOperatorToken — success', () => {
     await exchangeForOperatorToken(SUBJECT);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://gap.local/api/admin/auth/token-exchange');
+    expect(url).toBe('http://iam.local/api/admin/auth/token-exchange');
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
     // Exactly the three RFC 8693 fields — no extras.
@@ -176,7 +176,7 @@ describe('exchangeForOperatorToken — unavailable', () => {
   it('network failure → unavailable (no token in the error message)', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockRejectedValue(new Error('ECONNREFUSED gap.local')),
+      vi.fn().mockRejectedValue(new Error('ECONNREFUSED iam.local')),
     );
     const err = await exchangeForOperatorToken(SUBJECT).catch((e) => e);
     expect(err).toBeInstanceOf(OperatorExchangeError);

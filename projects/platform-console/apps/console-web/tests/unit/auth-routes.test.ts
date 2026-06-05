@@ -30,13 +30,13 @@ vi.mock('next/headers', () => ({ cookies: async () => cookiesMock }));
 // also returns ENV for use in the test bodies below.
 const { ENV } = vi.hoisted(() => ({
   ENV: {
-    OIDC_ISSUER_URL: 'http://gap.local',
+    OIDC_ISSUER_URL: 'http://iam.local',
     OIDC_CLIENT_ID: 'platform-console-web',
     OIDC_REDIRECT_URI: 'http://console.local/api/auth/callback',
     OIDC_SCOPE: 'openid profile email tenant.read',
-    CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
+    CONSOLE_REGISTRY_URL: 'http://iam.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 5000,
-    CONSOLE_TOKEN_EXCHANGE_URL: 'http://gap.local/api/admin/auth/token-exchange',
+    CONSOLE_TOKEN_EXCHANGE_URL: 'http://iam.local/api/admin/auth/token-exchange',
     TOKEN_EXCHANGE_TIMEOUT_MS: 5000,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
@@ -105,7 +105,7 @@ describe('GET /api/auth/login (PKCE initiation)', () => {
 
     expect(res.status).toBe(307);
     const loc = new URL(res.headers.get('location')!);
-    expect(loc.origin + loc.pathname).toBe('http://gap.local/oauth2/authorize');
+    expect(loc.origin + loc.pathname).toBe('http://iam.local/oauth2/authorize');
     expect(loc.searchParams.get('response_type')).toBe('code');
     expect(loc.searchParams.get('client_id')).toBe('platform-console-web');
     expect(loc.searchParams.get('redirect_uri')).toBe(ENV.OIDC_REDIRECT_URI);
@@ -174,7 +174,7 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(res.headers.get('location')).toBe('http://console.local/console');
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://gap.local/oauth2/token');
+    expect(url).toBe('http://iam.local/oauth2/token');
     const sent = new URLSearchParams((init as RequestInit).body as string);
     expect(sent.get('grant_type')).toBe('authorization_code');
     expect(sent.get('code')).toBe('AUTHCODE');

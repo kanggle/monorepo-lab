@@ -51,9 +51,9 @@ taxonomy_version: 0.1
 
 ## GAP IdP Integration
 
-`platform-console`은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP)를 표준 OIDC IdP로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 단, 다른 프로젝트와 달리 콘솔은 **백엔드 Resource Server가 아니라 OIDC public client(Auth Code + PKCE)** 로서 사용자(운영자) 로그인을 수행하며, 동시에 GAP의 **product/tenant 레지스트리**를 카탈로그 소스로 소비한다.
+`platform-console`은 [iam-platform](../iam-platform/PROJECT.md) (GAP)를 표준 OIDC IdP로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 단, 다른 프로젝트와 달리 콘솔은 **백엔드 Resource Server가 아니라 OIDC public client(Auth Code + PKCE)** 로서 사용자(운영자) 로그인을 수행하며, 동시에 GAP의 **product/tenant 레지스트리**를 카탈로그 소스로 소비한다.
 
-GAP 측 선행 작업 (spec-first, [TASK-BE-296](../global-account-platform/tasks/ready/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
+GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
 - 콘솔용 OIDC public client (`platform-console-web`, Auth Code + PKCE, redirect=`http://console.local/...`) 등록
 - 운영자가 가시 가능한 product/tenant 레지스트리 조회 surface (콘솔 data-driven 카탈로그 소스)
 

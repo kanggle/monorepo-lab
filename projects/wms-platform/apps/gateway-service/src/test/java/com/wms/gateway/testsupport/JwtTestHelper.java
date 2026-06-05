@@ -30,11 +30,11 @@ public final class JwtTestHelper {
 
     /**
      * Default issuer matches the legacy {@code POST /api/auth/login} issuer
-     * ({@code "global-account-platform"}) — kept on the
+     * ({@code "iam"}) — kept on the
      * {@link com.wms.gateway.security.AllowedIssuersValidator} allowlist while
      * D2-b deprecation is in flight (TASK-MONO-019).
      */
-    public static final String LEGACY_ISSUER = "global-account-platform";
+    public static final String LEGACY_ISSUER = "iam";
     /** Issuer URL used by SAS-issued tokens (TASK-MONO-019). */
     public static final String SAS_ISSUER = "http://localhost:8081";
     /** Required tenant for the WMS gateway (TASK-MONO-019). */

@@ -41,7 +41,7 @@ spring:
 
 scmplatform:
   oauth2:
-    allowed-issuers: http://localhost:9999,global-account-platform
+    allowed-issuers: http://localhost:9999,iam
     required-tenant-id: scm
 
 inventory-visibility:

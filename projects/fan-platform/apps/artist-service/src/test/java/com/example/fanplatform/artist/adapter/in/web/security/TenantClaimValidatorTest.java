@@ -17,7 +17,7 @@ class TenantClaimValidatorTest {
     private static Jwt jwtWithClaim(String name, Object value) {
         return Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .issuer("http://gap.local")
+                .issuer("http://iam.local")
                 .subject("user-1")
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(60))
@@ -53,7 +53,7 @@ class TenantClaimValidatorTest {
     void missingTenantRejected() {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .issuer("http://gap.local")
+                .issuer("http://iam.local")
                 .subject("user-1")
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(60))

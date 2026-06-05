@@ -56,7 +56,7 @@ curl -i http://console.local/api/health   # → {"status":"ok"}
 
 콘솔은 다른 프로젝트(백엔드 Resource Server)와 달리 **OIDC public client (Auth Code + PKCE)** 로서 운영자 로그인을 수행하고, GAP의 product/tenant 레지스트리를 카탈로그 소스로 소비한다.
 
-GAP 측 선행 작업 (spec-first, [TASK-BE-296](../global-account-platform/tasks/ready/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
+GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
 - OIDC public client `platform-console-web` (Auth Code + PKCE, redirect `http://console.local/...`)
 - 운영자 가시 product/tenant 레지스트리 조회 surface
 

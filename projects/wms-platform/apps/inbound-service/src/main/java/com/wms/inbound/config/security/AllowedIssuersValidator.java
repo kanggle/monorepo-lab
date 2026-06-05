@@ -14,7 +14,7 @@ import java.util.Objects;
  *
  * <p>TASK-MONO-019 (D2-b deprecate window): GAP issues two flavours of access
  * token signed by the same JWKS — SAS issuer URL and the legacy
- * {@code "global-account-platform"} string. Both must validate while the
+ * {@code "iam"} string. Both must validate while the
  * legacy path is being deprecated.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {

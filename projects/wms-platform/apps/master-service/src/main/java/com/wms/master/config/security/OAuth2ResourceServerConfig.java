@@ -21,7 +21,7 @@ import java.util.List;
  * <p>Supports BOTH legacy {@code POST /api/auth/login} tokens and SAS-issued tokens
  * during the deprecation window: the JWKS URI points at GAP, but the {@code iss}
  * claim is validated against an explicit allowlist that includes both the
- * SAS issuer URL and the legacy {@code "global-account-platform"} string.
+ * SAS issuer URL and the legacy {@code "iam"} string.
  *
  * <p>Tenant isolation: every accepted token must additionally carry
  * {@code tenant_id = wms}. Cross-tenant tokens (e.g. {@code fan-platform}) fail
@@ -61,7 +61,7 @@ public class OAuth2ResourceServerConfig {
         // Standard timestamp validator — exp / nbf / iat with default leeway.
         validators.add(new JwtTimestampValidator());
         // No JwtIssuerValidator: we accept either the SAS issuer or the legacy
-        // "global-account-platform" string while D2-b deprecation is ongoing.
+        // "iam" string while D2-b deprecation is ongoing.
         validators.add(new AllowedIssuersValidator(allowedIssuers));
         validators.add(new TenantClaimValidator(requiredTenantId));
         // Add Spring's default validators (currently just timestamp, but future-proof).

@@ -65,7 +65,7 @@ services:
       start_period: 20s
 
   # auth/account/admin — point the outbox relay at the real broker (overrides
-  # the base x-gap-service-env anchor's KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999).
+  # the base x-iam-service-env anchor's KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999).
   auth-service:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092

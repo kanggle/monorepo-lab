@@ -8,7 +8,7 @@
 --
 -- AC-3 / AC-5 byte-diff invariant: this file lives in the platform-console
 -- project and does runtime INSERTs / UPDATEs against the GAP + finance-platform
--- schemas. Neither `projects/global-account-platform/` nor
+-- schemas. Neither `projects/iam-platform/` nor
 -- `projects/finance-platform/` is touched on disk.
 --
 -- Strategy:

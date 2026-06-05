@@ -71,7 +71,7 @@ open http://fan-platform.local/
                       │ OIDC JWT (RS256, tenant_id=fan-platform)
                       │
               ┌───────┴────────┐
-              │      GAP       │  http://gap.local/
+              │      GAP       │  http://iam.local/
               │ (auth-service +│
               │ account-service│
               │  + admin)      │
@@ -91,7 +91,7 @@ open http://fan-platform.local/
 
 ## Differentiation from GAP's frozen `community-service`
 
-GAP 안에 [`community-service`](../global-account-platform/apps/community-service/) 가 frozen demo 로 존재하지만, 본 fan-platform 은 다음 점에서 차별화:
+GAP 안에 [`community-service`](../iam-platform/apps/community-service/) 가 frozen demo 로 존재하지만, 본 fan-platform 은 다음 점에서 차별화:
 
 | 측면 | GAP frozen demo | fan-platform |
 |---|---|---|
@@ -125,7 +125,7 @@ projects/fan-platform/
 
 - [PROJECT.md](PROJECT.md) — 분류 + service map + GAP 통합 + scope
 - [tasks/INDEX.md](tasks/INDEX.md) — task lifecycle
-- [GAP ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md) — OIDC 통합 결정
+- [GAP ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — OIDC 통합 결정
 - [ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) — hostname routing
 - [rules/domains/fan-platform.md](../../rules/domains/fan-platform.md) — 도메인 규칙
 

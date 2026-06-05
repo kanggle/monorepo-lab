@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AllowedIssuersValidatorTest {
 
     private final AllowedIssuersValidator validator = new AllowedIssuersValidator(
-            List.of("http://gap.local", "global-account-platform"));
+            List.of("http://iam.local", "iam"));
 
     private static Jwt jwt(String issuer) {
         return Jwt.withTokenValue("token")
@@ -30,12 +30,12 @@ class AllowedIssuersValidatorTest {
 
     @Test
     void sasIssuerPasses() {
-        assertThat(validator.validate(jwt("http://gap.local")).hasErrors()).isFalse();
+        assertThat(validator.validate(jwt("http://iam.local")).hasErrors()).isFalse();
     }
 
     @Test
     void legacyIssuerPasses() {
-        assertThat(validator.validate(jwt("global-account-platform")).hasErrors()).isFalse();
+        assertThat(validator.validate(jwt("iam")).hasErrors()).isFalse();
     }
 
     @Test

@@ -7,7 +7,7 @@
 | Domain | `erp` ([rules/domains/erp.md](../../rules/domains/erp.md)) |
 | Traits | `internal-system`, `transactional`, `audit-heavy` |
 | Service Types | `rest-api` |
-| IdP | GAP (`tenant_id=erp`) — [GAP integration](../global-account-platform/PROJECT.md) |
+| IdP | GAP (`tenant_id=erp`) — [GAP integration](../iam-platform/PROJECT.md) |
 | Hostname | `erp.local` (Traefik routing, ADR-MONO-001) |
 | Status | **v1 bootstrap (TASK-MONO-119)** — skeleton only, masterdata-service 미가동 |
 
@@ -62,7 +62,7 @@ dev 토큰 발급 (GAP `erp-platform-internal-services-client` 등록 완료, TA
 ```bash
 curl -u erp-platform-internal-services-client:erp-dev \
      -d "grant_type=client_credentials&scope=erp.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
 ---
@@ -76,7 +76,7 @@ GAP 측 인프라 (TASK-MONO-119 V0018 시드):
 - `oauth_clients.client_id='erp-platform-internal-services-client'` (client_credentials, scopes=`erp.read`/`erp.write`) — auth-service V0018
 - `oauth_scopes` — `erp.read`, `erp.write` — auth-service V0018
 
-상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#gap-idp-integration) + [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#iam-idp-integration) + [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ---
 

@@ -99,6 +99,8 @@ Append-only.
 
 ACCEPTED execution: `TASK-BE-298` authored (GAP, spec-first); § D5 sequence in progress. Phase 2 / `TASK-PC-FE-002` stays unstarted until `TASK-BE-298` merged.
 
+> **Additive note (2026-06-06, TASK-MONO-179 project rename)** — the OIDC authority `global-account-platform` (alias `gap`) referenced throughout this ADR is **renamed to `iam-platform` (alias `iam`)**; the RFC 8693 token-exchange operator-auth decisions (D1–D8) are **unchanged** (HARDSTOP-04; pure rename). The internal workload-client `tenant_id='global-account-platform'` and NextAuth provider id `gap` are intentionally retained (checksum-locked seeds). See ADR-MONO-013's 2026-06-06 amendment for the full rename note.
+
 ## 7. Provenance
 
 - HARDSTOP-06 #3 + HARDSTOP-09 #2 (`platform/hardstop-rules.md`) — mandate for an ADR + PAUSE-until-ACCEPTED on a conflicting-spec / undocumented cross-service architecture decision.

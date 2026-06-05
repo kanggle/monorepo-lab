@@ -37,7 +37,7 @@ class JwtSignerVerifierTest {
                 "sub", "user-123",
                 "email", "test@example.com",
                 "role", "USER",
-                "iss", "gap-auth",
+                "iss", "iam-auth",
                 "iat", now,
                 "exp", now.plusSeconds(1800)
         );
@@ -48,7 +48,7 @@ class JwtSignerVerifierTest {
         assertThat(verified.get("sub")).isEqualTo("user-123");
         assertThat(verified.get("email")).isEqualTo("test@example.com");
         assertThat(verified.get("role")).isEqualTo("USER");
-        assertThat(verified.get("iss")).isEqualTo("gap-auth");
+        assertThat(verified.get("iss")).isEqualTo("iam-auth");
     }
 
     @Test

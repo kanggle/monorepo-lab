@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * (`shared/lib/assume-tenant-exchange.ts`) — ADR-MONO-020 D4 / § 2.7.
  *
  * Authoritative producer contract (verbatim):
- *   global-account-platform/specs/contracts/http/auth-api.md
+ *   iam/specs/contracts/http/auth-api.md
  *   § Assume-Tenant Exchange (form-urlencoded `POST /oauth2/token`,
  *   token-exchange grant + `audience`, SAS response, NO refresh_token).
  *
@@ -14,13 +14,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { ENV } = vi.hoisted(() => ({
   ENV: {
-    OIDC_ISSUER_URL: 'http://gap.local',
+    OIDC_ISSUER_URL: 'http://iam.local',
     OIDC_CLIENT_ID: 'platform-console-web',
     OIDC_REDIRECT_URI: 'http://console.local/api/auth/callback',
     OIDC_SCOPE: 'openid profile email tenant.read',
-    CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
+    CONSOLE_REGISTRY_URL: 'http://iam.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 50,
-    CONSOLE_TOKEN_EXCHANGE_URL: 'http://gap.local/api/admin/auth/token-exchange',
+    CONSOLE_TOKEN_EXCHANGE_URL: 'http://iam.local/api/admin/auth/token-exchange',
     TOKEN_EXCHANGE_TIMEOUT_MS: 50,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
@@ -88,7 +88,7 @@ describe('exchangeForAssumedToken — success', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     // SAS /oauth2/token, derived from OIDC_ISSUER_URL (NOT the admin JSON URL).
-    expect(url).toBe('http://gap.local/oauth2/token');
+    expect(url).toBe('http://iam.local/oauth2/token');
     expect((init as RequestInit).method).toBe('POST');
     // form-urlencoded, NOT JSON (the § 2.6 admin shape).
     expect(
@@ -184,7 +184,7 @@ describe('exchangeForAssumedToken — unavailable (never falls back)', () => {
   it('network failure → unavailable, no token in the error message', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockRejectedValue(new Error('ECONNREFUSED gap.local')),
+      vi.fn().mockRejectedValue(new Error('ECONNREFUSED iam.local')),
     );
     const err = await exchangeForAssumedToken(SUBJECT, 'acme-corp').catch(
       (e) => e,

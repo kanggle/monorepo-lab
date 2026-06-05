@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - **Single external entry point** — every `/api/...` request for ecommerce routes through this service per [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md).
-- **JWT validation** — OAuth2 Resource Server against GAP JWKS (`/.well-known/jwks.json`); validates RS256 signature, `aud=ecommerce`, `tenant_id=ecommerce` (see [`../../integration/gap-integration.md`](../../integration/gap-integration.md)).
+- **JWT validation** — OAuth2 Resource Server against GAP JWKS (`/.well-known/jwks.json`); validates RS256 signature, `aud=ecommerce`, `tenant_id=ecommerce` (see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)).
 - **Identity header pipeline** — strip client-supplied `X-User-Id` / `X-User-Email` / `X-User-Role` before processing; re-set them from verified JWT claims via the JWT enrichment filter.
 - **Per-IP + per-route rate limiting** — Redis-backed token bucket; sensitive routes (`/api/auth/login`, `/signup`, `/refresh`) have lower limits, see [`public-routes.md` § Rate-Limit Tiers](public-routes.md).
 - **Public/private route enforcement** — only the routes in [`public-routes.md`](public-routes.md) skip authentication; every other path rejects with `401 UNAUTHORIZED` if JWT missing/invalid.
@@ -61,7 +61,7 @@ Admin paths (`/api/admin/**`) are JWT-required + `ROLE_ADMIN`; admin RBAC is enf
 
 ## Dependent Systems
 
-- GAP (global-account-platform) JWKS — JWT signature validation
+- GAP (iam-platform) JWKS — JWT signature validation
 - Redis — rate limiting state
 - all downstream backend services — routing targets
 

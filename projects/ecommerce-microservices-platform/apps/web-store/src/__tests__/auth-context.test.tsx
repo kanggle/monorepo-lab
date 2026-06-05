@@ -127,7 +127,7 @@ describe('AuthContext (NextAuth + GAP)', () => {
     // The server route returns the GAP end_session URL; logout must navigate to
     // it so the IdP session is terminated (RP-initiated logout).
     const endSession =
-      'http://gap.local/connect/logout?id_token_hint=x&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F&client_id=ecommerce-web-store-client';
+      'http://iam.local/connect/logout?id_token_hint=x&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F&client_id=ecommerce-web-store-client';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ url: endSession }),

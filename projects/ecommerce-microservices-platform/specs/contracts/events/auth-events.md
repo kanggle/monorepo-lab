@@ -1,6 +1,6 @@
 # Event Contract: auth-service (DEPRECATED)
 
-> **DEPRECATED — replaced by GAP (global-account-platform) account events.**
+> **DEPRECATED — replaced by GAP (iam-platform) account events.**
 >
 > The ecommerce auth-service component was retired by TASK-BE-132 (PR #150).
 > Authentication, account lifecycle, and the events that signal those state
@@ -8,8 +8,8 @@
 > account events instead of these.
 >
 > See:
-> - `projects/global-account-platform/specs/contracts/events/account-events.md`
-> - `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
+> - `projects/iam-platform/specs/contracts/events/account-events.md`
+> - `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`
 >
 > The contract below is retained for historical reference of what the
 > in-tree auth-service used to publish.

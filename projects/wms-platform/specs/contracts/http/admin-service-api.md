@@ -30,7 +30,7 @@ Every request:
 
 | Header | Required | Notes |
 |---|---|---|
-| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by GAP (OIDC, ADR-001). RS256 JWT validated against GAP JWKS by both gateway and admin-service; `tenant_id=wms` enforced. See [`specs/integration/gap-integration.md`](../../integration/gap-integration.md). |
+| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by GAP (OIDC, ADR-001). RS256 JWT validated against GAP JWKS by both gateway and admin-service; `tenant_id=wms` enforced. See [`specs/integration/iam-integration.md`](../../integration/iam-integration.md). |
 | `X-Request-Id` | yes | Generated/echoed by gateway. Surfaced in logs + traces |
 | `X-Actor-Id` | yes | User id from JWT claim, set by gateway |
 | `Idempotency-Key` | yes for POST / PATCH / PUT / DELETE on `/users`, `/roles`, `/assignments`, `/settings` | UUID. TTL 24h. Scope `(Idempotency-Key, method, path)` |
@@ -827,7 +827,7 @@ to verify catch-up after a rebuild. Pure read — no idempotency.
 - [`specs/services/admin-service/idempotency.md`](../../services/admin-service/idempotency.md)
 - [`specs/services/admin-service/runbooks/read-model-rebuild.md`](../../services/admin-service/runbooks/read-model-rebuild.md)
 - [`specs/contracts/events/admin-events.md`](../events/admin-events.md)
-- [`specs/integration/gap-integration.md`](../../integration/gap-integration.md)
+- [`specs/integration/iam-integration.md`](../../integration/iam-integration.md)
 - [`platform/error-handling.md`](../../../../../platform/error-handling.md) § Admin
 - [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md)
 - `rules/traits/transactional.md` — T1, T3, T4, T5, T8

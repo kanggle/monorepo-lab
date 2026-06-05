@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="gap-kafka"
+CONTAINER_NAME="iam-kafka"
 
 echo "=== Test: Kafka Topic Creation Idempotency ==="
 echo ""

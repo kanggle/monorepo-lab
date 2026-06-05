@@ -449,7 +449,7 @@ This spec does NOT create build or infra files. FAN-BE-009 wires:
 - `platform/testing-strategy.md`
 - `projects/fan-platform/specs/services/community-service/architecture.md` (§ Visibility Tiers + `MembershipChecker` port)
 - `projects/fan-platform/specs/services/gateway-service/architecture.md`
-- `projects/fan-platform/specs/integration/gap-integration.md`
+- `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/contracts/http/membership-api.md`
 - `projects/fan-platform/specs/contracts/events/fan-membership-events.md`
 - ADR-MONO-005 (workload identity — GAP `client_credentials` JWT for `/internal/**`)

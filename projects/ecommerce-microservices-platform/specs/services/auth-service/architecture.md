@@ -149,8 +149,8 @@ owns identity invariants, never JPA-mapped directly.
   `specs/contracts/events/auth-events.md` (if published)
 - `UserSignedUp` consumed by `user-service` (creates initial user profile)
   and by `notification-service` (welcome notification)
-- `auth.login.succeeded` consumed by `global-account-platform/security-service`
-  (login history) and by `global-account-platform/account-service`
+- `auth.login.succeeded` consumed by `iam-platform/security-service`
+  (login history) and by `iam-platform/account-service`
   (`last_login_succeeded_at` projection)
 - `user.user.withdrawn` consumed FROM `user-service` (downstream cleanup —
   deactivate User + revoke refresh tokens)

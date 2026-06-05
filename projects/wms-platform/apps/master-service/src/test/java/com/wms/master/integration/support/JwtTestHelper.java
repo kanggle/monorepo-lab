@@ -39,11 +39,11 @@ public final class JwtTestHelper implements AutoCloseable {
     private static final String KEY_ID = "master-test-key";
     /**
      * Default issuer: matches the legacy {@code POST /api/auth/login}
-     * issuer ({@code "global-account-platform"}) — kept on the
+     * issuer ({@code "iam"}) — kept on the
      * {@code AllowedIssuersValidator} allowlist while D2-b deprecation
      * is in flight (TASK-MONO-019).
      */
-    public static final String LEGACY_ISSUER = "global-account-platform";
+    public static final String LEGACY_ISSUER = "iam";
     /**
      * Issuer that matches the SAS-issued tokens (the OIDC issuer URL).
      * Tests that need to exercise the standard path use {@link #issueSasToken}.

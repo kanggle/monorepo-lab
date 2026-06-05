@@ -48,10 +48,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
           # V0013 SQL seeded scm-platform OIDC client against GAP's standard
           # /oauth2/jwks endpoint (TASK-MONO-035 alignment).
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -97,14 +97,14 @@ outbox:
 
 scmplatform:
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "global-account-platform" string.
+    # D2-b deprecation window: SAS issuer + legacy "iam" string.
     # MUST stay byte-identical to gateway-service's allowed-issuers — if the
     # gateway accepts an issuer that this service rejects, traffic flowing
     # through the gateway gets a 401 here despite the gateway's green light
     # (cross-service issuer drift). When changing this value, update
     # projects/scm-platform/apps/gateway-service/src/main/resources/application.yml
     # in the same commit.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
   procurement:
     supplier:

@@ -13,7 +13,7 @@
 >   `{ event_id, event_type, source, occurred_at, version, payload }` event
 >   envelope.
 > - The other portfolio projects do not maintain a populated
->   `contracts/schemas/` either (global-account-platform keeps an empty
+>   `contracts/schemas/` either (iam-platform keeps an empty
 >   placeholder; wms / scm / fan-platform have no `schemas/` directory).
 >
 > Markdown contracts in this repo have no `$ref` / transclusion mechanism,

@@ -54,5 +54,5 @@ spring:
 # tenant_id=ecommerce; the validators must accept that pair.
 ecommerce:
   oauth2:
-    allowed-issuers: https://test.local/issuer,global-account-platform
+    allowed-issuers: https://test.local/issuer,iam
     required-tenant-id: ecommerce

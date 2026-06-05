@@ -149,7 +149,7 @@ async function callGapAdmin<T>(
   const timer = setTimeout(() => controller.abort(), env.ACCOUNTS_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${env.GAP_ADMIN_API_BASE}${opts.path}`, {
+    const res = await fetch(`${env.IAM_ADMIN_API_BASE}${opts.path}`, {
       method: opts.method,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
@@ -431,7 +431,7 @@ export async function exportAccount(
   const timer = setTimeout(() => controller.abort(), env.ACCOUNTS_TIMEOUT_MS);
   try {
     const res = await fetch(
-      `${env.GAP_ADMIN_API_BASE}${ADMIN_PREFIX}/accounts/${encodeURIComponent(accountId)}/export`,
+      `${env.IAM_ADMIN_API_BASE}${ADMIN_PREFIX}/accounts/${encodeURIComponent(accountId)}/export`,
       {
         method: 'GET',
         headers: {

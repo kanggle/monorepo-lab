@@ -1011,15 +1011,15 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       # TASK-MONO-027: ecommerce gateway is now a GAP OIDC consumer.
-      # GAP joins the shared traefik-net network so http://gap.local works
+      # GAP joins the shared traefik-net network so http://iam.local works
       # from inside the ecommerce stack (mirrors fan-platform compose,
       # TASK-MONO-026). JWT_JWKS_URI is kept for backward-compat with the
       # e2e harness; the production lookup comes from OIDC_ISSUER_URL.
       # TASK-BE-132: auth-service decommissioned; gateway validates GAP tokens only.
-      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-http://gap.local}
-      - JWT_JWKS_URI=${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-http://iam.local}
+      - JWT_JWKS_URI=${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       - OIDC_REQUIRED_TENANT_ID=${OIDC_REQUIRED_TENANT_ID:-ecommerce}
-      - OIDC_ALLOWED_ISSUERS=${OIDC_ALLOWED_ISSUERS:-http://gap.local,global-account-platform}
+      - OIDC_ALLOWED_ISSUERS=${OIDC_ALLOWED_ISSUERS:-http://iam.local,iam}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - PRODUCT_SERVICE_URL=http://product-service:8082
       - SEARCH_SERVICE_URL=http://search-service:8085

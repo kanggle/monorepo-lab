@@ -11,7 +11,7 @@ spring:
       resourceserver:
         jwt:
           # OIDC issuer for SAS-issued tokens (GAP auth-service via Traefik
-          # at http://gap.local). The issuer-uri triggers Spring Security's
+          # at http://iam.local). The issuer-uri triggers Spring Security's
           # automatic /.well-known/openid-configuration discovery.
           issuer-uri: ${OIDC_ISSUER_URL:http://localhost:8081}
           # Default port 8088 avoids a self-referential loop when the gateway
@@ -171,13 +171,13 @@ server:
 ecommerce:
   # TASK-MONO-027: OIDC Resource Server validators.
   # Consumed by OAuth2ResourceServerConfig + TenantClaimValidator +
-  # AllowedIssuersValidator. See specs/integration/gap-integration.md.
+  # AllowedIssuersValidator. See specs/integration/iam-integration.md.
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window
-    # (~2026-08-01). Both the SAS issuer (default http://gap.local) and the
-    # legacy 'global-account-platform' string must validate while the
+    # (~2026-08-01). Both the SAS issuer (default http://iam.local) and the
+    # legacy 'iam' string must validate while the
     # legacy path is being deprecated.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
     # Tokens whose tenant_id claim does not match this value are rejected
     # at the gateway with 403 (TENANT_FORBIDDEN). Single-tenant only — no
     # wildcard support; cross-tenant access is blocked by design.

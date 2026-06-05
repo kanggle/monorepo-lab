@@ -22,7 +22,7 @@ import java.util.UUID;
  */
 public final class JwtTestHelper {
 
-    public static final String LEGACY_ISSUER = "global-account-platform";
+    public static final String LEGACY_ISSUER = "iam";
     public static final String SAS_ISSUER = "http://test-issuer";
     public static final String DEFAULT_TENANT_ID = "fan-platform";
 

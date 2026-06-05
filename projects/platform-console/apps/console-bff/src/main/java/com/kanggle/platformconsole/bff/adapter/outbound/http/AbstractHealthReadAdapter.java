@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Base class for the 5 domain {@code /actuator/health} outbound legs.
  *
- * <p>All five domain health adapters ({@link GapHealthReadAdapter},
+ * <p>All five domain health adapters ({@link IamHealthReadAdapter},
  * {@link WmsHealthReadAdapter}, {@link ScmHealthReadAdapter},
  * {@link FinanceHealthReadAdapter}, {@link ErpHealthReadAdapter}) share
  * identical logic: {@code GET /actuator/health} with {@code Accept:

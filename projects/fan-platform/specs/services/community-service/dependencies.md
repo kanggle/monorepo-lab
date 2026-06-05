@@ -31,13 +31,13 @@ Declared in `apps/community-service/build.gradle`:
 
 ### GAP IdP — OIDC Resource Server
 
-- Issuer: `${OIDC_ISSUER_URL}` (default `http://gap.local`).
+- Issuer: `${OIDC_ISSUER_URL}` (default `http://iam.local`).
 - JWKS: `${OIDC_JWK_SET_URI}` or `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/.well-known/jwks.json`.
 - Algorithm: RS256 only.
 - Required claims: `iss` (∈ allowed-issuers), `sub`, `tenant_id` ∈ `{ fan-platform, * }`, `exp`, `nbf`, `iat`.
 - Optional: `roles[]` or `role` string for OPERATOR / SUPER_ADMIN authorization.
 
-See `projects/fan-platform/specs/integration/gap-integration.md` for the full
+See `projects/fan-platform/specs/integration/iam-integration.md` for the full
 integration contract.
 
 ## Cross-service contracts (produced)

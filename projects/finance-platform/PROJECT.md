@@ -20,7 +20,7 @@ taxonomy_version: 0.1
 기존 portfolio 와의 차별점:
 
 - **scm-platform** 은 공급망 노드 간 흐름(조달·운송·정산)이고 trait 가 `transactional + integration-heavy + batch-heavy`. finance 는 자금 정확성·규제 추적이 핵심이고 trait 가 `transactional + regulated + audit-heavy` — 라이브러리에 `regulated + audit-heavy` 동시 stress 를 처음 가한다.
-- **global-account-platform** (GAP) 은 IdP(`saas` 도메인) — finance 는 GAP 의 **B2B_ENTERPRISE** tenant 로 합류(`tenant_id=finance`, V0017 시드).
+- **iam-platform** (GAP) 은 IdP(`saas` 도메인) — finance 는 GAP 의 **B2B_ENTERPRISE** tenant 로 합류(`tenant_id=finance`, V0017 시드).
 - **ecommerce / fan-platform** 은 B2C 판매·콘텐츠 도메인. finance 는 자금 자체가 도메인 자산 — 결제·정산·규제의 정확성이 시스템 가치의 중심.
 
 본 프로젝트는 **백엔드 포트폴리오** 로서 프로덕션 지향 설계(transactional + regulated + audit-heavy 의 동시 트레이드오프)를 보여준다. v1 = backend only — frontend 는 통합 platform console 이 렌더하며([ADR-MONO-013](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) §3.3 backend-only + 콘솔 렌더; GAP/scm 선례) `frontend-app` service_type 을 두지 않는다.
@@ -70,22 +70,22 @@ taxonomy_version: 0.1
 
 ## GAP IdP Integration
 
-`finance-platform` 은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 finance-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=finance` claim 만 통과시킨다.
+`finance-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 finance-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=finance` claim 만 통과시킨다.
 
 GAP 측 인프라 (TASK-MONO-114 V0017 시드):
 - account-service V0017: `tenants` 에 `finance` row (B2B_ENTERPRISE — scm 과 동일 type, 내부-서비스 모델)
 - auth-service V0017: `oauth_clients` 에 `finance-platform-internal-services-client` (client_credentials, scopes=`finance.read`/`finance.write`)
 - v1 = backend only. user-flow PKCE client 는 별도 V slot (v1 미발행 — 콘솔이 GAP public client 로 렌더, ADR-MONO-013).
-- **platform-console operator read consumer (ADR-MONO-013 Model B)** — `platform-console` (별도 ADR-MONO-013-governed 프로젝트) 가 GAP **자신의** `platform-console-web` 콘솔 클라이언트로 finance 의 v1 read 표면(`GET /accounts/{id}`·`/balances`·`/transactions`)을 **외부 운영자 read consumer** 로서 server-side 소비한다 (read-only; 상세 = [`gap-integration.md` § platform-console Operator Read Consumer](specs/integration/gap-integration.md#platform-console-operator-read-consumer-adr-mono-013)). finance 자체는 backend-only 유지 — finance 프론트엔드 없음, finance user-flow 클라이언트 없음 (deferred `finance-platform-user-flow-client` 는 무관). 콘솔의 trait 은 콘솔의 것이지 finance 의 것이 아니다 — finance 는 `multi-tenant`/`integration-heavy` 미선언 유지 (§ Out of Scope). finance 도메인 거버넌스는 ADR-MONO-008 그대로 (재결정 아님).
+- **platform-console operator read consumer (ADR-MONO-013 Model B)** — `platform-console` (별도 ADR-MONO-013-governed 프로젝트) 가 GAP **자신의** `platform-console-web` 콘솔 클라이언트로 finance 의 v1 read 표면(`GET /accounts/{id}`·`/balances`·`/transactions`)을 **외부 운영자 read consumer** 로서 server-side 소비한다 (read-only; 상세 = [`iam-integration.md` § platform-console Operator Read Consumer](specs/integration/iam-integration.md#platform-console-operator-read-consumer-adr-mono-013)). finance 자체는 backend-only 유지 — finance 프론트엔드 없음, finance user-flow 클라이언트 없음 (deferred `finance-platform-user-flow-client` 는 무관). 콘솔의 trait 은 콘솔의 것이지 finance 의 것이 아니다 — finance 는 `multi-tenant`/`integration-heavy` 미선언 유지 (§ Out of Scope). finance 도메인 거버넌스는 ADR-MONO-008 그대로 (재결정 아님).
 
 dev 환경 토큰 발급 예:
 ```
 curl -u finance-platform-internal-services-client:finance-dev \
      -d "grant_type=client_credentials&scope=finance.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
-통합 상세는 [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+통합 상세는 [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ## Local Network
 

@@ -19,7 +19,7 @@ layers (`rules/common.md`, `rules/traits/content-heavy.md`,
 | Primary stack | Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 3.4, next-auth v5 (auth.js), TanStack Query v5 |
 | Bounded Context | `fan-platform-frontend` |
 | Deployable unit | `web/fan-platform-web/` |
-| Backend dependencies | gateway-service (`http://fan-platform.local`), GAP IdP (`http://gap.local`) |
+| Backend dependencies | gateway-service (`http://fan-platform.local`), GAP IdP (`http://iam.local`) |
 
 ### Service Type Composition
 
@@ -242,10 +242,10 @@ inside `projects/fan-platform/` working directory.
 - `platform/architecture-decision-rule.md`
 - `platform/service-types/frontend-app.md` (if present)
 - `projects/fan-platform/PROJECT.md` § Frontend
-- `projects/fan-platform/specs/integration/gap-integration.md`
+- `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/contracts/http/community-api.md`
 - `projects/fan-platform/specs/contracts/http/artist-api.md`
-- `projects/global-account-platform/specs/features/consumer-integration-guide.md`
+- `projects/iam-platform/specs/features/consumer-integration-guide.md`
 - `projects/ecommerce-microservices-platform/apps/web-store/` (reference)
 - `.claude/skills/frontend/auth-client/SKILL.md`
 - `.claude/skills/frontend/architecture/feature-sliced-design/SKILL.md`

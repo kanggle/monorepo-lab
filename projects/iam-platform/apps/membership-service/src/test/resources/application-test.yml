@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: membership-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  # TASK-BE-253: Resource Server JWKS — overridden by a test JwtDecoder bean.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081
+          jwk-set-uri: http://localhost:8081/oauth2/jwks
+
+server:
+  port: 0
+
+membership:
+  oauth2:
+    allowed-issuers: http://localhost:8081,iam
+    required-tenant-id: fan-platform
+  account-service:
+    base-url: http://localhost:0
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+    # TASK-BE-318d: internal-token removed (membership → account is Bearer JWT now). IT that trigger
+    # account-status calls mock IamClientCredentialsTokenProvider; others never fetch a token (lazy).
+  idempotency:
+    ttl-seconds: 86400
+  scheduler:
+    expiry-fixed-delay-ms: 600000
+    expiry-batch-size: 100

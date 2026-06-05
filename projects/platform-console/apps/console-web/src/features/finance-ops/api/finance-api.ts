@@ -34,7 +34,7 @@ import {
  * to another). finance REUSES it with the SAME outcome as wms / scm: the
  * finance `account-service` validates a GAP RS256 JWT (ADR-001) against
  * GAP JWKS, `tenant_id ∈ { finance, * }` enforced producer-side from
- * the JWT claim (finance `gap-integration.md` § platform-console
+ * the JWT claim (finance `iam-integration.md` § platform-console
  * Operator Read Consumer — TASK-FIN-BE-005). finance has NO
  * token-exchange.
  *
