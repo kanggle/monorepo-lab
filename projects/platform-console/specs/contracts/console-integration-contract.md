@@ -730,11 +730,17 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   / 5×`POST /retire` / 1×`POST .../move-parent`) is operator-domain
   mutation requiring `Idempotency-Key` (E1 / transactional T1) +
   role-scoped E6 fail-CLOSED authorization + append-only E8 audit —
-  **not** an operator-parity console surface at v1; **explicitly out
-  of scope** (not silently dropped). erp's v2 `approval-service` /
-  `read-model-service` / future `admin-service` / `notification-service`
-  / `permission-service` are likewise out of scope (all v2-deferred
-  per ADR-MONO-016 § D3 / erp `PROJECT.md` § v1 OUT).
+  **not** an operator-parity console surface at v1 (the **masterdata
+  write binding** below extends this for all five masters under
+  ADR-MONO-016 § D3.1). The forward erp services declared v2 in
+  ADR-MONO-016 § D3 have since shipped **first increments** and are now
+  consumed by the console: `read-model-service` (the *integrated
+  read-model binding* below — TASK-PC-FE-049), `approval-service` (the
+  결재함 workflow surface — TASK-PC-FE-051, consuming `/api/erp/approval/**`
+  under the § D3.1 write-affordance model), and `notification-service`
+  (the *notification inbox binding* below — TASK-PC-FE-052). The future
+  `admin-service` / `permission-service` remain out of scope (still
+  v2-deferred per ADR-MONO-016 § D3 / erp `PROJECT.md` § v1 OUT).
 
 - **Per-domain credential selection — reuse of the § 2.4.5 rule (do
   NOT re-derive, do NOT diverge)**: the normative per-domain
@@ -782,10 +788,11 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   `IDEMPOTENCY_KEY_REQUIRED` / `IDEMPOTENCY_KEY_CONFLICT` (409) /
   `MASTERDATA_DUPLICATE_KEY` / `MASTERDATA_REFERENCE_VIOLATION` /
   `MASTERDATA_PARENT_CYCLE` (409) + `MASTERDATA_EFFECTIVE_PERIOD_INVALID`
-  (422) are **mutation-only** — the read path never hits them. The v2
-  `approval-service` / `read-model-service` / future `admin-service` /
-  `notification-service` / `permission-service` surfaces stay out of
-  scope.
+  (422) are **mutation-only** — the read path never hits them. Beyond
+  this masterdata surface, the console now also binds the shipped erp
+  first increments — `read-model-service` (read), `approval-service`
+  (결재함), `notification-service` (inbox bell, below) — while the future
+  `admin-service` / `permission-service` surfaces stay out of scope.
 
 - **Integrated read-model binding (TASK-PC-FE-049 — read-only; ADR-MONO-016
   § D3 read-model-service first increment)**: the console renders the erp
@@ -806,6 +813,60 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   routes `/api/erp/read-model/**` to read-model-service via a path-prefix
   Traefik router (priority over the masterdata catch-all); the single-base
   `ERP_BASE_URL` console model is unchanged.
+
+- **Notification inbox binding (TASK-PC-FE-052 — read + idempotent
+  acknowledge; ADR-MONO-016 § D3 notification-service first increment)**:
+  the console renders a **shell-level notification bell** that consumes the
+  erp **notification-service** in-app inbox — `GET /api/erp/notifications`
+  (the caller's recipient-scoped inbox, optional `unread` filter),
+  `GET /api/erp/notifications/{id}`, and the idempotent
+  `POST /api/erp/notifications/{id}/read`; request/response/error owned by
+  [`notification-api.md`](../../../erp-platform/specs/contracts/http/notification-api.md)
+  (authoritative). This closes the user-visible leg of the
+  `approval(event) → notification(fan-out) → console(bell)` loop —
+  notification-service consumes the four `erp.approval.*` transitions
+  (`notification-subscriptions.md`) and the bell surfaces them.
+  - **Strictly read + acknowledge** — the ONLY mutation is the **naturally
+    idempotent mark-read** (a state-converging `read = true` assignment, not
+    an accumulating create). Per `notification-api.md` § POST `…/read` it
+    carries **no `Idempotency-Key`** (unlike the approval transitions /
+    masterdata writes — re-marking is a no-op returning the **same**
+    `readAt`, never advanced). The console MUST NOT fabricate an
+    `Idempotency-Key` header on this surface (asserted by test).
+  - **Credential — UNCHANGED from the erp read binding**: the same
+    server-side domain-facing GAP OIDC token (`getDomainFacingToken()`);
+    **never** `getOperatorToken()`. erp resolves the tenant from the JWT
+    `tenant_id ∈ {erp,*}` claim — the console sends **no** `X-Tenant-Id`.
+  - **Recipient-scoped (E6, fail-CLOSED — producer-enforced)**: the inbox
+    is **personal** — every row is implicitly filtered to `recipient ==
+    caller.sub`; there is **no** all-recipients view in v1. A detail /
+    mark-read on another recipient's notification returns **404
+    `NOTIFICATION_NOT_FOUND`** (existence-leak avoidance — 404 not 403),
+    passed through inline-actionably (unreachable on the bell's own-inbox
+    happy path). The console never queries another employee's inbox.
+  - **NON_NULL absent `readAt`**: `readAt` is **ABSENT** while
+    `read == false` (never serialized `null`) → parsed `optional`; the bell
+    distinguishes unread by `read === false` / the absent `readAt`, never a
+    null value (same tolerant-parser discipline as the read-model /
+    masterdata surfaces). Unknown / future `sourceType` (`MASTERDATA` /
+    `PERMISSION` — v2) and `type` values degrade to a generic label, never
+    a parser throw; deep-link to the source record is offered only for
+    `sourceType: APPROVAL` (`sourceId` → the approval request).
+  - **Shell-level degrade (integration-heavy resilience — § 2.5)**: the
+    bell is a **global** header affordance, but its v1 source is the
+    erp-scoped inbox. When the operator's GAP token is not erp-eligible
+    (`403 TENANT_FORBIDDEN` / `PERMISSION_DENIED`) or notification-service
+    is unavailable (`503` / timeout / network → `ErpUnavailableError`), the
+    bell **degrades silently to empty / inert** and **MUST NOT** break the
+    console shell or any other section (asserted by test — a non-erp
+    operator uses the console normally with an empty bell). No
+    `refetchInterval` polling (the same no-tight-loop rule as the erp-ops
+    read hooks); the inbox refetches on bell-open + after a mark-read.
+  - **Routing**: in v1 (gateway-service deferred) `erp.local` routes
+    `/api/erp/notifications/**` to notification-service via a path-prefix
+    Traefik router (alongside the read-model `/api/erp/read-model/**` and
+    approval `/api/erp/approval/**` routers, priority over the masterdata
+    catch-all); the single-base `ERP_BASE_URL` console model is unchanged.
 
 - **Masterdata write binding (TASK-PC-FE-046 department pilot →
   TASK-PC-FE-048 all 5 masters; ADR-MONO-016 § D3.1 amended)**: each of
