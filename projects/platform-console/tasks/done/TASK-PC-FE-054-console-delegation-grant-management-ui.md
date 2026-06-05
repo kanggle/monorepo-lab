@@ -8,7 +8,7 @@ TASK-PC-FE-054
 
 # Status
 
-ready
+done
 
 # Owner
 
