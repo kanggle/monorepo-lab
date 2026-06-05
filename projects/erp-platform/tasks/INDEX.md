@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-010-read-model-approval-fact-projection.md` — **READY (2026-06-05)**. read-model approval-fact 투영 — approval→read-model 이벤트 루프 완결(통합조회 v2 first increment). read-model-service 가 `erp.approval.{submitted,approved,rejected,withdrawn}.v1`(ERP-BE-009 발행, 소비자 0)을 구독→`approval_fact_proj`(요청당 최신 fact, terminal-once) 투영 + read-only `GET /api/erp/read-model/approvals` list/detail(org_scope subtree 필터, subject read-time 해소). masterdata→read-model(ERP-BE-007) 미러. E5 유지(latest fact 만; full history 권위=approval-service REST). spec=read-model architecture amendment+subscriptions(+4 topic)+read-model-api(approvals)+ADR-016 §D3 amendment(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-010-read-model-approval-fact-projection.md` — **REVIEW (2026-06-05, impl PR open)**. read-model approval-fact 투영 — **approval→read-model 이벤트 루프 완결**(통합조회 v2 first increment; ERP-BE-009 outbox 의 소비자 0 고리 닫음, masterdata→read-model[ERP-BE-007] 미러). 분석=Opus 4.8 / 구현=backend-engineer(Opus dispatch)+dispatcher 독립 재검증. read-model-service 확장: `ApprovalEventConsumer`(4 `@KafkaListener` `erp.approval.*.v1`, group `erp-read-model-v1` 합류, `@RetryableTopic` 3-retry+DLT, manual ACK, invalid→즉시 DLT, `processed_events` dedupe T8) + `ApprovalFactProjection`(domain, **terminal-once**: `applySubmitted` `if(!isTerminal())` revert 방지, `ofTerminal` out-of-order submittedAt=null no-fabrication) + `ApplyApprovalFactUseCase`(latest-state upsert) + `QueryApprovalFactUseCase`(org_scope subtree 필터: DEPARTMENT subject=자신/EMPLOYEE subject=`employee_proj.department` 경유 fail-closed disjunction; `["*"]`/미설정=net-zero; subject read-time 해소 미해소→null+meta.unresolved) + `ApprovalFactController`(`GET /approvals` list/`/{id}` detail, out-of-scope/missing→404 `MASTERDATA_NOT_FOUND`) + V2 Flyway `approval_fact_proj` + `EmployeeProjectionRepository.findIdsByDepartmentIdIn`(additive). **E5 유지**(approval 경로 publish/outbox/write-back 0 — grep 확인; latest fact 만, history 권위=approval-service REST). 분석=Opus 4.8 / dispatcher 독립: scope=read-model-service only · `:check` BUILD SUCCESSFUL 99 unit/slice · terminal-once 코드 확인 · E5 grep 0 · IT @Tag integration CI Linux 게이트. v2-deferred=business-partner/permission facts/notification/multi-stage.
 
 ## done
 

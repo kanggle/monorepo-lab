@@ -16,4 +16,6 @@ public interface EmployeeProjJpaRepository extends JpaRepository<EmployeeProjJpa
             String status, Collection<String> departmentIds, Pageable pageable);
 
     long countByStatusAndDepartmentIdIn(String status, Collection<String> departmentIds);
+
+    List<EmployeeProjJpaEntity> findByDepartmentIdIn(Collection<String> departmentIds);
 }
