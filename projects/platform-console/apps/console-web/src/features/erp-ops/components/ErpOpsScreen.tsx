@@ -16,6 +16,7 @@ import { CostCenterList } from './CostCenterList';
 import { BusinessPartnerList } from './BusinessPartnerList';
 import { EmployeeOrgViewCard } from './EmployeeOrgViewCard';
 import { ApprovalScreen } from './ApprovalScreen';
+import { DelegationScreen } from './DelegationScreen';
 import type { ApprovalListResponse } from '../api/approval-types';
 import type { MasterOption } from './MasterWriteDialog';
 
@@ -97,6 +98,9 @@ export function ErpOpsScreen({
         <a href="#approval-heading" className="underline" data-testid="erp-nav-approval">
           결재함
         </a>
+        <a href="#delegation-heading" className="underline" data-testid="erp-nav-delegation">
+          위임
+        </a>
       </nav>
 
       <AsOfPicker />
@@ -134,6 +138,9 @@ export function ErpOpsScreen({
         initialRequests={initialApprovalRequests ?? undefined}
         initialInbox={initialApprovalInbox ?? undefined}
       />
+
+      {/* TASK-PC-FE-054 — delegation grant management (위임 관리) section. */}
+      <DelegationScreen />
     </section>
   );
 }

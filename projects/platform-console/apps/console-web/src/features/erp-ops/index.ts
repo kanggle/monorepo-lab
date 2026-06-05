@@ -40,6 +40,8 @@ export {
   ApprovalCreateDialog,
 } from './components/ApprovalScreen';
 export { approvalErrorMessage } from './components/approval-error';
+// TASK-PC-FE-054 — delegation grant management (위임 관리).
+export { DelegationScreen } from './components/DelegationScreen';
 export { AsOfPicker } from './components/AsOfPicker';
 export { EffectivePeriodBadge } from './components/EffectivePeriodBadge';
 export { RetiredReferenceBadge } from './components/RetiredReferenceBadge';
@@ -112,6 +114,32 @@ export type {
   CreateApprovalArgs,
   ApprovalTransitionArgs,
 } from './hooks/use-erp-ops';
+// TASK-PC-FE-054 — delegation grant management hooks.
+export {
+  useDelegations,
+  useCreateDelegation,
+  useRevokeDelegation,
+} from './hooks/use-erp-ops';
+export type {
+  CreateDelegationArgs,
+  RevokeDelegationArgs,
+} from './hooks/use-erp-ops';
+// TASK-PC-FE-054 — delegation types + helpers.
+export type {
+  DelegationGrant,
+  DelegationListResponse,
+  DelegationListMeta,
+  CreateDelegationInput,
+} from './api/delegation-types';
+export {
+  DelegationGrantSchema,
+  DelegationListResponseSchema,
+  isActiveGrant,
+} from './api/delegation-types';
+export {
+  DELEGATION_PREFIX,
+  delegationListKey,
+} from './api/erp-keys';
 // TASK-PC-FE-051 — approval types + helpers.
 export type {
   ApprovalRequest,

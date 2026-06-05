@@ -45,6 +45,11 @@ export function approvalErrorMessage(
         return '이 작업을 수행할 권한이 없습니다.';
       case 'EXTERNAL_TRAFFIC_REJECTED':
         return 'erp 는 내부 전용 경계입니다. 콘솔 SSO 세션으로만 조회할 수 있습니다.';
+      // TASK-PC-FE-054 — delegation-specific codes (§v2.1 AMENDMENT).
+      case 'DELEGATION_INVALID':
+        return '자기 위임이거나 유효기간이 올바르지 않습니다 (validTo < validFrom).';
+      case 'DELEGATION_NOT_FOUND':
+        return '위임을 찾을 수 없습니다. 목록을 새로고침하세요.';
       default:
         return err.message || '요청을 처리하지 못했습니다.';
     }

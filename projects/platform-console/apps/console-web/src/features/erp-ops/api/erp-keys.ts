@@ -156,3 +156,15 @@ export function approvalDetailKey(id: string) {
 export function approvalInboxKey(page: number, size: number) {
   return [ERP_KEY, APPROVAL_PREFIX, 'inbox', page, size] as const;
 }
+
+// ---------------------------------------------------------------------------
+// delegation grant management (TASK-PC-FE-054) — list keys.
+// The mutations (create + revoke) invalidate the `delegation` prefix so
+// both DELEGATOR + DELEGATE lists refetch on success.
+// ---------------------------------------------------------------------------
+
+export const DELEGATION_PREFIX = 'delegation';
+
+export function delegationListKey(role: 'DELEGATOR' | 'DELEGATE' | undefined) {
+  return [ERP_KEY, DELEGATION_PREFIX, 'list', role ?? null] as const;
+}
