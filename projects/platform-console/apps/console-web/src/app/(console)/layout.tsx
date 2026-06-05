@@ -11,6 +11,7 @@ import { getCatalog } from '@/features/catalog';
 import { selectableTenants, TenantSwitcher } from '@/features/tenant';
 import { ThemeToggle } from '@/shared/ui/ThemeToggle';
 import { AccountMenu } from '@/shared/ui/AccountMenu';
+import { NotificationBell } from '@/features/notifications';
 import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
 
@@ -81,6 +82,7 @@ export default async function ConsoleLayout({
           </span>
           <div className="flex items-center gap-3">
             <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
+            <NotificationBell />
             <ThemeToggle />
             <AccountMenu accountLabel={accountLabel} />
           </div>
