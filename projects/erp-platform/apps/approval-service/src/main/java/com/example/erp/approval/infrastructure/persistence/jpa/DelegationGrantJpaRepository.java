@@ -22,18 +22,25 @@ public interface DelegationGrantJpaRepository extends JpaRepository<DelegationGr
     /**
      * The ACTIVE grant {@code delegatorId → delegateId} whose window contains
      * {@code now} (status=ACTIVE ∧ validFrom ≤ now ∧ (validTo is null ∨ validTo ≥
-     * now)). At most one active grant per pair is expected; if more, the first by
-     * createdAt desc is returned (the resolver re-checks {@code isActiveAt}).
+     * now)) AND whose scope covers {@code approvalRequestId} (TASK-ERP-BE-017:
+     * scope=GLOBAL OR (scope=REQUEST ∧ scope_request_id = approvalRequestId)).
+     * {@code ORDER BY g.scope ASC} makes GLOBAL deterministically precede REQUEST
+     * when both match; the impl takes the first (the resolver re-checks
+     * {@code isActiveAt} + {@code coversRequest}).
      */
     @Query("SELECT g FROM DelegationGrant g WHERE g.tenantId = :tenantId "
             + "AND g.delegatorId = :delegatorId AND g.delegateId = :delegateId "
             + "AND g.status = com.example.erp.approval.domain.delegation.DelegationStatus.ACTIVE "
             + "AND g.validFrom <= :now "
             + "AND (g.validTo IS NULL OR g.validTo >= :now) "
-            + "ORDER BY g.createdAt DESC")
+            + "AND (g.scope = com.example.erp.approval.domain.delegation.DelegationScope.GLOBAL "
+            + "  OR (g.scope = com.example.erp.approval.domain.delegation.DelegationScope.REQUEST "
+            + "      AND g.scopeRequestId = :approvalRequestId)) "
+            + "ORDER BY g.scope ASC, g.createdAt DESC")
     List<DelegationGrant> findActiveGrants(@Param("delegatorId") String delegatorId,
                                            @Param("delegateId") String delegateId,
                                            @Param("tenantId") String tenantId,
+                                           @Param("approvalRequestId") String approvalRequestId,
                                            @Param("now") Instant now);
 
     @Query("SELECT g FROM DelegationGrant g WHERE g.tenantId = :tenantId "

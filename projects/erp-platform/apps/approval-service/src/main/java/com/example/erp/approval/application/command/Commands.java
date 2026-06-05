@@ -1,6 +1,7 @@
 package com.example.erp.approval.application.command;
 
 import com.example.erp.approval.application.ActorContext;
+import com.example.erp.approval.domain.delegation.DelegationScope;
 import com.example.erp.approval.domain.request.SubjectType;
 
 import java.time.Instant;
@@ -51,11 +52,14 @@ public final class Commands {
     /**
      * Create a delegation grant. The delegator A = the caller's {@code sub}
      * ({@code actor.actorId()}); D = {@code delegateId}. {@code validTo} null =
-     * open-ended.
+     * open-ended. TASK-ERP-BE-017 — {@code scope} ({@code null} → GLOBAL) +
+     * {@code scopeRequestId} (REQUEST-scoped grant target; the controller parses the
+     * scope string and an unknown value is a 400 before the command is built).
      */
     public record CreateDelegationCommand(ActorContext actor, String delegateId,
                                           Instant validFrom, Instant validTo,
-                                          String reason) {
+                                          String reason, DelegationScope scope,
+                                          String scopeRequestId) {
     }
 
     public record RevokeDelegationCommand(ActorContext actor, String id, String reason) {

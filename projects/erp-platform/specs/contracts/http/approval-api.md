@@ -76,6 +76,33 @@ exactly one approver (`approverId`).
 > v2.2-deferred: per-request/per-route delegation, auto-absence detection,
 > transitive chaining (§ v2 deferred).
 
+> **v2.3 AMENDMENT (TASK-ERP-BE-017 — per-request delegation scoping, additive).**
+> A delegation grant can be narrowed to ONE approval request (the v2.1 grant is the
+> `GLOBAL` default — blanket over A's whole queue). Additive changes:
+> - **Create body** — `POST /api/erp/approval/delegations` accepts two optional
+>   fields: `scope` (`"GLOBAL"` | `"REQUEST"`, default `GLOBAL`) + `scopeRequestId`
+>   (the target `approvalRequestId` string, ≤64). Coherence: `scope="REQUEST"`
+>   requires a non-blank `scopeRequestId`; `scope="GLOBAL"` forbids it — a violation
+>   → 422 `DELEGATION_INVALID`. An unparseable `scope` string → 400
+>   `VALIDATION_ERROR`. The full create body is now `{ delegateId, validFrom,
+>   validTo?, reason?, scope?, scopeRequestId? }`.
+> - **Grant view** — create + `GET /delegations` responses carry `scope` (always)
+>   + `scopeRequestId` (present only when `REQUEST`; ABSENT when `GLOBAL` —
+>   `@JsonInclude(NON_NULL)`).
+> - **Transition acceptance honors scope** — `approve`/`reject` accept a delegate
+>   only when the delegate holds an active grant that **covers the request being
+>   acted on**: a `GLOBAL` grant covers every request where A is the approver; a
+>   `REQUEST` grant covers ONLY its `scopeRequestId`. A delegate with a
+>   `REQUEST`-scoped grant for a *different* request → 403
+>   `APPROVAL_NOT_AUTHORIZED_APPROVER` (fail-closed). SoD (delegate ≠ submitter) +
+>   `withdraw` submitter-only are unchanged.
+> - **No new error codes.** Reuses `DELEGATION_INVALID` (422) / `VALIDATION_ERROR`
+>   (400) / `APPROVAL_NOT_AUTHORIZED_APPROVER` (403).
+>
+> Clients that send neither field behave **identically to the v2.1 contract**
+> (every grant is `GLOBAL`). v2.2-still-deferred: **per-route** scoping (a
+> route-template identity does not yet exist), auto-absence, transitive chaining.
+
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
   (RS256, GAP JWKS — [`gap-integration.md`](../../integration/gap-integration.md)).

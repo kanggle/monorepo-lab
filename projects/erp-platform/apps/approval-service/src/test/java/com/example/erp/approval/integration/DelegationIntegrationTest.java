@@ -72,11 +72,23 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(status().isOk());
     }
 
-    /** Create a grant delegator→delegate (delegator = token sub). Returns grant id. */
+    /** Create a GLOBAL grant delegator→delegate (delegator = token sub). Returns grant id. */
     private String createGrant(String delegator, String delegate, String validFrom,
                                String validTo, String key) throws Exception {
+        return createGrant(delegator, delegate, validFrom, validTo, key, null, null);
+    }
+
+    /**
+     * Create a grant delegator→delegate with an optional scope ({@code null} =
+     * GLOBAL, request body omits the field) + scopeRequestId. Returns grant id.
+     */
+    private String createGrant(String delegator, String delegate, String validFrom,
+                               String validTo, String key, String scope,
+                               String scopeRequestId) throws Exception {
         String body = "{\"delegateId\":\"" + delegate + "\",\"validFrom\":\"" + validFrom + "\""
                 + (validTo == null ? "" : ",\"validTo\":\"" + validTo + "\"")
+                + (scope == null ? "" : ",\"scope\":\"" + scope + "\"")
+                + (scopeRequestId == null ? "" : ",\"scopeRequestId\":\"" + scopeRequestId + "\"")
                 + ",\"reason\":\"away\"}";
         MvcResult res = mockMvc.perform(post("/api/erp/approval/delegations")
                         .header("Authorization", "Bearer " + token(delegator, "erp.write"))
@@ -350,5 +362,158 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 "SELECT on_behalf_of FROM approval_action WHERE approval_request_id = ? AND actor = ?",
                 String.class, id, "emp-app1");
         assertThat(onBehalfOf).isNull();   // direct approver → no delegation recorded
+    }
+
+    // ---- TASK-ERP-BE-017: per-request scope ----
+
+    @Test
+    @DisplayName("BE-017 AC-1: REQUEST-scoped grant authorizes the delegate for R1 only; "
+            + "R2 of the same approver → 403 APPROVAL_NOT_AUTHORIZED_APPROVER")
+    void requestScopedAuthorizesOneRequestOnly() throws Exception {
+        // two requests, same approver emp-rq-app; grant scoped to R1 only.
+        String r1 = createMultiStage("emp-sub", "k-rq-r1-create", "emp-rq-app");
+        submitOk(r1, "emp-sub", "k-rq-r1-submit");
+        String r2 = createMultiStage("emp-sub", "k-rq-r2-create", "emp-rq-app");
+        submitOk(r2, "emp-sub", "k-rq-r2-submit");
+
+        createGrant("emp-rq-app", "emp-rq-d", FROM, TO, "k-rq-grant", "REQUEST", r1);
+
+        // delegate approves R1 → authorized (scope covers R1).
+        mockMvc.perform(post("/api/erp/approval/requests/" + r1 + "/approve")
+                        .header("Authorization", "Bearer " + token("emp-rq-d", "erp.write"))
+                        .header("Idempotency-Key", "k-rq-r1-approve")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+
+        // delegate approves R2 → fail-closed (scope does not cover R2).
+        mockMvc.perform(post("/api/erp/approval/requests/" + r2 + "/approve")
+                        .header("Authorization", "Bearer " + token("emp-rq-d", "erp.write"))
+                        .header("Idempotency-Key", "k-rq-r2-approve")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPROVAL_NOT_AUTHORIZED_APPROVER"));
+    }
+
+    @Test
+    @DisplayName("BE-017 AC-2 regression: a GLOBAL grant still authorizes any request "
+            + "(byte-unchanged blanket behavior)")
+    void globalGrantUnchangedAcrossRequests() throws Exception {
+        createGrant("emp-gl-app", "emp-gl-d", FROM, TO, "k-gl-grant");
+        // two distinct requests of the same approver — GLOBAL covers both.
+        String rA = createMultiStage("emp-sub", "k-gl-rA-create", "emp-gl-app");
+        submitOk(rA, "emp-sub", "k-gl-rA-submit");
+        String rB = createMultiStage("emp-sub", "k-gl-rB-create", "emp-gl-app");
+        submitOk(rB, "emp-sub", "k-gl-rB-submit");
+
+        mockMvc.perform(post("/api/erp/approval/requests/" + rA + "/approve")
+                        .header("Authorization", "Bearer " + token("emp-gl-d", "erp.write"))
+                        .header("Idempotency-Key", "k-gl-rA-approve")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+        mockMvc.perform(post("/api/erp/approval/requests/" + rB + "/approve")
+                        .header("Authorization", "Bearer " + token("emp-gl-d", "erp.write"))
+                        .header("Idempotency-Key", "k-gl-rB-approve")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+    }
+
+    @Test
+    @DisplayName("BE-017 AC-4: REQUEST grant view carries scope=REQUEST + scopeRequestId; "
+            + "GLOBAL view scopeRequestId ABSENT")
+    void viewCarriesScope() throws Exception {
+        MvcResult reqRes = mockMvc.perform(post("/api/erp/approval/delegations")
+                        .header("Authorization", "Bearer " + token("emp-vw-app", "erp.write"))
+                        .header("Idempotency-Key", "k-vw-req")
+                        .contentType("application/json")
+                        .content("{\"delegateId\":\"emp-vw-d\",\"validFrom\":\"" + FROM
+                                + "\",\"scope\":\"REQUEST\",\"scopeRequestId\":\"appr-vw-1\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.scope").value("REQUEST"))
+                .andExpect(jsonPath("$.data.scopeRequestId").value("appr-vw-1"))
+                .andReturn();
+        assertThat(reqRes.getResponse().getContentAsString()).contains("\"scope\":\"REQUEST\"");
+
+        // GLOBAL (default) → scope present, scopeRequestId ABSENT.
+        mockMvc.perform(post("/api/erp/approval/delegations")
+                        .header("Authorization", "Bearer " + token("emp-vw-app2", "erp.write"))
+                        .header("Idempotency-Key", "k-vw-global")
+                        .contentType("application/json")
+                        .content("{\"delegateId\":\"emp-vw-d2\",\"validFrom\":\"" + FROM + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.scope").value("GLOBAL"))
+                .andExpect(jsonPath("$.data.scopeRequestId").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("BE-017 AC-3: REQUEST scope with blank scopeRequestId → 422 DELEGATION_INVALID; "
+            + "GLOBAL with a scopeRequestId → 422; unknown scope string → 400 VALIDATION_ERROR")
+    void scopeCoherenceAndUnknownScope() throws Exception {
+        // REQUEST without scopeRequestId → 422 (coherence).
+        mockMvc.perform(post("/api/erp/approval/delegations")
+                        .header("Authorization", "Bearer " + token("emp-a", "erp.write"))
+                        .header("Idempotency-Key", "k-sc-req-noid")
+                        .contentType("application/json")
+                        .content("{\"delegateId\":\"emp-d\",\"validFrom\":\"" + FROM
+                                + "\",\"scope\":\"REQUEST\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DELEGATION_INVALID"));
+
+        // GLOBAL with a scopeRequestId → 422 (coherence).
+        mockMvc.perform(post("/api/erp/approval/delegations")
+                        .header("Authorization", "Bearer " + token("emp-a", "erp.write"))
+                        .header("Idempotency-Key", "k-sc-global-id")
+                        .contentType("application/json")
+                        .content("{\"delegateId\":\"emp-d\",\"validFrom\":\"" + FROM
+                                + "\",\"scope\":\"GLOBAL\",\"scopeRequestId\":\"appr-x\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DELEGATION_INVALID"));
+
+        // unknown scope string → 400 (client error, not 422).
+        mockMvc.perform(post("/api/erp/approval/delegations")
+                        .header("Authorization", "Bearer " + token("emp-a", "erp.write"))
+                        .header("Idempotency-Key", "k-sc-unknown")
+                        .contentType("application/json")
+                        .content("{\"delegateId\":\"emp-d\",\"validFrom\":\"" + FROM
+                                + "\",\"scope\":\"PER_ROUTE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("BE-017 AC-7 (§16): DB CHECK rejects scope=REQUEST with null scope_request_id "
+            + "(coherence enforced at the database, bypassing the factory)")
+    void checkConstraintRejectsIncoherentRow() {
+        // A native insert bypassing the domain factory must be rejected by
+        // ck_delegation_grant_scope_req (Docker-free :check would falsely pass).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO delegation_grant (id, tenant_id, delegator_id, delegate_id, "
+                        + "valid_from, status, created_at, created_by, version, scope, scope_request_id) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "dgr-bad-1", TENANT_ERP, "emp-a", "emp-d",
+                java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
+                "ACTIVE", java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
+                "emp-a", 0L, "REQUEST", null))
+                // MySQL surfaces a CHECK violation as SQLState HY000 / error 3819, which
+                // Spring's SQLExceptionTranslator categorizes as UncategorizedSQLException
+                // (not DataIntegrityViolationException) — assert the common DataAccessException
+                // parent + the constraint name so the intent (the DB rejected the row) holds
+                // regardless of Spring's exact categorization.
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_delegation_grant_scope_req");
+
+        // Symmetric: GLOBAL with a non-null scope_request_id is also rejected.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO delegation_grant (id, tenant_id, delegator_id, delegate_id, "
+                        + "valid_from, status, created_at, created_by, version, scope, scope_request_id) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "dgr-bad-2", TENANT_ERP, "emp-a", "emp-d",
+                java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
+                "ACTIVE", java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
+                "emp-a", 0L, "GLOBAL", "appr-x"))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_delegation_grant_scope_req");
     }
 }

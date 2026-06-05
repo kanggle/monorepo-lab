@@ -88,6 +88,13 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
         if (g.getReason() != null && !g.getReason().isBlank()) {
             p.put("reason", g.getReason());
         }
+        // TASK-ERP-BE-017 — scope always present; scopeRequestId only for REQUEST
+        // (NON_NULL absent for GLOBAL). Producer-only forward (BE-018 / PC-FE-056
+        // project later; current consumers ignore the unknown fields).
+        p.put("scope", g.getScope().name());
+        if (g.getScopeRequestId() != null && !g.getScopeRequestId().isBlank()) {
+            p.put("scopeRequestId", g.getScopeRequestId());
+        }
         p.put("tenantId", g.getTenantId());
         p.put("occurredAt", Instant.now().toString());
         p.put("actor", actor);

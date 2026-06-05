@@ -1,6 +1,7 @@
 package com.example.erp.approval.application.event;
 
 import com.example.erp.approval.domain.delegation.DelegationGrant;
+import com.example.erp.approval.domain.delegation.DelegationScope;
 import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +50,12 @@ class ApprovalEventPublisherTest {
 
     private DelegationGrant grant(String reason) {
         return DelegationGrant.create("dgr-1", "erp", "emp-a", "emp-d", FROM, TO,
-                reason, "emp-a", FROM);
+                reason, DelegationScope.GLOBAL, null, "emp-a", FROM);
+    }
+
+    private DelegationGrant requestGrant() {
+        return DelegationGrant.create("dgr-2", "erp", "emp-a", "emp-d", FROM, TO,
+                "cover R1", DelegationScope.REQUEST, "appr-1", "emp-a", FROM);
     }
 
     @Test
@@ -92,5 +98,34 @@ class ApprovalEventPublisherTest {
         JsonNode p = objectMapper.readTree(payloadCaptor.getValue()).at("/payload");
         assertThat(p.has("reason")).isFalse();
         assertThat(p.at("/actor").asText()).isEqualTo("emp-ops");
+    }
+
+    // ---- TASK-ERP-BE-017: delegated payload carries scope / scopeRequestId ----
+
+    @Test
+    @DisplayName("publishDelegated GLOBAL → scope=GLOBAL present, scopeRequestId ABSENT")
+    void publishDelegatedGlobalScope() throws Exception {
+        publisher.publishDelegated(grant("vacation"), "emp-a");
+
+        verify(outboxWriter).save(aggregateTypeCaptor.capture(), aggregateIdCaptor.capture(),
+                eventTypeCaptor.capture(), payloadCaptor.capture());
+
+        assertThat(eventTypeCaptor.getValue()).isEqualTo("erp.approval.delegated");
+        JsonNode p = objectMapper.readTree(payloadCaptor.getValue()).at("/payload");
+        assertThat(p.at("/scope").asText()).isEqualTo("GLOBAL");
+        assertThat(p.has("scopeRequestId")).isFalse();
+    }
+
+    @Test
+    @DisplayName("publishDelegated REQUEST → scope=REQUEST + scopeRequestId present")
+    void publishDelegatedRequestScope() throws Exception {
+        publisher.publishDelegated(requestGrant(), "emp-a");
+
+        verify(outboxWriter).save(aggregateTypeCaptor.capture(), aggregateIdCaptor.capture(),
+                eventTypeCaptor.capture(), payloadCaptor.capture());
+
+        JsonNode p = objectMapper.readTree(payloadCaptor.getValue()).at("/payload");
+        assertThat(p.at("/scope").asText()).isEqualTo("REQUEST");
+        assertThat(p.at("/scopeRequestId").asText()).isEqualTo("appr-1");
     }
 }

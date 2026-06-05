@@ -33,8 +33,9 @@ public class DelegationGrantRepositoryImpl implements DelegationGrantRepository 
 
     @Override
     public Optional<DelegationGrant> findActiveGrant(String delegatorId, String delegateId,
-                                                     String tenantId, Instant now) {
-        return jpa.findActiveGrants(delegatorId, delegateId, tenantId, now)
+                                                     String tenantId, String approvalRequestId,
+                                                     Instant now) {
+        return jpa.findActiveGrants(delegatorId, delegateId, tenantId, approvalRequestId, now)
                 .stream().findFirst();
     }
 
