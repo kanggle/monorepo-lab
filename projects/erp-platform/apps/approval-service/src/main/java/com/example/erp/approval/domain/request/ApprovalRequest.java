@@ -175,9 +175,22 @@ public class ApprovalRequest {
      * {@code finalizedAt} unset; the final approval stamps {@code finalizedAt}.
      */
     public void approve(String actorId, ApprovalRoute route, Instant now) {
+        approve(actorId, route, null, now);
+    }
+
+    /**
+     * Delegation-aware approve (TASK-ERP-BE-013, architecture.md § v2.1). When a
+     * delegate acts, {@code onBehalfOf} = the stage approver A the delegate stands
+     * in for; the aggregate validates that the <b>effective approver</b>
+     * ({@code onBehalfOf != null ? onBehalfOf : actorId}) is the CURRENT stage's
+     * approver — preserving the T4/SoD invariant in the domain (the route position
+     * always advances against its real approver, never the delegate). The
+     * 3-arg overload is the {@code onBehalfOf = null} (direct) case.
+     */
+    public void approve(String actorId, ApprovalRoute route, String onBehalfOf, Instant now) {
         boolean isLastStage = route.isLastStage(this.currentStageIndex);
         ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.APPROVE, isLastStage);
-        ensureActingStageApprover(actorId, route);
+        ensureEffectiveStageApprover(actorId, onBehalfOf, route);
         if (to == ApprovalStatus.IN_REVIEW) {
             this.currentStageIndex++;
             this.approverId = route.approverAt(this.currentStageIndex).approverId();
@@ -196,9 +209,20 @@ public class ApprovalRequest {
      * stage finalizes the request.
      */
     public void reject(String actorId, ApprovalRoute route, String reason, Instant now) {
+        reject(actorId, route, null, reason, now);
+    }
+
+    /**
+     * Delegation-aware reject (TASK-ERP-BE-013). {@code onBehalfOf} = the stage
+     * approver A a delegate stands in for; the effective approver must be the
+     * current stage's approver (same invariant as {@link #approve}). The 4-arg
+     * overload is the {@code onBehalfOf = null} (direct) case.
+     */
+    public void reject(String actorId, ApprovalRoute route, String onBehalfOf,
+                       String reason, Instant now) {
         // reject is stage-independent for the next-state (isLastStage ignored).
         ApprovalStatus to = ApprovalStateMachine.next(this.status, ApprovalCommand.REJECT, true);
-        ensureActingStageApprover(actorId, route);
+        ensureEffectiveStageApprover(actorId, onBehalfOf, route);
         ensureReasonPresent(reason, "reject");
         this.status = to;
         this.finalizedAt = now;
@@ -223,11 +247,24 @@ public class ApprovalRequest {
         return status == ApprovalStatus.IN_REVIEW;
     }
 
-    private void ensureActingStageApprover(String actorId, ApprovalRoute route) {
-        if (!route.isApproverAt(this.currentStageIndex, actorId)) {
+    /**
+     * The <b>effective approver</b> ({@code onBehalfOf != null ? onBehalfOf :
+     * actorId}) MUST be the current stage's approver (T4/SoD). When a delegate
+     * acts ({@code onBehalfOf != null}), the route position is validated against
+     * the real approver A — the delegate never becomes the stage approver, only
+     * acts for them. The application layer authorizes that {@code actorId} is a
+     * valid delegate of {@code onBehalfOf} BEFORE this is reached
+     * (architecture.md § v2.1 — transition-time resolution).
+     */
+    private void ensureEffectiveStageApprover(String actorId, String onBehalfOf,
+                                              ApprovalRoute route) {
+        String effective = onBehalfOf != null ? onBehalfOf : actorId;
+        if (!route.isApproverAt(this.currentStageIndex, effective)) {
             throw new ApprovalNotAuthorizedApproverException(
-                    "principal '" + actorId + "' is not the current stage ("
-                            + this.currentStageIndex + ") approver '"
+                    "principal '" + actorId + "'"
+                            + (onBehalfOf != null ? " (acting for '" + onBehalfOf + "')" : "")
+                            + " is not the current stage (" + this.currentStageIndex
+                            + ") approver '"
                             + route.approverAt(this.currentStageIndex).approverId() + "'");
         }
     }

@@ -77,10 +77,23 @@ public class ApprovalAuditLog {
     public static ApprovalAuditLog of(String eventId, String tenantId, String aggregateId,
                                       String action, String actor, String beforeState,
                                       String afterState, String reason, Instant occurredAt) {
+        return of(eventId, tenantId, "ApprovalRequest", aggregateId, action, actor,
+                beforeState, afterState, reason, occurredAt);
+    }
+
+    /**
+     * Audit row for an arbitrary aggregate type (TASK-ERP-BE-013 — the
+     * {@code DelegationGrant} create/revoke audit uses {@code aggregateType =
+     * "DelegationGrant"}; approval transitions keep {@code "ApprovalRequest"}).
+     */
+    public static ApprovalAuditLog of(String eventId, String tenantId, String aggregateType,
+                                      String aggregateId, String action, String actor,
+                                      String beforeState, String afterState, String reason,
+                                      Instant occurredAt) {
         ApprovalAuditLog row = new ApprovalAuditLog();
         row.eventId = eventId;
         row.tenantId = tenantId;
-        row.aggregateType = "ApprovalRequest";
+        row.aggregateType = aggregateType;
         row.aggregateId = aggregateId;
         row.action = action;
         row.actor = actor;

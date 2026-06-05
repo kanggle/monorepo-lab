@@ -3,6 +3,7 @@ package com.example.erp.approval.application.command;
 import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.domain.request.SubjectType;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -43,5 +44,20 @@ public final class Commands {
     }
 
     public record WithdrawCommand(ActorContext actor, String id, String reason) {
+    }
+
+    // ---- delegation (TASK-ERP-BE-013, 대결/위임) ----
+
+    /**
+     * Create a delegation grant. The delegator A = the caller's {@code sub}
+     * ({@code actor.actorId()}); D = {@code delegateId}. {@code validTo} null =
+     * open-ended.
+     */
+    public record CreateDelegationCommand(ActorContext actor, String delegateId,
+                                          Instant validFrom, Instant validTo,
+                                          String reason) {
+    }
+
+    public record RevokeDelegationCommand(ActorContext actor, String id, String reason) {
     }
 }

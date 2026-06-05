@@ -1,5 +1,6 @@
 package com.example.erp.approval.application.event;
 
+import com.example.erp.approval.domain.delegation.DelegationGrant;
 import com.example.erp.approval.domain.request.ApprovalRequest;
 import com.example.erp.approval.domain.request.ApprovalStatus;
 import com.example.messaging.event.BaseEventPublisher;
@@ -25,11 +26,15 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
 
     public static final String SOURCE = "erp-platform-approval-service";
     public static final String AGGREGATE_TYPE = "ApprovalRequest";
+    /** TASK-ERP-BE-013 — the delegated event's aggregate type. */
+    public static final String DELEGATION_AGGREGATE_TYPE = "DelegationGrant";
 
     public static final String EVENT_APPROVAL_SUBMITTED = "erp.approval.submitted";
     public static final String EVENT_APPROVAL_APPROVED = "erp.approval.approved";
     public static final String EVENT_APPROVAL_REJECTED = "erp.approval.rejected";
     public static final String EVENT_APPROVAL_WITHDRAWN = "erp.approval.withdrawn";
+    /** TASK-ERP-BE-013 — new topic, emitted on DelegationGrant create. */
+    public static final String EVENT_APPROVAL_DELEGATED = "erp.approval.delegated";
 
     public ApprovalEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
         super(outboxWriter, objectMapper);
@@ -37,22 +42,54 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
 
     public void publishSubmitted(ApprovalRequest r, String actor) {
         writeEvent(AGGREGATE_TYPE, r.getId(), EVENT_APPROVAL_SUBMITTED, SOURCE,
-                payload(r, actor, null, null));
+                payload(r, actor, null, null, null));
     }
 
-    public void publishApproved(ApprovalRequest r, String actor, String reason) {
+    /**
+     * {@code actingForApproverId} (TASK-ERP-BE-013) = the stage approver A when a
+     * delegate performed the approval on A's behalf; {@code null} (ABSENT) when the
+     * approver acted themselves.
+     */
+    public void publishApproved(ApprovalRequest r, String actor, String reason,
+                                String actingForApproverId) {
         writeEvent(AGGREGATE_TYPE, r.getId(), EVENT_APPROVAL_APPROVED, SOURCE,
-                payload(r, actor, r.getFinalizedAt(), reason));
+                payload(r, actor, r.getFinalizedAt(), reason, actingForApproverId));
     }
 
-    public void publishRejected(ApprovalRequest r, String actor, String reason) {
+    public void publishRejected(ApprovalRequest r, String actor, String reason,
+                                String actingForApproverId) {
         writeEvent(AGGREGATE_TYPE, r.getId(), EVENT_APPROVAL_REJECTED, SOURCE,
-                payload(r, actor, r.getFinalizedAt(), reason));
+                payload(r, actor, r.getFinalizedAt(), reason, actingForApproverId));
     }
 
     public void publishWithdrawn(ApprovalRequest r, String actor, String reason) {
         writeEvent(AGGREGATE_TYPE, r.getId(), EVENT_APPROVAL_WITHDRAWN, SOURCE,
-                payload(r, actor, r.getFinalizedAt(), reason));
+                payload(r, actor, r.getFinalizedAt(), reason, null));
+    }
+
+    /**
+     * NEW topic {@code erp.approval.delegated.v1} (TASK-ERP-BE-013) — emitted on
+     * DelegationGrant create. aggregateType = {@code DelegationGrant}, aggregateId
+     * = partition key = grantId. Producer-only forward interface; the existing
+     * consumers do not subscribe. {@code validTo} / {@code reason} ABSENT when
+     * null (NON_NULL).
+     */
+    public void publishDelegated(DelegationGrant g, String actor) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("grantId", g.getId());
+        p.put("delegatorId", g.getDelegatorId());
+        p.put("delegateId", g.getDelegateId());
+        p.put("validFrom", g.getValidFrom().toString());
+        if (g.getValidTo() != null) {
+            p.put("validTo", g.getValidTo().toString());
+        }
+        if (g.getReason() != null && !g.getReason().isBlank()) {
+            p.put("reason", g.getReason());
+        }
+        p.put("tenantId", g.getTenantId());
+        p.put("occurredAt", Instant.now().toString());
+        p.put("actor", actor);
+        writeEvent(DELEGATION_AGGREGATE_TYPE, g.getId(), EVENT_APPROVAL_DELEGATED, SOURCE, p);
     }
 
     /**
@@ -66,7 +103,8 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
      * {@code approverId} at emit time).
      */
     private static Map<String, Object> payload(ApprovalRequest r, String actor,
-                                               Instant finalizedAt, String reason) {
+                                               Instant finalizedAt, String reason,
+                                               String actingForApproverId) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("approvalRequestId", r.getId());
         p.put("subjectType", r.getSubjectType().name());
@@ -83,6 +121,11 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
         }
         if (reason != null && !reason.isBlank()) {
             p.put("reason", reason);
+        }
+        // TASK-ERP-BE-013 — present only when a delegate acted (NON_NULL absent
+        // otherwise); existing consumers ignore the unknown field.
+        if (actingForApproverId != null && !actingForApproverId.isBlank()) {
+            p.put("actingForApproverId", actingForApproverId);
         }
         return p;
     }

@@ -2,6 +2,7 @@ package com.example.erp.approval.application;
 
 import com.example.erp.approval.application.command.Commands.ApproveCommand;
 import com.example.erp.approval.application.command.Commands.CreateDraftCommand;
+import com.example.erp.approval.application.command.Commands.RejectCommand;
 import com.example.erp.approval.application.command.Commands.SubmitCommand;
 import com.example.erp.approval.application.event.ApprovalEventPublisher;
 import com.example.erp.approval.application.port.outbound.AuthorizationPort;
@@ -9,6 +10,9 @@ import com.example.erp.approval.application.port.outbound.ClockPort;
 import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
+import com.example.erp.approval.domain.delegation.DelegationGrant;
+import com.example.erp.approval.domain.delegation.DelegationGrantRepository;
+import com.example.erp.approval.domain.delegation.DelegationResolver;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalNotAuthorizedApproverException;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRequestNotFoundException;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRouteInvalidException;
@@ -69,14 +73,17 @@ class ApprovalApplicationServiceTest {
     @Mock ApprovalEventPublisher eventPublisher;
     @Mock MasterDataPort masterDataPort;
     @Mock AuthorizationPort authorizationPort;
+    @Mock DelegationGrantRepository delegationGrantRepository;
     @Mock ClockPort clock;
 
     ApprovalApplicationService service;
 
     @BeforeEach
     void stubDefaults() {
+        DelegationResolver delegationResolver = new DelegationResolver(delegationGrantRepository);
         service = new ApprovalApplicationService(requestRepository, auditLogRepository,
-                eventPublisher, masterDataPort, authorizationPort, clock, new ObjectMapper());
+                eventPublisher, masterDataPort, authorizationPort, delegationResolver,
+                clock, new ObjectMapper());
         lenient().when(clock.now()).thenReturn(NOW);
         lenient().when(requestRepository.save(any(ApprovalRequest.class)))
                 .thenAnswer(i -> i.getArgument(0));
@@ -221,7 +228,7 @@ class ApprovalApplicationServiceTest {
         var view = service.approve(new ApproveCommand(APPROVER, "appr-1", null));
 
         assertThat(view.status()).isEqualTo("APPROVED");
-        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), any(), any());
+        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), any(), any(), any());
     }
 
     @Test
@@ -236,7 +243,7 @@ class ApprovalApplicationServiceTest {
                 Set.of("erp.write"), Set.of("*"));
         assertThatThrownBy(() -> service.approve(new ApproveCommand(wrong, "appr-1", null)))
                 .isInstanceOf(ApprovalNotAuthorizedApproverException.class);
-        verify(eventPublisher, never()).publishApproved(any(), any(), any());
+        verify(eventPublisher, never()).publishApproved(any(), any(), any(), any());
     }
 
     // ---- multi-stage event-emission points (TASK-ERP-BE-012) ----
@@ -256,7 +263,7 @@ class ApprovalApplicationServiceTest {
         // audit + action row written, but no outbox event on the intermediate stage.
         verify(requestRepository).appendAction(any(ApprovalAction.class));
         verify(auditLogRepository).append(any(ApprovalAuditLog.class));
-        verify(eventPublisher, never()).publishApproved(any(), any(), any());
+        verify(eventPublisher, never()).publishApproved(any(), any(), any(), any());
     }
 
     @Test
@@ -274,7 +281,114 @@ class ApprovalApplicationServiceTest {
         var view = service.approve(new ApproveCommand(stage1, "appr-1", null));
 
         assertThat(view.status()).isEqualTo("APPROVED");
-        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), any(), any());
+        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), any(), any(), any());
+    }
+
+    // ---- delegation (대결) approve resolution (TASK-ERP-BE-013) ----
+
+    private DelegationGrant activeGrant(String delegator, String delegate) {
+        return DelegationGrant.create("dgr-1", TENANT, delegator, delegate,
+                Instant.parse("2026-06-01T00:00:00Z"),
+                Instant.parse("2026-06-30T00:00:00Z"), null, delegator,
+                Instant.parse("2026-06-01T00:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("delegated approve: active grant A→D, D approves → APPROVED, onBehalfOf=A in event")
+    void delegatedApprove() {
+        ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+                .thenReturn(Optional.of(activeGrant("emp-app", "emp-d")));
+
+        ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));
+        var view = service.approve(new ApproveCommand(delegate, "appr-1", null));
+
+        assertThat(view.status()).isEqualTo("APPROVED");
+        // actingForApproverId = the stage approver A (= emp-app) is carried to the event.
+        verify(eventPublisher).publishApproved(any(ApprovalRequest.class), org.mockito.ArgumentMatchers.eq("emp-d"),
+                any(), org.mockito.ArgumentMatchers.eq("emp-app"));
+        // the audit/action row records actor=D + onBehalfOf=A.
+        org.mockito.ArgumentCaptor<ApprovalAction> actionCaptor =
+                org.mockito.ArgumentCaptor.forClass(ApprovalAction.class);
+        verify(requestRepository).appendAction(actionCaptor.capture());
+        assertThat(actionCaptor.getValue().getActor()).isEqualTo("emp-d");
+        assertThat(actionCaptor.getValue().getOnBehalfOf()).isEqualTo("emp-app");
+    }
+
+    @Test
+    @DisplayName("no active grant for the other principal → APPROVAL_NOT_AUTHORIZED_APPROVER")
+    void noGrantOtherPrincipal() {
+        ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-other", TENANT, NOW))
+                .thenReturn(Optional.empty());
+
+        ActorContext other = new ActorContext("emp-other", TENANT, Set.of("erp.write"), Set.of("*"));
+        assertThatThrownBy(() -> service.approve(new ApproveCommand(other, "appr-1", null)))
+                .isInstanceOf(ApprovalNotAuthorizedApproverException.class);
+        verify(eventPublisher, never()).publishApproved(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("delegate == submitter → refused (self-approval-via-delegation, SoD)")
+    void delegateIsSubmitterRefused() {
+        // route: submitter=emp-sub, approver=emp-app. A grant emp-app→emp-sub would let
+        // the submitter approve via delegation — must be refused.
+        ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-sub", TENANT, NOW))
+                .thenReturn(Optional.of(activeGrant("emp-app", "emp-sub")));
+
+        ActorContext submitterAsDelegate = new ActorContext("emp-sub", TENANT,
+                Set.of("erp.write"), Set.of("*"));
+        assertThatThrownBy(() -> service.approve(new ApproveCommand(submitterAsDelegate, "appr-1", null)))
+                .isInstanceOf(ApprovalNotAuthorizedApproverException.class);
+        verify(eventPublisher, never()).publishApproved(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("expired grant → not authorized (isActiveAt re-check fails)")
+    void expiredGrantNotAuthorized() {
+        ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
+        DelegationGrant expired = DelegationGrant.create("dgr-2", TENANT, "emp-app", "emp-d",
+                Instant.parse("2026-05-01T00:00:00Z"),
+                Instant.parse("2026-05-31T00:00:00Z"), null, "emp-app",
+                Instant.parse("2026-05-01T00:00:00Z"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+                .thenReturn(Optional.of(expired));
+
+        ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));
+        assertThatThrownBy(() -> service.approve(new ApproveCommand(delegate, "appr-1", null)))
+                .isInstanceOf(ApprovalNotAuthorizedApproverException.class);
+    }
+
+    @Test
+    @DisplayName("delegated reject: active grant A→D, D rejects (reason) → REJECTED, onBehalfOf=A in event")
+    void delegatedReject() {
+        ApprovalRequest submitted = draftFor("emp-sub", "emp-app");
+        submitted.submit(NOW);
+        when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
+        stubRoute("emp-sub", List.of("emp-app"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+                .thenReturn(Optional.of(activeGrant("emp-app", "emp-d")));
+
+        ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));
+        var view = service.reject(new RejectCommand(delegate, "appr-1", "not ok"));
+
+        assertThat(view.status()).isEqualTo("REJECTED");
+        verify(eventPublisher).publishRejected(any(ApprovalRequest.class),
+                org.mockito.ArgumentMatchers.eq("emp-d"), any(),
+                org.mockito.ArgumentMatchers.eq("emp-app"));
     }
 
     private static String eqTenant() {
