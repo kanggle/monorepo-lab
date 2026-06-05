@@ -2,9 +2,11 @@ package com.example.erp.notification.infrastructure.messaging;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
 import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationRevokedCommand;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
+import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -153,5 +155,58 @@ public class EnvelopeToCommandMapper {
                 envelope.payloadString("validTo"),
                 envelope.payloadString("reason"));
         return new NotifyOnDelegationCommand(event, topic);
+    }
+
+    /**
+     * Maps the {@code erp.approval.delegation.revoked.v1} envelope to a
+     * {@link NotifyOnDelegationRevokedCommand} (TASK-ERP-BE-016). Parallel to
+     * {@link #mapDelegation} — the revoke payload has NO validity window
+     * ({@code grantId} / {@code delegatorId} / {@code delegateId} / {@code reason?}).
+     * Invalid envelope, non-{@code erp} tenant, or a null {@code delegateId}
+     * (the recipient) → {@link InvalidEnvelopeException} → immediate DLT.
+     */
+    public NotifyOnDelegationRevokedCommand mapDelegationRevoked(String rawValue, String topic) {
+        ApprovalEventEnvelope envelope;
+        try {
+            envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
+        } catch (Exception e) {
+            throw new InvalidEnvelopeException("Unparseable envelope on topic " + topic
+                    + ": " + e.getMessage());
+        }
+        if (envelope == null || !envelope.isValid()) {
+            throw new InvalidEnvelopeException("Invalid envelope (missing eventId/aggregateId/"
+                    + "payload) on topic " + topic);
+        }
+        String tenantId = envelope.payloadString("tenantId");
+        if (tenantId == null || tenantId.isBlank()) {
+            tenantId = envelope.tenantId();
+        }
+        if (tenantId == null || !requiredTenantId.equals(tenantId)) {
+            throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
+                    + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
+        }
+
+        String grantId = envelope.payloadString("grantId");
+        if (grantId == null || grantId.isBlank()) {
+            grantId = envelope.aggregateId();
+        }
+        String delegateId = envelope.payloadString("delegateId");
+        if (delegateId == null || delegateId.isBlank()) {
+            throw new InvalidEnvelopeException("Null delegateId (recipient) on topic " + topic
+                    + " (cannot deliver a revoke notification to an absent delegate)");
+        }
+        String delegatorId = envelope.payloadString("delegatorId");
+        if (delegatorId == null || delegatorId.isBlank()) {
+            throw new InvalidEnvelopeException("Missing delegatorId on topic " + topic);
+        }
+
+        DelegationRevokedEvent event = new DelegationRevokedEvent(
+                envelope.eventId(),
+                tenantId,
+                grantId,
+                delegatorId,
+                delegateId,
+                envelope.payloadString("reason"));
+        return new NotifyOnDelegationRevokedCommand(event, topic);
     }
 }

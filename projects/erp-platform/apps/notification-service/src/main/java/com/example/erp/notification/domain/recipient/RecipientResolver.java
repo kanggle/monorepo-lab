@@ -2,6 +2,7 @@ package com.example.erp.notification.domain.recipient;
 
 import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
+import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 
 /**
  * Resolves each approval transition to exactly ONE recipient employee id — the
@@ -28,8 +29,8 @@ public final class RecipientResolver {
         return switch (event.type()) {
             case APPROVAL_SUBMITTED, APPROVAL_WITHDRAWN -> new Recipient(event.approverId());
             case APPROVAL_APPROVED, APPROVAL_REJECTED -> new Recipient(event.submitterId());
-            case DELEGATION_GRANTED -> throw new IllegalStateException(
-                    "DELEGATION_GRANTED is not an approval-transition event (use the DelegationEvent overload)");
+            case DELEGATION_GRANTED, DELEGATION_REVOKED -> throw new IllegalStateException(
+                    "delegation events are not approval-transition events (use the delegation overloads)");
         };
     }
 
@@ -39,6 +40,15 @@ public final class RecipientResolver {
      * payload id; no outbound call.
      */
     public Recipient resolve(DelegationEvent event) {
+        return new Recipient(event.delegateId());
+    }
+
+    /**
+     * Resolves a delegation-revoked event to the **delegate** — the employee who
+     * LOSES the delegated authority (TASK-ERP-BE-016). Symmetric to the granted
+     * overload; pure pick from the payload id.
+     */
+    public Recipient resolve(DelegationRevokedEvent event) {
         return new Recipient(event.delegateId());
     }
 }

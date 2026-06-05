@@ -3,6 +3,7 @@ package com.example.erp.notification.domain.recipient;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
+import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,5 +54,13 @@ class RecipientResolverTest {
         DelegationEvent d = new DelegationEvent("evt-d", "erp", "dgr-1",
                 "emp-A", "emp-D", "2026-06-06T00:00:00Z", null, null);
         assertThat(resolver.resolve(d).employeeId()).isEqualTo("emp-D");
+    }
+
+    @Test
+    void revokedNotifiesDelegate() {
+        // TASK-ERP-BE-016: the employee who LOSES the delegated authority.
+        DelegationRevokedEvent r = new DelegationRevokedEvent("evt-r", "erp", "dgr-1",
+                "emp-A", "emp-D", "휴가 복귀");
+        assertThat(resolver.resolve(r).employeeId()).isEqualTo("emp-D");
     }
 }

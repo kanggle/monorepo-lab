@@ -58,16 +58,22 @@ path — the four transition consumers are **byte-unchanged**.
 | Topic | Producer | Recipient resolution | Notification type |
 |---|---|---|---|
 | `erp.approval.delegated.v1` | approval-service | `payload.delegateId` (the employee who **received** the delegation authority is told they may now act on the delegator's behalf) | `DELEGATION_GRANTED` |
+| `erp.approval.delegation.revoked.v1` | approval-service | `payload.delegateId` (the employee who **loses** the delegated authority is told it was revoked — TASK-ERP-BE-016) | `DELEGATION_REVOKED` |
 
 - `aggregateId` (= `grantId`) → partition key; written to `Notification.sourceId`
-  with `sourceType = DELEGATION`.
-- `payload.delegateId` — the resolved recipient; null/blank → invalid → immediate
-  DLT (cannot deliver to an absent recipient).
-- `payload.delegatorId` / `payload.validFrom` — always present; composed into the
-  body. `payload.validTo` ABSENT = open-ended ("무기한"); `payload.reason` ABSENT
-  when none (`@JsonInclude(NON_NULL)` — same absent-field convention).
-- Grant **revoke** emits **no** event (`erp-approval-events.md` v2.1 — audit only),
-  so there is no revoke notification (deliberate, recorded — not a silent drop).
+  with `sourceType = DELEGATION` (both delegation events).
+- `payload.delegateId` — the resolved recipient (both events); null/blank →
+  invalid → immediate DLT (cannot deliver to an absent recipient).
+- **granted** (`erp.approval.delegated.v1`): `payload.delegatorId` /
+  `payload.validFrom` always present; `payload.validTo` ABSENT = open-ended
+  ("무기한"); `payload.reason` ABSENT when none. Rendered via `DelegationEvent`.
+- **revoked** (`erp.approval.delegation.revoked.v1`, TASK-ERP-BE-016): the revoke
+  payload has **no validity window** (`grantId` / `delegatorId` / `delegateId` /
+  `reason?` — `erp-approval-events.md` § v2.2), so it is consumed by a separate
+  parallel mapper path (`DelegationRevokedEvent`); the granted path + the four
+  transition consumers are **byte-unchanged**. The producer emits it ONLY on an
+  ACTIVE→REVOKED transition (ERP-BE-015), so a notification is created once per
+  real revoke.
 
 > **`erp.masterdata.*.changed.v1` (masterdata-change notifications) are NOT
 > consumed** in this increment — master-change / permission-change / data-scope
@@ -173,9 +179,9 @@ later increment wires against a known gap rather than discovering a silent drop:
   forward-declared in the catalog, owned by the v2 permission increment; not
   emitted, so not consumed. (Delegation `erp.approval.delegated.v1` **is** now
   consumed — § Consumed topic — delegation, TASK-ERP-BE-014.)
-- **Delegation revoke notification** — `erp-approval-events.md` v2.1 emits **no**
-  revoke event (grant revoke is audit-only); a revoke notification waits on a
-  future `erp.approval.delegation.revoked` producer increment.
+- ~~**Delegation revoke notification**~~ → **DONE (TASK-ERP-BE-016)** — once
+  ERP-BE-015 added the `erp.approval.delegation.revoked.v1` producer event, the
+  delegate is now notified on revoke (§ Consumed topic — delegation, row 2).
 - **Recipient preferences / digest / batching** — per-recipient channel
   preferences and digest roll-up are v2; v1 delivers one inbox row per event.
 - **Display-name enrichment** at consume time — v1 stores the ids; read-time

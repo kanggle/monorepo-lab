@@ -2,6 +2,7 @@ package com.example.erp.notification.infrastructure.messaging;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
 import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationRevokedCommand;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -147,6 +148,59 @@ class EnvelopeToCommandMapperTest {
         assertThatThrownBy(() -> mapper.mapDelegation(
                 delegationEnvelope("evt-d", "other", "emp-D", null, null),
                 "erp.approval.delegated.v1"))
+                .isInstanceOf(InvalidEnvelopeException.class);
+    }
+
+    // ---- TASK-ERP-BE-016: mapDelegationRevoked ----
+
+    private String revokedEnvelope(String eventId, String tenantId, String delegateId, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("grantId", "dgr-1");
+        payload.put("delegatorId", "emp-A");
+        if (delegateId != null) payload.put("delegateId", delegateId);
+        if (reason != null) payload.put("reason", reason);
+        payload.put("tenantId", tenantId);
+        payload.put("actor", "emp-A");
+        Map<String, Object> env = new LinkedHashMap<>();
+        if (eventId != null) env.put("eventId", eventId);
+        env.put("eventType", "erp.approval.delegation.revoked");
+        env.put("tenantId", tenantId);
+        env.put("aggregateType", "DelegationGrant");
+        env.put("aggregateId", "dgr-1");
+        env.put("payload", payload);
+        try {
+            return om.writeValueAsString(env);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    void mapsValidRevokedEnvelope() {
+        NotifyOnDelegationRevokedCommand cmd = mapper.mapDelegationRevoked(
+                revokedEnvelope("evt-r", "erp", "emp-D", "휴가 복귀"),
+                "erp.approval.delegation.revoked.v1");
+        assertThat(cmd.event().eventId()).isEqualTo("evt-r");
+        assertThat(cmd.event().grantId()).isEqualTo("dgr-1");
+        assertThat(cmd.event().delegatorId()).isEqualTo("emp-A");
+        assertThat(cmd.event().delegateId()).isEqualTo("emp-D");
+        assertThat(cmd.event().reason()).isEqualTo("휴가 복귀");
+        assertThat(cmd.event().type()).isEqualTo(NotificationType.DELEGATION_REVOKED);
+    }
+
+    @Test
+    void revokedWithoutReasonHasNullReason() {
+        NotifyOnDelegationRevokedCommand cmd = mapper.mapDelegationRevoked(
+                revokedEnvelope("evt-r", "erp", "emp-D", null),
+                "erp.approval.delegation.revoked.v1");
+        assertThat(cmd.event().reason()).isNull();
+    }
+
+    @Test
+    void nullDelegateIdRevokedIsInvalid() {
+        assertThatThrownBy(() -> mapper.mapDelegationRevoked(
+                revokedEnvelope("evt-r", "erp", null, null),
+                "erp.approval.delegation.revoked.v1"))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }
 }

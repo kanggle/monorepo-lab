@@ -221,6 +221,47 @@ class NotificationEndToEndIntegrationTest extends AbstractNotificationIntegratio
     }
 
     @Test
+    void delegationRevokedNotifiesDelegate() throws Exception {
+        // TASK-ERP-BE-016: erp.approval.delegation.revoked.v1 → notify the delegate.
+        String grantId = "dgr-" + newId();
+        String delegator = "emp-A-" + newId();
+        String delegate = "emp-D-" + newId();
+        publish(TOPIC_DELEGATION_REVOKED, grantId, delegationRevokedEnvelope(newId(), grantId,
+                delegator, delegate, "휴가 복귀"));
+
+        NotificationJpaEntity n = awaitOneFor(delegate);
+        assertThat(n.getType().name()).isEqualTo("DELEGATION_REVOKED");
+        assertThat(n.getSourceType().name()).isEqualTo("DELEGATION");
+        assertThat(n.getSourceId()).isEqualTo(grantId);
+        assertThat(n.getTitle()).isEqualTo("위임 권한 회수됨");
+        assertThat(n.getBody()).contains("delegatorId=" + delegator, "reason=휴가 복귀");
+
+        var deliveries = deliveryJpa.findAll().stream()
+                .filter(d -> d.getNotificationId().equals(n.getId())).toList();
+        assertThat(deliveries).hasSize(1);
+        assertThat(deliveries.get(0).getStatus().name()).isEqualTo("DELIVERED");
+    }
+
+    @Test
+    void duplicateRevokedEventIdYieldsOneNotification() throws Exception {
+        String grantId = "dgr-" + newId();
+        String eventId = newId();
+        String delegate = "emp-D-" + newId();
+        String env = delegationRevokedEnvelope(eventId, grantId, "emp-A-" + newId(), delegate, null);
+        publish(TOPIC_DELEGATION_REVOKED, grantId, env);
+        NotificationJpaEntity n = awaitOneFor(delegate);
+        assertThat(n.getBody()).doesNotContain("reason=");
+
+        publish(TOPIC_DELEGATION_REVOKED, grantId, env);
+        Thread.sleep(3000);
+
+        long count = notificationJpa.findAll().stream()
+                .filter(x -> x.getRecipientId().equals(delegate)).count();
+        assertThat(count).isEqualTo(1);
+        assertThat(processedEventJpa.existsById(eventId)).isTrue();
+    }
+
+    @Test
     void recipientMappingCrossCheck() throws Exception {
         // submitted for approver-A and approved for submitter-B land in correct inboxes.
         String apprA = newId();

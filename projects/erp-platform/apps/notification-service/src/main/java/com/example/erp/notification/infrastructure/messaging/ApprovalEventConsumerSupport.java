@@ -3,6 +3,7 @@ package com.example.erp.notification.infrastructure.messaging;
 import com.example.erp.notification.application.NotifyOnApprovalEventUseCase;
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
 import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationRevokedCommand;
 import com.example.erp.notification.domain.notification.NotificationType;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -53,6 +54,24 @@ abstract class ApprovalEventConsumerSupport {
                                      String topic) {
         try {
             NotifyOnDelegationCommand command = mapper.mapDelegation(record.value(), topic);
+            useCase.handle(command);
+            ack.acknowledge();
+        } catch (InvalidEnvelopeException e) {
+            handleInvalidEnvelope(record, ack, topic, e);
+        } catch (Exception e) {
+            throw failed(record, topic, e);
+        }
+    }
+
+    /**
+     * Delegation-revoked consume path (TASK-ERP-BE-016). Same error handling as
+     * {@link #process} / {@link #processDelegation}; maps the revoke-shaped
+     * envelope to a {@link NotifyOnDelegationRevokedCommand}.
+     */
+    protected void processDelegationRevoked(ConsumerRecord<String, String> record, Acknowledgment ack,
+                                            String topic) {
+        try {
+            NotifyOnDelegationRevokedCommand command = mapper.mapDelegationRevoked(record.value(), topic);
             useCase.handle(command);
             ack.acknowledge();
         } catch (InvalidEnvelopeException e) {
