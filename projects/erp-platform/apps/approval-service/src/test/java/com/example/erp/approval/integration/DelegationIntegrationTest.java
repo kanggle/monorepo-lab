@@ -496,7 +496,13 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
                 "ACTIVE", java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
                 "emp-a", 0L, "REQUEST", null))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                // MySQL surfaces a CHECK violation as SQLState HY000 / error 3819, which
+                // Spring's SQLExceptionTranslator categorizes as UncategorizedSQLException
+                // (not DataIntegrityViolationException) — assert the common DataAccessException
+                // parent + the constraint name so the intent (the DB rejected the row) holds
+                // regardless of Spring's exact categorization.
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_delegation_grant_scope_req");
 
         // Symmetric: GLOBAL with a non-null scope_request_id is also rejected.
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbcTemplate.update(
@@ -507,6 +513,7 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
                 "ACTIVE", java.sql.Timestamp.from(java.time.Instant.parse(FROM)),
                 "emp-a", 0L, "GLOBAL", "appr-x"))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_delegation_grant_scope_req");
     }
 }
