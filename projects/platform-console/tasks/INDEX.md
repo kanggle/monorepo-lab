@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-053-console-multi-stage-approval-ui.md` — 콘솔 다단계 결재 UI. TASK-ERP-BE-012(다단계+IN_REVIEW) + BE-013(대결/위임) 백엔드를 PC-FE-051 결재함이 소비: create 시 **1~N 단계 결재선**(approverIds 순서 입력, 1행=legacy approverId 하위호환) + 상세 **단계 진행 타임라인**(각 단계 결재자·PENDING/APPROVED·현 단계 강조·k/N) + **`IN_REVIEW` 검토중 badge** + history `stage`/`actingForApproverId`(대결 승인 read-only 표시). 와이어=approval-api.md v2.0/v2.1 amendment 소비. types(IN_REVIEW/stages/currentStage/totalStages/approverIds 가산, NON_NULL absent tolerant) + api client(approverIds∨approverId payload) + proxy(create 검증 확장) + ApprovalScreen 확장. **위임 grant 관리 UI = 별 후속**(이 task 는 다단계 + 대결 승인 표시만). 이번 세션 approval 백엔드 3-증분의 사용자-가시화(`다단계 결재 → 콘솔 단계 진행` 루프 완결). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (UI slice — PC-FE-051/048 선례 재사용, 신규 도메인 로직 0). 사용자 "콘솔 다단계 결재 UI" 선택(2026-06-05).
 
 ## in-progress
 

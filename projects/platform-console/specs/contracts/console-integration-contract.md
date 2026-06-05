@@ -736,8 +736,11 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   ADR-MONO-016 § D3 have since shipped **first increments** and are now
   consumed by the console: `read-model-service` (the *integrated
   read-model binding* below — TASK-PC-FE-049), `approval-service` (the
-  결재함 workflow surface — TASK-PC-FE-051, consuming `/api/erp/approval/**`
-  under the § D3.1 write-affordance model), and `notification-service`
+  결재함 workflow surface — TASK-PC-FE-051 single-stage, extended by
+  TASK-PC-FE-053 to the v2.0/v2.1 backend: **multi-stage routes (`approverIds`)
+  + the `IN_REVIEW` status + a stage-progress timeline + delegated-approval
+  display (`actingForApproverId`)**, consuming `/api/erp/approval/**` under the
+  § D3.1 write-affordance model), and `notification-service`
   (the *notification inbox binding* below — TASK-PC-FE-052). The future
   `admin-service` / `permission-service` remain out of scope (still
   v2-deferred per ADR-MONO-016 § D3 / erp `PROJECT.md` § v1 OUT).
