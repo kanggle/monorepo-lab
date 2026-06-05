@@ -123,6 +123,91 @@ projection miss is not a fabricated row), 401 `UNAUTHORIZED`, 403
 
 ---
 
+## Approval facts (v1.1 — TASK-ERP-BE-010)
+
+The integrated read model also projects **approval facts** — the latest state of
+each approval request (consumed from `erp.approval.*.v1`,
+[`read-model-subscriptions.md`](../events/read-model-subscriptions.md)). These are
+**read-only projections** (E5): the latest fact only — the authoritative full
+transition `history` lives on `approval-service`
+(`GET /api/erp/approval/requests/{id}`). The read-model surface exists so an
+operator can query/report approval state **alongside** the org-view in one read
+store, without per-request fan-out to approval-service.
+
+`ApprovalFact`:
+```json
+{ "approvalRequestId": "appr-...",
+  "status": "SUBMITTED|APPROVED|REJECTED|WITHDRAWN",
+  "subjectType": "DEPARTMENT|EMPLOYEE",
+  "subjectId": "dept-... | emp-...",
+  "subject": <DepartmentRef> | <{ id, employeeNumber, name }> | null,
+  "approverId": "emp-approver-...",
+  "submitterId": "emp-submitter-...",
+  "submittedAt": "<ISO-8601 UTC; ABSENT if the submitted event was not seen>",
+  "finalizedAt": "<ISO-8601 UTC; ABSENT until a terminal event>",
+  "lastReason":  "<≤512; ABSENT when none (submitted / reasonless approve)>" }
+```
+- `subject` is the read-time-resolved master ref (`DepartmentRef` for
+  `DEPARTMENT`, a trimmed employee ref for `EMPLOYEE`) — `null` when the
+  referenced master projection is not yet consumed (eventually-consistent;
+  surfaced in `meta.unresolved`, never fabricated, E5).
+- Only `DRAFT` requests never appear (a draft emits no event — the first
+  projected fact is `SUBMITTED`).
+
+### GET /api/erp/read-model/approvals
+
+Paginated approval-fact list, **scope-aware** (E6) — same READ gate +
+**org_scope subtree filter** as the org-view: a caller bounded to a department
+subtree (TASK-ERP-BE-008 `org_scope`) sees only facts whose **subject department**
+(the `DEPARTMENT` subject itself, or an `EMPLOYEE` subject's resolved department)
+is in scope; `["*"]`/unset = all (net-zero).
+
+**Headers**: `Authorization` (req)
+
+**Query**:
+- `status` — optional, enum `SUBMITTED | APPROVED | REJECTED | WITHDRAWN`
+- `subjectType` — optional, enum `DEPARTMENT | EMPLOYEE`
+- `subjectId` — optional, filter to one subject
+- `approverId` / `submitterId` — optional, filter by route role
+- `page` — optional, default `0`
+- `size` — optional, default `20`, ≤ `100`
+
+**200**:
+```json
+{ "data": [ <ApprovalFact>, ... ],
+  "meta": { "page": 0, "size": 20, "totalElements": 12,
+            "timestamp": "<ISO-8601>",
+            "warning": "Eventually-consistent read-model" } }
+```
+
+**Errors**: 400 `VALIDATION_ERROR`, 401 `UNAUTHORIZED`, 403 `PERMISSION_DENIED`,
+403 `TENANT_FORBIDDEN`.
+
+### GET /api/erp/read-model/approvals/{approvalRequestId}
+
+Single approval fact (latest state). For the full immutable `history`, consumers
+use `approval-service` `GET /api/erp/approval/requests/{id}` (source of record).
+
+**Headers**: `Authorization` (req)
+
+**Path**: `approvalRequestId` — the approval request id.
+
+**200**:
+```json
+{ "data": <ApprovalFact>,
+  "meta": { "timestamp": "<ISO-8601>",
+            "warning": "Eventually-consistent read-model",
+            "unresolved": ["subject"] } }
+```
+(`meta.unresolved` present only when the subject ref is not yet resolved.)
+
+**Errors**: 404 `MASTERDATA_NOT_FOUND` (no approval-fact projection for the id — a
+projection miss is not fabricated; out-of-scope subject also surfaces as 404 to
+avoid existence leak, mirroring the org-view detail rule), 401 `UNAUTHORIZED`,
+403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`.
+
+---
+
 ## Notes
 
 - The read-model is **eventually consistent** with `masterdata-service`. Every

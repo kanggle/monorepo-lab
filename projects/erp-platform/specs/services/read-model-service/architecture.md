@@ -58,6 +58,36 @@ domain business logic**, owns no aggregate state machine, and never re-emits or
 mutates authoritative master facts. Each projected field has exactly one
 source of record (`masterdata-service`).
 
+> **[Amendment — TASK-ERP-BE-010, 2026-06-05] approval-fact projection (v1.1).**
+> The integrated read model is extended to also consume the four
+> `erp.approval.{submitted,approved,rejected,withdrawn}.v1` events
+> (`approval-service`, [`read-model-subscriptions.md`](../../contracts/events/read-model-subscriptions.md))
+> and maintain an `approval_fact_proj` projection (latest state per
+> `approvalRequestId`), served by a read-only `GET /api/erp/read-model/approvals`
+> list + `/{approvalRequestId}` detail ([`read-model-api.md`](../../contracts/http/read-model-api.md)).
+> This **closes the `approval-service` → `read-model` event loop** (the approval
+> events previously had zero consumers — `erp-approval-events.md` "Consumers in
+> this increment = none"), mirroring the masterdata → read-model loop. It
+> executes the integrated-full-view forward-declaration recorded in the
+> ADR-MONO-016 §D3 read-model amendment ("the full integrated view —
+> business-partner, approval/permission facts — stays v2-deferred") as a first
+> increment for **approval facts** (business-partner / permission facts remain
+> deferred). It is **additive** and stays within E5: the projection holds only
+> the *latest fact* (status + ids + timestamps + last reason), NOT the
+> authoritative transition `history` (which remains owned by `approval-service`
+> — `GET /api/erp/approval/requests/{id}` is the source of record). No approval
+> *business logic* is reconstructed (the state machine, authz, idempotency stay
+> in approval-service); this service only projects the state it observes. The
+> approval handlers join the existing `erp-read-model-v1` consumer group, reuse
+> the `processed_events` dedupe (T8) + `@RetryableTopic` DLT resilience
+> (ADR-MONO-005 Category C), and the list is org_scope-subtree-filtered on the
+> subject's department (TASK-ERP-BE-008 read-filter parity). Subject display
+> names + the subject's department (for the scope filter) are resolved at read
+> time against `employee_proj`/`department_proj` (eventually-consistent, never
+> fabricated). **Still no re-emission / no write-back / no publish (E5
+> terminal).** Spec: this amendment + `read-model-subscriptions.md` (approval
+> topics) + `read-model-api.md` (approval-fact endpoints).
+
 ## Architecture Style Rationale
 
 Hexagonal chosen because:
@@ -308,8 +338,8 @@ gate: an operator scoped to a subtree both writes and *sees* only that subtree.
 |---|---|---|
 | **E1** Master single source of record + reference integrity | N/A (consumer side) | This service holds **no** authoritative master; `masterdata-service` owns E1. The projection never creates a master — it only reflects consumed facts. Reference resolution (employee→department/cost-center/job-grade) is read-time join; unresolved → `null`, never fabricated. |
 | **E2** Effective-dated master change + immutable audit | Partial (effective-dating reflected) | The projection retains `effective_from`/`effective_to` from events so `?asOf` reads reproduce historic revisions; `RETIRED` rows are retained (not deleted). Audit of the *change* is owned by masterdata-service's `audit_log` (E2 write side); the read-model's provenance is `processed_events`. |
-| **E3** Approval state machine | N/A | No approval workflow (approval-service v2). |
-| **E4** Approval transition idempotent + audit | N/A | No approval workflow. |
+| **E3** Approval state machine | Read-only projection (no logic) | The approval **state machine** lives in `approval-service`; this service only **projects** the observed terminal state (terminal-once: never reverts a terminal fact to SUBMITTED). It owns no approval logic (E5). [BE-010] |
+| **E4** Approval transition idempotent + audit | `processed_events` dedupe (T8) | Transition idempotency + the immutable audit `history` are owned by `approval-service`; this consumer only dedupes on `eventId` and holds the latest fact (NOT the history — source of record = approval-service REST). [BE-010] |
 | **E5** Integrated read model holds NO domain logic — read-only projection | ✅ **Primary subject** | **This service is E5's reference implementation**: read-only projection; no business rules re-implemented; each field's single source of record = `masterdata-service`; source-absent → `READ_MODEL_SOURCE_UNAVAILABLE` semantics (`null` + `meta.unresolved`, no fabrication); no event re-emission; no write-back. |
 | **E6** Authorization via permission matrix + data scope — fail-closed | ✅ (read gate) | READ gate fail-closed: `erp.read` ∨ operator ∨ entitled, else `PERMISSION_DENIED`. No mutating surface → no WRITE/data-scope gate this increment (tenant-scoped list). |
 | **E7** internal-system boundary — no external traffic, SSO enforced | ✅ | OAuth2 RS (GAP SSO) only; entitlement-trust tenant gate fail-closed; actuator scrape internal-network only; external traffic rejected at edge. |
