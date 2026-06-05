@@ -29,6 +29,52 @@ Consumer group: `erp-read-model-v1`.
 
 ---
 
+## Consumed topics (v1.1 — approval-fact projection, TASK-ERP-BE-010)
+
+The integrated read model is extended to project **approval facts** (the latest
+state of each approval request), closing the previously-empty consumer side of
+[`erp-approval-events.md`](erp-approval-events.md) ("Consumers in this increment
+= none" — `approval-service` was a producer-only leaf). This is the read-model
+side of the `approval-service` → `read-model` event loop, mirroring the
+masterdata → read-model loop above. Still **read-only / no re-emission** (E5).
+
+| Topic | Producer | Projection table | Handler |
+|---|---|---|---|
+| `erp.approval.submitted.v1` | approval-service | `approval_fact_proj` | upsert by `aggregateId` (= `approvalRequestId`); set `status=SUBMITTED`, `submittedAt`, route/subject ids |
+| `erp.approval.approved.v1` | approval-service | `approval_fact_proj` | upsert; `status=APPROVED`, `finalizedAt`, optional `lastReason` |
+| `erp.approval.rejected.v1` | approval-service | `approval_fact_proj` | upsert; `status=REJECTED`, `finalizedAt`, `lastReason` (required) |
+| `erp.approval.withdrawn.v1` | approval-service | `approval_fact_proj` | upsert; `status=WITHDRAWN`, `finalizedAt`, `lastReason` (required) |
+
+Consumer group: `erp-read-model-v1` (shared — the approval handlers join the
+existing group; partition key = `aggregateId` = `approvalRequestId`).
+
+**Projection semantics** (approval facts):
+- **Latest-state upsert keyed on `approvalRequestId`** — the projection holds the
+  *current* fact (status + ids + timestamps + last reason), NOT the full
+  transition history. The authoritative full `history` stays with
+  `approval-service` (`GET /api/erp/approval/requests/{id}` is the source of
+  record — E5: the read-model does not reconstruct the audit trail).
+- **Terminal-once** (E3): once a terminal event (`approved`/`rejected`/
+  `withdrawn`) is projected, a later non-duplicate transition for the same
+  `approvalRequestId` is out-of-contract; the handler keeps the terminal fact
+  (idempotent / last-terminal-wins, never reverts a terminal to SUBMITTED).
+- **Out-of-order tolerance**: per-`approvalRequestId` ordering is guaranteed by
+  the producer partition key, so `submitted` precedes its terminal. A terminal
+  arriving without a prior `submitted` (e.g. compaction / replay-from-middle)
+  still upserts a row (the fact is the terminal state); missing `submittedAt`
+  is left ABSENT (E5 — no fabrication).
+- **Subject enrichment** is read-time only: the fact stores the opaque
+  `subjectId`/`subjectType`; display names + the subject's department (for the
+  org_scope read filter) are resolved at read time against the existing
+  `employee_proj` / `department_proj` (eventually-consistent; unresolved →
+  surfaced, never fabricated).
+
+> `erp.approval.delegated.v1` is NOT consumed (delegation is approval-service v2;
+> not emitted). `erp.permission.*` / other catalog topics remain forward-declared
+> and unconsumed (recorded gap, no silent drop).
+
+---
+
 ## Envelope (consumed — libs/java-messaging standard)
 
 The producer envelope is defined in

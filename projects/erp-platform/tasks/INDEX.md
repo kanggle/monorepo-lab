@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-010-read-model-approval-fact-projection.md` — **READY (2026-06-05)**. read-model approval-fact 투영 — approval→read-model 이벤트 루프 완결(통합조회 v2 first increment). read-model-service 가 `erp.approval.{submitted,approved,rejected,withdrawn}.v1`(ERP-BE-009 발행, 소비자 0)을 구독→`approval_fact_proj`(요청당 최신 fact, terminal-once) 투영 + read-only `GET /api/erp/read-model/approvals` list/detail(org_scope subtree 필터, subject read-time 해소). masterdata→read-model(ERP-BE-007) 미러. E5 유지(latest fact 만; full history 권위=approval-service REST). spec=read-model architecture amendment+subscriptions(+4 topic)+read-model-api(approvals)+ADR-016 §D3 amendment(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
