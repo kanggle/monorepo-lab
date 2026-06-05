@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-011-notification-service-bootstrap-first-increment.md` — **READY (2026-06-05)**. notification-service 부트스트랩 — 결재 알림 fan-out first increment (ERP v2 pillar, ADR-016 §D3 forward-decl 집행, read-model/approval 선례). dual-type Hexagonal(`apps/notification-service/`, `com.example.erp.notification`; event-consumer primary + rest-api inbox): `erp.approval.*.v1` 4 topic 구독 → recipient 해소(submitted→approver/approved·rejected→submitter/withdrawn→approver) → in-app `Notification` 영속 + recipient-scoped inbox(`GET /api/erp/notifications` + `POST /{id}/read` 멱등). ADR-005 Category C(notification=reference). terminal consumer(no outbox/no re-emit, OutboxAutoConfiguration exclude). first increment=IN_APP 채널(외부 Slack/SMTP=v2). deploy 배선(settings.gradle/CI/docker-compose) atomic + NOTIFICATION_NOT_FOUND 등록. spec=architecture.md+notification-subscriptions.md+notification-api.md+ADR-016 §D3 amendment(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-011-notification-service-bootstrap-first-increment.md` — **REVIEW (2026-06-05, impl PR open)**. notification-service 부트스트랩 first increment — 결재 알림 fan-out(ERP v2 pillar; approval→notification forward-consumer leg 완결). 분석=Opus 4.8 / 구현=backend-engineer(Opus dispatch)+dispatcher 독립 재검증. dual-type Hexagonal `apps/notification-service/`(`com.example.erp.notification`, event-consumer + rest-api): `NotificationServiceApplication`(OutboxAutoConfiguration/OutboxMetrics exclude — terminal consumer) + 4 approval `@KafkaListener`(`erp.approval.*.v1`, group `erp-notification-v1`, @RetryableTopic 3-retry+DLT, manual ACK, invalid→즉시 DLT, `processed_events` dedupe T8) + `RecipientResolver`(pure: SUBMITTED·WITHDRAWN→approverId / APPROVED·REJECTED→submitterId) + `Notification`(영속) + `NotificationChannelPort`(IN_APP adapter=영속 즉시 DELIVERED attempt=1 / stub external no-op, green-wash 회피) + `NotificationDelivery`(Category C 구조 status/attempt/scheduled_retry, 외부 retry scheduler=v2) + inbox REST(`GET /api/erp/notifications` recipient-scoped[JWT sub] + `GET /{id}` 타인→404 `NOTIFICATION_NOT_FOUND` + `POST /{id}/read` 멱등 readAt 보존) + READ gate(entitlement-trust) + RS256 + V1 Flyway(`is_read` reserved-word). deploy 배선 atomic: settings.gradle + ci.yml erp `:check`/`:integrationTest` + docker-compose `/api/erp/notifications` priority=100. **terminal consumer**(publish/outbox 0 — grep 확인). dispatcher 독립: scope=notification-service+배선 only · `:check` BUILD SUCCESSFUL 48 unit/slice · recipient 매핑(withdrawn→approver) 코드 확인 · publish grep 0 · IT @Tag integration CI Linux 게이트. v2-deferred=외부 채널/masterdata·permission·delegation 통지/콘솔 bell.
 
 ## done
 

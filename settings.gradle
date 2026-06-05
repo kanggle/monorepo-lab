@@ -98,7 +98,13 @@ include(
     // bounded context (ApprovalRequest aggregate + single-stage state machine +
     // no-self-approval + idempotent transitions + immutable audit + masterdata
     // subject ref-check; rest-api producer; ADR-MONO-016 §D3 forward-decl realised).
-    'projects:erp-platform:apps:approval-service'
+    'projects:erp-platform:apps:approval-service',
+    // TASK-ERP-BE-011: notification-service first increment — approval-notification
+    // fan-out (event-consumer + rest-api inbox dual-type). Consumes the 4
+    // erp.approval.*.v1 topics, resolves recipient + renders, persists in-app
+    // Notification + Category C delivery (IN_APP), serves a recipient-scoped
+    // inbox. Terminal consumer (no outbox; ADR-MONO-016 §D3 forward-decl realised).
+    'projects:erp-platform:apps:notification-service'
 )
 
 // Project: platform-console
