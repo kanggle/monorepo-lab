@@ -1,6 +1,7 @@
 package com.example.erp.notification.application;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
 import com.example.erp.notification.application.port.outbound.ClockPort;
 import com.example.erp.notification.application.port.outbound.IdGeneratorPort;
 import com.example.erp.notification.application.port.outbound.NotificationChannelPort;
@@ -9,9 +10,11 @@ import com.example.erp.notification.domain.delivery.DeliveryChannel;
 import com.example.erp.notification.domain.delivery.NotificationDelivery;
 import com.example.erp.notification.domain.delivery.repository.NotificationDeliveryRepository;
 import com.example.erp.notification.domain.notification.Notification;
+import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.recipient.Recipient;
 import com.example.erp.notification.domain.recipient.RecipientResolver;
 import com.example.erp.notification.domain.render.ApprovalEvent;
+import com.example.erp.notification.domain.render.DelegationEvent;
 import com.example.erp.notification.domain.notification.repository.NotificationRepository;
 import com.example.erp.notification.domain.render.NotificationFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -80,23 +83,60 @@ public class NotifyOnApprovalEventUseCase {
     @Transactional
     public void handle(NotifyOnApprovalCommand command) {
         ApprovalEvent event = command.event();
-        if (dedupeService.isDuplicate(event.eventId())) {
-            log.debug("Duplicate approval event skipped: eventId={} topic={}",
-                    event.eventId(), command.topic());
-            metrics.dedupeSkipped();
+        if (skipIfDuplicate(event.eventId(), command.topic())) {
             return;
         }
-
         Recipient recipient = recipientResolver.resolve(event);
         Instant now = clock.now();
-        String notificationId = idGenerator.newNotificationId();
-        Notification notification = factory.from(event, recipient, notificationId, now);
+        Notification notification = factory.from(event, recipient,
+                idGenerator.newNotificationId(), now);
+        dispatch(notification, recipient, event.eventId(), event.type(), event.tenantId(),
+                command.topic(), event.approvalRequestId(), now);
+    }
+
+    /**
+     * Delegation-granted consume boundary (TASK-ERP-BE-014). Same dedupe → resolve
+     * → render → persist → deliver → dedupe sequence as the approval handler,
+     * sharing {@link #dispatch}; the recipient is the delegate and the dedupe
+     * provenance aggregate id is the {@code grantId}.
+     */
+    @Transactional
+    public void handle(NotifyOnDelegationCommand command) {
+        DelegationEvent event = command.event();
+        if (skipIfDuplicate(event.eventId(), command.topic())) {
+            return;
+        }
+        Recipient recipient = recipientResolver.resolve(event);
+        Instant now = clock.now();
+        Notification notification = factory.from(event, recipient,
+                idGenerator.newNotificationId(), now);
+        dispatch(notification, recipient, event.eventId(), event.type(), event.tenantId(),
+                command.topic(), event.grantId(), now);
+    }
+
+    private boolean skipIfDuplicate(String eventId, String topic) {
+        if (dedupeService.isDuplicate(eventId)) {
+            log.debug("Duplicate event skipped: eventId={} topic={}", eventId, topic);
+            metrics.dedupeSkipped();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * The shared persist → deliver (IN_APP) → dedupe-provenance → metrics sequence,
+     * all within the caller's single {@code @Transactional} boundary (T2 / A7
+     * atomicity: no "delivered but not deduped" and no "deduped but not delivered").
+     */
+    private void dispatch(Notification notification, Recipient recipient, String eventId,
+                          NotificationType type, String tenantId, String topic,
+                          String sourceAggregateId, Instant now) {
         notificationRepository.save(notification);
 
         NotificationChannelPort channel = channelFor(V1_CHANNEL);
         NotificationDelivery delivery = NotificationDelivery.createPending(
-                idGenerator.newDeliveryId(), event.tenantId(), notificationId,
-                event.eventId(), V1_CHANNEL, now);
+                idGenerator.newDeliveryId(), tenantId, notification.id(),
+                eventId, V1_CHANNEL, now);
         NotificationChannelPort.DeliveryOutcome outcome = channel.deliver(notification);
         if (outcome.delivered()) {
             delivery.markDelivered(now);
@@ -107,11 +147,11 @@ public class NotifyOnApprovalEventUseCase {
         }
         deliveryRepository.save(delivery);
 
-        dedupeService.markProcessed(event.eventId(), command.topic(), event.approvalRequestId());
+        dedupeService.markProcessed(eventId, topic, sourceAggregateId);
 
-        metrics.dispatched(event.type());
+        metrics.dispatched(type);
         metrics.deliveryStatus(delivery.status());
         log.debug("Dispatched notification id={} type={} recipient={} delivery={}",
-                notificationId, event.type(), recipient.employeeId(), delivery.status());
+                notification.id(), type, recipient.employeeId(), delivery.status());
     }
 }

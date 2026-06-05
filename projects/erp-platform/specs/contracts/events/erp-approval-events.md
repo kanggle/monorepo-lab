@@ -81,13 +81,15 @@ This contract is the forward interface for those v2 consumers.
 >     "reason": "<≤512; ABSENT when none>", "tenantId": "erp",
 >     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the grant creator>" }
 >   ```
->   This is a **producer-only forward interface** — the four existing transition
->   topics are **unchanged**, and the current consumers (`read-model-service`
->   BE-010, `notification-service` BE-011) do **not** subscribe to
->   `erp.approval.delegated.v1` (a "you have been delegated" notification / a
->   delegation projection is a separate v2.2 increment). Adding a topic no one
->   consumes yet breaks nothing. Grant **revoke** is audited only — **no** event in
->   v2.1.
+>   This was a **producer-only forward interface** at v2.1 — the four existing
+>   transition topics are **unchanged**. **TASK-ERP-BE-014 (2026-06-06) added the
+>   first consumer**: `notification-service` now subscribes to
+>   `erp.approval.delegated.v1` and notifies the **delegate** ("you have been
+>   delegated" — [`notification-subscriptions.md`](notification-subscriptions.md)
+>   § Consumed topic — delegation). `read-model-service` still does **not**
+>   subscribe (a delegation projection is a separate later increment). The producer
+>   side and the four transition topics are unchanged by BE-014 (consumer-only
+>   addition). Grant **revoke** is audited only — **no** event in v2.1.
 > - **Additive `actingForApproverId`** on the transition payloads
 >   (`approved` / `rejected`) — present (= the stage approver A) when a **delegate**
 >   performed the transition on A's behalf; **ABSENT** (NON_NULL) when the approver

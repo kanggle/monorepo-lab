@@ -37,12 +37,32 @@ public final class NotificationFactory {
                 createdAt);
     }
 
+    /**
+     * Builds the in-app notification for a delegation-granted event
+     * (TASK-ERP-BE-014). Parallel to the {@link ApprovalEvent} overload — the
+     * recipient is the delegate, the source is the delegation grant, and the body
+     * names the delegator + validity window (open-ended → "무기한"). Ids-only
+     * display (no display-name resolution; E5 spirit).
+     */
+    public Notification from(DelegationEvent event, Recipient recipient, String id, Instant createdAt) {
+        return Notification.create(
+                id,
+                event.tenantId(),
+                recipient.employeeId(),
+                event.type(),
+                "결재 권한 위임됨",
+                delegationBody(event),
+                SourceRef.delegation(event.grantId()),
+                createdAt);
+    }
+
     private String title(ApprovalEvent event) {
         return switch (event.type()) {
             case APPROVAL_SUBMITTED -> "결재 요청 도착";
             case APPROVAL_APPROVED -> "결재 승인됨";
             case APPROVAL_REJECTED -> "결재 반려됨";
             case APPROVAL_WITHDRAWN -> "결재 회수됨";
+            case DELEGATION_GRANTED -> throw delegationOnApprovalPath();
         };
     }
 
@@ -69,8 +89,29 @@ public final class NotificationFactory {
                 appendFinalizedAt(sb, event);
                 event.reasonOpt().ifPresent(r -> sb.append(", reason=").append(r));
             }
+            case DELEGATION_GRANTED -> throw delegationOnApprovalPath();
         }
         return sb.toString();
+    }
+
+    private String delegationBody(DelegationEvent event) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("grantId=").append(event.grantId());
+        sb.append(", delegatorId=").append(event.delegatorId());
+        sb.append(", validFrom=").append(event.validFrom());
+        sb.append(", validTo=").append(event.validToOpt().orElse("무기한"));
+        event.reasonOpt().ifPresent(r -> sb.append(", reason=").append(r));
+        return sb.toString();
+    }
+
+    /**
+     * A {@code DELEGATION_GRANTED} type must never reach the {@link ApprovalEvent}
+     * switches — it is carried by {@link DelegationEvent}. Defensive (compile-time
+     * exhaustiveness forces the case; it is unreachable at runtime).
+     */
+    private static IllegalStateException delegationOnApprovalPath() {
+        return new IllegalStateException(
+                "DELEGATION_GRANTED is not an approval-transition event (use DelegationEvent)");
     }
 
     private void appendSubject(StringBuilder sb, ApprovalEvent event) {

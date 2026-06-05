@@ -176,6 +176,51 @@ class NotificationEndToEndIntegrationTest extends AbstractNotificationIntegratio
     }
 
     @Test
+    void delegatedNotifiesDelegate() throws Exception {
+        // TASK-ERP-BE-014: erp.approval.delegated.v1 → notify the delegate.
+        String grantId = "dgr-" + newId();
+        String delegator = "emp-A-" + newId();
+        String delegate = "emp-D-" + newId();
+        publish(TOPIC_DELEGATED, grantId, delegationEnvelope(newId(), grantId,
+                delegator, delegate, "2026-12-31T23:59:59Z", "휴가 대결"));
+
+        NotificationJpaEntity n = awaitOneFor(delegate);
+        assertThat(n.getType().name()).isEqualTo("DELEGATION_GRANTED");
+        assertThat(n.getSourceType().name()).isEqualTo("DELEGATION");
+        assertThat(n.getSourceId()).isEqualTo(grantId);
+        assertThat(n.getTitle()).isEqualTo("결재 권한 위임됨");
+        assertThat(n.getBody()).contains("delegatorId=" + delegator, "validTo=2026-12-31T23:59:59Z",
+                "reason=휴가 대결");
+
+        var deliveries = deliveryJpa.findAll().stream()
+                .filter(d -> d.getNotificationId().equals(n.getId())).toList();
+        assertThat(deliveries).hasSize(1);
+        assertThat(deliveries.get(0).getStatus().name()).isEqualTo("DELIVERED");
+        assertThat(deliveries.get(0).getAttemptCount()).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateDelegationEventIdYieldsOneNotification() throws Exception {
+        String grantId = "dgr-" + newId();
+        String eventId = newId();
+        String delegate = "emp-D-" + newId();
+        String env = delegationEnvelope(eventId, grantId, "emp-A-" + newId(),
+                delegate, null, null);
+        publish(TOPIC_DELEGATED, grantId, env);
+        NotificationJpaEntity n = awaitOneFor(delegate);
+        // Open-ended grant → body renders "무기한".
+        assertThat(n.getBody()).contains("validTo=무기한");
+
+        publish(TOPIC_DELEGATED, grantId, env);
+        Thread.sleep(3000);
+
+        long count = notificationJpa.findAll().stream()
+                .filter(x -> x.getRecipientId().equals(delegate)).count();
+        assertThat(count).isEqualTo(1);
+        assertThat(processedEventJpa.existsById(eventId)).isTrue();
+    }
+
+    @Test
     void recipientMappingCrossCheck() throws Exception {
         // submitted for approver-A and approved for submitter-B land in correct inboxes.
         String apprA = newId();

@@ -63,4 +63,32 @@ class NotificationFactoryTest {
         assertThat(n.title()).isEqualTo("결재 회수됨");
         assertThat(n.body()).contains("reason=기안 내용 수정 필요");
     }
+
+    // ---- TASK-ERP-BE-014: delegation-granted rendering ----
+
+    private DelegationEvent delegation(String validTo, String reason) {
+        return new DelegationEvent("evt-d", "erp", "dgr-1", "emp-A", "emp-D",
+                "2026-06-06T00:00:00Z", validTo, reason);
+    }
+
+    @Test
+    void delegationRendersTitleDelegatorAndValidity() {
+        Notification n = factory.from(delegation("2026-12-31T23:59:59Z", "휴가 대결"),
+                new Recipient("emp-D"), "ntf-d1", now);
+        assertThat(n.title()).isEqualTo("결재 권한 위임됨");
+        assertThat(n.recipientId()).isEqualTo("emp-D");
+        assertThat(n.type()).isEqualTo(NotificationType.DELEGATION_GRANTED);
+        assertThat(n.source().sourceType()).isEqualTo(SourceRef.SourceType.DELEGATION);
+        assertThat(n.source().sourceId()).isEqualTo("dgr-1");
+        assertThat(n.body()).contains("grantId=dgr-1", "delegatorId=emp-A",
+                "validFrom=2026-06-06T00:00:00Z", "validTo=2026-12-31T23:59:59Z", "reason=휴가 대결");
+    }
+
+    @Test
+    void delegationOpenEndedRendersMugihan() {
+        Notification n = factory.from(delegation(null, null),
+                new Recipient("emp-D"), "ntf-d2", now);
+        assertThat(n.body()).contains("validTo=무기한");
+        assertThat(n.body()).doesNotContain("reason=");
+    }
 }

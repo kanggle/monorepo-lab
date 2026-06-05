@@ -1,6 +1,7 @@
 package com.example.erp.notification.infrastructure.messaging;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,73 @@ class EnvelopeToCommandMapperTest {
         assertThatThrownBy(() -> mapper.map(
                 envelope("evt-1", "erp", null, "emp-submitter", null),
                 "t", NotificationType.APPROVAL_SUBMITTED))
+                .isInstanceOf(InvalidEnvelopeException.class);
+    }
+
+    // ---- TASK-ERP-BE-014: mapDelegation ----
+
+    private String delegationEnvelope(String eventId, String tenantId, String delegateId,
+                                      String validTo, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("grantId", "dgr-1");
+        payload.put("delegatorId", "emp-A");
+        if (delegateId != null) payload.put("delegateId", delegateId);
+        payload.put("validFrom", "2026-06-06T00:00:00Z");
+        if (validTo != null) payload.put("validTo", validTo);
+        if (reason != null) payload.put("reason", reason);
+        payload.put("tenantId", tenantId);
+        payload.put("actor", "emp-A");
+        Map<String, Object> env = new LinkedHashMap<>();
+        if (eventId != null) env.put("eventId", eventId);
+        env.put("eventType", "erp.approval.delegated");
+        env.put("tenantId", tenantId);
+        env.put("aggregateType", "DelegationGrant");
+        env.put("aggregateId", "dgr-1");
+        env.put("payload", payload);
+        try {
+            return om.writeValueAsString(env);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    void mapsValidDelegationEnvelope() {
+        NotifyOnDelegationCommand cmd = mapper.mapDelegation(
+                delegationEnvelope("evt-d", "erp", "emp-D", "2026-12-31T23:59:59Z", "휴가 대결"),
+                "erp.approval.delegated.v1");
+        assertThat(cmd.event().eventId()).isEqualTo("evt-d");
+        assertThat(cmd.event().grantId()).isEqualTo("dgr-1");
+        assertThat(cmd.event().delegatorId()).isEqualTo("emp-A");
+        assertThat(cmd.event().delegateId()).isEqualTo("emp-D");
+        assertThat(cmd.event().validTo()).isEqualTo("2026-12-31T23:59:59Z");
+        assertThat(cmd.event().reason()).isEqualTo("휴가 대결");
+        assertThat(cmd.event().type()).isEqualTo(NotificationType.DELEGATION_GRANTED);
+    }
+
+    @Test
+    void delegationOpenEndedHasNullValidTo() {
+        NotifyOnDelegationCommand cmd = mapper.mapDelegation(
+                delegationEnvelope("evt-d", "erp", "emp-D", null, null),
+                "erp.approval.delegated.v1");
+        assertThat(cmd.event().validTo()).isNull();
+        assertThat(cmd.event().reason()).isNull();
+    }
+
+    @Test
+    void nullDelegateIdIsInvalid() {
+        // delegateId is the recipient; absent → cannot deliver → DLT.
+        assertThatThrownBy(() -> mapper.mapDelegation(
+                delegationEnvelope("evt-d", "erp", null, null, null),
+                "erp.approval.delegated.v1"))
+                .isInstanceOf(InvalidEnvelopeException.class);
+    }
+
+    @Test
+    void nonErpTenantDelegationIsInvalid() {
+        assertThatThrownBy(() -> mapper.mapDelegation(
+                delegationEnvelope("evt-d", "other", "emp-D", null, null),
+                "erp.approval.delegated.v1"))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }
 }
