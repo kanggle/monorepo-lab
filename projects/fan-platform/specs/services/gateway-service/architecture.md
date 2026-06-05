@@ -147,6 +147,15 @@ Downstream services do **not** use the `v1` prefix internally. The gateway
 | `/api/v1/artists/**` | `/api/artists/**` | `artist-service:8080` |
 | `/api/v1/artist-groups/**` | `/api/artist-groups/**` | `artist-service:8080` |
 | `/api/v1/fandoms/**` | `/api/fandoms/**` | `artist-service:8080` |
+| `/api/v1/memberships/**` | `/api/fan/memberships/**` | `membership-service:8080` (spec: TASK-FAN-BE-008; route wired by TASK-FAN-BE-009) |
+
+> **membership-service `/internal/**` is NOT gateway-exposed.** The internal
+> access-check endpoint (`GET /internal/membership/access`) is reachable only on the
+> internal `fan-platform-net` docker network, authenticated by GAP
+> `client_credentials` workload identity (ADR-MONO-005). No gateway route admits
+> `/internal/**`. See
+> `projects/fan-platform/specs/services/membership-service/architecture.md`
+> § Internal Access-Check Contract and `specs/contracts/http/membership-api.md`.
 
 The artist-service routes are declared as **3 explicit routes** (one per
 downstream base path) rather than a single `/api/v1/artist/**` catch-all.
@@ -160,7 +169,12 @@ RewritePath filter syntax (Spring Cloud Gateway named-group capture):
 - RewritePath=/api/v1/artists/(?<segment>.*), /api/artists/${segment}
 - RewritePath=/api/v1/artist-groups/(?<segment>.*), /api/artist-groups/${segment}
 - RewritePath=/api/v1/fandoms/(?<segment>.*), /api/fandoms/${segment}
+- RewritePath=/api/v1/memberships/(?<segment>.*), /api/fan/memberships/${segment}
 ```
+
+> The membership route is forward-declared here (spec TASK-FAN-BE-008); the actual
+> `application.yml` entry is added by TASK-FAN-BE-009 when membership-service is
+> bootstrapped.
 
 Path variables and query strings are preserved automatically by Spring Cloud
 Gateway — only the path prefix is rewritten. The `segment` capture group
@@ -175,6 +189,7 @@ matches everything after the prefix (including nested path variables such as
 | `/api/v1/artists/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
 | `/api/v1/artist-groups/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
 | `/api/v1/fandoms/**` | `artist-service:8080` | required | account/IP — 1 r/s replenish, 120 burst |
+| `/api/v1/memberships/**` | `membership-service:8080` | required | account/IP — 1 r/s replenish, 120 burst (wired by TASK-FAN-BE-009) |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
