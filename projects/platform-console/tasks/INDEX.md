@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-054-console-delegation-grant-management-ui.md` — 콘솔 위임(대결) grant 관리 UI. TASK-ERP-BE-013 `/api/erp/approval/delegations` 3 endpoint 소비: 위임 **생성**(delegateId+validFrom/validTo?+reason, Idempotency-Key) · **회수**(reason 필수) · **목록**("내가 위임한"[DELEGATOR]/"나에게 위임된"[DELEGATE], status ACTIVE|REVOKED). PC-FE-053 은 대결 승인 read-only **표시**만 했고 이 task 가 grant **관리**(create/revoke) 추가 → `위임 → 콘솔 grant 관리` 루프 완결(erp 결재 사용자-가시 표면 완성). 신규 `features/erp-ops` delegation types/api/keys/hooks + `DelegationScreen`(목록 2종 + 생성 다이얼로그 + reason-gated 회수) + delegations proxy(GET+POST / {id}/revoke POST) + ErpOpsScreen "위임" nav. 자기위임 클라 경고 + 422 `DELEGATION_INVALID`/404 `DELEGATION_NOT_FOUND` graceful. 와이어=approval-api.md §v2.1 amendment 소비(grant shape NON_NULL absent). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (UI slice — PC-FE-050 OrgScopeDialog + PC-FE-051 결재함 선례 재사용). 사용자 "콘솔 위임 grant 관리 UI" 선택(2026-06-05).
 
 ## in-progress
 

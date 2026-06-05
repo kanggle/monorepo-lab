@@ -739,7 +739,9 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   결재함 workflow surface — TASK-PC-FE-051 single-stage, extended by
   TASK-PC-FE-053 to the v2.0/v2.1 backend: **multi-stage routes (`approverIds`)
   + the `IN_REVIEW` status + a stage-progress timeline + delegated-approval
-  display (`actingForApproverId`)**, consuming `/api/erp/approval/**` under the
+  display (`actingForApproverId`)**, and by TASK-PC-FE-054 with **delegation
+  grant management** (create / revoke / list `/api/erp/approval/delegations` —
+  대결/위임 grants), consuming `/api/erp/approval/**` under the
   § D3.1 write-affordance model), and `notification-service`
   (the *notification inbox binding* below — TASK-PC-FE-052). The future
   `admin-service` / `permission-service` remain out of scope (still
