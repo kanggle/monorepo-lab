@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-178-project-overview-reality-alignment-12th.md` — `docs/project-overview.md` reality-alignment 12회째 (MONO-141/148/168/172/177 cadence). MONO-177(11회) 이후 이번 세션 출하 erp 결재 워크플로 도메인 전체(백엔드 BE-009~013 단계/대결/위임 + read-model approval-fact BE-010 + notification BE-011 + 콘솔 PC-FE-051~054) 정합. **핵심: §2.8 v2-deferred 가 approval-service/notification-service 를 아직 deferred 로 잘못 분류하던 사실오류 교정**(MONO-177 read-model 교정의 approval/notification 판) + §2.6 console 결재 surface + §7 ADR-016 §D3 행 + §9 roadmap. docs-only surgical, no code/spec/ADR. 분석=Opus 4.8 / 구현=Opus 직접. 사용자 "reality-alignment 12회" 선택(2026-06-05).
+(empty)
 
 ## in-progress
 
@@ -122,6 +122,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-178-project-overview-reality-alignment-12th.md` — **DONE (2026-06-05, 3-dim verified — impl PR #1131 squash `08427c99`)**. `docs/project-overview.md` reality-alignment 12회째 (MONO-141/148/168/172/177 cadence). MONO-177(11회) 이후 이번 세션 출하 **erp 결재 워크플로 도메인 전체** 정합 — 백엔드 ERP-BE-009(단일단계)/010(read-model approval-fact)/011(notification)/012(다단계+IN_REVIEW)/013(대결/위임) + 콘솔 PC-FE-051(결재함)/052(notification bell)/053(다단계 UI)/054(위임 관리). 6 surgical edit: header narrative + §2.8 erp(결재 워크플로 라이브 bullet + service map approval/notification 행 + read-model approval-fact 보강 + **v2-deferred 사실오류 교정**: approval-service/notification-service 제거[라이브], permission/admin 만 잔존) + §2.6 console 결재 surface bullet + §7 ADR-016 §D3 forward-declaration 집행 보강 + §9 roadmap 8+ 행. **메타: MONO-177 read-model 교정의 approval/notification 판 — 명시적 갱신 시점에만 변경되는 docs 스냅샷이 큰 build wave(approval 도메인 9 task) 후 누적 arc 와 벌어진 회차; v2-deferred 라벨이 라이브 서비스를 deferred 로 잘못 분류하는 drift 가 reality-alignment 의 단골 신규 사실.** **3-dim**: (a) MERGED+`08427c99`; (b) origin/main tip 일치(제목 `--subject`); (c) pre-merge failing required=0(docs fast-lane: `changes` pass + heavy jobs skip). diff confined to docs/project-overview.md + tasks/. docs-only, no code/spec/ADR. 분석=Opus 4.8 / 구현=Opus 직접. 사용자 "reality-alignment 12회" 선택.
 
 - `TASK-MONO-177-project-overview-reality-alignment-11th.md` — **DONE (2026-06-05, 3-dim verified — impl PR #1103 squash `174a25e9`)**. `docs/project-overview.md` reality-alignment (11th) — 10th(MONO-172, 2026-06-03) 이후 arc 정합 7 surgical edit (docs-only, no code/spec/ADR): header 2026-06-05 + §2.2 GAP org_scope authz 출처(BE-336 위임scope/337 bridge/338 멤버십출처/339 admin API) + §2.6 console erp write parity(PC-FE-046~048)/통합 read 카드(PC-FE-049)/org_scope 설정 UI(PC-FE-050)/operators·audit active-tenant 스코핑(MONO-175·PC-FE-043)/self-service account 이동(PC-FE-045)/demo redpanda(MONO-174) + §2.8 erp **read-model-service 라이브화**(ERP-BE-007 — **v2-deferred 사실오류 교정**: 서비스맵 행 추가 + v1.1 라이브 note + org_scope subtree 소비 ERP-BE-008) + §7 ADR-MONO-020 D3 amendment 행 + §9 Phase 8+ 행. **3-dim**: (a) MERGED+`174a25e9`; (b) origin/main tip 일치; (c) pre-merge failing required=0 (docs-only fast-lane, `changes` pass + heavy jobs skip). diff confined to project-overview.md + tasks/. **메타: SoT 가 ERP-BE-007 로 출하한 read-model-service 를 'v2 deferred' 로 잘못 분류하던 drift 교정 — 명시적 갱신 시점에만 변경되는 docs 스냅샷이 누적 arc 와 벌어진 회차.** 분석=Opus 4.8 / 구현=Opus(직접).
 
