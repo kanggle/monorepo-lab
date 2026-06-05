@@ -46,6 +46,36 @@ exactly one approver (`approverId`).
 > this amendment: the single approver is the N=1 special case. 대결/위임 (delegation)
 > remains **v2.1-deferred** (§ v2 deferred).
 
+> **v2.1 AMENDMENT (TASK-ERP-BE-013 — 대결/위임 delegation, additive).** A standing
+> windowed delegation grant lets an absent stage approver's delegate act for them
+> (architecture.md § v2.1 amendment). Additive changes to this contract:
+> - **New delegation endpoints** (all under `/api/erp/approval/delegations`):
+>   - `POST /api/erp/approval/delegations` — create a grant `{ delegateId,
+>     validFrom, validTo? , reason }` (delegator = caller `sub`; `Idempotency-Key`
+>     required). 201 with the grant. Self-delegation (`delegateId == caller`) or
+>     `validTo < validFrom` → 422 `DELEGATION_INVALID`.
+>   - `POST /api/erp/approval/delegations/{id}/revoke` — `{ reason }` →
+>     ACTIVE→REVOKED (idempotent; unknown id → 404 `DELEGATION_NOT_FOUND`).
+>   - `GET /api/erp/approval/delegations` — the caller's grants (as delegator +
+>     as delegate), scope-aware; `?role=DELEGATOR|DELEGATE` optional filter.
+>   Auth: create/revoke = `erp.write` (own grants / admin); list = `erp.read`.
+> - **Transition acceptance** — `approve` / `reject` accept **the current stage's
+>   approver OR an active delegate of that approver**. When a delegate acts, the
+>   transition succeeds exactly as if the approver acted (state machine + stage
+>   advance unchanged), the audit records `actor` (delegate) + `onBehalfOf`
+>   (approver), and the response/detail + the emitted event carry an additive
+>   **`actingForApproverId`** (= the approver; ABSENT when the approver acted
+>   themselves — NON_NULL). A non-approver with **no** active grant → 403
+>   `APPROVAL_NOT_AUTHORIZED_APPROVER` (unchanged). **Delegation cannot bypass
+>   Separation of Duties**: a delegate who is the request's `submitterId` is
+>   refused. `withdraw` stays **submitter-only** (never delegable).
+> - **New error codes** — `DELEGATION_INVALID` (422), `DELEGATION_NOT_FOUND` (404),
+>   registered in `platform/error-handling.md` erp section.
+>
+> This completes the ADR-MONO-016 §D3 approval forward-declaration (단계/대결/위임).
+> v2.2-deferred: per-request/per-route delegation, auto-absence detection,
+> transitive chaining (§ v2 deferred).
+
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
   (RS256, GAP JWKS — [`gap-integration.md`](../../integration/gap-integration.md)).

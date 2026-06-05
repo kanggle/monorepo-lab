@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-013-approval-delegation.md` — approval-service **v2.1**: 대결/위임 (delegation) (ADR-016 §D3 approval forward-declaration **3번째·마지막 증분** — 단계/대결/위임 완성). BE-012 다단계 base 위에 위임 모델: 신규 `DelegationGrant` aggregate(A→D, 유효기간, ACTIVE|REVOKED, 불변 감사 L131) + create/revoke/list REST + `erp.approval.delegated.v1` 신규 토픽(grant create 시; **producer-only — 소비자 무영향**) + 전이시점 대결자 resolution(현 단계 결재자 A 또는 active grant A→actor; audit `onBehalfOf`; 전이 이벤트 `actingForApproverId` 가산) + 위임-통한-자기결재 차단(SoD). withdraw 기안자-only 불변. spec=architecture.md §v2.1 amendment + approval-api.md + erp-approval-events.md + error-handling.md(`DELEGATION_INVALID`/`DELEGATION_NOT_FOUND` 등록 + 기존 approval 코드 consolidate) + ADR-016 §D3 amendment. Flyway V3(순수 추가). **소비자(read-model/notification) 무변경**. per-request/자동부재/transitive=v2.2 deferred. 분석=Opus 4.8 / 구현 권장=Opus (권한위양 모델 + 전이시점 resolution + onBehalfOf 감사 + SoD + 신규 토픽). 사용자 "approval v2.1 대결/위임(#1)" 선택(2026-06-05).
 
 ## in-progress
 

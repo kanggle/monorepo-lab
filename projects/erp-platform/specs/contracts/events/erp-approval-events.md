@@ -69,6 +69,34 @@ This contract is the forward interface for those v2 consumers.
 > terminal event, `currentStage`/`totalStages` = `0`/`1`. Consumers that never read
 > the new fields behave identically to the v1.0 contract.
 
+> **v2.1 AMENDMENT (TASK-ERP-BE-013 — 대결/위임 delegation; additive, consumers
+> UNCHANGED).** Delegation (architecture.md § v2.1 amendment) adds:
+> - **A NEW topic `erp.approval.delegated.v1`** (`rules/domains/erp.md` L101
+>   catalog-named), emitted when a `DelegationGrant` is **created**.
+>   `aggregateType = "DelegationGrant"`, `aggregateId = <grantId>`, partition key =
+>   `grantId`. Payload:
+>   ```json
+>   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
+>     "validFrom": "<ISO-8601 UTC>", "validTo": "<ISO-8601 UTC; ABSENT = open-ended>",
+>     "reason": "<≤512; ABSENT when none>", "tenantId": "erp",
+>     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the grant creator>" }
+>   ```
+>   This is a **producer-only forward interface** — the four existing transition
+>   topics are **unchanged**, and the current consumers (`read-model-service`
+>   BE-010, `notification-service` BE-011) do **not** subscribe to
+>   `erp.approval.delegated.v1` (a "you have been delegated" notification / a
+>   delegation projection is a separate v2.2 increment). Adding a topic no one
+>   consumes yet breaks nothing. Grant **revoke** is audited only — **no** event in
+>   v2.1.
+> - **Additive `actingForApproverId`** on the transition payloads
+>   (`approved` / `rejected`) — present (= the stage approver A) when a **delegate**
+>   performed the transition on A's behalf; **ABSENT** (NON_NULL) when the approver
+>   acted themselves. Existing consumers ignore the unknown field → **UNCHANGED**.
+>   `submitted` / `withdrawn` are unaffected (submit and withdraw are never delegated).
+>
+> Consumers that read none of the v2.0/v2.1 additive fields and ignore the new
+> topic behave **identically to the v1.0 contract**.
+
 ---
 
 ## Envelope (libs/java-messaging standard)

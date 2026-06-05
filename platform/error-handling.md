@@ -637,6 +637,31 @@ and append-only audit. See [`rules/domains/erp.md`](../rules/domains/erp.md)
 | MASTERDATA_PARENT_CYCLE | 409 | `Department.moveParent` would close a cycle — the candidate new parent is a descendant of, or equal to, this department (`MasterdataParentCycleException`) (E1) |
 | MASTERDATA_EFFECTIVE_PERIOD_INVALID | 422 | Effective-dated revision insert / append violates the period invariant: overlapping `[effectiveFrom, effectiveTo)` interval on the same natural key, OR `effectiveTo ≤ effectiveFrom` (`MasterdataEffectivePeriodInvalidException`) (E2) |
 
+## Approval Workflow  `[domain: erp]`
+
+Owned by `approval-service` (TASK-ERP-BE-009 single-stage → BE-012 multi-stage +
+`IN_REVIEW` → BE-013 대결/위임 delegation). The approval state machine + multi-stage
+route + per-stage approver authorization + delegation. Authoritative domain catalog:
+[`rules/domains/erp.md`](../rules/domains/erp.md) § Standard Error Codes (E3·E4).
+This platform-registry section consolidates those codes (they were previously only
+in the domain catalog) + the delegation codes (BE-013).
+
+| Code | HTTP | Description |
+|---|---|---|
+| APPROVAL_REQUEST_NOT_FOUND | 404 | Approval request with the given id does not exist (for the caller's scope) (`ApprovalRequestNotFoundException`) (E3) |
+| APPROVAL_STATUS_TRANSITION_INVALID | 409 | The `(state, command)` is not a defined edge of the approval state machine (e.g. `approve` on a `DRAFT`); not a finalized request (`ApprovalStatusTransitionInvalidException`) (E3·T4) |
+| APPROVAL_ALREADY_FINALIZED | 409 | Any transition command on a finalized (APPROVED / REJECTED / WITHDRAWN) request — immutable, re-decision requires a new request (`ApprovalAlreadyFinalizedException`) (E3·E4) |
+| APPROVAL_NOT_AUTHORIZED_APPROVER | 403 | The acting principal is not the current stage's approver **and** holds no active delegation for that approver; or a delegate who is the request's submitter (self-approval-via-delegation) (`ApprovalNotAuthorizedApproverException`) (E3·I4) |
+| APPROVAL_ROUTE_INVALID | 422 | Route malformed — no approver, blank approver, `submitter ∈ any stage` (self-approval), duplicate approver across stages (`details.cause = duplicate_stage_approver`), or the referenced subject does not resolve to an ACTIVE master (`ApprovalRouteInvalidException`) (E1·E3·I4) |
+| DELEGATION_INVALID | 422 | Delegation grant create is malformed — self-delegation (`delegatorId == delegateId`) or an invalid validity window (`validTo < validFrom`) (`DelegationInvalidException`) (E3·I4) — TASK-ERP-BE-013 |
+| DELEGATION_NOT_FOUND | 404 | Delegation grant with the given id does not exist (for the caller's scope) — e.g. revoke of an unknown grant (`DelegationNotFoundException`) (E3) — TASK-ERP-BE-013 |
+
+> The mutating approval/delegation endpoints reuse the shared codes: `UNAUTHORIZED`
+> (401), `PERMISSION_DENIED` / `DATA_SCOPE_FORBIDDEN` / `TENANT_FORBIDDEN` (403, see
+> Authorization + Tenant sections), `VALIDATION_ERROR` (400, e.g. reject/withdraw
+> missing reason), `IDEMPOTENCY_KEY_REQUIRED` (400) / `IDEMPOTENCY_KEY_CONFLICT` (409)
+> / `CONCURRENT_MODIFICATION` (409, optimistic lock).
+
 ## Authorization  `[domain: erp]`
 
 Owned by `masterdata-service` v1; `permission-service` v2. Single
