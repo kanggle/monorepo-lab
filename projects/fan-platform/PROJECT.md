@@ -55,8 +55,8 @@ GAP 안에 [frozen `community-service`](../global-account-platform/apps/communit
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
-| `membership-service` | rest-api | 멤버십 / 구독 / 프리미엄 접근 제어 (PG 통합 mock) |
-| `notification-service` | event-consumer | 이벤트 fanout (FCM/APNs/이메일) |
+| `membership-service` | rest-api | 멤버십 / 구독 / 프리미엄 접근 제어 (PG 통합 mock) — **spec 확정 (TASK-FAN-BE-008): [architecture](specs/services/membership-service/architecture.md) + [membership-api](specs/contracts/http/membership-api.md) + [fan-membership-events](specs/contracts/events/fan-membership-events.md). 구현 = TASK-FAN-BE-009; community-service `MembershipChecker` 어댑터 교체 = TASK-FAN-BE-010.** |
+| `notification-service` | event-consumer | 이벤트 fanout (FCM/APNs/이메일) — membership 라이프사이클 이벤트 소비 forward |
 | `admin-service` | rest-api | B2C 운영 콘솔 (post 모더레이션 / 신고 처리 / 아티스트 등록) |
 
 ### Frontend
