@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-178-project-overview-reality-alignment-12th.md` — `docs/project-overview.md` reality-alignment 12회째 (MONO-141/148/168/172/177 cadence). MONO-177(11회) 이후 이번 세션 출하 erp 결재 워크플로 도메인 전체(백엔드 BE-009~013 단계/대결/위임 + read-model approval-fact BE-010 + notification BE-011 + 콘솔 PC-FE-051~054) 정합. **핵심: §2.8 v2-deferred 가 approval-service/notification-service 를 아직 deferred 로 잘못 분류하던 사실오류 교정**(MONO-177 read-model 교정의 approval/notification 판) + §2.6 console 결재 surface + §7 ADR-016 §D3 행 + §9 roadmap. docs-only surgical, no code/spec/ADR. 분석=Opus 4.8 / 구현=Opus 직접. 사용자 "reality-alignment 12회" 선택(2026-06-05).
 
 ## in-progress
 
