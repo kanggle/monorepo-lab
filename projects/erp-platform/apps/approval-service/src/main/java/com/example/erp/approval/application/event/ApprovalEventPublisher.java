@@ -35,6 +35,8 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
     public static final String EVENT_APPROVAL_WITHDRAWN = "erp.approval.withdrawn";
     /** TASK-ERP-BE-013 — new topic, emitted on DelegationGrant create. */
     public static final String EVENT_APPROVAL_DELEGATED = "erp.approval.delegated";
+    /** TASK-ERP-BE-015 — new topic, emitted on DelegationGrant revoke (ACTIVE→REVOKED). */
+    public static final String EVENT_APPROVAL_DELEGATION_REVOKED = "erp.approval.delegation.revoked";
 
     public ApprovalEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
         super(outboxWriter, objectMapper);
@@ -90,6 +92,33 @@ public class ApprovalEventPublisher extends BaseEventPublisher {
         p.put("occurredAt", Instant.now().toString());
         p.put("actor", actor);
         writeEvent(DELEGATION_AGGREGATE_TYPE, g.getId(), EVENT_APPROVAL_DELEGATED, SOURCE, p);
+    }
+
+    /**
+     * NEW topic {@code erp.approval.delegation.revoked.v1} (TASK-ERP-BE-015) —
+     * emitted when a DelegationGrant is **revoked** (an actual ACTIVE→REVOKED
+     * transition; the application service does not call this on an idempotent
+     * re-revoke). aggregateType = {@code DelegationGrant}, aggregateId = partition
+     * key = grantId — same aggregate as {@link #publishDelegated} so a consumer
+     * sees grant + revoke on one partition (per-grant ordering). Payload carries
+     * the grant identity + actor; the validity window ({@code validFrom}/
+     * {@code validTo}) is NOT in the revoke payload (a revoke does not restate the
+     * window — the read model keeps what the {@code delegated} event projected).
+     * {@code reason} ABSENT when null/blank (NON_NULL).
+     */
+    public void publishRevoked(DelegationGrant g, String actor) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("grantId", g.getId());
+        p.put("delegatorId", g.getDelegatorId());
+        p.put("delegateId", g.getDelegateId());
+        if (g.getReason() != null && !g.getReason().isBlank()) {
+            p.put("reason", g.getReason());
+        }
+        p.put("tenantId", g.getTenantId());
+        p.put("occurredAt", Instant.now().toString());
+        p.put("actor", actor);
+        writeEvent(DELEGATION_AGGREGATE_TYPE, g.getId(),
+                EVENT_APPROVAL_DELEGATION_REVOKED, SOURCE, p);
     }
 
     /**

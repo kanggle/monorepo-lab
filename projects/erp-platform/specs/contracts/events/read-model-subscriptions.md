@@ -69,9 +69,50 @@ existing group; partition key = `aggregateId` = `approvalRequestId`).
   `employee_proj` / `department_proj` (eventually-consistent; unresolved →
   surfaced, never fabricated).
 
-> `erp.approval.delegated.v1` is NOT consumed (delegation is approval-service v2;
-> not emitted). `erp.permission.*` / other catalog topics remain forward-declared
-> and unconsumed (recorded gap, no silent drop).
+> `erp.approval.delegated.v1` is **consumed** as of TASK-ERP-BE-015 (see § v1.2
+> below). `erp.permission.*` / other catalog topics remain forward-declared and
+> unconsumed (recorded gap, no silent drop).
+
+---
+
+## Consumed topics (v1.2 — delegation-fact projection, TASK-ERP-BE-015)
+
+The integrated read model is extended to project **delegation facts** (the latest
+state of each delegation grant: ACTIVE/REVOKED) so an operator can query "who may
+act for whom" read-only. This consumes BOTH the existing
+`erp.approval.delegated.v1` (grant create — previously unconsumed) AND the NEW
+`erp.approval.delegation.revoked.v1` (grant revoke — added by the producer leg of
+this task, [`erp-approval-events.md`](erp-approval-events.md) § v2.2). Without the
+revoke event a create-only projection could never reflect a manual cancellation.
+Still **read-only / no re-emission** (E5).
+
+| Topic | Producer | Projection table | Handler |
+|---|---|---|---|
+| `erp.approval.delegated.v1` | approval-service | `delegation_fact_proj` | upsert by `aggregateId` (= `grantId`); set `status=ACTIVE`, `delegatorId`/`delegateId`, `validFrom`/`validTo`, `reason` |
+| `erp.approval.delegation.revoked.v1` | approval-service | `delegation_fact_proj` | upsert; `status=REVOKED`, `revokedAt`; the validity window is preserved (the revoke payload carries none) |
+
+Consumer group: `erp-read-model-v1` (shared — the delegation handlers join the
+existing group; partition key = `aggregateId` = `grantId`).
+
+**Projection semantics** (delegation facts):
+- **Latest-state upsert keyed on `grantId`** — the projection holds the *current*
+  fact (status + ids + window + last reason + revoke timestamp), NOT the grant
+  audit history (which stays with `approval-service`).
+- **Sticky-terminal REVOKED** (last-event-wins): once `revoked` is projected, a
+  later non-duplicate `delegated` for the same `grantId` never reverts REVOKED →
+  ACTIVE (a late grant may fill in a previously-absent validity window, but the
+  status stays REVOKED).
+- **Out-of-order tolerance**: a `revoked` arriving without a prior `delegated`
+  (compaction / replay-from-middle) still upserts a REVOKED row; the grant-only
+  fields (`validFrom`/`validTo`) are left ABSENT (E5 — no fabrication; the revoke
+  payload carries no window).
+- **Time-window expiry is read-time only**: `validTo` in the past is NOT a status —
+  an `?activeAt=<instant>` list filter evaluates `status=ACTIVE ∧ validFrom ≤ t ∧
+  (validTo null ∨ t ≤ validTo)`; the projected status tracks only the grant/revoke
+  lifecycle.
+- **org_scope read filter** is the **delegator's department subtree**
+  (TASK-ERP-BE-008 parity): the `delegatorId` (an employee id) is resolved to its
+  `employee_proj` department; `["*"]`/absent = net-zero.
 
 ---
 

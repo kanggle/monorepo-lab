@@ -14,7 +14,7 @@
 | Deployable unit | `apps/read-model-service/` |
 | Data store | MySQL `erp_read_model_db` schema (Flyway) — separate database from `masterdata-service`'s `erp_db` (CQRS read store; no shared tables) |
 | Event publication | **None** — read-model is a terminal projection (E5: never re-emits authoritative master facts) |
-| Event consumption | Kafka 4 topics from `masterdata-service` (same project): `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1` (EventDedupe idempotency). `businesspartner` topic is **not** consumed in this increment (not part of the employee org-view; deferred to the full read-model) |
+| Event consumption | Kafka 4 topics from `masterdata-service` (same project): `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1` (EventDedupe idempotency) + 4 approval-transition topics `erp.approval.{submitted,approved,rejected,withdrawn}.v1` (TASK-ERP-BE-010, approval-fact projection) + 2 delegation topics `erp.approval.delegated.v1` + `erp.approval.delegation.revoked.v1` (TASK-ERP-BE-015, delegation-fact projection). `businesspartner` + `erp.permission.*` topics are **not** consumed (deferred / forward-declared) |
 
 ### Service Type Composition
 
@@ -87,6 +87,33 @@ source of record (`masterdata-service`).
 > fabricated). **Still no re-emission / no write-back / no publish (E5
 > terminal).** Spec: this amendment + `read-model-subscriptions.md` (approval
 > topics) + `read-model-api.md` (approval-fact endpoints).
+
+> **[Amendment — TASK-ERP-BE-015] delegation-fact projection (v1.2).** The
+> integrated read model is extended to also consume `erp.approval.delegated.v1`
+> (grant create — previously the lone unconsumed approval topic) AND the NEW
+> `erp.approval.delegation.revoked.v1` (grant revoke — added by the producer leg
+> of this task; [`read-model-subscriptions.md`](../../contracts/events/read-model-subscriptions.md)
+> § v1.2). It maintains a `delegation_fact_proj` projection (latest state per
+> `grantId`: ACTIVE/REVOKED), served by a read-only
+> `GET /api/erp/read-model/delegations` list + `/{grantId}` detail
+> ([`read-model-api.md`](../../contracts/http/read-model-api.md) § Delegation
+> facts). This **closes the `approval-service` → `read-model` delegation event
+> loop** — the read answer to "who may act for whom". The grant→revoke accuracy
+> requires the NEW revoke event: a create-only projection could never reflect a
+> manual cancellation (only time-window expiry, evaluated read-time). It mirrors
+> the approval-fact blueprint 1:1: the handlers join the existing
+> `erp-read-model-v1` consumer group, reuse the `processed_events` dedupe (T8) +
+> `@RetryableTopic` DLT resilience (ADR-MONO-005 Category C); invalid envelope
+> (null `eventId`/`grantId`/`payload`, non-`erp` tenant) → immediate DLT. The
+> projection is **sticky-terminal REVOKED** (last-event-wins; a late `delegated`
+> after `revoked` never reverts) + **out-of-order tolerant** (a `revoked` before
+> any `delegated` upserts a REVOKED row with the validity window ABSENT — no
+> fabrication, E5). The list is org_scope-subtree-filtered on the **delegator's**
+> department (TASK-ERP-BE-008 read-filter parity). **Still no re-emission / no
+> write-back / no publish (E5 terminal).** Spec: this amendment +
+> `read-model-subscriptions.md` (delegation topics) + `read-model-api.md`
+> (delegation-fact endpoints) + `erp-approval-events.md` § v2.2 (the revoke
+> producer leg).
 
 ## Architecture Style Rationale
 
@@ -203,7 +230,8 @@ org-view returns the employee with the unresolved reference fields `null` +
 |---|---|---|---|
 | In | erp `gateway-service` (v1 deferred) → direct JWT until then | HTTP `/api/erp/read-model/**` | tenant-validated JWT (entitlement-trust dual-accept) |
 | In | erp `masterdata-service` Kafka | Consumer subscribed to `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1` | EventDedupe (T8) idempotent; first erp inbound consumer |
-| Out | MySQL `erp_read_model_db` | JDBC | `department_proj` / `employee_proj` / `job_grade_proj` / `cost_center_proj` / `processed_events` |
+| In | erp `approval-service` Kafka | Consumer subscribed to `erp.approval.{submitted,approved,rejected,withdrawn}.v1` (BE-010) + `erp.approval.delegated.v1` + `erp.approval.delegation.revoked.v1` (BE-015) | EventDedupe (T8); `approval_fact_proj` + `delegation_fact_proj` projections |
+| Out | MySQL `erp_read_model_db` | JDBC | `department_proj` / `employee_proj` / `job_grade_proj` / `cost_center_proj` / `approval_fact_proj` / `delegation_fact_proj` / `processed_events` |
 | Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 
@@ -229,6 +257,12 @@ job_grade_proj(id PK, code, name, display_order, status,
 employee_proj(id PK, employee_number, name, department_id, cost_center_id,
                 job_grade_id, status, effective_from, effective_to,
                 last_event_at, last_event_id)
+approval_fact_proj(approval_request_id PK, status, subject_type, subject_id,
+                approver_id, submitter_id, submitted_at, finalized_at,
+                last_reason, last_event_at, last_event_id)   -- BE-010
+delegation_fact_proj(grant_id PK, delegator_id, delegate_id, valid_from,
+                valid_to, status, reason, revoked_at, last_event_at,
+                last_event_id, tenant_id)                    -- BE-015
 processed_events(event_id VARCHAR PK, topic, aggregate_id, processed_at)
 ```
 
