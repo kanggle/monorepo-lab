@@ -154,9 +154,11 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     // TASK-PC-FE-051: approval requests + inbox seeded.
     expect(state.approvalRequests).not.toBeNull();
     expect(state.approvalInbox).not.toBeNull();
-    // 8 legs: 5 masterdata + 1 read-model org-view (FE-049) + 2 approval
-    // (FE-051 — requests list + inbox).
-    expect(fetchMock.mock.calls.length).toBe(8);
+    // TASK-PC-FE-055: delegation-fact read-model leg seeded.
+    expect(state.delegationFacts).not.toBeNull();
+    // 9 legs: 5 masterdata + 1 read-model org-view (FE-049) + 2 approval
+    // (FE-051 — requests list + inbox) + 1 delegation-fact read-model (FE-055).
+    expect(fetchMock.mock.calls.length).toBe(9);
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;
       expect(h.Authorization).toBe('Bearer GAP-ACCESS');
@@ -173,13 +175,19 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     vi.stubGlobal('fetch', fetchMock);
 
     await getErpSectionState(true, '2025-01-01');
-    // 8 legs total (6 asOf-bearing + 2 approval).
-    expect(fetchMock.mock.calls.length).toBe(8);
+    // 9 legs total (6 asOf-bearing masterdata + 1 read-model org-view + 2 approval + 1 delegation-fact).
+    // The delegation-fact leg does NOT thread asOf (it uses page/size only at seed; no asOf concept).
+    expect(fetchMock.mock.calls.length).toBe(9);
     for (const [url] of fetchMock.mock.calls) {
       const u = new URL(String(url));
       if (u.pathname.includes('/approval/')) {
         // approval-service has no asOf (single-stage workflow, not an
         // effective-dated master read) — exempt from the E3 thread-through.
+        expect(u.searchParams.get('asOf')).toBeNull();
+      } else if (u.pathname.includes('/read-model/delegations')) {
+        // TASK-PC-FE-055: delegation-fact read-model has no asOf at the seed level
+        // (the delegation-fact list uses page/size filters; asOf is not a producer-
+        // defined filter for this endpoint — it's not an effective-dated master).
         expect(u.searchParams.get('asOf')).toBeNull();
       } else {
         expect(u.searchParams.get('asOf')).toBe('2025-01-01');
@@ -229,9 +237,10 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     // degrade (any-other-error → degrade), NOT a retry storm.
     expect(state.degraded).toBe(true);
     // Each leg attempted exactly once (no retry from a 429 honour;
-    // 6 asOf legs + 2 approval legs = 8 fetches max — TASK-PC-FE-049 adds
-    // the read-model leg, TASK-PC-FE-051 the 2 approval legs).
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(8);
+    // 6 asOf legs + 2 approval legs + 1 delegation-fact leg = 9 fetches max —
+    // TASK-PC-FE-049 adds the read-model leg, TASK-PC-FE-051 the 2 approval
+    // legs, TASK-PC-FE-055 the delegation-fact leg).
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(9);
     for (const [, init] of fetchMock.mock.calls) {
       expect((init as RequestInit).method).toBe('GET');
     }

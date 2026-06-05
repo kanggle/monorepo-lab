@@ -393,6 +393,9 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         // TASK-PC-FE-049: 2 read-model reads (READ-ONLY, no write)
         'listEmployeeOrgViews',
         'getEmployeeOrgView',
+        // TASK-PC-FE-055: 2 delegation-fact read-model reads (READ-ONLY, no write)
+        'listDelegationFacts',
+        'getDelegationFact',
         // department writes (+ move-parent)
         'createDepartment',
         'updateDepartment',
@@ -465,9 +468,10 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     //   detail, inbox) = 15
     // + TASK-PC-FE-052: 2 notification GET routes (notifications inbox,
     //   notifications/[id] detail) = 17
-    // + TASK-PC-FE-054: 1 delegation GET route (delegations list) = 18 total
-    //   GET route files.
-    expect(getRouteFiles).toBe(18);
+    // + TASK-PC-FE-054: 1 delegation GET route (delegations list) = 18
+    // + TASK-PC-FE-055: 2 read-model delegation-fact GET routes
+    //   (delegations list + delegations/[grantId] detail) = 20 total GET route files.
+    expect(getRouteFiles).toBe(20);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16
     // + TASK-PC-FE-051: 2 approval POST routes (requests create, the

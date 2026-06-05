@@ -168,3 +168,33 @@ export const DELEGATION_PREFIX = 'delegation';
 export function delegationListKey(role: 'DELEGATOR' | 'DELEGATE' | undefined) {
   return [ERP_KEY, DELEGATION_PREFIX, 'list', role ?? null] as const;
 }
+
+// ---------------------------------------------------------------------------
+// read-model — delegation facts (TASK-PC-FE-055)
+// ---------------------------------------------------------------------------
+
+export function delegationFactsListKey(
+  delegatorId: string | undefined,
+  delegateId: string | undefined,
+  status: string | undefined,
+  activeAt: string | undefined,
+  page: number,
+  size: number,
+) {
+  return [
+    ERP_KEY,
+    'read-model',
+    'delegations',
+    'list',
+    delegatorId ?? null,
+    delegateId ?? null,
+    status ?? null,
+    activeAt ?? null,
+    page,
+    size,
+  ] as const;
+}
+
+export function delegationFactDetailKey(grantId: string) {
+  return [ERP_KEY, 'read-model', 'delegations', 'detail', grantId] as const;
+}

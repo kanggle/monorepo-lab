@@ -33,6 +33,8 @@
  */
 export { ErpOpsScreen } from './components/ErpOpsScreen';
 export { EmployeeOrgViewCard } from './components/EmployeeOrgViewCard';
+// TASK-PC-FE-055 — delegation facts read-only card (위임 현황).
+export { DelegationFactCard } from './components/DelegationFactCard';
 // TASK-PC-FE-051 — approval workflow (결재함).
 export {
   ApprovalScreen,
@@ -97,8 +99,15 @@ export {
   businessPartnerDetailKey,
   employeeOrgViewsListKey,
   employeeOrgViewDetailKey,
+  delegationFactsListKey,
+  delegationFactDetailKey,
 } from './api/erp-state';
 export { useAsOf, useEmployeeOrgViews } from './hooks/use-erp-ops';
+// TASK-PC-FE-055 — delegation fact read-model hooks.
+export {
+  useDelegationFacts,
+  useDelegationFact,
+} from './hooks/use-erp-ops';
 // TASK-PC-FE-051 — approval workflow query + mutation hooks.
 export {
   useApprovalRequests,
@@ -236,6 +245,11 @@ export type {
   UpdateCostCenterInput,
   CreateBusinessPartnerInput,
   UpdateBusinessPartnerInput,
+  // TASK-PC-FE-055 — read-model delegation-fact types.
+  DelegationFact,
+  DelegationFactListResponse,
+  DelegationFactDetailResponse,
+  DelegationFactListQueryParams,
 } from './api/types';
 export {
   isRetired,
@@ -248,4 +262,8 @@ export {
   EmployeeOrgViewListResponseSchema,
   EmployeeOrgViewDetailResponseSchema,
   ReadModelMetaSchema,
+  // TASK-PC-FE-055 — read-model delegation-fact schemas.
+  DelegationFactSchema,
+  DelegationFactListResponseSchema,
+  DelegationFactDetailResponseSchema,
 } from './api/types';
