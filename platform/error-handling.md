@@ -660,6 +660,28 @@ before any repository call); fail-CLOSED on missing role/scope (E6·E7).
 > readability. `UNAUTHORIZED` (401, missing/invalid/expired JWT) —
 > Platform-Common Authentication.
 
+## Notification  `[domain: erp]`
+
+Owned by `notification-service` v1 (TASK-ERP-BE-011). Event-consumer that
+fans out in-app notifications from `erp.approval.*.v1` to the recipient
+employee (submitted→approver, approved/rejected→submitter, withdrawn→approver),
+plus a recipient-scoped inbox read surface. Terminal consumer — publishes no
+events (E5-style boundary; `rules/domains/erp.md` § Internal Event Catalog has
+no `erp.notification.*` producer topic).
+
+| Code | HTTP | Description |
+|---|---|---|
+| NOTIFICATION_NOT_FOUND | 404 | Notification with the given id does not exist, **or** does not belong to the calling recipient (foreign-recipient access returns 404 to avoid existence leak — recipient-scoped, `NotificationNotFoundException`) (E6) |
+
+> The inbox read surface reuses the shared codes: `UNAUTHORIZED` (401),
+> `PERMISSION_DENIED` (403, READ gate — `erp.read` ∨ operator ∨ entitled),
+> `TENANT_FORBIDDEN` (403, `tenant_id ∉ {erp, *}` ∧ ¬entitled),
+> `VALIDATION_ERROR` (400, bad `page`/`size`/`unread`). `POST .../{id}/read`
+> needs **no** `Idempotency-Key` — marking read is naturally idempotent
+> (re-mark returns 200 with the original `readAt` preserved). v2 (external
+> channels Slack/SMTP) will add `DELIVERY_RETRY_EXHAUSTED` (ADR-MONO-005
+> Category C terminal) — NOT emitted in v1 (in-app delivery is synchronous).
+
 ---
 
 # Rules

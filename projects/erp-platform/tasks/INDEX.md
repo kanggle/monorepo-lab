@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-011-notification-service-bootstrap-first-increment.md` — **READY (2026-06-05)**. notification-service 부트스트랩 — 결재 알림 fan-out first increment (ERP v2 pillar, ADR-016 §D3 forward-decl 집행, read-model/approval 선례). dual-type Hexagonal(`apps/notification-service/`, `com.example.erp.notification`; event-consumer primary + rest-api inbox): `erp.approval.*.v1` 4 topic 구독 → recipient 해소(submitted→approver/approved·rejected→submitter/withdrawn→approver) → in-app `Notification` 영속 + recipient-scoped inbox(`GET /api/erp/notifications` + `POST /{id}/read` 멱등). ADR-005 Category C(notification=reference). terminal consumer(no outbox/no re-emit, OutboxAutoConfiguration exclude). first increment=IN_APP 채널(외부 Slack/SMTP=v2). deploy 배선(settings.gradle/CI/docker-compose) atomic + NOTIFICATION_NOT_FOUND 등록. spec=architecture.md+notification-subscriptions.md+notification-api.md+ADR-016 §D3 amendment(이 spec PR). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
