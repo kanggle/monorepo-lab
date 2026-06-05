@@ -74,6 +74,11 @@ public abstract class AbstractReadModelIntegrationTest {
     protected static final String TOPIC_JOBGRADE = "erp.masterdata.jobgrade.changed.v1";
     protected static final String TOPIC_COSTCENTER = "erp.masterdata.costcenter.changed.v1";
 
+    protected static final String TOPIC_APPROVAL_SUBMITTED = "erp.approval.submitted.v1";
+    protected static final String TOPIC_APPROVAL_APPROVED = "erp.approval.approved.v1";
+    protected static final String TOPIC_APPROVAL_REJECTED = "erp.approval.rejected.v1";
+    protected static final String TOPIC_APPROVAL_WITHDRAWN = "erp.approval.withdrawn.v1";
+
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
             new MySQLContainer<>(DockerImageName.parse("mysql:8.0"))
@@ -130,7 +135,11 @@ public abstract class AbstractReadModelIntegrationTest {
                     new NewTopic(TOPIC_DEPARTMENT, 1, (short) 1),
                     new NewTopic(TOPIC_EMPLOYEE, 1, (short) 1),
                     new NewTopic(TOPIC_JOBGRADE, 1, (short) 1),
-                    new NewTopic(TOPIC_COSTCENTER, 1, (short) 1)
+                    new NewTopic(TOPIC_COSTCENTER, 1, (short) 1),
+                    new NewTopic(TOPIC_APPROVAL_SUBMITTED, 1, (short) 1),
+                    new NewTopic(TOPIC_APPROVAL_APPROVED, 1, (short) 1),
+                    new NewTopic(TOPIC_APPROVAL_REJECTED, 1, (short) 1),
+                    new NewTopic(TOPIC_APPROVAL_WITHDRAWN, 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() != null
@@ -168,6 +177,8 @@ public abstract class AbstractReadModelIntegrationTest {
     @Autowired protected JobGradeProjJpaRepository jobGradeJpa;
     @Autowired protected CostCenterProjJpaRepository costCenterJpa;
     @Autowired protected ProcessedEventJpaRepository processedEventJpa;
+    @Autowired protected com.example.erp.readmodel.adapter.outbound.persistence.jpa
+            .ApprovalFactProjJpaRepository approvalFactJpa;
     @Autowired protected ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------------
@@ -244,6 +255,47 @@ public abstract class AbstractReadModelIntegrationTest {
             return objectMapper.writeValueAsString(env);
         } catch (Exception e) {
             throw new IllegalStateException("envelope serialise failed", e);
+        }
+    }
+
+    /**
+     * Builds an approval event envelope (erp-approval-events.md § Envelope). The
+     * common payload header (approvalRequestId / subjectType / subjectId /
+     * approverId / submitterId / occurredAt / actor) plus the optional terminal
+     * fields (finalizedAt / reason) when supplied (ABSENT otherwise).
+     */
+    protected String approvalEnvelope(String eventId, String eventType, String approvalRequestId,
+                                      String subjectType, String subjectId,
+                                      String approverId, String submitterId,
+                                      String finalizedAt, String reason) {
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("approvalRequestId", approvalRequestId);
+        payload.put("subjectType", subjectType);
+        payload.put("subjectId", subjectId);
+        payload.put("approverId", approverId);
+        payload.put("submitterId", submitterId);
+        payload.put("tenantId", "erp");
+        payload.put("occurredAt", Instant.now().toString());
+        payload.put("actor", submitterId);
+        if (finalizedAt != null) {
+            payload.put("finalizedAt", finalizedAt);
+        }
+        if (reason != null) {
+            payload.put("reason", reason);
+        }
+        java.util.Map<String, Object> env = new java.util.LinkedHashMap<>();
+        env.put("eventId", eventId);
+        env.put("eventType", eventType);
+        env.put("occurredAt", Instant.now().toString());
+        env.put("tenantId", "erp");
+        env.put("source", "erp-platform-approval-service");
+        env.put("aggregateType", "ApprovalRequest");
+        env.put("aggregateId", approvalRequestId);
+        env.put("payload", payload);
+        try {
+            return objectMapper.writeValueAsString(env);
+        } catch (Exception e) {
+            throw new IllegalStateException("approval envelope serialise failed", e);
         }
     }
 

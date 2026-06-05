@@ -55,6 +55,15 @@ public class EmployeeProjectionRepositoryImpl implements EmployeeProjectionRepos
     }
 
     @Override
+    public List<String> findIdsByDepartmentIdIn(java.util.Collection<String> departmentIds) {
+        if (departmentIds == null || departmentIds.isEmpty()) {
+            return List.of();
+        }
+        return jpa.findByDepartmentIdIn(departmentIds).stream()
+                .map(EmployeeProjJpaEntity::getId).toList();
+    }
+
+    @Override
     public void save(EmployeeProjection projection) {
         EmployeeProjJpaEntity e = jpa.findById(projection.id())
                 .orElseGet(EmployeeProjJpaEntity::new);
