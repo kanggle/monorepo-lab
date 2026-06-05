@@ -15,6 +15,37 @@ intermediate `IN_REVIEW` state, multi-stage routes, delegation (대결), and
 inbox filtering are **v2 deferred** (see § v2 deferred). Each request carries
 exactly one approver (`approverId`).
 
+> **v2.0 AMENDMENT (TASK-ERP-BE-012 — multi-stage routing + `IN_REVIEW`,
+> additive + backward-compatible).** Multi-stage routes (1~N ordered stages) and
+> the `IN_REVIEW` status are now realised (architecture.md § v2.0 amendment).
+> Additive changes to this contract:
+> - **Create** accepts an ordered **`approverIds: ["emp-a","emp-b",…]`** (1~N
+>   stages) **OR** the legacy **`approverId`** (= a 1-stage route); exactly one is
+>   required. The platform-console (TASK-PC-FE-051) keeps sending `approverId` and
+>   continues to work unchanged (a 1-stage route).
+> - **`status`** enum gains **`IN_REVIEW`** (non-terminal). A multi-stage request
+>   is `SUBMITTED` while stage 0 is pending, `IN_REVIEW` while a later stage is
+>   pending, then `APPROVED` once the final stage approves.
+> - **Detail / Summary** gain **`stages`** (`[{ "stageIndex", "approverId",
+>   "status": "PENDING|APPROVED" }]`), **`currentStage`** (0-based index of the
+>   pending stage; ABSENT once finalized), and **`totalStages`**. The legacy
+>   **`approverId`** is retained = the **current stage's** approver (read
+>   back-compat). `history` entries gain an optional **`stage`** field.
+> - **`approve`** advances the route: from `SUBMITTED|IN_REVIEW` → `APPROVED` if
+>   the current stage is the last, else → `IN_REVIEW` (next stage pending). Only
+>   the **current stage's** approver may `approve`/`reject` (an earlier/later
+>   stage's approver → 403 `APPROVAL_NOT_AUTHORIZED_APPROVER` — sequential order
+>   enforced). `withdraw` stays submitter-only; `reject` from any stage → terminal
+>   `REJECTED`.
+> - **Route-validity** (`APPROVAL_ROUTE_INVALID`) extends to a **duplicate
+>   approver across stages** (`details.cause = "duplicate_stage_approver"`) and
+>   `submitter ∈ any stage` (self-approval). **No new error code** — the existing
+>   approval codes cover it.
+>
+> Where a v1.0 endpoint below says "single-stage" / `approverId`, read it through
+> this amendment: the single approver is the N=1 special case. 대결/위임 (delegation)
+> remains **v2.1-deferred** (§ v2 deferred).
+
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
   (RS256, GAP JWKS — [`gap-integration.md`](../../integration/gap-integration.md)).

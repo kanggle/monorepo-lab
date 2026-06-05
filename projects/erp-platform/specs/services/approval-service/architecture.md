@@ -23,6 +23,75 @@ All implementation tasks targeting this service must follow this declaration,
 > **before** implementation). The full approval-service (multi-stage routing, 대결/위임,
 > `IN_REVIEW`) stays v2-deferred — see § Out-of-Scope.
 
+> **v2.0 AMENDMENT (TASK-ERP-BE-012 — multi-stage routing + `IN_REVIEW`; the
+> SECOND increment of the same ADR-MONO-016 § D3 forward-declaration).** This
+> increment realises the **multi-stage Approval Route (1~N stages)** and the
+> **`IN_REVIEW` intermediate state** that `rules/domains/erp.md` Ubiquitous
+> Language names (`DRAFT → SUBMITTED → (IN_REVIEW →) APPROVED`). It is **additive,
+> backward-compatible, and authored before implementation** — like the v1.0
+> first-increment, it **executes** the recorded § D3 forward-declaration and
+> introduces **no new architecture decision** (HARDSTOP-09 satisfied here). The
+> changes layered over the v1.0 sections below:
+>
+> - **`IN_REVIEW` status** (non-terminal) joins `ApprovalStatus`. `isFinalized()`
+>   is unchanged (only APPROVED/REJECTED/WITHDRAWN are terminal).
+> - **`ApprovalRoute` becomes an ordered list of 1~N stages** (each stage = one
+>   `Approver` at a `stage_index`). The v1.0 `singleStage(...)` factory is retained
+>   (= a 1-stage route); `multiStage(submitter, [approverId…])` is added.
+>   Route-validity (`APPROVAL_ROUTE_INVALID`) extends: zero stages / a blank
+>   approver / `submitter ∈ any stage` (self-approval) / a **duplicate approver
+>   across stages** (`details.cause = "duplicate_stage_approver"` — Separation of
+>   Duties, I4).
+> - **State machine** gains the stage-aware approve edge:
+>   `approve` from `SUBMITTED | IN_REVIEW` → **`APPROVED` if the current stage is
+>   the last, else `IN_REVIEW`** (advancing `current_stage_index`). `reject` from
+>   `SUBMITTED | IN_REVIEW` → `REJECTED`; `withdraw` from `DRAFT | SUBMITTED |
+>   IN_REVIEW` → `WITHDRAWN`. The finalized-guard (highest precedence) and the
+>   legal-edge guard are unchanged; every transition still flows through
+>   `ApprovalStateMachine` (T4 — no direct `status` UPDATE). The pure module gains
+>   a route-context parameter (`isLastStage`) so last-vs-intermediate is decided
+>   inside the matrix, not by a caller.
+> - **Per-stage approver authorization** — `approve` / `reject` require the acting
+>   principal to be **the current stage's approver** (`stages[current_stage_index]
+>   .approverId == actor.sub`); a different stage's approver (earlier OR later) →
+>   `APPROVAL_NOT_AUTHORIZED_APPROVER` (sequential order is enforced — a later
+>   approver cannot pre-approve). `withdraw` stays submitter-only.
+> - **Persistence + migration (backward-compatible)** — new `approval_route_stage`
+>   table `(id, tenant_id, request_id, stage_index, approver_id, created_at)`;
+>   `approval_request` gains `current_stage_index INT NOT NULL DEFAULT 0` +
+>   `total_stages INT NOT NULL DEFAULT 1`. A Flyway migration **backfills every
+>   existing request as a 1-stage route** (one `approval_route_stage` row,
+>   `stage_index = 0`, `approver_id =` the existing denormalized `approver_id`;
+>   `total_stages = 1`). The v1.0 `approval_request.approver_id` column is retained
+>   as the **current stage's** approver (read back-compat).
+> - **Event emission** (additive, terminal-once preserved — § Outbox):
+>   `erp.approval.approved.v1` fires **only on the FINAL-stage approval**
+>   (`* → APPROVED`); an **intermediate-stage approval** (`→ IN_REVIEW`) writes an
+>   audit row but **emits NO outbox event** (the next stage's approver is surfaced
+>   by the inbox; event-driven fan-out of stage advances is v2.1). `submitted` /
+>   `rejected` / `withdrawn` are unchanged. Every payload gains additive
+>   `currentStage` (0-based) + `totalStages` fields (NON_NULL; existing consumers
+>   ignore unknown fields → **`notification-service` and `read-model-service` are
+>   UNCHANGED** and still observe `submitted` + exactly one terminal event per
+>   request — the terminal-once contract holds because `approved` fires once, on
+>   the final stage).
+> - **Contracts** — `approval-api.md` (create accepts `approverIds: [...]` OR the
+>   legacy `approverId`; detail/summary gain `stages` / `currentStage` /
+>   `totalStages`; `status` enum gains `IN_REVIEW`) + `erp-approval-events.md`
+>   (additive stage fields; `approved` = final-only; intermediate = no emit) are
+>   updated additively. **No new error code** (the existing approval codes cover
+>   it; the new `APPROVAL_ROUTE_INVALID` cause is a `details` field).
+> - **Still v2.1-deferred** (NOT this increment): **대결/위임 (delegation /
+>   substitution)** + the `erp.approval.delegated` event (a distinct
+>   authority-delegation model, cleanly layered on this working multi-stage base),
+>   and **event-driven fan-out of stage advances** (notify the next stage's
+>   approver) — see § Out-of-Scope.
+>
+> Where a v1.0 section below says "single-stage" / "multi-stage … v2", read it
+> through this amendment: multi-stage + `IN_REVIEW` are **now realised**; 대결/위임
+> remains the deferred frontier. The v1.0 single-stage path is the N=1 special case
+> (a strict subset — backward-compatible, regression-gated).
+
 ---
 
 ## Identity
@@ -815,14 +884,23 @@ memory `project_testcontainers_docker_desktop_blocker`).
 Named as deferred per the first-increment discipline (ADR-MONO-016 § D3 +
 read-model-service precedent); these are **not** designed in depth in this document:
 
-- **Multi-stage routing** — 1~N approval stages beyond the single stage (the
-  `Approval Route 1~N stage` of erp.md Ubiquitous Language). v2.
+- ~~**Multi-stage routing**~~ — **REALISED in v2.0** (TASK-ERP-BE-012, § v2.0
+  amendment): 1~N ordered approval stages, the `Approval Route 1~N stage` of erp.md
+  Ubiquitous Language.
+- ~~**`IN_REVIEW` intermediate state**~~ — **REALISED in v2.0** (TASK-ERP-BE-012):
+  the `(IN_REVIEW →)` of the erp.md state-machine language; reached when a
+  non-final stage of a multi-stage route is approved.
 - **대결 / 위임 (delegation / substitution)** — an absent approver's delegate; the
-  `erp.approval.delegated` event (erp.md § Internal Event Catalog). v2.
-- **`IN_REVIEW` intermediate state** — the optional `(IN_REVIEW →)` of the erp.md
-  state-machine language; appears only with multi-stage. v2.
-- **Rich inbox filtering** — beyond the basic pending-for-current-approver list
-  (status facets, full-text, delegated items). v2.
+  `erp.approval.delegated` event (erp.md § Internal Event Catalog). **v2.1** — a
+  distinct authority-delegation model layered on the v2.0 multi-stage base (the
+  immediate next increment).
+- **Event-driven fan-out of stage advances** — emitting an event when a
+  multi-stage request advances to `IN_REVIEW` so `notification-service` can notify
+  the next stage's approver. **v2.1** — in v2.0 the next approver is surfaced by
+  the inbox (pending-for-current-approver); intermediate advances are silent on
+  the bus to preserve the terminal-once consumer contract.
+- **Rich inbox filtering** — beyond the basic pending-for-current-stage-approver
+  list (status facets, full-text, delegated items). v2.
 - **Console parity slice** — the platform-console approval-inbox UI is a separate
   PC-FE task (ADR-MONO-013 § D3.1 parity discipline); approval-service is
   backend-only.
