@@ -82,7 +82,7 @@ class SubscriptionReactivationIntegrationTest extends AbstractIntegrationTest {
     com.example.membership.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     @org.junit.jupiter.api.BeforeEach
-    void stubGapClientCredentialsToken() {
+    void stubIamClientCredentialsToken() {
         org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
     }
 

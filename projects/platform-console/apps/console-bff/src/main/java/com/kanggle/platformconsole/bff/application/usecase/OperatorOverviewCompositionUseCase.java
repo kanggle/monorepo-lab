@@ -194,7 +194,7 @@ public class OperatorOverviewCompositionUseCase {
     private static String bearerFromCred(OutboundCredential cred) {
         return switch (cred) {
             case OutboundCredential.OperatorToken t -> t.token();
-            case OutboundCredential.GapOidcAccessToken t -> t.token();
+            case OutboundCredential.IamOidcAccessToken t -> t.token();
         };
     }
 

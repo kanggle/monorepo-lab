@@ -127,7 +127,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     com.example.auth.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     @org.junit.jupiter.api.BeforeEach
-    void stubGapClientCredentialsToken() {
+    void stubIamClientCredentialsToken() {
         org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
     }
 

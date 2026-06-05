@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
  * Per console-integration-contract.md § 2.4.9.1: the Operator Overview
  * composition route aggregates 5 domain fan-out results. The BFF credential
  * dispatch table (§ 2.4.9 D4 table) applies: GAP → OperatorToken;
- * wms/scm/finance/erp → GapOidcAccessToken.
+ * wms/scm/finance/erp → IamOidcAccessToken.
  *
  * This spec verifies the composition renders (200 OK + 5-card grid) when all
  * 5 producers are live. Degrade path (force-pause one domain) = MVP

@@ -132,46 +132,46 @@ class ConsoleBffSmokeIntegrationTest extends AbstractConsoleBffIntegrationTest {
     }
 
     @Test
-    @DisplayName("CredentialSelectionAdapter: WMS → GapOidcAccessToken (dry-run)")
+    @DisplayName("CredentialSelectionAdapter: WMS → IamOidcAccessToken (dry-run)")
     void credentialSelector_wmsDomain_returnsGapOidcToken() {
         withRequestContext("op-tok-abc", "wms", gapOidcJwt, () -> {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
             OutboundCredential cred = adapter.selectFor(DomainTarget.WMS);
-            assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
+            assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
         });
     }
 
     @Test
-    @DisplayName("CredentialSelectionAdapter: SCM → GapOidcAccessToken (dry-run)")
+    @DisplayName("CredentialSelectionAdapter: SCM → IamOidcAccessToken (dry-run)")
     void credentialSelector_scmDomain_returnsGapOidcToken() {
         withRequestContext("op-tok-abc", "scm", gapOidcJwt, () -> {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
             OutboundCredential cred = adapter.selectFor(DomainTarget.SCM);
-            assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
+            assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
         });
     }
 
     @Test
-    @DisplayName("CredentialSelectionAdapter: FINANCE → GapOidcAccessToken (dry-run)")
+    @DisplayName("CredentialSelectionAdapter: FINANCE → IamOidcAccessToken (dry-run)")
     void credentialSelector_financeDomain_returnsGapOidcToken() {
         withRequestContext("op-tok-abc", "finance", gapOidcJwt, () -> {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
             OutboundCredential cred = adapter.selectFor(DomainTarget.FINANCE);
-            assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
+            assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
         });
     }
 
     @Test
-    @DisplayName("CredentialSelectionAdapter: ERP → GapOidcAccessToken (dry-run)")
+    @DisplayName("CredentialSelectionAdapter: ERP → IamOidcAccessToken (dry-run)")
     void credentialSelector_erpDomain_returnsGapOidcToken() {
         withRequestContext("op-tok-abc", "erp", gapOidcJwt, () -> {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
             OutboundCredential cred = adapter.selectFor(DomainTarget.ERP);
-            assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
+            assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
         });
     }
 

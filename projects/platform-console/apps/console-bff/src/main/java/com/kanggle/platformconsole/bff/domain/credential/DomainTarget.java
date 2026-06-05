@@ -9,7 +9,7 @@ package com.kanggle.platformconsole.bff.domain.credential;
  * <p>Selector predicate (byte-verbatim from {@code console-integration-contract.md} § 2.4.9):
  * <ul>
  *   <li>{@code GAP} → {@link OutboundCredential.OperatorToken} (RFC 8693 exchanged)</li>
- *   <li>{@code WMS, SCM, FINANCE, ERP} → {@link OutboundCredential.GapOidcAccessToken}</li>
+ *   <li>{@code WMS, SCM, FINANCE, ERP} → {@link OutboundCredential.IamOidcAccessToken}</li>
  * </ul>
  */
 public enum DomainTarget {

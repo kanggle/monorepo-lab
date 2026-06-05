@@ -107,13 +107,13 @@ class OperatorOverviewCompositionUseCaseTest {
         lenient().when(credentialSelection.selectFor(DomainTarget.GAP))
                 .thenReturn(new OutboundCredential.OperatorToken(OPERATOR_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.SCM))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.FINANCE))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
     }
 
     // ------------------------------------------------------------------
@@ -316,11 +316,11 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenThrow(new MissingCredentialException("operator token absent"));
         // Other legs ok.
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.SCM))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));

@@ -1315,7 +1315,7 @@ For the inbound-validation errors **before** any outbound leg fires
 ##### Auth flow (verbatim from § 2.4.9, restated for cross-reference only)
 
 - **Inbound** (console-web SSR → console-bff): `Authorization` (GAP OIDC access token, inbound principal) + `X-Operator-Token` (RFC 8693 exchanged operator token, request-scoped via `OperatorCredentialContext`) + `X-Tenant-Id` (operator's selected active tenant). The browser **never** reaches console-bff directly.
-- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → GapOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
+- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
 
 ##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
 

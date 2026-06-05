@@ -22,7 +22,7 @@ import { env } from '@/shared/config/env';
  *   - .claude/skills/frontend/auth-client/SKILL.md
  */
 
-interface GapOidcProfile {
+interface IamOidcProfile {
   sub: string;
   email?: string;
   name?: string;
@@ -61,7 +61,7 @@ export const authConfig: NextAuthConfig = {
       // PKCE + state — required by GAP for `authorization_code` (consumer-
       // integration-guide § Phase 2).
       checks: ['pkce', 'state'],
-      profile(profile: GapOidcProfile) {
+      profile(profile: IamOidcProfile) {
         return {
           id: profile.sub,
           accountId: profile.account_id ?? profile.sub,
@@ -88,7 +88,7 @@ export const authConfig: NextAuthConfig = {
         token.idToken = account.id_token;
       }
       if (profile) {
-        const p = profile as GapOidcProfile;
+        const p = profile as IamOidcProfile;
         token.tenantId = p.tenant_id ?? token.tenantId;
         token.accountId = p.account_id ?? token.accountId;
         token.roles = p.roles ?? token.roles;
