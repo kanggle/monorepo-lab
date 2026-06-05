@@ -88,8 +88,8 @@ Still **read-only / no re-emission** (E5).
 
 | Topic | Producer | Projection table | Handler |
 |---|---|---|---|
-| `erp.approval.delegated.v1` | approval-service | `delegation_fact_proj` | upsert by `aggregateId` (= `grantId`); set `status=ACTIVE`, `delegatorId`/`delegateId`, `validFrom`/`validTo`, `reason` |
-| `erp.approval.delegation.revoked.v1` | approval-service | `delegation_fact_proj` | upsert; `status=REVOKED`, `revokedAt`; the validity window is preserved (the revoke payload carries none) |
+| `erp.approval.delegated.v1` | approval-service | `delegation_fact_proj` | upsert by `aggregateId` (= `grantId`); set `status=ACTIVE`, `delegatorId`/`delegateId`, `validFrom`/`validTo`, `reason`, **`scope`/`scopeRequestId` (TASK-ERP-BE-018)** |
+| `erp.approval.delegation.revoked.v1` | approval-service | `delegation_fact_proj` | upsert; `status=REVOKED`, `revokedAt`; the validity window **and `scope`/`scopeRequestId` are preserved** (the revoke payload carries neither) |
 
 Consumer group: `erp-read-model-v1` (shared — the delegation handlers join the
 existing group; partition key = `aggregateId` = `grantId`).
@@ -104,8 +104,15 @@ existing group; partition key = `aggregateId` = `grantId`).
   status stays REVOKED).
 - **Out-of-order tolerance**: a `revoked` arriving without a prior `delegated`
   (compaction / replay-from-middle) still upserts a REVOKED row; the grant-only
-  fields (`validFrom`/`validTo`) are left ABSENT (E5 — no fabrication; the revoke
-  payload carries no window).
+  fields (`validFrom`/`validTo`, **and `scope`/`scopeRequestId` — TASK-ERP-BE-018**)
+  are left ABSENT (E5 — no fabrication; the revoke payload carries none).
+- **`scope`/`scopeRequestId` are grant-time immutable metadata (TASK-ERP-BE-018)** —
+  projected from the `delegated` payload (`erp-approval-events.md` § v2.3): `scope`
+  ∈ {`GLOBAL`, `REQUEST`}, `scopeRequestId` set only when `REQUEST`. Treated exactly
+  like the validity window: the `delegated` handler **always** (re)stamps them — even
+  onto a sticky-terminal REVOKED row (a late grant fills a revoke-before-grant row's
+  ABSENT scope while the status stays REVOKED) — and the `revoked` handler **never**
+  restates them. A grant that is never seen leaves `scope` ABSENT (unknown, honest).
 - **Time-window expiry is read-time only**: `validTo` in the past is NOT a status —
   an `?activeAt=<instant>` list filter evaluates `status=ACTIVE ∧ validFrom ≤ t ∧
   (validTo null ∨ t ≤ validTo)`; the projected status tracks only the grant/revoke

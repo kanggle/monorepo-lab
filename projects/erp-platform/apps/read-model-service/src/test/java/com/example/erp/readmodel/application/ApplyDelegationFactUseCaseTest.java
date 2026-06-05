@@ -45,13 +45,13 @@ class ApplyDelegationFactUseCaseTest {
     private DelegationFactCommand granted(String eventId) {
         return new DelegationFactCommand(eventId, "erp.approval.delegated.v1", "dgr-1",
                 DelegationFactStatus.ACTIVE, "emp-a", "emp-d", FROM, TO, "vacation",
-                T_GRANT, null);
+                T_GRANT, null, "REQUEST", "appr-1");
     }
 
     private DelegationFactCommand revoked(String eventId) {
         return new DelegationFactCommand(eventId, "erp.approval.delegation.revoked.v1", "dgr-1",
                 DelegationFactStatus.REVOKED, "emp-a", "emp-d", null, null, "back",
-                T_REVOKE, T_REVOKE);
+                T_REVOKE, T_REVOKE, null, null);
     }
 
     @Test
@@ -68,13 +68,17 @@ class ApplyDelegationFactUseCaseTest {
         assertThat(captor.getValue().validFrom()).isEqualTo(FROM);
         assertThat(captor.getValue().validTo()).isEqualTo(TO);
         assertThat(captor.getValue().revokedAt()).isNull();
+        // AC-1: the REQUEST scope + scopeRequestId are projected.
+        assertThat(captor.getValue().scope()).isEqualTo("REQUEST");
+        assertThat(captor.getValue().scopeRequestId()).isEqualTo("appr-1");
         verify(dedupeService).markProcessed("evt-1", "erp.approval.delegated.v1", "dgr-1");
     }
 
     @Test
     void revokeOnExistingActiveTransitionsToRevoked() {
         DelegationFactProjection existing = DelegationFactProjection.ofGranted(
-                "dgr-1", "emp-a", "emp-d", FROM, TO, "vacation", T_GRANT, "evt-1");
+                "dgr-1", "emp-a", "emp-d", FROM, TO, "vacation", T_GRANT, "evt-1",
+                "GLOBAL", null);
         when(dedupeService.isDuplicate("evt-2")).thenReturn(false);
         when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(existing));
 
@@ -114,6 +118,9 @@ class ApplyDelegationFactUseCaseTest {
         useCase.apply(granted("evt-late"));
 
         assertThat(revokedRow.status()).isEqualTo(DelegationFactStatus.REVOKED);
+        // AC-3: the late grant fills the previously-NULL scope without reverting status.
+        assertThat(revokedRow.scope()).isEqualTo("REQUEST");
+        assertThat(revokedRow.scopeRequestId()).isEqualTo("appr-1");
         verify(delegationRepository).save(revokedRow);
     }
 

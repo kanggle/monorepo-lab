@@ -12,6 +12,11 @@ import java.time.Instant;
  * / {@code validTo} / {@code reason} / {@code revokedAt} are ABSENT (NON_NULL)
  * when not applicable — an out-of-order revoke-before-grant leaves the validity
  * window absent (no fabrication, E5).
+ *
+ * <p>{@code scope} ({@code GLOBAL}|{@code REQUEST}) + {@code scopeRequestId} are the
+ * grant-time scoping (TASK-ERP-BE-018). NON_NULL → {@code scope} is ABSENT for a
+ * revoke-only (out-of-order) row whose scope is unknown, and {@code scopeRequestId}
+ * is ABSENT for a {@code GLOBAL} grant (only present when {@code scope == REQUEST}).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record DelegationFactResponse(
@@ -22,7 +27,9 @@ public record DelegationFactResponse(
         Instant validFrom,
         Instant validTo,
         String reason,
-        Instant revokedAt
+        Instant revokedAt,
+        String scope,
+        String scopeRequestId
 ) {
 
     public static DelegationFactResponse from(DelegationFactProjection fact) {
@@ -34,6 +41,8 @@ public record DelegationFactResponse(
                 fact.validFrom(),
                 fact.validTo(),
                 fact.reason(),
-                fact.revokedAt());
+                fact.revokedAt(),
+                fact.scope(),
+                fact.scopeRequestId());
     }
 }

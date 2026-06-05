@@ -61,6 +61,10 @@ public class DelegationEnvelopeToCommandMapper {
         Instant validFrom = granted ? envelope.payloadInstant("validFrom") : null;
         Instant validTo = granted ? envelope.payloadInstant("validTo") : null;
         Instant revokedAt = granted ? null : occurredAt;
+        // scope/scopeRequestId are grant-time metadata — present only on a delegated
+        // event (the revoke payload restates neither; TASK-ERP-BE-018).
+        String scope = granted ? envelope.payloadString("scope") : null;
+        String scopeRequestId = granted ? envelope.payloadString("scopeRequestId") : null;
 
         return new DelegationFactCommand(
                 envelope.eventId(),
@@ -73,6 +77,8 @@ public class DelegationEnvelopeToCommandMapper {
                 validTo,
                 envelope.payloadString("reason"),
                 occurredAt,
-                revokedAt);
+                revokedAt,
+                scope,
+                scopeRequestId);
     }
 }

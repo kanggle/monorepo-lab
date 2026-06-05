@@ -315,6 +315,19 @@ public abstract class AbstractReadModelIntegrationTest {
     protected String delegationEnvelope(String eventId, String eventType, String grantId,
                                         String delegatorId, String delegateId,
                                         String validFrom, String validTo, String reason) {
+        return delegationEnvelope(eventId, eventType, grantId, delegatorId, delegateId,
+                validFrom, validTo, reason, null, null);
+    }
+
+    /**
+     * Overload carrying the grant-time {@code scope}/{@code scopeRequestId}
+     * (TASK-ERP-BE-018) — present only on a {@code delegated} payload. Pass both
+     * null for a revoke envelope (or a delegated envelope predating BE-017).
+     */
+    protected String delegationEnvelope(String eventId, String eventType, String grantId,
+                                        String delegatorId, String delegateId,
+                                        String validFrom, String validTo, String reason,
+                                        String scope, String scopeRequestId) {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("grantId", grantId);
         payload.put("delegatorId", delegatorId);
@@ -327,6 +340,12 @@ public abstract class AbstractReadModelIntegrationTest {
         }
         if (reason != null) {
             payload.put("reason", reason);
+        }
+        if (scope != null) {
+            payload.put("scope", scope);
+        }
+        if (scopeRequestId != null) {
+            payload.put("scopeRequestId", scopeRequestId);
         }
         payload.put("tenantId", "erp");
         payload.put("occurredAt", Instant.now().toString());

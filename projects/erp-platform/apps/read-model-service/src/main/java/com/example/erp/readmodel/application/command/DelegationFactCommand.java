@@ -16,6 +16,11 @@ import java.time.Instant;
  * {@code erp.approval.delegation.revoked.v1}). {@code validFrom}/{@code validTo}
  * are non-null only on a {@code delegated} event (the revoke payload carries no
  * validity window). {@code revokedAt} is the {@code occurredAt} of a revoke event.
+ *
+ * <p>{@code scope} ({@code GLOBAL}|{@code REQUEST}) + {@code scopeRequestId} are the
+ * grant-time scoping (TASK-ERP-BE-018); they are non-null only on a {@code delegated}
+ * event (a revoke restates neither), and {@code scopeRequestId} is non-null only when
+ * {@code scope == REQUEST}.
  */
 public record DelegationFactCommand(
         String eventId,
@@ -28,7 +33,9 @@ public record DelegationFactCommand(
         Instant validTo,
         String reason,
         Instant occurredAt,
-        Instant revokedAt
+        Instant revokedAt,
+        String scope,
+        String scopeRequestId
 ) {
 
     public boolean isGranted() {

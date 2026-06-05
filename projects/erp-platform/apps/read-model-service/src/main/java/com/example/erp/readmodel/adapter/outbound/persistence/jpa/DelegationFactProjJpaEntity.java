@@ -56,4 +56,10 @@ public class DelegationFactProjJpaEntity {
 
     @Column(name = "last_event_id", nullable = false, length = 64)
     private String lastEventId;
+
+    @Column(name = "scope", length = 16)
+    private String scope;
+
+    @Column(name = "scope_request_id", length = 64)
+    private String scopeRequestId;
 }

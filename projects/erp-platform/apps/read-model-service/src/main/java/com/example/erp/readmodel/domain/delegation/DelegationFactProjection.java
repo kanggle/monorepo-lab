@@ -40,11 +40,14 @@ public final class DelegationFactProjection {
     private Instant revokedAt;
     private Instant lastEventAt;
     private String lastEventId;
+    private String scope;
+    private String scopeRequestId;
 
     public DelegationFactProjection(String grantId, DelegationFactStatus status,
                                     String delegatorId, String delegateId,
                                     Instant validFrom, Instant validTo, String reason,
-                                    Instant revokedAt, Instant lastEventAt, String lastEventId) {
+                                    Instant revokedAt, Instant lastEventAt, String lastEventId,
+                                    String scope, String scopeRequestId) {
         this.grantId = Objects.requireNonNull(grantId, "grantId");
         this.status = status;
         this.delegatorId = delegatorId;
@@ -55,6 +58,8 @@ public final class DelegationFactProjection {
         this.revokedAt = revokedAt;
         this.lastEventAt = lastEventAt;
         this.lastEventId = lastEventId;
+        this.scope = scope;
+        this.scopeRequestId = scopeRequestId;
     }
 
     /**
@@ -64,18 +69,20 @@ public final class DelegationFactProjection {
     public static DelegationFactProjection ofGranted(String grantId, String delegatorId,
                                                      String delegateId, Instant validFrom,
                                                      Instant validTo, String reason,
-                                                     Instant lastEventAt, String lastEventId) {
+                                                     Instant lastEventAt, String lastEventId,
+                                                     String scope, String scopeRequestId) {
         return new DelegationFactProjection(grantId, DelegationFactStatus.ACTIVE,
                 delegatorId, delegateId, validFrom, validTo, reason,
-                null, lastEventAt, lastEventId);
+                null, lastEventAt, lastEventId, scope, scopeRequestId);
     }
 
     /**
      * Factory for a {@code REVOKED} fact produced when the {@code revoked} event
      * arrives with no prior {@code delegated} row (out-of-order). The grant-only
-     * fields ({@code validFrom}/{@code validTo}) are left {@code null} (ABSENT —
-     * no fabrication, E5; the revoke payload carries no validity window).
-     * {@code revokedAt} = the event instant.
+     * fields ({@code validFrom}/{@code validTo} + {@code scope}/{@code scopeRequestId})
+     * are left {@code null} (ABSENT — no fabrication, E5; the revoke payload carries
+     * neither the validity window nor the scope — a later {@code delegated} fills
+     * the scope without reverting the status). {@code revokedAt} = the event instant.
      */
     public static DelegationFactProjection ofRevoked(String grantId, String delegatorId,
                                                      String delegateId, String reason,
@@ -83,7 +90,7 @@ public final class DelegationFactProjection {
                                                      String lastEventId) {
         return new DelegationFactProjection(grantId, DelegationFactStatus.REVOKED,
                 delegatorId, delegateId, null, null, reason,
-                revokedAt, lastEventAt, lastEventId);
+                revokedAt, lastEventAt, lastEventId, null, null);
     }
 
     /**
@@ -94,14 +101,25 @@ public final class DelegationFactProjection {
      * grant payload (the {@code delegated} event is authoritative for the window —
      * including filling in an out-of-order row whose window was ABSENT). Always
      * advances the provenance timestamps for a non-duplicate event.
+     *
+     * <p>{@code scope}/{@code scopeRequestId} are grant-time immutable metadata
+     * (same handling as {@code validFrom}/{@code validTo}): they are (re)stamped
+     * <b>UNCONDITIONALLY</b> — OUTSIDE the sticky-terminal {@code status} guard — so
+     * an out-of-order {@code revoke}-before-{@code grant} row (created with
+     * {@code scope == null}) gets its scope filled by the later {@code delegated}
+     * event WITHOUT reverting the REVOKED status (the {@code delegated} event is the
+     * authoritative source for the scope; TASK-ERP-BE-018).
      */
     public void applyGrant(String delegatorId, String delegateId, Instant validFrom,
                            Instant validTo, String reason,
-                           Instant lastEventAt, String lastEventId) {
+                           Instant lastEventAt, String lastEventId,
+                           String scope, String scopeRequestId) {
         this.delegatorId = delegatorId;
         this.delegateId = delegateId;
         this.validFrom = validFrom;
         this.validTo = validTo;
+        this.scope = scope;
+        this.scopeRequestId = scopeRequestId;
         if (reason != null) {
             this.reason = reason;
         }
@@ -114,10 +132,11 @@ public final class DelegationFactProjection {
 
     /**
      * Applies a {@code revoked} event to an EXISTING row. Last-revoke-wins: sets
-     * {@code status = REVOKED} + {@code revokedAt}; the validity window is
-     * preserved (the revoke event does not restate it). The delegator/delegate
-     * ids are refreshed (the revoke payload carries them). {@code reason} is
-     * updated when supplied.
+     * {@code status = REVOKED} + {@code revokedAt}; the validity window +
+     * {@code scope}/{@code scopeRequestId} are preserved (the revoke event does not
+     * restate them — same as the validity window; TASK-ERP-BE-018). The
+     * delegator/delegate ids are refreshed (the revoke payload carries them).
+     * {@code reason} is updated when supplied.
      */
     public void applyRevoke(String delegatorId, String delegateId, String reason,
                             Instant revokedAt, Instant lastEventAt, String lastEventId) {
@@ -163,4 +182,6 @@ public final class DelegationFactProjection {
     public Instant revokedAt() { return revokedAt; }
     public Instant lastEventAt() { return lastEventAt; }
     public String lastEventId() { return lastEventId; }
+    public String scope() { return scope; }
+    public String scopeRequestId() { return scopeRequestId; }
 }

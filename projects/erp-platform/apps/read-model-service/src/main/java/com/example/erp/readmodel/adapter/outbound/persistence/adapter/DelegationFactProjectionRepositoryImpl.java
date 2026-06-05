@@ -68,6 +68,8 @@ public class DelegationFactProjectionRepositoryImpl implements DelegationFactPro
         e.setRevokedAt(projection.revokedAt());
         e.setLastEventAt(projection.lastEventAt());
         e.setLastEventId(projection.lastEventId());
+        e.setScope(projection.scope());
+        e.setScopeRequestId(projection.scopeRequestId());
         jpa.save(e);
     }
 
@@ -117,6 +119,7 @@ public class DelegationFactProjectionRepositoryImpl implements DelegationFactPro
                 e.getStatus() == null ? null : DelegationFactStatus.valueOf(e.getStatus()),
                 e.getDelegatorId(), e.getDelegateId(),
                 e.getValidFrom(), e.getValidTo(), e.getReason(),
-                e.getRevokedAt(), e.getLastEventAt(), e.getLastEventId());
+                e.getRevokedAt(), e.getLastEventAt(), e.getLastEventId(),
+                e.getScope(), e.getScopeRequestId());
     }
 }
