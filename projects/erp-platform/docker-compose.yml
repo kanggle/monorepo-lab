@@ -254,6 +254,64 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
+  # notification-service — TASK-ERP-BE-011 active. Approval-notification fan-out
+  # (first increment): consumes erp.approval.{submitted,approved,rejected,
+  # withdrawn}.v1, resolves recipient + renders, persists in-app Notification +
+  # Category C delivery (IN_APP), serves a recipient-scoped read-only inbox
+  # (event-consumer + rest-api dual-type). Terminal consumer (no outbox, no
+  # re-emission). Shares the erp_db MySQL instance (separate tables) + the Kafka
+  # broker. Path-based routing on erp.local: /api/erp/notifications/** →
+  # notification-service (priority=100, like read-model / approval); everything
+  # else → masterdata-service (catch-all, priority=1). v1 direct-routing bridge
+  # until gateway-service.
+  # ---------------------------------------------------------------------------
+  notification-service:
+    image: erp-platform/notification-service:local
+    container_name: erp-platform-notification
+    build:
+      context: ./apps/notification-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: ${MYSQL_DB:-erp_db}
+      MYSQL_USER: ${MYSQL_USER:-erp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
+      KAFKA_BOOTSTRAP: kafka:9092
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    labels:
+      # Path-based routing on erp.local: /api/erp/notifications/** →
+      # notification-service. priority=100 wins over the masterdata-service
+      # catch-all (priority=1); read-model (/api/erp/read-model) + approval
+      # (/api/erp/approval) own distinct PathPrefixes so the routers never collide.
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.erp-notification.rule=Host(`erp.local`) && PathPrefix(`/api/erp/notifications`)"
+      - "traefik.http.routers.erp-notification.entrypoints=web"
+      - "traefik.http.routers.erp-notification.priority=100"
+      - "traefik.http.services.erp-notification.loadbalancer.server.port=8080"
+    networks:
+      - erp-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # MySQL 8 — backing store for masterdata-service (TASK-ERP-BE-001+). erp_db.
   # Mirrors GAP's MySQL engine choice (GAP Identity tables are MySQL); erp
   # master-data tables live here. expose: only — no host port (Local
