@@ -464,15 +464,19 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     // + TASK-PC-FE-051: 3 approval GET routes (requests list, requests/[id]
     //   detail, inbox) = 15
     // + TASK-PC-FE-052: 2 notification GET routes (notifications inbox,
-    //   notifications/[id] detail) = 17 total GET route files.
-    expect(getRouteFiles).toBe(17);
+    //   notifications/[id] detail) = 17
+    // + TASK-PC-FE-054: 1 delegation GET route (delegations list) = 18 total
+    //   GET route files.
+    expect(getRouteFiles).toBe(18);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16
     // + TASK-PC-FE-051: 2 approval POST routes (requests create, the
     //   [id]/[transition] dynamic transition route) = 18
     // + TASK-PC-FE-052: 1 notification POST route (notifications/[id]/read
-    //   idempotent mark-read) = 19.
-    expect(postRouteFiles).toBe(19);
+    //   idempotent mark-read) = 19
+    // + TASK-PC-FE-054: 2 delegation POST routes (delegations create,
+    //   delegations/{id}/revoke) = 21.
+    expect(postRouteFiles).toBe(21);
   });
 });
 
