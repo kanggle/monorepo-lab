@@ -1,8 +1,10 @@
 package com.example.erp.notification.infrastructure.messaging;
 
 import com.example.erp.notification.application.command.NotifyOnApprovalCommand;
+import com.example.erp.notification.application.command.NotifyOnDelegationCommand;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.render.ApprovalEvent;
+import com.example.erp.notification.domain.render.DelegationEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -92,5 +94,64 @@ public class EnvelopeToCommandMapper {
             throw new InvalidEnvelopeException("Missing approver/submitter id for type " + type
                     + " on topic " + topic);
         }
+    }
+
+    /**
+     * Maps the {@code erp.approval.delegated.v1} envelope to a
+     * {@link NotifyOnDelegationCommand} (TASK-ERP-BE-014). Parallel to {@link #map}
+     * — the delegation payload has a different shape ({@code grantId} /
+     * {@code delegatorId} / {@code delegateId} / {@code validFrom}; no
+     * {@code approverId} / {@code submitterId}). A malformed / invalid envelope, a
+     * non-{@code erp} tenant, or a null {@code delegateId} (the recipient) is
+     * rejected with {@link InvalidEnvelopeException} → straight to the DLT, no
+     * retry. {@code validTo} / {@code reason} are optional (NON_NULL absent).
+     */
+    public NotifyOnDelegationCommand mapDelegation(String rawValue, String topic) {
+        ApprovalEventEnvelope envelope;
+        try {
+            envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
+        } catch (Exception e) {
+            throw new InvalidEnvelopeException("Unparseable envelope on topic " + topic
+                    + ": " + e.getMessage());
+        }
+        if (envelope == null || !envelope.isValid()) {
+            throw new InvalidEnvelopeException("Invalid envelope (missing eventId/aggregateId/"
+                    + "payload) on topic " + topic);
+        }
+        String tenantId = envelope.payloadString("tenantId");
+        if (tenantId == null || tenantId.isBlank()) {
+            tenantId = envelope.tenantId();
+        }
+        if (tenantId == null || !requiredTenantId.equals(tenantId)) {
+            throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
+                    + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
+        }
+
+        String grantId = envelope.payloadString("grantId");
+        if (grantId == null || grantId.isBlank()) {
+            grantId = envelope.aggregateId();
+        }
+        String delegateId = envelope.payloadString("delegateId");
+        if (delegateId == null || delegateId.isBlank()) {
+            throw new InvalidEnvelopeException("Null delegateId (recipient) on topic " + topic
+                    + " (cannot deliver a delegation notification to an absent delegate)");
+        }
+        String delegatorId = envelope.payloadString("delegatorId");
+        String validFrom = envelope.payloadString("validFrom");
+        if (delegatorId == null || delegatorId.isBlank()
+                || validFrom == null || validFrom.isBlank()) {
+            throw new InvalidEnvelopeException("Missing delegatorId/validFrom on topic " + topic);
+        }
+
+        DelegationEvent event = new DelegationEvent(
+                envelope.eventId(),
+                tenantId,
+                grantId,
+                delegatorId,
+                delegateId,
+                validFrom,
+                envelope.payloadString("validTo"),
+                envelope.payloadString("reason"));
+        return new NotifyOnDelegationCommand(event, topic);
     }
 }

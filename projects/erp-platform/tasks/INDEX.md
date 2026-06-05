@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-014-notification-delegation-consumer.md` — **READY (2026-06-06)**. notification-service delegation-granted 알림 — `erp.approval.delegated.v1` 소비(approval→notification **delegated leg 완결**). ERP-BE-013 이 발행하나 소비자 0이던 producer-only 토픽을 notification-service 가 **5번째 consumer** 로 구독 → 위임받은 결재자(`delegateId`)에게 "결재 권한 위임됨" in-app 알림. **평행 additive 경로**(기존 4 transition consumer + `ApprovalEvent`/`NotifyOnApprovalCommand`/`map(...)`/`handle(NotifyOnApprovalCommand)` **byte-unchanged**): 신규 `DelegationEvent`(render) + `NotifyOnDelegationCommand` + `RecipientResolver.resolve(DelegationEvent)`/`NotificationFactory.from(DelegationEvent)` overload + `SourceRef.DELEGATION` + `NotificationType.DELEGATION_GRANTED`(enum STRING → Flyway 0) + `EnvelopeToCommandMapper.mapDelegation` + `ApprovalDelegatedConsumer`(@RetryableTopic 3-retry+DLT, group `erp-notification-v1`, dedupe T8) + UseCase 공유 `dispatch` helper. terminal consumer(no outbox/no re-emit, grep 0) 불변. spec/contract 갱신: architecture.md §v1.1 amendment + notification-subscriptions.md(5번째 topic) + erp-approval-events.md 소비자 노트. body=delegatorId/validFrom/validTo(없으면 "무기한")/reason(present 시). revoke=이벤트 무발행→무알림(설계). **out-of-scope**: read-model delegation projection(별 후속 ERP-BE-015 후보) / revoke 알림 / 외부 채널. tests: unit(resolver/factory/usecase/mapper delegation) + IT(`NotificationEndToEndIntegrationTest` delegation→inbox + dedupe + 무기한 렌더). 로컬 `:projects:erp-platform:apps:notification-service:check` GREEN(unit). 분석=Opus 4.8 / 구현 권장=Opus. 사용자 "delegated-event 소비자 고리" 선택. [[project_monorepo_template_strategy]] [[project_platform_console_adr_013]]
 
 ## in-progress
 

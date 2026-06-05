@@ -45,9 +45,30 @@ already on the payload** (a v2 increment may resolve master display names at
 read time, same E5 read-time-resolution rule as the read-model). The notification
 is **never** fabricated from a master lookup that has not occurred.
 
-> **`erp.approval.delegated.v1` is NOT consumed** — delegation is approval-service
-> v2 and is not emitted in this increment (no delegate recipient to notify).
->
+### Consumed topic — delegation (TASK-ERP-BE-014, additive)
+
+The fifth consumed topic. Producer = `approval-service`
+([`erp-approval-events.md`](erp-approval-events.md) § v2.1 amendment). A
+`DelegationGrant`-create event → one in-app `Notification` to the **delegate**.
+This topic has a **different aggregate + payload shape** from the four transition
+topics (`aggregateType = "DelegationGrant"`, partition key = `grantId`, NO
+`approverId`/`submitterId`/`subjectId`), so it is consumed by a parallel mapper
+path — the four transition consumers are **byte-unchanged**.
+
+| Topic | Producer | Recipient resolution | Notification type |
+|---|---|---|---|
+| `erp.approval.delegated.v1` | approval-service | `payload.delegateId` (the employee who **received** the delegation authority is told they may now act on the delegator's behalf) | `DELEGATION_GRANTED` |
+
+- `aggregateId` (= `grantId`) → partition key; written to `Notification.sourceId`
+  with `sourceType = DELEGATION`.
+- `payload.delegateId` — the resolved recipient; null/blank → invalid → immediate
+  DLT (cannot deliver to an absent recipient).
+- `payload.delegatorId` / `payload.validFrom` — always present; composed into the
+  body. `payload.validTo` ABSENT = open-ended ("무기한"); `payload.reason` ABSENT
+  when none (`@JsonInclude(NON_NULL)` — same absent-field convention).
+- Grant **revoke** emits **no** event (`erp-approval-events.md` v2.1 — audit only),
+  so there is no revoke notification (deliberate, recorded — not a silent drop).
+
 > **`erp.masterdata.*.changed.v1` (masterdata-change notifications) are NOT
 > consumed** in this increment — master-change / permission-change / data-scope
 > notifications (`rules/domains/erp.md` § Integration Boundaries "알림 채널":
@@ -148,9 +169,13 @@ later increment wires against a known gap rather than discovering a silent drop:
   § Integration Boundaries "알림 채널"). v1 is **in-app inbox only**.
 - **Masterdata-change notifications** (`erp.masterdata.*.changed.v1`) — 마스터
   변경 통지. Not subscribed in v1.
-- **Permission / data-scope / delegation notifications** (`erp.permission.*`,
-  `erp.approval.delegated.v1`) — forward-declared in the catalog, owned by the
-  v2 permission / delegation increments; not emitted, so not consumed.
+- **Permission / data-scope notifications** (`erp.permission.*`) —
+  forward-declared in the catalog, owned by the v2 permission increment; not
+  emitted, so not consumed. (Delegation `erp.approval.delegated.v1` **is** now
+  consumed — § Consumed topic — delegation, TASK-ERP-BE-014.)
+- **Delegation revoke notification** — `erp-approval-events.md` v2.1 emits **no**
+  revoke event (grant revoke is audit-only); a revoke notification waits on a
+  future `erp.approval.delegation.revoked` producer increment.
 - **Recipient preferences / digest / batching** — per-recipient channel
   preferences and digest roll-up are v2; v1 delivers one inbox row per event.
 - **Display-name enrichment** at consume time — v1 stores the ids; read-time

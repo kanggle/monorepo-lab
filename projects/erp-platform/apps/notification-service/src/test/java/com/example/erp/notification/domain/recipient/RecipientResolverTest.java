@@ -2,6 +2,7 @@ package com.example.erp.notification.domain.recipient;
 
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.render.ApprovalEvent;
+import com.example.erp.notification.domain.render.DelegationEvent;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,5 +45,13 @@ class RecipientResolverTest {
         // pending is the one to be told.
         assertThat(resolver.resolve(event(NotificationType.APPROVAL_WITHDRAWN)).employeeId())
                 .isEqualTo("emp-approver");
+    }
+
+    @Test
+    void delegatedNotifiesDelegate() {
+        // TASK-ERP-BE-014: the employee who RECEIVED the delegation authority.
+        DelegationEvent d = new DelegationEvent("evt-d", "erp", "dgr-1",
+                "emp-A", "emp-D", "2026-06-06T00:00:00Z", null, null);
+        assertThat(resolver.resolve(d).employeeId()).isEqualTo("emp-D");
     }
 }
