@@ -166,6 +166,54 @@ All implementation tasks targeting this service must follow this declaration,
 > (단계/대결/위임): BE-009 single-stage → BE-012 multi-stage + `IN_REVIEW` →
 > BE-013 delegation.
 
+> **v2.3 AMENDMENT (TASK-ERP-BE-017 — per-request delegation scoping; additive,
+> the v2.1 blanket grant is the `GLOBAL` default).** Realises the **per-request**
+> half of the v2.2-deferred "per-request/per-route delegation" sub-part. A
+> `DelegationGrant` gains a **`scope`** dimension:
+> - **`scope ∈ {GLOBAL, REQUEST}`** (`@Enumerated(STRING)`, NOT NULL, default
+>   `GLOBAL`) + **`scopeRequestId`** (nullable; the target `approvalRequestId` when
+>   `REQUEST`). Coherence invariant (→ `DELEGATION_INVALID`, 422): `REQUEST` ⟺
+>   `scopeRequestId` non-blank; `GLOBAL` ⟺ `scopeRequestId` null. New pure domain
+>   method `coversRequest(approvalRequestId)` = `GLOBAL || scopeRequestId == rid`.
+> - **`scope = GLOBAL`** preserves the v2.1 blanket behavior **byte-for-byte** (D
+>   may act for A at any stage where A is approver). **`scope = REQUEST`** narrows
+>   the grant to ONE approval request — the delegate authorizes only that request,
+>   and is fail-closed `APPROVAL_NOT_AUTHORIZED_APPROVER` for every other request
+>   of A.
+> - **Transition-time resolution** — `DelegationResolver.resolve` gains the
+>   `approvalRequestId`; an active grant authorizes only when `isActiveAt(now)`
+>   **and** `coversRequest(approvalRequestId)`. The in-domain `coversRequest`
+>   re-check is the authoritative filter (defense-in-depth over the SQL predicate
+>   that pre-narrows by scope). SoD (delegate ≠ submitter) + `withdraw`
+>   submitter-only are unchanged.
+> - **Events** — `erp.approval.delegated.v1` payload gains `scope` (always) +
+>   `scopeRequestId` (REQUEST only, NON_NULL). This is a **producer-only forward
+>   interface** (mirrors how BE-013 added the `delegated` topic before BE-015
+>   consumed it): read-model + notification ignore the new fields (unknown-field
+>   tolerant) until **TASK-ERP-BE-018** (read-model `delegation_fact_proj.scope`)
+>   + **TASK-PC-FE-056** (console card) consume them. `publishRevoked` + the four
+>   transition topics are **byte-unchanged** (revoke does not restate scope —
+>   sticky like the validity window).
+> - **REST (additive)** — `POST /api/erp/approval/delegations` accepts `scope?`
+>   (default GLOBAL) + `scopeRequestId?`; the grant view carries `scope` (+
+>   `scopeRequestId` when REQUEST). Unknown `scope` string → 400 `VALIDATION_ERROR`;
+>   coherence violation → 422 `DELEGATION_INVALID`.
+> - **Persistence** — Flyway `V4__delegation_scope.sql` adds `scope` (backfill
+>   `GLOBAL`) + `scope_request_id` + **two CHECK constraints**
+>   (`ck_delegation_grant_scope` value set + `ck_delegation_grant_scope_req`
+>   scope↔request_id coherence). **§16**: the enum VARCHAR fits, but the value set
+>   + coherence are DB-enforced; the Docker-free `:check` slice does not exercise
+>   CHECK → the Testcontainers IT is the authoritative gate. Contract:
+>   [`approval-api.md`](../../contracts/http/approval-api.md) § v2.3 +
+>   [`erp-approval-events.md`](../../contracts/events/erp-approval-events.md) § v2.3.
+>
+> **Still v2.2-deferred after this increment**: **per-route** delegation (a grant
+> scoped to a route template rather than a single request — needs a first-class
+> route-template identity that does not yet exist; not invented here), automatic
+> absence detection, transitive/chained delegation. The console scope display +
+> the read-model scope projection are the forward-declared follow-ups
+> (PC-FE-056 / BE-018) above.
+
 ---
 
 ## Identity
@@ -969,9 +1017,12 @@ read-model-service precedent); these are **not** designed in depth in this docum
   (A→D) lets an absent approver's delegate act at the approver's stage; the
   `erp.approval.delegated.v1` event (erp.md § Internal Event Catalog) is emitted on
   grant create; transitions carry `onBehalfOf` audit + `actingForApproverId`.
-  **v2.2-deferred sub-parts**: per-request/per-route delegation, automatic absence
-  detection, transitive/chained delegation, and the console delegation read-view
-  UI. The `read-model` consumer of the delegation events is **REALISED in
+  **v2.2-deferred sub-parts**: ~~per-request~~ (**REALISED in TASK-ERP-BE-017** —
+  `DelegationGrant.scope = GLOBAL|REQUEST`, § v2.3 amendment; the read-model scope
+  projection + console scope display are forward-declared as BE-018 / PC-FE-056) /
+  **per-route** delegation (still deferred — needs a route-template identity),
+  automatic absence detection, transitive/chained delegation, and the console
+  delegation read-view UI (REALISED in TASK-PC-FE-055). The `read-model` consumer of the delegation events is **REALISED in
   TASK-ERP-BE-015** (`delegation_fact_proj` ACTIVE/REVOKED + a NEW
   `erp.approval.delegation.revoked.v1` producer leg, superseding the v2.1
   audit-only revoke); the `notification` "you have been delegated" consumer is

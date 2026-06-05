@@ -9,6 +9,7 @@ import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.delegation.DelegationGrant;
 import com.example.erp.approval.domain.delegation.DelegationGrantRepository;
+import com.example.erp.approval.domain.delegation.DelegationScope;
 import com.example.erp.approval.domain.delegation.DelegationStatus;
 import com.example.erp.approval.domain.error.ApprovalErrors.DelegationInvalidException;
 import com.example.erp.approval.domain.error.ApprovalErrors.DelegationNotFoundException;
@@ -73,27 +74,60 @@ class DelegationApplicationServiceTest {
 
     private DelegationGrant grant() {
         return DelegationGrant.create("dgr-1", TENANT, "emp-a", "emp-d", FROM, TO,
-                "vacation", "emp-a", FROM);
+                "vacation", DelegationScope.GLOBAL, null, "emp-a", FROM);
     }
 
     @Test
-    @DisplayName("create → grant saved + delegated event + audit row")
+    @DisplayName("create → grant saved + delegated event + audit row (GLOBAL default)")
     void create() {
         var view = service.createDelegation(new CreateDelegationCommand(
-                A, "emp-d", FROM, TO, "vacation"));
+                A, "emp-d", FROM, TO, "vacation", DelegationScope.GLOBAL, null));
         assertThat(view.status()).isEqualTo("ACTIVE");
         assertThat(view.delegatorId()).isEqualTo("emp-a");
         assertThat(view.delegateId()).isEqualTo("emp-d");
+        assertThat(view.scope()).isEqualTo("GLOBAL");
+        assertThat(view.scopeRequestId()).isNull();
         verify(repo).save(any(DelegationGrant.class));
         verify(auditLogRepository).append(any(ApprovalAuditLog.class));
         verify(eventPublisher).publishDelegated(any(DelegationGrant.class), any());
     }
 
     @Test
+    @DisplayName("create REQUEST-scoped grant → ACTIVE + scope=REQUEST + scopeRequestId")
+    void createRequestScoped() {
+        var view = service.createDelegation(new CreateDelegationCommand(
+                A, "emp-d", FROM, TO, "cover R1", DelegationScope.REQUEST, "appr-1"));
+        assertThat(view.status()).isEqualTo("ACTIVE");
+        assertThat(view.scope()).isEqualTo("REQUEST");
+        assertThat(view.scopeRequestId()).isEqualTo("appr-1");
+        verify(repo).save(any(DelegationGrant.class));
+        verify(eventPublisher).publishDelegated(any(DelegationGrant.class), any());
+    }
+
+    @Test
+    @DisplayName("create REQUEST scope with no scopeRequestId → DELEGATION_INVALID (422, no save/event)")
+    void createRequestScopeCoherenceViolation() {
+        assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
+                A, "emp-d", FROM, TO, null, DelegationScope.REQUEST, null)))
+                .isInstanceOf(DelegationInvalidException.class);
+        verify(repo, never()).save(any());
+        verify(eventPublisher, never()).publishDelegated(any(), any());
+    }
+
+    @Test
+    @DisplayName("create GLOBAL scope with a scopeRequestId → DELEGATION_INVALID (422)")
+    void createGlobalScopeWithRequestId() {
+        assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
+                A, "emp-d", FROM, TO, null, DelegationScope.GLOBAL, "appr-1")))
+                .isInstanceOf(DelegationInvalidException.class);
+        verify(repo, never()).save(any());
+    }
+
+    @Test
     @DisplayName("create self-delegation → DELEGATION_INVALID (no save/event)")
     void createSelfDelegation() {
         assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
-                A, "emp-a", FROM, TO, null)))
+                A, "emp-a", FROM, TO, null, DelegationScope.GLOBAL, null)))
                 .isInstanceOf(DelegationInvalidException.class);
         verify(repo, never()).save(any());
         verify(eventPublisher, never()).publishDelegated(any(), any());
@@ -103,7 +137,7 @@ class DelegationApplicationServiceTest {
     @DisplayName("create invalid window → DELEGATION_INVALID")
     void createInvalidWindow() {
         assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
-                A, "emp-d", TO, FROM, null)))
+                A, "emp-d", TO, FROM, null, DelegationScope.GLOBAL, null)))
                 .isInstanceOf(DelegationInvalidException.class);
         verify(repo, never()).save(any());
     }
@@ -112,7 +146,7 @@ class DelegationApplicationServiceTest {
     @DisplayName("create without write role → PermissionDenied (no save)")
     void createNoRole() {
         assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
-                NO_ROLE, "emp-d", FROM, TO, null)))
+                NO_ROLE, "emp-d", FROM, TO, null, DelegationScope.GLOBAL, null)))
                 .isInstanceOf(PermissionDeniedException.class);
         verify(repo, never()).save(any());
     }

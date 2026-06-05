@@ -63,6 +63,23 @@ public class DelegationGrant {
     @Column(name = "reason", length = 512)
     private String reason;
 
+    /**
+     * Scope of the grant (TASK-ERP-BE-017). {@code GLOBAL} = blanket A→D (default,
+     * pre-BE-017 behavior); {@code REQUEST} = narrowed to {@link #scopeRequestId}.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "scope", length = 16, nullable = false)
+    private DelegationScope scope;
+
+    /**
+     * The single approval request this grant authorizes when {@code scope ==
+     * REQUEST}; {@code null} when {@code scope == GLOBAL} (coherence enforced by
+     * the factory + the DB CHECK {@code ck_delegation_grant_scope_req}).
+     */
+    @Column(name = "scope_request_id", length = 64)
+    private String scopeRequestId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 16, nullable = false)
@@ -89,11 +106,18 @@ public class DelegationGrant {
      * inverted validity window ({@code validTo < validFrom}). {@code validTo}
      * {@code null} is allowed (open-ended). {@code createdBy} = the grant creator's
      * JWT sub (= the delegator A, or an admin acting on A's behalf).
+     *
+     * <p>TASK-ERP-BE-017 — scope coherence (→ {@link DelegationInvalidException}):
+     * a {@code null} {@code scope} arg defaults to {@code GLOBAL} (back-compat);
+     * {@code scope == REQUEST} requires a non-blank {@code scopeRequestId};
+     * {@code scope == GLOBAL} forbids a non-blank {@code scopeRequestId}. The blank
+     * {@code scopeRequestId} of a GLOBAL grant is normalized to {@code null}.
      */
     public static DelegationGrant create(String id, String tenantId, String delegatorId,
                                          String delegateId, Instant validFrom,
-                                         Instant validTo, String reason, String createdBy,
-                                         Instant now) {
+                                         Instant validTo, String reason,
+                                         DelegationScope scope, String scopeRequestId,
+                                         String createdBy, Instant now) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(delegatorId, "delegatorId");
@@ -111,6 +135,16 @@ public class DelegationGrant {
                     "validity window is invalid: validTo (" + validTo
                             + ") is before validFrom (" + validFrom + ")");
         }
+        DelegationScope resolvedScope = scope == null ? DelegationScope.GLOBAL : scope;
+        boolean hasRequestId = scopeRequestId != null && !scopeRequestId.isBlank();
+        if (resolvedScope == DelegationScope.REQUEST && !hasRequestId) {
+            throw new DelegationInvalidException(
+                    "scope=REQUEST requires a non-blank scopeRequestId");
+        }
+        if (resolvedScope == DelegationScope.GLOBAL && hasRequestId) {
+            throw new DelegationInvalidException(
+                    "scope=GLOBAL forbids a scopeRequestId (got '" + scopeRequestId + "')");
+        }
         DelegationGrant g = new DelegationGrant();
         g.id = id;
         g.tenantId = tenantId;
@@ -119,6 +153,8 @@ public class DelegationGrant {
         g.validFrom = validFrom;
         g.validTo = validTo;
         g.reason = reason;
+        g.scope = resolvedScope;
+        g.scopeRequestId = resolvedScope == DelegationScope.REQUEST ? scopeRequestId : null;
         g.status = DelegationStatus.ACTIVE;
         g.createdAt = now;
         g.createdBy = createdBy;
@@ -152,5 +188,19 @@ public class DelegationGrant {
         return status == DelegationStatus.ACTIVE
                 && !now.isBefore(validFrom)
                 && (validTo == null || !now.isAfter(validTo));
+    }
+
+    /**
+     * True iff this grant's scope covers {@code approvalRequestId} (TASK-ERP-BE-017).
+     * A {@code GLOBAL} grant covers every request; a {@code REQUEST} grant covers
+     * only the request whose id equals {@code scopeRequestId}. Pure — the single
+     * place the scope semantics live; the resolver applies it as the authoritative
+     * in-domain re-check over the SQL predicate (defense-in-depth).
+     */
+    public boolean coversRequest(String approvalRequestId) {
+        return scope == DelegationScope.GLOBAL
+                || (scope == DelegationScope.REQUEST
+                        && scopeRequestId != null
+                        && scopeRequestId.equals(approvalRequestId));
     }
 }

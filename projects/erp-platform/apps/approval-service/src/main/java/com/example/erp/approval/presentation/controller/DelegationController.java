@@ -5,6 +5,8 @@ import com.example.erp.approval.application.DelegationApplicationService;
 import com.example.erp.approval.application.command.Commands.CreateDelegationCommand;
 import com.example.erp.approval.application.command.Commands.RevokeDelegationCommand;
 import com.example.erp.approval.application.view.DelegationGrantView;
+import com.example.erp.approval.domain.delegation.DelegationScope;
+import com.example.erp.approval.domain.error.ApprovalErrors.ValidationException;
 import com.example.erp.approval.infrastructure.security.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import com.example.erp.approval.presentation.dto.DelegationRequests.CreateDelegationRequest;
@@ -47,9 +49,13 @@ public class DelegationController {
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/delegations",
                 idempotencyKey, req, () -> {
+                    // TASK-ERP-BE-017 — parse the scope string here (an unknown value is
+                    // a client error → 400 VALIDATION_ERROR); null/blank → GLOBAL. The
+                    // domain factory raises 422 DELEGATION_INVALID for the coherence rule.
+                    DelegationScope scope = parseScope(req.scope());
                     DelegationGrantView v = service.createDelegation(new CreateDelegationCommand(
                             actor, req.delegateId(), req.validFrom(), req.validTo(),
-                            req.reason()));
+                            req.reason(), scope, req.scopeRequestId()));
                     return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(v));
                 });
     }
@@ -67,6 +73,19 @@ public class DelegationController {
                             new RevokeDelegationCommand(actor, id, req.reason()));
                     return ResponseEntity.ok(ApiEnvelope.of(v));
                 });
+    }
+
+    /** null/blank → GLOBAL (default); an unparseable value → 400 VALIDATION_ERROR. */
+    private static DelegationScope parseScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return DelegationScope.GLOBAL;
+        }
+        try {
+            return DelegationScope.valueOf(scope.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ValidationException("unknown delegation scope: '" + scope
+                    + "' (expected GLOBAL or REQUEST)");
+        }
     }
 
     @GetMapping

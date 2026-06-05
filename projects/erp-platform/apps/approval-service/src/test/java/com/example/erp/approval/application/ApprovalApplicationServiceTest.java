@@ -289,8 +289,9 @@ class ApprovalApplicationServiceTest {
     private DelegationGrant activeGrant(String delegator, String delegate) {
         return DelegationGrant.create("dgr-1", TENANT, delegator, delegate,
                 Instant.parse("2026-06-01T00:00:00Z"),
-                Instant.parse("2026-06-30T00:00:00Z"), null, delegator,
-                Instant.parse("2026-06-01T00:00:00Z"));
+                Instant.parse("2026-06-30T00:00:00Z"), null,
+                com.example.erp.approval.domain.delegation.DelegationScope.GLOBAL, null,
+                delegator, Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     @Test
@@ -300,7 +301,7 @@ class ApprovalApplicationServiceTest {
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
         stubRoute("emp-sub", List.of("emp-app"));
-        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, "appr-1", NOW))
                 .thenReturn(Optional.of(activeGrant("emp-app", "emp-d")));
 
         ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));
@@ -325,7 +326,7 @@ class ApprovalApplicationServiceTest {
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
         stubRoute("emp-sub", List.of("emp-app"));
-        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-other", TENANT, NOW))
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-other", TENANT, "appr-1", NOW))
                 .thenReturn(Optional.empty());
 
         ActorContext other = new ActorContext("emp-other", TENANT, Set.of("erp.write"), Set.of("*"));
@@ -343,7 +344,7 @@ class ApprovalApplicationServiceTest {
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
         stubRoute("emp-sub", List.of("emp-app"));
-        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-sub", TENANT, NOW))
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-sub", TENANT, "appr-1", NOW))
                 .thenReturn(Optional.of(activeGrant("emp-app", "emp-sub")));
 
         ActorContext submitterAsDelegate = new ActorContext("emp-sub", TENANT,
@@ -362,9 +363,10 @@ class ApprovalApplicationServiceTest {
         stubRoute("emp-sub", List.of("emp-app"));
         DelegationGrant expired = DelegationGrant.create("dgr-2", TENANT, "emp-app", "emp-d",
                 Instant.parse("2026-05-01T00:00:00Z"),
-                Instant.parse("2026-05-31T00:00:00Z"), null, "emp-app",
-                Instant.parse("2026-05-01T00:00:00Z"));
-        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+                Instant.parse("2026-05-31T00:00:00Z"), null,
+                com.example.erp.approval.domain.delegation.DelegationScope.GLOBAL, null,
+                "emp-app", Instant.parse("2026-05-01T00:00:00Z"));
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, "appr-1", NOW))
                 .thenReturn(Optional.of(expired));
 
         ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));
@@ -379,7 +381,7 @@ class ApprovalApplicationServiceTest {
         submitted.submit(NOW);
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(submitted));
         stubRoute("emp-sub", List.of("emp-app"));
-        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, NOW))
+        when(delegationGrantRepository.findActiveGrant("emp-app", "emp-d", TENANT, "appr-1", NOW))
                 .thenReturn(Optional.of(activeGrant("emp-app", "emp-d")));
 
         ActorContext delegate = new ActorContext("emp-d", TENANT, Set.of("erp.write"), Set.of("*"));

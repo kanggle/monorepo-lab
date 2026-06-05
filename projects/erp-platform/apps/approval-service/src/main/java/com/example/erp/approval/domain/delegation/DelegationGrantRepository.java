@@ -20,10 +20,16 @@ public interface DelegationGrantRepository {
     /**
      * The single ACTIVE grant {@code delegatorId → delegateId} whose validity
      * window contains {@code now} (status=ACTIVE ∧ validFrom ≤ now ∧ (validTo is
-     * null ∨ validTo ≥ now)). Empty if none — the transition then fails closed.
+     * null ∨ validTo ≥ now)) AND whose scope covers {@code approvalRequestId}
+     * (scope=GLOBAL OR (scope=REQUEST ∧ scope_request_id = approvalRequestId)).
+     * Empty if none — the transition then fails closed. When both a GLOBAL and a
+     * matching REQUEST grant exist, either authorizes; the query returns one
+     * deterministically (GLOBAL first). The resolver re-checks {@code isActiveAt} +
+     * {@code coversRequest} (defense-in-depth; TASK-ERP-BE-017).
      */
     Optional<DelegationGrant> findActiveGrant(String delegatorId, String delegateId,
-                                              String tenantId, Instant now);
+                                              String tenantId, String approvalRequestId,
+                                              Instant now);
 
     /** Grants where the principal is the delegator OR the delegate (list endpoint). */
     List<DelegationGrant> findByDelegatorOrDelegate(String principalId, String tenantId);

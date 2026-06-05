@@ -54,7 +54,8 @@ public class DelegationApplicationService {
         String grantId = "dgr-" + UuidV7.randomString();
         DelegationGrant grant = DelegationGrant.create(
                 grantId, actor.tenantId(), actor.actorId(), cmd.delegateId(),
-                cmd.validFrom(), cmd.validTo(), cmd.reason(), actor.actorId(), now);
+                cmd.validFrom(), cmd.validTo(), cmd.reason(),
+                cmd.scope(), cmd.scopeRequestId(), actor.actorId(), now);
         DelegationGrant saved = delegationGrantRepository.save(grant);
 
         // Immutable audit row (L131) — before = none, after = ACTIVE — same Tx.

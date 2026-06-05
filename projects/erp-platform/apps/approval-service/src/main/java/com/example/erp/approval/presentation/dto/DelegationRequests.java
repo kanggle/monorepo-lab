@@ -19,12 +19,17 @@ public final class DelegationRequests {
     /**
      * POST /delegations — create a grant. The delegator A is the caller's
      * {@code sub} (not in the body); {@code validTo} null = open-ended.
+     * TASK-ERP-BE-017 — {@code scope} ({@code GLOBAL}|{@code REQUEST}, null/blank →
+     * GLOBAL; an unknown value → 400 in the controller) + {@code scopeRequestId}
+     * (the REQUEST-scoped grant's target request).
      */
     public record CreateDelegationRequest(
             @NotBlank @Size(max = 64) String delegateId,
             @NotNull Instant validFrom,
             Instant validTo,
-            @Size(max = 512) String reason) {
+            @Size(max = 512) String reason,
+            @Size(max = 16) String scope,
+            @Size(max = 64) String scopeRequestId) {
     }
 
     /** POST /delegations/{id}/revoke — reason required (audit completeness, L131). */

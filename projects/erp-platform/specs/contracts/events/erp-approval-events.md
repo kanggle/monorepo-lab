@@ -136,6 +136,34 @@ This contract is the forward interface for those v2 consumers.
 >
 > Consumers that ignore the new topic behave identically to the v2.1 contract.
 
+> **v2.3 AMENDMENT (TASK-ERP-BE-017 — per-request scope on the `delegated`
+> payload; additive, the four transition topics + `delegation.revoked.v1`
+> byte-unchanged).** A delegation grant can be narrowed to ONE approval request
+> (architecture.md § v2.3). The `erp.approval.delegated.v1` payload gains two
+> additive fields:
+> - **`scope`** (always present): `"GLOBAL"` (blanket — D acts for A at any stage
+>   where A is approver, = the v2.1 behavior) or `"REQUEST"` (D acts only for the
+>   one request named below).
+> - **`scopeRequestId`** (present only when `scope = "REQUEST"`; ABSENT when
+>   `GLOBAL` — `@JsonInclude(NON_NULL)`): the target `approvalRequestId`.
+>
+>   ```json
+>   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
+>     "validFrom": "<ISO-8601 UTC>", "validTo": "<ISO-8601 UTC; ABSENT = open-ended>",
+>     "reason": "<≤512; ABSENT when none>", "scope": "GLOBAL | REQUEST",
+>     "scopeRequestId": "<approvalRequestId; ABSENT when GLOBAL>", "tenantId": "erp",
+>     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the grant creator>" }
+>   ```
+>
+> This is a **producer-only forward interface** at v2.3 (mirrors how v2.1 added the
+> `delegated` topic before BE-015 consumed it): the current consumers
+> (`read-model-service`, `notification-service`) are **unknown-field tolerant** and
+> ignore `scope`/`scopeRequestId` until **TASK-ERP-BE-018** projects them into
+> `delegation_fact_proj` (+ **TASK-PC-FE-056** console card). The `delegation.revoked.v1`
+> payload is **byte-unchanged** — a revoke does not restate the scope (sticky, like
+> the validity window; the read model keeps what the `delegated` event projected).
+> Consumers that ignore the new fields behave identically to the v2.2 contract.
+
 ---
 
 ## Envelope (libs/java-messaging standard)

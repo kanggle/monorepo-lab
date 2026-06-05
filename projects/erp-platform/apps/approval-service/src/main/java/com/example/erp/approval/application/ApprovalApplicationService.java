@@ -354,8 +354,10 @@ public class ApprovalApplicationService {
             return null;
         }
         String stageApprover = route.approverAt(request.getCurrentStageIndex()).approverId();
-        DelegationResolution resolution =
-                delegationResolver.resolve(stageApprover, actor.actorId(), actor.tenantId(), now);
+        // TASK-ERP-BE-017 — pass the request id so a REQUEST-scoped grant authorizes
+        // only this request (the resolver applies coversRequest fail-closed).
+        DelegationResolution resolution = delegationResolver.resolve(
+                stageApprover, actor.actorId(), actor.tenantId(), request.getId(), now);
         if (!resolution.authorized()) {
             throw new ApprovalNotAuthorizedApproverException(
                     "principal '" + actor.actorId() + "' is not the current stage ("

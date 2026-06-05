@@ -30,13 +30,18 @@ public class DelegationResolver {
     private final DelegationGrantRepository delegationGrantRepository;
 
     public DelegationResolution resolve(String stageApproverId, String actorId,
-                                        String tenantId, Instant now) {
+                                        String tenantId, String approvalRequestId,
+                                        Instant now) {
         if (stageApproverId.equals(actorId)) {
             return DelegationResolution.direct();
         }
+        // TASK-ERP-BE-017 — the matched grant must be active AND cover this request.
+        // coversRequest is the authoritative in-domain re-check (defense-in-depth):
+        // a REQUEST-scoped grant for a different request is fail-closed even though
+        // the query also narrows by scope.
         return delegationGrantRepository
-                .findActiveGrant(stageApproverId, actorId, tenantId, now)
-                .filter(g -> g.isActiveAt(now))
+                .findActiveGrant(stageApproverId, actorId, tenantId, approvalRequestId, now)
+                .filter(g -> g.isActiveAt(now) && g.coversRequest(approvalRequestId))
                 .map(g -> DelegationResolution.delegated(stageApproverId))
                 .orElseGet(DelegationResolution::notAuthorized);
     }

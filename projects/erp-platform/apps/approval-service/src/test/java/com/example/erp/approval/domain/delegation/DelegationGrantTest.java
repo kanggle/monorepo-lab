@@ -22,7 +22,7 @@ class DelegationGrantTest {
 
     private DelegationGrant grant(Instant from, Instant to) {
         return DelegationGrant.create("dgr-1", TENANT, "emp-a", "emp-d", from, to,
-                "vacation", "emp-a", from);
+                "vacation", DelegationScope.GLOBAL, null, "emp-a", from);
     }
 
     @Test
@@ -35,13 +35,80 @@ class DelegationGrantTest {
         assertThat(g.getValidTo()).isEqualTo(TO);
         assertThat(g.getCreatedBy()).isEqualTo("emp-a");
         assertThat(g.getRevokedAt()).isNull();
+        // TASK-ERP-BE-017 — default scope is GLOBAL with no scopeRequestId.
+        assertThat(g.getScope()).isEqualTo(DelegationScope.GLOBAL);
+        assertThat(g.getScopeRequestId()).isNull();
+    }
+
+    // ---- TASK-ERP-BE-017: scope invariants + coversRequest ----
+
+    @Test
+    @DisplayName("create REQUEST scope with scopeRequestId → REQUEST, id set")
+    void createRequestScoped() {
+        DelegationGrant g = DelegationGrant.create("dgr-r", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.REQUEST, "appr-1", "emp-a", FROM);
+        assertThat(g.getScope()).isEqualTo(DelegationScope.REQUEST);
+        assertThat(g.getScopeRequestId()).isEqualTo("appr-1");
+    }
+
+    @Test
+    @DisplayName("null scope arg defaults to GLOBAL (back-compat)")
+    void nullScopeDefaultsGlobal() {
+        DelegationGrant g = DelegationGrant.create("dgr-n", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, null, null, "emp-a", FROM);
+        assertThat(g.getScope()).isEqualTo(DelegationScope.GLOBAL);
+        assertThat(g.getScopeRequestId()).isNull();
+    }
+
+    @Test
+    @DisplayName("GLOBAL with blank scopeRequestId → normalized to null (not a violation)")
+    void globalBlankRequestIdNormalized() {
+        DelegationGrant g = DelegationGrant.create("dgr-gb", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.GLOBAL, "   ", "emp-a", FROM);
+        assertThat(g.getScope()).isEqualTo(DelegationScope.GLOBAL);
+        assertThat(g.getScopeRequestId()).isNull();
+    }
+
+    @Test
+    @DisplayName("REQUEST scope without scopeRequestId → DELEGATION_INVALID")
+    void requestScopeNeedsRequestId() {
+        assertThatThrownBy(() -> DelegationGrant.create("dgr-r2", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.REQUEST, null, "emp-a", FROM))
+                .isInstanceOf(DelegationInvalidException.class);
+        assertThatThrownBy(() -> DelegationGrant.create("dgr-r3", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.REQUEST, "  ", "emp-a", FROM))
+                .isInstanceOf(DelegationInvalidException.class);
+    }
+
+    @Test
+    @DisplayName("GLOBAL scope with a non-blank scopeRequestId → DELEGATION_INVALID")
+    void globalScopeForbidsRequestId() {
+        assertThatThrownBy(() -> DelegationGrant.create("dgr-g2", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.GLOBAL, "appr-1", "emp-a", FROM))
+                .isInstanceOf(DelegationInvalidException.class);
+    }
+
+    @Test
+    @DisplayName("coversRequest: GLOBAL covers any; REQUEST covers only its id; mismatch false")
+    void coversRequest() {
+        DelegationGrant global = DelegationGrant.create("dgr-cg", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.GLOBAL, null, "emp-a", FROM);
+        assertThat(global.coversRequest("appr-1")).isTrue();
+        assertThat(global.coversRequest("appr-2")).isTrue();
+        assertThat(global.coversRequest(null)).isTrue();
+
+        DelegationGrant scoped = DelegationGrant.create("dgr-cr", TENANT, "emp-a", "emp-d",
+                FROM, TO, null, DelegationScope.REQUEST, "appr-1", "emp-a", FROM);
+        assertThat(scoped.coversRequest("appr-1")).isTrue();
+        assertThat(scoped.coversRequest("appr-2")).isFalse();
+        assertThat(scoped.coversRequest(null)).isFalse();
     }
 
     @Test
     @DisplayName("create open-ended (validTo null) → ACTIVE")
     void createOpenEnded() {
         DelegationGrant g = DelegationGrant.create("dgr-2", TENANT, "emp-a", "emp-d",
-                FROM, null, null, "emp-a", FROM);
+                FROM, null, null, DelegationScope.GLOBAL, null, "emp-a", FROM);
         assertThat(g.getValidTo()).isNull();
         assertThat(g.getStatus()).isEqualTo(DelegationStatus.ACTIVE);
     }
@@ -50,7 +117,7 @@ class DelegationGrantTest {
     @DisplayName("self-delegation (A == D) → DELEGATION_INVALID")
     void selfDelegation() {
         assertThatThrownBy(() -> DelegationGrant.create("dgr-3", TENANT, "emp-a", "emp-a",
-                FROM, TO, null, "emp-a", FROM))
+                FROM, TO, null, DelegationScope.GLOBAL, null, "emp-a", FROM))
                 .isInstanceOf(DelegationInvalidException.class);
     }
 
@@ -58,7 +125,7 @@ class DelegationGrantTest {
     @DisplayName("invalid window (validTo < validFrom) → DELEGATION_INVALID")
     void invalidWindow() {
         assertThatThrownBy(() -> DelegationGrant.create("dgr-4", TENANT, "emp-a", "emp-d",
-                TO, FROM, null, "emp-a", FROM))
+                TO, FROM, null, DelegationScope.GLOBAL, null, "emp-a", FROM))
                 .isInstanceOf(DelegationInvalidException.class);
     }
 
@@ -93,7 +160,7 @@ class DelegationGrantTest {
     @DisplayName("isActiveAt: open-ended grant is active for any now ≥ validFrom")
     void isActiveAtOpenEnded() {
         DelegationGrant g = DelegationGrant.create("dgr-5", TENANT, "emp-a", "emp-d",
-                FROM, null, null, "emp-a", FROM);
+                FROM, null, null, DelegationScope.GLOBAL, null, "emp-a", FROM);
         assertThat(g.isActiveAt(Instant.parse("2030-01-01T00:00:00Z"))).isTrue();
         assertThat(g.isActiveAt(Instant.parse("2026-05-01T00:00:00Z"))).isFalse();
     }
