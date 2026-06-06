@@ -7,7 +7,7 @@
 | Domain | `fintech` ([rules/domains/fintech.md](../../rules/domains/fintech.md)) |
 | Traits | `transactional`, `regulated`, `audit-heavy` |
 | Service Types | `rest-api`, `event-consumer` |
-| IdP | GAP (`tenant_id=finance`) — [GAP integration](../iam-platform/PROJECT.md) |
+| IdP | IAM (`tenant_id=finance`) — [IAM integration](../iam-platform/PROJECT.md) |
 | Hostname | `finance.local` (Traefik routing, ADR-MONO-001) |
 | Status | **v1 bootstrap (TASK-MONO-114)** — skeleton only, account-service 미가동 |
 
@@ -27,7 +27,7 @@
 
 | Service | 역할 | 후속 Task |
 |---|---|---|
-| `gateway-service` | 엣지 라우팅, GAP RS256 JWT 검증, `tenant_id=finance` gate | 후속 task |
+| `gateway-service` | 엣지 라우팅, IAM RS256 JWT 검증, `tenant_id=finance` gate | 후속 task |
 | `account-service` | Account 라이프사이클 — KYC / 잔액 hold·release·capture / 계좌 상태기계 / 자금 이동 멱등 / 불변 audit_log | TASK-FIN-BE-001 |
 
 v2 deferred: ledger-service (복식부기/GL/AP), wallet-service, kyc-service, notification-service, admin-service.
@@ -58,7 +58,7 @@ pnpm finance:logs
 pnpm finance:down
 ```
 
-dev 토큰 발급 (GAP `finance-platform-internal-services-client` 등록 완료, TASK-MONO-114 V0017):
+dev 토큰 발급 (IAM `finance-platform-internal-services-client` 등록 완료, TASK-MONO-114 V0017):
 ```bash
 curl -u finance-platform-internal-services-client:finance-dev \
      -d "grant_type=client_credentials&scope=finance.read" \
@@ -67,16 +67,16 @@ curl -u finance-platform-internal-services-client:finance-dev \
 
 ---
 
-## GAP IdP Integration
+## IAM IdP Integration
 
-finance-platform 의 모든 서비스는 OAuth2 Resource Server 패턴으로 GAP RS256 JWT 를 검증하며 `tenant_id=finance` claim 만 통과시킨다.
+finance-platform 의 모든 서비스는 OAuth2 Resource Server 패턴으로 IAM RS256 JWT 를 검증하며 `tenant_id=finance` claim 만 통과시킨다.
 
-GAP 측 인프라 (TASK-MONO-114 V0017 시드):
+IAM 측 인프라 (TASK-MONO-114 V0017 시드):
 - `tenants.tenant_id='finance'` (B2B_ENTERPRISE) — account-service V0017
 - `oauth_clients.client_id='finance-platform-internal-services-client'` (client_credentials, scopes=`finance.read`/`finance.write`) — auth-service V0017
 - `oauth_scopes` — `finance.read`, `finance.write` — auth-service V0017
 
-상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#iam-idp-integration) + [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
+상세는 [PROJECT.md § IAM IdP Integration](PROJECT.md#iam-idp-integration) + [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ---
 
@@ -90,9 +90,9 @@ GAP 측 인프라 (TASK-MONO-114 V0017 시드):
 
 ## References
 
-- [PROJECT.md](PROJECT.md) — domain · traits · service map · GAP integration · trait rationale
+- [PROJECT.md](PROJECT.md) — domain · traits · service map · IAM integration · trait rationale
 - [tasks/INDEX.md](tasks/INDEX.md) — project task lifecycle
 - [rules/domains/fintech.md](../../rules/domains/fintech.md) — fintech 도메인 mandatory rules · bounded contexts · ubiquitous language
 - [ADR-MONO-008](../../docs/adr/ADR-MONO-008-finance-platform-bootstrap.md) — finance-platform 부트스트랩 결정 (Option C)
 - [TASK-MONO-114](../../tasks/ready/) (본 부트스트랩 artifact) / TASK-FIN-BE-001 (account-service 구현)
-- [TEMPLATE.md § Local Network Convention](../../TEMPLATE.md) — 신규 프로젝트 GAP 통합 + hostname routing 표준 절차
+- [TEMPLATE.md § Local Network Convention](../../TEMPLATE.md) — 신규 프로젝트 IAM 통합 + hostname routing 표준 절차
