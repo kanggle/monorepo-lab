@@ -49,7 +49,7 @@ taxonomy_version: 0.1
 
 상세 아키텍처는 각 service의 `specs/services/<service>/architecture.md`에서 선언.
 
-## GAP IdP Integration
+## IAM IdP Integration
 
 `platform-console`은 [iam-platform](../iam-platform/PROJECT.md) (GAP)를 표준 OIDC IdP로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 단, 다른 프로젝트와 달리 콘솔은 **백엔드 Resource Server가 아니라 OIDC public client(Auth Code + PKCE)** 로서 사용자(운영자) 로그인을 수행하며, 동시에 GAP의 **product/tenant 레지스트리**를 카탈로그 소스로 소비한다.
 
