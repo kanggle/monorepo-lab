@@ -3,7 +3,7 @@
 # Enable the per-domain ops DEMO on the federation-hardening-e2e stack (Windows).
 #
 # The federation-hardening-e2e harness already runs all 5 domains' producers +
-# GAP + console-bff + console-web as CONTAINERS (the per-project `*:up` composes
+# IAM + console-bff + console-web as CONTAINERS (the per-project `*:up` composes
 # are infra-only; app services run via that harness or bootRun). This script
 # adds — as an ADDITIVE overlay, leaving the CI base compose byte-unchanged —
 # the two things the per-domain ops pages need beyond the BFF overview/health
@@ -45,7 +45,7 @@ try { docker info *> $null } catch { Write-Err 'Docker is not running.'; exit 1 
 $authUp = docker ps --filter "name=federation-hardening-e2e-auth-service-1" --filter "status=running" --format '{{.Names}}'
 if (-not $authUp) {
     Write-Err 'federation-hardening-e2e base stack is NOT running (auth-service absent).'
-    Write-Host '       Bring the base harness up first (it builds + runs the 5 producers + GAP +'
+    Write-Host '       Bring the base harness up first (it builds + runs the 5 producers + IAM +'
     Write-Host '       console). See docs/guides/console-fullstack-local-dev.md § "Base harness".'
     exit 1
 }
@@ -92,6 +92,6 @@ Write-Ok 'Open http://localhost:3000'
 Write-Host '       Login:   multi-operator@example.com  /  devpassword123!'
 Write-Host '       Demo:    active tenant acme-corp   -> Finance 운영 + WMS 운영 live'
 Write-Host '                switch to  globex-corp     -> SCM 운영 + ERP 운영 live'
-Write-Host '       GAP 운영 (계정/감사/운영자) always available. (Do NOT log in as'
+Write-Host '       IAM 운영 (계정/감사/운영자) always available. (Do NOT log in as'
 Write-Host '       super-admin / acme-operator for the scm/erp screens — not entitled.)'
 Write-Host '       Walkthrough: docs/guides/console-fullstack-local-dev.md'

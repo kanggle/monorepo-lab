@@ -12,10 +12,10 @@
 -- fed-e2e CREATE DATABASE finance_db/erp_db clutter is intentionally OMITTED
 -- here (finance/erp run their own MySQL containers in this topology).
 --
--- Customers + entitlements come from GAP account-service Flyway (NOT this file):
+-- Customers + entitlements come from IAM account-service Flyway (NOT this file):
 --   - acme-corp  [finance,wms]  — db/migration/V0020 (loads in ALL profiles)
 --   - globex-corp [scm,erp]     — db/migration-dev/V0021 (loads ONLY under the
---                                 `e2e` profile — the orchestration brings GAP
+--                                 `e2e` profile — the orchestration brings IAM
 --                                 up with SPRING_PROFILES_ACTIVE=e2e for this)
 --
 -- Demo operator: `multi-operator@example.com` / devpassword123!  (home tenant
@@ -58,7 +58,7 @@ USE `admin_db`;
 -- Relax SUPER_ADMIN require_2fa for the local demo ONLY.
 UPDATE admin_roles SET require_2fa = FALSE WHERE name = 'SUPER_ADMIN';
 
--- SUPER_ADMIN caller (tenant_id='*') — convenience login (sees GAP ops; '*'
+-- SUPER_ADMIN caller (tenant_id='*') — convenience login (sees IAM ops; '*'
 -- has empty entitled_domains so the per-domain ops pages 403 for it — use the
 -- multi-operator for the domain demo).
 INSERT INTO admin_operators (

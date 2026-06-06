@@ -84,7 +84,7 @@ One project in the monorepo (`wms-platform`). Focus on learning what's truly com
 
 ### Phase 3 — Third and Fourth Project ✅ (completed, 2026-05-03)
 
-`iam-platform` (GAP) and `fan-platform` imported. GAP elevated to standard OIDC IdP (ADR-001 ACCEPTED). 4 projects co-existed at this point:
+`iam-platform` (IAM) and `fan-platform` imported. IAM elevated to standard OIDC IdP (ADR-001 ACCEPTED). 4 projects co-existed at this point:
 
 | Project | Domain | Integration style | Hostname |
 |---|---|---|---|
@@ -114,7 +114,7 @@ scm-platform first stresses:
 - **`transactional` + `integration-heavy` simultaneous** — `procurement-service` PO state machine + outbox + supplier circuit breaker + retry+jitter + idempotency (TASK-SCM-BE-002).
 - **Library surface validation** — `libs:java-web-servlet` (split out by TASK-MONO-044a) and `libs:java-messaging` outbox both work in fresh domain without changes; first cross-domain library reuse since `libs/` consolidation.
 
-**1차 evaluation outcome (2026-05-06)**: 3 traits + cross-project event + GAP IdP integration + AES credential encryption all passed in production code. CI regression 0. Shared library required no project-specific patches. Test pyramid 121 procurement-service tests (BE-002b 101 + BE-002c 20 slice). E2E spec ready (TASK-SCM-INT-001).
+**1차 evaluation outcome (2026-05-06)**: 3 traits + cross-project event + IAM IdP integration + AES credential encryption all passed in production code. CI regression 0. Shared library required no project-specific patches. Test pyramid 121 procurement-service tests (BE-002b 101 + BE-002c 20 slice). E2E spec ready (TASK-SCM-INT-001).
 
 **Phase 4 outstanding** before declaring "ready for Template extraction":
 
@@ -182,7 +182,7 @@ mkdir -p projects/<new-project>/{apps,specs/{contracts/{http,events},services,fe
 touch projects/<new-project>/tasks/{backlog,ready,in-progress,review,done,archive}/.gitkeep
 ```
 
-> `specs/integration/` is created here because the `PROJECT.md` GAP IdP section references `specs/integration/iam-integration.md` (see Step 2 and §"GAP IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
+> `specs/integration/` is created here because the `PROJECT.md` IAM IdP section references `specs/integration/iam-integration.md` (see Step 2 and §"IAM IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
 
 #### 2. Write `PROJECT.md`
 
@@ -203,7 +203,7 @@ taxonomy_version: 0.1
 
 Verify `domain` and each `trait` exist in `rules/taxonomy.md` (Hard Stop if not). If adding a new domain or trait, add the rule file in the same PR per the On-Demand Rule Policy below.
 
-Write prose sections: Purpose, Domain Rationale, Trait Rationale, Service Map, GAP IdP Integration (see §"GAP IdP Integration Pattern" below), Out of Scope, Overrides.
+Write prose sections: Purpose, Domain Rationale, Trait Rationale, Service Map, IAM IdP Integration (see §"IAM IdP Integration Pattern" below), Out of Scope, Overrides.
 
 #### 3. Write `tasks/INDEX.md`
 
@@ -250,7 +250,7 @@ networks:
     driver: bridge
 ```
 
-> `traefik.docker.network=traefik-net` is required when the gateway container is attached to multiple networks — without it Traefik may route via the wrong network and fail to reach the container. `entrypoints=web` pins the router to Traefik's HTTP (port 80) entrypoint. Both labels are present in all existing projects (fan-platform, wms, gap, ecommerce).
+> `traefik.docker.network=traefik-net` is required when the gateway container is attached to multiple networks — without it Traefik may route via the wrong network and fail to reach the container. `entrypoints=web` pins the router to Traefik's HTTP (port 80) entrypoint. Both labels are present in all existing projects (fan-platform, wms, iam, ecommerce).
 
 Backing services (postgres, redis, kafka, …) use `expose:` only — never `ports:`. See `TEMPLATE.md § Local Network Convention` (master, full detail) for the DB tool access pattern. `CLAUDE.md § Local Network Convention` is a concise summary that redirects here.
 
@@ -260,8 +260,8 @@ Backing services (postgres, redis, kafka, …) use `expose:` only — never `por
 # Hostname (Traefik routing — no PORT_PREFIX)
 PROJECT_HOSTNAME=<new-project>.local
 
-# GAP OIDC (if integrating with GAP IdP)
-# OIDC_ISSUER_URL: GAP's issuer base URL — no trailing /oauth2/ path.
+# IAM OIDC (if integrating with IAM IdP)
+# OIDC_ISSUER_URL: IAM's issuer base URL — no trailing /oauth2/ path.
 #   Spring Security appends /.well-known/openid-configuration automatically.
 OIDC_ISSUER_URL=http://iam.local
 # JWT_JWKS_URI: explicit JWKS endpoint (avoids OpenID discovery round-trip in dev).
@@ -517,7 +517,7 @@ External tools that need direct TCP access to backing services use one of:
 
 ### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
-The original three projects (ecommerce, wms, iam-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, GAP, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
+The original three projects (ecommerce, wms, iam-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, IAM, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
 
 5-digit source ports (e.g. Jaeger UI `16686` in ecommerce) are kept as-is; they remain unprefixed and continue to publish on the host because collisions with other projects are unlikely in practice.
 
@@ -593,11 +593,11 @@ monorepo main → filter-repo (keep SHARED_PATHS + projects/<name>/) → hoist t
 
 ### PROJECT_EXCLUDE_PATHS — standalone freeze policy
 
-A project's standalone repo is not always identical to the monorepo. When a project undergoes a **major integration cutover** (e.g., migrating from a self-hosted auth service to GAP OIDC), the standalone v1 may intentionally be **frozen** at the pre-cutover state to preserve the v1 demo intact.
+A project's standalone repo is not always identical to the monorepo. When a project undergoes a **major integration cutover** (e.g., migrating from a self-hosted auth service to IAM OIDC), the standalone v1 may intentionally be **frozen** at the pre-cutover state to preserve the v1 demo intact.
 
 **Use `PROJECT_EXCLUDE_PATHS` when:**
 
-- The monorepo has a breaking integration change that the standalone v1 must NOT receive (e.g., auth-service decommission, docker-compose overhaul, GAP OIDC cutover).
+- The monorepo has a breaking integration change that the standalone v1 must NOT receive (e.g., auth-service decommission, docker-compose overhaul, IAM OIDC cutover).
 - The standalone's demo depends on components that are removed or replaced in the monorepo.
 
 **Do NOT use `PROJECT_EXCLUDE_PATHS` for:**
@@ -607,11 +607,11 @@ A project's standalone repo is not always identical to the monorepo. When a proj
 
 **Current freeze example — ecommerce standalone v1:**
 
-`ecommerce-microservices-platform` standalone is frozen at the state prior to the GAP OIDC cutover (TASK-MONO-027 + TASK-FE-067 + TASK-BE-132). The standalone v1 preserves the legacy self-hosted ecommerce auth-service (JWT issuer, signup, Google OAuth) so the standalone repo demonstrates an end-to-end JWT-issuing service without requiring GAP as a transitive dependency.
+`ecommerce-microservices-platform` standalone is frozen at the state prior to the IAM OIDC cutover (TASK-MONO-027 + TASK-FE-067 + TASK-BE-132). The standalone v1 preserves the legacy self-hosted ecommerce auth-service (JWT issuer, signup, Google OAuth) so the standalone repo demonstrates an end-to-end JWT-issuing service without requiring IAM as a transitive dependency.
 
 The following path groups are excluded from the ecommerce standalone sync:
 
-- **GROUP A (TASK-FE-067)**: frontend NextAuth v5 + GAP OIDC cutover (web-store / admin-dashboard auth files)
+- **GROUP A (TASK-FE-067)**: frontend NextAuth v5 + IAM OIDC cutover (web-store / admin-dashboard auth files)
 - **GROUP B (TASK-BE-132)**: backend auth-service decommission (docker-compose × 3, .env.example, k8s, gateway application.yml, spec rename, deprecated contracts, deprecated feature specs)
 
 ### Dual-deploy strategy
@@ -634,15 +634,15 @@ When a project's standalone is frozen, the standalone `README.md` should documen
 
 ---
 
-## GAP IdP Integration Pattern (New Projects)
+## IAM IdP Integration Pattern (New Projects)
 
-As of ADR-001 (ACCEPTED 2026-05-01), **iam-platform (GAP) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with GAP from bootstrap.
+As of ADR-001 (ACCEPTED 2026-05-01), **iam-platform (IAM) is the standard OIDC IdP** for all monorepo projects. New projects do **not** implement their own auth service — they integrate with IAM from bootstrap.
 
 This applies to: `fan-platform`, `wms`, `ecommerce` (post-TASK-MONO-027), and all future projects.
 
 ### 1. Tenant registration
 
-Before any code, register the new domain as a GAP tenant via the admin API:
+Before any code, register the new domain as a IAM tenant via the admin API:
 
 ```
 POST /api/admin/tenants
@@ -659,7 +659,7 @@ Full procedure: `projects/iam-platform/specs/features/consumer-integration-guide
 
 ### 2. OIDC client registration (Flyway seed)
 
-Register the new OIDC client(s) via a GAP Flyway seed migration (pattern: `V00XX__<description>.sql`). Reference existing seeds (V0010 = wms, V0011 = fan-platform, V0012 = ecommerce) for the INSERT pattern.
+Register the new OIDC client(s) via a IAM Flyway seed migration (pattern: `V00XX__<description>.sql`). Reference existing seeds (V0010 = wms, V0011 = fan-platform, V0012 = ecommerce) for the INSERT pattern.
 
 Typical client registration includes:
 
@@ -673,7 +673,7 @@ The seed lives in `projects/iam-platform/apps/auth-service/src/main/resources/db
 
 ### 3. Gateway — OAuth2 Resource Server
 
-The new project's gateway service must be configured as an OAuth2 Resource Server that validates GAP's RS256 JWT:
+The new project's gateway service must be configured as an OAuth2 Resource Server that validates IAM's RS256 JWT:
 
 ```yaml
 # application.yml (gateway-service)
@@ -690,16 +690,16 @@ spring:
 
 Add a `TenantClaimValidator` (or equivalent) that rejects tokens with `tenant_id` != `<domain>`. Reference: `projects/ecommerce-microservices-platform/apps/gateway-service/` (post-TASK-MONO-027).
 
-### 4. PROJECT.md — declare GAP IdP integration
+### 4. PROJECT.md — declare IAM IdP integration
 
-Add a `## GAP IdP Integration` section to the project's `PROJECT.md` (see `projects/wms-platform/PROJECT.md` and `projects/fan-platform/PROJECT.md` as templates):
+Add a `## IAM IdP Integration` section to the project's `PROJECT.md` (see `projects/wms-platform/PROJECT.md` and `projects/fan-platform/PROJECT.md` as templates):
 
 ```markdown
-## GAP IdP Integration
+## IAM IdP Integration
 
-`<project>` uses [iam-platform](../iam-platform/PROJECT.md) (GAP)
+`<project>` uses [iam-platform](../iam-platform/PROJECT.md) (IAM)
 as the standard OIDC IdP ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)).
-All <project> services validate GAP RS256 access tokens as OAuth2 Resource Servers and
+All <project> services validate IAM RS256 access tokens as OAuth2 Resource Servers and
 pass only `tenant_id=<domain>` tokens.
 Integration detail: [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 ```
@@ -745,7 +745,7 @@ The root `tasks/INDEX.md § PR Separation Rule` is the authoritative definition.
 
 ## Periodic Consistency Audit
 
-After any major cutover (new project join, GAP IdP migration, Traefik hostname migration, shared library promotion, or similar), run a consistency audit:
+After any major cutover (new project join, IAM IdP migration, Traefik hostname migration, shared library promotion, or similar), run a consistency audit:
 
 | Audit scope | Reference task |
 |---|---|
@@ -757,7 +757,7 @@ After any major cutover (new project join, GAP IdP migration, Traefik hostname m
 
 **Recommended audit trigger**: after each major platform-level cutover (e.g., adding a 4th or 5th project, completing a cross-project migration) or at minimum quarterly if multiple projects are co-developed.
 
-The TASK-MONO-029~033 series (공통규칙 정리 시리즈, 2026-05-04) established the audit baseline for the 4-project (wms / ecommerce / GAP / fan-platform) monorepo state.
+The TASK-MONO-029~033 series (공통규칙 정리 시리즈, 2026-05-04) established the audit baseline for the 4-project (wms / ecommerce / IAM / fan-platform) monorepo state.
 
 ---
 
@@ -771,7 +771,7 @@ Project-level ADRs live in `projects/<name>/docs/adr/`. The most significant pro
 
 | ADR | Title | Status | Date |
 |---|---|---|---|
-| [GAP ADR-001](projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | GAP as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
+| [IAM ADR-001](projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | IAM as standard OIDC Authorization Server (Spring Authorization Server) | **ACCEPTED** | 2026-05-01 |
 
 ---
 
@@ -835,6 +835,6 @@ A: Only when an existing standalone repo with its own `settings.gradle` + nested
 - `tasks/INDEX.md` — root task lifecycle + PR Separation Rule (authoritative)
 - `scripts/sync-portfolio.sh` — portfolio extraction tool (PROJECT_REMOTES, PROJECT_TYPES, PROJECT_EXCLUDE_PATHS)
 - `docs/adr/ADR-MONO-001-port-prefix-scaling.md` — hostname routing ADR (ACCEPTED)
-- `projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md` — GAP OIDC AS ADR (ACCEPTED)
-- `projects/iam-platform/specs/features/consumer-integration-guide.md` — GAP consumer integration (single reference)
+- `projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md` — IAM OIDC AS ADR (ACCEPTED)
+- `projects/iam-platform/specs/features/consumer-integration-guide.md` — IAM consumer integration (single reference)
 - `docs/guides/` — human-oriented workflow guides (when present)

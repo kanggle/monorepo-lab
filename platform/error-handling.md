@@ -75,7 +75,7 @@ Services that return additional context (trace/request ids, structured `details`
 | INVALID_REFRESH_TOKEN | 401 | Refresh token not found or expired |
 | REFRESH_TOKEN_REVOKED | 401 | Refresh token has been explicitly revoked |
 | TOKEN_REVOKED | 401 | Access token has been revoked (e.g. logout blacklist) |
-| INVALID_STATE | 400 | OAuth `state` parameter missing, malformed, or does not match the stored CSRF token (RFC 6749 §10.12). Promoted to Platform-Common in TASK-MONO-052 — emitted by both ecommerce `auth-service` and GAP `auth-service` with identical semantics |
+| INVALID_STATE | 400 | OAuth `state` parameter missing, malformed, or does not match the stored CSRF token (RFC 6749 §10.12). Promoted to Platform-Common in TASK-MONO-052 — emitted by both ecommerce `auth-service` and IAM `auth-service` with identical semantics |
 
 ## Authorization
 
@@ -279,7 +279,7 @@ Owned by `search-service`. See `rules/domains/ecommerce.md`.
 
 ## Auth  `[domain: ecommerce]`
 
-Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct from GAP IdP; the ecommerce standalone repo retains its own auth flow per `project_gap_idp_promotion.md` § standalone frozen policy).
+Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct from IAM IdP; the ecommerce standalone repo retains its own auth flow per `project_gap_idp_promotion.md` § standalone frozen policy).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -288,7 +288,7 @@ Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct 
 | REFRESH_TOKEN_REVOKED | 401 | Refresh token explicitly revoked (`RefreshTokenRevokedException`). Same string as Platform-Common Authentication entry — ecommerce-local emission |
 | OAUTH_UPSTREAM_ERROR | 502 | OAuth provider returned an error response to the token-exchange call (`OAuthUpstreamException`) |
 
-> `INVALID_CREDENTIALS` and `INVALID_STATE` are emitted by this service but are documented under Platform-Common Authentication (shared across ecommerce + GAP auth-service emissions).
+> `INVALID_CREDENTIALS` and `INVALID_STATE` are emitted by this service but are documented under Platform-Common Authentication (shared across ecommerce + IAM auth-service emissions).
 
 ## Order  `[domain: ecommerce]`
 
@@ -430,9 +430,9 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 |---|---|---|
 | ACCOUNT_NOT_FOUND | 404 | Account does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | ACCOUNT_ALREADY_EXISTS | 409 | Account with the given email/identifier already exists in this tenant |
-| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded). **TODO**: GAP `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
+| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded). **TODO**: IAM `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
 | ACCOUNT_DELETED | 410 | Account is soft-deleted (anonymized) |
-| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required. **TODO**: GAP `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
+| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required. **TODO**: IAM `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
 | ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
 | ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
 | EMAIL_ALREADY_VERIFIED | 409 | Email already verified; second verify attempt rejected (`EmailAlreadyVerifiedException`) |
@@ -456,7 +456,7 @@ Owned by `auth-service` (Spring Authorization Server).
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
 | LOGIN_TENANT_AMBIGUOUS | 400 | Login identifier matches accounts across multiple tenants without disambiguator |
-| CREDENTIALS_INVALID | 401 | GAP auth credentials invalid (email/password login) (`CredentialsInvalidException`). Semantic alias of ecommerce-local `INVALID_CREDENTIALS` — two strings retained intentionally pending future standardization |
+| CREDENTIALS_INVALID | 401 | IAM auth credentials invalid (email/password login) (`CredentialsInvalidException`). Semantic alias of ecommerce-local `INVALID_CREDENTIALS` — two strings retained intentionally pending future standardization |
 | PASSWORD_RESET_TOKEN_INVALID | 400 | Password-reset token unknown, expired, or already consumed (`PasswordResetTokenInvalidException`) |
 | CREDENTIAL_ALREADY_EXISTS | 409 | Credential row already exists for account (e.g. social re-link attempt) (`CredentialAlreadyExistsException`) |
 | SESSION_REVOKED | 401 | Active session has been administratively revoked (`SessionRevokedException`) |
@@ -488,7 +488,7 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | Code | HTTP | Description |
 |---|---|---|
 | REASON_REQUIRED | 400 | `X-Operator-Reason` header missing on an audited admin action (`ReasonRequiredException`) |
-| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by GAP community + membership services with identical semantics |
+| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by IAM community + membership services with identical semantics |
 | INVALID_BOOTSTRAP_TOKEN | 401 | Bootstrap token missing, expired, or already consumed (`InvalidBootstrapTokenException`) |
 | INVALID_2FA_CODE | 401 | TOTP code is invalid or expired (`InvalidTwoFaCodeException`) |
 | TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`) |
@@ -511,7 +511,7 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 
 ## Community  `[domain: saas]`
 
-Owned by GAP `community-service` (multi-tenant community feature distinct from `fan-platform/community-service` — same string codes, different service ownership).
+Owned by IAM `community-service` (multi-tenant community feature distinct from `fan-platform/community-service` — same string codes, different service ownership).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -543,7 +543,7 @@ Owned by `community-service` (post / comment / reaction / follow).
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED) |
-| POST_STATUS_TRANSITION_INVALID | 422 | Same semantic as `POST_INVALID_STATE` — current code emits this string (`InvalidStateTransitionException`); cross-shared with GAP community-service |
+| POST_STATUS_TRANSITION_INVALID | 422 | Same semantic as `POST_INVALID_STATE` — current code emits this string (`InvalidStateTransitionException`); cross-shared with IAM community-service |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
@@ -670,7 +670,7 @@ before any repository call); fail-CLOSED on missing role/scope (E6·E7).
 
 | Code | HTTP | Description |
 |---|---|---|
-| PERMISSION_DENIED | 403 | Caller lacks the required role for the requested use case (`PermissionDeniedException`) (E6). Cross-project: same string as GAP admin-service `PermissionDeniedException` — erp-local emission. |
+| PERMISSION_DENIED | 403 | Caller lacks the required role for the requested use case (`PermissionDeniedException`) (E6). Cross-project: same string as IAM admin-service `PermissionDeniedException` — erp-local emission. |
 | DATA_SCOPE_FORBIDDEN | 403 | Caller has the required role but the target row's owning department is outside the caller's organization scope (descendant departments only) (`DataScopeForbiddenException`) (E6) |
 | EXTERNAL_TRAFFIC_REJECTED | 403 | External (non-internal-network) traffic reached the application layer. Primary enforcement is at the Traefik / network layer (`internal: true` Docker network); this code is the application-layer fallback surface (E7) |
 

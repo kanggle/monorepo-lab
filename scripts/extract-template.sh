@@ -452,9 +452,9 @@ Explain why each declared trait was chosen and what surface it activates.
 | gateway-service | rest-api | API gateway, JWT validation, routing |
 | <service-name> | <type> | <role> |
 
-## TODO: GAP IdP Integration
+## TODO: IAM IdP Integration
 
-Describe how this project integrates with the Global Account Platform (GAP) OIDC IdP.
+Describe how this project integrates with the Identity & Access Management (IAM) OIDC IdP.
 Reference: projects/iam-platform/specs/features/consumer-integration-guide.md
 
 ## TODO: Out of Scope
@@ -543,13 +543,13 @@ networks:
     driver: bridge
 DC_EOF
 
-# .env.example — PROJECT_HOSTNAME + GAP OIDC vars (from TEMPLATE.md Option A Step 5)
+# .env.example — PROJECT_HOSTNAME + IAM OIDC vars (from TEMPLATE.md Option A Step 5)
 write_file "$SHELL_BASE/.env.example" <<'ENV_EOF'
 # Hostname (Traefik routing — no PORT_PREFIX)
 PROJECT_HOSTNAME=<project-name>.local
 
-# GAP OIDC (if integrating with GAP IdP)
-# OIDC_ISSUER_URL: GAP's issuer base URL — no trailing /oauth2/ path.
+# IAM OIDC (if integrating with IAM IdP)
+# OIDC_ISSUER_URL: IAM's issuer base URL — no trailing /oauth2/ path.
 #   Spring Security appends /.well-known/openid-configuration automatically.
 OIDC_ISSUER_URL=http://iam.local
 # JWT_JWKS_URI: explicit JWKS endpoint (avoids OpenID discovery round-trip in dev).
@@ -580,7 +580,7 @@ Only tasks in `ready/` may be implemented.
 - `TASK-<PREFIX>-INT-XXX`: cross-service integration / E2E (Testcontainers, Docker Compose)
 - `TASK-<PREFIX>-FE-XXX`: frontend
 
-TODO: replace <PREFIX> with your project's task prefix (e.g. WMS, ECO, GAP, SCM).
+TODO: replace <PREFIX> with your project's task prefix (e.g. WMS, ECO, IAM, SCM).
 
 ---
 

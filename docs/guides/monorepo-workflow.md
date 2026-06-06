@@ -207,7 +207,7 @@ CI is defined in `.github/workflows/ci.yml`. Jobs are loosely ordered by depende
 
 Some test families are intentionally skipped in CI due to environment constraints (Docker unavailable on runner):
 
-- WMS / GAP integration tests that require Docker on Windows CI runners.
+- WMS / IAM integration tests that require Docker on Windows CI runners.
 - Full-stack Playwright `frontend-e2e` is gated to the canonical repo only.
 
 When adding a new backend service, add its `:check` task to the `build-and-test` step in `ci.yml`. Pattern: `./gradlew :projects:<name>:apps:<service>:check`.
@@ -296,9 +296,9 @@ These patterns surfaced repeatedly across TASK-MONO-029 through TASK-MONO-037. K
 | Document | What it governs |
 |---|---|
 | `CLAUDE.md` | Minimum operating rules: project classification, hard stops, required workflow, source-of-truth priority |
-| `TEMPLATE.md` | Discovery → Distribution strategy, new project bootstrap (Options A/B), standalone portfolio sync, hostname routing spec, GAP IdP integration pattern |
+| `TEMPLATE.md` | Discovery → Distribution strategy, new project bootstrap (Options A/B), standalone portfolio sync, hostname routing spec, IAM IdP integration pattern |
 | `tasks/INDEX.md` | Monorepo-level task lifecycle, PR Separation Rule, move rules, when to use root vs project tasks |
-| `projects/<name>/PROJECT.md` | Project domain/trait declaration (activates rule bundles); service map; GAP IdP integration declaration |
+| `projects/<name>/PROJECT.md` | Project domain/trait declaration (activates rule bundles); service map; IAM IdP integration declaration |
 | `platform/entrypoint.md` | Spec reading order for implementation tasks |
 | `rules/taxonomy.md` | Authoritative catalog of all declared domains and traits |
 | `.claude/config/activation-rules.md` | Dispatch table: which rule categories and skills activate per domain/trait |
