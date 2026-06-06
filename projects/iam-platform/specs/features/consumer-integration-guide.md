@@ -1,7 +1,7 @@
 # Feature: Consumer Integration Guide (OIDC)
 
 > 본 문서는 [ADR-001](../../docs/adr/ADR-001-oidc-adoption.md) (D1=A, D4=D4-c) 의 결정에 따라
-> GAP를 표준 OIDC IdP로 이용하는 신규 소비 서비스의 **단일 진입 통합 가이드**다.
+> IAM를 표준 OIDC IdP로 이용하는 신규 소비 서비스의 **단일 진입 통합 가이드**다.
 > 구현 specs (TASK-BE-251 / TASK-BE-252 / TASK-BE-256) 와 동기 유지 의무를 가진다.
 > ADR-001 또는 OIDC 컨트랙트가 변경되면 본 가이드도 같은 PR 안에서 갱신해야 한다.
 
@@ -9,7 +9,7 @@
 
 ## Purpose
 
-GAP는 6개 도메인 (`fan-platform`, `wms`, 향후 `erp`/`scm`/`mes`/`fan-community`) 의 공유 인증 공급자로 동작하며,
+IAM는 6개 도메인 (`fan-platform`, `wms`, 향후 `erp`/`scm`/`mes`/`fan-community`) 의 공유 인증 공급자로 동작하며,
 신규 도메인이 합류할 때마다 다음 정보가 분산되어 있어 동일한 탐색 비용이 반복 발생한다:
 
 - 테넌트 등록 절차 → [admin-api.md § Tenant Lifecycle](../contracts/http/admin-api.md#tenant-lifecycle-task-be-256)
@@ -30,15 +30,15 @@ GAP는 6개 도메인 (`fan-platform`, `wms`, 향후 `erp`/`scm`/`mes`/`fan-comm
 
 | 패턴 | 설명 | 대표 grant |
 |---|---|---|
-| 사용자 인증 위임 (User Delegation) | 최종 사용자가 GAP에서 로그인하고, 소비 서비스는 GAP가 발급한 access/id token 으로 사용자를 식별 | `authorization_code` + PKCE |
-| Service-to-Service | 소비 서비스 백엔드가 다른 백엔드(GAP 또는 GAP 보호 영역) 호출 시 자기 자신을 인증 | `client_credentials` |
+| 사용자 인증 위임 (User Delegation) | 최종 사용자가 IAM에서 로그인하고, 소비 서비스는 IAM가 발급한 access/id token 으로 사용자를 식별 | `authorization_code` + PKCE |
+| Service-to-Service | 소비 서비스 백엔드가 다른 백엔드(IAM 또는 IAM 보호 영역) 호출 시 자기 자신을 인증 | `client_credentials` |
 
 두 패턴은 같은 OIDC IdP를 공유하므로 client 등록·token 검증·이벤트 구독은 동일한 인프라를 재사용한다.
 다만 token 종류 (id_token 유무) 와 발급 흐름 (redirect 유무) 만 달라진다.
 
 ### 본 가이드가 다루지 않는 것
 
-- GAP 자체의 SAS 내부 구현 — [auth-service architecture](../services/auth-service/architecture.md)
+- IAM 자체의 SAS 내부 구현 — [auth-service architecture](../services/auth-service/architecture.md)
 - 외부 파트너 portal 또는 self-service client 등록 UI — 별도 후속
 - Python / Go / Ruby 등 그 외 언어 예시 — 필요 시 후속에서 부록 추가
 - 소비 서비스의 도메인 권한 매트릭스 — 해당 서비스가 자체 소유
@@ -179,7 +179,7 @@ Content-Type: application/json
 
 - `oauth_clients` 테이블에 `client_id`, `client_secret_hash` (BCrypt), `redirect_uris`, `allowed_grants`, `allowed_scopes`, `tenant_id` row 1건 INSERT.
 - `admin_actions` 에 `OAUTH_CLIENT_CREATE` 감사 row 기록.
-- secret 평문은 GAP DB에 저장하지 않는다 — hash 만 저장 ([ADR-001 § 7 Risks](../../docs/adr/ADR-001-oidc-adoption.md#7-risks--mitigations)).
+- secret 평문은 IAM DB에 저장하지 않는다 — hash 만 저장 ([ADR-001 § 7 Risks](../../docs/adr/ADR-001-oidc-adoption.md#7-risks--mitigations)).
 
 ---
 
@@ -187,7 +187,7 @@ Content-Type: application/json
 
 ### Discovery 엔드포인트
 
-GAP는 RFC 8414 OIDC Discovery 1.0 을 준수한다.
+IAM는 RFC 8414 OIDC Discovery 1.0 을 준수한다.
 
 ```
 GET /.well-known/openid-configuration
@@ -197,7 +197,7 @@ GET /.well-known/openid-configuration
 
 | 필드 | 값 |
 |---|---|
-| `issuer` | `OIDC_ISSUER_URL` 환경변수 (예: `https://gap.example.com`) |
+| `issuer` | `OIDC_ISSUER_URL` 환경변수 (예: `https://iam.example.com`) |
 | `authorization_endpoint` | `${issuer}/oauth2/authorize` |
 | `token_endpoint` | `${issuer}/oauth2/token` |
 | `jwks_uri` | `${issuer}/oauth2/jwks` |
@@ -212,7 +212,7 @@ GET /.well-known/openid-configuration
 
 ### Spring Security 설정 (Resource Server)
 
-소비 서비스가 GAP가 발급한 access token을 검증하는 모드. Spring Security는 issuer-uri 한 줄 설정만으로
+소비 서비스가 IAM가 발급한 access token을 검증하는 모드. Spring Security는 issuer-uri 한 줄 설정만으로
 discovery 문서를 자동 fetch 하고 JWKS URI를 캐시한다.
 
 ```yaml
@@ -222,7 +222,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL}        # 예: https://gap.example.com
+          issuer-uri: ${OIDC_ISSUER_URL}        # 예: https://iam.example.com
 ```
 
 ```gradle
@@ -255,8 +255,8 @@ dependencies {
 
 ### 흐름
 
-소비 서비스 백엔드가 다른 백엔드(GAP 보호 영역 또는 동일 GAP를 공유하는 다른 도메인) 를 호출할 때
-자기 자신을 GAP에 등록된 client로 인증한다. 사용자 컨텍스트가 없는 백그라운드 작업에 적합.
+소비 서비스 백엔드가 다른 백엔드(IAM 보호 영역 또는 동일 IAM를 공유하는 다른 도메인) 를 호출할 때
+자기 자신을 IAM에 등록된 client로 인증한다. 사용자 컨텍스트가 없는 백그라운드 작업에 적합.
 
 ```
 POST /oauth2/token
@@ -299,8 +299,8 @@ spring:
         registration:
           iam-erp:
             provider: iam
-            client-id: ${GAP_CLIENT_ID}
-            client-secret: ${GAP_CLIENT_SECRET}
+            client-id: ${IAM_CLIENT_ID}
+            client-secret: ${IAM_CLIENT_SECRET}
             authorization-grant-type: client_credentials
             scope: erp.read
         provider:
@@ -376,8 +376,8 @@ async function getGapTokens() {
   }
   const issuer = await Issuer.discover(process.env.OIDC_ISSUER_URL);
   const client = new issuer.Client({
-    client_id: process.env.GAP_CLIENT_ID,
-    client_secret: process.env.GAP_CLIENT_SECRET,
+    client_id: process.env.IAM_CLIENT_ID,
+    client_secret: process.env.IAM_CLIENT_SECRET,
     token_endpoint_auth_method: 'client_secret_basic',
   });
   const token = await client.grant({
@@ -425,7 +425,7 @@ async function fetchInventory(sku) {
 
 ### 구독해야 할 4개 이벤트
 
-소비 서비스가 GAP 사용자 캐시·downstream 처리를 일관되게 유지하려면 다음 4개 토픽을 구독한다.
+소비 서비스가 IAM 사용자 캐시·downstream 처리를 일관되게 유지하려면 다음 4개 토픽을 구독한다.
 모든 페이로드에 `tenant_id` 필드가 포함되며, 소비자는 자기 테넌트의 이벤트만 처리한다.
 
 | 토픽 | 트리거 | 소비 의무 |
@@ -502,7 +502,7 @@ public void onAccountDeleted(ConsumerRecord<String, AccountEvent> rec) {
 
 세부 GDPR 정책은 [data-rights.md](data-rights.md) 참조.
 
-> **TASK-BE-258 — 소비자 의무 계약**: GAP 내부 소비자(security-service, community-service, membership-service, admin-service) 각각의 마스킹 SLA와 실패 처리 의무는 [account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258) 에 표 형식으로 정의되어 있다. 외부 소비자(WMS 등) 도 해당 표의 "External 소비자 가이드" 절을 준수해야 한다.
+> **TASK-BE-258 — 소비자 의무 계약**: IAM 내부 소비자(security-service, community-service, membership-service, admin-service) 각각의 마스킹 SLA와 실패 처리 의무는 [account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258) 에 표 형식으로 정의되어 있다. 외부 소비자(WMS 등) 도 해당 표의 "External 소비자 가이드" 절을 준수해야 한다.
 >
 > security-service의 reference 구현(`AccountDeletedAnonymizedConsumer`)이 마스킹 완료 후 발행하는 `security.pii.masked` audit 이벤트 스펙: [security-events.md § security.pii.masked](../contracts/events/security-events.md#securitypiimasked-task-be-258).
 
@@ -580,7 +580,7 @@ public class JwtDecoderConfig {
 
 ### JWKS endpoint 가용성 모니터링
 
-- discovery 캐시는 in-memory 이므로 단발 장애에는 강건하지만, 콜드 스타트 직후 GAP 가 다운된 상태이면 모든 검증이 실패.
+- discovery 캐시는 in-memory 이므로 단발 장애에는 강건하지만, 콜드 스타트 직후 IAM 가 다운된 상태이면 모든 검증이 실패.
 - 운영 모니터링 항목:
   - `${OIDC_ISSUER_URL}/.well-known/openid-configuration` 200 응답 (1분 간격)
   - `${OIDC_ISSUER_URL}/oauth2/jwks` 200 응답 + `keys` 배열 비어있지 않음
@@ -612,7 +612,7 @@ public class JwtDecoderConfig {
 - [ ] DLQ 토픽 `<topic>.dlq` 처리 절차 문서화.
 - [ ] 4개 이벤트 토픽 구독 — `account.created`, `account.locked`, `account.deleted`, `account.status.changed` (또는 통합 `account.status.changed` 만).
 - [ ] `account.deleted` anonymized=true 처리 경로 검증 (GDPR).
-- [ ] 운영 사고 대응 대비: GAP 장애 시 fail-closed 기본값 (캐시된 사용자 정보로 read-only 모드만 허용).
+- [ ] 운영 사고 대응 대비: IAM 장애 시 fail-closed 기본값 (캐시된 사용자 정보로 read-only 모드만 허용).
 
 ---
 
@@ -655,9 +655,9 @@ public class JwtDecoderConfig {
 
 | 시나리오 | 증상 | 권장 대응 |
 |---|---|---|
-| GAP discovery endpoint 일시 장애 | 콜드 스타트 시 검증 실패 | retry + circuit breaker. 기존 검증 캐시는 단기간 유지 |
+| IAM discovery endpoint 일시 장애 | 콜드 스타트 시 검증 실패 | retry + circuit breaker. 기존 검증 캐시는 단기간 유지 |
 | JWKS 키 회전 직후 검증 실패 burst | 30초 내외 401 spike | NimbusJwtDecoder 자동 재fetch — 별도 조치 불필요. 알림만 등록 |
-| Kafka consumer lag 폭증 | account 캐시 stale | lag 임계치 알람 + 일시적으로 pull-through (직접 GAP API 조회) fallback |
+| Kafka consumer lag 폭증 | account 캐시 stale | lag 임계치 알람 + 일시적으로 pull-through (직접 IAM API 조회) fallback |
 | DLQ 누적 | schema 변경 또는 미지원 eventType | DLQ 메시지 inspect → 신규 schemaVersion 지원 후 재처리 |
 | client_credentials token 발급 실패 | S2S 호출 401 burst | 캐시 무효화 + 1회 재발급 시도. 반복 실패 시 client 등록 상태 점검 |
 | cross-tenant token 사용 시도 (의도적 공격) | 403 `TENANT_SCOPE_DENIED` 반복 | 보안 이벤트 발행 + IP 차단 (rate limit) |

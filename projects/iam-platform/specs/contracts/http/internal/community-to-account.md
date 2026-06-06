@@ -4,7 +4,7 @@
 **노출 경로**: `/internal/accounts/*` — 게이트웨이에 노출 금지
 **인증** (TASK-BE-253 변경): `Authorization: Bearer <oauth2-access-token>`
 - 기존 `X-Internal-Token` 헤더는 **deprecated**.
-- community-service는 GAP에서 `client_credentials` grant 로 발급한 access token 을 사용한다.
+- community-service는 IAM에서 `client_credentials` grant 로 발급한 access token 을 사용한다.
   - 등록 client: `community-service-client` (`tenant_id=fan-platform`, `allowed_grants=[client_credentials]`, `allowed_scopes=[account.read, membership.read]`).
 - account-service 는 표준 OAuth2 Resource Server 로서 토큰 서명·만료·issuer를 검증하고, 필요 시 `account.read` scope를 추가로 요구할 수 있다 (TASK-BE-253 § Implementation Notes "scope enforcement").
 

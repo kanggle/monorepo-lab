@@ -12,7 +12,7 @@ base path: `/internal/security`
 
 특정 계정의 로그인 이력 조회.
 
-**Auth required**: internal — `Authorization: Bearer <GAP client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
+**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
 
 **Query Parameters**:
 
@@ -65,7 +65,7 @@ base path: `/internal/security`
 
 특정 계정의 비정상 로그인 탐지 이벤트 조회.
 
-**Auth required**: internal — `Authorization: Bearer <GAP client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
+**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
 
 **Query Parameters**:
 

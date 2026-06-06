@@ -6,7 +6,7 @@ community-service는 프리미엄 포스트 접근 권한 확인 시 membership-
 **노출 경로**: `/internal/membership/*` — 게이트웨이에 노출 금지
 **인증** (TASK-BE-253 변경): `Authorization: Bearer <oauth2-access-token>`
 - 기존 "내부 서비스 토큰 (mTLS 대체)" 표기는 **deprecated**.
-- community-service는 GAP에서 `client_credentials` grant 로 발급한 access token 을 사용한다.
+- community-service는 IAM에서 `client_credentials` grant 로 발급한 access token 을 사용한다.
   - 등록 client: `community-service-client` (`tenant_id=fan-platform`, `allowed_grants=[client_credentials]`, `allowed_scopes=[account.read, membership.read]`).
 - membership-service 는 표준 OAuth2 Resource Server 로서 토큰 서명·만료·issuer 를 검증하고, 향후 `membership.read` scope 를 추가로 요구할 수 있다.
 
@@ -73,4 +73,4 @@ community-service는 프리미엄 포스트 접근 권한 확인 시 membership-
 - 이 엔드포인트는 **읽기 전용** — 상태 변경 없음
 - `accountId`에 대한 ACTIVE 구독 중 `planLevel >= requiredPlanLevel` 여부만 판단
 - 응답 시간 목표: p95 < 30ms (DB 단순 조회)
-- (TASK-BE-253) `spring-boot-starter-oauth2-resource-server` 로 모든 `/internal/membership/*`, `/api/membership/*` 요청에 대해 GAP 의 JWKS 로 토큰을 검증하고 `tenant_id=fan-platform` 인 토큰만 통과시킨다 (기타 테넌트 → 403)
+- (TASK-BE-253) `spring-boot-starter-oauth2-resource-server` 로 모든 `/internal/membership/*`, `/api/membership/*` 요청에 대해 IAM 의 JWKS 로 토큰을 검증하고 `tenant_id=fan-platform` 인 토큰만 통과시킨다 (기타 테넌트 → 403)

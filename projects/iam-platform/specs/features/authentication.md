@@ -1,6 +1,6 @@
 # Feature: Authentication
 
-> 신규 소비 서비스가 GAP를 OIDC IdP로 이용하는 통합 절차는 [consumer-integration-guide.md](consumer-integration-guide.md) 의 Phase 3 (discovery + JWKS) 와 Phase 4 (S2S `client_credentials`) 를 단일 진입점으로 사용한다.
+> 신규 소비 서비스가 IAM를 OIDC IdP로 이용하는 통합 절차는 [consumer-integration-guide.md](consumer-integration-guide.md) 의 Phase 3 (discovery + JWKS) 와 Phase 4 (S2S `client_credentials`) 를 단일 진입점으로 사용한다.
 
 ## Purpose
 

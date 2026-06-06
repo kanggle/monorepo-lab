@@ -49,7 +49,7 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 
 ### `social_identities`
 
-OAuth/OIDC 외부 IdP(예: Google, Apple, Naver, Kakao)와 GAP 계정의 연결
+OAuth/OIDC 외부 IdP(예: Google, Apple, Naver, Kakao)와 IAM 계정의 연결
 관계. 동일 사용자가 다수 provider 를 연결 가능. V0005에서 신설,
 V0007 (TASK-BE-229)에서 `tenant_id` 컬럼 + 인덱스 swap.
 

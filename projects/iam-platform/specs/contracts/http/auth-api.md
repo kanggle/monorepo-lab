@@ -18,13 +18,13 @@ OIDC Discovery 문서. RFC 8414 준거.
 **Response 200** (example):
 ```json
 {
-  "issuer": "https://gap.example.com",
-  "authorization_endpoint": "https://gap.example.com/oauth2/authorize",
-  "token_endpoint": "https://gap.example.com/oauth2/token",
-  "jwks_uri": "https://gap.example.com/oauth2/jwks",
-  "userinfo_endpoint": "https://gap.example.com/oauth2/userinfo",
-  "revocation_endpoint": "https://gap.example.com/oauth2/revoke",
-  "introspection_endpoint": "https://gap.example.com/oauth2/introspect",
+  "issuer": "https://iam.example.com",
+  "authorization_endpoint": "https://iam.example.com/oauth2/authorize",
+  "token_endpoint": "https://iam.example.com/oauth2/token",
+  "jwks_uri": "https://iam.example.com/oauth2/jwks",
+  "userinfo_endpoint": "https://iam.example.com/oauth2/userinfo",
+  "revocation_endpoint": "https://iam.example.com/oauth2/revoke",
+  "introspection_endpoint": "https://iam.example.com/oauth2/introspect",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
   "subject_types_supported": ["public"],
@@ -106,7 +106,7 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 | `code_verifier` | authorization_code 전용 | PKCE verifier |
 | `client_id` | public client | Basic auth 미사용 시 |
 | `refresh_token` | refresh_token 전용 | 기존 refresh token 값 |
-| `subject_token` | token-exchange 전용 | 운영자의 base GAP OIDC **access token** (auth-service 자신이 발급한 `platform-console-web` 토큰) |
+| `subject_token` | token-exchange 전용 | 운영자의 base IAM OIDC **access token** (auth-service 자신이 발급한 `platform-console-web` 토큰) |
 | `subject_token_type` | token-exchange 전용 | `urn:ietf:params:oauth:token-type:access_token` |
 | `audience` | token-exchange 전용 | 선택된(assume 대상) customer **tenant id** |
 | `scope` | client_credentials 권장 | 요청 scope |
@@ -115,9 +115,9 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 
 #### Assume-Tenant Exchange (RFC 8693 — TASK-BE-327 / ADR-MONO-020 § 3.3 step 2, D2+D3)
 
-`grant_type=urn:ietf:params:oauth:grant-type:token-exchange` 로 운영자의 base GAP OIDC 세션을, **선택된 customer tenant** 로 scope 된 **단명(short-lived) domain-facing GAP OIDC access token** 으로 교환한다 (AWS STS AssumeRole 유사). 발급된 토큰은 login 토큰과 **동일한 `iss`/JWKS/kid** 를 가지므로 federated 도메인 게이트(ADR-019 D5)와 BFF(ADR-017 D6)가 변경 없이 수용한다.
+`grant_type=urn:ietf:params:oauth:grant-type:token-exchange` 로 운영자의 base IAM OIDC 세션을, **선택된 customer tenant** 로 scope 된 **단명(short-lived) domain-facing IAM OIDC access token** 으로 교환한다 (AWS STS AssumeRole 유사). 발급된 토큰은 login 토큰과 **동일한 `iss`/JWKS/kid** 를 가지므로 federated 도메인 게이트(ADR-019 D5)와 BFF(ADR-017 D6)가 변경 없이 수용한다.
 
-- **subject_token**: auth-service 자신이 발급한 base GAP OIDC access token. auth-service 의 자기 `JwtDecoder`(자신이 서명한 동일 JWKS)로 검증한다. `sub`(account_id) + base `tenant_id` 추출. 검증 실패(만료/무효 서명/issuer 불일치 등) → `invalid_grant`.
+- **subject_token**: auth-service 자신이 발급한 base IAM OIDC access token. auth-service 의 자기 `JwtDecoder`(자신이 서명한 동일 JWKS)로 검증한다. `sub`(account_id) + base `tenant_id` 추출. 검증 실패(만료/무효 서명/issuer 불일치 등) → `invalid_grant`.
 - **선택된 tenant**: RFC 8693 **`audience`** 파라미터로 운반한다 (`resource` 는 사용하지 않음).
 - **assignment 게이트 (fail-CLOSED)**: admin-service `GET /internal/operator-assignments/check?oidcSubject=<sub>&tenantId=<audience>` 가 `assigned=true` 를 반환할 때만 발급한다. 미할당 / 알 수 없는 subject / 비-ACTIVE 운영자 / **admin-service 장애·circuit-open·timeout** 모두 → **토큰 미발급**, `invalid_grant`. ([auth-to-admin.md](./internal/auth-to-admin.md) — fail-closed)
 - **`entitled_domains` (fail-SOFT, least-privilege)**: 선택된 tenant 의 ACTIVE subscriptions **만** (다른 assignment 와의 union 없음 — D3). account-service 장애 시 claim 을 **생략**하고 토큰은 발급한다 (fail-soft; 도메인은 `tenant_id` 게이트로 fallback). keystone `populateEntitledDomains` 재사용.
@@ -125,7 +125,7 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 **Request 예** (form-urlencoded):
 ```
 grant_type=urn:ietf:params:oauth:grant-type:token-exchange
-&subject_token=<base GAP OIDC access token>
+&subject_token=<base IAM OIDC access token>
 &subject_token_type=urn:ietf:params:oauth:token-type:access_token
 &audience=acme-corp
 &client_id=platform-console-web
@@ -274,7 +274,7 @@ revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2Authorizat
   "nbf": 1234566090,
   "sub": "account-uuid",
   "aud": ["string"],
-  "iss": "https://gap.example.com",
+  "iss": "https://iam.example.com",
   "tenant_id": "fan-platform",
   "tenant_type": "B2C"
 }

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Global Account Platform의 **단일 공개 진입점**. 외부 클라이언트(브라우저, 모바일 앱, 3rd-party 통합)가 오는 모든 HTTP 트래픽을 받아 인증 검증·rate limit·요청 ID 주입·다운스트림 라우팅을 수행한다. 비즈니스 로직을 수행하지 않고, 정책 집행(policy enforcement)에만 집중한다.
+Identity & Access Management의 **단일 공개 진입점**. 외부 클라이언트(브라우저, 모바일 앱, 3rd-party 통합)가 오는 모든 HTTP 트래픽을 받아 인증 검증·rate limit·요청 ID 주입·다운스트림 라우팅을 수행한다. 비즈니스 로직을 수행하지 않고, 정책 집행(policy enforcement)에만 집중한다.
 
 ## Callers
 

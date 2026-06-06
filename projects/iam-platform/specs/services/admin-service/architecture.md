@@ -206,9 +206,9 @@ admin-service 가 operator access token 을 민팅하는 경로는 다음 **둘*
 
 1. **password (+ optional TOTP) login** — `POST /api/admin/auth/login`
    (`AdminLoginService`, TASK-BE-029-3). canonical 발급 경로.
-2. **GAP OIDC token exchange** — `POST /api/admin/auth/token-exchange`
+2. **IAM OIDC token exchange** — `POST /api/admin/auth/token-exchange`
    (TASK-BE-298, ADR-MONO-014 ACCEPTED § D2/D3). platform-console 이 보유한
-   GAP OIDC `platform-console-web` access token 을 검증(auth-service JWKS)하고
+   IAM OIDC `platform-console-web` access token 을 검증(auth-service JWKS)하고
    OIDC subject 를 `admin_operators` row 로 **fail-closed** 해석한 뒤, 위
    1번과 **동일한 발급기**로 operator token 을 민팅한다. tenant 스코프는
    `admin_operators.tenant_id`(ADR-002 `'*'` sentinel 포함)에서만 결정되며
@@ -218,7 +218,7 @@ admin-service 가 operator access token 을 민팅하는 경로는 다음 **둘*
 > 경로의 형제**일 뿐, 검증(verification) 경계의 확장이 아니다.
 > `OperatorAuthenticationFilter` 는 단일 issuer(`iss=admin-service`,
 > `token_type=admin`)만 수용하도록 **확장되지 않는다** — `/api/admin/**` 의
-> 일반 엔드포인트에 raw GAP OIDC 토큰을 제시하면 여전히 `401`. admin-service
+> 일반 엔드포인트에 raw IAM OIDC 토큰을 제시하면 여전히 `401`. admin-service
 > 는 외부 IdP 토큰을 **수용하지 않는** self-issuing operator IdP 로 남는다.
 > 회귀 테스트가 이 불변식을 고정한다.
 
@@ -257,7 +257,7 @@ sentinel)가 본 서비스 모델, (3) gateway 가 `/api/admin/**` 의 operator 
 admin-service 는 `GET /internal/operator-assignments/check?oidcSubject=&tenantId=`
 로 운영자의 **effective tenant scope** 포함 여부를 노출한다. auth-service 의
 assume-tenant 발급기가 issuance-time **one-shot** 으로 호출하여 fail-closed
-assignment 게이트를 통과시킨다 (도메인→GAP per-request callback 아님 — ADR-020
+assignment 게이트를 통과시킨다 (도메인→IAM per-request callback 아님 — ADR-020
 § 3.1 은 후자만 금지).
 
 - 판정: `oidcSubject` → `admin_operators` row (`AdminOperatorPort.findByOidcSubject`)
@@ -298,7 +298,7 @@ admin-service 는 기존 단일 operator-JWT 체인(`/api/admin/**`)에 더해 *
 `SecurityFilterChain @Order(0)` (`securityMatcher("/internal/**")`) 을 추가한다.
 account-service `SecurityConfig`/`InternalApiFilter` 를 미러링한다:
 
-- GAP `client_credentials` JWT 만 수용 (`internalJwtDecoder` = GAP JWKS + issuer);
+- IAM `client_credentials` JWT 만 수용 (`internalJwtDecoder` = IAM JWKS + issuer);
   미제시/무효 → 401 `UNAUTHORIZED` (production fail-closed).
 - non-terminal dev/test bypass (`InternalApiFilter`, `test`/`standalone` 프로파일
   또는 `internal.api.bypass-when-unconfigured=true`) 는 production 을 약화시키지
@@ -311,7 +311,7 @@ account-service `SecurityConfig`/`InternalApiFilter` 를 미러링한다:
 ## Integration Rules
 
 - **HTTP 컨트랙트 (외부)**: [specs/contracts/http/admin-api.md](../../contracts/http/) — admin 전용 엔드포인트. [specs/contracts/http/console-registry-api.md](../../contracts/http/) — platform-console product/tenant registry (`GET /api/admin/console/registry`, TASK-BE-296)
-- **HTTP 컨트랙트 (in-coming)**: [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — auth-service → admin-service assume-tenant assignment check (`GET /internal/operator-assignments/check`, GAP client_credentials JWT, read-only, TASK-BE-327)
+- **HTTP 컨트랙트 (in-coming)**: [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — auth-service → admin-service assume-tenant assignment check (`GET /internal/operator-assignments/check`, IAM client_credentials JWT, read-only, TASK-BE-327)
 - **HTTP 컨트랙트 (out-going)**:
   - [specs/contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) — 강제 로그아웃
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) — lock/unlock/delete

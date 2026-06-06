@@ -10,7 +10,7 @@ expose `/internal/**` to the public internet.
 > registration, OAuth client issuance, JWKS setup, and event subscription.
 
 **Path prefix**: `/internal/tenants/{tenantId}/accounts`
-**Authentication**: `Authorization: Bearer <GAP client_credentials JWT>` (TASK-BE-319b; 정적 `X-Internal-Token` 제거됨). account-service `InternalApiFilter`/oauth2 resource-server 가 JWKS 서명 + issuer 로 검증.
+**Authentication**: `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319b; 정적 `X-Internal-Token` 제거됨). account-service `InternalApiFilter`/oauth2 resource-server 가 JWKS 서명 + issuer 로 검증.
 **Authorization**: Path `{tenantId}` must match the caller's JWT `tenant_id` claim,
 or the caller must hold a platform-scope `SUPER_ADMIN` role.
 
@@ -23,7 +23,7 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 
 | Header | Required | Description |
 |---|---|---|
-| `Authorization` | Yes | `Bearer <GAP client_credentials JWT>` (TASK-BE-319b; replaces the removed `X-Internal-Token`) |
+| `Authorization` | Yes | `Bearer <IAM client_credentials JWT>` (TASK-BE-319b; replaces the removed `X-Internal-Token`) |
 | `X-Tenant-Id` | Conditional | Caller's tenant scope. Required when not derivable from the JWT. |
 
 ---
