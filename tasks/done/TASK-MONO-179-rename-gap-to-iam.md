@@ -8,7 +8,7 @@ Rename the project **`global-account-platform` (alias `gap`) → `iam-platform` 
 
 # Status
 
-ready
+done
 
 # Owner
 
