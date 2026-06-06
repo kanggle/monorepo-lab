@@ -13,7 +13,7 @@ import type { PoPage, SnapshotResponse, StalenessResponse } from './types';
 
 /**
  * Server-side scm operations section state for the `(console)/scm` route
- * (TASK-PC-FE-008 — the SECOND non-GAP federation; completes Phase 4).
+ * (TASK-PC-FE-008 — the SECOND non-IAM federation; completes Phase 4).
  * STRICTLY READ-ONLY — no mutation ever.
  *
  * Eligibility gate (console-integration-contract § 2.4.6, reusing the
@@ -33,7 +33,7 @@ import type { PoPage, SnapshotResponse, StalenessResponse } from './types';
  * Dependencies / § Boundary Rules.)
  *
  * Resilience boundary (§ 2.4.6 / § 2.5, mirrors `wms-state.ts`):
- *   - `401` (GAP OIDC session expired) → `redirect('/login')` — a
+ *   - `401` (IAM OIDC session expired) → `redirect('/login')` — a
  *     WHOLE-SESSION re-login, NOT a per-section degrade (no partial authed
  *     state; consistent with the FE-002..007 401 discipline).
  *   - `403` (token not scm-scoped / insufficient scope) → a non-crashing

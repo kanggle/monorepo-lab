@@ -11,7 +11,7 @@ import {
 } from './types';
 
 /**
- * Server-side GAP admin-service unified audit + security read client
+ * Server-side IAM admin-service unified audit + security read client
  * (TASK-PC-FE-003 — ADR-MONO-013 Phase 2 slice 2).
  *
  * Server-only by construction (same posture as `accounts-api.ts` /
@@ -23,7 +23,7 @@ import {
  *
  * Auth invariant (console-integration-contract § 2.1/§ 2.4.2 — the #569
  * trust boundary): the call authenticates with the EXCHANGED operator token
- * (`getOperatorToken()`), NEVER the GAP OIDC access token. An absent
+ * (`getOperatorToken()`), NEVER the IAM OIDC access token. An absent
  * operator token ⇒ no usable operator session ⇒ `401 TOKEN_INVALID` (the
  * caller re-logins; the fetch is NOT made — no silent GAP-token fallback).
  *
@@ -115,7 +115,7 @@ export async function queryAudit(
   const requestId = newRequestId();
 
   // Trust boundary: the /api/admin/** credential is the EXCHANGED operator
-  // token — never the GAP OIDC access token. Absent ⇒ 401, no fetch.
+  // token — never the IAM OIDC access token. Absent ⇒ 401, no fetch.
   const token = await getOperatorToken();
   if (!token) {
     logger.warn('audit_no_operator_session', { requestId });
@@ -199,7 +199,7 @@ export async function queryAudit(
       throw new AuditUnavailableError(
         code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
         code,
-        'GAP audit service unavailable',
+        'IAM audit service unavailable',
       );
     }
 
@@ -248,14 +248,14 @@ export async function queryAudit(
       throw new AuditUnavailableError(
         'timeout',
         'TIMEOUT',
-        'GAP audit call timed out',
+        'IAM audit call timed out',
       );
     }
     logger.error('audit_error', { requestId });
     throw new AuditUnavailableError(
       'downstream',
       'NETWORK_ERROR',
-      'GAP audit call failed',
+      'IAM audit call failed',
     );
   } finally {
     clearTimeout(timer);

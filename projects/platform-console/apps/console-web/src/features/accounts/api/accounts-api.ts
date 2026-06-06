@@ -22,7 +22,7 @@ import {
 } from './types';
 
 /**
- * Server-side GAP admin-service accounts client (TASK-PC-FE-002).
+ * Server-side IAM admin-service accounts client (TASK-PC-FE-002).
  *
  * Server-only by construction (same posture as `registry-client.ts` /
  * `operator-token-exchange.ts`): imported exclusively from server components
@@ -33,7 +33,7 @@ import {
  *
  * Auth invariant (console-integration-contract § 2.1/§ 2.4.1 — the #569
  * trust boundary): every call authenticates with the EXCHANGED operator
- * token (`getOperatorToken()`), NEVER the GAP OIDC access token. An absent
+ * token (`getOperatorToken()`), NEVER the IAM OIDC access token. An absent
  * operator token ⇒ no usable operator session ⇒ `401 TOKEN_INVALID` (the
  * caller re-logins; the fetch is NOT made — no silent GAP-token fallback).
  *
@@ -88,7 +88,7 @@ async function callGapAdmin<T>(
   const requestId = newRequestId();
 
   // Trust boundary: the /api/admin/** credential is the EXCHANGED operator
-  // token — never the GAP OIDC access token. Absent ⇒ 401, no fetch.
+  // token — never the IAM OIDC access token. Absent ⇒ 401, no fetch.
   const token = await getOperatorToken();
   if (!token) {
     logger.warn('accounts_no_operator_session', { requestId, path: opts.path });
@@ -190,7 +190,7 @@ async function callGapAdmin<T>(
       throw new AccountsUnavailableError(
         code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
         code,
-        'GAP accounts service unavailable',
+        'IAM accounts service unavailable',
       );
     }
 
@@ -237,14 +237,14 @@ async function callGapAdmin<T>(
       throw new AccountsUnavailableError(
         'timeout',
         'TIMEOUT',
-        'GAP accounts call timed out',
+        'IAM accounts call timed out',
       );
     }
     logger.error('accounts_error', { requestId, path: opts.path });
     throw new AccountsUnavailableError(
       'downstream',
       'NETWORK_ERROR',
-      'GAP accounts call failed',
+      'IAM accounts call failed',
     );
   } finally {
     clearTimeout(timer);
@@ -461,7 +461,7 @@ export async function exportAccount(
       throw new AccountsUnavailableError(
         code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
         code,
-        'GAP accounts service unavailable',
+        'IAM accounts service unavailable',
       );
     }
     if (!res.ok) {
@@ -490,13 +490,13 @@ export async function exportAccount(
       throw new AccountsUnavailableError(
         'timeout',
         'TIMEOUT',
-        'GAP accounts export timed out',
+        'IAM accounts export timed out',
       );
     }
     throw new AccountsUnavailableError(
       'downstream',
       'NETWORK_ERROR',
-      'GAP accounts export failed',
+      'IAM accounts export failed',
     );
   } finally {
     clearTimeout(timer);

@@ -78,7 +78,7 @@ function req(body: unknown): Request {
 function registryWith(tenants: string[]) {
   return {
     products: [
-      { productKey: 'gap', available: true, tenants },
+      { productKey: 'iam', available: true, tenants },
       { productKey: 'finance', available: true, tenants },
     ],
   };
@@ -185,7 +185,7 @@ describe('POST /api/tenant — fail-closed switch (AC-3)', () => {
     expect(res.status).toBe(503);
   });
 
-  it('missing base GAP token → 401 (no exchange attempted)', async () => {
+  it('missing base IAM token → 401 (no exchange attempted)', async () => {
     // No ACCESS_COOKIE seeded.
     fetchRegistryMock.mockResolvedValue(registryWith(['acme-corp']));
     const fetchMock = vi.fn();

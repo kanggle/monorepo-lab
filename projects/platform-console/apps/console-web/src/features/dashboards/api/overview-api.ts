@@ -17,7 +17,7 @@ import {
 } from './types';
 
 /**
- * Server-side GAP composed operator overview (TASK-PC-FE-005 — ADR-MONO-013
+ * Server-side IAM composed operator overview (TASK-PC-FE-005 — ADR-MONO-013
  * Phase 2 slice 4 / ADR-MONO-015 D1-B).
  *
  * Server-only by construction (same posture as `accounts-api.ts` /
@@ -28,7 +28,7 @@ import {
  *
  * NO NEW PRODUCER (ADR-MONO-015 D1): this is a **bounded fan-out** over the
  * EXISTING FE-002/003/004 server clients (`searchAccounts` / `queryAudit` /
- * `listOperators`). It does NOT duplicate or invent a GAP client — every
+ * `listOperators`). It does NOT duplicate or invent a IAM client — every
  * hardened call site (operator-token bearer via `getOperatorToken()` —
  * NEVER `getAccessToken()`, `X-Tenant-Id` from `getActiveTenant()`,
  * AbortController hard timeout, structured no-PII logging) is inherited

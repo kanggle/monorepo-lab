@@ -5,8 +5,8 @@ import { AssumeTenantError } from '@/shared/api/errors';
 
 /**
  * Server-only RFC 8693 **assume-tenant** token exchange: the operator's base
- * GAP OIDC `platform-console-web` access token  →  a short-lived
- * domain-facing GAP OIDC access token scoped to the **selected** customer
+ * IAM OIDC `platform-console-web` access token  →  a short-lived
+ * domain-facing IAM OIDC access token scoped to the **selected** customer
  * tenant (AWS STS AssumeRole analogue). This is the active-tenant switcher's
  * server-side driver (ADR-MONO-020 D4 / § 3.3 step 3).
  *
@@ -28,14 +28,14 @@ import { AssumeTenantError } from '@/shared/api/errors';
  *   - Server-only by construction: imported exclusively from the
  *     `/api/tenant` switch route + the `/api/auth/refresh` re-assume path
  *     (`runtime = 'nodejs'`); never reachable from client code.
- *   - The base GAP OIDC token is ONLY the `subject_token` request input; it is
+ *   - The base IAM OIDC token is ONLY the `subject_token` request input; it is
  *     never returned, never logged. The minted assumed token is never logged.
  *   - **No fallback to the base token on the selected-tenant boundary**: on
  *     any failure the switch is rejected; the console never serves the base
  *     (login-tenant) token in place of the assumed token for a selected
  *     tenant (the silent wrong-tenant-view defect this closes).
  *   - **No refresh token**: the producer issues none (D2). Re-assume on every
- *     GAP refresh (re-exchange model — mirrors § 2.6).
+ *     IAM refresh (re-exchange model — mirrors § 2.6).
  *
  * Resilience (integration-heavy I1 + § 2.6 parity):
  *   - Hard timeout (`TOKEN_EXCHANGE_TIMEOUT_MS`) via AbortController.
@@ -53,7 +53,7 @@ const SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 /**
  * SAS token response (assume-tenant). `token_type` MUST be `Bearer`; the grant
  * issues NO `refresh_token` (D2 — the assumed token is short-lived and
- * re-minted on each selection / GAP refresh). Extra fields (`issued_token_type`,
+ * re-minted on each selection / IAM refresh). Extra fields (`issued_token_type`,
  * `scope`) are tolerated and ignored.
  */
 const AssumeResponseSchema = z.object({
@@ -63,7 +63,7 @@ const AssumeResponseSchema = z.object({
 });
 
 export interface AssumedToken {
-  /** Domain-facing GAP OIDC JWT scoped to the selected tenant
+  /** Domain-facing IAM OIDC JWT scoped to the selected tenant
    *  (`tenant_id=<audience>` + `entitled_domains=<audience's ACTIVE subs>`). */
   accessToken: string;
   /** Seconds — used as the assumed-token cookie `maxAge`. */
@@ -78,10 +78,10 @@ function assumeTenantUrl(issuerUrl: string): string {
 }
 
 /**
- * Exchanges the base GAP OIDC access token for an assumed (tenant-scoped)
+ * Exchanges the base IAM OIDC access token for an assumed (tenant-scoped)
  * domain-facing token.
  *
- * @param gapAccessToken the operator's base GAP OIDC `platform-console-web`
+ * @param gapAccessToken the operator's base IAM OIDC `platform-console-web`
  *   access token (the `subject_token`). Never logged.
  * @param selectedTenant the customer tenant to assume (the RFC 8693
  *   `audience`). Must be non-blank.

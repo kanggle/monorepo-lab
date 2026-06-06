@@ -77,7 +77,7 @@ describe('POST /api/auth/logout', () => {
     expect(cookieDeletes).toContain(TENANT_COOKIE);
   });
 
-  it('still clears the operator cookie even if GAP revoke fails', async () => {
+  it('still clears the operator cookie even if IAM revoke fails', async () => {
     cookieJar.set(ACCESS_COOKIE, 'a');
     cookieJar.set(OPERATOR_COOKIE, 'op');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('revoke down')));

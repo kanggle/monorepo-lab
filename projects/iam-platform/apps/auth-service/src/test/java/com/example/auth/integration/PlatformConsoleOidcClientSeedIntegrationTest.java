@@ -179,7 +179,7 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
                                   "displayName": "Console Operator",
                                   "preferredUsername": "operator",
                                   "locale": "ko-KR",
-                                  "tenantId": "gap",
+                                  "tenantId": "iam",
                                   "tenantType": "B2B_ENTERPRISE"
                                 }
                                 """)));
@@ -277,9 +277,9 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
                 .as("refresh tokens must rotate (reuse-refresh-tokens=false)")
                 .isFalse();
 
-        // tenant_id carried in ClientSettings (Option B), scoped to 'gap'.
+        // tenant_id carried in ClientSettings (Option B), scoped to 'iam'.
         assertThat(client.getClientSettings().<String>getSetting("custom.tenant_id"))
-                .isEqualTo("gap");
+                .isEqualTo("iam");
     }
 
     // -----------------------------------------------------------------------

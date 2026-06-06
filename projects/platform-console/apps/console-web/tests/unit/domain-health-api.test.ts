@@ -81,7 +81,7 @@ function jsonResponse(body: unknown, status = 200) {
 const HAPPY_ENVELOPE = {
   asOf: '2026-05-21T01:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { status: 'UP' } },
+    { domain: 'iam', status: 'ok', data: { status: 'UP' } },
     { domain: 'wms', status: 'ok', data: { status: 'UP' } },
     { domain: 'scm', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
     { domain: 'finance', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
@@ -103,7 +103,7 @@ describe('DomainHealthSchema — runtime validation', () => {
     const envelope = {
       asOf: '2026-05-21T01:30:00Z',
       cards: [
-        { domain: 'gap', status: 'ok', data: { status: 'UP' } },
+        { domain: 'iam', status: 'ok', data: { status: 'UP' } },
         { domain: 'wms', status: 'ok', data: { status: 'DOWN' } },
         { domain: 'scm', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
         { domain: 'finance', status: 'ok', data: { status: 'UNKNOWN' } },
@@ -130,7 +130,7 @@ describe('DomainHealthSchema — runtime validation', () => {
     const bad = {
       ...HAPPY_ENVELOPE,
       cards: HAPPY_ENVELOPE.cards.map((c) =>
-        c.domain === 'gap' ? { domain: 'gap', status: 'ok', data: { status: 'HEALTHY' } } : c,
+        c.domain === 'iam' ? { domain: 'iam', status: 'ok', data: { status: 'HEALTHY' } } : c,
       ),
     };
     expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
@@ -149,7 +149,7 @@ describe('DomainHealthSchema — runtime validation', () => {
       ...HAPPY_ENVELOPE,
       cards: [
         ...HAPPY_ENVELOPE.cards.filter((c) => c.domain !== 'erp'),
-        { domain: 'gap', status: 'ok', data: { status: 'UP' } },
+        { domain: 'iam', status: 'ok', data: { status: 'UP' } },
       ],
     };
     expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
@@ -199,7 +199,7 @@ describe('fetchDomainHealth — happy path', () => {
     expect(health.asOf).toBe('2026-05-21T01:30:00Z');
     expect(health.cards).toHaveLength(5);
     expect(health.cards.map((c) => c.domain)).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',

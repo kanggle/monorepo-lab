@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin composed-overview read proxy for client components (the typed
- * API client's single backend entry point — no browser-direct GAP call,
+ * API client's single backend entry point — no browser-direct IAM call,
  * architecture.md § Forbidden Dependencies / contract § 2.3 / § 2.4.4).
  * The HttpOnly operator token + active tenant are attached server-side
  * inside each reused FE-002/003/004 client; this route only composes the

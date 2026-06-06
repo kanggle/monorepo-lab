@@ -6,8 +6,8 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  * GAP V0012 seed registers:
  *   - client_id:     `ecommerce-web-store-client`
  *   - client_secret: `ecommerce-dev` (plain, dev-only)
- *   - redirect_uris: http://localhost:3000/api/auth/callback/gap,
- *                    http://web.ecommerce.local/api/auth/callback/gap
+ *   - redirect_uris: http://localhost:3000/api/auth/callback/iam,
+ *                    http://web.ecommerce.local/api/auth/callback/iam
  *   - scopes:        openid profile email tenant.read ecommerce.consumer
  *
  * web-store is the consumer-facing storefront. The `account_type` claim from
@@ -53,8 +53,8 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [
     {
-      id: 'gap',
-      name: 'Global Account Platform',
+      id: 'iam',
+      name: 'IAM',
       type: 'oidc',
       issuer: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
       clientId: process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',

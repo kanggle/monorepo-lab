@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Same-origin wms-ops proxy route handlers (TASK-PC-FE-007 — § 2.4.5):
- *   - read GET (inventory/alerts): GAP OIDC access token attached
+ *   - read GET (inventory/alerts): IAM OIDC access token attached
  *     server-side (NOT the operator token); no mutation artifacts.
  *   - alert-ack POST: Idempotency-Key forwarded, EMPTY upstream body, NO
  *     X-Operator-Reason (reason-free wms surface).
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/wms/inventory proxy', () => {
-  it('attaches the GAP OIDC access token (NOT the operator token), forwards filters', async () => {
+  it('attaches the IAM OIDC access token (NOT the operator token), forwards filters', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(INV));
@@ -116,7 +116,7 @@ describe('GET /api/wms/inventory proxy', () => {
     expect(res.status).toBe(401);
   });
 
-  it('no GAP session → 401 (no upstream call)', async () => {
+  it('no IAM session → 401 (no upstream call)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await inventoryGET(
@@ -149,7 +149,7 @@ describe('GET /api/wms/inventory proxy', () => {
 });
 
 describe('GET /api/wms/alerts proxy', () => {
-  it('forwards alert filters with the GAP OIDC token', async () => {
+  it('forwards alert filters with the IAM OIDC token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({ content: [], page: { number: 0, size: 20, totalElements: 0, totalPages: 0 } }),

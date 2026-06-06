@@ -32,7 +32,7 @@ import { z } from 'zod';
 // --- domain enum ----------------------------------------------------------
 
 /** Fixed render order — § 2.4.9.1 envelope schema invariant. */
-export const CARD_ORDER = ['gap', 'wms', 'scm', 'finance', 'erp'] as const;
+export const CARD_ORDER = ['iam', 'wms', 'scm', 'finance', 'erp'] as const;
 export type DomainKey = (typeof CARD_ORDER)[number];
 
 const DomainKeySchema = z.enum(CARD_ORDER);
@@ -148,7 +148,7 @@ export type OperatorOverview = z.infer<typeof OperatorOverviewSchema>;
  * placeholder — never a UI crash on a producer schema drift).
  */
 
-// GAP accounts summary — `GET /api/admin/accounts?page=0&size=1`
+// IAM accounts summary — `GET /api/admin/accounts?page=0&size=1`
 // (page total snapshot — `totalElements` is the count surfaced).
 export const GapDataSchema = z
   .object({

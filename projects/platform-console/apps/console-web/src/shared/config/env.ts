@@ -4,13 +4,13 @@ import { z } from 'zod';
  * Typed environment accessor for console-web.
  *
  * - Client env: only `NEXT_PUBLIC_`-prefixed values, safe to ship to browser.
- * - Server env: OIDC public-client config + the GAP product/tenant registry
+ * - Server env: OIDC public-client config + the IAM product/tenant registry
  *   URL. Validated at access time (server runtime only — never serialised to
  *   the client), per `platform/service-types/frontend-app.md`
  *   § Environment Variables (server-only secrets injected at runtime, not
  *   build time; build artifacts must work across environments without rebuild).
  *
- * The GAP OIDC client is a PUBLIC client (`platform-console-web`,
+ * The IAM OIDC client is a PUBLIC client (`platform-console-web`,
  * Authorization Code + PKCE, no client secret — auth-service
  * V0015 seed / ADR-003 public-client lineage), so there is no
  * `OIDC_CLIENT_SECRET`.
@@ -22,7 +22,7 @@ import { z } from 'zod';
  * `CONSOLE_TOKEN_EXCHANGE_URL` points at the authoritative TASK-BE-298
  * producer path: `http://iam.local/api/admin/auth/token-exchange`
  * (admin-service, RFC 8693 — `admin-api.md` / ADR-MONO-014). The console
- * server-side exchanges the GAP OIDC access token for an operator token
+ * server-side exchanges the IAM OIDC access token for an operator token
  * here (console-integration-contract § 2.6).
  */
 
@@ -43,7 +43,7 @@ export const clientEnv = ClientEnvSchema.parse({
 // ---------------------------------------------------------------------------
 
 const ServerEnvSchema = z.object({
-  /** GAP OIDC issuer base (e.g. http://iam.local). OAuth2/OIDC endpoints are
+  /** IAM OIDC issuer base (e.g. http://iam.local). OAuth2/OIDC endpoints are
    *  `${OIDC_ISSUER_URL}/oauth2/{authorize,token,revoke}` (auth-api.md). */
   OIDC_ISSUER_URL: z.string().url(),
   /** Public client id registered by TASK-BE-296 (V0015 seed). */
@@ -53,14 +53,14 @@ const ServerEnvSchema = z.object({
   /** OIDC scopes — must be a subset of the V0015-seeded client scopes
    *  (`openid profile email tenant.read`). */
   OIDC_SCOPE: z.string().min(1).default('openid profile email tenant.read'),
-  /** GAP product/tenant registry surface (TASK-BE-296 authoritative path). */
+  /** IAM product/tenant registry surface (TASK-BE-296 authoritative path). */
   CONSOLE_REGISTRY_URL: z
     .string()
     .url()
     .default('http://iam.local/api/admin/console/registry'),
   /** Outbound timeout (ms) for the registry call (integration-heavy I1). */
   REGISTRY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  /** GAP admin-service RFC 8693 operator-token exchange endpoint
+  /** IAM admin-service RFC 8693 operator-token exchange endpoint
    *  (TASK-BE-298 / ADR-MONO-014 authoritative path — admin-api.md). */
   CONSOLE_TOKEN_EXCHANGE_URL: z
     .string()
@@ -69,25 +69,25 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for the operator-token exchange call
    *  (integration-heavy I1 — same convention as REGISTRY_TIMEOUT_MS). */
   TOKEN_EXCHANGE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  /** GAP admin-service base for the accounts operator surface (TASK-PC-FE-002
+  /** IAM admin-service base for the accounts operator surface (TASK-PC-FE-002
    *  / TASK-BE-296 operator-auth boundary). The 8 account/session endpoints
    *  hang off `${IAM_ADMIN_API_BASE}/api/admin/...` — request/response/error
-   *  owned by GAP `admin-api.md` (authoritative, consumed only). */
+   *  owned by IAM `admin-api.md` (authoritative, consumed only). */
   IAM_ADMIN_API_BASE: z.string().url().default('http://iam.local'),
-  /** Outbound timeout (ms) for GAP accounts calls (integration-heavy I1 —
+  /** Outbound timeout (ms) for IAM accounts calls (integration-heavy I1 —
    *  same convention as REGISTRY_TIMEOUT_MS). */
   ACCOUNTS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  /** Outbound timeout (ms) for the GAP unified audit read call
+  /** Outbound timeout (ms) for the IAM unified audit read call
    *  (TASK-PC-FE-003 / integration-heavy I1 — same convention as
    *  ACCOUNTS_TIMEOUT_MS). The audit endpoint is `GET
    *  ${IAM_ADMIN_API_BASE}/api/admin/audit` — request/response/error owned
-   *  by GAP `admin-api.md` (authoritative, consumed only, read-only). */
+   *  by IAM `admin-api.md` (authoritative, consumed only, read-only). */
   AUDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  /** Outbound timeout (ms) for GAP operators-management calls
+  /** Outbound timeout (ms) for IAM operators-management calls
    *  (TASK-PC-FE-004 / integration-heavy I1 — same convention as
    *  ACCOUNTS_TIMEOUT_MS). The 5 operator endpoints hang off
    *  `${IAM_ADMIN_API_BASE}/api/admin/operators...` — request/response/
-   *  per-endpoint headers/error owned by GAP `admin-api.md` (authoritative,
+   *  per-endpoint headers/error owned by IAM `admin-api.md` (authoritative,
    *  consumed only). */
   OPERATORS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
@@ -96,7 +96,7 @@ const ServerEnvSchema = z.object({
    *  request/response/error owned by wms `admin-service-api.md`
    *  (authoritative, consumed only). Aligned with the registry `baseRoute`
    *  for `productKey=wms`; the wms gateway hostname is `wms.local`. NOTE:
-   *  unlike the GAP surface this is reached with the GAP OIDC access token
+   *  unlike the IAM surface this is reached with the IAM OIDC access token
    *  directly (the wms gateway requires it — § 2.4.5 per-domain credential
    *  divergence; the #569 invariant is GAP-domain-scoped). */
   WMS_ADMIN_BASE_URL: z
@@ -116,7 +116,7 @@ const ServerEnvSchema = z.object({
    *  `scm.local`. NOTE: like wms (NOT GAP) this is reached with the GAP
    *  OIDC access token DIRECTLY — the § 2.4.5 per-domain credential rule
    *  reused (the #569 invariant is GAP-domain-scoped; scm's gateway
-   *  validates the GAP RS256 token + `tenant_id ∈ {scm,*}` claim
+   *  validates the IAM RS256 token + `tenant_id ∈ {scm,*}` claim
    *  producer-side per TASK-SCM-BE-015). */
   SCM_GATEWAY_BASE_URL: z.string().url().default('http://scm.local'),
   /** Outbound timeout (ms) for scm operations calls (integration-heavy I1 —
@@ -129,9 +129,9 @@ const ServerEnvSchema = z.object({
    *  (authoritative, consumed read-only). Aligned with the registry
    *  `baseRoute` for `productKey=finance`; the finance hostname is
    *  `finance.local`. NOTE: like wms + scm (NOT GAP) this is reached
-   *  with the GAP OIDC access token DIRECTLY — the § 2.4.5 per-domain
+   *  with the IAM OIDC access token DIRECTLY — the § 2.4.5 per-domain
    *  credential rule reused (the #569 invariant is GAP-domain-scoped;
-   *  finance validates the GAP RS256 token + `tenant_id ∈ {finance,*}`
+   *  finance validates the IAM RS256 token + `tenant_id ∈ {finance,*}`
    *  claim producer-side per TASK-FIN-BE-005). */
   FINANCE_BASE_URL: z.string().url().default('http://finance.local'),
   /** Outbound timeout (ms) for finance operations calls
@@ -144,10 +144,10 @@ const ServerEnvSchema = z.object({
    *  owned by erp `masterdata-api.md` (authoritative, consumed
    *  read-only). Aligned with the registry `baseRoute` for
    *  `productKey=erp`; the erp hostname is `erp.local`. NOTE: like
-   *  wms + scm + finance (NOT GAP) this is reached with the GAP OIDC
+   *  wms + scm + finance (NOT GAP) this is reached with the IAM OIDC
    *  access token DIRECTLY — the § 2.4.5 per-domain credential rule
    *  reused (the #569 invariant is GAP-domain-scoped; erp validates
-   *  the GAP RS256 token + `tenant_id ∈ {erp,*}` claim producer-side
+   *  the IAM RS256 token + `tenant_id ∈ {erp,*}` claim producer-side
    *  per TASK-ERP-BE-002). */
   ERP_BASE_URL: z.string().url().default('http://erp.local'),
   /** Outbound timeout (ms) for erp operations calls

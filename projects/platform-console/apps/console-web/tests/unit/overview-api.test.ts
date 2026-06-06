@@ -178,7 +178,7 @@ describe('overview-api — composition over the EXISTING reads (no new producer)
     cookieJar.set(TENANT_COOKIE, 'wms');
   });
 
-  it('fans out to exactly the 3 existing GAP read endpoints, one bounded set per load', async () => {
+  it('fans out to exactly the 3 existing IAM read endpoints, one bounded set per load', async () => {
     const fetchMock = routedFetch();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -202,7 +202,7 @@ describe('overview-api — composition over the EXISTING reads (no new producer)
     expect(overview.operators.suspendedCount).toBe(1);
   });
 
-  it('every leg sends the OPERATOR cookie as the bearer, NOT the GAP token, with X-Tenant-Id', async () => {
+  it('every leg sends the OPERATOR cookie as the bearer, NOT the IAM token, with X-Tenant-Id', async () => {
     const fetchMock = routedFetch();
     vi.stubGlobal('fetch', fetchMock);
 

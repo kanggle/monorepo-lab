@@ -77,7 +77,7 @@ public class DomainHealthCompositionUseCase {
     /** Composes the domain-health envelope by firing 5 parallel credential-less legs. */
     public List<CompositionLeg> compose() {
         Map<DomainTarget, Supplier<CompositionLeg>> legBodies = new EnumMap<>(DomainTarget.class);
-        legBodies.put(DomainTarget.GAP, () -> timed(DomainTarget.GAP, gapPort::read));
+        legBodies.put(DomainTarget.IAM, () -> timed(DomainTarget.IAM, gapPort::read));
         legBodies.put(DomainTarget.WMS, () -> timed(DomainTarget.WMS, wmsPort::read));
         legBodies.put(DomainTarget.SCM, () -> timed(DomainTarget.SCM, scmPort::read));
         legBodies.put(DomainTarget.FINANCE, () -> timed(DomainTarget.FINANCE, financePort::read));

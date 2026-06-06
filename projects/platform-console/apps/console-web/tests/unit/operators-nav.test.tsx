@@ -9,17 +9,17 @@ import type { OperatorPage } from '@/features/operators';
 
 /**
  * Regression (TASK-PC-FE-004 AC): the `/operators` surface is an in-console
- * NAV destination — it must NOT change the catalog `gap.baseRoute`
- * contract (FE-002 stays: gap → /accounts). The operators screen mounts
+ * NAV destination — it must NOT change the catalog `iam.baseRoute`
+ * contract (FE-002 stays: iam → /accounts). The operators screen mounts
  * server-side as an in-console destination.
  */
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['wms'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 
 function wrapper() {
@@ -39,8 +39,8 @@ const PAGE: OperatorPage = {
   totalPages: 0,
 };
 
-describe('operators nav — does not disturb the catalog gap.baseRoute (FE-002)', () => {
-  it('gap still resolves to /accounts (FE-002 contract unchanged)', () => {
+describe('operators nav — does not disturb the catalog iam.baseRoute (FE-002)', () => {
+  it('iam still resolves to /accounts (FE-002 contract unchanged)', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 

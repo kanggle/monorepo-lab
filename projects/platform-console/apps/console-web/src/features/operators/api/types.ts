@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Feature-local types for the GAP operators-management surface.
+ * Feature-local types for the IAM operators-management surface.
  *
  * Authoritative producer contract (do NOT redefine — consume only):
  *   `iam/specs/contracts/http/admin-api.md`
@@ -236,7 +236,7 @@ export type OperatorAssignmentsResponse = z.infer<
  *   - `null`  → clear (전체 / net-zero ⟺ `["*"]`); column `NULL`.
  *   - `[]`    → explicit zero-scope (차단; distinct from `null`).
  *   - `[ids]` → department subtree-root ids (producer trims · rejects blank
- *               · dedupes order-preserving · ≤ 256; GAP does NOT verify the
+ *               · dedupes order-preserving · ≤ 256; IAM does NOT verify the
  *               ids exist in erp — ERP-BE-008 验证 at consume time).
  */
 export interface SetOrgScopeInput {
@@ -254,7 +254,7 @@ export type SetOrgScopeResult = z.infer<typeof SetOrgScopeResultSchema>;
 /**
  * Self update-profile input (TASK-PC-FE-016). v1 carries a single
  * attribute under `operatorContext.defaultAccountId` — the operator's
- * chosen default finance-platform account UUID (opaque to GAP — TASK-
+ * chosen default finance-platform account UUID (opaque to IAM — TASK-
  * BE-304 § Decision authority). Explicit `null` clears the column;
  * a string must be non-empty after trim, ≤ 36 chars, with no internal
  * whitespace and no control chars (producer-authoritative). The body

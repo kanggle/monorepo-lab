@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - not scm-eligible → `notEligible` block, NO scm call fabricated
  *     (no cross-tenant call; the console never sends a tenant — scm
  *     resolves it from the JWT claim);
- *   - eligible → seeds PO list + snapshot + staleness (GAP OIDC token,
+ *   - eligible → seeds PO list + snapshot + staleness (IAM OIDC token,
  *     server-side);
  *   - 403 → `forbidden` (inline, no crash);
  *   - 429 → `rateLimited` (degrade with notice; api client already did
@@ -119,7 +119,7 @@ describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds PO + snapshot + staleness (GAP OIDC token, server-side)', async () => {
+  it('eligible → seeds PO + snapshot + staleness (IAM OIDC token, server-side)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = routed();
     vi.stubGlobal('fetch', fetchMock);
@@ -134,7 +134,7 @@ describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
     expect(state.snapshot!.meta.warning).toBe(
       'Not for procurement decisions (S5)',
     );
-    // Every seeded read carries the GAP OIDC access token.
+    // Every seeded read carries the IAM OIDC access token.
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;
       expect(h.Authorization).toBe('Bearer GAP-ACCESS');

@@ -111,10 +111,10 @@ class TenantDomainSubscriptionJpaRepositoryTest {
         }
     }
 
-    // ── acme-corp must NOT have gap/scm/erp subscriptions ───────────────────
+    // ── acme-corp must NOT have iam/scm/erp subscriptions ───────────────────
 
     @Test
-    @DisplayName("acme-corp has no gap/scm/erp subscription (deliberate non-entitlement)")
+    @DisplayName("acme-corp has no iam/scm/erp subscription (deliberate non-entitlement)")
     void acmeCorp_noGapScmErpSubscription() {
         List<TenantDomainSubscriptionJpaEntity> results =
                 repository.findByStatusAndTenantId(TenantStatus.ACTIVE, "acme-corp");
@@ -124,7 +124,7 @@ class TenantDomainSubscriptionJpaRepositoryTest {
                 .collect(Collectors.toSet());
 
         assertThat(domainKeys)
-                .as("acme-corp must not be subscribed to gap (bindsAllTenants), scm, or erp")
-                .doesNotContain("gap", "scm", "erp");
+                .as("acme-corp must not be subscribed to iam (bindsAllTenants), scm, or erp")
+                .doesNotContain("iam", "scm", "erp");
     }
 }

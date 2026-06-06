@@ -15,7 +15,7 @@ import {
  * Components — React Query is client-only). The call goes to the
  * same-origin `/api/audit` proxy (the typed API client's single backend
  * entry point); the proxy attaches the HttpOnly operator token + tenant
- * server-side — the browser never reads a token or calls GAP directly
+ * server-side — the browser never reads a token or calls IAM directly
  * (contract § 2.3).
  *
  * READ-ONLY (console-integration-contract § 2.4.2 / audit-heavy A5): no

@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Feature-local types for the erp `masterdata-service`'s read-only
  * 5-master × {list, detail} = 10 GET surface (TASK-PC-FE-010 —
- * ADR-MONO-013 Phase 6, the FOURTH non-GAP federated domain and the
+ * ADR-MONO-013 Phase 6, the FOURTH non-IAM federated domain and the
  * FIRST internal-system-primary confirmation: wms transactional →
  * scm integration-heavy → finance regulated/transactional → erp
  * internal-system + transactional + audit-heavy).

@@ -23,7 +23,7 @@ import {
  * Client-side wms-ops hooks (architecture.md § Server vs Client Components —
  * React Query is client-only). Every call goes to the same-origin
  * `/api/wms/**` proxy (the typed API client's single backend entry point);
- * the proxy attaches the HttpOnly **GAP OIDC access token** server-side —
+ * the proxy attaches the HttpOnly **IAM OIDC access token** server-side —
  * the browser never reads a token or calls wms directly (contract § 2.3).
  *
  * Read-model lag honesty (§ 2.4.5): the read-model is eventually consistent

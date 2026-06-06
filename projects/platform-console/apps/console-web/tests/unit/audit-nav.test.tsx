@@ -9,17 +9,17 @@ import type { ReactNode } from 'react';
 
 /**
  * Regression (TASK-PC-FE-003 AC): the `/audit` surface is an in-console
- * NAV destination — it must NOT change the catalog `gap.baseRoute`
- * contract (FE-002 stays: gap → /accounts). The audit screen must mount
+ * NAV destination — it must NOT change the catalog `iam.baseRoute`
+ * contract (FE-002 stays: iam → /accounts). The audit screen must mount
  * without any FE-002 mutation scaffolding (read-only).
  */
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['wms'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 
 function wrapper() {
@@ -39,8 +39,8 @@ const PAGE: AuditPage = {
   totalPages: 0,
 };
 
-describe('audit nav — does not disturb the catalog gap.baseRoute (FE-002)', () => {
-  it('gap still resolves to /accounts (FE-002 contract unchanged)', () => {
+describe('audit nav — does not disturb the catalog iam.baseRoute (FE-002)', () => {
+  it('iam still resolves to /accounts (FE-002 contract unchanged)', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 

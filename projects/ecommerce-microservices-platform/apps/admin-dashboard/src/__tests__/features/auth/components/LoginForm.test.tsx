@@ -52,12 +52,12 @@ describe('LoginForm (admin-dashboard, GAP)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('버튼 클릭 시 signIn("gap", {callbackUrl: "/dashboard"}) 호출', async () => {
+  it('버튼 클릭 시 signIn("iam", {callbackUrl: "/dashboard"}) 호출', async () => {
     const user = userEvent.setup();
     renderLoginForm();
     await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/dashboard' });
+      expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/dashboard' });
     });
   });
 
@@ -67,7 +67,7 @@ describe('LoginForm (admin-dashboard, GAP)', () => {
     renderLoginForm();
     await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/orders' });
+      expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/orders' });
     });
   });
 

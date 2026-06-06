@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - assignments route exports GET ONLY (no POST/PUT/PATCH/DELETE).
  *   - org-scope route exports PUT ONLY (no GET/POST/PATCH/DELETE).
  *   - GET .../assignments → forwards to GAP; 200 passthrough; server-only
- *     operator-token bearer + X-Tenant-Id (never the GAP OIDC token).
+ *     operator-token bearer + X-Tenant-Id (never the IAM OIDC token).
  *   - PUT .../org-scope → forwards X-Operator-Reason; NO Idempotency-Key;
  *     tri-state body { orgScope: null | [] | [ids] } passes through.
  *   - error mapping: 403 TENANT_SCOPE_MISMATCH → 403; 404 ASSIGNMENT_NOT_FOUND
@@ -83,7 +83,7 @@ describe('method exposure (GET-only / PUT-only gates)', () => {
 });
 
 describe('GET /api/operators/[id]/assignments proxy', () => {
-  it('forwards to GAP with operator-token bearer + X-Tenant-Id; 200 passthrough', async () => {
+  it('forwards to IAM with operator-token bearer + X-Tenant-Id; 200 passthrough', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-must-not-leak');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-correct');
     cookieJar.set(TENANT_COOKIE, 'acme-corp');
@@ -122,7 +122,7 @@ describe('GET /api/operators/[id]/assignments proxy', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('401 from GAP → 401 (forced re-login)', async () => {
+  it('401 from IAM → 401 (forced re-login)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'acme-corp');
     vi.stubGlobal(
@@ -201,7 +201,7 @@ describe('PUT /api/operators/[id]/assignments/[tenantId]/org-scope proxy', () =>
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('403 TENANT_SCOPE_MISMATCH from GAP → 403 (inline)', async () => {
+  it('403 TENANT_SCOPE_MISMATCH from IAM → 403 (inline)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'acme-corp');
     vi.stubGlobal(
@@ -218,7 +218,7 @@ describe('PUT /api/operators/[id]/assignments/[tenantId]/org-scope proxy', () =>
     expect((await res.json()).code).toBe('TENANT_SCOPE_MISMATCH');
   });
 
-  it('404 ASSIGNMENT_NOT_FOUND from GAP → 404 (inline)', async () => {
+  it('404 ASSIGNMENT_NOT_FOUND from IAM → 404 (inline)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'acme-corp');
     vi.stubGlobal(

@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * The browser NEVER reaches `console-bff` directly. The 2 inbound headers
  * this route forwards (per § 2.4.9.2 Auth flow):
  *   - `Authorization: Bearer <gap-oidc-access-token>` (inbound principal,
- *     RS256 / GAP issuer — Spring Security on the BFF validates).
+ *     RS256 / IAM issuer — Spring Security on the BFF validates).
  *   - `X-Tenant-Id: <active-tenant>` (forwarded for log MDC + audit
  *     traceability; the BFF's outbound actuator legs do NOT consume it).
  *
@@ -29,7 +29,7 @@ export const runtime = 'nodejs';
  * HTTP outcome map (mirrors BFF + § 2.4.9.2 error envelope):
  *   - inbound tenant absent → 400 NO_ACTIVE_TENANT (BEFORE any outbound;
  *     the BFF also enforces it).
- *   - inbound GAP access-token absent → 401 TOKEN_INVALID (the BFF
+ *   - inbound IAM access-token absent → 401 TOKEN_INVALID (the BFF
  *     would also reject; we do not call it in that state).
  *   - BFF 200 → passthrough verbatim (per-card degrade is INSIDE the
  *     200 payload as `card.status`; the proxy never re-classifies).

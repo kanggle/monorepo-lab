@@ -6,7 +6,7 @@ import {
 
 /**
  * Consumer-side contract test for the TASK-BE-304 `operatorContext`
- * extension on the GAP registry item shape (consumer obligation:
+ * extension on the IAM registry item shape (consumer obligation:
  * TASK-PC-FE-014 / `console-integration-contract.md § 2.2`).
  *
  * Asserts:
@@ -28,11 +28,11 @@ import {
 const REGISTRY_WITH_FINANCE_DEFAULT_ACCOUNT_ID = {
   products: [
     {
-      productKey: 'gap',
-      displayName: 'GAP',
+      productKey: 'iam',
+      displayName: 'IAM',
       available: true,
       tenants: ['wms'],
-      baseRoute: '/gap',
+      baseRoute: '/iam',
     },
     {
       productKey: 'wms',
@@ -71,11 +71,11 @@ const REGISTRY_WITH_FINANCE_DEFAULT_ACCOUNT_ID = {
 const REGISTRY_NO_OPERATOR_CONTEXT_ANYWHERE = {
   products: [
     {
-      productKey: 'gap',
-      displayName: 'GAP',
+      productKey: 'iam',
+      displayName: 'IAM',
       available: true,
       tenants: ['wms'],
-      baseRoute: '/gap',
+      baseRoute: '/iam',
     },
     {
       productKey: 'finance',

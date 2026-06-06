@@ -102,7 +102,7 @@ const DEFAULTS = {
   // SUPER_ADMIN credential — matches the row inserted by tests/e2e/fixtures/
   // seed.sql (auth_db.credentials + admin_db.admin_operators where
   // oidc_subject=email). password is the fixed dev/test Argon2id-hashed
-  // plaintext also used by GAP V0014 dev seed — value is hardcoded test data,
+  // plaintext also used by IAM V0014 dev seed — value is hardcoded test data,
   // no production credential.
   superAdminEmail: 'e2e-super-admin@example.com',
   superAdminPassword: 'devpassword123!',

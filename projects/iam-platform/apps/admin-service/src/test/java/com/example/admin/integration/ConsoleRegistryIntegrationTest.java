@@ -256,10 +256,10 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 // exactly 5 products in catalog order
                 .andExpect(jsonPath("$.products.length()").value(5))
-                .andExpect(jsonPath("$.products[0].productKey").value("gap"))
-                .andExpect(jsonPath("$.products[0].displayName").value("Global Account Platform"))
+                .andExpect(jsonPath("$.products[0].productKey").value("iam"))
+                .andExpect(jsonPath("$.products[0].displayName").value("Identity & Access Management"))
                 .andExpect(jsonPath("$.products[0].available").value(true))
-                .andExpect(jsonPath("$.products[0].baseRoute").value("/gap"))
+                .andExpect(jsonPath("$.products[0].baseRoute").value("/iam"))
                 // gap federates all registered ACTIVE tenants for a platform-scope op
                 .andExpect(jsonPath("$.products[0].tenants",
                         org.hamcrest.Matchers.containsInAnyOrder("fan-platform", "wms", "scm")))
@@ -286,7 +286,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.products.length()").value(5))
                 // gap shows ONLY the operator's own tenant — not the full list
-                .andExpect(jsonPath("$.products[0].productKey").value("gap"))
+                .andExpect(jsonPath("$.products[0].productKey").value("iam"))
                 .andExpect(jsonPath("$.products[0].tenants.length()").value(1))
                 .andExpect(jsonPath("$.products[0].tenants[0]").value("wms"))
                 // wms product → own tenant

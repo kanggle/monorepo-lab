@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * Same-origin erp-ops proxy route handlers (TASK-PC-FE-010 —
  * § 2.4.8):
- *   - read GET (5 list + 5 detail = 10 routes): GAP OIDC access
+ *   - read GET (5 list + 5 detail = 10 routes): IAM OIDC access
  *     token attached server-side (NOT the operator token); no
  *     mutation artifacts; STRICTLY READ-ONLY (GET-only routes).
  *   - E3 `?asOf=` threaded through verbatim on every list /
@@ -130,7 +130,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/erp/masterdata/departments proxy (read-only)', () => {
-  it('attaches the GAP OIDC access token (NOT the operator token)', async () => {
+  it('attaches the IAM OIDC access token (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_LIST_ENV));
@@ -184,7 +184,7 @@ describe('GET /api/erp/masterdata/departments proxy (read-only)', () => {
     expect(upstream.searchParams.get('parentId')).toBe('dept-parent');
   });
 
-  it('no GAP session → 401 (no upstream call)', async () => {
+  it('no IAM session → 401 (no upstream call)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await deptListGET(
@@ -269,7 +269,7 @@ describe('GET /api/erp/masterdata/departments/{id} proxy (read-only)', () => {
 });
 
 describe('GET /api/erp/masterdata/employees + employees/{id} proxies (read-only)', () => {
-  it('attaches the GAP OIDC access token + threads asOf (list)', async () => {
+  it('attaches the IAM OIDC access token + threads asOf (list)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_LIST_ENV));
     vi.stubGlobal('fetch', fetchMock);
@@ -396,7 +396,7 @@ describe('GET /api/erp/masterdata/job-grades + cost-centers + business-partners 
 // ===========================================================================
 // Department WRITE PILOT proxy routes (TASK-PC-FE-046 / § 2.4.8 *Department
 // write binding (PILOT)*). Same-origin POST → correct UPSTREAM method,
-// GAP OIDC token, Idempotency-Key forwarded, reason in body where the
+// IAM OIDC token, Idempotency-Key forwarded, reason in body where the
 // producer has a slot, mutation-only errors mapped.
 // ===========================================================================
 
@@ -408,7 +408,7 @@ describe('department WRITE PILOT proxy routes', () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
   });
 
-  it('create: POST → upstream POST .../departments + Idempotency-Key + body (GAP token, no operator token / X-Operator-Reason)', async () => {
+  it('create: POST → upstream POST .../departments + Idempotency-Key + body (IAM token, no operator token / X-Operator-Reason)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DEPT_MUTATION_ENV, 201));
     vi.stubGlobal('fetch', fetchMock);
 

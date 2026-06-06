@@ -127,7 +127,7 @@ class CompositionEngineTest {
         // WMS degraded; other 4 ok.
         assertThat(results.get(DomainTarget.WMS).outcome().isDegraded()).isTrue();
         assertThat(results.get(DomainTarget.WMS).outcome().reason()).isEqualTo("DOWNSTREAM_ERROR");
-        for (DomainTarget d : List.of(DomainTarget.GAP, DomainTarget.SCM,
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.SCM,
                 DomainTarget.FINANCE, DomainTarget.ERP)) {
             assertThat(results.get(d).outcome().isOk())
                     .as("domain %s should be ok", d).isTrue();
@@ -146,7 +146,7 @@ class CompositionEngineTest {
         assertThat(wmsErr.count()).isEqualTo(1.0);
 
         // The other 4 legs have NO error counter at any code.
-        for (DomainTarget d : List.of(DomainTarget.GAP, DomainTarget.SCM,
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.SCM,
                 DomainTarget.FINANCE, DomainTarget.ERP)) {
             assertThat(meterRegistry.find("bff_fanout_errors")
                     .tag("domain", d.name().toLowerCase())
@@ -193,7 +193,7 @@ class CompositionEngineTest {
         assertThat(results.get(DomainTarget.SCM).outcome().reason()).isEqualTo("TIMEOUT");
 
         // Other 4 legs ok.
-        for (DomainTarget d : List.of(DomainTarget.GAP, DomainTarget.WMS,
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.WMS,
                 DomainTarget.FINANCE, DomainTarget.ERP)) {
             assertThat(results.get(d).outcome().isOk())
                     .as("domain %s should be ok", d).isTrue();

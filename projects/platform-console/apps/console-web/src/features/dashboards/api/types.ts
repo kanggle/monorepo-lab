@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Feature-local view-model for the GAP **composed operator overview**
+ * Feature-local view-model for the IAM **composed operator overview**
  * (TASK-PC-FE-005 — ADR-MONO-013 Phase 2 slice 4 / ADR-MONO-015 D1-B).
  *
  * This is a CONSUMER-SIDE composition view-model — there is NO new GAP
@@ -104,7 +104,7 @@ export const OperatorOverviewSchema = z.object({
 export type OperatorOverview = z.infer<typeof OperatorOverviewSchema>;
 
 /** Quick-link targets — the overview links into the EXISTING in-console
- *  routes (FE-002/003/004). `gap.baseRoute` (`/accounts`) is unchanged;
+ *  routes (FE-002/003/004). `iam.baseRoute` (`/accounts`) is unchanged;
  *  these are nav destinations, not catalog routes. */
 export const OVERVIEW_QUICK_LINKS = {
   accounts: '/accounts',

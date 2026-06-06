@@ -87,7 +87,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
                 .subject("op-user-it-health")
                 .audience("console-bff")
                 .expirationTime(new Date(System.currentTimeMillis() + 3_600_000))
-                .claim("tenant_id", "gap")
+                .claim("tenant_id", "iam")
                 .build();
 
         SignedJWT signed = new SignedJWT(
@@ -154,7 +154,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         h.set(HttpHeaders.AUTHORIZATION, "Bearer " + gapOidcJwt);
         // X-Tenant-Id required for log MDC / audit traceability — NOT forwarded
         // to outbound legs. Verified by takeRequest below.
-        h.set("X-Tenant-Id", "gap");
+        h.set("X-Tenant-Id", "iam");
         // No X-Operator-Token — this route does NOT consume it.
         return h;
     }
@@ -196,7 +196,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         // Envelope shape (§ 2.4.9.2).
         assertThat(body).as("body:\n%s", body).contains("\"asOf\"").contains("\"cards\"");
         assertThat(body).as("body:\n%s", body)
-                .contains("\"domain\":\"gap\"")
+                .contains("\"domain\":\"iam\"")
                 .contains("\"domain\":\"wms\"")
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
@@ -248,7 +248,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
                 .as("non-200 body:\n%s", body)
                 .isEqualTo(HttpStatus.OK);
         // gap card ok + data.status=DOWN; NOT degraded.
-        assertThat(body).as("body:\n%s", body).contains("\"domain\":\"gap\"");
+        assertThat(body).as("body:\n%s", body).contains("\"domain\":\"iam\"");
         assertThat(body).as("body:\n%s", body).contains("\"status\":\"DOWN\"");
         // wms still ok + UP.
         assertThat(body).as("body:\n%s", body).contains("\"status\":\"UP\"");
@@ -358,7 +358,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @DisplayName("inbound_missing_auth_401: absent Authorization → 401 (Spring Security entry point); no outbound")
     void inbound_missing_auth_401() {
         HttpHeaders h = new HttpHeaders();
-        h.set("X-Tenant-Id", "gap");
+        h.set("X-Tenant-Id", "iam");
         // Authorization intentionally absent.
 
         Set<Integer> beforeCounts = snapshotRequestCounts();

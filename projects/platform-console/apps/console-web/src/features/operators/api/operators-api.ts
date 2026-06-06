@@ -25,7 +25,7 @@ import {
 } from './types';
 
 /**
- * Server-side GAP admin-service operators-management client
+ * Server-side IAM admin-service operators-management client
  * (TASK-PC-FE-004 — ADR-MONO-013 Phase 2 slice 3, the MOST
  * privilege-sensitive slice: create/role/status = the
  * operator-privilege-escalation surface).
@@ -40,7 +40,7 @@ import {
  *
  * Auth invariant (console-integration-contract § 2.1/§ 2.4.3 — the #569
  * trust boundary): every call authenticates with the EXCHANGED operator
- * token (`getOperatorToken()`), NEVER the GAP OIDC access token. An absent
+ * token (`getOperatorToken()`), NEVER the IAM OIDC access token. An absent
  * operator token ⇒ no usable operator session ⇒ `401 TOKEN_INVALID` (the
  * caller re-logins; the fetch is NOT made — no silent GAP-token fallback).
  *
@@ -105,7 +105,7 @@ async function callGapOperators<T>(
   const requestId = newRequestId();
 
   // Trust boundary: the /api/admin/** credential is the EXCHANGED operator
-  // token — never the GAP OIDC access token. Absent ⇒ 401, no fetch.
+  // token — never the IAM OIDC access token. Absent ⇒ 401, no fetch.
   const token = await getOperatorToken();
   if (!token) {
     logger.warn('operators_no_operator_session', {
@@ -220,7 +220,7 @@ async function callGapOperators<T>(
       throw new OperatorsUnavailableError(
         code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
         code,
-        'GAP operators service unavailable',
+        'IAM operators service unavailable',
       );
     }
 
@@ -276,14 +276,14 @@ async function callGapOperators<T>(
       throw new OperatorsUnavailableError(
         'timeout',
         'TIMEOUT',
-        'GAP operators call timed out',
+        'IAM operators call timed out',
       );
     }
     logger.error('operators_error', { requestId, path: opts.path });
     throw new OperatorsUnavailableError(
       'downstream',
       'NETWORK_ERROR',
-      'GAP operators call failed',
+      'IAM operators call failed',
     );
   } finally {
     clearTimeout(timer);
@@ -423,7 +423,7 @@ export async function changeOwnPassword(
 //    TASK-PC-FE-016). SELF only (no admin-set-other-profile). Valid operator
 //    token only — no X-Operator-Reason, no Idempotency-Key per the producer.
 //    204 No Content on success. The value is the operator's chosen
-//    finance-platform account UUID (opaque to GAP — TASK-BE-304 § Decision
+//    finance-platform account UUID (opaque to IAM — TASK-BE-304 § Decision
 //    authority); `null` clears the column. Body shape mirrors the read shape
 //    on console-registry-api `operatorContext.defaultAccountId` verbatim.
 // ---------------------------------------------------------------------------
@@ -459,7 +459,7 @@ export async function updateOwnProfile(
 //    `{id}/roles` + `{id}/status` non-uniformity — full-replace PATCH on the
 //    column is idempotent; sending the key is a header-matrix-drift defect).
 //    204 No Content on success. The value is the target operator's chosen
-//    default finance-platform account UUID (opaque to GAP — TASK-BE-304
+//    default finance-platform account UUID (opaque to IAM — TASK-BE-304
 //    § Decision authority); `null` clears the column.
 // ---------------------------------------------------------------------------
 

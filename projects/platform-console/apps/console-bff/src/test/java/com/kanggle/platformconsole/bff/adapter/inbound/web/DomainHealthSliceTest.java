@@ -59,7 +59,7 @@ class DomainHealthSliceTest {
     void happy_200_envelope() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(compositionUseCase.compose()).thenReturn(List.of(
-                CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("status", "UP")),
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.IAM), Map.of("status", "UP")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("status", "UP")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("status", "UP")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("status", "UP")),
@@ -75,7 +75,7 @@ class DomainHealthSliceTest {
         assertThat(status).as("non-200 body:\n%s", body).isEqualTo(200);
         assertThat(body).as("body shape:\n%s", body).contains("\"asOf\"").contains("\"cards\"");
         // Fixed order: gap → wms → scm → finance → erp.
-        int gapIdx = body.indexOf("\"domain\":\"gap\"");
+        int gapIdx = body.indexOf("\"domain\":\"iam\"");
         int wmsIdx = body.indexOf("\"domain\":\"wms\"");
         int scmIdx = body.indexOf("\"domain\":\"scm\"");
         int finIdx = body.indexOf("\"domain\":\"finance\"");
@@ -96,7 +96,7 @@ class DomainHealthSliceTest {
     void mixed_200_envelope() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(compositionUseCase.compose()).thenReturn(List.of(
-                CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("status", "UP")),
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.IAM), Map.of("status", "UP")),
                 CompositionLeg.outcomeOnly(LegOutcome.degraded(DomainTarget.WMS, "DOWNSTREAM_ERROR")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("status", "DOWN")),
                 CompositionLeg.outcomeOnly(LegOutcome.degraded(DomainTarget.FINANCE, "TIMEOUT")),

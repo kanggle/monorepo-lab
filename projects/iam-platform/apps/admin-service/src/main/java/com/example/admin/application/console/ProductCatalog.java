@@ -15,7 +15,7 @@ import java.util.List;
  *
  * <p>Tenant binding:
  * <ul>
- *   <li>{@code gap} federates ALL registered tenants
+ *   <li>{@code iam} federates ALL registered tenants
  *       ({@link Entry#bindsAllTenants()} = true).</li>
  *   <li>{@code wms}/{@code scm} bind to their own tenant slug.</li>
  *   <li>{@code erp}/{@code finance} are V1 live (ADR-MONO-013 § D6 Phase 5/6
@@ -30,7 +30,7 @@ public final class ProductCatalog {
 
     /**
      * A catalog entry. {@code tenantSlug} is the tenant a domain product binds
-     * to; ignored when {@code bindsAllTenants} is true (the {@code gap} case)
+     * to; ignored when {@code bindsAllTenants} is true (the {@code iam} case)
      * or when {@code available} is false.
      */
     public record Entry(
@@ -44,7 +44,7 @@ public final class ProductCatalog {
     }
 
     private static final List<Entry> ENTRIES = List.of(
-            new Entry("gap", "Global Account Platform", true, true, null, "/gap"),
+            new Entry("iam", "Identity & Access Management", true, true, null, "/iam"),
             new Entry("wms", "Warehouse Management Platform", true, false, "wms", "/wms"),
             new Entry("scm", "Supply Chain Management Platform", true, false, "scm", "/scm"),
             new Entry("erp", "Enterprise Resource Planning", true, false, "erp", "/erp"),

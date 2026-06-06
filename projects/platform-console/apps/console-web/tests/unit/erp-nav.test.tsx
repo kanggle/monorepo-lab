@@ -23,8 +23,8 @@ import { ErpOpsScreen } from '@/features/erp-ops';
  * Regression (TASK-PC-FE-010 AC): the `/erp` surface is an
  * in-console NAV destination and an ADDITIVE domain section. It
  * must NOT disturb the data-driven catalog routing (FE-001 /
- * FE-002 / FE-007 / FE-008 / FE-009 unchanged): `gap.baseRoute`
- * still resolves to `/accounts`, and a non-GAP product (incl.
+ * FE-002 / FE-007 / FE-008 / FE-009 unchanged): `iam.baseRoute`
+ * still resolves to `/accounts`, and a non-IAM product (incl.
  * `wms`, `scm`, `finance`, and `erp`) keeps its registry
  * `baseRoute` (resolveConsoleRoute is additive). The erp section
  * mounts as an in-console destination without the GAP-section
@@ -33,11 +33,11 @@ import { ErpOpsScreen } from '@/features/erp-ops';
  */
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['erp'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 const wms: RegistryProduct = {
   productKey: 'wms',
@@ -85,7 +85,7 @@ function wrapper() {
 }
 
 describe('erp nav — additive, does not disturb catalog routing (FE-001/002/007/008/009)', () => {
-  it('gap still resolves to /accounts (FE-002 contract unchanged)', () => {
+  it('iam still resolves to /accounts (FE-002 contract unchanged)', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 

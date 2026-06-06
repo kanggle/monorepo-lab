@@ -5,7 +5,7 @@ import type { InventoryPage, AlertPage } from './types';
 
 /**
  * Server-side wms operations section state for the `(console)/wms` route
- * (TASK-PC-FE-007 — first non-GAP federation).
+ * (TASK-PC-FE-007 — first non-IAM federation).
  *
  * Eligibility gate (console-integration-contract § 2.4.5 tenant-model
  * divergence): wms resolves the operator's tenant from the JWT `tenant_id`
@@ -22,13 +22,13 @@ import type { InventoryPage, AlertPage } from './types';
  * Dependencies / § Boundary Rules.)
  *
  * Resilience boundary (§ 2.4.5 / § 2.5, mirrors `accounts-state.ts`):
- *   - `401` (GAP OIDC session expired) → `redirect('/login')` — a
+ *   - `401` (IAM OIDC session expired) → `redirect('/login')` — a
  *     WHOLE-SESSION re-login, NOT a per-section degrade (no partial authed
  *     state; consistent with the FE-002..005 401 discipline).
  *   - `403` (role-insufficient) → a non-crashing inline "not available to
  *     your role" state.
  *   - `503` / timeout / network → DEGRADED — ONLY the wms section renders
- *     a degraded notice; the console shell + the GAP sections stay intact.
+ *     a degraded notice; the console shell + the IAM sections stay intact.
  *   - any other producer error → degrade rather than crash.
  *
  * Read-model lag (§ 2.4.5): the inventory/alerts lag hint (if the producer
@@ -95,7 +95,7 @@ export async function getWmsSectionState(
       return { ...EMPTY, forbidden: true };
     }
     if (err instanceof WmsUnavailableError) {
-      // Degrade ONLY the wms section — shell + GAP sections intact (§ 2.5).
+      // Degrade ONLY the wms section — shell + IAM sections intact (§ 2.5).
       return { ...EMPTY, degraded: true };
     }
     // Any other producer error (404/400/422/409 on a seeded page-0 read —

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - not wms-eligible → `notEligible` block, NO wms call fabricated
  *     (no cross-tenant call; the console never sends a tenant — wms
  *     resolves it from the JWT claim);
- *   - eligible → seeds inventory + alerts (GAP OIDC token, server-side);
+ *   - eligible → seeds inventory + alerts (IAM OIDC token, server-side);
  *   - 403 → `forbidden` (inline, no crash);
  *   - 503/timeout → `degraded` (wms section only — shell intact);
  *   - the read-model-lag hint is surfaced when present.
@@ -102,7 +102,7 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds inventory + alerts (GAP OIDC token, server-side)', async () => {
+  it('eligible → seeds inventory + alerts (IAM OIDC token, server-side)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
       Promise.resolve(jsonResponse(INV)),
@@ -114,7 +114,7 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
     expect(state.degraded).toBe(false);
     expect(state.inventory).not.toBeNull();
     expect(state.alerts).not.toBeNull();
-    // Both seeded reads carry the GAP OIDC access token.
+    // Both seeded reads carry the IAM OIDC access token.
     const h = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');

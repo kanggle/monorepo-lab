@@ -30,7 +30,7 @@ export const runtime = 'nodejs';
  * § 2.4.9.1 Implementation guidance)**:
  *   - `X-Finance-Default-Account-Id: <finance-account-uuid>` (sourced
  *     server-side from `getFinanceDefaultAccountId()` which reads the
- *     GAP registry's `productItem[finance].operatorContext.defaultAccountId`).
+ *     IAM registry's `productItem[finance].operatorContext.defaultAccountId`).
  *   - **Set only when non-blank**. Absent / whitespace / null ⇒ header
  *     omitted entirely (NOT set to `""`). The BFF's `callFinance(...)`
  *     gate then preserves the existing MISSING_PREREQUISITE path.
@@ -98,8 +98,8 @@ export async function GET() {
   // The BFF forwards `Authorization: Bearer <token>` verbatim to the non-GAP
   // legs (ADR-017 D6 pass-through, 0-byte). We put the **domain-facing** token
   // here: the ASSUMED (tenant-scoped) token when the operator has switched to
-  // a customer (so the non-GAP domain entitlement gates follow the selection),
-  // else the base token (net-zero). The GAP leg keeps using `X-Operator-Token`
+  // a customer (so the non-IAM domain entitlement gates follow the selection),
+  // else the base token (net-zero). The IAM leg keeps using `X-Operator-Token`
   // (§ 2.6 operator-token boundary — unchanged).
   const domainFacingToken = await getDomainFacingToken();
   if (!domainFacingToken) {

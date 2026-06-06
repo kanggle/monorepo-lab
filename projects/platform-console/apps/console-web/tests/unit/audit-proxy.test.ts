@@ -92,7 +92,7 @@ describe('GET /api/audit proxy', () => {
     expect(h['Idempotency-Key']).toBeUndefined();
   });
 
-  it('401 from GAP → 401 (forced re-login, no partial authed state)', async () => {
+  it('401 from IAM → 401 (forced re-login, no partial authed state)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -105,7 +105,7 @@ describe('GET /api/audit proxy', () => {
     expect(res.status).toBe(401);
   });
 
-  it('403 PERMISSION_DENIED from GAP → 403 (inline, no crash)', async () => {
+  it('403 PERMISSION_DENIED from IAM → 403 (inline, no crash)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -120,7 +120,7 @@ describe('GET /api/audit proxy', () => {
     expect(body.code).toBe('PERMISSION_DENIED');
   });
 
-  it('403 TENANT_SCOPE_DENIED from GAP → 403 (inline tenant-scope)', async () => {
+  it('403 TENANT_SCOPE_DENIED from IAM → 403 (inline tenant-scope)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -137,7 +137,7 @@ describe('GET /api/audit proxy', () => {
     expect(body.code).toBe('TENANT_SCOPE_DENIED');
   });
 
-  it('422 from GAP → 422 (inline field-level)', async () => {
+  it('422 from IAM → 422 (inline field-level)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -150,7 +150,7 @@ describe('GET /api/audit proxy', () => {
     expect(res.status).toBe(422);
   });
 
-  it('503 from GAP → 503 (audit section degrades only)', async () => {
+  it('503 from IAM → 503 (audit section degrades only)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(

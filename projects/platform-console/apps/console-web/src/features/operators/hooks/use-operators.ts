@@ -48,7 +48,7 @@ import {
  * same-origin `/api/operators/**` proxy (the typed API client's single
  * backend entry point); the proxy attaches the HttpOnly operator token +
  * tenant server-side AND applies the per-endpoint header matrix — the
- * browser never reads a token or calls GAP directly (contract § 2.3), and
+ * browser never reads a token or calls IAM directly (contract § 2.3), and
  * a password is never read back from a token cookie.
  *
  * Per-endpoint header fidelity (§ 2.4.3): `create` sends an
@@ -302,7 +302,7 @@ export function useOperatorAssignments(operatorId: string | null) {
 
 // --- read: erp departments for the org_scope picker (TASK-PC-FE-050) ------
 // Reuses the EXISTING erp departments read proxy
-// (`/api/erp/masterdata/departments`, active-tenant scoped, GAP OIDC
+// (`/api/erp/masterdata/departments`, active-tenant scoped, IAM OIDC
 // domain-facing token attached server-side). A thin, self-contained client
 // query (NOT the erp-ops `useDepartments` hook — that lives behind the
 // erp-ops barrel which is server-coupled; importing it into this GAP-domain

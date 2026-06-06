@@ -29,7 +29,7 @@ import { RetryButton } from './RetryButton';
  */
 
 const DOMAIN_TITLE: Record<DomainKey, string> = {
-  gap: 'GAP',
+  iam: 'IAM',
   wms: 'WMS',
   scm: 'SCM',
   finance: 'Finance',

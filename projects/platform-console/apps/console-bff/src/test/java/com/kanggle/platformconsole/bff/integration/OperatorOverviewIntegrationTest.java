@@ -86,7 +86,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
                 .subject("op-user-it")
                 .audience("console-bff")
                 .expirationTime(new Date(System.currentTimeMillis() + 3_600_000))
-                .claim("tenant_id", "gap")
+                .claim("tenant_id", "iam")
                 .build();
 
         SignedJWT signed = new SignedJWT(
@@ -165,7 +165,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         HttpHeaders h = new HttpHeaders();
         h.set(HttpHeaders.AUTHORIZATION, "Bearer " + gapOidcJwt);
         h.set("X-Operator-Token", "op-tok-abc");
-        h.set("X-Tenant-Id", "gap");
+        h.set("X-Tenant-Id", "iam");
         return h;
     }
 
@@ -216,7 +216,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         // Fixed order — 4 legs ok; finance is MVP-pinned forbidden/MISSING_PREREQUISITE
         // (the use case short-circuits without firing FINANCE).
         assertThat(body).as("body:\n%s", body)
-                .contains("\"domain\":\"gap\"")
+                .contains("\"domain\":\"iam\"")
                 .contains("\"domain\":\"wms\"")
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
@@ -228,7 +228,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         assertThat(gapReq.getHeader(HttpHeaders.AUTHORIZATION))
                 .as("GAP must dispatch RFC8693 operator token")
                 .isEqualTo("Bearer op-tok-abc");
-        assertThat(gapReq.getHeader("X-Tenant-Id")).isEqualTo("gap");
+        assertThat(gapReq.getHeader("X-Tenant-Id")).isEqualTo("iam");
 
         // wms / scm / erp legs — GAP OIDC access token (inbound bearer) verbatim.
         for (MockWebServer s : new MockWebServer[]{WMS, SCM, ERP}) {
@@ -237,7 +237,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
             assertThat(r.getHeader(HttpHeaders.AUTHORIZATION))
                     .as("non-GAP leg must dispatch GAP OIDC access token")
                     .isEqualTo("Bearer " + gapOidcJwt);
-            assertThat(r.getHeader("X-Tenant-Id")).isEqualTo("gap");
+            assertThat(r.getHeader("X-Tenant-Id")).isEqualTo("iam");
         }
 
         // FINANCE — option (b) short-circuit when X-Finance-Default-Account-Id
@@ -412,7 +412,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     void inbound_missing_auth_401() {
         HttpHeaders h = new HttpHeaders();
         h.set("X-Operator-Token", "op-tok-abc");
-        h.set("X-Tenant-Id", "gap");
+        h.set("X-Tenant-Id", "iam");
         // No Authorization
 
         Set<Integer> beforeCounts = snapshotRequestCounts();
@@ -555,7 +555,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         assertThat(finReq.getHeader(HttpHeaders.AUTHORIZATION))
                 .as("finance leg must dispatch GAP OIDC access token bearer (§ 2.4.9.1 row 4)")
                 .isEqualTo("Bearer " + gapOidcJwt);
-        assertThat(finReq.getHeader("X-Tenant-Id")).isEqualTo("gap");
+        assertThat(finReq.getHeader("X-Tenant-Id")).isEqualTo("iam");
     }
 
     @Test

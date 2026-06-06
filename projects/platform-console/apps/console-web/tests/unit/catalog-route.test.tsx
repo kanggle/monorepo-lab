@@ -5,16 +5,16 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
 
 /**
  * Regression (TASK-PC-FE-002 AC): the catalog `gap` tile must route to the
- * accounts operator surface — `gap.baseRoute` resolves to `/accounts`.
+ * accounts operator surface — `iam.baseRoute` resolves to `/accounts`.
  * Other products keep their registry `baseRoute` unchanged (data-driven,
  * additive — no FE-001/FE-002a regression).
  */
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['wms'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 const wms: RegistryProduct = {
   productKey: 'wms',
@@ -25,7 +25,7 @@ const wms: RegistryProduct = {
 };
 
 describe('catalog → accounts route resolution', () => {
-  it('resolveConsoleRoute maps gap to the accounts surface', () => {
+  it('resolveConsoleRoute maps iam to the accounts surface', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 
@@ -33,7 +33,7 @@ describe('catalog → accounts route resolution', () => {
     expect(resolveConsoleRoute(wms)).toBe('/wms');
   });
 
-  it('the GAP catalog tile links to /accounts (not /gap)', () => {
+  it('the IAM catalog tile links to /accounts (not /iam)', () => {
     render(<ServiceCatalog catalog={{ products: [gap], degraded: false }} />);
     const link = screen.getByRole('link', {
       name: /Global Account Platform/,
@@ -41,7 +41,7 @@ describe('catalog → accounts route resolution', () => {
     expect(link).toHaveAttribute('href', '/accounts');
   });
 
-  it('a non-GAP tile is unaffected (FE-001 behaviour preserved)', () => {
+  it('a non-IAM tile is unaffected (FE-001 behaviour preserved)', () => {
     render(<ServiceCatalog catalog={{ products: [wms], degraded: false }} />);
     expect(screen.getByRole('link', { name: /WMS/ })).toHaveAttribute(
       'href',

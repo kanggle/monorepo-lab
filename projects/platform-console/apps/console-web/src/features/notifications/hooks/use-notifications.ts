@@ -18,7 +18,7 @@ import {
  * Client-side notification hooks (TASK-PC-FE-052). Every call goes to the
  * same-origin `/api/erp/notifications/**` proxy (the typed API client's
  * single backend entry point); the proxy attaches the HttpOnly domain-facing
- * GAP OIDC token server-side — the browser never reads a token or calls erp
+ * IAM OIDC token server-side — the browser never reads a token or calls erp
  * directly (contract § 2.3).
  *
  * NO `refetchInterval` / polling (erp-ops discipline — same rule as the

@@ -1,5 +1,5 @@
 /**
- * PKCE (RFC 7636) + OAuth state helpers for the GAP Authorization Code flow.
+ * PKCE (RFC 7636) + OAuth state helpers for the IAM Authorization Code flow.
  *
  * The console is a PUBLIC OIDC client (`platform-console-web`, no client
  * secret — auth-service V0015 seed, `settings.client.require-proof-key=true`).

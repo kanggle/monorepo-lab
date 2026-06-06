@@ -21,9 +21,9 @@ import { logger, newRequestId } from '@/shared/lib/logger';
 export const runtime = 'nodejs';
 
 /**
- * GAP OIDC Authorization Code + PKCE — step 2 (callback / token exchange).
+ * IAM OIDC Authorization Code + PKCE — step 2 (callback / token exchange).
  *
- * GAP redirects the browser here (exact pre-registered redirect URI
+ * IAM redirects the browser here (exact pre-registered redirect URI
  * `http://console.local/api/auth/callback` — V0015 seed). This handler:
  *   1. Validates the `state` against the HttpOnly state cookie (CSRF; on
  *      mismatch → safe re-login, no token leak — task Edge Case).
@@ -33,14 +33,14 @@ export const runtime = 'nodejs';
  *      auth-api.md § POST /oauth2/token).
  *   3. Stores access/refresh tokens in HttpOnly Secure SameSite=Strict
  *      cookies ONLY (frontend-app.md § Authentication; never localStorage).
- *   4. Server-side exchanges the GAP access token for an admin-service
+ *   4. Server-side exchanges the IAM access token for an admin-service
  *      operator token (RFC 8693 — console-integration-contract § 2.6 /
  *      ADR-MONO-014) and stores it in its own HttpOnly operator cookie
  *      (`maxAge = expiresIn`). Fail-closed: exchange `401`
  *      → `not_provisioned` re-login; unavailable → `operator_exchange_
  *      unavailable` re-login. On either failure NO operator cookie is set
- *      and the GAP token cookies are cleared — there is no partial authed
- *      state and the GAP token can never be used as an `/api/admin/**`
+ *      and the IAM token cookies are cleared — there is no partial authed
+ *      state and the IAM token can never be used as an `/api/admin/**`
  *      credential (the #569 defect this closes).
  *   5. Clears the transient PKCE/state cookies and 302s to the post-login
  *      path carried by the state cookie.
@@ -151,9 +151,9 @@ export async function GET(req: Request) {
     }
 
     // --- Server-side operator-token exchange (§ 2.6 / ADR-MONO-014) -------
-    // The GAP access token is NOT an /api/admin/** credential — exchange it
+    // The IAM access token is NOT an /api/admin/** credential — exchange it
     // for the operator token. On failure: NO operator cookie + drop the GAP
-    // cookies (no partial authed state; GAP token never an admin credential).
+    // cookies (no partial authed state; IAM token never an admin credential).
     try {
       const op = await exchangeForOperatorToken(data.access_token);
       jar.set(OPERATOR_COOKIE, op.accessToken, {
@@ -188,7 +188,7 @@ export async function GET(req: Request) {
     // TASK-PC-FE-036: without this the active-tenant cookie is unset on first
     // load, so the tenant-scoped overviews (운영자 통합 개요 / 도메인 상태)
     // gate with "select a tenant" even though the switcher shows a tenant —
-    // a confusing UI/server mismatch. A real-customer operator's GAP OIDC
+    // a confusing UI/server mismatch. A real-customer operator's IAM OIDC
     // access token already carries `tenant_id=<home>` (+ entitled_domains), so
     // defaulting the active tenant to it makes the overviews work immediately
     // via the base token (no assume-tenant needed — getDomainFacingToken falls

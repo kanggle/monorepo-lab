@@ -30,7 +30,7 @@ function wrapper() {
 const HAPPY: OperatorOverview = {
   asOf: '2026-05-20T10:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { totalElements: 12345 } },
+    { domain: 'iam', status: 'ok', data: { totalElements: 12345 } },
     {
       domain: 'wms',
       status: 'ok',
@@ -69,7 +69,7 @@ describe('OperatorOverviewScreen — renders 5 cards in FIXED order', () => {
     const cardSections = cards.filter((el) => el.hasAttribute('data-domain'));
     expect(cardSections).toHaveLength(5);
     expect(cardSections.map((el) => el.getAttribute('data-domain'))).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',
@@ -96,7 +96,7 @@ describe('OperatorOverviewScreen — renders 5 cards in FIXED order', () => {
       .getAllByTestId(/^operator-overview-card-/)
       .filter((el) => el.hasAttribute('data-domain'));
     expect(cards.map((el) => el.getAttribute('data-domain'))).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',

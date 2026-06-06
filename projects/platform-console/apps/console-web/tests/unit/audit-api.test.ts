@@ -4,9 +4,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * `features/audit/api/audit-api.ts` — the security-critical core of
  * TASK-PC-FE-003 (READ-ONLY slice).
  *
- * Asserts (console-integration-contract § 2.4.2 / GAP admin-api.md
+ * Asserts (console-integration-contract § 2.4.2 / IAM admin-api.md
  * § GET /api/admin/audit):
- *   - the bearer is the EXCHANGED operator cookie, NEVER the GAP OIDC
+ *   - the bearer is the EXCHANGED operator cookie, NEVER the IAM OIDC
  *     access token (the #569 trust-boundary invariant);
  *   - `X-Tenant-Id` is the active-tenant cookie value (never empty);
  *   - filter / `source` / pagination params are serialised correctly;
@@ -101,7 +101,7 @@ beforeEach(() => {
 });
 
 describe('audit-api — operator-token trust boundary (#569 invariant)', () => {
-  it('sends the OPERATOR cookie as the bearer, NOT the GAP token, with X-Tenant-Id', async () => {
+  it('sends the OPERATOR cookie as the bearer, NOT the IAM token, with X-Tenant-Id', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-must-not-leak');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-correct');
     cookieJar.set(TENANT_COOKIE, 'wms');
@@ -121,7 +121,7 @@ describe('audit-api — operator-token trust boundary (#569 invariant)', () => {
     expect(String(url)).toContain('/api/admin/audit');
   });
 
-  it('throws 401 with NO fetch when the operator token is absent (no GAP fallback)', async () => {
+  it('throws 401 with NO fetch when the operator token is absent (no IAM fallback)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-only');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn();

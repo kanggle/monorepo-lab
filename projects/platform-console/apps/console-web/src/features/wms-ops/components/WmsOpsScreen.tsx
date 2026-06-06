@@ -19,7 +19,7 @@ import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
 
 /**
  * wms operations section (TASK-PC-FE-007 — ADR-MONO-013 Phase 4 slice 1).
- * The first NON-GAP federated domain screen.
+ * The first NON-IAM federated domain screen.
  *
  * Server-rendered initial inventory + alerts pages are passed in; client
  * re-query handles filter / pagination changes. The read-model is
@@ -36,7 +36,7 @@ import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
  * Resilience (§ 2.5): 401 is handled by the server route (whole-session
  * re-login — not surfaced here as a per-section state); 403/404/422/409 →
  * inline actionable; 503/timeout → this section degrades only (the console
- * shell + GAP sections stay intact).
+ * shell + IAM sections stay intact).
  */
 
 export interface WmsOpsScreenProps {

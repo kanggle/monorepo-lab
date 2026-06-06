@@ -97,7 +97,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/scm/po proxy (read-only)', () => {
-  it('attaches the GAP OIDC access token (NOT the operator token), forwards filters', async () => {
+  it('attaches the IAM OIDC access token (NOT the operator token), forwards filters', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PO_ENV));
@@ -123,7 +123,7 @@ describe('GET /api/scm/po proxy (read-only)', () => {
     expect(upstream.searchParams.get('size')).toBe('100'); // capped
   });
 
-  it('no GAP session → 401 (no upstream call)', async () => {
+  it('no IAM session → 401 (no upstream call)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await poGET(new Request('http://console.local/api/scm/po'));
@@ -153,7 +153,7 @@ describe('GET /api/scm/po proxy (read-only)', () => {
 });
 
 describe('GET /api/scm/po/{poId} proxy (read-only — no PO write route)', () => {
-  it('forwards the detail read with the GAP OIDC token', async () => {
+  it('forwards the detail read with the IAM OIDC token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({ data: { id: 'po-1', status: 'DRAFT' }, meta: {} }),

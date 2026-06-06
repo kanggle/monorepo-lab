@@ -43,7 +43,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, session, status]);
 
   const login = useCallback((callbackUrl?: string) => {
-    return signIn('gap', { callbackUrl: callbackUrl ?? '/' });
+    return signIn('iam', { callbackUrl: callbackUrl ?? '/' });
   }, []);
 
   const logout = useCallback(async () => {

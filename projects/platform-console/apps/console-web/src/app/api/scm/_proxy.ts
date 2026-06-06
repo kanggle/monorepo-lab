@@ -8,9 +8,9 @@ import { logger, newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the scm-ops same-origin proxy routes
- * (console-integration-contract § 2.4.6 / § 2.5). The HttpOnly **GAP OIDC
+ * (console-integration-contract § 2.4.6 / § 2.5). The HttpOnly **IAM OIDC
  * access token** is attached server-side in `scm-api.ts` — NOT the GAP
- * exchanged operator token (scm's gateway requires the GAP OIDC token; the
+ * exchanged operator token (scm's gateway requires the IAM OIDC token; the
  * #569 invariant is GAP-domain-scoped — the § 2.4.5 rule reused, NOT
  * re-derived). Mirrors the FE-007 wms `_proxy` shape but for the scm
  * (FLAT) envelope.

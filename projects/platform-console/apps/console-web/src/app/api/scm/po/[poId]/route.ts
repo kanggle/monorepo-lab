@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin scm PO-detail read proxy (read-only — GET). The HttpOnly
- * GAP OIDC access token is attached server-side in `getPurchaseOrder()`
+ * IAM OIDC access token is attached server-side in `getPurchaseOrder()`
  * (§ 2.4.6 reusing the § 2.4.5 per-domain credential rule — NOT the
  * operator token). No mutation artifacts. PO write (`/submit|/confirm|
  * /cancel`) is explicitly out of scope — there is no such proxy route.

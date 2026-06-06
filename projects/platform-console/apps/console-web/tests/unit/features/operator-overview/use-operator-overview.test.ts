@@ -64,7 +64,7 @@ function jsonResponse(body: unknown, status = 200) {
 const ENVELOPE: OperatorOverview = {
   asOf: '2026-05-20T10:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { totalElements: 1 } },
+    { domain: 'iam', status: 'ok', data: { totalElements: 1 } },
     { domain: 'wms', status: 'ok', data: {} },
     { domain: 'scm', status: 'ok', data: {} },
     { domain: 'finance', status: 'ok', data: {} },

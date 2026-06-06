@@ -3,7 +3,7 @@ import { signIn } from '@/shared/auth/auth';
 import { Button } from '@/shared/ui/Button';
 
 /**
- * Public login page. Triggers `signIn('gap', ...)` which redirects to GAP's
+ * Public login page. Triggers `signIn('iam', ...)` which redirects to GAP's
  * `/oauth2/authorize` endpoint with PKCE + state. After GAP roundtrip the
  * `[...nextauth]` callback completes the code-exchange and sets the session
  * cookie.
@@ -30,7 +30,7 @@ export default async function LoginPage({
       <section className="w-full rounded-xl border border-ink-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-ink-900">로그인</h2>
         <p className="mt-1 text-sm text-ink-600">
-          Global Account Platform 으로 안전하게 로그인합니다.
+          IAM 으로 안전하게 로그인합니다.
         </p>
 
         {params.error ? (
@@ -46,7 +46,7 @@ export default async function LoginPage({
           className="mt-6"
           action={async () => {
             'use server';
-            await signIn('gap', { redirectTo: callbackUrl });
+            await signIn('iam', { redirectTo: callbackUrl });
           }}
         >
           <Button type="submit" size="lg" className="w-full" data-testid="oidc-signin">

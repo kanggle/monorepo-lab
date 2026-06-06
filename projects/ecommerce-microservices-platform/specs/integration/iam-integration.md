@@ -47,8 +47,8 @@ spring:
 
 | Client ID | Grant Types | PKCE | Redirect URIs | Flyway |
 |---|---|---|---|---|
-| `ecommerce-web-store-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/gap`, `http://web.ecommerce.local/api/auth/callback/gap` | V0012 (TASK-MONO-027) |
-| `ecommerce-admin-dashboard-client` | `authorization_code` + `refresh_token` | 필수 | `http://localhost:3001/api/auth/callback/gap`, `http://admin.ecommerce.local/api/auth/callback/gap` | V0012 (TASK-MONO-027) |
+| `ecommerce-web-store-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/iam`, `http://web.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
+| `ecommerce-admin-dashboard-client` | `authorization_code` + `refresh_token` | 필수 | `http://localhost:3001/api/auth/callback/iam`, `http://admin.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
 | `ecommerce-internal-services-client` | `client_credentials` | No | — | v2 DEFERRED |
 
 두 user-flow client 는 confidential (secret + PKCE 동시 사용) 로 등록:

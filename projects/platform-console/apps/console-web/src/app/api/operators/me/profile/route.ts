@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
  *
  * BODY shape mirrors the read shape verbatim (TASK-BE-304 → BE-306 →
  * PC-FE-014 → THIS): `{ operatorContext: { defaultAccountId: string | null } }`.
- * Explicit `null` clears the column; a string is opaque to GAP (no
+ * Explicit `null` clears the column; a string is opaque to IAM (no
  * cross-service verification — TASK-BE-304 § Decision authority). The
  * effective value is re-read via `GET /api/admin/console/registry`.
  */

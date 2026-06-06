@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Same-origin erp delegation proxy route handlers (TASK-PC-FE-054):
  *   - delegations: GET (list ?role=) + POST (create) only
  *   - delegations/{id}/revoke: POST only
- *   server-only domain-facing GAP token; Idempotency-Key forwarded;
+ *   server-only domain-facing IAM token; Idempotency-Key forwarded;
  *   reason required on revoke (pre-guard); error mapping via shared erp
  *   `_proxy` mapper.
  */
@@ -117,7 +117,7 @@ describe('delegation proxy — method exposure', () => {
 // ===========================================================================
 
 describe('GET /api/erp/approval/delegations', () => {
-  it('domain-facing GAP token (NOT operator token); no X-Tenant-Id; forwards role param', async () => {
+  it('domain-facing IAM token (NOT operator token); no X-Tenant-Id; forwards role param', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST));
@@ -139,7 +139,7 @@ describe('GET /api/erp/approval/delegations', () => {
     expect(u.searchParams.get('role')).toBe('DELEGATOR');
   });
 
-  it('no GAP session → 401, no upstream call', async () => {
+  it('no IAM session → 401, no upstream call', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await delegationsGET(

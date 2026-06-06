@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin erp department DETAIL read proxy (read-only — GET).
- * E3 `?asOf=` threaded through verbatim. GAP OIDC access token
+ * E3 `?asOf=` threaded through verbatim. IAM OIDC access token
  * attached server-side. No mutation artifacts.
  */
 export async function GET(

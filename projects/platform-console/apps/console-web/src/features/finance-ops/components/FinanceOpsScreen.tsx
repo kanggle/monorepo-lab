@@ -18,7 +18,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 
 /**
  * finance operations section (TASK-PC-FE-009 — ADR-MONO-013 Phase 5, the
- * THIRD non-GAP federated domain; closes the non-GAP federation cycle).
+ * THIRD non-IAM federated domain; closes the non-IAM federation cycle).
  *
  * STRICTLY READ-ONLY. The section renders:
  *   - AccountLookup (accountId entry — honest finance constraint: v1
@@ -45,7 +45,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
  * Resilience (§ 2.5): 401 is handled by the server route (whole-session
  * re-login — not surfaced here); 403 / 404 → inline actionable;
  * 503 / timeout → this section degrades only (the console shell + the
- * GAP / wms / scm sections stay intact). **No 429 handling** (§ 2.4.7
+ * IAM / wms / scm sections stay intact). **No 429 handling** (§ 2.4.7
  * — finance has no documented 429; a stray 429 is rendered as a
  * generic error, NOT retried).
  */

@@ -93,7 +93,7 @@ async function parseDelegationError(
 }
 
 /**
- * Single hardened call site. Resolves the domain-facing GAP OIDC token,
+ * Single hardened call site. Resolves the domain-facing IAM OIDC token,
  * applies the timeout, maps the erp FLAT error envelope to the § 2.5
  * resilience taxonomy. No 429 / Retry-After / backoff branch (erp has no
  * documented rate-limit — identical to the approval surface).
@@ -111,7 +111,7 @@ async function callDelegation<T>(
       requestId,
       path: opts.logPath,
     });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {

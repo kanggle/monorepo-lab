@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp approval INBOX proxy (read — GET only). Forwards to the
  * UNCHANGED producer `GET /api/erp/approval/inbox` via `listApprovalInbox()`
- * (domain-facing GAP token server-side). Returns the caller's PENDING
+ * (domain-facing IAM token server-side). Returns the caller's PENDING
  * (SUBMITTED) requests where they are the `approverId`. First increment is
  * minimal — no due-date / priority / delegation filtering (v2 deferred); only
  * page / size are forwarded.

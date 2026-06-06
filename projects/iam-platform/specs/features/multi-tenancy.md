@@ -57,7 +57,7 @@
 - 등록 경로: admin-service의 운영자 명령 — 4개 엔드포인트 (`POST /api/admin/tenants`, `GET /api/admin/tenants`, `GET /api/admin/tenants/{id}`, `PATCH /api/admin/tenants/{id}`). 상세 contract 는 [admin-api.md § Tenant Lifecycle](../contracts/http/admin-api.md#tenant-lifecycle-task-be-256) 참조 (TASK-BE-256).
 - 등록 시 `admin_actions`에 `action_code=TENANT_CREATE` 기록 + outbox 이벤트 [tenant-events.md](../contracts/events/tenant-events.md) `tenant.created` 발행 (audit-heavy).
 - 테넌트 SUSPEND/REACTIVATE 도 동일하게 admin-service 경유 — `tenant.suspended` / `tenant.reactivated` outbox 이벤트 발행. account-service 가 이 이벤트를 소비해 SUSPENDED 테넌트의 신규 로그인·가입을 차단한다.
-- 예약어 (`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `auth`, `oauth`, `me`) 는 `tenantId` 로 등록 불가 (`400 TENANT_ID_RESERVED`).
+- 예약어 (`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `iam`, `auth`, `oauth`, `me`) 는 `tenantId` 로 등록 불가 (`400 TENANT_ID_RESERVED`).
 - 테넌트 삭제 미지원 — 감사 트레일·외부 토큰 정합으로 인해 SUSPEND 만 가능.
 
 ---
@@ -269,7 +269,7 @@ GAP 는 두 가지 producer-side 선행물을 제공한다.
   등록 client 에 대해 fire 하므로 신규 wiring 불필요. 회전 시
   `reuse-refresh-tokens=false` 로 매 refresh rotation, 재사용 시 체인 전체
   invalidate.
-- `tenant_id='gap'` 로 스코프됨 — `gap` 은 [TenantId](#tenantid) 예약어이므로
+- `tenant_id='iam'` 로 스코프됨 — `iam` 은 [TenantId](#tenantid) 예약어이므로
   consumer 테넌트와 충돌 불가. 운영자 신원·cross-tenant 선택은 이 client 의
   `tenant_id` 가 아니라 admin-service operator JWT + ADR-002 tenant-scope
   sentinel 로 결정된다.
@@ -279,7 +279,7 @@ GAP 는 두 가지 producer-side 선행물을 제공한다.
 - admin-service 가 `GET /api/admin/console/registry` 로 노출 (operator JWT 필수,
   read-only, audit row 없음). 상세 contract:
   [console-registry-api.md](../contracts/http/console-registry-api.md).
-- 응답은 5개 product (`gap`/`wms`/`scm`/`erp`/`finance`) 의 catalog 이며 각
+- 응답은 5개 product (`iam`/`wms`/`scm`/`erp`/`finance`) 의 catalog 이며 각
   product 의 `available` 플래그 + 운영자가 선택 가능한 `tenants` +
   `displayName` + `baseRoute` 를 담는다 (console-integration-contract § 2.2
   shape).
@@ -288,7 +288,7 @@ GAP 는 두 가지 producer-side 선행물을 제공한다.
   운영자는 자신의 테넌트 1개만 (`tenants` length ≤ 1). 다른 테넌트의 slug 는
   어떤 product 의 `tenants` 에도 노출되지 않는다 (cross-tenant 격리 회귀 테스트
   필수, 본 문서 [격리 회귀 방지](#격리-회귀-방지) + M6).
-- 5 federated domains (`gap` + `wms` + `scm` + `erp` + `finance`) 는 모두 V1
+- 5 federated domains (`iam` + `wms` + `scm` + `erp` + `finance`) 는 모두 V1
   live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
   reality-alignment — finance Phase 5 COMPLETE 2026-05-19/20 + erp Phase 6
   COMPLETE 2026-05-20 per ADR-MONO-013 § D6). product catalog 변경은

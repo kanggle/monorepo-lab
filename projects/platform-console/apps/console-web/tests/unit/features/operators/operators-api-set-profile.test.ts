@@ -84,7 +84,7 @@ describe('operators-api setOperatorProfile — call shape + AC-7 header-matrix-d
     expect((init as RequestInit).method).toBe('PATCH');
 
     const h = (init as RequestInit).headers as Record<string, string>;
-    // Operator token bearer, NOT the GAP OIDC token (#569 invariant).
+    // Operator token bearer, NOT the IAM OIDC token (#569 invariant).
     expect(h.Authorization).toBe('Bearer OPERATOR-TOKEN-correct');
     expect(h.Authorization).not.toContain('GAP-OIDC-ACCESS-must-not-leak');
     expect(h['X-Tenant-Id']).toBe('wms');

@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/accounts proxy', () => {
-  it('401 from GAP → 401 (forced re-login, no partial authed state)', async () => {
+  it('401 from IAM → 401 (forced re-login, no partial authed state)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -69,7 +69,7 @@ describe('GET /api/accounts proxy', () => {
     expect(res.status).toBe(401);
   });
 
-  it('503 from GAP → 503 (accounts section degrades only)', async () => {
+  it('503 from IAM → 503 (accounts section degrades only)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -97,7 +97,7 @@ describe('GET /api/accounts proxy', () => {
 });
 
 describe('POST /api/accounts/[id]/lock proxy', () => {
-  it('passes the operator reason + idempotency-key to GAP unchanged', async () => {
+  it('passes the operator reason + idempotency-key to IAM unchanged', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn().mockResolvedValue(
@@ -132,7 +132,7 @@ describe('POST /api/accounts/[id]/lock proxy', () => {
     expect(h['Idempotency-Key']).toBe('idem-1');
   });
 
-  it('403 PERMISSION_DENIED from GAP → 403 (inline permission / re-login)', async () => {
+  it('403 PERMISSION_DENIED from IAM → 403 (inline permission / re-login)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -151,7 +151,7 @@ describe('POST /api/accounts/[id]/lock proxy', () => {
     expect(res.status).toBe(403);
   });
 
-  it('a malformed body → 422 without calling GAP (the reason is never fabricated)', async () => {
+  it('a malformed body → 422 without calling IAM (the reason is never fabricated)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn();

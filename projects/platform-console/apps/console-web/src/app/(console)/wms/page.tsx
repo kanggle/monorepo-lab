@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * wms operations section route (TASK-PC-FE-007 — ADR-MONO-013 Phase 4
- * slice 1, the first NON-GAP domain federated by the console). An
+ * slice 1, the first NON-IAM domain federated by the console). An
  * in-console nav destination, NOT a catalog product re-route — the catalog
  * `wms.baseRoute` stays data-driven (resolveConsoleRoute leaves non-GAP
  * products on their registry baseRoute; an `available:false` wms is handled
@@ -16,9 +16,9 @@ export const dynamic = 'force-dynamic';
  * hard-crash when wms is unavailable).
  *
  * Server component. wms is reached server-side with the HttpOnly **GAP
- * OIDC access token** (NOT the GAP exchanged operator token — § 2.4.5
+ * OIDC access token** (NOT the IAM exchanged operator token — § 2.4.5
  * per-domain credential divergence; the #569 invariant is GAP-domain-
- * scoped and the wms gateway *requires* the GAP OIDC token).
+ * scoped and the wms gateway *requires* the IAM OIDC token).
  *
  * Eligibility (§ 2.4.5 tenant-model divergence): wms resolves the tenant
  * from the JWT `tenant_id` claim producer-side — the console sends no

@@ -40,7 +40,7 @@ public class IamAccountsReadAdapter implements IamAccountsReadPort {
 
     @Override
     public DomainTarget domainTarget() {
-        return DomainTarget.GAP;
+        return DomainTarget.IAM;
     }
 
     @Override

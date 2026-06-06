@@ -131,7 +131,7 @@ Flow:
    (`/.well-known/openid-configuration`), generates PKCE verifier + state,
    and redirects the browser to GAP's `/oauth2/authorize`.
 3. GAP authenticates the user, redirects back to
-   `/api/auth/callback/gap?code=...&state=...`.
+   `/api/auth/callback/iam?code=...&state=...`.
 4. next-auth exchanges the code for tokens at GAP's `/oauth2/token`
    (PKCE verifier supplied), validates ID-token signature against GAP's
    JWKS, and persists `access_token` + `refresh_token` + `tenant_id` claim
@@ -148,7 +148,7 @@ token from the session via `'server-only'`.
 
 GAP V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
 + `fan-platform-internal-services-client` + `fan-platform` tenant 시드 적용.
-end-to-end OIDC `signIn('gap')` round-trip 정상 작동. dev secret = `fan-platform-dev`.
+end-to-end OIDC `signIn('iam')` round-trip 정상 작동. dev secret = `fan-platform-dev`.
 
 ---
 

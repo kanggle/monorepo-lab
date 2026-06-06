@@ -127,11 +127,11 @@ Returns the data-driven product/tenant catalog the console renders.
 {
   "products": [
     {
-      "productKey": "gap",
-      "displayName": "Global Account Platform",
+      "productKey": "iam",
+      "displayName": "Identity & Access Management",
       "available": true,
       "tenants": ["fan-platform", "wms", "scm"],
-      "baseRoute": "/gap"
+      "baseRoute": "/iam"
     },
     {
       "productKey": "wms",
@@ -177,7 +177,7 @@ Returns the data-driven product/tenant catalog the console renders.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | one of `gap` \| `wms` \| `scm` \| `erp` \| `finance` |
+| `productKey` | string | one of `iam` \| `wms` \| `scm` \| `erp` \| `finance` |
 | `displayName` | string | Catalog tile label |
 | `available` | boolean | `false` → console renders "coming soon" |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
@@ -225,7 +225,7 @@ Per-product emission rule (v1):
 
 | product | emits `operatorContext` | source | when |
 |---|---|---|---|
-| `gap` | no | — | always omitted |
+| `iam` | no | — | always omitted |
 | `wms` | no | — | always omitted |
 | `scm` | no | — | always omitted |
 | `erp` | no | — | always omitted |
@@ -243,7 +243,7 @@ The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
 
 | productKey | displayName | available rule |
 |---|---|---|
-| `gap` | Global Account Platform | always `true` (this platform is live) |
+| `iam` | Identity & Access Management | always `true` (this platform is live) |
 | `wms` | Warehouse Management Platform | `true` (bootstrapped — V0010/V0016 seeds) |
 | `scm` | Supply Chain Management Platform | `true` (bootstrapped — V0013/V0015 seeds) |
 | `erp` | Enterprise Resource Planning | `true` (V1 live per ADR-MONO-013 § D6 Phase 6 COMPLETE 2026-05-20 — ADR-MONO-016 ACCEPTED + ERP-BE-001 masterdata-service + ERP-BE-002 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
@@ -251,7 +251,7 @@ The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
 
 Adding a product or flipping `available` is a **registry change only** — zero
 `console-web` code change (console-integration-contract § 2.2 / ADR-MONO-013
-§ 1.2 / D5). All 5 federated domains (`gap` + `wms` + `scm` + `erp` + `finance`)
+§ 1.2 / D5). All 5 federated domains (`iam` + `wms` + `scm` + `erp` + `finance`)
 are now V1 live; the `available` flag is `true` across the catalog and the
 console renders each tile as interactive (subject to per-operator `tenants`
 selection per § Tenant selection rule).
@@ -260,7 +260,7 @@ selection per § Tenant selection rule).
 
 `tenants` per available product is the intersection of:
 
-1. the product's tenant binding — `gap` binds to **all** registered tenants
+1. the product's tenant binding — `iam` binds to **all** registered tenants
    (the platform itself federates them); each of `wms` / `scm` / `erp` /
    `finance` binds to the tenants that hold an **ACTIVE subscription** to its
    `domain_key` (TASK-BE-322 / ADR-MONO-019 D2/D4 — see below);
@@ -279,7 +279,7 @@ subscriptions** that GAP account-service owns (ADR-019 **D2** entitlement
 authority), read by admin-service via the internal subscription surface
 ([`internal/account-tenant-domain-subscriptions.md`](internal/account-tenant-domain-subscriptions.md))
 and projected here (ADR-019 **D4**). This **replaces** the prior fixed
-`tenantSlug == domain` binding; the `gap` `bindsAllTenants` branch is unchanged
+`tenantSlug == domain` binding; the `iam` `bindsAllTenants` branch is unchanged
 (it never consults subscriptions). The operator-scope intersection (2) and the
 registered+ACTIVE intersection (3) are unchanged and still apply on top.
 
@@ -319,7 +319,7 @@ Error envelope: the standard
   any product's `tenants` array — covered by a cross-tenant isolation
   regression test ([rules/traits/multi-tenant.md](../../../../../rules/traits/multi-tenant.md)
   M6; task Failure Scenario "Registry leaks cross-tenant products").
-- `gap` product's `tenants` for a single-tenant operator is `["<own>"]`
+- `iam` product's `tenants` for a single-tenant operator is `["<own>"]`
   (length ≤ 1) — it is **not** the full tenant list.
 - **`operatorContext` (TASK-BE-304) carries no cross-tenant data**: the
   `admin_operators.finance_default_account_id` column is read from the

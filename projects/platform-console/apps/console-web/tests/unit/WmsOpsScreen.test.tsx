@@ -230,7 +230,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
       { wrapper: wrapper() },
     );
     await user.click(screen.getByTestId('wms-alert-ack-0'));
-    // The GAP ConfirmActionDialog has a `confirm-reason` textarea; the wms
+    // The IAM ConfirmActionDialog has a `confirm-reason` textarea; the wms
     // ack dialog deliberately does NOT (no X-Operator-Reason on wms).
     expect(screen.queryByTestId('confirm-reason')).not.toBeInTheDocument();
   });

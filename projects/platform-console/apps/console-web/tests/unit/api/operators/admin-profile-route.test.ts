@@ -5,12 +5,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * (`PATCH /api/admin/operators/{operatorId}/profile` — TASK-PC-FE-017):
  *
  *   - (a) POST `{ defaultAccountId: "<uuid>", reason: "<r>" }` → 204
- *     (forwards to GAP `PATCH /api/admin/operators/{id}/profile` with
+ *     (forwards to IAM `PATCH /api/admin/operators/{id}/profile` with
  *     body `{ operatorContext: { defaultAccountId } }` + `X-Operator-Reason`
  *     ONLY — NO `Idempotency-Key` per the producer matrix);
  *   - (b) POST missing `reason` → 422 VALIDATION_ERROR (proxy zod fails
- *     first; GAP not called);
- *   - (c) downstream throws (GAP returns 503) → 503 via `mapError`.
+ *     first; IAM not called);
+ *   - (c) downstream throws (IAM returns 503) → 503 via `mapError`.
  *
  * Plus: explicit `null` clears; unknown top-level keys rejected
  * (`.strict()` mirror of FAIL_ON_UNKNOWN_PROPERTIES); over-36-char value
@@ -83,7 +83,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/operators/[operatorId]/profile proxy (a) — valid body → 204', () => {
-  it('forwards to GAP {id}/profile with reason header + NO Idempotency-Key, returns 204', async () => {
+  it('forwards to IAM {id}/profile with reason header + NO Idempotency-Key, returns 204', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn().mockResolvedValue(noContent());
@@ -107,7 +107,7 @@ describe('POST /api/operators/[operatorId]/profile proxy (a) — valid body → 
     expect(h['Idempotency-Key']).toBeUndefined();
     expect('Idempotency-Key' in h).toBe(false);
 
-    // Body shape on the GAP wire mirrors me/profile verbatim.
+    // Body shape on the IAM wire mirrors me/profile verbatim.
     const sentBody = JSON.parse((init as RequestInit).body as string);
     expect(sentBody).toEqual({
       operatorContext: {
@@ -202,7 +202,7 @@ describe('POST /api/operators/[operatorId]/profile proxy (b) — malformed body 
 });
 
 describe('POST /api/operators/[operatorId]/profile proxy (c) — downstream error mapping', () => {
-  it('GAP 503 CIRCUIT_OPEN → proxy 503 (operators section degrades only)', async () => {
+  it('IAM 503 CIRCUIT_OPEN → proxy 503 (operators section degrades only)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -220,7 +220,7 @@ describe('POST /api/operators/[operatorId]/profile proxy (c) — downstream erro
     expect(res.status).toBe(503);
   });
 
-  it('GAP 400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH → proxy 400 (passthrough)', async () => {
+  it('IAM 400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH → proxy 400 (passthrough)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(

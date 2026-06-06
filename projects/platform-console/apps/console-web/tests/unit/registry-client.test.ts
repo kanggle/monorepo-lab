@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * `shared/api/registry-client.ts` — the registry call MUST authenticate with
- * the EXCHANGED operator token (the operator cookie), NEVER the GAP OIDC
+ * the EXCHANGED operator token (the operator cookie), NEVER the IAM OIDC
  * access token. This is the assertion that closes the #569 latent defect
  * (console-integration-contract § 2.1/§ 2.2). Existing 401/503/timeout
  * degrade paths must still hold.
@@ -44,11 +44,11 @@ import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 const REGISTRY_200 = {
   products: [
     {
-      productKey: 'gap',
-      displayName: 'GAP',
+      productKey: 'iam',
+      displayName: 'IAM',
       available: true,
       tenants: ['wms'],
-      baseRoute: '/gap',
+      baseRoute: '/iam',
     },
   ],
 };
@@ -59,7 +59,7 @@ beforeEach(() => {
 });
 
 describe('fetchRegistry — operator-token bearer (#569 fix)', () => {
-  it('sends the OPERATOR cookie as the bearer, NOT the GAP access token', async () => {
+  it('sends the OPERATOR cookie as the bearer, NOT the IAM access token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-TOKEN-must-not-leak');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-correct');
 
@@ -76,13 +76,13 @@ describe('fetchRegistry — operator-token bearer (#569 fix)', () => {
     const [, init] = fetchMock.mock.calls[0];
     const auth = (init as RequestInit).headers as Record<string, string>;
     expect(auth.Authorization).toBe('Bearer OPERATOR-TOKEN-correct');
-    // The GAP OIDC token must NEVER appear on the /api/admin/** call.
+    // The IAM OIDC token must NEVER appear on the /api/admin/** call.
     expect(auth.Authorization).not.toContain(
       'GAP-OIDC-ACCESS-TOKEN-must-not-leak',
     );
   });
 
-  it('401s (no fetch) when only the GAP token is present but no operator token', async () => {
+  it('401s (no fetch) when only the IAM token is present but no operator token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-only');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -90,7 +90,7 @@ describe('fetchRegistry — operator-token bearer (#569 fix)', () => {
     const err = await fetchRegistry().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(401);
-    // It must NOT silently fall back to the GAP token on the boundary.
+    // It must NOT silently fall back to the IAM token on the boundary.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

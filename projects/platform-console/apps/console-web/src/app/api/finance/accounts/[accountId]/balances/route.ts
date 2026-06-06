@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin finance balances read proxy (read-only — GET). The
- * HttpOnly GAP OIDC access token is attached server-side in
+ * HttpOnly IAM OIDC access token is attached server-side in
  * `getBalances()` (§ 2.4.7 reusing § 2.4.5 — NOT the operator token).
  * No mutation artifacts. The full `{ data, meta }` envelope is
  * forwarded so the per-currency F5 minor-units strings reach the

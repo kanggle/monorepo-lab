@@ -53,7 +53,7 @@ describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-
     expect(src).not.toContain('통합 개요');
   });
 
-  it('no nav entry points at the bare /dashboards (GAP detail is card-reached only)', () => {
+  it('no nav entry points at the bare /dashboards (IAM detail is card-reached only)', () => {
     const src = readFileSync(NAV_PATH, 'utf8');
     expect(src).not.toContain("'/dashboards'");
   });

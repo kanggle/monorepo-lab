@@ -8,19 +8,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * by TASK-PC-FE-010 to cover erp (Phase 6 COMPLETE — the FIRST
  * internal-system-primary confirmation):
  *
- *   - GAP (§§ 2.4.1–2.4.4) STILL authenticates with the EXCHANGED
+ *   - IAM (§§ 2.4.1–2.4.4) STILL authenticates with the EXCHANGED
  *     operator token (`getOperatorToken()`) — FE-002..006 unchanged, NOT
  *     regressed by FE-007/FE-008/FE-009/FE-010 (the divergence is
  *     ADDITIVE);
- *   - wms (§ 2.4.5) authenticates with the GAP OIDC ACCESS token
+ *   - wms (§ 2.4.5) authenticates with the IAM OIDC ACCESS token
  *     (`getAccessToken()`) and NEVER the operator token;
- *   - scm (§ 2.4.6) ALSO authenticates with the GAP OIDC ACCESS token
+ *   - scm (§ 2.4.6) ALSO authenticates with the IAM OIDC ACCESS token
  *     (`getAccessToken()`) and NEVER the operator token — the § 2.4.5
  *     rule generalises (the #569 invariant is GAP-domain-scoped);
- *   - finance (§ 2.4.7) ALSO authenticates with the GAP OIDC ACCESS
+ *   - finance (§ 2.4.7) ALSO authenticates with the IAM OIDC ACCESS
  *     token (`getAccessToken()`) and NEVER the operator token — the
  *     § 2.4.5 rule generalises a SECOND time;
- *   - erp (§ 2.4.8) ALSO authenticates with the GAP OIDC ACCESS token
+ *   - erp (§ 2.4.8) ALSO authenticates with the IAM OIDC ACCESS token
  *     (`getAccessToken()`) and NEVER the operator token — the § 2.4.5
  *     rule generalises a THIRD time across the FIRST
  *     internal-system-primary trait shape.
@@ -28,7 +28,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Asserting all five in one test makes a future refactor that
  * blanket-applies one domain's auth to another fail loudly (the failure
  * mode § 2.4.5/§ 2.4.6/§ 2.4.7/§ 2.4.8 exists to prevent — the
- * per-domain credential rule holds across GAP / wms / scm / finance /
+ * per-domain credential rule holds across IAM / wms / scm / finance /
  * erp).
  */
 
@@ -95,12 +95,12 @@ beforeEach(() => {
 });
 
 describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 2.4.8) — all 5 domains pinned', () => {
-  it('GAP uses the EXCHANGED operator token; wms AND scm AND finance AND erp use the GAP OIDC access token', async () => {
+  it('IAM uses the EXCHANGED operator token; wms AND scm AND finance AND erp use the IAM OIDC access token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'EXCHANGED-OPERATOR');
     cookieJar.set(TENANT_COOKIE, 'scm');
 
-    // GAP accounts uses `AccountPageSchema`; wms uses its own page meta;
+    // IAM accounts uses `AccountPageSchema`; wms uses its own page meta;
     // scm uses the procurement-PO envelope; finance uses its
     // account-by-id envelope. Route each parser-valid body by URL so
     // all four calls succeed.
@@ -159,16 +159,16 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    // GAP accounts (FE-002 path — STILL the operator token).
+    // IAM accounts (FE-002 path — STILL the operator token).
     await searchAccounts({ page: 0, size: 20 });
     const gapHeaders = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
     expect(gapHeaders.Authorization).toBe('Bearer EXCHANGED-OPERATOR');
     expect(gapHeaders.Authorization).not.toContain('GAP-OIDC-ACCESS');
-    // GAP still scopes by X-Tenant-Id (its mechanism — unchanged).
+    // IAM still scopes by X-Tenant-Id (its mechanism — unchanged).
     expect(gapHeaders['X-Tenant-Id']).toBe('scm');
 
-    // wms ops (FE-007 path — the GAP OIDC access token, NOT the operator
+    // wms ops (FE-007 path — the IAM OIDC access token, NOT the operator
     // token; NO X-Tenant-Id — wms resolves the tenant from the JWT claim).
     await listInventory({ page: 0, size: 20 });
     const wmsHeaders = (fetchMock.mock.calls[1][1] as RequestInit)
@@ -177,7 +177,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     expect(wmsHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(wmsHeaders['X-Tenant-Id']).toBeUndefined();
 
-    // scm ops (FE-008 path — the § 2.4.5 rule REUSED: the GAP OIDC access
+    // scm ops (FE-008 path — the § 2.4.5 rule REUSED: the IAM OIDC access
     // token, NOT the operator token; NO X-Tenant-Id — scm resolves the
     // tenant from the JWT `tenant_id ∈ {scm,*}` claim).
     await listPurchaseOrders({ page: 0, size: 20 });
@@ -188,7 +188,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     expect(scmHeaders['X-Tenant-Id']).toBeUndefined();
 
     // finance ops (FE-009 path — the § 2.4.5 rule REUSED a second time:
-    // the GAP OIDC access token, NOT the operator token; NO X-Tenant-Id
+    // the IAM OIDC access token, NOT the operator token; NO X-Tenant-Id
     // — finance resolves the tenant from the JWT `tenant_id ∈
     // {finance,*}` claim).
     await getAccount('acct-1');
@@ -210,7 +210,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     expect(erpHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(erpHeaders['X-Tenant-Id']).toBeUndefined();
 
-    // GAP uses a DIFFERENT credential from wms/scm/finance/erp — the
+    // IAM uses a DIFFERENT credential from wms/scm/finance/erp — the
     // divergence is real and additive (FE-002..006 unchanged). wms,
     // scm, finance AND erp share the SAME GAP-OIDC credential (the
     // § 2.4.5 rule generalises to scm, finance, AND erp).

@@ -5,11 +5,11 @@ import { AccountsScreen } from '@/features/accounts';
 export const dynamic = 'force-dynamic';
 
 /**
- * GAP accounts operator surface route (TASK-PC-FE-002 — ADR-MONO-013
- * Phase 2 slice 1). The catalog `gap.baseRoute` resolves here.
+ * IAM accounts operator surface route (TASK-PC-FE-002 — ADR-MONO-013
+ * Phase 2 slice 1). The catalog `iam.baseRoute` resolves here.
  *
  * Server component: the initial accounts page is fetched server-side via the
- * GAP admin-service client with the HttpOnly operator token + active tenant
+ * IAM admin-service client with the HttpOnly operator token + active tenant
  * (`getAccountsListState()`). Resilience is handled there:
  *   - 401/403 → `redirect('/login')` (clean re-login, no partial authed
  *     state — handled inside `getAccountsListState`).

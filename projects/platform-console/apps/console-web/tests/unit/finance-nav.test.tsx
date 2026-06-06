@@ -10,8 +10,8 @@ import { FinanceOpsScreen } from '@/features/finance-ops';
  * Regression (TASK-PC-FE-009 AC): the `/finance` surface is an
  * in-console NAV destination and an ADDITIVE domain section. It must
  * NOT disturb the data-driven catalog routing (FE-001 / FE-002 /
- * FE-007 / FE-008 unchanged): `gap.baseRoute` still resolves to
- * `/accounts`, and a non-GAP product (incl. `wms`, `scm`, and
+ * FE-007 / FE-008 unchanged): `iam.baseRoute` still resolves to
+ * `/accounts`, and a non-IAM product (incl. `wms`, `scm`, and
  * `finance`) keeps its registry `baseRoute` (resolveConsoleRoute is
  * additive). The finance section mounts as an in-console destination
  * without the GAP-section operator-token / X-Tenant-Id machinery (it
@@ -19,11 +19,11 @@ import { FinanceOpsScreen } from '@/features/finance-ops';
  */
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['finance'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 const wms: RegistryProduct = {
   productKey: 'wms',
@@ -64,7 +64,7 @@ function wrapper() {
 }
 
 describe('finance nav — additive, does not disturb catalog routing (FE-001/002/007/008)', () => {
-  it('gap still resolves to /accounts (FE-002 contract unchanged)', () => {
+  it('iam still resolves to /accounts (FE-002 contract unchanged)', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 

@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * `features/wms-ops/api/wms-api.ts` — the security-critical core of
- * TASK-PC-FE-007 (the FIRST non-GAP federated domain).
+ * TASK-PC-FE-007 (the FIRST non-IAM federated domain).
  *
  * THE CENTRAL ASSERTION (console-integration-contract § 2.4.5 per-domain
  * credential selection — the EXACT INVERSE of the FE-002..006 assertion):
- *   - every wms call's bearer is the **GAP OIDC ACCESS token** (the
+ *   - every wms call's bearer is the **IAM OIDC ACCESS token** (the
  *     `console_access_token` cookie), NEVER the exchanged operator token;
  *   - the operator-token path is ABSENT for wms (the wms client does NOT
  *     call `getOperatorToken()` — pinned so a future refactor cannot
@@ -146,7 +146,7 @@ beforeEach(() => {
 });
 
 describe('wms-api — per-domain credential selection (the INVERSE of #569; § 2.4.5)', () => {
-  it('sends the GAP OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
+  it('sends the IAM OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-wms');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
 
@@ -168,11 +168,11 @@ describe('wms-api — per-domain credential selection (the INVERSE of #569; § 2
     );
   });
 
-  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for wms (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base IAM token) and NEVER getOperatorToken() for wms (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
     // ADR-MONO-020 D4 / § 2.7: the credential is now the DOMAIN-FACING token
-    // (assumed-when-switched, else the base GAP token). With no assumed token
+    // (assumed-when-switched, else the base IAM token). With no assumed token
     // it resolves to the base token — net-zero. It is STILL never the
     // operator token (the per-domain rule / #569 boundary holds).
     const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
@@ -188,7 +188,7 @@ describe('wms-api — per-domain credential selection (the INVERSE of #569; § 2
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent (whole-session re-login signal)', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent (whole-session re-login signal)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -280,7 +280,7 @@ describe('wms-api — read vs mutation discipline (§ 2.4.5)', () => {
   });
 });
 
-describe('wms-api — wms NESTED error envelope parsing (NOT GAP flat shape) + § 2.5', () => {
+describe('wms-api — wms NESTED error envelope parsing (NOT IAM flat shape) + § 2.5', () => {
   beforeEach(() => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
   });
@@ -307,7 +307,7 @@ describe('wms-api — wms NESTED error envelope parsing (NOT GAP flat shape) + �
     expect(err.code).toBe('FORBIDDEN');
   });
 
-  it('parses the NESTED { error: { code } } shape (a GAP flat parser would miss it)', async () => {
+  it('parses the NESTED { error: { code } } shape (a IAM flat parser would miss it)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -318,7 +318,7 @@ describe('wms-api — wms NESTED error envelope parsing (NOT GAP flat shape) + �
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(422);
     // The code came from `error.code`, NOT a flat `code` — proves the
-    // wms-shape parser (a GAP flat parser would yield HTTP_422).
+    // wms-shape parser (a IAM flat parser would yield HTTP_422).
     expect(err.code).toBe('STATE_TRANSITION_INVALID');
     expect(err.message).toBe('already acknowledged');
   });

@@ -14,6 +14,6 @@ test.describe('root redirect (backend 미기동)', () => {
     await page.goto('/');
     await page.waitForURL('**/login', { timeout: 10_000 });
     await expect(page.getByRole('heading', { name: 'Platform Console' })).toBeVisible();
-    await expect(page.getByTestId('gap-login')).toBeVisible();
+    await expect(page.getByTestId('iam-login')).toBeVisible();
   });
 });

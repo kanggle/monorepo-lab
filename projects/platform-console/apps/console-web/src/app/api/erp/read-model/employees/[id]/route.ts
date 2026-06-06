@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin erp read-model employee org-view DETAIL proxy (GET only —
- * TASK-PC-FE-049). READ-ONLY (E5). GAP OIDC domain-facing token
+ * TASK-PC-FE-049). READ-ONLY (E5). IAM OIDC domain-facing token
  * attached server-side. E3 `?asOf=` threaded through verbatim.
  *
  * No POST / PATCH handler — this route file intentionally exports only

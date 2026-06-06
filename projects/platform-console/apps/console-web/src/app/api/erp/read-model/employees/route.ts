@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp read-model employee org-view LIST proxy (GET only —
  * TASK-PC-FE-049). READ-ONLY (E5 — the read-model holds no domain
- * logic and has NO mutation surface). GAP OIDC domain-facing token
+ * logic and has NO mutation surface). IAM OIDC domain-facing token
  * attached server-side (UNCHANGED from the masterdata read binding;
  * never `getOperatorToken()`). E3 `?asOf=` + `departmentId` +
  * `status` threaded through via `buildListParams` / `listEmployeeOrgViews`.

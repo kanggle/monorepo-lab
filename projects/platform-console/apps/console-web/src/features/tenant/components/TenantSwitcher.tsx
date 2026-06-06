@@ -14,7 +14,7 @@ interface Props {
  * Graceful degradation (task Edge Case): with 0 tenants the control is hidden
  * entirely; with exactly 1 tenant it renders a static read-only label (no-op,
  * not an error). The actual cross-tenant rejection is enforced server-side /
- * by GAP — this is only the UX gate (architecture.md § Boundary Rules).
+ * by IAM — this is only the UX gate (architecture.md § Boundary Rules).
  */
 export function TenantSwitcher({ tenants, activeTenant }: Props) {
   const selectId = useId();

@@ -9,7 +9,7 @@ import { cookies } from 'next/headers';
  * never read the access/refresh token.
  */
 
-/** GAP OIDC `platform-console-web` access token. NEVER an `/api/admin/**`
+/** IAM OIDC `platform-console-web` access token. NEVER an `/api/admin/**`
  *  credential — it is only the `subject_token` input to the operator-token
  *  exchange (console-integration-contract § 2.1 trust-boundary invariant /
  *  ADR-MONO-014). */
@@ -18,28 +18,28 @@ export const REFRESH_COOKIE = 'console_refresh_token';
 /** admin-service operator token (`token_type=admin`, `iss=admin-service`)
  *  obtained server-side via the RFC 8693 exchange (§ 2.6). This — and only
  *  this — is the credential for every `/api/admin/**` call. Re-exchanged on
- *  every GAP refresh (no operator-refresh state — ADR-MONO-014 D2). */
+ *  every IAM refresh (no operator-refresh state — ADR-MONO-014 D2). */
 export const OPERATOR_COOKIE = 'console_operator_token';
 /** Active tenant for tenant-scoped server-side domain calls (multi-tenant). */
 export const TENANT_COOKIE = 'console_active_tenant';
-/** Domain-facing **assumed** GAP OIDC access token (ADR-MONO-020 D4 / § 2.7).
+/** Domain-facing **assumed** IAM OIDC access token (ADR-MONO-020 D4 / § 2.7).
  *  Minted server-side by the assume-tenant RFC 8693 exchange
  *  (`assume-tenant-exchange.ts`) when the operator switches to a customer
  *  tenant: it carries `tenant_id=<selected>` + `entitled_domains=<selected's
  *  ACTIVE subs>` (re-scoped signed claims — NOT just X-Tenant-Id). It is the
- *  **domain-facing bearer** for the non-GAP domain reads + the cross-domain
+ *  **domain-facing bearer** for the non-IAM domain reads + the cross-domain
  *  overview proxy (see {@link getDomainFacingToken}). Scoped to the CURRENT
  *  {@link TENANT_COOKIE} BY CONSTRUCTION — the `/api/tenant` switch sets BOTH
  *  atomically and clearing the tenant clears this cookie. The grant issues no
- *  refresh token (D2); it is re-assumed on every GAP refresh. Never an
- *  `/api/admin/**` credential (the GAP operator-token boundary § 2.6 is
+ *  refresh token (D2); it is re-assumed on every IAM refresh. Never an
+ *  `/api/admin/**` credential (the IAM operator-token boundary § 2.6 is
  *  unchanged). */
 export const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
-/** GAP OIDC `id_token` from the login/refresh token response. Stored ONLY to
+/** IAM OIDC `id_token` from the login/refresh token response. Stored ONLY to
  *  serve as the `id_token_hint` for RP-initiated logout (OIDC end_session /
  *  `/connect/logout` — TASK-PC-FE-033). NEVER a credential: it is not sent to
  *  any `/api/**` boundary, only as the logout hint that lets the IdP terminate
- *  its own session (so the next login re-presents the GAP credential form). */
+ *  its own session (so the next login re-presents the IAM credential form). */
 export const ID_TOKEN_COOKIE = 'console_id_token';
 /** Short-lived PKCE/state cookies used only between /login and /callback. */
 export const PKCE_VERIFIER_COOKIE = 'console_pkce_verifier';
@@ -82,7 +82,7 @@ export const transientCookieOpts = {
 };
 
 /**
- * Server-side read of the GAP OIDC access token (or null).
+ * Server-side read of the IAM OIDC access token (or null).
  *
  * SCOPE: this token is exclusively the `subject_token` input to the
  * operator-token exchange (`operator-token-exchange.ts`) and the OAuth
@@ -106,7 +106,7 @@ export async function getOperatorToken(): Promise<string | null> {
 }
 
 /**
- * Server-side read of the GAP OIDC `id_token` (or null). Used ONLY as the
+ * Server-side read of the IAM OIDC `id_token` (or null). Used ONLY as the
  * `id_token_hint` for RP-initiated logout (`/connect/logout` — TASK-PC-FE-033).
  * Never a credential — see {@link ID_TOKEN_COOKIE}.
  */
@@ -139,7 +139,7 @@ export async function getAssumedToken(): Promise<string | null> {
 
 /**
  * The **domain-facing** GAP-OIDC bearer for every tenant-scoped domain read
- * (the cross-domain overview proxy + the 4 non-GAP domain section clients
+ * (the cross-domain overview proxy + the 4 non-IAM domain section clients
  * wms/scm/finance/erp). ADR-MONO-020 D4 / § 2.7 — the central resolver:
  *
  *   - the **assumed** token if an active-tenant assumption exists (the
@@ -149,9 +149,9 @@ export async function getAssumedToken(): Promise<string | null> {
  *   - else the base {@link getAccessToken} (a non-switched / single-tenant
  *     operator keeps using the login token EXACTLY as before — **net-zero**;
  *     the existing per-domain credential rule § 2.4.5 is unchanged, only WHICH
- *     GAP OIDC token).
+ *     IAM OIDC token).
  *
- * This is NOT a GAP `/api/admin/**` credential (that boundary uses
+ * This is NOT a IAM `/api/admin/**` credential (that boundary uses
  * {@link getOperatorToken}, § 2.6, unchanged). The GAP-domain clients
  * (accounts/audit/operators/dashboards) MUST NOT use this resolver.
  */
@@ -160,7 +160,7 @@ export async function getDomainFacingToken(): Promise<string | null> {
 }
 
 /**
- * A usable operator session requires BOTH the GAP OIDC session (so refresh
+ * A usable operator session requires BOTH the IAM OIDC session (so refresh
  * can re-exchange — ADR-MONO-014 D2) AND a present operator token (the
  * `/api/admin/**` credential). A GAP-token-only state is NOT authenticated
  * for operator actions: the exchange having failed must never leave a

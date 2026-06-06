@@ -31,7 +31,7 @@ export type ExtraHandler = (
  * Shared error → HTTP mapping factory for the same-origin domain proxy
  * routes (console-integration-contract § 2.4.5–2.4.8).
  *
- * <p>All four non-GAP domain proxies (wms / scm / finance / erp) share
+ * <p>All four non-IAM domain proxies (wms / scm / finance / erp) share
  * an identical error-handling skeleton:
  * <ol>
  *   <li>{@code ApiError(401)} → 401 (whole-session re-login signal).</li>

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * GAP product/tenant registry response shape.
+ * IAM product/tenant registry response shape.
  *
  * Authoritative producer contract: TASK-BE-296
  * `projects/iam-platform/specs/contracts/http/console-registry-api.md`
@@ -13,7 +13,7 @@ import { z } from 'zod';
  * schema is the runtime parser the contract test asserts against.
  */
 
-export const ProductKeySchema = z.enum(['gap', 'wms', 'scm', 'erp', 'finance']);
+export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance']);
 export type ProductKey = z.infer<typeof ProductKeySchema>;
 
 /**
@@ -21,7 +21,7 @@ export type ProductKey = z.infer<typeof ProductKeySchema>;
  * TASK-PC-FE-014 consumer). The producer omits this field entirely when no
  * attribute is set (Jackson `@JsonInclude(NON_NULL)`) — `undefined` here,
  * never literal `null`. v1: only the `finance` product item populates
- * `defaultAccountId` (sourced from GAP `admin_operators.finance_default_account_id`);
+ * `defaultAccountId` (sourced from IAM `admin_operators.finance_default_account_id`);
  * the other 4 items always omit `operatorContext`. The schema is intentionally
  * additive + optional so a v0 producer / unprovisioned operator parses cleanly.
  * See `console-integration-contract.md § 2.2` + `console-registry-api.md

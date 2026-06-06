@@ -27,7 +27,7 @@ import type { ApprovalListResponse } from './approval-types';
 
 /**
  * Server-side erp operations section state for the `(console)/erp`
- * route (TASK-PC-FE-010 — the FOURTH non-GAP federation; the FIRST
+ * route (TASK-PC-FE-010 — the FOURTH non-IAM federation; the FIRST
  * internal-system-primary). STRICTLY READ-ONLY — no mutation ever.
  *
  * Eligibility gate (console-integration-contract § 2.4.8, reusing
@@ -53,7 +53,7 @@ import type { ApprovalListResponse } from './approval-types';
  * populated.
  *
  * Resilience boundary (§ 2.4.8 / § 2.5, mirrors `finance-state.ts`):
- *   - `401` (GAP OIDC session expired) → `redirect('/login')` — a
+ *   - `401` (IAM OIDC session expired) → `redirect('/login')` — a
  *     WHOLE-SESSION re-login, NOT a per-section degrade (no partial
  *     authed state; consistent with the FE-002..009 401 discipline).
  *   - `403` (token not erp-scoped / insufficient scope / outside
@@ -61,7 +61,7 @@ import type { ApprovalListResponse } from './approval-types';
  *     boundary per E7) → a non-crashing inline "not available /
  *     not scoped" state.
  *   - `503` / timeout / network → DEGRADED — ONLY the erp section
- *     renders a degraded notice; the console shell + the GAP / wms
+ *     renders a degraded notice; the console shell + the IAM / wms
  *     / scm / finance sections stay intact.
  *   - **no 429 handling** (§ 2.4.8 — identical to finance § 2.4.7):
  *     erp has no documented 429; a 429 would land as an unexpected
@@ -163,7 +163,7 @@ export async function getErpSectionState(
   // transient error) must NOT degrade the masterdata section. They are
   // caught to `null` here so the section still renders; the client hooks
   // re-fetch behind the proxy and surface their own inline errors. A 401
-  // would already be raised by the masterdata legs (shared GAP session).
+  // would already be raised by the masterdata legs (shared IAM session).
   const approvalRequestsP = listApprovalRequests({ page: 0, size: 20 }).catch(
     () => null,
   );
@@ -228,7 +228,7 @@ export async function getErpSectionState(
       return { ...EMPTY, forbidden: true };
     }
     if (err instanceof ErpUnavailableError) {
-      // Degrade ONLY the erp section — shell + GAP / wms / scm /
+      // Degrade ONLY the erp section — shell + IAM / wms / scm /
       // finance sections intact.
       return { ...EMPTY, degraded: true };
     }

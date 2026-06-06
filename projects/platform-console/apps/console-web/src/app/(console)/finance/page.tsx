@@ -11,19 +11,19 @@ export const dynamic = 'force-dynamic';
 
 /**
  * finance operations section route (TASK-PC-FE-009 — ADR-MONO-013 Phase
- * 5; the THIRD non-GAP domain federated by the console — closes the
- * non-GAP federation cycle). An in-console nav destination, NOT a
+ * 5; the THIRD non-IAM domain federated by the console — closes the
+ * non-IAM federation cycle). An in-console nav destination, NOT a
  * catalog product re-route — the catalog `finance.baseRoute` stays
- * data-driven (resolveConsoleRoute leaves non-GAP products on their
+ * data-driven (resolveConsoleRoute leaves non-IAM products on their
  * registry baseRoute; an `available:false` finance is handled by the
  * existing catalog "coming soon" path — this route does not
  * hard-crash when finance is unavailable).
  *
  * Server component. STRICTLY READ-ONLY. finance is reached server-side
- * with the HttpOnly **GAP OIDC access token** (NOT the GAP exchanged
+ * with the HttpOnly **IAM OIDC access token** (NOT the IAM exchanged
  * operator token — § 2.4.7 reuses the § 2.4.5 per-domain credential
  * rule; the #569 invariant is GAP-domain-scoped and finance
- * *requires* the GAP OIDC token).
+ * *requires* the IAM OIDC token).
  *
  * Eligibility (§ 2.4.7 reusing § 2.4.5 tenant-model divergence):
  * finance resolves the tenant from the JWT `tenant_id ∈ {finance,*}`
@@ -41,7 +41,7 @@ export const dynamic = 'force-dynamic';
  *
  * Resilience (§ 2.5): 401 → whole-session re-login; 403 → inline "not
  * scoped"; 404 `ACCOUNT_NOT_FOUND` → inline actionable; 503 / timeout
- * → only this section degrades (the `(console)` shell + GAP / wms /
+ * → only this section degrades (the `(console)` shell + IAM / wms /
  * scm sections stay). **No 429 handling** — finance has no documented
  * 429.
  */

@@ -28,7 +28,7 @@ import {
 
 /**
  * Server-side scm gateway operations client (TASK-PC-FE-008 —
- * ADR-MONO-013 Phase 4 slice 2, the SECOND non-GAP federated domain;
+ * ADR-MONO-013 Phase 4 slice 2, the SECOND non-IAM federated domain;
  * completes Phase 4). STRICTLY READ-ONLY.
  *
  * Server-only by construction (same posture as `wms-api.ts` /
@@ -44,14 +44,14 @@ import {
  * console-integration-contract § 2.4.5 (each binding declares its own
  * credential against its producer; never blanket-apply one domain's auth
  * to another). scm REUSES it with the SAME outcome as wms: the scm gateway
- * validates a GAP RS256 JWT (ADR-001) against GAP JWKS,
+ * validates a IAM RS256 JWT (ADR-001) against IAM JWKS,
  * `tenant_id ∈ { scm, * }` enforced producer-side from the JWT claim (scm
  * `gateway-public-routes.md` § platform-console operator read consumer —
  * TASK-SCM-BE-015). scm has NO token-exchange.
  *
  * Therefore this client uses `getAccessToken()` (the GAP-session HttpOnly
  * cookie) and NEVER `getOperatorToken()` — exactly like `wms-api.ts`, and
- * the EXACT INVERSE of the GAP `features/{accounts,audit,operators,
+ * the EXACT INVERSE of the IAM `features/{accounts,audit,operators,
  * dashboards}` clients. The #569 trust-boundary invariant is
  * GAP-domain-scoped and does NOT generalise to scm. A test pins this (the
  * `getOperatorToken` path MUST be absent for scm; the cross-domain
@@ -60,13 +60,13 @@ import {
  * Tenant invariant (§ 2.4.6 / reuse of § 2.4.5): scm resolves the tenant
  * from the JWT `tenant_id` claim (`∈ {scm,*}`) — NOT an `X-Tenant-Id`
  * header. The console therefore does NOT send `X-Tenant-Id` to scm; the
- * tenant rides inside the GAP OIDC token. scm rejects cross-tenant
+ * tenant rides inside the IAM OIDC token. scm rejects cross-tenant
  * producer-side (`403 TENANT_FORBIDDEN`).
  *
  * READ-ONLY (§ 2.4.6, NORMATIVE): every call is a pure GET. There is NO
  * mutation anywhere — NO `Idempotency-Key`, NO `X-Operator-Reason`, NO
  * body, NO PO write (`/submit|/confirm|/cancel`), NO webhook. Carrying the
- * FE-007 alert-ack OR the GAP § 2.4.1 mutation scaffolding here is a
+ * FE-007 alert-ack OR the IAM § 2.4.1 mutation scaffolding here is a
  * defect (tests assert their absence).
  *
  * Error envelope (§ 2.4.6 / § 2.5): scm uses the FLAT shape
@@ -91,7 +91,7 @@ import {
  * inventory-visibility view-model (never stripped — enforced in
  * `types.ts`).
  *
- * Logging: structured, server-side only; the GAP access token and any scm
+ * Logging: structured, server-side only; the IAM access token and any scm
  * data are NEVER logged (redacted) — § 2.6 logging invariant extended.
  */
 
@@ -154,7 +154,7 @@ async function parseScmError(
 }
 
 /**
- * Single hardened call site. Resolves the GAP OIDC access token, applies
+ * Single hardened call site. Resolves the IAM OIDC access token, applies
  * the timeout, maps the scm FLAT error envelope to the § 2.5 resilience
  * taxonomy, and honours a 429 `Retry-After` with ONE bounded backoff. The
  * `retried` guard makes the storm impossible (a second 429 is surfaced,
@@ -168,18 +168,18 @@ async function callScm<T>(
   const requestId = newRequestId();
 
   // ── Per-domain credential (§ 2.4.6 reusing § 2.4.5): scm requires the
-  //    GAP OIDC ACCESS token directly. NEVER getOperatorToken() — that is
+  //    IAM OIDC ACCESS token directly. NEVER getOperatorToken() — that is
   //    the GAP-domain (§ 2.6 exchanged) credential; scm would reject it
   //    (wrong issuer/type). The #569 invariant is GAP-domain-scoped.
-  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING GAP OIDC token — the
+  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING IAM OIDC token — the
   //    ASSUMED (tenant-scoped) token when the operator has switched, else the
   //    base access token (net-zero). Still NOT the operator token.
   const token = await getDomainFacingToken();
   if (!token) {
     logger.warn('scm_no_gap_session', { requestId, path: opts.path });
-    // No GAP OIDC session ⇒ whole-session re-login (not a per-section
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
     // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {
@@ -241,7 +241,7 @@ async function callScm<T>(
         code: e.code,
         path: opts.path,
       });
-      // GAP OIDC session expired → whole-session re-login (no partial
+      // IAM OIDC session expired → whole-session re-login (no partial
       // authed state — NOT a per-section degrade).
       throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
     }

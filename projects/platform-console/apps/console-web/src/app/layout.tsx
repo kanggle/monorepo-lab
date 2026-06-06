@@ -10,7 +10,7 @@ import { WebVitals } from '@/shared/observability/web-vitals';
 export const metadata: Metadata = {
   title: 'Platform Console',
   description:
-    'Unified operations console for the enterprise suite (gap · wms · scm · erp · finance)',
+    'Unified operations console for the enterprise suite (iam · wms · scm · erp · finance)',
 };
 
 /**

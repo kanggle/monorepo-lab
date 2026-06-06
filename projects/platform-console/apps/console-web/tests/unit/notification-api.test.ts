@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * `notification-service` in-app inbox client (TASK-PC-FE-052).
  *
  * Pins:
- *   - per-domain credential REUSE of § 2.4.8: the domain-facing GAP OIDC
+ *   - per-domain credential REUSE of § 2.4.8: the domain-facing IAM OIDC
  *     token, NEVER `getOperatorToken()`; no `X-Tenant-Id` (erp resolves
  *     tenant from the JWT claim);
  *   - NO `Idempotency-Key` on any call (mark-read is naturally idempotent —
@@ -144,7 +144,7 @@ function lastCall(fetchMock: ReturnType<typeof vi.fn>) {
 // ===========================================================================
 
 describe('notification-api — per-domain credential (REUSE of § 2.4.8)', () => {
-  it('sends the domain-facing GAP token, NEVER the operator token / X-Tenant-Id', async () => {
+  it('sends the domain-facing IAM token, NEVER the operator token / X-Tenant-Id', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
@@ -163,7 +163,7 @@ describe('notification-api — per-domain credential (REUSE of § 2.4.8)', () =>
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const err = await listNotifications({}).catch((e) => e);
@@ -277,7 +277,7 @@ describe('notification-api — mark-read (POST; no body; no Idempotency-Key; no 
     expect(n.readAt).toBe('2026-06-05T02:00:00Z');
   });
 
-  it('uses domain-facing GAP token (NOT operator token) on mark-read', async () => {
+  it('uses domain-facing IAM token (NOT operator token) on mark-read', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(READ_DETAIL_ENVELOPE));
     vi.stubGlobal('fetch', fetchMock);

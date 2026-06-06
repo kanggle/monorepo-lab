@@ -4,11 +4,11 @@ import { ServiceCatalog } from '@/features/catalog';
 import type { RegistryProduct } from '@/shared/api/registry-types';
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['fan-platform', 'wms', 'scm'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 const erp: RegistryProduct = {
   productKey: 'erp',
@@ -23,17 +23,17 @@ describe('ServiceCatalog (data-driven)', () => {
     render(
       <ServiceCatalog catalog={{ products: [gap, erp], degraded: false }} />,
     );
-    expect(screen.getByTestId('tile-gap')).toBeInTheDocument();
+    expect(screen.getByTestId('tile-iam')).toBeInTheDocument();
     expect(screen.getByTestId('tile-erp')).toBeInTheDocument();
     expect(screen.getByText('Global Account Platform')).toBeInTheDocument();
   });
 
   it('renders an available product as a navigable link to its console route', () => {
-    // TASK-PC-FE-002: the GAP tile resolves to the Phase-2 operator surface
+    // TASK-PC-FE-002: the IAM tile resolves to the Phase-2 operator surface
     // (`/accounts`) via `resolveConsoleRoute` — the registry `baseRoute` is
     // the logical prefix; which screen it lands on is console-internal.
     // (Dedicated coverage of the mapping lives in catalog-route.test.tsx;
-    // non-GAP products still use their registry `baseRoute` unchanged.)
+    // non-IAM products still use their registry `baseRoute` unchanged.)
     render(<ServiceCatalog catalog={{ products: [gap], degraded: false }} />);
     const link = screen.getByRole('link', { name: /Global Account Platform/ });
     expect(link).toHaveAttribute('href', '/accounts');

@@ -17,9 +17,9 @@ test.describe('/login render (backend 미기동)', () => {
   test('GET /login 기본 → CTA + 헤더 + 보조 텍스트 모두 visible', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Platform Console' })).toBeVisible();
-    await expect(page.getByTestId('gap-login')).toBeVisible();
+    await expect(page.getByTestId('iam-login')).toBeVisible();
     await expect(
-      page.getByText('GAP OIDC (Authorization Code + PKCE) 단일 로그인'),
+      page.getByText('IAM OIDC (Authorization Code + PKCE) 단일 로그인'),
     ).toBeVisible();
   });
 
@@ -28,9 +28,9 @@ test.describe('/login render (backend 미기동)', () => {
   }) => {
     await page.goto('/login?error=provider_error');
     await expect(
-      page.getByText('GAP 로그인 중 오류가 발생했습니다. 다시 시도해주세요.'),
+      page.getByText('IAM 로그인 중 오류가 발생했습니다. 다시 시도해주세요.'),
     ).toBeVisible();
-    await expect(page.getByTestId('gap-login')).toBeVisible();
+    await expect(page.getByTestId('iam-login')).toBeVisible();
   });
 
   test('GET /login?error=invalid_state → mapping 적용', async ({ page }) => {

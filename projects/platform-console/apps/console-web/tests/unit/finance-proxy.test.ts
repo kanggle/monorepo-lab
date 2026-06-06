@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * Same-origin finance-ops proxy route handlers (TASK-PC-FE-009 —
  * § 2.4.7):
- *   - read GET (account by id, balances, transactions): GAP OIDC
+ *   - read GET (account by id, balances, transactions): IAM OIDC
  *     access token attached server-side (NOT the operator token);
  *     no mutation artifacts; STRICTLY READ-ONLY (GET-only routes).
  *   - 401 → 401 (whole-session re-login signal; no partial authed
@@ -119,7 +119,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/finance/accounts/{accountId} proxy (read-only)', () => {
-  it('attaches the GAP OIDC access token (NOT the operator token)', async () => {
+  it('attaches the IAM OIDC access token (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(ACCOUNT_ENV));
@@ -144,7 +144,7 @@ describe('GET /api/finance/accounts/{accountId} proxy (read-only)', () => {
     );
   });
 
-  it('no GAP session → 401 (no upstream call)', async () => {
+  it('no IAM session → 401 (no upstream call)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await accountGET(

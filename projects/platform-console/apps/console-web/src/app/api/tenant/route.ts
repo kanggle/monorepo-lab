@@ -27,7 +27,7 @@ export const runtime = 'nodejs';
  * array in the operator's own GAP-scoped registry response —
  * console-registry-api.md § Multi-tenant isolation; M2 layer 2), then (2)
  * drives the server-side **assume-tenant exchange** (subject = the operator's
- * base GAP OIDC access token, audience = the selected tenant) to mint a
+ * base IAM OIDC access token, audience = the selected tenant) to mint a
  * short-lived domain-facing token re-scoped to the selected customer
  * (`tenant_id=<selected>` + `entitled_domains=<selected's subs>`), and (3)
  * stores the assumed token + `TENANT_COOKIE` **atomically**. Setting
@@ -108,10 +108,10 @@ export async function POST(req: Request) {
 
   // ── Assume-tenant exchange (ADR-MONO-020 D4 / § 2.7) ────────────────────
   // Re-scope the domain-facing credential to the selected customer. The base
-  // GAP OIDC access token is the `subject_token` only (never logged/returned).
+  // IAM OIDC access token is the `subject_token` only (never logged/returned).
   const baseToken = await getAccessToken();
   if (!baseToken) {
-    // No GAP session ⇒ cannot assume; the caller must re-login (no partial
+    // No IAM session ⇒ cannot assume; the caller must re-login (no partial
     // state, no cookie change).
     logger.warn('tenant_switch_no_base_token', { requestId });
     return NextResponse.json(

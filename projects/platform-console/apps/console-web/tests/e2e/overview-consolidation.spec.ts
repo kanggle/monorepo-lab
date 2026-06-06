@@ -14,11 +14,11 @@ import { test, expect } from '@playwright/test';
  *     entry is gone;
  *   - "도메인 상태" (nav-domain-health) is unchanged + still reachable;
  *   - a new "ERP 운영" (nav-erp → /erp) entry renders the ERP ops screen;
- *   - the home GAP card is an accessible drill-down link to `/dashboards`;
+ *   - the home IAM card is an accessible drill-down link to `/dashboards`;
  *     activating it renders the GAP-only composed overview (re-framed as
- *     "GAP 상세 …") with a back link to /dashboards/overview.
+ *     "IAM 상세 …") with a back link to /dashboards/overview.
  *
- * The seeded SUPER_ADMIN can read every leg, so the GAP card renders `ok`
+ * The seeded SUPER_ADMIN can read every leg, so the IAM card renders `ok`
  * and the drill-down affordance is present (AC-6).
  */
 test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
@@ -43,7 +43,7 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     await expect(dashboards).toHaveText('개요');
     // The previous separate "통합 개요" entry is removed.
     await expect(page.getByTestId('nav-operator-overview')).toHaveCount(0);
-    // No nav item points at the bare /dashboards (GAP detail = card-reached).
+    // No nav item points at the bare /dashboards (IAM detail = card-reached).
     await expect(
       page.locator('nav a[href="/dashboards"]'),
     ).toHaveCount(0);
@@ -73,14 +73,14 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     ).toBeVisible();
   });
 
-  test('GAP card on the home overview drills down to the GAP detail (/dashboards)', async ({
+  test('IAM card on the home overview drills down to the IAM detail (/dashboards)', async ({
     page,
   }) => {
     await page.goto('/dashboards/overview');
-    const gapCard = page.getByTestId('operator-overview-card-gap');
+    const gapCard = page.getByTestId('operator-overview-card-iam');
     await expect(gapCard).toHaveAttribute('data-status', 'ok');
 
-    const drilldown = page.getByTestId('operator-overview-card-gap-drilldown');
+    const drilldown = page.getByTestId('operator-overview-card-iam-drilldown');
     await expect(drilldown).toBeVisible();
     await expect(drilldown).toHaveAttribute('href', '/dashboards');
 
@@ -90,11 +90,11 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
 
     await drilldown.click();
     await page.waitForURL('**/dashboards', { timeout: 15_000 });
-    // The GAP detail is re-framed as the drill-down + offers a back link.
+    // The IAM detail is re-framed as the drill-down + offers a back link.
     await expect(
-      page.getByRole('heading', { name: 'GAP 상세 (계정 · 감사 · 운영자)' }),
+      page.getByRole('heading', { name: 'IAM 상세 (계정 · 감사 · 운영자)' }),
     ).toBeVisible();
-    const back = page.getByTestId('gap-detail-back-link');
+    const back = page.getByTestId('iam-detail-back-link');
     await expect(back).toBeVisible();
     await expect(back).toHaveAttribute('href', '/dashboards/overview');
   });

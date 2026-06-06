@@ -40,48 +40,48 @@ function envelopeFor(card: Card): OperatorOverview {
 describe('DomainCard — ok branch (per-domain summaries)', () => {
   it('gap ok → renders the total account count', () => {
     const card: Card = {
-      domain: 'gap',
+      domain: 'iam',
       status: 'ok',
       data: { totalElements: 12345 },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),
     });
-    expect(screen.getByTestId('operator-overview-card-gap')).toHaveAttribute(
+    expect(screen.getByTestId('operator-overview-card-iam')).toHaveAttribute(
       'data-status',
       'ok',
     );
     expect(
-      screen.getByTestId('operator-overview-card-gap-total'),
+      screen.getByTestId('operator-overview-card-iam-total'),
     ).toHaveTextContent('12,345');
   });
 
-  it('gap ok → renders the drill-down link to the GAP detail (/dashboards) (TASK-PC-FE-034 AC-5)', () => {
+  it('gap ok → renders the drill-down link to the IAM detail (/dashboards) (TASK-PC-FE-034 AC-5)', () => {
     const card: Card = {
-      domain: 'gap',
+      domain: 'iam',
       status: 'ok',
       data: { totalElements: 12345 },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),
     });
-    const link = screen.getByTestId('operator-overview-card-gap-drilldown');
+    const link = screen.getByTestId('operator-overview-card-iam-drilldown');
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/dashboards');
-    // The link carries the GAP card heading text (accessible name) so the
+    // The link carries the IAM card heading text (accessible name) so the
     // heading semantics are preserved (AC-5 a11y).
-    expect(link).toHaveAccessibleName(/GAP 계정/);
+    expect(link).toHaveAccessibleName(/IAM 계정/);
   });
 
   it.each(['wms', 'scm', 'finance', 'erp'] as const)(
-    '%s ok → does NOT render a drill-down link (AC-6: GAP card only)',
+    '%s ok → does NOT render a drill-down link (AC-6: IAM card only)',
     (domain) => {
       const card: Card = { domain, status: 'ok', data: {} };
       render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
         wrapper: wrapper(),
       });
       expect(
-        screen.queryByTestId('operator-overview-card-gap-drilldown'),
+        screen.queryByTestId('operator-overview-card-iam-drilldown'),
       ).not.toBeInTheDocument();
     },
   );
@@ -169,7 +169,7 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
 
 describe('DomainCard — degraded branch', () => {
   it.each([
-    ['gap', 'DOWNSTREAM_ERROR'],
+    ['iam', 'DOWNSTREAM_ERROR'],
     ['wms', 'TIMEOUT'],
     ['scm', 'CIRCUIT_OPEN'],
     ['finance', 'DOWNSTREAM_ERROR'],
@@ -197,7 +197,7 @@ describe('DomainCard — degraded branch', () => {
 
   it('gap degraded → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
     const card: Card = {
-      domain: 'gap',
+      domain: 'iam',
       status: 'degraded',
       reason: 'TIMEOUT',
     };
@@ -205,20 +205,20 @@ describe('DomainCard — degraded branch', () => {
       wrapper: wrapper(),
     });
     expect(
-      screen.queryByTestId('operator-overview-card-gap-drilldown'),
+      screen.queryByTestId('operator-overview-card-iam-drilldown'),
     ).not.toBeInTheDocument();
   });
 
   it('degraded card status attribute is "degraded"', () => {
     const card: Card = {
-      domain: 'gap',
+      domain: 'iam',
       status: 'degraded',
       reason: 'TIMEOUT',
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),
     });
-    expect(screen.getByTestId('operator-overview-card-gap')).toHaveAttribute(
+    expect(screen.getByTestId('operator-overview-card-iam')).toHaveAttribute(
       'data-status',
       'degraded',
     );
@@ -227,7 +227,7 @@ describe('DomainCard — degraded branch', () => {
 
 describe('DomainCard — forbidden branch', () => {
   it.each([
-    ['gap', 'PERMISSION_DENIED'],
+    ['iam', 'PERMISSION_DENIED'],
     ['wms', 'TENANT_FORBIDDEN'],
     ['scm', 'PERMISSION_DENIED'],
     ['erp', 'TENANT_FORBIDDEN'],
@@ -255,7 +255,7 @@ describe('DomainCard — forbidden branch', () => {
 
   it('gap forbidden → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
     const card: Card = {
-      domain: 'gap',
+      domain: 'iam',
       status: 'forbidden',
       reason: 'PERMISSION_DENIED',
     };
@@ -263,7 +263,7 @@ describe('DomainCard — forbidden branch', () => {
       wrapper: wrapper(),
     });
     expect(
-      screen.queryByTestId('operator-overview-card-gap-drilldown'),
+      screen.queryByTestId('operator-overview-card-iam-drilldown'),
     ).not.toBeInTheDocument();
   });
 

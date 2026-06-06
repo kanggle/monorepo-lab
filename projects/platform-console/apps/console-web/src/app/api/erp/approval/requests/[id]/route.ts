@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp approval DETAIL proxy (read — GET only). Forwards to the
  * UNCHANGED producer `GET /api/erp/approval/requests/{id}` via
- * `getApprovalRequest()` (domain-facing GAP token server-side). Returns the
+ * `getApprovalRequest()` (domain-facing IAM token server-side). Returns the
  * full request incl. the immutable transition `history` (E4). A
  * `404 APPROVAL_REQUEST_NOT_FOUND` / `403 DATA_SCOPE_FORBIDDEN` passes
  * through `mapErpError` inline-actionably (no crash).

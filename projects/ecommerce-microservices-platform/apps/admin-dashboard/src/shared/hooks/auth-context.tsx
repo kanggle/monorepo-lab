@@ -23,7 +23,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  /** Initiate GAP OIDC sign-in. Equivalent to `signIn('gap', { callbackUrl })`. */
+  /** Initiate GAP OIDC sign-in. Equivalent to `signIn('iam', { callbackUrl })`. */
   login: (callbackUrl?: string) => Promise<unknown> | unknown;
   /** Initiate `signOut()` and clear the api-client token bridge. */
   logout: () => Promise<unknown> | unknown;
@@ -55,7 +55,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, session, status]);
 
   const login = useCallback((callbackUrl?: string) => {
-    return signIn('gap', { callbackUrl: callbackUrl ?? '/dashboard' });
+    return signIn('iam', { callbackUrl: callbackUrl ?? '/dashboard' });
   }, []);
 
   const logout = useCallback(async () => {

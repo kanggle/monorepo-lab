@@ -4,16 +4,16 @@ import path from 'node:path';
 
 /**
  * `features/finance-ops/api/finance-api.ts` — the security-critical
- * core of TASK-PC-FE-009 (the THIRD non-GAP federated domain; closes
- * the non-GAP federation cycle: wms → scm → finance).
+ * core of TASK-PC-FE-009 (the THIRD non-IAM federated domain; closes
+ * the non-IAM federation cycle: wms → scm → finance).
  * STRICTLY READ-ONLY.
  *
  * THE CENTRAL ASSERTIONS (console-integration-contract § 2.4.7 —
  * REUSE of the § 2.4.5 per-domain credential rule, NOT re-derived;
  * same outcome as wms / scm / the EXACT INVERSE of the FE-002..006
- * GAP assertion):
+ * IAM assertion):
  *
- *   - every finance call's bearer is the **GAP OIDC ACCESS token** (the
+ *   - every finance call's bearer is the **IAM OIDC ACCESS token** (the
  *     `console_access_token` cookie), NEVER the exchanged operator
  *     token;
  *   - the operator-token path is ABSENT for finance (the finance client
@@ -213,11 +213,11 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// 1. Per-domain credential — GAP OIDC token, NEVER getOperatorToken()
+// 1. Per-domain credential — IAM OIDC token, NEVER getOperatorToken()
 // ===========================================================================
 
 describe('finance-api — per-domain credential selection (REUSE of § 2.4.5; the INVERSE of #569)', () => {
-  it('sends the GAP OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
+  it('sends the IAM OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-finance');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
 
@@ -239,7 +239,7 @@ describe('finance-api — per-domain credential selection (REUSE of § 2.4.5; th
     );
   });
 
-  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for finance (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base IAM token) and NEVER getOperatorToken() for finance (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
     // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
@@ -260,7 +260,7 @@ describe('finance-api — per-domain credential selection (REUSE of § 2.4.5; th
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent (whole-session re-login signal)', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent (whole-session re-login signal)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 

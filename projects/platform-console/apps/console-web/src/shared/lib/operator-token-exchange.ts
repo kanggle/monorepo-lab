@@ -4,14 +4,14 @@ import { logger, newRequestId } from '@/shared/lib/logger';
 import { OperatorExchangeError } from '@/shared/api/errors';
 
 /**
- * Server-only RFC 8693 token exchange: GAP OIDC `platform-console-web`
+ * Server-only RFC 8693 token exchange: IAM OIDC `platform-console-web`
  * access token  →  admin-service operator token.
  *
  * Authoritative producer contract (do NOT redefine here — consume only):
  *   - `iam/specs/contracts/http/admin-api.md`
  *     § `POST /api/admin/auth/token-exchange` (request / 200 / 400 / 401).
  *   - `iam/specs/services/admin-service/security.md`
- *     § GAP OIDC Subject-Token Validation (producer fail-closed policy).
+ *     § IAM OIDC Subject-Token Validation (producer fail-closed policy).
  *   - Consumer obligation: `console-integration-contract.md` § 2.6
  *     (ADR-MONO-014 D2 re-exchange model; fail-closed mapping).
  *
@@ -19,7 +19,7 @@ import { OperatorExchangeError } from '@/shared/api/errors';
  *   - Server-only by construction: imported exclusively from the auth route
  *     handlers (`runtime = 'nodejs'`); never reachable from client code
  *     (same posture as `registry-client.ts`, which is also server-only).
- *   - The GAP OIDC token is ONLY the `subject_token` request input; it is
+ *   - The IAM OIDC token is ONLY the `subject_token` request input; it is
  *     never returned, never logged, never an `/api/admin/**` credential.
  *   - The minted operator token is never logged.
  *   - Re-exchange model: NO operator-refresh token/state — every GAP
@@ -31,7 +31,7 @@ import { OperatorExchangeError } from '@/shared/api/errors';
  *     (operator not provisioned / subject invalid → forced re-login).
  *   - `400` / `5xx` / timeout / network / unexpected `tokenType`
  *     → `OperatorExchangeError('unavailable')` (session-unavailable; the
- *     console never falls back to the GAP token on the operator boundary —
+ *     console never falls back to the IAM token on the operator boundary —
  *     the exact #569 latent defect this closes).
  */
 
@@ -53,9 +53,9 @@ export interface OperatorToken {
 }
 
 /**
- * Exchanges the GAP OIDC access token for an operator token.
+ * Exchanges the IAM OIDC access token for an operator token.
  *
- * @param gapAccessToken the operator's GAP OIDC `platform-console-web`
+ * @param gapAccessToken the operator's IAM OIDC `platform-console-web`
  *   access token (the `subject_token`). Never logged.
  * @throws OperatorExchangeError — `fail_closed` (401, re-login) or
  *   `unavailable` (400/5xx/timeout/network — no partial authed state).
@@ -93,7 +93,7 @@ export async function exchangeForOperatorToken(
     if (res.status === 401) {
       const body = (await res.json().catch(() => ({}))) as { code?: string };
       // Producer fail-closed: invalid subject token OR no active operator
-      // mapping (not provisioned). NEVER mint / fall back to the GAP token.
+      // mapping (not provisioned). NEVER mint / fall back to the IAM token.
       logger.warn('operator_exchange_fail_closed', {
         requestId,
         status: 401,

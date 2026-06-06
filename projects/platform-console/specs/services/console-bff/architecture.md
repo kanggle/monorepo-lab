@@ -173,7 +173,7 @@ console-web server routes today:
 
 | Outbound domain | Credential | Header on outbound | Selector predicate |
 |---|---|---|---|
-| GAP (`/api/admin/**`) | RFC 8693 exchanged operator token (§ 2.6) | `Authorization: Bearer <operator-token>` | `domain == GAP` |
+| IAM (`/api/admin/**`) | RFC 8693 exchanged operator token (§ 2.6) | `Authorization: Bearer <operator-token>` | `domain == IAM` |
 | wms (`/api/wms/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | `domain ∈ {wms,scm,finance,erp}` |
 | scm (`/api/scm/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
 | finance (`/api/finance/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |

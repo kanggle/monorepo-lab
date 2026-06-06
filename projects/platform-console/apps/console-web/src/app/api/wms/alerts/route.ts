@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin wms alerts-list read proxy (read-only — GET). The HttpOnly
- * GAP OIDC access token is attached server-side in `listAlerts()`
+ * IAM OIDC access token is attached server-side in `listAlerts()`
  * (§ 2.4.5 per-domain credential divergence — NOT the operator token).
  * No mutation artifacts.
  */

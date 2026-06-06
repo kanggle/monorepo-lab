@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin scm inventory-visibility per-SKU breakdown read proxy
- * (read-only — GET). The HttpOnly GAP OIDC access token is attached
+ * (read-only — GET). The HttpOnly IAM OIDC access token is attached
  * server-side in `getSkuBreakdown()` (§ 2.4.6 reusing § 2.4.5 — NOT the
  * operator token). The full `{ data, meta }` envelope is forwarded so the
  * REQUIRED S5 `meta.warning` reaches the client and is rendered

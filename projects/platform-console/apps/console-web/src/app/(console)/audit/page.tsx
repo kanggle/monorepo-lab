@@ -4,12 +4,12 @@ import { getAuditListState, AuditScreen } from '@/features/audit';
 export const dynamic = 'force-dynamic';
 
 /**
- * GAP audit + security read parity route (TASK-PC-FE-003 — ADR-MONO-013
+ * IAM audit + security read parity route (TASK-PC-FE-003 — ADR-MONO-013
  * Phase 2 slice 2). An in-console nav destination (NOT a catalog product —
- * the catalog `gap.baseRoute` stays `/accounts`, FE-002 unchanged).
+ * the catalog `iam.baseRoute` stays `/accounts`, FE-002 unchanged).
  *
  * Server component: the initial audit page is fetched server-side via the
- * GAP admin-service client with the HttpOnly operator token + active
+ * IAM admin-service client with the HttpOnly operator token + active
  * tenant (`getAuditListState()`). READ-ONLY — no mutation. Resilience is
  * handled there:
  *   - 401 → `redirect('/login')` (clean re-login, no partial authed state).

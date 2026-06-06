@@ -13,9 +13,9 @@ export const runtime = 'nodejs';
  * Same-origin wms alert-acknowledge mutation proxy — THE ONLY mutation in
  * the wms-ops slice (console-integration-contract § 2.4.5). The client
  * supplies a stable `idempotencyKey` per the confirmed action (the
- * confirm-dialog generates it via `crypto.randomUUID()`); the **GAP OIDC
+ * confirm-dialog generates it via `crypto.randomUUID()`); the **IAM OIDC
  * access token** is attached server-side in `acknowledgeAlert()` (NOT the
- * GAP operator token — wms requires the GAP OIDC token; the #569 invariant
+ * IAM operator token — wms requires the IAM OIDC token; the #569 invariant
  * is GAP-domain-scoped).
  *
  * Reason-free: wms does NOT define `X-Operator-Reason` on this surface —

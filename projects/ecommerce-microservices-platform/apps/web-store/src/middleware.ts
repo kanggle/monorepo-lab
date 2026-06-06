@@ -10,7 +10,7 @@ import { auth } from '@/shared/auth/auth';
  * lands on `/login?from=<original>`.
  *
  * Cross-app guard: if a non-CONSUMER somehow holds a session (e.g. an
- * OPERATOR after `/api/auth/callback/gap`), the session callback in
+ * OPERATOR after `/api/auth/callback/iam`), the session callback in
  * `auth.ts` returns a session with `accountId=null`, and the `auth` check
  * here treats them as anonymous → redirected to `/login?error=...`.
  */

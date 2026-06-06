@@ -15,7 +15,7 @@ import java.util.List;
  * {
  *   "asOf": "2026-05-20T10:30:00Z",
  *   "cards": [
- *     { "domain": "gap",     "status": "ok",         "data": { ... } },
+ *     { "domain": "iam",     "status": "ok",         "data": { ... } },
  *     { "domain": "wms",     "status": "ok",         "data": { ... } },
  *     { "domain": "scm",     "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
  *     { "domain": "finance", "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },

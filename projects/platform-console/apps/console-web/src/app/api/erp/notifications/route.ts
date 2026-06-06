@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp notification INBOX proxy (read — GET only). Forwards to the
  * UNCHANGED producer `GET /api/erp/notifications` via `listNotifications()`
- * (domain-facing GAP token server-side). Returns the caller's recipient-scoped
+ * (domain-facing IAM token server-side). Returns the caller's recipient-scoped
  * notification inbox with optional `unread`/`page`/`size` filtering.
  *
  * `unread` is forwarded verbatim ONLY when present in the query string (omitting

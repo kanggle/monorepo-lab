@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * workflow client (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice).
  *
  * Pins:
- *   - per-domain credential REUSE of § 2.4.8: the domain-facing GAP OIDC
+ *   - per-domain credential REUSE of § 2.4.8: the domain-facing IAM OIDC
  *     token, NEVER `getOperatorToken()`; no `X-Tenant-Id` (erp resolves
  *     tenant from the JWT claim);
  *   - create + the 4 transitions carry the console-generated
@@ -175,7 +175,7 @@ function lastCall(fetchMock: ReturnType<typeof vi.fn>) {
 // ===========================================================================
 
 describe('approval-api — per-domain credential (REUSE of § 2.4.8)', () => {
-  it('sends the domain-facing GAP token, NEVER the operator token / X-Tenant-Id', async () => {
+  it('sends the domain-facing IAM token, NEVER the operator token / X-Tenant-Id', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
@@ -194,7 +194,7 @@ describe('approval-api — per-domain credential (REUSE of § 2.4.8)', () => {
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const err = await listApprovalRequests({}).catch((e) => e);
