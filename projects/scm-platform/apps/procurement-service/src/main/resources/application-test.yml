@@ -27,7 +27,7 @@ outbox:
 
 scmplatform:
   oauth2:
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,iam}
     required-tenant-id: scm
   procurement:
     supplier:

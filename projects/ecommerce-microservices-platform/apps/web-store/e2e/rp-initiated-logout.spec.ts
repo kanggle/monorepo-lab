@@ -11,7 +11,7 @@ import { shouldSkipGap, loginAsSeededConsumer } from './helpers/auth';
  * GAP button again bounced straight back, authenticated, with no form.
  *
  * Requires a real GAP container (gates on SKIP_GAP_E2E). See
- * `docker-compose.gap-e2e.yml` + `e2e/fixtures/gap-consumer-seed.sql`.
+ * `docker-compose.iam-e2e.yml` + `e2e/fixtures/iam-consumer-seed.sql`.
  */
 test.describe('RP-initiated OIDC logout (GAP end_session)', () => {
   test.skip(shouldSkipGap(), 'requires a running GAP container (SKIP_GAP_E2E=1)');

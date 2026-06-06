@@ -36,8 +36,8 @@ services:
     environment:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/.well-known/jwks.json}
       OIDC_REQUIRED_TENANT_ID: fan-platform
       REDIS_HOST: redis
       REDIS_PORT: "6379"
@@ -82,8 +82,8 @@ services:
     environment:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/.well-known/jwks.json}
       OIDC_REQUIRED_TENANT_ID: fan-platform
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
@@ -127,8 +127,8 @@ services:
     environment:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/.well-known/jwks.json}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/.well-known/jwks.json}
       OIDC_REQUIRED_TENANT_ID: fan-platform
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

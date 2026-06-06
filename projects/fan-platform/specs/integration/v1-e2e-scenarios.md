@@ -51,7 +51,7 @@ test can. Per portfolio demo intent, GREEN here is the green light for
 ### JWT helper
 
 `com.example.fanplatform.e2e.testsupport.JwtTestHelper` mints RS256 tokens
-with the issuer `http://gap.local` (matches `OIDC_ISSUER_URL` default) and
+with the issuer `http://iam.local` (matches `OIDC_ISSUER_URL` default) and
 the configured `tenant_id` claim. Convenience methods:
 
 | Method | sub | tenant_id | role/roles claims |

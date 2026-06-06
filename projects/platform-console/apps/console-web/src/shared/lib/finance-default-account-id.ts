@@ -20,7 +20,7 @@ import { fetchRegistry } from '@/shared/api/registry-client';
  * surface — TASK-BE-304; consumer-side wiring — TASK-PC-FE-014; specs:
  * `console-integration-contract.md § 2.2` + `§ 2.4.9.1 Implementation
  * guidance — Option (a) activation`; producer:
- * `global-account-platform/specs/contracts/http/console-registry-api.md
+ * `iam/specs/contracts/http/console-registry-api.md
  * § Per-operator profile attributes`).
  *
  * Returns `null` when:

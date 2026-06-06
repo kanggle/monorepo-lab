@@ -26,7 +26,7 @@ import java.util.UUID;
  * {@code JWT_JWKS_URI} env var points at the host JVM's JWKS server so Spring
  * Security's oauth2 resource-server validates signatures against the same key.
  *
- * <p>Tokens are issued with {@code iss=http://gap.local} (matches the SAS
+ * <p>Tokens are issued with {@code iss=http://iam.local} (matches the SAS
  * issuer scm gateway/procurement/inventory-visibility services accept by
  * default — see each service's {@code allowed-issuers} in application.yml)
  * and {@code tenant_id=scm} (matches the required tenant). Cross-tenant
@@ -36,7 +36,7 @@ import java.util.UUID;
 public final class JwtTestHelper {
 
     /** Issuer URL used by SAS-issued tokens (matches application.yml default across all 3 services). */
-    public static final String SAS_ISSUER = "http://gap.local";
+    public static final String SAS_ISSUER = "http://iam.local";
     /** Required tenant for the scm-platform stack. */
     public static final String DEFAULT_TENANT_ID = "scm";
     /** Token lifetime — generous so a slow CI run never trips an exp boundary. */

@@ -7,7 +7,7 @@
 | Domain | `fintech` ([rules/domains/fintech.md](../../rules/domains/fintech.md)) |
 | Traits | `transactional`, `regulated`, `audit-heavy` |
 | Service Types | `rest-api`, `event-consumer` |
-| IdP | GAP (`tenant_id=finance`) — [GAP integration](../global-account-platform/PROJECT.md) |
+| IdP | GAP (`tenant_id=finance`) — [GAP integration](../iam-platform/PROJECT.md) |
 | Hostname | `finance.local` (Traefik routing, ADR-MONO-001) |
 | Status | **v1 bootstrap (TASK-MONO-114)** — skeleton only, account-service 미가동 |
 
@@ -62,7 +62,7 @@ dev 토큰 발급 (GAP `finance-platform-internal-services-client` 등록 완료
 ```bash
 curl -u finance-platform-internal-services-client:finance-dev \
      -d "grant_type=client_credentials&scope=finance.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
 ---
@@ -76,7 +76,7 @@ GAP 측 인프라 (TASK-MONO-114 V0017 시드):
 - `oauth_clients.client_id='finance-platform-internal-services-client'` (client_credentials, scopes=`finance.read`/`finance.write`) — auth-service V0017
 - `oauth_scopes` — `finance.read`, `finance.write` — auth-service V0017
 
-상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#gap-idp-integration) + [specs/integration/gap-integration.md](specs/integration/gap-integration.md).
+상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#iam-idp-integration) + [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ---
 

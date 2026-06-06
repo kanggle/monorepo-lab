@@ -22,7 +22,7 @@ import java.util.List;
  *
  * <p>Mirrors the reference implementation in wms-platform's gateway-service but
  * tuned for fan-platform. Decoder accepts BOTH SAS-issued tokens and the legacy
- * {@code "global-account-platform"} issuer during the D2-b deprecation window:
+ * {@code "iam"} issuer during the D2-b deprecation window:
  * JWKS URI points at GAP, and the {@code iss} claim is validated against an
  * explicit allowlist.
  *

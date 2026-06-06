@@ -7,7 +7,7 @@ set -euo pipefail
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.e2e.yml}"
 CYCLE_LABEL="${1:-unnamed}"
 DEADLINE_SEC=300
-SERVICES=(gap-e2e-auth gap-e2e-account gap-e2e-admin gap-e2e-security)
+SERVICES=(iam-e2e-auth iam-e2e-account iam-e2e-admin iam-e2e-security)
 
 echo "=== cycle ${CYCLE_LABEL}: down -v ==="
 docker compose -f "${COMPOSE_FILE}" down -v >/dev/null 2>&1 || true

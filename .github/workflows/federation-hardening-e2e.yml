@@ -12,7 +12,7 @@ name: Federation Hardening E2E (Phase 8 cross-product, nightly)
 #
 # 2 jobs:
 #   1. federation-hardening-boot-jars (timeout 25 min): builds 10 boot jars
-#      (GAP auth/account/admin + finance-account + wms-master + wms-admin
+#      (IAM auth/account/admin + finance-account + wms-master + wms-admin
 #      + scm-procurement + scm-inventory-visibility + erp-masterdata
 #      + console-bff). Uploads artifact.
 #   2. federation-hardening-e2e-fullstack (timeout 50 min): downloads boot
@@ -22,7 +22,7 @@ name: Federation Hardening E2E (Phase 8 cross-product, nightly)
 #
 # Phase 8 gate (already satisfied per ADR-018 § 1.1):
 #   - ADR-MONO-017 ACCEPTED 2026-05-20 (Phase 7 LIVE)
-#   - 5/5 backend domains live (GAP + wms + scm + finance + erp)
+#   - 5/5 backend domains live (IAM + wms + scm + finance + erp)
 #   - console-bff D7 per-domain fan-out attribution baseline ON
 #
 # HARDSTOP-04 invariant: per-domain producer specs / ADR / console-integration-
@@ -75,16 +75,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build federation hardening e2e boot jars
-        # 10 boot jars: GAP (auth/account/admin) + finance-account + wms-master
+        # 10 boot jars: IAM (auth/account/admin) + finance-account + wms-master
         # + wms-admin + scm-procurement + scm-inventory-visibility + erp-masterdata
         # + console-bff. wms-admin + scm-inventory-visibility added TASK-MONO-162
         # (the producers the operator-overview wms/scm legs actually call).
         # console-web is a Next.js standalone build (handled in e2e job).
         run: >-
           ./gradlew
-          :projects:global-account-platform:apps:auth-service:bootJar
-          :projects:global-account-platform:apps:account-service:bootJar
-          :projects:global-account-platform:apps:admin-service:bootJar
+          :projects:iam-platform:apps:auth-service:bootJar
+          :projects:iam-platform:apps:account-service:bootJar
+          :projects:iam-platform:apps:admin-service:bootJar
           :projects:finance-platform:apps:account-service:bootJar
           :projects:wms-platform:apps:master-service:bootJar
           :projects:wms-platform:apps:admin-service:bootJar
@@ -102,9 +102,9 @@ jobs:
           # uploads — artifact root becomes <project>/apps/<service>/build/libs/<jar>.
           # The e2e job below restores canonical paths.
           path: |
-            projects/global-account-platform/apps/auth-service/build/libs/auth-service.jar
-            projects/global-account-platform/apps/account-service/build/libs/account-service.jar
-            projects/global-account-platform/apps/admin-service/build/libs/admin-service.jar
+            projects/iam-platform/apps/auth-service/build/libs/auth-service.jar
+            projects/iam-platform/apps/account-service/build/libs/account-service.jar
+            projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
@@ -160,16 +160,16 @@ jobs:
         # <project>/apps/<service>/build/libs/<jar>. Restore to canonical paths
         # that each Dockerfile expects (COPY <service>/build/libs/*.jar app.jar).
         run: |
-          # GAP services
-          mkdir -p projects/global-account-platform/apps/auth-service/build/libs/
-          mkdir -p projects/global-account-platform/apps/account-service/build/libs/
-          mkdir -p projects/global-account-platform/apps/admin-service/build/libs/
-          mv artifact-staging/global-account-platform/apps/auth-service/build/libs/auth-service.jar \
-             projects/global-account-platform/apps/auth-service/build/libs/auth-service.jar
-          mv artifact-staging/global-account-platform/apps/account-service/build/libs/account-service.jar \
-             projects/global-account-platform/apps/account-service/build/libs/account-service.jar
-          mv artifact-staging/global-account-platform/apps/admin-service/build/libs/admin-service.jar \
-             projects/global-account-platform/apps/admin-service/build/libs/admin-service.jar
+          # IAM services
+          mkdir -p projects/iam-platform/apps/auth-service/build/libs/
+          mkdir -p projects/iam-platform/apps/account-service/build/libs/
+          mkdir -p projects/iam-platform/apps/admin-service/build/libs/
+          mv artifact-staging/iam/apps/auth-service/build/libs/auth-service.jar \
+             projects/iam-platform/apps/auth-service/build/libs/auth-service.jar
+          mv artifact-staging/iam/apps/account-service/build/libs/account-service.jar \
+             projects/iam-platform/apps/account-service/build/libs/account-service.jar
+          mv artifact-staging/iam/apps/admin-service/build/libs/admin-service.jar \
+             projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
 
           # finance-platform
           mkdir -p projects/finance-platform/apps/account-service/build/libs/
@@ -206,8 +206,8 @@ jobs:
         working-directory: projects/platform-console/apps/console-web
         run: pnpm build
 
-      # --- Phase 1: Start GAP core stack ---
-      - name: Start docker compose Phase 1 (mysql + redis + kafka + victoriatraces + GAP services)
+      # --- Phase 1: Start IAM core stack ---
+      - name: Start docker compose Phase 1 (mysql + redis + kafka + victoriatraces + IAM services)
         working-directory: tests/federation-hardening-e2e/docker
         run: |
           docker compose -f docker-compose.federation-e2e.yml up -d --build \
@@ -232,9 +232,9 @@ jobs:
           docker compose -f docker-compose.federation-e2e.yml logs --tail=50 admin-service
           exit 1
 
-      # --- Phase 1.5: Apply GAP + schema seed ---
-      - name: Apply seed.sql (GAP operators + finance_db + erp_db CREATE)
-        # Phase 1.5 — runs AFTER admin-service healthy (GAP Flyway done) and
+      # --- Phase 1.5: Apply IAM + schema seed ---
+      - name: Apply seed.sql (IAM operators + finance_db + erp_db CREATE)
+        # Phase 1.5 — runs AFTER admin-service healthy (IAM Flyway done) and
         # BEFORE producer services start. Creates finance_db + erp_db schemas
         # + auth_db.credentials + admin_db.admin_operators / roles.
         working-directory: tests/federation-hardening-e2e/docker

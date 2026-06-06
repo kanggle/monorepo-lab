@@ -1,4 +1,4 @@
-# hardstop-detect.ps1 — auto-inject Hard Stop 4-block remediation messages
+﻿# hardstop-detect.ps1 — auto-inject Hard Stop 4-block remediation messages
 #
 # PreToolUse hook for Edit + Write. Detects the 5 mechanically-detectable Hard
 # Stop triggers (HARDSTOP-01 / -03 / -05 / -09 / -10) and emits a JSON
@@ -192,7 +192,7 @@ try {
         $shortAliases = @{
             'ecommerce-microservices-platform' = @('ecommerce', 'ecom')
             'fan-platform'                     = @('fan-platform', 'fan')
-            'global-account-platform'          = @('global-account-platform', 'gap')
+            'iam-platform'                     = @('iam-platform', 'iam')
             'scm-platform'                     = @('scm-platform', 'scm')
             'wms-platform'                     = @('wms-platform', 'wms')
         }

@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <ul>
  *   <li>Legacy {@code POST /api/auth/login} tokens
- *       (iss=global-account-platform) still pass — D2-b deprecation
+ *       (iss=iam) still pass — D2-b deprecation
  *       compatibility.</li>
  *   <li>SAS-issued tokens (iss=oidc.issuer-url) pass — primary path.</li>
  *   <li>Cross-tenant tokens (tenant_id=fan-platform) are rejected with
@@ -42,7 +42,7 @@ class OidcAuthIntegrationTest extends MasterServiceIntegrationBase {
     private ObjectMapper objectMapper;
 
     @Test
-    @DisplayName("legacy iss=global-account-platform 토큰 → 200 (호환성)")
+    @DisplayName("legacy iss=iam 토큰 → 200 (호환성)")
     void legacyToken_returns200() {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(JWT.issueToken("integration-actor", "MASTER_READ"));

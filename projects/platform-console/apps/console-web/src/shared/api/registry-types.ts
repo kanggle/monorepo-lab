@@ -4,7 +4,7 @@ import { z } from 'zod';
  * GAP product/tenant registry response shape.
  *
  * Authoritative producer contract: TASK-BE-296
- * `projects/global-account-platform/specs/contracts/http/console-registry-api.md`
+ * `projects/iam-platform/specs/contracts/http/console-registry-api.md`
  * (`GET /api/admin/console/registry`, admin-service, operator-auth boundary).
  *
  * Item shape is governed by the consumer contract

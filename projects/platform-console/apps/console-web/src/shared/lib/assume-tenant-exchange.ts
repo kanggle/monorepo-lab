@@ -11,7 +11,7 @@ import { AssumeTenantError } from '@/shared/api/errors';
  * server-side driver (ADR-MONO-020 D4 / § 3.3 step 3).
  *
  * Authoritative producer contract (do NOT redefine here — consume only):
- *   - `global-account-platform/specs/contracts/http/auth-api.md`
+ *   - `iam/specs/contracts/http/auth-api.md`
  *     § Assume-Tenant Exchange (`POST /oauth2/token`,
  *     `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` +
  *     `audience=<selected tenant>`, RFC 8693 — TASK-BE-327, D2+D3).

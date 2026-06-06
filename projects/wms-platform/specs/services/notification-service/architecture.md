@@ -348,12 +348,12 @@ ops can pivot from Slack message → delivery row → source event.
 
 `notification-service` has **no REST surface in v1**. The only inbound
 trust boundary is Kafka, which is already authenticated at the broker level
-(per `gap-integration.md`). No JWT validation required in v1.
+(per `iam-integration.md`). No JWT validation required in v1.
 
 When v2 adds an admin surface (`/internal/notifications/{id}/retry`,
 `/api/v1/notifications/preferences`), it will sit behind `gateway-service`
 with the standard OAuth2 RS pattern declared in
-`specs/services/gateway-service/gap-integration.md`.
+`specs/services/gateway-service/iam-integration.md`.
 
 ### Outbound Vendor Auth
 

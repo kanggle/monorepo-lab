@@ -153,7 +153,7 @@ established at the GAP OIDC login callback (per
 
 The console-web server route forwards **both** to the BFF on every call:
 
-- `Authorization: Bearer <gap-oidc-access-token>` (treated by Spring Security
+- `Authorization: Bearer <iam-oidc-access-token>` (treated by Spring Security
   OAuth2 Resource Server as the inbound principal — RS256, JWKS = GAP, standard
   validation: issuer / audience / exp / sig).
 - `X-Operator-Token: <rfc8693-operator-token>` (carried request-scoped, not
@@ -174,10 +174,10 @@ console-web server routes today:
 | Outbound domain | Credential | Header on outbound | Selector predicate |
 |---|---|---|---|
 | GAP (`/api/admin/**`) | RFC 8693 exchanged operator token (§ 2.6) | `Authorization: Bearer <operator-token>` | `domain == GAP` |
-| wms (`/api/wms/**`) | GAP OIDC access token | `Authorization: Bearer <gap-oidc-access-token>` | `domain ∈ {wms,scm,finance,erp}` |
-| scm (`/api/scm/**`) | GAP OIDC access token | `Authorization: Bearer <gap-oidc-access-token>` | (same) |
-| finance (`/api/finance/**`) | GAP OIDC access token | `Authorization: Bearer <gap-oidc-access-token>` | (same) |
-| erp (`/api/erp/**`) | GAP OIDC access token | `Authorization: Bearer <gap-oidc-access-token>` | (same) |
+| wms (`/api/wms/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | `domain ∈ {wms,scm,finance,erp}` |
+| scm (`/api/scm/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
+| finance (`/api/finance/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
+| erp (`/api/erp/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
 
 The inbound `X-Tenant-Id` is forwarded verbatim on every outbound leg (no
 re-derivation — D6.A); each producer's `TenantClaimValidator` gates the call

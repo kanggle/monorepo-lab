@@ -124,7 +124,7 @@ Dependencies flow **downward only**. Upper layers may import from lower layers, 
 
 ## Authentication: GAP OIDC (post TASK-FE-067)
 - Auth library: `next-auth` v5 (auth.js) configured in `src/shared/auth/auth.ts`.
-- Identity provider: `global-account-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://gap.local`) hosts the discovery doc + `/oauth2/authorize` + `/oauth2/token` endpoints.
+- Identity provider: `iam-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://iam.local`) hosts the discovery doc + `/oauth2/authorize` + `/oauth2/token` endpoints.
 - Client: `ecommerce-web-store-client` (registered in GAP V0012 seed). Confidential client + PKCE.
 - Scope: `openid profile email tenant.read ecommerce.consumer`. Backend (gateway-service) asserts `tenant_id=ecommerce` via the JWT claim.
 - Account-type guard: only `account_type=CONSUMER` may sign in. An `OPERATOR` who completes the GAP flow is rejected by the `session()` callback (returned session has no `accountId`) and bounced to `/login?error=account_type_mismatch`.

@@ -7,7 +7,7 @@ package com.kanggle.platformconsole.bff.domain.credential;
  * {@code console-integration-contract.md} § 2.4.9:
  * <pre>
  *   GAP              → OperatorToken   (RFC 8693 exchanged)
- *   WMS, SCM, FINANCE, ERP → GapOidcAccessToken
+ *   WMS, SCM, FINANCE, ERP → IamOidcAccessToken
  * </pre>
  *
  * <p>There is NO fallback path. If the required token is absent the

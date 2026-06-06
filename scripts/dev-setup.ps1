@@ -17,7 +17,7 @@ $MarkerEnd = "# END monorepo-lab dev hosts"
 $Hosts = @(
     'ecommerce.local',
     'wms.local',
-    'gap.local',
+    'iam.local',
     'fan-platform.local',
     'scm.local',
     'erp.local',

@@ -17,7 +17,7 @@ K-pop 류 아티스트↔팬 커뮤니티 백엔드 플랫폼. Weverse 스타일
 
 이 프로젝트는 백엔드 포트폴리오로서 **프로덕션 지향 설계** + **풀스택 demo path** 를 모두 추구한다. ecommerce-microservices-platform 과 함께 **두 번째 풀스택 B2C 도메인** 으로, GAP 의 OIDC IdP 통합·multi-tenant 격리·content-heavy 패턴을 깊이 검증한다.
 
-GAP 안에 [frozen `community-service`](../global-account-platform/apps/community-service/) (포스트/댓글/반응 데모) 가 이미 있지만, 그것은 GAP 의 internal API 호출 시연용 mini-demo 이며, 본 fan-platform 은 다음 점에서 차별화된다:
+GAP 안에 [frozen `community-service`](../iam-platform/apps/community-service/) (포스트/댓글/반응 데모) 가 이미 있지만, 그것은 GAP 의 internal API 호출 시연용 mini-demo 이며, 본 fan-platform 은 다음 점에서 차별화된다:
 
 - **자체 프로젝트** — GAP 와 같은 레벨의 독립 서비스 군. GAP 를 표준 OIDC IdP 로 소비
 - **service split** — community / artist / membership / notification / admin 으로 도메인 경계를 나눠 비대칭 관계 (artist 1 : N 팬) 를 데이터 모델 레벨에서 명시
@@ -69,11 +69,11 @@ GAP 안에 [frozen `community-service`](../global-account-platform/apps/communit
 
 ## GAP IdP Integration
 
-`fan-platform` 은 [global-account-platform](../global-account-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../global-account-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 fan-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=fan-platform` claim 만 통과시킨다.
+`fan-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 fan-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=fan-platform` claim 만 통과시킨다.
 
 frontend (`fan-platform-web`) 는 `next-auth` + GAP OIDC custom provider 로 `authorization_code` + PKCE 플로우 적용 (TASK-BE-254 consumer-integration-guide 따름).
 
-통합 상세는 [specs/integration/gap-integration.md](specs/integration/gap-integration.md) (TASK-FAN-BE-001 부트스트랩 시 작성).
+통합 상세는 [specs/integration/iam-integration.md](specs/integration/iam-integration.md) (TASK-FAN-BE-001 부트스트랩 시 작성).
 
 ## Local Network
 

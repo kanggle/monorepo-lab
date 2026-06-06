@@ -608,7 +608,7 @@ The Kafka consumer trusts the producer's `tenantId = erp` envelope field
 ## Security
 
 - **JWT (RS256)** on the inbox surface: `oauth2-resource-server` against
-  `${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks`; RS256 only;
+  `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`
   (decode-time entitlement-trust dual-accept). The console assume-tenant operator
   token + the employee SSO token are the v1.0 inbox callers (E7 / I1 — SSO single
@@ -897,7 +897,7 @@ bootstrap / follow-up tasks, not this spec):
   `rules/traits/transactional.md` (T2 / T4 / T5 / T8),
   `rules/traits/audit-heavy.md` (A2 / A3 / A6 / A7)
 - `projects/erp-platform/PROJECT.md` (§ Service Map v2 — notification-service),
-  [`gap-integration.md`](../../integration/gap-integration.md)
+  [`iam-integration.md`](../../integration/iam-integration.md)
 - [`notification-api.md`](../../contracts/http/notification-api.md) (sibling-authored,
   this bundle), [`notification-subscriptions.md`](../../contracts/events/notification-subscriptions.md)
   (sibling-authored, this bundle),

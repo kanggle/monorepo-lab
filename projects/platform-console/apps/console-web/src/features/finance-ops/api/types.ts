@@ -14,7 +14,7 @@ import { z } from 'zod';
  * Consumer obligation: `console-integration-contract.md` § 2.4.7 (reuses
  * the § 2.4.5 per-domain credential rule — NOT re-derived; same outcome
  * as § 2.4.6 scm). finance-side spec-first basis:
- * `finance-platform/specs/integration/gap-integration.md` § *platform-
+ * `finance-platform/specs/integration/iam-integration.md` § *platform-
  * console Operator Read Consumer* (TASK-FIN-BE-005).
  *
  * These zod schemas are the runtime parsers the api-client / tests

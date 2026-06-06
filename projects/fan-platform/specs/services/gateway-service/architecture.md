@@ -89,7 +89,7 @@ com.example.fanplatform.gateway/
 ├── ratelimit/
 │   └── FailOpenRateLimiter.java           ← Redis fail-open wrapper + metric
 ├── security/
-│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy global-account-platform
+│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy iam-platform
 │   └── TenantClaimValidator.java          ← tenant_id ∈ { fan-platform, * }
 └── error/
     ├── ApiErrorEnvelope.java
@@ -219,13 +219,13 @@ For Prometheus job configuration and scrape interval guidance, see
 
 ## JWT Validation
 
-Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/gap-integration.md`:
+Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/iam-integration.md`:
 
 - Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at GAP.
 - Algorithm: RS256 only.
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the
-  legacy `"global-account-platform"` string (D2-b deprecation window).
+  legacy `"iam-platform"` string (D2-b deprecation window).
 - Tenant: `TenantClaimValidator` — only `tenant_id ∈ { fan-platform, * }`. The
   wildcard accommodates SUPER_ADMIN platform-scope tokens.
 - Forwarded headers after successful validation:
@@ -321,7 +321,7 @@ Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/ga
 - `platform/api-gateway-policy.md`
 - `platform/error-handling.md`
 - `platform/service-types/rest-api.md`
-- `projects/fan-platform/specs/integration/gap-integration.md`
+- `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/wms-platform/apps/gateway-service` (reference implementation pattern
   per TASK-FAN-BE-001 § Implementation Notes)
 - `rules/traits/integration-heavy.md` (fail-open / circuit-breaker patterns)

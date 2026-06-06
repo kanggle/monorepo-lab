@@ -152,5 +152,5 @@ wms:
   # TASK-MONO-019: OIDC Resource Server validators.
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}

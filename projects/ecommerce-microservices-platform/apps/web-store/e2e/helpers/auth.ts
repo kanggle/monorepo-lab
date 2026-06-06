@@ -14,7 +14,7 @@ import { expect, type Page } from '@playwright/test';
  *   5. GAP `/oauth2/callback` → web-store `/api/auth/callback/gap`
  *   6. NextAuth completes session → redirects to `callbackUrl`
  *
- * Steps 3-5 are owned by GAP (see `projects/global-account-platform/`),
+ * Steps 3-5 are owned by GAP (see `projects/iam-platform/`),
  * so the helpers below need a running GAP container in the e2e stack
  * (TASK-MONO-014 docker-compose addition). For environments where GAP is
  * not yet running, set `process.env.SKIP_GAP_E2E=1` and tests requiring
@@ -46,7 +46,7 @@ export function shouldSkipGap(): boolean {
 }
 
 /**
- * The CONSUMER credential seeded by `e2e/fixtures/gap-consumer-seed.sql` (run
+ * The CONSUMER credential seeded by `e2e/fixtures/iam-consumer-seed.sql` (run
  * against the GAP `auth_db` before the Playwright run). Password matches the
  * federation-e2e Argon2id seed. Used by `loginAsSeededConsumer` for the real
  * GAP-backed specs (TASK-INT-023).
@@ -79,7 +79,7 @@ export async function fillGapCredentialForm(page: Page, user: TestUser): Promise
 /**
  * Real GAP login as the SEEDED consumer: web-store `/login` → GAP button →
  * GAP credential form → back into web-store. No signup (GAP has no inline
- * signup); the credential must already exist (gap-consumer-seed.sql).
+ * signup); the credential must already exist (iam-consumer-seed.sql).
  */
 export async function loginAsSeededConsumer(
   page: Page,
@@ -99,7 +99,7 @@ export async function loginAsSeededConsumer(
 
 /**
  * Drive the GAP signup-or-login page. The exact selectors depend on GAP's
- * own login UI (defined in `projects/global-account-platform/`); when the
+ * own login UI (defined in `projects/iam-platform/`); when the
  * GAP UI changes, update this helper.
  *
  * Defensive selectors: GAP's login page exposes accessible labels in Korean

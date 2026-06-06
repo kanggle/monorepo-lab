@@ -26,8 +26,8 @@
 ### 2.2 Product / Tenant Registry (catalog source)
 
 - GAP exposes a registry surface the console reads to build the **data-driven** catalog.
-- **Authoritative producer endpoint** (TASK-BE-296 — GAP owns the path/auth/envelope; see [`global-account-platform/specs/contracts/http/console-registry-api.md`](../../../global-account-platform/specs/contracts/http/console-registry-api.md)):
-  - **Path**: `GET http://gap.local/api/admin/console/registry` (admin-service, hosted on the GAP operator-auth boundary; the gateway treats `/api/admin/**` as a public-path subtree and delegates operator-JWT verification to admin-service `OperatorAuthenticationFilter` — platform invariant).
+- **Authoritative producer endpoint** (TASK-BE-296 — GAP owns the path/auth/envelope; see [`iam-platform/specs/contracts/http/console-registry-api.md`](../../../iam-platform/specs/contracts/http/console-registry-api.md)):
+  - **Path**: `GET http://iam.local/api/admin/console/registry` (admin-service, hosted on the GAP operator-auth boundary; the gateway treats `/api/admin/**` as a public-path subtree and delegates operator-JWT verification to admin-service `OperatorAuthenticationFilter` — platform invariant).
   - **Auth model**: `Authorization: Bearer <operator-token>` (`token_type=admin`, `iss=admin-service`) — producer requirement **unchanged**. No `X-Operator-Reason` (read-only catalog lookup). The console calls this **server-side** with the **operator token obtained via the § 2.6 exchange** (held in its own HttpOnly cookie), **not** the GAP OIDC access token — never a browser-direct call (§ 2.3). The GAP OIDC access token is never an `/api/admin/**` credential (§ 2.1 trust boundary invariant); it is only the `subject_token` input to the exchange.
   - **Tenant scoping**: the operator's tenant scope is resolved producer-side from `admin_operators.tenant_id` (ADR-002 `'*'` platform sentinel). The console does **not** send a tenant to the registry; GAP returns only the tenants the operator may select (cross-tenant isolation enforced producer-side — regression-tested, multi-tenant M3/M4).
   - **Response envelope**: `{ "products": [ <item> ] }`. **Errors** use the GAP admin error envelope `{ code, message, timestamp }`: `401 TOKEN_INVALID` / `401 TOKEN_REVOKED` → console forces re-login; `503 DOWNSTREAM_ERROR` / `503 CIRCUIT_OPEN` → console renders a degraded catalog, never blanks the shell (§ 2.5).
@@ -41,14 +41,14 @@
 | `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 5 federated v1 domains — `gap` + `wms` + `scm` + `erp` + `finance` — are `available:true` as of TASK-BE-305 2026-05-21) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
-| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from GAP `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`global-account-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../global-account-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
+| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from GAP `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`iam-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../iam-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
 
 - Adding a product (e.g. finance) or flipping `available` is a **registry change only** — zero `console-web` code change (ADR-MONO-013 § 1.2 / D5).
 - **Subscription-driven `tenants` derivation (TASK-BE-322 / ADR-MONO-019 D2/D4 — envelope shape UNCHANGED, zero console-web change)**: each domain product's `tenants[]` is now derived producer-side from the **ACTIVE tenant↔domain subscriptions** GAP account-service owns (the D2 entitlement authority), instead of the prior fixed `tenantSlug == domain` binding. This is a **producer-internal derivation change only** — the response envelope, item shape, and field semantics are identical. In ADR-019 **step 1** the values are still the domain slugs (a backward-compatible self-subscription seed makes the output byte-identical to the pre-BE-322 catalog); real customer-tenant names surface in a later step (step 2) without any console-web change. `gap` continues to federate **all** registered tenants (it never consults the subscription surface).
 
 ### 2.3 Routing
 
-- Each domain is reachable at its Traefik hostname (`gap.local`, `wms.local`, `scm.local`, … ; console at `console.local`).
+- Each domain is reachable at its Traefik hostname (`iam.local`, `wms.local`, `scm.local`, … ; console at `console.local`).
 - The console reaches domains **server-side** (server components / server routes), never via browser-direct calls that bypass the typed API client.
 
 ### 2.4 Console-facing API surface (per domain)
@@ -61,7 +61,7 @@
 
 The first concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 1 / § 3 parity "accounts" line). The console's `features/accounts` renders, **server-side and tenant-scoped**, the GAP operator account surface. The producer contract is **authoritative and unchanged** — this section only states the consumer obligation and points at the owning GAP spec.
 
-- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`global-account-platform/specs/contracts/http/admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md). The console consumes exactly these endpoints (request/response/headers/error tables are canonical there):
+- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`iam-platform/specs/contracts/http/admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md). The console consumes exactly these endpoints (request/response/headers/error tables are canonical there):
 
   | # | Operation | Producer endpoint (`admin-api.md` §) | Kind |
   |---|---|---|---|
@@ -87,7 +87,7 @@ The first concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 1 / 
 
 The second concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 2 / § 3 parity "audit: query" + "security: login-history, suspicious"). The console's `features/audit` renders, **server-side and tenant-scoped**, the GAP unified audit + security read surface. This is a **read-only** slice — there is **no mutation**, therefore the § 2.4.1 mutation scaffolding (`X-Operator-Reason`, `Idempotency-Key`, destructive-confirm dialogs) **does not apply and MUST NOT be carried over**. The producer contract is **authoritative and unchanged** — this section only states the consumer obligation and points at the owning GAP spec.
 
-- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`global-account-platform/specs/contracts/http/admin-api.md` § `GET /api/admin/audit`](../../../global-account-platform/specs/contracts/http/admin-api.md). A single unified-view endpoint over `admin_actions` + `login_history` + `suspicious_events`, discriminated by the `source` filter. The console consumes exactly this endpoint (request/response/headers/error tables are canonical there):
+- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`iam-platform/specs/contracts/http/admin-api.md` § `GET /api/admin/audit`](../../../iam-platform/specs/contracts/http/admin-api.md). A single unified-view endpoint over `admin_actions` + `login_history` + `suspicious_events`, discriminated by the `source` filter. The console consumes exactly this endpoint (request/response/headers/error tables are canonical there):
 
   | # | Operation | Producer endpoint (`admin-api.md` §) | `source` | Base permission | Kind |
   |---|---|---|---|---|---|
@@ -110,7 +110,7 @@ The second concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 2 /
 
 The third concrete per-domain binding of § 2.4 (ADR-MONO-013 Phase 2 slice 3 / § 3 parity "operators: create, edit-roles, change-status, change-password"). The console's `features/operators` renders, **server-side and tenant-scoped**, the GAP operator-management surface. This is the **most privilege-sensitive** slice — creating operators and changing roles/status is the operator-privilege-escalation surface. The producer contract is **authoritative and unchanged** — this section only states the consumer obligation and points at the owning GAP spec.
 
-- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`global-account-platform/specs/contracts/http/admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md). The console consumes exactly these endpoints (request/response/**per-endpoint headers**/error tables are canonical there):
+- **Authoritative producer (owned by GAP, do NOT redefine here)**: [`iam-platform/specs/contracts/http/admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md). The console consumes exactly these endpoints (request/response/**per-endpoint headers**/error tables are canonical there):
 
   | # | Operation | Producer endpoint (`admin-api.md` §) | Kind | Required permission |
   |---|---|---|---|---|
@@ -153,7 +153,7 @@ The fourth concrete binding of § 2.4 (ADR-MONO-013 Phase 2 slice 4 / § 3 parit
 
 This is a **read-only** binding — there is **no mutation**, therefore the § 2.4.1 mutation scaffolding (`X-Operator-Reason`, `Idempotency-Key`, destructive-confirm dialogs) **does not apply and MUST NOT be carried over** (same read discipline as § 2.4.2; carrying it over is a defect). It also introduces **no new GAP producer endpoint** — it is a **composition of the EXISTING reads** already bound in §§ 2.4.1/2.4.2/2.4.3. GAP `admin-api.md` is **unchanged** (ADR-MONO-015 D1: compose existing reads only; cross-reference, never redefine).
 
-- **Composed producers (owned by GAP, do NOT redefine here — the EXISTING reads only, unchanged)**: the overview is a **bounded fan-out** over the three already-integrated read endpoints in [`global-account-platform/specs/contracts/http/admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md), consumed through the **existing** FE-002/003/004 server clients (no duplicate / new GAP client):
+- **Composed producers (owned by GAP, do NOT redefine here — the EXISTING reads only, unchanged)**: the overview is a **bounded fan-out** over the three already-integrated read endpoints in [`iam-platform/specs/contracts/http/admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md), consumed through the **existing** FE-002/003/004 server clients (no duplicate / new GAP client):
 
   | # | Overview card | Composed producer endpoint (`admin-api.md` §) | Existing client (reused) | Base permission | Kind |
   |---|---|---|---|---|---|
@@ -219,7 +219,7 @@ non-GAP domain is bound for the first time, and it surfaces a genuine
   | Domain binding | `/api/admin/**` credential | Mechanism | Authority |
   |---|---|---|---|
   | GAP (§§ 2.4.1–2.4.4) | the **exchanged operator token** (`token_type=admin`, `iss=admin-service`), `getOperatorToken()` | server-side RFC 8693 token exchange (§ 2.6) | ADR-MONO-014; the **#569 trust-boundary invariant** (§ 2.1) — the GAP OIDC access token is **never** sent to GAP's `/api/admin/**` |
-  | **wms (§ 2.4.5, this binding)** | the **GAP OIDC access token** itself (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001) | sent **directly** as `Authorization: Bearer <GAP OIDC access token>` | wms `admin-service-api.md` § Global Conventions + `gap-integration.md`: RS256 JWT issued by GAP per ADR-001, validated against GAP JWKS by the wms gateway + admin-service; **`tenant_id=wms` enforced producer-side from the JWT claim**. wms has **no** token-exchange and **requires** the GAP OIDC token |
+  | **wms (§ 2.4.5, this binding)** | the **GAP OIDC access token** itself (`getAccessToken()`, the GAP-session HttpOnly cookie from FE-001) | sent **directly** as `Authorization: Bearer <GAP OIDC access token>` | wms `admin-service-api.md` § Global Conventions + `iam-integration.md`: RS256 JWT issued by GAP per ADR-001, validated against GAP JWKS by the wms gateway + admin-service; **`tenant_id=wms` enforced producer-side from the JWT claim**. wms has **no** token-exchange and **requires** the GAP OIDC token |
 
   **The #569 trust-boundary invariant is GAP-domain-scoped and does NOT
   generalise to wms.** #569 forbids the GAP OIDC access token on **GAP's**
@@ -527,7 +527,7 @@ time** (it is reused verbatim here, not re-derived).
   `account-service` validates a GAP RS256 JWT (ADR-001) against GAP's
   JWKS, `tenant_id ∈ { finance, * }` enforced producer-side from the
   JWT claim (finance
-  [`gap-integration.md`](../../../finance-platform/specs/integration/gap-integration.md)
+  [`iam-integration.md`](../../../finance-platform/specs/integration/iam-integration.md)
   § *platform-console Operator Read Consumer* — the merged
   TASK-FIN-BE-005 reconciliation that sanctions the console as an
   external operator GAP-token read consumer of the existing finance
@@ -644,7 +644,7 @@ time** (it is reused verbatim here, not re-derived).
   finance project-internal spec-first change in `account-api.md`;
   this section follows it, never redefines it (§ 5 Change Rule). The
   finance-side acknowledgment of this console consumer is the merged
-  finance `gap-integration.md` § *platform-console Operator Read
+  finance `iam-integration.md` § *platform-console Operator Read
   Consumer* (TASK-FIN-BE-005) — the spec-first basis for this
   binding.
 
@@ -756,7 +756,7 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   finance**: the erp `masterdata-service` validates a GAP RS256 JWT
   (ADR-001) against GAP's JWKS, `tenant_id ∈ { erp, * }` enforced
   producer-side from the JWT claim (erp
-  [`gap-integration.md`](../../../erp-platform/specs/integration/gap-integration.md)
+  [`iam-integration.md`](../../../erp-platform/specs/integration/iam-integration.md)
   § *platform-console Operator Read Consumer* — the merged
   TASK-ERP-BE-002 reconciliation that sanctions the console as an
   external operator GAP-token read consumer of the existing erp read
@@ -1036,7 +1036,7 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   contract is an erp project-internal spec-first change in
   `masterdata-api.md`; this section follows it, never redefines
   it (§ 5 Change Rule). The erp-side acknowledgment of this
-  console consumer is the merged erp `gap-integration.md` §
+  console consumer is the merged erp `iam-integration.md` §
   *platform-console Operator Read Consumer* (TASK-ERP-BE-002) —
   the spec-first basis for this binding.
 
@@ -1099,7 +1099,7 @@ contract row (smoke-target for the IT harness and Traefik probe).
   the two tokens already established at login (per
   [`console-web/architecture.md`](../services/console-web/architecture.md) +
   FE-002a) and forwards them to `console-bff` on every call:
-  - `Authorization: Bearer <gap-oidc-access-token>` — the inbound principal,
+  - `Authorization: Bearer <iam-oidc-access-token>` — the inbound principal,
     RS256 / JWKS = GAP (standard OAuth2 Resource Server validation: issuer
     / audience / exp / signature),
   - `X-Operator-Token: <rfc8693-operator-token>` — request-scoped, available
@@ -1225,7 +1225,7 @@ confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
 
 | # | Method / Path | Purpose | Auth | Producer |
 |---|---|---|---|---|
-| 1 | `GET /api/console/dashboards/operator-overview` | Single composed cross-domain dashboard envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the per-leg outcome (`ok` / `degraded` / `forbidden`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <gap-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Operator-Token: <rfc8693-operator-token>` (request-scoped, for GAP leg) + `X-Tenant-Id: <active-tenant>` (forwarded verbatim) — all three set server-side by `console-web` 's SSR route, never by the browser. Absent any of the three → fail-closed (`400 NO_ACTIVE_TENANT` if `X-Tenant-Id` absent; otherwise `401 TOKEN_INVALID`) before any outbound leg | `console-bff` |
+| 1 | `GET /api/console/dashboards/operator-overview` | Single composed cross-domain dashboard envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the per-leg outcome (`ok` / `degraded` / `forbidden`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <iam-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Operator-Token: <rfc8693-operator-token>` (request-scoped, for GAP leg) + `X-Tenant-Id: <active-tenant>` (forwarded verbatim) — all three set server-side by `console-web` 's SSR route, never by the browser. Absent any of the three → fail-closed (`400 NO_ACTIVE_TENANT` if `X-Tenant-Id` absent; otherwise `401 TOKEN_INVALID`) before any outbound leg | `console-bff` |
 
 > The route is **GET only — read-only**. ADR-MONO-017 § 2.4.9 hard invariant
 > "no mutation at MVP" applies; therefore `Idempotency-Key`,
@@ -1243,7 +1243,7 @@ redefined here**:
 
 | # | Card | Composed producer endpoint | Domain credential (§ 2.4.9 D4) | Producer spec § (authoritative) | Read content surfaced |
 |---|---|---|---|---|---|
-| 1 | accounts summary | `GET /api/admin/accounts?page=0&size=1` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` | GAP [`admin-api.md`](../../../global-account-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot) |
+| 1 | accounts summary | `GET /api/admin/accounts?page=0&size=1` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` | GAP [`admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot) |
 | 2 | wms inventory health | `GET /api/v1/admin/dashboard/inventory` (snapshot) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.1 Dashboard / Read-Model (already bound by § 2.4.5 / FE-007) | inventory snapshot health summary (stock total, alert count) |
 | 3 | scm procurement / inventory | `GET /api/inventory-visibility/snapshot` (snapshot) — inventory-visibility-service **direct** producer read (see scm-leg topology note below; § 2.4.6 / FE-008) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
 | 4 | finance balance health | `GET /api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **GAP OIDC access token** — `getAccessToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → an `operatorDefaultAccountId` resolution mechanism is required (registry-side or operator-profile-side; spec-first decided **at MVP impl** — see § Implementation guidance); if absent → that card renders `forbidden` (not a crash) |
@@ -1315,7 +1315,7 @@ For the inbound-validation errors **before** any outbound leg fires
 ##### Auth flow (verbatim from § 2.4.9, restated for cross-reference only)
 
 - **Inbound** (console-web SSR → console-bff): `Authorization` (GAP OIDC access token, inbound principal) + `X-Operator-Token` (RFC 8693 exchanged operator token, request-scoped via `OperatorCredentialContext`) + `X-Tenant-Id` (operator's selected active tenant). The browser **never** reaches console-bff directly.
-- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → GapOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
+- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
 
 ##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
 
@@ -1408,7 +1408,7 @@ Consumer wiring chain (top-down, all server-side; the browser never sees any of 
 
 ##### Hard invariants this MVP route inherits (HARD INVARIANT — ADR-MONO-017 § D4 + § 3.3 + § 2.4.9)
 
-- **No producer retrofit** — 5 producer specs (`{global-account-platform, wms-platform, scm-platform, finance-platform, erp-platform}/specs/contracts/`) byte-unchanged.
+- **No producer retrofit** — 5 producer specs (`{iam-platform, wms-platform, scm-platform, finance-platform, erp-platform}/specs/contracts/`) byte-unchanged.
 - **Per-domain credential dispatch** verbatim from §§ 2.4.5/6/7/8 + § 2.6.
 - **Read-only** — no `Idempotency-Key` / `X-Operator-Reason` / mutation method.
 - **Producer-authoritative tenant gate** — `X-Tenant-Id` pass-through; BFF never re-derives or relaxes.
@@ -1456,7 +1456,7 @@ logging, and edge-routing constraints declared in § 2.4.9 apply verbatim
 
 | # | Method / Path | Purpose | Auth (inbound) | Producer |
 |---|---|---|---|---|
-| 1 | `GET /api/console/dashboards/domain-health` | Single composed cross-domain health envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the producer's Spring Boot `/actuator/health` status (`UP` / `DOWN` / `OUT_OF_SERVICE` / `UNKNOWN`) wrapped in the per-leg outcome (`ok` / `degraded`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <gap-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Tenant-Id: <active-tenant>` (forwarded to log MDC and degrade counter — **not** to outbound actuator legs); **`X-Operator-Token` NOT required** for this route (no outbound leg consumes it; the D4 sealed-switch is not invoked). Absent `Authorization` → `401 TOKEN_INVALID` before any outbound leg. Absent `X-Tenant-Id` → `400 NO_ACTIVE_TENANT` (for log/audit traceability, not because legs need it) | `console-bff` |
+| 1 | `GET /api/console/dashboards/domain-health` | Single composed cross-domain health envelope; one card per backend domain (GAP + wms + scm + finance + erp); each card carries the producer's Spring Boot `/actuator/health` status (`UP` / `DOWN` / `OUT_OF_SERVICE` / `UNKNOWN`) wrapped in the per-leg outcome (`ok` / `degraded`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <iam-oidc-access-token>` (inbound principal, RS256 / GAP issuer) + `X-Tenant-Id: <active-tenant>` (forwarded to log MDC and degrade counter — **not** to outbound actuator legs); **`X-Operator-Token` NOT required** for this route (no outbound leg consumes it; the D4 sealed-switch is not invoked). Absent `Authorization` → `401 TOKEN_INVALID` before any outbound leg. Absent `X-Tenant-Id` → `400 NO_ACTIVE_TENANT` (for log/audit traceability, not because legs need it) | `console-bff` |
 
 > The route is **GET only — read-only**. The hard invariant in § 2.4.9.1
 > applies verbatim: no `Idempotency-Key`, no `X-Operator-Reason`, no
@@ -1473,7 +1473,7 @@ respective service files and are **not redefined here**:
 
 | # | Card | Composed producer endpoint | Outbound auth | Producer SecurityConfig (authoritative permitAll) | Read content surfaced |
 |---|---|---|---|---|---|
-| 1 | gap health | `GET http://gap.local/actuator/health` (gateway-service primary entry) | **None** (public actuator, no `Authorization`, no `X-Tenant-Id`) | GAP `gateway-service` `application.yml` `public-paths` includes `GET:/actuator/health` | `{"status": "UP" \| "DOWN" \| "OUT_OF_SERVICE" \| "UNKNOWN"}` aggregated status (Spring Boot `management.endpoint.health.show-details: never` per console-bff baseline; no component drill-down) |
+| 1 | gap health | `GET http://iam.local/actuator/health` (gateway-service primary entry) | **None** (public actuator, no `Authorization`, no `X-Tenant-Id`) | GAP `gateway-service` `application.yml` `public-paths` includes `GET:/actuator/health` | `{"status": "UP" \| "DOWN" \| "OUT_OF_SERVICE" \| "UNKNOWN"}` aggregated status (Spring Boot `management.endpoint.health.show-details: never` per console-bff baseline; no component drill-down) |
 | 2 | wms health | `GET http://wms.local/actuator/health` (gateway-service primary entry) | **None** | WMS `gateway-service` `SecurityConfig.PUBLIC_PATHS` includes `/actuator/health` + `/actuator/health/**` | same aggregated status |
 | 3 | scm health | `GET http://scm.local/actuator/health` (gateway-service primary entry) | **None** | SCM `gateway-service` `SecurityConfig.PUBLIC_PATHS` includes `/actuator/health` | same aggregated status |
 | 4 | finance health | `GET http://finance.local/actuator/health` (`account-service` direct — finance has no gateway-service in v1) | **None** | finance `account-service` `SecurityConfig` `permitAll` includes `/actuator/{health,info,prometheus}` | same aggregated status |
@@ -1596,7 +1596,7 @@ carries `bff.domain` + `bff.route="domain-health"` attributes.
 
 The operator credential the console presents to `/api/admin/**` (§ 2.2 registry + the Phase-2 operator screens § 2.4) is obtained by a **server-side RFC 8693 token exchange**, never by sending the GAP OIDC token directly.
 
-- **Endpoint (authoritative producer)**: `POST http://gap.local/api/admin/auth/token-exchange` (GAP `admin-service`, on the same `/api/admin/**` operator-auth public-path subtree as the registry). The request/response/error contract is owned by GAP [`global-account-platform/specs/contracts/http/admin-api.md` § `POST /api/admin/auth/token-exchange`](../../../global-account-platform/specs/contracts/http/admin-api.md); the subject-token validation policy is GAP [`admin-service/security.md` § GAP OIDC Subject-Token Validation](../../../global-account-platform/specs/services/admin-service/security.md). This file does **not** redefine those — it only states the consumer obligation.
+- **Endpoint (authoritative producer)**: `POST http://iam.local/api/admin/auth/token-exchange` (GAP `admin-service`, on the same `/api/admin/**` operator-auth public-path subtree as the registry). The request/response/error contract is owned by GAP [`iam-platform/specs/contracts/http/admin-api.md` § `POST /api/admin/auth/token-exchange`](../../../iam-platform/specs/contracts/http/admin-api.md); the subject-token validation policy is GAP [`admin-service/security.md` § GAP OIDC Subject-Token Validation](../../../iam-platform/specs/services/admin-service/security.md). This file does **not** redefine those — it only states the consumer obligation.
 - **Request** (server-side only, `application/json`, RFC 8693 — verbatim per the producer contract):
 
   ```json
@@ -1614,7 +1614,7 @@ The operator credential the console presents to `/api/admin/**` (§ 2.2 registry
   - Exchange `400 BAD_REQUEST`/`VALIDATION_ERROR`, timeout, network failure, or `5xx`: treated as **session-unavailable** → no operator cookie set / existing operator session dropped; the console never falls back to the GAP OIDC token on the `/api/admin/**` boundary (that is the exact #569 latent defect this contract fix closes).
   - An unexpected `tokenType` (≠ `"admin"`) is treated as fail-closed (operator cookie not set).
 - **Resilience parity (§ 2.5)**: the exchange call uses the same `integration-heavy` discipline as the registry call — explicit hard timeout (AbortController), structured logging, no unbounded default — but the operator-boundary outcome is fail-closed (no partial authed state), distinct from the registry's degrade-the-section behaviour.
-- **Tenant scope**: never derived from the GAP OIDC token. GAP resolves operator tenant scope producer-side from `admin_operators.tenant_id` (ADR-002 `'*'` platform sentinel); the console sends no tenant to the exchange (consistent with § 2.2 registry tenant scoping). Cross-references: GAP [`console-registry-api.md` § Authentication](../../../global-account-platform/specs/contracts/http/console-registry-api.md) (operator token now via the exchange; producer requirement unchanged).
+- **Tenant scope**: never derived from the GAP OIDC token. GAP resolves operator tenant scope producer-side from `admin_operators.tenant_id` (ADR-002 `'*'` platform sentinel); the console sends no tenant to the exchange (consistent with § 2.2 registry tenant scoping). Cross-references: GAP [`console-registry-api.md` § Authentication](../../../iam-platform/specs/contracts/http/console-registry-api.md) (operator token now via the exchange; producer requirement unchanged).
 
 ### 2.7 Active-Tenant Switcher → Assume-Tenant Exchange (normative — ADR-MONO-020 D4)
 
@@ -1622,7 +1622,7 @@ The active-tenant switcher re-scopes the operator's **domain-facing** credential
 
 - **Two server-side exchanges (do NOT conflate)**:
   - **§ 2.6 operator-identity exchange** (ADR-MONO-014): admin **JSON** `POST /api/admin/auth/token-exchange` → operator token for `/api/admin/**`. Unchanged.
-  - **assume-tenant exchange** (this section): SAS **form-urlencoded** `POST ${OIDC_ISSUER_URL}/oauth2/token`, `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` + `subject_token=<base GAP OIDC access token>` + `subject_token_type=urn:ietf:params:oauth:token-type:access_token` + `audience=<selected tenant>` + `client_id`. **Consume only** — the request/response/error contract is owned producer-side by GAP [`auth-api.md` § Assume-Tenant Exchange](../../../global-account-platform/specs/contracts/http/auth-api.md) (TASK-BE-327); this file states the consumer obligation, it does NOT redefine the wire shape.
+  - **assume-tenant exchange** (this section): SAS **form-urlencoded** `POST ${OIDC_ISSUER_URL}/oauth2/token`, `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` + `subject_token=<base GAP OIDC access token>` + `subject_token_type=urn:ietf:params:oauth:token-type:access_token` + `audience=<selected tenant>` + `client_id`. **Consume only** — the request/response/error contract is owned producer-side by GAP [`auth-api.md` § Assume-Tenant Exchange](../../../iam-platform/specs/contracts/http/auth-api.md) (TASK-BE-327); this file states the consumer obligation, it does NOT redefine the wire shape.
   - **Response 200** (SAS shape): `{ access_token, token_type: "Bearer", expires_in }` — **no `refresh_token`** (the assumed token is short-lived and re-minted per selection / GAP refresh). The console stores `access_token` in its own HttpOnly·Secure·SameSite=Lax cookie (`console_assumed_token`) with `maxAge = expires_in`, validates `token_type === "Bearer"`.
 
 - **Domain-facing credential resolution (the central change)**: `getDomainFacingToken()` = **the assumed token if an active-tenant assumption exists, else the base `getAccessToken()`**. Every tenant-scoped domain read uses it for the GAP-OIDC bearer:

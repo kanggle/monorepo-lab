@@ -36,15 +36,15 @@ vi.mock('next/headers', () => ({
 
 const { ENV } = vi.hoisted(() => ({
   ENV: {
-    OIDC_ISSUER_URL: 'http://gap.local',
+    OIDC_ISSUER_URL: 'http://iam.local',
     OIDC_CLIENT_ID: 'platform-console-web',
     OIDC_REDIRECT_URI: 'http://console.local/api/auth/callback',
     OIDC_SCOPE: 'openid profile email tenant.read',
-    CONSOLE_REGISTRY_URL: 'http://gap.local/api/admin/console/registry',
+    CONSOLE_REGISTRY_URL: 'http://iam.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 50,
-    CONSOLE_TOKEN_EXCHANGE_URL: 'http://gap.local/api/admin/auth/token-exchange',
+    CONSOLE_TOKEN_EXCHANGE_URL: 'http://iam.local/api/admin/auth/token-exchange',
     TOKEN_EXCHANGE_TIMEOUT_MS: 50,
-    GAP_ADMIN_API_BASE: 'http://gap.local',
+    IAM_ADMIN_API_BASE: 'http://iam.local',
     ACCOUNTS_TIMEOUT_MS: 50,
     AUDIT_TIMEOUT_MS: 50,
     LOG_LEVEL: 'info' as const,

@@ -24,7 +24,7 @@ import java.util.List;
  * Spring Cloud Gateway runs on WebFlux, so the gateway must publish a
  * {@link ReactiveJwtDecoder} (not the servlet-style {@code JwtDecoder}). The
  * decoder accepts tokens issued by GAP under either the SAS issuer URL or the
- * legacy {@code "global-account-platform"} string during the deprecation
+ * legacy {@code "iam"} string during the deprecation
  * window: JWKS URI points at GAP, and the {@code iss} claim is validated
  * against an explicit allowlist via {@link AllowedIssuersValidator}.
  *

@@ -105,7 +105,7 @@ exactly one approver (`approverId`).
 
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
-  (RS256, GAP JWKS — [`gap-integration.md`](../../integration/gap-integration.md)).
+  (RS256, GAP JWKS — [`iam-integration.md`](../../integration/iam-integration.md)).
   Cross-tenant → 403 `TENANT_FORBIDDEN`.
 - Enforce the **authorization matrix + data scope** (E6, fail-closed) — the
   caller must hold `erp.write` for mutations / `erp.read` for reads, and the
@@ -470,7 +470,7 @@ authorization sections.
 ## Auth
 
 Identical to [`masterdata-api.md`](masterdata-api.md) and
-[`gap-integration.md`](../../integration/gap-integration.md):
+[`iam-integration.md`](../../integration/iam-integration.md):
 
 - **Authentication** — `Authorization: Bearer <RS256 JWT>` verified against GAP
   JWKS. `tenant_id ∈ {erp, *}`; else 403 `TENANT_FORBIDDEN`. `entitlement-trust`

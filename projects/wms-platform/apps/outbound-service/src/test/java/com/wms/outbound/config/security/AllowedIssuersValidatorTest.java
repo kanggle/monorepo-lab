@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AllowedIssuersValidatorTest {
 
     private final AllowedIssuersValidator validator = new AllowedIssuersValidator(
-            List.of("http://localhost:8081", "global-account-platform"));
+            List.of("http://localhost:8081", "iam"));
 
     private static Jwt jwt(String issuer) {
         return Jwt.withTokenValue("token")
@@ -33,7 +33,7 @@ class AllowedIssuersValidatorTest {
 
     @Test
     void legacyIssuerPasses() {
-        assertThat(validator.validate(jwt("global-account-platform")).hasErrors()).isFalse();
+        assertThat(validator.validate(jwt("iam")).hasErrors()).isFalse();
     }
 
     @Test

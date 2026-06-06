@@ -28,7 +28,7 @@ import { getToken } from 'next-auth/jwt';
 const SECURE_COOKIE = '__Secure-authjs.session-token';
 const PLAIN_COOKIE = 'authjs.session-token';
 
-const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://gap.local';
+const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://iam.local';
 const CLIENT_ID =
   process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client';
 const APP_URL = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';

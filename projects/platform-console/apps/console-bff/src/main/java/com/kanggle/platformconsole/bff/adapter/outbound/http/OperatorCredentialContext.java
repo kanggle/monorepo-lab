@@ -61,7 +61,7 @@ public class OperatorCredentialContext {
      * Already validated by Spring Security; may be null in test contexts where
      * security filters are bypassed.
      */
-    public String getGapOidcAccessToken() {
+    public String getIamOidcAccessToken() {
         return gapOidcAccessToken;
     }
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Feature-local types for the GAP unified audit + security read surface.
  *
  * Authoritative producer contract (do NOT redefine — consume only):
- *   `global-account-platform/specs/contracts/http/admin-api.md`
+ *   `iam/specs/contracts/http/admin-api.md`
  *   § `GET /api/admin/audit` (unified view over admin_actions +
  *     login_history + suspicious_events, discriminated by `source`).
  * Consumer obligation: `console-integration-contract.md` § 2.4.2.

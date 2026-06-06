@@ -31,7 +31,7 @@ spring:
       timeout: 2s
 
   # GAP OIDC Resource Server. RS256 + JWKS + tenant_id=wms. See
-  # specs/integration/gap-integration.md.
+  # specs/integration/iam-integration.md.
   security:
     oauth2:
       resourceserver:
@@ -104,9 +104,9 @@ logging:
 wms:
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window. First
-    # entry is the SAS issuer URL; the legacy "global-account-platform" string
+    # entry is the SAS issuer URL; the legacy "iam" string
     # is kept so existing tokens validate. Drop after deprecation.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
 
 admin:

@@ -112,10 +112,10 @@ wms:
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window.
     # - The first entry is the SAS issuer URL.
-    # - The legacy "global-account-platform" string is kept so existing
+    # - The legacy "iam" string is kept so existing
     #   tokens from POST /api/auth/login continue to validate. Drop after
     #   deprecation.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
   scheduler:
     lot-expiration:

@@ -504,7 +504,7 @@ v2 services and are unchanged by this increment.
 - `rules/domains/erp.md` (E5 — this service is E5's reference implementation; E1/E2/E6/E7),
   `rules/traits/internal-system.md`, `rules/traits/transactional.md` (T8)
 - `projects/erp-platform/PROJECT.md` (§ Service Map — read-model-service),
-  [`gap-integration.md`](../../integration/gap-integration.md)
+  [`iam-integration.md`](../../integration/iam-integration.md)
 - [`read-model-api.md`](../../contracts/http/read-model-api.md) (this PR),
   [`read-model-subscriptions.md`](../../contracts/events/read-model-subscriptions.md) (this PR),
   [`erp-masterdata-events.md`](../../contracts/events/erp-masterdata-events.md)

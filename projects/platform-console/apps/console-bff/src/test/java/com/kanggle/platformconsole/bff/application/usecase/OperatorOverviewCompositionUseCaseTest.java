@@ -3,7 +3,7 @@ package com.kanggle.platformconsole.bff.application.usecase;
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
-import com.kanggle.platformconsole.bff.application.port.outbound.GapAccountsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.IamAccountsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsInventoryReadPort;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
@@ -70,13 +70,13 @@ class OperatorOverviewCompositionUseCaseTest {
 
     private static final String TENANT = "wms";
     private static final String OPERATOR_TOKEN = "op-tok-abc";
-    private static final String GAP_OIDC_TOKEN = "gap-oidc-xyz";
+    private static final String GAP_OIDC_TOKEN = "iam-oidc-xyz";
 
     @Mock
     CredentialSelectionPort credentialSelection;
 
     @Mock
-    GapAccountsReadPort gapPort;
+    IamAccountsReadPort gapPort;
 
     @Mock
     WmsInventoryReadPort wmsPort;
@@ -107,13 +107,13 @@ class OperatorOverviewCompositionUseCaseTest {
         lenient().when(credentialSelection.selectFor(DomainTarget.GAP))
                 .thenReturn(new OutboundCredential.OperatorToken(OPERATOR_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.SCM))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.FINANCE))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
     }
 
     // ------------------------------------------------------------------
@@ -316,11 +316,11 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenThrow(new MissingCredentialException("operator token absent"));
         // Other legs ok.
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.SCM))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
-                .thenReturn(new OutboundCredential.GapOidcAccessToken(GAP_OIDC_TOKEN));
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));

@@ -84,7 +84,7 @@ public abstract class InventoryServiceIntegrationBase {
                     // No JWT in bootstrap — REST endpoints come in TASK-BE-022
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:0/.well-known/jwks.json",
                     // TASK-MONO-019
-                    "wms.oauth2.allowed-issuers=http://localhost:8081,global-account-platform",
+                    "wms.oauth2.allowed-issuers=http://localhost:8081,iam",
                     "wms.oauth2.required-tenant-id=wms"
             ).applyTo(context.getEnvironment());
         }

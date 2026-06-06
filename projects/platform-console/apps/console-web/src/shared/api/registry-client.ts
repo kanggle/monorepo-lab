@@ -12,7 +12,7 @@ import {
  *
  * Path / auth / envelope per the authoritative producer contract
  * `console-registry-api.md` (TASK-BE-296):
- *   - `GET ${CONSOLE_REGISTRY_URL}` → `http://gap.local/api/admin/console/registry`
+ *   - `GET ${CONSOLE_REGISTRY_URL}` → `http://iam.local/api/admin/console/registry`
  *   - `Authorization: Bearer <operator-token>` — the **operator token
  *     obtained via the server-side RFC 8693 exchange**
  *     (`operator-token-exchange.ts`; console-integration-contract § 2.6 /

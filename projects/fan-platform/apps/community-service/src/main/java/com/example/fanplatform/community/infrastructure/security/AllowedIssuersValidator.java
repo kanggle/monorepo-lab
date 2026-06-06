@@ -15,7 +15,7 @@ import java.util.Objects;
  * <p>Replicates the fan-platform gateway-service validator at the service level
  * (defense-in-depth — even if a request bypasses the gateway, the token must
  * still match the allowlist here). D2-b deprecation window: GAP issues both
- * SAS-style and legacy {@code "global-account-platform"} tokens.
+ * SAS-style and legacy {@code "iam"} tokens.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {
 

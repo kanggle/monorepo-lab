@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - **Single external entry point** — every `/api/v1/...` request for fan-platform routes through this service per [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md).
-- **JWT validation** — OAuth2 Resource Server against GAP's JWKS (`/.well-known/jwks.json`); `AllowedIssuersValidator` accepts SAS issuer + legacy global-account-platform issuer.
+- **JWT validation** — OAuth2 Resource Server against GAP's JWKS (`/.well-known/jwks.json`); `AllowedIssuersValidator` accepts SAS issuer + legacy iam-platform issuer.
 - **Tenant isolation** — only `tenant_id=fan-platform` (or `*` SUPER_ADMIN wildcard) is admitted; cross-tenant tokens are rejected at the edge with 403 `TENANT_FORBIDDEN`.
 - **Identity header pipeline** — strip client-supplied headers (`X-Account-Id`, `X-Tenant-Id`, `X-Roles`) before processing; re-set them from verified JWT claims via `JwtHeaderEnrichmentFilter`.
 - **Rate limiting** — per `(account, route)` for authenticated traffic, `(clientIp, route)` for unauthenticated; keys are project-prefixed (`rate:fan-platform:<route>:<id>`) to avoid cross-project collision; Redis-backed but **fail-open** (`FailOpenRateLimiter`).

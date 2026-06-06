@@ -18,7 +18,7 @@ MARKER_END="# END monorepo-lab dev hosts"
 HOSTS=(
     "ecommerce.local"
     "wms.local"
-    "gap.local"
+    "iam.local"
     "fan-platform.local"
     "scm.local"
     "erp.local"

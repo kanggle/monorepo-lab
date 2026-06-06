@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CredentialSelectionTest {
 
     private static final String OPERATOR_TOKEN = "op-tok-abc123";
-    private static final String GAP_OIDC_TOKEN = "gap-oidc-xyz789";
+    private static final String GAP_OIDC_TOKEN = "iam-oidc-xyz789";
 
     // ---- Inline stub implementation for the test ----
     // The real implementation lives in CredentialSelectionAdapter (adapter layer).
@@ -24,7 +24,7 @@ class CredentialSelectionTest {
     private OutboundCredential select(DomainTarget domain, String operatorToken, String gapOidcToken) {
         return switch (domain) {
             case GAP -> new OutboundCredential.OperatorToken(operatorToken);
-            case WMS, SCM, FINANCE, ERP -> new OutboundCredential.GapOidcAccessToken(gapOidcToken);
+            case WMS, SCM, FINANCE, ERP -> new OutboundCredential.IamOidcAccessToken(gapOidcToken);
         };
     }
 
@@ -37,35 +37,35 @@ class CredentialSelectionTest {
     }
 
     @Test
-    @DisplayName("Row 2: WMS domain → GapOidcAccessToken")
+    @DisplayName("Row 2: WMS domain → IamOidcAccessToken")
     void wmsDomain_returnsGapOidcToken() {
         OutboundCredential cred = select(DomainTarget.WMS, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
-        assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
-        assertThat(((OutboundCredential.GapOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
+        assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        assertThat(((OutboundCredential.IamOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
     }
 
     @Test
-    @DisplayName("Row 3: SCM domain → GapOidcAccessToken")
+    @DisplayName("Row 3: SCM domain → IamOidcAccessToken")
     void scmDomain_returnsGapOidcToken() {
         OutboundCredential cred = select(DomainTarget.SCM, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
-        assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
-        assertThat(((OutboundCredential.GapOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
+        assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        assertThat(((OutboundCredential.IamOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
     }
 
     @Test
-    @DisplayName("Row 4: FINANCE domain → GapOidcAccessToken")
+    @DisplayName("Row 4: FINANCE domain → IamOidcAccessToken")
     void financeDomain_returnsGapOidcToken() {
         OutboundCredential cred = select(DomainTarget.FINANCE, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
-        assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
-        assertThat(((OutboundCredential.GapOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
+        assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        assertThat(((OutboundCredential.IamOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
     }
 
     @Test
-    @DisplayName("Row 5: ERP domain → GapOidcAccessToken")
+    @DisplayName("Row 5: ERP domain → IamOidcAccessToken")
     void erpDomain_returnsGapOidcToken() {
         OutboundCredential cred = select(DomainTarget.ERP, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
-        assertThat(cred).isInstanceOf(OutboundCredential.GapOidcAccessToken.class);
-        assertThat(((OutboundCredential.GapOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
+        assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        assertThat(((OutboundCredential.IamOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
     }
 
     @Test
@@ -84,9 +84,9 @@ class CredentialSelectionTest {
     @Test
     @DisplayName("Non-GAP leg with absent GAP OIDC token → MissingCredentialException (fail-closed)")
     void nonGapDomain_absentGapOidcToken_failsClosed() {
-        assertThatThrownBy(() -> new OutboundCredential.GapOidcAccessToken(null))
+        assertThatThrownBy(() -> new OutboundCredential.IamOidcAccessToken(null))
                 .isInstanceOf(MissingCredentialException.class);
-        assertThatThrownBy(() -> new OutboundCredential.GapOidcAccessToken(""))
+        assertThatThrownBy(() -> new OutboundCredential.IamOidcAccessToken(""))
                 .isInstanceOf(MissingCredentialException.class);
     }
 

@@ -16,10 +16,10 @@ import java.util.Objects;
  * access token signed by the same JWKS:
  * <ul>
  *   <li>SAS-issued tokens — {@code iss = oidc.issuer-url} (e.g. {@code http://localhost:8081})</li>
- *   <li>Legacy {@code POST /api/auth/login} tokens — {@code iss = "global-account-platform"}</li>
+ *   <li>Legacy {@code POST /api/auth/login} tokens — {@code iss = "iam"}</li>
  * </ul>
  * Both must validate while the legacy path is being deprecated. After deprecation,
- * drop {@code "global-account-platform"} from the allowlist and rely only on the
+ * drop {@code "iam"} from the allowlist and rely only on the
  * standard {@code JwtIssuerValidator}.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {

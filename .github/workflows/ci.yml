@@ -38,7 +38,7 @@ jobs:
   #              → activates ALL downstream jobs (CI self-change safety)
   #   wms        projects/wms-platform/**
   #   ecommerce  projects/ecommerce-microservices-platform/**
-  #   gap        projects/global-account-platform/**
+  #   iam        projects/iam-platform/**
   #   fan        projects/fan-platform/**
   #   scm        projects/scm-platform/**
   #   contracts  projects/*/specs/contracts/**
@@ -93,15 +93,15 @@ jobs:
   # E2E smoke vs full split (ADR-MONO-010 / TASK-MONO-076, Phase 2 +
   # ADR-MONO-011 / TASK-MONO-079, Phase 3 wired):
   #   PR-time e2e jobs (`e2e-tests`, `fan-platform-e2e`, `scm-platform-e2e`,
-  #   `gap-platform-e2e-smoke`) invoke `:e2eSmokeTest` Gradle task → only
+  #   `iam-platform-e2e-smoke`) invoke `:e2eSmokeTest` Gradle task → only
   #   `@Tag("smoke")` classes/methods run (the cross-service happy-path /
   #   cheap-edge subset). `@Tag("full")` classes/methods (edge / resilience /
   #   long flow / cross-project / DLQ / circuit breaker / multi-step lifecycle)
   #   run nightly + push-to-main only via separate `e2eFullTest` jobs in
   #   nightly-e2e.yml. Timeout per PR-time smoke job is shortened accordingly
-  #   (60 → 20 wms, 20 → 10 fan, 25 → 12 scm, gap 20). Per-test smoke budget
+  #   (60 → 20 wms, 20 → 10 fan, 25 → 12 scm, iam 20). Per-test smoke budget
   #   = ≤ 30 s wall-clock excluding container cold-start (ADR § D1).
-  #   gap-platform-e2e-smoke (TASK-MONO-088) is the PR-time first-call
+  #   iam-platform-e2e-smoke (TASK-MONO-088) is the PR-time first-call
   #   validation for ComposeFixture self-managed mode — ADR-MONO-011 § 6.2
   #   (inherited ADR-MONO-010 § 6.2) outstanding closure / Phase 3 의
   #   7-cycle archaeological inspection root cause prevention.
@@ -130,7 +130,7 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       wms: ${{ steps.filter.outputs.wms == 'true' && steps.filter.outputs.code-changed == 'true' }}
       ecommerce: ${{ steps.filter.outputs.ecommerce == 'true' && steps.filter.outputs.code-changed == 'true' }}
-      gap: ${{ steps.filter.outputs.gap == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      iam: ${{ steps.filter.outputs.iam == 'true' && steps.filter.outputs.code-changed == 'true' }}
       fan: ${{ steps.filter.outputs.fan == 'true' && steps.filter.outputs.code-changed == 'true' }}
       scm: ${{ steps.filter.outputs.scm == 'true' && steps.filter.outputs.code-changed == 'true' }}
       finance: ${{ steps.filter.outputs.finance == 'true' && steps.filter.outputs.code-changed == 'true' }}
@@ -166,10 +166,10 @@ jobs:
               - 'projects/ecommerce-microservices-platform/**'
               - '!projects/ecommerce-microservices-platform/tasks/**'
               - '!projects/ecommerce-microservices-platform/**/*.md'
-            gap:
-              - 'projects/global-account-platform/**'
-              - '!projects/global-account-platform/tasks/**'
-              - '!projects/global-account-platform/**/*.md'
+            iam:
+              - 'projects/iam-platform/**'
+              - '!projects/iam-platform/tasks/**'
+              - '!projects/iam-platform/**/*.md'
             fan:
               - 'projects/fan-platform/**'
               - '!projects/fan-platform/tasks/**'
@@ -243,7 +243,7 @@ jobs:
     needs: changes
     # Activate when:
     #   - any shared library / cross-project path changed (libs, workflows)
-    #   - any project's backend code changed (wms, ecommerce, gap, fan, scm, finance, erp)
+    #   - any project's backend code changed (wms, ecommerce, iam, fan, scm, finance, erp)
     #   - push to main always runs (safety net regardless of filter)
     # spec/chore PRs (tasks/** or *.md only) produce no matching flag → skip.
     if: >-
@@ -252,7 +252,7 @@ jobs:
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.wms == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
-      needs.changes.outputs.gap == 'true' ||
+      needs.changes.outputs.iam == 'true' ||
       needs.changes.outputs.fan == 'true' ||
       needs.changes.outputs.scm == 'true' ||
       needs.changes.outputs.finance == 'true' ||
@@ -312,24 +312,24 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
 
-      - name: Build and check GAP backend (Docker-free)
-        # GAP integration tests carry @Tag("integration") (either directly or
+      - name: Build and check IAM backend (Docker-free)
+        # IAM integration tests carry @Tag("integration") (either directly or
         # via AbstractIntegrationTest base) and are excluded from `:test` /
-        # `:check` by `projects/global-account-platform/build.gradle`. They
-        # run in the dedicated `gap-integration-tests` job below. This step
+        # `:check` by `projects/iam-platform/build.gradle`. They
+        # run in the dedicated `iam-integration-tests` job below. This step
         # therefore stays Docker-free. The tests/e2e module's default `test`
         # carries `excludeTags 'e2e'` (fan/scm pattern, TASK-MONO-080) so its
         # `:check` invocation is also Docker-free.
         run: >-
           ./gradlew
-          :projects:global-account-platform:apps:auth-service:check
-          :projects:global-account-platform:apps:account-service:check
-          :projects:global-account-platform:apps:admin-service:check
-          :projects:global-account-platform:apps:community-service:check
-          :projects:global-account-platform:apps:gateway-service:check
-          :projects:global-account-platform:apps:membership-service:check
-          :projects:global-account-platform:apps:security-service:check
-          :projects:global-account-platform:tests:e2e:check
+          :projects:iam-platform:apps:auth-service:check
+          :projects:iam-platform:apps:account-service:check
+          :projects:iam-platform:apps:admin-service:check
+          :projects:iam-platform:apps:community-service:check
+          :projects:iam-platform:apps:gateway-service:check
+          :projects:iam-platform:apps:membership-service:check
+          :projects:iam-platform:apps:security-service:check
+          :projects:iam-platform:tests:e2e:check
           --no-daemon --stacktrace
 
       - name: Build and check fan-platform backend (Docker-free)
@@ -859,22 +859,22 @@ jobs:
             projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
           retention-days: 7
 
-  gap-integration-tests:
-    name: Integration (global-account-platform, Testcontainers)
+  iam-integration-tests:
+    name: Integration (iam, Testcontainers)
     runs-on: ubuntu-latest
     needs: [changes, build-and-test]
     timeout-minutes: 30
-    # GAP integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
+    # IAM integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
     # via Testcontainers. Scoped to monorepo-lab; the standalone repo
     # extraction relies on its own Docker-free `check` signal.
-    # Activate for GAP changes or cross-project (libs/workflows).
+    # Activate for IAM changes or cross-project (libs/workflows).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
         github.event_name == 'push' ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.gap == 'true'
+        needs.changes.outputs.iam == 'true'
       )
 
     steps:
@@ -893,44 +893,44 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Run GAP integration suites
+      - name: Run IAM integration suites
         run: >-
           ./gradlew
-          :projects:global-account-platform:apps:auth-service:integrationTest
-          :projects:global-account-platform:apps:account-service:integrationTest
-          :projects:global-account-platform:apps:admin-service:integrationTest
-          :projects:global-account-platform:apps:community-service:integrationTest
-          :projects:global-account-platform:apps:gateway-service:integrationTest
-          :projects:global-account-platform:apps:membership-service:integrationTest
-          :projects:global-account-platform:apps:security-service:integrationTest
+          :projects:iam-platform:apps:auth-service:integrationTest
+          :projects:iam-platform:apps:account-service:integrationTest
+          :projects:iam-platform:apps:admin-service:integrationTest
+          :projects:iam-platform:apps:community-service:integrationTest
+          :projects:iam-platform:apps:gateway-service:integrationTest
+          :projects:iam-platform:apps:membership-service:integrationTest
+          :projects:iam-platform:apps:security-service:integrationTest
           --no-daemon --stacktrace
 
-      - name: Upload GAP integration test reports on failure
+      - name: Upload IAM integration test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: gap-integration-test-reports
+          name: iam-integration-test-reports
           path: |
-            projects/global-account-platform/apps/*/build/reports/tests/integrationTest/
-            projects/global-account-platform/apps/*/build/test-results/integrationTest/
+            projects/iam-platform/apps/*/build/reports/tests/integrationTest/
+            projects/iam-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
-  gap-platform-e2e-smoke:
-    name: E2E smoke (gap docker-compose)
+  iam-platform-e2e-smoke:
+    name: E2E smoke (iam docker-compose)
     runs-on: ubuntu-latest
     needs: [changes, build-and-test]
     timeout-minutes: 20
-    # GAP PR-time smoke job — ADR-MONO-011 § 6.2 (inherited ADR-MONO-010 § 6.2)
-    # outstanding closure (TASK-MONO-088). Phase 3 nightly gap-e2e-full 의
+    # IAM PR-time smoke job — ADR-MONO-011 § 6.2 (inherited ADR-MONO-010 § 6.2)
+    # outstanding closure (TASK-MONO-088). Phase 3 nightly iam-e2e-full 의
     # 7-cycle archaeological inspection (TASK-MONO-080/081/082 + BE-278/279)
     # root cause prevention — ComposeFixture self-managed mode 의 PR-time
-    # first-call validation 의무화. gap tests/e2e 모듈이 settings.gradle
+    # first-call validation 의무화. iam tests/e2e 모듈이 settings.gradle
     # 미등록이었기에 PR-time CI 의 어떤 job 도 ComposeFixture 호출 안 했고,
     # 7 layer 의 historical 누락이 dev/local-only 가정으로 누적되어 nightly
     # 첫 호출 시 노출되었음. 본 job 이 PR 마다 한 번씩 ComposeFixture 작동
     # 검증.
     #
-    # Structure: nightly gap-e2e-full (nightly-e2e.yml L525-599) verbatim +
+    # Structure: nightly iam-e2e-full (nightly-e2e.yml L525-599) verbatim +
     # target = :e2eSmokeTest + path-filter gate = fan-platform-e2e pattern.
     # No Docker CLI image build step (ComposeFixture handles via
     # `docker compose up -d --build` in @BeforeAll). No -Pobservability=on
@@ -941,7 +941,7 @@ jobs:
         github.event_name == 'push' ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.gap == 'true' ||
+        needs.changes.outputs.iam == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
 
@@ -958,41 +958,41 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build gap boot jars
+      - name: Build iam boot jars
         # 5 services = docker-compose.e2e.yml `build:` directive service set
         # (auth / account / security / admin / gateway). community/membership
-        # are not booted in the e2e environment. Mirrors nightly gap-e2e-full
+        # are not booted in the e2e environment. Mirrors nightly iam-e2e-full
         # (TASK-MONO-081 + ADR-MONO-011 § D5 audit, option C-1).
         run: >-
           ./gradlew
-          :projects:global-account-platform:apps:auth-service:bootJar
-          :projects:global-account-platform:apps:account-service:bootJar
-          :projects:global-account-platform:apps:security-service:bootJar
-          :projects:global-account-platform:apps:admin-service:bootJar
-          :projects:global-account-platform:apps:gateway-service:bootJar
+          :projects:iam-platform:apps:auth-service:bootJar
+          :projects:iam-platform:apps:account-service:bootJar
+          :projects:iam-platform:apps:security-service:bootJar
+          :projects:iam-platform:apps:admin-service:bootJar
+          :projects:iam-platform:apps:gateway-service:bootJar
           --no-daemon --stacktrace
 
       - name: Verify Docker (ComposeFixture prerequisite)
         run: docker info
 
-      - name: Run gap docker-compose e2e smoke suite
+      - name: Run iam docker-compose e2e smoke suite
         # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
         # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via the separate `gap-e2e-full` job in nightly-e2e.yml
+        # main via the separate `iam-e2e-full` job in nightly-e2e.yml
         # (ADR-MONO-011 Phase 3).
         run: >-
           ./gradlew
-          :projects:global-account-platform:tests:e2e:e2eSmokeTest
+          :projects:iam-platform:tests:e2e:e2eSmokeTest
           --no-daemon --stacktrace
 
-      - name: Upload gap e2e smoke test reports on failure
+      - name: Upload iam e2e smoke test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: gap-platform-e2e-smoke-test-reports
+          name: iam-platform-e2e-smoke-test-reports
           path: |
-            projects/global-account-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
-            projects/global-account-platform/tests/e2e/build/test-results/e2eSmokeTest/
+            projects/iam-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
+            projects/iam-platform/tests/e2e/build/test-results/e2eSmokeTest/
           retention-days: 7
 
   scm-integration-tests:
@@ -1157,7 +1157,7 @@ jobs:
     needs: [changes, build-and-test]
     timeout-minutes: 30
     # console-bff integration suite boots the full Spring context with WireMock
-    # stubbing the GAP JWKS endpoint. No DB/Kafka containers — stateless BFF.
+    # stubbing the IAM JWKS endpoint. No DB/Kafka containers — stateless BFF.
     # Scoped to monorepo-lab; standalone repo extraction relies on its own
     # Docker-free `check` signal.
     # Activate for platform-console changes or cross-project (libs/workflows).

@@ -38,7 +38,7 @@ set -euo pipefail
 declare -A PROJECT_REMOTES=(
     ["wms-platform"]="https://github.com/kanggle/wms-platform.git"
     ["ecommerce-microservices-platform"]="https://github.com/kanggle/ecommerce-microservices-platform.git"
-    ["global-account-platform"]="https://github.com/kanggle/global-account-platform.git"
+    ["iam-platform"]="https://github.com/kanggle/iam-platform.git"
     ["fan-platform"]="https://github.com/kanggle/fan-platform.git"
     ["scm-platform"]="https://github.com/kanggle/scm-platform.git"
     ["finance-platform"]="https://github.com/kanggle/finance-platform.git"
@@ -69,7 +69,7 @@ declare -A PROJECT_REMOTES=(
 declare -A PROJECT_TYPES=(
     ["wms-platform"]="direct-include"
     ["ecommerce-microservices-platform"]="direct-include"
-    ["global-account-platform"]="direct-include"
+    ["iam-platform"]="direct-include"
     ["fan-platform"]="direct-include"
     ["scm-platform"]="direct-include"
     ["finance-platform"]="direct-include"
@@ -138,7 +138,7 @@ apps/admin-dashboard/src/shared/auth \
 apps/admin-dashboard/src/middleware.ts \
 apps/admin-dashboard/src/app/api/auth \
 apps/admin-dashboard/.env.local.example \
-specs/integration/gap-integration.md \
+specs/integration/iam-integration.md \
 specs/services/web-store/architecture.md \
 specs/services/admin-dashboard/architecture.md \
 docker-compose.yml \

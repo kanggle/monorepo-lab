@@ -237,7 +237,7 @@ class GatewayIntegrationTest {
     //
     // The integration profile (application-integration-test.yml) configures:
     //   ecommerce.oauth2.allowed-issuers = https://test.local/issuer,
-    //                                      global-account-platform
+    //                                      iam
     //   ecommerce.oauth2.required-tenant-id = ecommerce
     //
     // Spring Security WebFlux surfaces all JWT validation failures
@@ -291,10 +291,10 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("iss=global-account-platform (legacy) + tenant_id=ecommerce → 통과")
+    @DisplayName("iss=iam (legacy) + tenant_id=ecommerce → 통과")
     void protectedRoute_legacyIssuer_passesJwtFilter() {
         String token = jwtHelper.signTokenWithIssuerAndTenant(
-                "global-account-platform", "ecommerce");
+                "iam", "ecommerce");
 
         webTestClient.get()
                 .uri("/api/orders/123")

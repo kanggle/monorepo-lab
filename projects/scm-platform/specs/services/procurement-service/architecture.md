@@ -516,10 +516,10 @@ includes `tenantId` and the database UNIQUE constraint
 Same as `gateway-service` (consistent issuer allow-list):
 
 - Decoder: standard `oauth2-resource-server` against
-  `${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks`.
+  `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`.
 - Algorithm: RS256 only.
 - Validators: `JwtTimestampValidator` (default) +
-  `AllowedIssuersValidator` (SAS issuer + legacy `"global-account-platform"`
+  `AllowedIssuersValidator` (SAS issuer + legacy `"iam-platform"`
   during D2-b deprecation window) + `TenantClaimValidator`
   (entitlement-trust dual-accept: `tenant_id ∈ {scm, *}` ∪ signed
   `entitled_domains ∋ scm`).
@@ -729,7 +729,7 @@ None block the spec — they are filed here for transparency and follow-up:
 - `rules/traits/integration-heavy.md` (I2/I3/I6/I7/I8/I9)
 - [`gateway-service/architecture.md`](../gateway-service/architecture.md)
 - [`inventory-visibility-service/architecture.md`](../inventory-visibility-service/architecture.md)
-- [`gap-integration.md`](../../integration/gap-integration.md)
+- [`iam-integration.md`](../../integration/iam-integration.md)
 - [`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md)
 - [`procurement-api.md`](../../contracts/http/procurement-api.md) (this PR)
 - TASK-SCM-BE-002 — bootstrap task (PR #239) that shipped the implementation

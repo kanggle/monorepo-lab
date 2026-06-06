@@ -4,7 +4,7 @@ import com.kanggle.platformconsole.bff.application.composition.CompositionEngine
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
-import com.kanggle.platformconsole.bff.application.port.outbound.GapHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.IamHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
 import com.kanggle.platformconsole.bff.domain.composition.DegradePolicy;
@@ -52,7 +52,7 @@ public class DomainHealthCompositionUseCase {
     public static final List<DomainTarget> CARD_ORDER = CompositionEngine.CARD_ORDER;
 
     private final CompositionEngine engine;
-    private final GapHealthReadPort gapPort;
+    private final IamHealthReadPort gapPort;
     private final WmsHealthReadPort wmsPort;
     private final ScmHealthReadPort scmPort;
     private final FinanceHealthReadPort financePort;
@@ -61,7 +61,7 @@ public class DomainHealthCompositionUseCase {
     public DomainHealthCompositionUseCase(
             MeterRegistry meterRegistry,
             Tracer tracer,
-            GapHealthReadPort gapPort,
+            IamHealthReadPort gapPort,
             WmsHealthReadPort wmsPort,
             ScmHealthReadPort scmPort,
             FinanceHealthReadPort financePort,

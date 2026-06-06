@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * table (ADR-MONO-017 D4.A HARD INVARIANT):
  * <pre>
  *   GAP              → OperatorToken(operatorToken)
- *   WMS, SCM, FINANCE, ERP → GapOidcAccessToken(gapOidcAccessToken)
+ *   WMS, SCM, FINANCE, ERP → IamOidcAccessToken(gapOidcAccessToken)
  * </pre>
  *
  * <p>NO fallback path. If the required token is absent, the record constructor
@@ -35,7 +35,7 @@ public class CredentialSelectionAdapter implements CredentialSelectionPort {
         return switch (domain) {
             case GAP -> new OutboundCredential.OperatorToken(context.getOperatorToken());
             case WMS, SCM, FINANCE, ERP ->
-                    new OutboundCredential.GapOidcAccessToken(context.getGapOidcAccessToken());
+                    new OutboundCredential.IamOidcAccessToken(context.getIamOidcAccessToken());
         };
     }
 }

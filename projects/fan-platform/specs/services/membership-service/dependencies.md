@@ -35,7 +35,7 @@ Declared in `apps/membership-service/build.gradle` (authored by FAN-BE-009):
 
 ### GAP IdP — OIDC Resource Server (end-user tokens)
 
-- Issuer: `${OIDC_ISSUER_URL}` (default `http://gap.local`).
+- Issuer: `${OIDC_ISSUER_URL}` (default `http://iam.local`).
 - JWKS: `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/oauth2/jwks`.
 - Algorithm: RS256 only.
 - Required claims: `iss` (∈ allowed-issuers), `sub`, `tenant_id` ∈ `{ fan-platform, * }`, `exp`, `nbf`, `iat`.
@@ -48,7 +48,7 @@ Declared in `apps/membership-service/build.gradle` (authored by FAN-BE-009):
   community-service is the **caller**.
 - The internal security chain validates issuer + signature + a recognized internal
   client identity/role; end-user tokens and missing tokens are rejected 401/403.
-- See `projects/fan-platform/specs/integration/gap-integration.md` and
+- See `projects/fan-platform/specs/integration/iam-integration.md` and
   ADR-MONO-005.
 
 ## Cross-service contracts (produced)

@@ -48,9 +48,9 @@
 #
 # Boot-jar prerequisite:
 #   ./gradlew \
-#     :projects:global-account-platform:apps:auth-service:bootJar \
-#     :projects:global-account-platform:apps:account-service:bootJar \
-#     :projects:global-account-platform:apps:admin-service:bootJar \
+#     :projects:iam-platform:apps:auth-service:bootJar \
+#     :projects:iam-platform:apps:account-service:bootJar \
+#     :projects:iam-platform:apps:admin-service:bootJar \
 #     :projects:finance-platform:apps:account-service:bootJar \
 #     :projects:platform-console:apps:console-bff:bootJar
 #
@@ -61,7 +61,7 @@
 
 name: platform-console-e2e
 
-x-gap-service-env: &gap-service-env
+x-iam-service-env: &iam-service-env
   SPRING_PROFILES_ACTIVE: e2e
   DB_HOST: mysql
   DB_PORT: "3306"
@@ -106,7 +106,7 @@ services:
       # Reuse the GAP init script verbatim — it creates the 4 GAP databases +
       # service users. finance_db is created at seed time (seed.sql first
       # statement) since GAP's init.sh is GAP-owned (AC-3).
-      - ../global-account-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../iam/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
       interval: 10s
@@ -139,7 +139,7 @@ services:
   # is allowed to start.
   #
   # At the application layer, every GAP service in this overlay carries
-  # `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999` (see `x-gap-service-env` above) —
+  # `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999` (see `x-iam-service-env` above) —
   # non-routable by design. The Kafka client logs the expected warnings but does
   # not crash the Spring application context, exactly as the overlay author
   # intended (the 2 e2e click sequences never exercise an event-producing path).
@@ -172,10 +172,10 @@ services:
   # ---------------------------------------------------------------------------
   auth-service:
     build:
-      context: ../global-account-platform
+      context: ../iam
       dockerfile: apps/auth-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: auth_db
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
@@ -189,7 +189,7 @@ services:
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
     volumes:
-      - ../global-account-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
+      - ../iam/apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -221,10 +221,10 @@ services:
   # ---------------------------------------------------------------------------
   account-service:
     build:
-      context: ../global-account-platform
+      context: ../iam
       dockerfile: apps/account-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: account_db
       DB_USERNAME: account_user
       DB_PASSWORD: account_pass
@@ -252,10 +252,10 @@ services:
   # ---------------------------------------------------------------------------
   admin-service:
     build:
-      context: ../global-account-platform
+      context: ../iam
       dockerfile: apps/admin-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: admin_db
       DB_USERNAME: admin_user
       DB_PASSWORD: admin_pass
@@ -263,7 +263,7 @@ services:
       ACCOUNT_SERVICE_URL: http://account-service:8082
       INTERNAL_API_TOKEN: e2e-internal-token
       # GAP OIDC subject-token validator config — see
-      # admin-service/src/main/java/.../config/GapOidcProperties.java. The
+      # admin-service/src/main/java/.../config/IamOidcProperties.java. The
       # issuer must match auth-service's `iss` claim; the JWKS URL targets the
       # auth-service container directly (no Traefik in this overlay).
       ADMIN_OIDC_ISSUER: http://auth-service:8081
@@ -369,7 +369,7 @@ services:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: docker
       # GAP OIDC trust anchor — JWKS validation of inbound bearer tokens.
-      CONSOLE_BFF_GAP_ISSUER_URL: http://auth-service:8081
+      CONSOLE_BFF_IAM_ISSUER_URL: http://auth-service:8081
       CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
       # Per-domain outbound base URLs (ADR-MONO-017 D6 fan-out). Only the
       # finance leg is exercised by the 2 e2e specs (PC-FE-016 finance card
@@ -377,7 +377,7 @@ services:
       # scm / erp) are wired to non-routable hostnames so their adapters
       # surface as `down`/`unreachable` on the overview rather than 502'ing
       # the entire response.
-      CONSOLE_BFF_OUTBOUND_GAP_BASE_URL: http://admin-service:8085
+      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: http://admin-service:8085
       CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
       CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://127.0.0.1:9
       CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://127.0.0.1:9
@@ -434,12 +434,12 @@ services:
       # endpoints (operators list/create/edit-roles/change-status/change-
       # password/update-profile/admin-set-profile) AND the audit + accounts
       # surfaces (TASK-PC-FE-002/003/004). console-web's `env.ts` defaults
-      # this to `http://gap.local` (the dev Traefik path); the e2e overlay
+      # this to `http://iam.local` (the dev Traefik path); the e2e overlay
       # has no Traefik, so the default would resolve nowhere → 5s timeout
       # on `/api/admin/operators?page=0&size=20` → server `operators-state`
       # falls into `degraded: true` branch → MyProfileForm never mounts →
       # spec `my-profile-default-account-id` testid 5s timeout.
-      GAP_ADMIN_API_BASE: http://admin-service:8085
+      IAM_ADMIN_API_BASE: http://admin-service:8085
       # console-bff orchestrator — server-side same-origin proxy.
       CONSOLE_BFF_URL: http://console-bff:8080
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.

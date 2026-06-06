@@ -39,7 +39,7 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       # GAP OIDC PUBLIC client (Auth Code + PKCE, no client secret) —
       # registered by TASK-BE-296 (auth-service V0015 seed).
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-platform-console-web}
       OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://console.local/api/auth/callback}
       OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email tenant.read}
@@ -48,7 +48,7 @@ services:
       # boundary GET /api/admin/console/registry (gateway public-path subtree
       # → admin-service OperatorAuthenticationFilter). Called server-side with
       # the EXCHANGED operator token (NOT the GAP OIDC token).
-      CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://gap.local/api/admin/console/registry}
+      CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://iam.local/api/admin/console/registry}
       REGISTRY_TIMEOUT_MS: ${REGISTRY_TIMEOUT_MS:-5000}
       # GAP admin-service RFC 8693 operator-token exchange — AUTHORITATIVE
       # producer path (TASK-BE-298 / admin-api.md / ADR-MONO-014): POST
@@ -56,7 +56,7 @@ services:
       # subtree. Console server-side exchanges the GAP OIDC access token
       # (subject_token) for a short-lived operator token (token_type=admin).
       # The GAP OIDC token is never an /api/admin/** credential.
-      CONSOLE_TOKEN_EXCHANGE_URL: ${CONSOLE_TOKEN_EXCHANGE_URL:-http://gap.local/api/admin/auth/token-exchange}
+      CONSOLE_TOKEN_EXCHANGE_URL: ${CONSOLE_TOKEN_EXCHANGE_URL:-http://iam.local/api/admin/auth/token-exchange}
       TOKEN_EXCHANGE_TIMEOUT_MS: ${TOKEN_EXCHANGE_TIMEOUT_MS:-5000}
     labels:
       - "traefik.enable=true"
@@ -82,7 +82,7 @@ services:
   # expose: only — no host-port publish (Local Network Convention ADR-MONO-001).
   #
   # Per-domain credential dispatch is request-scoped (stateless, no DB/Redis).
-  # GAP issuer URL is passed via CONSOLE_BFF_GAP_ISSUER_URL (JWKS discovery).
+  # GAP issuer URL is passed via CONSOLE_BFF_IAM_ISSUER_URL (JWKS discovery).
   # ---------------------------------------------------------------------------
   console-bff:
     build:
@@ -96,7 +96,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: "8080"
       # GAP OIDC issuer for RS256 JWKS validation of inbound bearer tokens.
-      CONSOLE_BFF_GAP_ISSUER_URL: ${CONSOLE_BFF_GAP_ISSUER_URL:-http://gap.local}
+      CONSOLE_BFF_IAM_ISSUER_URL: ${CONSOLE_BFF_IAM_ISSUER_URL:-http://iam.local}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"

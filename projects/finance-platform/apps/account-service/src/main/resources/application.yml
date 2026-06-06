@@ -39,10 +39,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
           # V0017 SQL seeded the finance-platform OIDC client against GAP's
           # standard /oauth2/jwks endpoint (scm / wms / fan-platform alignment).
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -82,11 +82,11 @@ logging:
 
 financeplatform:
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "global-account-platform"
+    # D2-b deprecation window: SAS issuer + legacy "iam"
     # string. Keep byte-identical to gateway-service's allowed-issuers when the
     # gateway-service is introduced (cross-service issuer drift guard — scm
     # precedent).
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:finance}
   account:
     crypto:

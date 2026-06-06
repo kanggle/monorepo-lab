@@ -12,7 +12,7 @@ import okhttp3.mockwebserver.RecordedRequest;
  * by {@link JwtTestHelper} at {@code /oauth2/jwks}.
  *
  * <p>The path matches GAP V0013's standard endpoint (per Edge Case E2 — V0013
- * SQL seeded {@code jwks_uri = http://gap.local/oauth2/jwks}, not the legacy
+ * SQL seeded {@code jwks_uri = http://iam.local/oauth2/jwks}, not the legacy
  * {@code /.well-known/jwks.json}).
  */
 public final class JwksMockServer implements AutoCloseable {

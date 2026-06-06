@@ -48,8 +48,8 @@ services:
     environment:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       OIDC_REQUIRED_TENANT_ID: scm
       OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-scm-platform-internal-services-client}
       OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-scm-dev}
@@ -181,8 +181,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
       KAFKA_BOOTSTRAP: kafka:9092
       REDIS_HOST: redis
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
     depends_on:
       postgres:
         condition: service_healthy
@@ -216,8 +216,8 @@ services:
       # WMS_KAFKA_BOOTSTRAP: cross-project event source. In dev, same cluster.
       KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
       REDIS_HOST: redis
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://gap.local}
-      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://gap.local/oauth2/jwks}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       STALENESS_THRESHOLD_SECONDS: ${STALENESS_THRESHOLD_SECONDS:-600}
     depends_on:
       postgres:

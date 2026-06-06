@@ -373,7 +373,7 @@ service); GAP supplies `tenant_id=finance`. Defense-in-depth (mirrors scm):
 
 1. **Gateway** (v1 deferred) — domain gate at JWT decode.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` (SAS issuer +
-   legacy `global-account-platform` D2-b window — byte-identical to the
+   legacy `iam-platform` D2-b window — byte-identical to the
    future gateway's allowed-issuers) + `TenantClaimValidator`.
 3. **Service filter** — `TenantClaimEnforcer` → 403 `TENANT_FORBIDDEN` when
    the gate rejects (public paths skipped).
@@ -411,7 +411,7 @@ always embed `tenant_id` in `WHERE` (no tenant-omitting method exists).
 ## Security
 
 - **JWT (RS256)**: `oauth2-resource-server` against
-  `${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks`; RS256 only;
+  `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`.
   GAP `finance-platform-internal-services-client` (client_credentials,
   scopes `finance.read`/`finance.write`, V0017) is the v1 caller.
@@ -553,7 +553,7 @@ No cross-service master-event consumption in v1 (account-service is a leaf).
 - `rules/domains/fintech.md` (F1–F8 — governing), `rules/traits/transactional.md`,
   `rules/traits/regulated.md`, `rules/traits/audit-heavy.md`
 - `projects/finance-platform/PROJECT.md`,
-  [`gap-integration.md`](../../integration/gap-integration.md)
+  [`iam-integration.md`](../../integration/iam-integration.md)
 - [`account-api.md`](../../contracts/http/account-api.md) (this PR),
   [`finance-account-events.md`](../../contracts/events/finance-account-events.md) (this PR)
 - precedent: `projects/scm-platform/specs/services/procurement-service/architecture.md`

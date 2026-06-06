@@ -7,7 +7,7 @@
 | Domain | `scm` ([rules/domains/scm.md](../../rules/domains/scm.md)) |
 | Traits | `transactional`, `integration-heavy`, `batch-heavy` |
 | Service Types | `rest-api`, `event-consumer`, `batch-job` |
-| IdP | GAP (`tenant_id=scm`) — [GAP integration](../global-account-platform/PROJECT.md) |
+| IdP | GAP (`tenant_id=scm`) — [GAP integration](../iam-platform/PROJECT.md) |
 | Hostname | `scm.local` (Traefik routing, ADR-MONO-001) |
 | Status | **v1 bootstrap (TASK-MONO-040)** — skeleton only, 첫 service 미가동 |
 
@@ -69,7 +69,7 @@ dev 토큰 발급 (GAP `scm-platform-internal-services-client` 등록 완료, TA
 ```bash
 curl -u scm-platform-internal-services-client:scm-dev \
      -d "grant_type=client_credentials&scope=scm.read" \
-     http://gap.local/oauth2/token
+     http://iam.local/oauth2/token
 ```
 
 ---
@@ -83,7 +83,7 @@ GAP 측 인프라 (TASK-MONO-042 머지 완료):
 - `oauth_clients.client_id='scm-platform-internal-services-client'` (client_credentials, scopes=`scm.read`/`scm.write`) — auth-service V0013
 - `oauth_scopes` — `scm.read`, `scm.write` — auth-service V0013
 
-상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#gap-idp-integration) + (후속) `specs/integration/gap-integration.md`.
+상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#iam-idp-integration) + (후속) `specs/integration/iam-integration.md`.
 
 ---
 
@@ -103,4 +103,4 @@ GAP 측 인프라 (TASK-MONO-042 머지 완료):
 - [rules/domains/scm.md](../../rules/domains/scm.md) — scm 도메인 mandatory rules · bounded contexts · ubiquitous language
 - [ADR-MONO-002](../../docs/adr/ADR-MONO-002-phase-4-template-extraction-trigger.md) — Phase 4 catalyst 결정
 - [TASK-MONO-040](../../tasks/done/) (본 부트스트랩) / [TASK-MONO-042](../../tasks/done/) (GAP V0013/V0015 시드)
-- [TEMPLATE.md § GAP IdP Integration Pattern](../../TEMPLATE.md#gap-idp-integration-pattern-new-projects) — 신규 프로젝트의 GAP 통합 표준 절차
+- [TEMPLATE.md § GAP IdP Integration Pattern](../../TEMPLATE.md#iam-idp-integration-pattern-new-projects) — 신규 프로젝트의 GAP 통합 표준 절차

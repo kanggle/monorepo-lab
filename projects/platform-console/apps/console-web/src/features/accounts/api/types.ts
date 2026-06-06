@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Feature-local types for the GAP accounts operator surface.
  *
  * Authoritative producer contract (do NOT redefine — consume only):
- *   `global-account-platform/specs/contracts/http/admin-api.md`
+ *   `iam/specs/contracts/http/admin-api.md`
  *   §§ `GET /api/admin/accounts`, `.../{id}/lock`, `bulk-lock`,
  *      `.../{id}/unlock`, `POST /api/admin/sessions/{accountId}/revoke`,
  *      `.../{id}/gdpr-delete`, `GET .../{id}/export`.

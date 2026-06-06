@@ -15,11 +15,11 @@ spring:
       resourceserver:
         jwt:
           # OIDC issuer for SAS-issued tokens (GAP auth-service).
-          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
           # JWKS endpoint default. V0013 SQL seeded the scm-platform OIDC client
           # against GAP's standard /oauth2/jwks endpoint (TASK-MONO-035 alignment).
           # Edge Case E2: default to /oauth2/jwks, not /.well-known/jwks.json.
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
   cloud:
     gateway:
@@ -125,8 +125,8 @@ scmplatform:
   # OIDC Resource Server validators.
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window:
-    # SAS issuer URL + the legacy "global-account-platform" string.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    # SAS issuer URL + the legacy "iam" string.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
 
 # JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable

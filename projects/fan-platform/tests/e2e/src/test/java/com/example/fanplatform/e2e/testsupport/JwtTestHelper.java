@@ -29,7 +29,7 @@ import java.util.UUID;
  * {@code JWT_JWKS_URI} env var points at the host JVM's JWKS server so Spring
  * Security's oauth2 resource-server validates signatures against the same key.
  *
- * <p>Tokens are issued with {@code iss=http://gap.local} (matches the SAS
+ * <p>Tokens are issued with {@code iss=http://iam.local} (matches the SAS
  * issuer the gateway/community/artist services accept by default) and
  * {@code tenant_id=fan-platform} (matches the required tenant). Cross-tenant
  * tokens use {@code tenant_id=wms} to verify the gateway's tenant gate.
@@ -37,7 +37,7 @@ import java.util.UUID;
 public final class JwtTestHelper {
 
     /** Issuer URL used by SAS-issued tokens (matches application.yml default across all 3 services). */
-    public static final String SAS_ISSUER = "http://gap.local";
+    public static final String SAS_ISSUER = "http://iam.local";
     /** Required tenant for the fan-platform gateway. */
     public static final String DEFAULT_TENANT_ID = "fan-platform";
     /** Token lifetime — generous so a slow CI run never trips an exp boundary. */

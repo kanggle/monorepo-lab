@@ -31,11 +31,11 @@ The migration was completed in three steps:
 
 ## Replacement
 
-- **Token issuance / login**: `projects/global-account-platform/` — GAP
-  Authorization Server at `http://gap.local` (dev) or the production GAP
+- **Token issuance / login**: `projects/iam-platform/` — GAP
+  Authorization Server at `http://iam.local` (dev) or the production GAP
   cluster.
-- **Integration spec**: `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
-- **GAP auth contract**: `projects/global-account-platform/specs/contracts/http/auth-api.md`
+- **Integration spec**: `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`
+- **GAP auth contract**: `projects/iam-platform/specs/contracts/http/auth-api.md`
 
 ## Source Code
 

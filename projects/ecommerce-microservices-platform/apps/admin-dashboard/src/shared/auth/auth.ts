@@ -16,12 +16,12 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  * rejected and bounced back to `/login?error=account_type_mismatch`.
  *
  * See:
- *   - projects/global-account-platform/specs/features/consumer-integration-guide.md § Phase 4
- *   - projects/ecommerce-microservices-platform/specs/integration/gap-integration.md (TASK-MONO-027)
+ *   - projects/iam-platform/specs/features/consumer-integration-guide.md § Phase 4
+ *   - projects/ecommerce-microservices-platform/specs/integration/iam-integration.md (TASK-MONO-027)
  *   - projects/fan-platform/web/fan-platform-web/src/shared/auth/auth.ts (reference pattern)
  */
 
-interface GapOidcProfile {
+interface IamOidcProfile {
   sub: string;
   email?: string;
   name?: string;
@@ -47,7 +47,7 @@ export const authConfig: NextAuthConfig = {
       id: 'gap',
       name: 'Global Account Platform',
       type: 'oidc',
-      issuer: process.env.OIDC_ISSUER_URL ?? 'http://gap.local',
+      issuer: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
       clientId: process.env.ECOMMERCE_ADMIN_DASHBOARD_CLIENT_ID ?? 'ecommerce-admin-dashboard-client',
       clientSecret: process.env.ECOMMERCE_ADMIN_DASHBOARD_CLIENT_SECRET ?? '',
       authorization: {
@@ -56,7 +56,7 @@ export const authConfig: NextAuthConfig = {
         },
       },
       checks: ['pkce', 'state'],
-      profile(profile: GapOidcProfile) {
+      profile(profile: IamOidcProfile) {
         return {
           id: profile.sub,
           accountId: profile.account_id ?? profile.sub,
@@ -75,7 +75,7 @@ export const authConfig: NextAuthConfig = {
      * `/login?error=account_type_mismatch` URL is set for the LoginForm banner.
      */
     async signIn({ profile }) {
-      const p = profile as GapOidcProfile | undefined;
+      const p = profile as IamOidcProfile | undefined;
       if (p?.account_type && p.account_type !== ALLOWED_ACCOUNT_TYPE) {
         return '/login?error=account_type_mismatch';
       }
@@ -91,7 +91,7 @@ export const authConfig: NextAuthConfig = {
         token.idToken = account.id_token;
       }
       if (profile) {
-        const p = profile as GapOidcProfile;
+        const p = profile as IamOidcProfile;
         token.tenantId = p.tenant_id ?? token.tenantId;
         token.accountId = p.account_id ?? token.accountId;
         token.roles = p.roles ?? token.roles;

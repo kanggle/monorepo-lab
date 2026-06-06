@@ -8,9 +8,9 @@ import { OperatorExchangeError } from '@/shared/api/errors';
  * access token  →  admin-service operator token.
  *
  * Authoritative producer contract (do NOT redefine here — consume only):
- *   - `global-account-platform/specs/contracts/http/admin-api.md`
+ *   - `iam/specs/contracts/http/admin-api.md`
  *     § `POST /api/admin/auth/token-exchange` (request / 200 / 400 / 401).
- *   - `global-account-platform/specs/services/admin-service/security.md`
+ *   - `iam/specs/services/admin-service/security.md`
  *     § GAP OIDC Subject-Token Validation (producer fail-closed policy).
  *   - Consumer obligation: `console-integration-contract.md` § 2.6
  *     (ADR-MONO-014 D2 re-exchange model; fail-closed mapping).
@@ -156,7 +156,7 @@ export async function exchangeForOperatorToken(
         'operator token exchange timed out',
       );
     }
-    // Network / DNS / unreachable gap.local — never expose the cause string
+    // Network / DNS / unreachable iam.local — never expose the cause string
     // (may carry the URL but not tokens; still keep it generic + no token).
     logger.error('operator_exchange_error', { requestId });
     throw new OperatorExchangeError(

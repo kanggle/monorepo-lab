@@ -13,10 +13,10 @@
 
 ## Job별 진단
 
-### Job 1 — Integration (global-account-platform, Testcontainers)
+### Job 1 — Integration (iam-platform, Testcontainers)
 
 - **Job DB ID**: 74252350954
-- **Failed task**: `:projects:global-account-platform:apps:gateway-service:integrationTest`
+- **Failed task**: `:projects:iam-platform:apps:gateway-service:integrationTest`
 - **모든 8 통합 테스트 클래스가 동일 stack trace로 FAIL**:
 
 ```

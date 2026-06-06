@@ -4,7 +4,7 @@ import com.kanggle.platformconsole.bff.application.composition.CompositionEngine
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
-import com.kanggle.platformconsole.bff.application.port.outbound.GapAccountsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.IamAccountsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsInventoryReadPort;
 import com.kanggle.platformconsole.bff.domain.composition.DegradePolicy;
@@ -57,7 +57,7 @@ public class OperatorOverviewCompositionUseCase {
 
     private final CredentialSelectionPort credentialSelection;
     private final CompositionEngine engine;
-    private final GapAccountsReadPort gapPort;
+    private final IamAccountsReadPort gapPort;
     private final WmsInventoryReadPort wmsPort;
     private final ScmInventoryReadPort scmPort;
     private final FinanceBalanceReadPort financePort;
@@ -67,7 +67,7 @@ public class OperatorOverviewCompositionUseCase {
             CredentialSelectionPort credentialSelection,
             MeterRegistry meterRegistry,
             Tracer tracer,
-            GapAccountsReadPort gapPort,
+            IamAccountsReadPort gapPort,
             WmsInventoryReadPort wmsPort,
             ScmInventoryReadPort scmPort,
             FinanceBalanceReadPort financePort,
@@ -194,7 +194,7 @@ public class OperatorOverviewCompositionUseCase {
     private static String bearerFromCred(OutboundCredential cred) {
         return switch (cred) {
             case OutboundCredential.OperatorToken t -> t.token();
-            case OutboundCredential.GapOidcAccessToken t -> t.token();
+            case OutboundCredential.IamOidcAccessToken t -> t.token();
         };
     }
 

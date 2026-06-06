@@ -11,7 +11,7 @@ import java.util.Objects;
 
 /**
  * Accepts tokens whose {@code iss} matches any configured allowed issuer
- * (SAS issuer + legacy {@code global-account-platform} D2-b window). Mirrors
+ * (SAS issuer + legacy {@code iam} D2-b window). Mirrors
  * the scm-platform service-level validator (defense-in-depth — byte-identical
  * to the future finance gateway-service allowed-issuers).
  */

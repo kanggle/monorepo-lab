@@ -277,7 +277,7 @@ opts in.
 - `platform/testing-strategy.md`
 - `projects/wms-platform/apps/master-service` (Hexagonal master-data reference)
 - `projects/fan-platform/apps/community-service` (sibling fan-platform service patterns)
-- `projects/fan-platform/specs/integration/gap-integration.md`
+- `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/services/gateway-service/architecture.md`
 - `rules/traits/transactional.md` § T3 / T4 (outbox / state machine)
 - `rules/domains/fan-platform.md` § F1 / F7 (asymmetric content, multi-tenant)

@@ -10,7 +10,7 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 
 | Spec | Domain | Assertion |
 |---|---|---|
-| `gap-golden-path.spec.ts` | GAP | operator registry list 200 + 1+ row |
+| `iam-golden-path.spec.ts` | GAP | operator registry list 200 + 1+ row |
 | `wms-golden-path.spec.ts` | wms | warehouse list 200 + seed row |
 | `scm-golden-path.spec.ts` | scm | purchase order list 200 + seed PO |
 | `finance-golden-path.spec.ts` | finance | account detail 200 + KRW balance |
@@ -29,9 +29,9 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 ```bash
 # 1. Build boot jars (from repo root)
 ./gradlew \
-  :projects:global-account-platform:apps:auth-service:bootJar \
-  :projects:global-account-platform:apps:account-service:bootJar \
-  :projects:global-account-platform:apps:admin-service:bootJar \
+  :projects:iam-platform:apps:auth-service:bootJar \
+  :projects:iam-platform:apps:account-service:bootJar \
+  :projects:iam-platform:apps:admin-service:bootJar \
   :projects:finance-platform:apps:account-service:bootJar \
   :projects:wms-platform:apps:master-service:bootJar \
   :projects:scm-platform:apps:procurement-service:bootJar \

@@ -17,7 +17,7 @@ const csp = [
   // same-origin Next route handlers. connect-src stays 'self'. form-action
   // allows the GAP authorize redirect target.
   "connect-src 'self'",
-  "form-action 'self' http://gap.local http://localhost:3000",
+  "form-action 'self' http://iam.local http://localhost:3000",
 ].join('; ');
 
 const nextConfig = {

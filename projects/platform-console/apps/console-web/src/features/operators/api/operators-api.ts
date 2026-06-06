@@ -179,7 +179,7 @@ async function callGapOperators<T>(
   );
 
   try {
-    const res = await fetch(`${env.GAP_ADMIN_API_BASE}${opts.path}`, {
+    const res = await fetch(`${env.IAM_ADMIN_API_BASE}${opts.path}`, {
       method: opts.method,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),

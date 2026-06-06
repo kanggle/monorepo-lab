@@ -8,7 +8,7 @@ package com.kanggle.platformconsole.bff.domain.credential;
  * <ul>
  *   <li>{@link OperatorToken} — RFC 8693 exchanged operator token, used exclusively for
  *       the GAP admin surface ({@code /api/admin/**}).</li>
- *   <li>{@link GapOidcAccessToken} — GAP OIDC access token, used for non-GAP domains
+ *   <li>{@link IamOidcAccessToken} — GAP OIDC access token, used for non-GAP domains
  *       (wms / scm / finance / erp).</li>
  * </ul>
  *
@@ -18,7 +18,7 @@ package com.kanggle.platformconsole.bff.domain.credential;
  * non-null via the record components).
  */
 public sealed interface OutboundCredential
-        permits OutboundCredential.OperatorToken, OutboundCredential.GapOidcAccessToken {
+        permits OutboundCredential.OperatorToken, OutboundCredential.IamOidcAccessToken {
 
     /**
      * RFC 8693 exchanged operator token.
@@ -37,8 +37,8 @@ public sealed interface OutboundCredential
      * GAP OIDC access token (RS256).
      * Used for non-GAP domains — wms / scm / finance / erp.
      */
-    record GapOidcAccessToken(String token) implements OutboundCredential {
-        public GapOidcAccessToken {
+    record IamOidcAccessToken(String token) implements OutboundCredential {
+        public IamOidcAccessToken {
             if (token == null || token.isBlank()) {
                 throw new MissingCredentialException(
                         "GAP OIDC access token is absent — non-GAP leg dispatch fails closed");

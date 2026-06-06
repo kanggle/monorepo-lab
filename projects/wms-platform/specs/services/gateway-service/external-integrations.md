@@ -6,7 +6,7 @@ External vendor catalog for `gateway-service`. Required artifact per
 **Zero-state declaration**: `gateway-service` is the **edge gateway** of
 the WMS — every external HTTP request passes through it, but the gateway
 itself **calls no external vendor** in v1. The OAuth2 Authorization
-Server it consults for JWT validation (`gap-platform`) is a sibling
+Server it consults for JWT validation (`iam-platform`) is a sibling
 project within the same monorepo deploy, classified as project-internal
 infrastructure (see § Internal vs External Boundary). External-bound
 traffic is reverse-proxied to downstream sibling services; gateway's own
@@ -51,7 +51,7 @@ The vendor surface that *does* exist (Slack / TMS / ERP) is owned by the downstr
 | Component | Classified as | Rationale |
 |---|---|---|
 | Redis (rate-limit counters) | **infrastructure** (project-shared, ephemeral) | No persistent data; outage fails open per `platform/api-gateway-policy.md` |
-| OAuth2 Authorization Server / JWKS endpoint | **internal infrastructure (project-cohabited)** | v1 deploy: `gap-platform` sibling project hosts the AS within the same monorepo deploy. Gateway fetches JWKS at boot + on token kid miss. Treated as infrastructure, not vendor, because it shares the deploy lifecycle. **If AS is swapped to external SaaS (Auth0 / Cognito / Okta), this file leaves zero-state** — full I1-I3 timeout / circuit / retry policy required for the JWKS path |
+| OAuth2 Authorization Server / JWKS endpoint | **internal infrastructure (project-cohabited)** | v1 deploy: `iam-platform` sibling project hosts the AS within the same monorepo deploy. Gateway fetches JWKS at boot + on token kid miss. Treated as infrastructure, not vendor, because it shares the deploy lifecycle. **If AS is swapped to external SaaS (Auth0 / Cognito / Okta), this file leaves zero-state** — full I1-I3 timeout / circuit / retry policy required for the JWKS path |
 | Downstream 5 sibling services | **internal service routes** | Reverse-proxy target only; per-route circuit / rate-limit live in the route filter config, not as vendor adapters |
 | External HTTP clients (browsers, admin UI, ERP) | **callers**, not "external integrations" | Inbound traffic, not outbound vendor calls |
 
@@ -80,7 +80,7 @@ Candidate integrations that would migrate this file out of zero-state:
 
 | Candidate | Trigger | New required content |
 |---|---|---|
-| **External SaaS IdP swap** (Auth0 / Cognito / Okta / Azure AD) | Decision to retire `gap-platform` AS in favor of a managed IdP | JWKS endpoint timeout (I1), circuit breaker (I2), retry-with-jitter (I3), kid-cache eviction policy, signing key rotation contract |
+| **External SaaS IdP swap** (Auth0 / Cognito / Okta / Azure AD) | Decision to retire `iam-platform` AS in favor of a managed IdP | JWKS endpoint timeout (I1), circuit breaker (I2), retry-with-jitter (I3), kid-cache eviction policy, signing key rotation contract |
 | **SAML / SCIM federation** | Operator base demands enterprise SSO + auto-provisioning beyond OAuth2/OIDC | I6 inbound webhook (SCIM POST), I7 vendor SDK isolation for SAML assertion parser, multi-IdP routing |
 | **WAF / DDoS shield** (Cloudflare / AWS Shield in front) | Public deployment with hostile traffic profile | Mostly out-of-process (lives in front of gateway), but gateway grows trust-the-client-IP-from-header logic |
 | **API key issuer (vendor API marketplace)** | WMS exposes `/api/v1/**` to external partners with metered access | Per-key rate-limit tier, key issuance / revocation event consumer, billing meter publication |

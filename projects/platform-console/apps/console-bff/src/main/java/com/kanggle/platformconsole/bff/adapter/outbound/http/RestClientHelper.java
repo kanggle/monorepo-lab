@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 /**
  * Static helper for the authenticated outbound read legs used by
- * {@link GapAccountsReadAdapter}, {@link WmsInventoryReadAdapter},
+ * {@link IamAccountsReadAdapter}, {@link WmsInventoryReadAdapter},
  * {@link ScmInventoryReadAdapter}, {@link FinanceBalanceReadAdapter},
  * and {@link ErpDepartmentsReadAdapter}.
  *

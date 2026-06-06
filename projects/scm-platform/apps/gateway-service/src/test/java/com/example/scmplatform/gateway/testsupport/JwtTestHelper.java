@@ -28,9 +28,9 @@ import java.util.UUID;
 public final class JwtTestHelper {
 
     /** Legacy issuer string kept on the AllowedIssuersValidator allowlist. */
-    public static final String LEGACY_ISSUER = "global-account-platform";
+    public static final String LEGACY_ISSUER = "iam";
     /** Issuer URL used by SAS-issued tokens (matches application.yml default). */
-    public static final String SAS_ISSUER = "http://gap.local";
+    public static final String SAS_ISSUER = "http://iam.local";
     /** Required tenant for the scm-platform gateway. */
     public static final String DEFAULT_TENANT_ID = "scm";
     /** V0013-seeded internal client_id (per TASK-MONO-042). */

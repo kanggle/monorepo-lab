@@ -481,7 +481,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     //     the FINANCE MockWebServer (snapshot-and-diff request-count pattern).
     //   header-set   → finance card ok; exactly 1 request fired against the
     //     FINANCE leg with path /api/finance/accounts/{id}/balances and
-    //     Authorization: Bearer <gap-oidc-token>.
+    //     Authorization: Bearer <iam-oidc-token>.
     // ------------------------------------------------------------------
 
     @Test
@@ -513,7 +513,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     }
 
     @Test
-    @DisplayName("inbound_header_set_finance_ok_one_outbound: X-Finance-Default-Account-Id → finance ok with data; exactly 1 outbound fired with /api/finance/accounts/{id}/balances + Bearer gap-oidc")
+    @DisplayName("inbound_header_set_finance_ok_one_outbound: X-Finance-Default-Account-Id → finance ok with data; exactly 1 outbound fired with /api/finance/accounts/{id}/balances + Bearer iam-oidc")
     void inbound_header_set_finance_ok_one_outbound() throws Exception {
         respond(GAP, 200, "{\"page\":{\"totalElements\":1}}");
         respond(WMS, 200, "{\"snapshotTotal\":1}");

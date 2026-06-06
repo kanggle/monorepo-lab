@@ -82,7 +82,7 @@ fan-platform 도메인에서 공통으로 발생하는 에러는 [../../platform
 
 ### 외부 (플랫폼 경계 바깥)
 
-- **GAP (global-account-platform)** — OIDC IdP. RS256 JWT 검증, `tenant_id=fan-platform` claim, account profile 조회. **표준 OAuth2 Resource Server 패턴** 으로 통합.
+- **GAP (iam-platform)** — OIDC IdP. RS256 JWT 검증, `tenant_id=fan-platform` claim, account profile 조회. **표준 OAuth2 Resource Server 패턴** 으로 통합.
 - **MinIO / S3** — 미디어 (포스트 이미지, 아티스트 프로필 사진) 저장. CDN 연동.
 - **PG (Payment Gateway)** — 멤버십 결제 (v2). mock 으로 시작 가능.
 - **푸시 알림 채널** — FCM / APNs / 이메일 / 카카오톡 알림톡 (v2 notification-service).
@@ -149,7 +149,7 @@ MEMBERS_ONLY / PREMIUM 콘텐츠 접근 시 멤버십 서비스 호출이 timeou
 1. **Bounded context 맵** — 각 context 의 책임·소유 데이터·통신 방향. 위치: `specs/services/` 전반 또는 `specs/architecture.md`
 2. **포스트 상태 머신** — DRAFT / PUBLISHED / HIDDEN / DELETED 전이 다이어그램. 위치: `specs/services/community-service/state-machines/post-status.md`
 3. **멤버십 등급 정의** — FREE / BASIC / PREMIUM 등급별 콘텐츠 접근 매트릭스. 위치: `specs/services/membership-service/membership-tiers.md` (v2)
-4. **GAP OIDC 통합 가이드** — `tenant_id=fan-platform` 검증, JWKS URI, role mapping. 위치: `specs/integration/gap-integration.md`
+4. **GAP OIDC 통합 가이드** — `tenant_id=fan-platform` 검증, JWKS URI, role mapping. 위치: `specs/integration/iam-integration.md`
 5. **에러 코드 등록** — 위 Standard Error Codes 가 [../../platform/error-handling.md](../../platform/error-handling.md) 에 존재
 6. **Frontend → Backend API 계약** — Next.js fan-platform-web 이 호출하는 gateway 라우트. 위치: `specs/contracts/http/community-api.md`, `artist-api.md` 등
 

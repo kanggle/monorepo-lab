@@ -58,8 +58,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OIDC_ISSUER_URL:http://gap.local}
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://gap.local}/oauth2/jwks}}
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -99,9 +99,9 @@ logging:
 
 scmplatform:
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "global-account-platform" string.
+    # D2-b deprecation window: SAS issuer + legacy "iam" string.
     # MUST stay byte-identical to gateway-service's allowed-issuers.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://gap.local},global-account-platform}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
 
 inventory-visibility:

@@ -2,7 +2,7 @@
 
 These manifests are kept for historical reference only. The ecommerce
 auth-service component was retired by TASK-BE-132 (PR #150) after the
-ecommerce platform cut over to GAP (global-account-platform) as the
+ecommerce platform cut over to GAP (iam-platform) as the
 standard OIDC provider.
 
 The `Deployment` here still references SealedSecrets (`jwt-secret`,
@@ -15,7 +15,7 @@ applying these manifests will fail with `CreateContainerConfigError`.
   `OIDC_ISSUER_URL` + `OIDC_JWK_SET_URI` (TASK-MONO-027 / PR #145).
 - User-facing sign-in: `web-store` and `admin-dashboard` use NextAuth v5
   with the GAP OIDC provider (TASK-FE-067 / PR #148).
-- Spec: `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`.
+- Spec: `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`.
 
 ## Removal policy
 

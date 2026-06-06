@@ -208,7 +208,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         // AC-A + AC-C: token + tenant pass-through verification.
         //
         // Non-GAP legs (WMS, SCM, ERP + FINANCE when activated) receive the
-        // inbound bearer verbatim (GapOidcAccessToken = Authorization bearer,
+        // inbound bearer verbatim (IamOidcAccessToken = Authorization bearer,
         // CredentialSelectionAdapter rows WMS/SCM/FINANCE/ERP).
         // ----------------------------------------------------------------
 

@@ -128,8 +128,8 @@ class TenantClaimValidatorTest {
     @DisplayName("AllowedIssuersValidator accepts listed issuer, rejects others")
     void issuerValidator() {
         var v = new AllowedIssuersValidator(
-                java.util.List.of("http://gap.local", "global-account-platform"));
-        assertThat(v.validate(jwtWith(Map.of("iss", "http://gap.local",
+                java.util.List.of("http://iam.local", "iam"));
+        assertThat(v.validate(jwtWith(Map.of("iss", "http://iam.local",
                 "sub", "s"))).hasErrors()).isFalse();
         assertThat(v.validate(jwtWith(Map.of("iss", "http://evil",
                 "sub", "s"))).hasErrors()).isTrue();

@@ -13,8 +13,8 @@ import java.util.Objects;
  * Accepts tokens whose {@code iss} claim matches any of the configured allowed issuers.
  *
  * <p>D2-b deprecation window: GAP issues two flavours of access token signed by the
- * same JWKS — the SAS issuer URL (e.g. {@code http://gap.local}) and the legacy
- * {@code "global-account-platform"} string. Both must validate at the scm-platform
+ * same JWKS — the SAS issuer URL (e.g. {@code http://iam.local}) and the legacy
+ * {@code "iam"} string. Both must validate at the scm-platform
  * gateway while the legacy path is being deprecated.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {

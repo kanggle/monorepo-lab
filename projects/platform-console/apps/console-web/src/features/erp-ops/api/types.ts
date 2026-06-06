@@ -19,7 +19,7 @@ import { z } from 'zod';
  * same outcome as § 2.4.6 scm / § 2.4.7 finance).
  *
  * erp-side spec-first basis:
- * `erp-platform/specs/integration/gap-integration.md` § *platform-
+ * `erp-platform/specs/integration/iam-integration.md` § *platform-
  * console Operator Read Consumer* (TASK-ERP-BE-002, merged
  * 2026-05-20).
  *

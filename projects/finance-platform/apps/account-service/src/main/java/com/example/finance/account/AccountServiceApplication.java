@@ -16,7 +16,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>Planned dependencies: MySQL ({@code finance_db}), Redis (idempotency
  * cache), GAP IdP (OAuth2 Resource Server, RS256 JWKS, {@code tenant_id=finance}
  * fail-closed gate). See {@code projects/finance-platform/PROJECT.md} +
- * {@code specs/integration/gap-integration.md}.
+ * {@code specs/integration/iam-integration.md}.
  */
 @SpringBootApplication
 public class AccountServiceApplication {

@@ -23,9 +23,9 @@ import { shouldSkipGap, loginAsSeededConsumer } from './helpers/auth';
  * regression gate for that contract.
  *
  * Requires a real GAP container built from BE-329+ (emits account_type) +
- * the consumer seed (`e2e/fixtures/gap-consumer-seed.sql`, account_type=CONSUMER).
+ * the consumer seed (`e2e/fixtures/iam-consumer-seed.sql`, account_type=CONSUMER).
  * Gated on SKIP_GAP_E2E so the default CI run (=1) skips it — no regression to
- * the nightly frontend-e2e job. See `docker-compose.gap-e2e.yml`.
+ * the nightly frontend-e2e job. See `docker-compose.iam-e2e.yml`.
  */
 test.describe('account_type claim end-to-end (GAP → web-store session)', () => {
   test.skip(shouldSkipGap(), 'requires a running GAP container (SKIP_GAP_E2E=1)');

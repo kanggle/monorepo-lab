@@ -20,8 +20,8 @@ The simplest path: open a shell inside the container and use the native CLI.
 # wms-platform postgres
 docker exec -it wms-postgres psql -U wms_user -d wms_db
 
-# global-account-platform postgres (for any GAP service's DB)
-docker exec -it gap-postgres psql -U auth_user -d auth_db
+# iam-platform postgres (for any GAP service's DB)
+docker exec -it iam-postgres psql -U auth_user -d auth_db
 ```
 
 ### Redis

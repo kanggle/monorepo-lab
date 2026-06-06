@@ -54,7 +54,7 @@
 #   CONSOLE_BFF_OUTBOUND_ERP_BASE_URL=http://erp-masterdata-service:8080
 #
 # Usage (local dev):
-#   ./gradlew :projects:global-account-platform:apps:auth-service:bootJar ...
+#   ./gradlew :projects:iam-platform:apps:auth-service:bootJar ...
 #   docker compose -f docker-compose.federation-e2e.yml up -d --build mysql redis kafka auth-service account-service admin-service
 #   # wait for admin-service healthy
 #   docker compose -f docker-compose.federation-e2e.yml exec -T mysql mysql -uroot -prootpass < ../fixtures/seed.sql
@@ -64,7 +64,7 @@
 
 name: federation-hardening-e2e
 
-x-gap-service-env: &gap-service-env
+x-iam-service-env: &iam-service-env
   SPRING_PROFILES_ACTIVE: e2e
   DB_HOST: mysql
   DB_PORT: "3306"
@@ -97,7 +97,7 @@ services:
       COMMUNITY_DB_PASSWORD: community_pass
       MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
-      - ../../../projects/global-account-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../../../projects/iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
       interval: 10s
@@ -239,10 +239,10 @@ services:
   # ---------------------------------------------------------------------------
   auth-service:
     build:
-      context: ../../../projects/global-account-platform
+      context: ../../../projects/iam-platform
       dockerfile: apps/auth-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: auth_db
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
@@ -257,7 +257,7 @@ services:
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
     volumes:
-      - ../../../projects/global-account-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
+      - ../../../projects/iam-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -276,10 +276,10 @@ services:
   # ---------------------------------------------------------------------------
   account-service:
     build:
-      context: ../../../projects/global-account-platform
+      context: ../../../projects/iam-platform
       dockerfile: apps/account-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: account_db
       DB_USERNAME: account_user
       DB_PASSWORD: account_pass
@@ -303,10 +303,10 @@ services:
   # ---------------------------------------------------------------------------
   admin-service:
     build:
-      context: ../../../projects/global-account-platform
+      context: ../../../projects/iam-platform
       dockerfile: apps/admin-service/Dockerfile
     environment:
-      <<: *gap-service-env
+      <<: *iam-service-env
       DB_NAME: admin_db
       DB_USERNAME: admin_user
       DB_PASSWORD: admin_pass
@@ -616,12 +616,12 @@ services:
     environment:
       SERVER_PORT: "8080"
       SPRING_PROFILES_ACTIVE: docker
-      CONSOLE_BFF_GAP_ISSUER_URL: http://auth-service:8081
+      CONSOLE_BFF_IAM_ISSUER_URL: http://auth-service:8081
       CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
       # Per-domain outbound base URLs — ALL 5 live for this cohort.
       # ADR-MONO-018 D1: replaces the 127.0.0.1:9 non-routable placeholders
       # in platform-console docker-compose.e2e.yml (wms/scm/erp were placeholder).
-      CONSOLE_BFF_OUTBOUND_GAP_BASE_URL: http://admin-service:8085
+      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: http://admin-service:8085
       # TASK-MONO-162 — the wms + scm operator-overview legs now target the
       # producers that actually serve the BFF adapter paths (previously the wms
       # leg was mis-wired to master-service → NoResourceFoundException → 500, and
@@ -675,7 +675,7 @@ services:
       REGISTRY_TIMEOUT_MS: "5000"
       CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
       TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
-      GAP_ADMIN_API_BASE: http://admin-service:8085
+      IAM_ADMIN_API_BASE: http://admin-service:8085
       CONSOLE_BFF_URL: http://console-bff:8080
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       # TASK-MONO-144 — otel-node (MONO-143 D3) starts the root SSR span +

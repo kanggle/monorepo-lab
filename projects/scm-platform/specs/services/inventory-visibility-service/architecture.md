@@ -299,7 +299,7 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
 - [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) — Category C consumer + Category D sweep + no-outbox best-effort alert
 - [`procurement-service/architecture.md`](../procurement-service/architecture.md) — sibling architecture (section structure reference)
 - [`gateway-service/architecture.md`](../gateway-service/architecture.md)
-- [`gap-integration.md`](../../integration/gap-integration.md)
+- [`iam-integration.md`](../../integration/iam-integration.md)
 - [`gateway-public-routes.md`](../../contracts/http/gateway-public-routes.md)
 - [`inventory-visibility-api.md`](../../contracts/http/inventory-visibility-api.md)
 - [`inventory-visibility-subscriptions.md`](../../contracts/events/inventory-visibility-subscriptions.md)

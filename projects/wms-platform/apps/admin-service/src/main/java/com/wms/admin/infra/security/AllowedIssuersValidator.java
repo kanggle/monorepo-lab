@@ -11,7 +11,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimNames;
 /**
  * Accepts tokens whose {@code iss} claim matches any allowed issuer.
  * Mirrors the master-service pattern (TASK-MONO-019, D2-b deprecation
- * window — accepts SAS issuer + legacy {@code "global-account-platform"}).
+ * window — accepts SAS issuer + legacy {@code "iam"}).
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {
 

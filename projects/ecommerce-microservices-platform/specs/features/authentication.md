@@ -5,14 +5,14 @@
 > TASK-MONO-027 (PR #145) + TASK-FE-067 (PR #148) + TASK-BE-132 (PR #150)
 > retired the in-tree ecommerce auth-service. Identity, signup/login/logout,
 > token issuance, and admin authorization are now owned by GAP
-> (global-account-platform). The ecommerce gateway validates GAP-issued
+> (iam-platform). The ecommerce gateway validates GAP-issued
 > RS256 JWTs via JWKS; the frontends use NextAuth v5 with the GAP OIDC
 > provider.
 >
 > Authoritative sources:
-> - `projects/ecommerce-microservices-platform/specs/integration/gap-integration.md`
-> - `projects/global-account-platform/specs/contracts/http/auth-api.md`
-> - `projects/global-account-platform/specs/features/consumer-integration-guide.md`
+> - `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`
+> - `projects/iam-platform/specs/contracts/http/auth-api.md`
+> - `projects/iam-platform/specs/features/consumer-integration-guide.md`
 >
 > The flows below are retained as historical reference of how the in-tree
 > auth-service used to behave; they no longer reflect runtime behavior.
@@ -31,7 +31,7 @@ Provides user identity management and access control for the platform. Handles a
 
 ## User Flows
 
-> ~~아래 Signup / Login / Token Refresh / Logout 흐름은 폐기된 in-tree auth-service 의 과거 동작이며 런타임을 반영하지 않는다 — 현재 identity/token 은 GAP 가 소유 (상단 DEPRECATED 배너 + `specs/integration/gap-integration.md` 참조).~~
+> ~~아래 Signup / Login / Token Refresh / Logout 흐름은 폐기된 in-tree auth-service 의 과거 동작이며 런타임을 반영하지 않는다 — 현재 identity/token 은 GAP 가 소유 (상단 DEPRECATED 배너 + `specs/integration/iam-integration.md` 참조).~~
 
 ### Signup
 
