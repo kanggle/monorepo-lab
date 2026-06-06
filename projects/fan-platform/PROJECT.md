@@ -67,7 +67,7 @@ GAP 안에 [frozen `community-service`](../iam-platform/apps/community-service/)
 
 상세 아키텍처는 각 service 의 `specs/services/<service>/architecture.md` 에서 선언.
 
-## GAP IdP Integration
+## IAM IdP Integration
 
 `fan-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 fan-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=fan-platform` claim 만 통과시킨다.
 

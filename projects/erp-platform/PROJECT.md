@@ -74,7 +74,7 @@ taxonomy_version: 0.1
 
 상세 아키텍처는 각 service 의 `specs/services/<service>/architecture.md` 에서 선언.
 
-## GAP IdP Integration
+## IAM IdP Integration
 
 `erp-platform` 은 [iam-platform](../iam-platform/PROJECT.md) (GAP) 을 표준 OIDC IdP(SSO) 로 사용한다 ([ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md)). 모든 erp-platform 서비스는 OAuth2 Resource Server 패턴으로 GAP 의 JWKS 기반 RS256 access token 을 검증하고, `tenant_id=erp` claim 만 통과시킨다 (internal-system 경계 — 외부 공개 트래픽 없음).
 
