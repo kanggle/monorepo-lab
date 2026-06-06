@@ -8,7 +8,7 @@ Fix **3 broken cross-file `#anchor` links** caused by the gap→iam rename's hea
 
 # Status
 
-ready
+done
 
 # Owner
 
