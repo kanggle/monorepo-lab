@@ -2,7 +2,7 @@
 
 ## Purpose
 
-계정 생명주기 및 프로필 데이터 전담 서비스. 회원가입, 프로필 CRUD, 그리고 계정 상태(`ACTIVE` / `LOCKED` / `DORMANT` / `DELETED`)의 **상태 기계 소유자**. Global Account Platform에서 "이 사용자가 현재 어떤 상태인가?"에 대한 유일한 진실 소스.
+계정 생명주기 및 프로필 데이터 전담 서비스. 회원가입, 프로필 CRUD, 그리고 계정 상태(`ACTIVE` / `LOCKED` / `DORMANT` / `DELETED`)의 **상태 기계 소유자**. Identity & Access Management에서 "이 사용자가 현재 어떤 상태인가?"에 대한 유일한 진실 소스.
 
 [rules/domains/saas.md](../../../../../rules/domains/saas.md) S1에 따라 credentials(auth-service)과 물리적으로 분리된다. profile 데이터에는 비밀·토큰·해시가 포함되지 않는다.
 

@@ -4,7 +4,7 @@
 
 인증(authentication) 전담 서비스. 사용자 자격 증명을 검증하고, JWT access/refresh token을 발급·회전·무효화한다. 로그인 실패 카운팅, refresh token 재사용 탐지, JWT 서명 키(JWKS) 배포의 단일 소유자. **권한(authorization) 결정은 다루지 않는다** — 그건 각 다운스트림 서비스의 책임.
 
-Global Account Platform에서 "로그인이 성공했는가?"에 대한 유일한 진실 소스.
+Identity & Access Management에서 "로그인이 성공했는가?"에 대한 유일한 진실 소스.
 
 ## Callers
 

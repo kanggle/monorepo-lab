@@ -30,8 +30,8 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `status` | VARCHAR(20) | NOT NULL, DEFAULT 'ACTIVE' | internal | `ACTIVE` / `DISABLED` / `LOCKED`. 소프트 비활성 플래그 |
 | `totp_secret_encrypted` | VARBINARY(255) | NULL | **restricted** | TOTP 시크릿 (envelope encryption). **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
 | `totp_enrolled_at` | DATETIME(6) | NULL | internal | TOTP 등록 완료 시각. **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |
-| `oidc_subject` | VARCHAR(255) | NULL, UNIQUE | internal | **신규 (TASK-BE-298, Flyway V0027)** — GAP OIDC `platform-console-web` access token 의 `sub`(account_id UUID). `POST /api/admin/auth/token-exchange` 의 OIDC↔operator **링크 키**. `NULL` = console-token-exchange 미허용 운영자 (fail-closed 기본값 — 명시적 provisioning 으로만 활성화). 플랫폼-전역 UNIQUE (OIDC subject 공간은 테넌트 무관 — 아래 §OIDC Subject ↔ Operator Link Key). 스코프 상승 비-소스: 이 컬럼은 **링크에만** 쓰이고, tenant 스코프는 `tenant_id` 가 단일 진실 소스 |
-| `finance_default_account_id` | VARCHAR(36) | NULL | internal | **신규 (TASK-BE-304, Flyway V0028)** — 운영자가 platform-console `Operator Overview` (ADR-MONO-017 / `console-integration-contract.md § 2.4.9.1`) 의 finance 카드에서 기본으로 조회할 finance-platform 계정 UUID. `NULL` = 미설정 — platform-console 가 finance 카드를 `forbidden / MISSING_PREREQUISITE` 로 렌더링 (MVP option (b) 잔존 path). 비-NULL = `console-registry-api.md` 응답의 finance product item 에 `operatorContext.defaultAccountId` 로 emit (option (a) 활성화). **불투명 식별자** — GAP 는 finance-platform 에 verify 하지 않음 (cross-service decoupling); stale 값은 BFF 호출 시 finance `404 ACCOUNT_NOT_FOUND` 로 자연 노출. 인덱스 부재 (조회는 항상 operator row PK 단건). 분류 = **internal** (운영자가 선택한 외부 시스템 식별자; PII 아님, credential 아님). |
+| `oidc_subject` | VARCHAR(255) | NULL, UNIQUE | internal | **신규 (TASK-BE-298, Flyway V0027)** — IAM OIDC `platform-console-web` access token 의 `sub`(account_id UUID). `POST /api/admin/auth/token-exchange` 의 OIDC↔operator **링크 키**. `NULL` = console-token-exchange 미허용 운영자 (fail-closed 기본값 — 명시적 provisioning 으로만 활성화). 플랫폼-전역 UNIQUE (OIDC subject 공간은 테넌트 무관 — 아래 §OIDC Subject ↔ Operator Link Key). 스코프 상승 비-소스: 이 컬럼은 **링크에만** 쓰이고, tenant 스코프는 `tenant_id` 가 단일 진실 소스 |
+| `finance_default_account_id` | VARCHAR(36) | NULL | internal | **신규 (TASK-BE-304, Flyway V0028)** — 운영자가 platform-console `Operator Overview` (ADR-MONO-017 / `console-integration-contract.md § 2.4.9.1`) 의 finance 카드에서 기본으로 조회할 finance-platform 계정 UUID. `NULL` = 미설정 — platform-console 가 finance 카드를 `forbidden / MISSING_PREREQUISITE` 로 렌더링 (MVP option (b) 잔존 path). 비-NULL = `console-registry-api.md` 응답의 finance product item 에 `operatorContext.defaultAccountId` 로 emit (option (a) 활성화). **불투명 식별자** — IAM 는 finance-platform 에 verify 하지 않음 (cross-service decoupling); stale 값은 BFF 호출 시 finance `404 ACCOUNT_NOT_FOUND` 로 자연 노출. 인덱스 부재 (조회는 항상 operator row PK 단건). 분류 = **internal** (운영자가 선택한 외부 시스템 식별자; PII 아님, credential 아님). |
 | `last_login_at` | DATETIME(6) | NULL | internal | 마지막 operator JWT 발급 시각 |
 | `created_at` | DATETIME(6) | NOT NULL | internal | — |
 | `updated_at` | DATETIME(6) | NOT NULL | internal | — |
@@ -51,7 +51,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 >
 > ADR-MONO-014 D3 은 OIDC subject ↔ operator 매핑이 **명시적·결정적·
 > operator-row-authoritative**(OIDC token 이 스코프를 상승시키지 않음)여야
-> 한다고만 고정하고, 링크 키 선택을 GAP 구현 태스크의 sub-decision 으로
+> 한다고만 고정하고, 링크 키 선택을 IAM 구현 태스크의 sub-decision 으로
 > 위임했다. **선택: provisioned `admin_operators.oidc_subject VARCHAR(255)
 > NULL UNIQUE` 컬럼** (vs. verified-email 매칭).
 >

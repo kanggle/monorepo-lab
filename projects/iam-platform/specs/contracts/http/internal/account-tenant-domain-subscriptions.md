@@ -9,7 +9,7 @@
 
 **호출 방향**: admin-service (client) → account-service (server)
 **노출 경로**: `/internal/tenant-domain-subscriptions`
-**인증** (TASK-BE-318b 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <GAP client_credentials JWT>` — admin-service 가 `admin-service-client` 로 GAP `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 신규 `/internal/` 경로이므로 기존 `InternalApiFilter` + OAuth2 resource-server `.authenticated()` 게이트가 자동 적용되며 별도 보안 설정은 없다. 정적 `X-Internal-Token` 은 미사용.
+**인증** (TASK-BE-318b 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <IAM client_credentials JWT>` — admin-service 가 `admin-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 신규 `/internal/` 경로이므로 기존 `InternalApiFilter` + OAuth2 resource-server `.authenticated()` 게이트가 자동 적용되며 별도 보안 설정은 없다. 정적 `X-Internal-Token` 은 미사용.
 
 ---
 
@@ -21,7 +21,7 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `domainKey` | string | No | 단일 도메인키 필터 (`gap`\|`wms`\|`scm`\|`erp`\|`finance`). 생략/공백이면 전체 ACTIVE 구독 반환. |
+| `domainKey` | string | No | 단일 도메인키 필터 (`iam`\|`wms`\|`scm`\|`erp`\|`finance`). 생략/공백이면 전체 ACTIVE 구독 반환. |
 | `tenantId` | string | No | 단일 테넌트 id 필터 — 그 테넌트의 ACTIVE 구독만 반환. auth-service 발급-시점 entitled_domains populate(ADR-019 keystone)용 역조회. 생략/공백이면 필터 미적용. |
 
 > **`tenantId` + `domainKey` 조합**: 둘 다 지정 시 AND 로 합성된다 (그 테넌트의, 그 domainKey 인 ACTIVE 구독). `tenantId` 역조회(TASK-BE-324 ADR-019 § 3.3 keystone)는 auth-service `TenantClaimTokenCustomizer` 가 authorization_code/refresh_token 발급 시 그 테넌트의 ACTIVE domainKey 목록을 받아 서명된 `entitled_domains` claim 으로 주입하는 데 쓰인다 (실패/빈 결과 → claim 생략 fail-soft, net-zero).
@@ -43,7 +43,7 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 | `items[].tenantId` | string | 구독 보유 테넌트 id (`tenants.tenant_id` FK) |
 | `items[].domainKey` | string | 구독 대상 product/domain key (catalog key; tenant id 아님) |
 
-> **`gap` 부재 (의도적)**: `gap` product 는 admin-side 에서 `bindsAllTenants=true` 로 전체 등록 테넌트를 federate 하므로 이 표면을 조회하지 않는다. 구독 테이블에 `gap` 행을 시드하면 이중계산이 되므로 backward-compat 시드는 `gap` 을 포함하지 않는다.
+> **`iam` 부재 (의도적)**: `iam` product 는 admin-side 에서 `bindsAllTenants=true` 로 전체 등록 테넌트를 federate 하므로 이 표면을 조회하지 않는다. 구독 테이블에 `iam` 행을 시드하면 이중계산이 되므로 backward-compat 시드는 `iam` 을 포함하지 않는다.
 
 > **Net-zero (ADR-019 step 1)**: backward-compat 시드(`(wms,wms)`/`(scm,scm)`/`(erp,erp)`/`(finance,finance)` self-subscription)로 인해 consumer(admin) catalog derivation 결과가 기존과 byte-identical 하다.
 

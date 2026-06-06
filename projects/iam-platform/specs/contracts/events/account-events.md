@@ -150,12 +150,12 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 
 `account.deleted(anonymized=true)` 이벤트를 수신한 모든 소비 서비스는 자체 보유 PII를 마스킹할 GDPR/PIPA 의무를 진다. 유예 진입(`anonymized=false`) 이벤트는 **마스킹 대상이 아니다** — 유예 종료 후 발행되는 `anonymized=true`만 처리한다.
 
-#### GAP 내부 소비자 의무 표
+#### IAM 내부 소비자 의무 표
 
 | 소비자 | 의무 행동 | SLA | 실패 처리 |
 |---|---|---|---|
 | **security-service** | `login_history`, `suspicious_events`, `account_lock_history` 의 `ip_address(ip_masked)`, `user_agent(user_agent_family)`, `device_fingerprint` 컬럼을 마스킹값으로 UPDATE (`ip_address='0.0.0.0'`, `user_agent='REDACTED'`, `device_fingerprint=SHA256(accountId\|\|salt)` — `salt`는 `app.pii.masking.fingerprint-salt` 로 주입되는 **애플리케이션-수준 고정값**으로 UUID 공간에 대한 pre-image 공격 방지 (TASK-BE-270). 운영 환경은 secret manager 또는 환경변수 override 의무. salt rotation은 기존 마스킹된 row의 hash 일관성을 깨뜨리므로 별도 절차 필요). `tenant_id`, `account_id`는 감사 무결성 보존 (삭제 금지). 마스킹 완료 후 `security.pii.masked` 이벤트를 outbox 로 발행하여 컴플라이언스 audit trail 제공. | 수신 후 24시간 이내 마스킹 완료 | Kafka consumer 실패 → `account.deleted.dlq`. retry 1시간 간격, 5회 초과 시 alert. SLA 24시간은 retry 시간 포함. |
-| **community-service** | 사용자 프로필 캐시(있다면) 무효화. 작성 콘텐츠의 `author_name`을 `"(deleted user)"` 로 교체. content 본문은 community-service 자체 정책에 따름 (GAP 강제 범위 외). | 수신 후 24시간 이내 | Kafka consumer 실패 → `account.deleted.dlq`. community-service 자체 retry/alert 정책 적용. |
+| **community-service** | 사용자 프로필 캐시(있다면) 무효화. 작성 콘텐츠의 `author_name`을 `"(deleted user)"` 로 교체. content 본문은 community-service 자체 정책에 따름 (IAM 강제 범위 외). | 수신 후 24시간 이내 | Kafka consumer 실패 → `account.deleted.dlq`. community-service 자체 retry/alert 정책 적용. |
 | **membership-service** | 멤버십 record의 사용자 식별자(이름, 이메일 등) 마스킹. `account_id` FK는 보존 (billing 감사 무결성). | 수신 후 24시간 이내 | Kafka consumer 실패 → `account.deleted.dlq`. membership-service 자체 retry/alert 정책 적용. |
 | **admin-service** | `admin_actions.target_id` 는 감사 무결성을 위해 변경하지 않음. 운영자 UI에서 해당 `target_id` 조회 시 `"(deleted user)"` 라벨을 표시. (UI 표시 로직은 admin-service 프레젠테이션 레이어 책임) | 즉시 (UI 렌더링 시점) | UI 표시 실패는 감사 데이터에 영향 없음. |
 
@@ -165,7 +165,7 @@ WMS, ERP, SCM, MES 등 외부 소비자는 자체 시스템에서 `account.delet
 
 - 자기 도메인이 보유한 해당 `accountId`의 PII 필드 (이메일, 이름, 전화번호, IP 등) 를 마스킹 또는 삭제.
 - audit/billing row의 FK (`account_id`) 는 보존 가능.
-- 마스킹 완료를 증명할 수 있는 내부 audit trail 발행 권장 (GAP의 `security.pii.masked` 패턴 참고).
+- 마스킹 완료를 증명할 수 있는 내부 audit trail 발행 권장 (IAM의 `security.pii.masked` 패턴 참고).
 - SLA: 수신 후 **24시간 이내** 마스킹 완료.
 - 컴플라이언스 정기 리뷰에서 이행 여부를 증명할 수 있도록 audit trail 보관.
 

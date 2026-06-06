@@ -1,9 +1,9 @@
 # HTTP Contract: Platform Console Product / Tenant Registry (admin-service)
 
-> **TASK-BE-296**. GAP is the **producer** of this surface; the authoritative
+> **TASK-BE-296**. IAM is the **producer** of this surface; the authoritative
 > consumer-side item shape is
 > [`projects/platform-console/specs/contracts/console-integration-contract.md` § 2.2](../../../../platform-console/specs/contracts/console-integration-contract.md).
-> This contract is the GAP-side source-of-truth for the endpoint path, auth,
+> This contract is the IAM-side source-of-truth for the endpoint path, auth,
 > tenant scoping, and the full response envelope. Read-only — no mutation, no
 > audit row (consistent with the existing tenant read-path,
 > `GetTenantUseCase` / `ListTenantsUseCase`).
@@ -16,10 +16,10 @@ base path: `/api/admin/console`
 
 The registry surface is **operator-scoped and tenant-aware**: it returns the
 products a given operator may see and, per product, the tenant ids that
-operator may select. The only GAP service that owns the **operator
+operator may select. The only IAM service that owns the **operator
 authentication boundary** is `admin-service`
 ([admin-service/architecture.md](../../services/admin-service/architecture.md)
-"Admin IdP Boundary") via `OperatorAuthenticationFilter`, and the only GAP
+"Admin IdP Boundary") via `OperatorAuthenticationFilter`, and the only IAM
 service that already models **cross-tenant operator scope** is `admin-service`
 (ADR-002 platform-scope sentinel `tenant_id='*'`,
 [admin-service/architecture.md](../../services/admin-service/architecture.md)
@@ -41,7 +41,7 @@ The registry is **not** placed under the tenant-scoped
 semantics for an operator catalog that spans the operator's accessible
 tenants.
 
-> **Consumer env note (producer-side authoritative):** the GAP-side registry
+> **Consumer env note (producer-side authoritative):** the IAM-side registry
 > URL is `http://iam.local/api/admin/console/registry` (gateway hostname
 > `iam.local` → `/api/admin/**` → admin-service). The console's
 > `CONSOLE_REGISTRY_URL` (in `projects/platform-console/`, out of scope for
@@ -73,7 +73,7 @@ tenants.
 > **Operator-token acquisition (TASK-BE-298 / ADR-MONO-014, producer
 > requirement UNCHANGED)**: platform-console does not hold an
 > admin-service operator token directly — it authenticates operators via the
-> GAP OIDC `platform-console-web` client and then **exchanges** that subject
+> IAM OIDC `platform-console-web` client and then **exchanges** that subject
 > token for the operator token via
 > [`POST /api/admin/auth/token-exchange`](admin-api.md) (RFC 8693). The
 > exchanged token is the **same** operator token this endpoint requires:
@@ -187,7 +187,7 @@ Returns the data-driven product/tenant catalog the console renders.
 ### Per-operator profile attributes (`operatorContext`) — TASK-BE-304
 
 The `operatorContext` nested object is the **extensible carrier** for
-per-operator per-product profile attributes the GAP `admin_operators` row owns
+per-operator per-product profile attributes the IAM `admin_operators` row owns
 on behalf of a federated product. It is scoped per-operator-row (never
 per-tenant, never cross-tenant) and is read only on the operator's own row in
 `ConsoleRegistryUseCase.resolveOperator(operator)` — the same row that
@@ -209,16 +209,16 @@ Design rationale (recorded inline so consumer + producer agree without an ADR):
   the field as `null \| {…}` explicitly. Jackson
   `@JsonInclude(JsonInclude.Include.NON_NULL)` enforces omission at the
   serializer.
-- **Why GAP-side storage (not finance-side)**: this is operator profile
+- **Why IAM-side storage (not finance-side)**: this is operator profile
   data, not finance domain data. `admin_operators` is the existing operator
   profile authority (`tenant_id` is already there per ADR-002). A new column
   `finance_default_account_id VARCHAR(36) NULL` extends the same row with a
   single nullable scalar — minimal blast radius, no cross-service call.
-- **Why no validation against finance-platform**: GAP carries the value as
+- **Why no validation against finance-platform**: IAM carries the value as
   opaque (`VARCHAR(36)`, non-empty when set). A stale account id surfaces
   honestly on the eventual cross-domain BFF call as a finance `404
   ACCOUNT_NOT_FOUND` — the console then renders the affected card as
-  `degraded` with the producer error, preserving the GAP↔finance
+  `degraded` with the producer error, preserving the IAM↔finance
   non-coupling invariant.
 
 Per-product emission rule (v1):
@@ -275,7 +275,7 @@ An unavailable product always has `tenants: []` regardless of operator scope.
 #### Subscription-driven domain binding (TASK-BE-322 — ADR-MONO-019 D2/D4)
 
 The domain product binding in (1) is derived from the **ACTIVE tenant↔domain
-subscriptions** that GAP account-service owns (ADR-019 **D2** entitlement
+subscriptions** that IAM account-service owns (ADR-019 **D2** entitlement
 authority), read by admin-service via the internal subscription surface
 ([`internal/account-tenant-domain-subscriptions.md`](internal/account-tenant-domain-subscriptions.md))
 and projected here (ADR-019 **D4**). This **replaces** the prior fixed
