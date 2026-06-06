@@ -213,7 +213,7 @@ docker compose -f docker-compose.e2e.yml -p iam-e2e up -d --build
 
 > Testcontainers 기반 통합 테스트는 `@EnabledIf("isDockerAvailable")`로
 > Docker 환경이 유효할 때만 실행됩니다. **Windows + Docker Desktop 4.69+
-> 환경에서는 로컬 skip이 정상 동작**이며, [GitHub Actions CI](.github/workflows/ci.yml)의
+> 환경에서는 로컬 skip이 정상 동작**이며, [GitHub Actions CI](../../.github/workflows/ci.yml)의
 > `build-backend` job이 Ubuntu runner에서 모든 통합 테스트를 실행하여
 > 실질 안전망 역할을 합니다. 로컬 실행이 필요한 경우
 > [docs/guides/local-integration-testing.md](docs/guides/local-integration-testing.md)

@@ -292,7 +292,7 @@ sequenceDiagram
 - **`transactional`** — 변경 경로에 `Idempotency-Key`, 상태 머신, 낙관적 잠금, 트랜잭셔널 아웃박스 적용
 - **`integration-heavy`** — ERP / TMS / 스캐너 연동을 전용 포트, 서킷 브레이커, 벌크헤드 패턴으로 대비
 
-[`rules/traits/transactional.md`](rules/traits/transactional.md) · [`rules/traits/integration-heavy.md`](rules/traits/integration-heavy.md) 참고.
+[`rules/traits/transactional.md`](../../rules/traits/transactional.md) · [`rules/traits/integration-heavy.md`](../../rules/traits/integration-heavy.md) 참고.
 
 ---
 
@@ -509,7 +509,7 @@ Reserve는 `AVAILABLE`을 직접 감소시키지 않고 `AVAILABLE → RESERVED`
 - **Confirm은 브로큰 파이프에 면역** — 예약 버킷이 출고 확인 도착 전까지 약속을 유지.
 - 같은 구조로 취소 / TTL 해제 처리 시 `AVAILABLE`을 한 번만 건드림.
 
-코드: `Inventory.reserve / release / confirm`, `ReserveStockService`, `ConfirmReservationService`. 도메인 규칙 W4/W5는 [`rules/domains/wms.md`](rules/domains/wms.md).
+코드: `Inventory.reserve / release / confirm`, `ReserveStockService`, `ConfirmReservationService`. 도메인 규칙 W4/W5는 [`rules/domains/wms.md`](../../rules/domains/wms.md).
 
 ### 낙관적 잠금 재시도 + id 오름차순 잠금 순서
 
@@ -560,7 +560,7 @@ Trait T5 (낙관적 잠금 우선; 비관적 잠금 금지). [`ReserveStockServi
 
 ## 🧭 개발 방식
 
-> **전체 과정** (규칙 레이어 · `/process-tasks` 파이프라인 · 리뷰 규율 · 구체적 아티팩트): [docs/guides/development-process.md](docs/guides/development-process.md)
+> **전체 과정** (규칙 레이어 · `/process-tasks` 파이프라인 · 리뷰 규율 · 구체적 아티팩트): [docs/guides/development-process.md](../../docs/guides/development-process.md)
 
 이 프로젝트는 **[Claude Code](https://claude.com/claude-code)** 기반의 규칙 주도, 태스크 중심 워크플로우를 따릅니다:
 
@@ -598,10 +598,10 @@ Trait T5 (낙관적 잠금 우선; 비관적 잠금 금지). [`ReserveStockServi
 
 ### 규칙
 
-- [rules/common.md](rules/common.md) — 항상 로드되는 규칙 인덱스
-- [rules/domains/wms.md](rules/domains/wms.md) — WMS 도메인 규칙 (W1–W6)
-- [rules/traits/transactional.md](rules/traits/transactional.md) — T1–T8
-- [rules/traits/integration-heavy.md](rules/traits/integration-heavy.md) — I1–I10
+- [rules/common.md](../../rules/common.md) — 항상 로드되는 규칙 인덱스
+- [rules/domains/wms.md](../../rules/domains/wms.md) — WMS 도메인 규칙 (W1–W6)
+- [rules/traits/transactional.md](../../rules/traits/transactional.md) — T1–T8
+- [rules/traits/integration-heavy.md](../../rules/traits/integration-heavy.md) — I1–I10
 
 ---
 

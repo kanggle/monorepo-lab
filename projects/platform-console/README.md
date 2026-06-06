@@ -56,7 +56,7 @@ curl -i http://console.local/api/health   # → {"status":"ok"}
 
 콘솔은 다른 프로젝트(백엔드 Resource Server)와 달리 **OIDC public client (Auth Code + PKCE)** 로서 운영자 로그인을 수행하고, IAM의 product/tenant 레지스트리를 카탈로그 소스로 소비한다.
 
-IAM 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
+IAM 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/done/TASK-BE-296-platform-console-oidc-client-and-product-registry.md)):
 - OIDC public client `platform-console-web` (Auth Code + PKCE, redirect `http://console.local/...`)
 - 운영자 가시 product/tenant 레지스트리 조회 surface
 
@@ -79,4 +79,4 @@ IAM 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TAS
 - [tasks/INDEX.md](tasks/INDEX.md) — project task lifecycle
 - [ADR-MONO-013](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) — 콘솔 foundation (Model B · 배치 · admin-web 폐기 · BFF 계약 · 8-phase roadmap)
 - [specs/contracts/console-integration-contract.md](specs/contracts/console-integration-contract.md) — 교차 프로젝트 BFF 통합 계약
-- [TASK-MONO-108](../../tasks/ready/TASK-MONO-108-adr-mono-013-accepted-platform-console-bootstrap.md) — 본 부트스트랩 task
+- [TASK-MONO-108](../../tasks/done/TASK-MONO-108-adr-mono-013-accepted-platform-console-bootstrap.md) — 본 부트스트랩 task
