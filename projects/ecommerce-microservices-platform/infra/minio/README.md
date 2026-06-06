@@ -1,7 +1,7 @@
 # MinIO (local object storage)
 
 Local / dev S3-compatible backend used by services that store binary media.
-Policy: [specs/platform/object-storage-policy.md](../../specs/platform/object-storage-policy.md).
+Policy: [platform/object-storage-policy.md](../../../../platform/object-storage-policy.md).
 
 ## Endpoints
 

@@ -82,7 +82,7 @@ open http://fan-platform.local/
 
 | Service | Status |
 |---|---|
-| `gateway-service` | 🚧 첫 부트스트랩 태스크 ([TASK-FAN-BE-001](tasks/ready/)) |
+| `gateway-service` | 🚧 첫 부트스트랩 태스크 ([TASK-FAN-BE-001](tasks/done/TASK-FAN-BE-001-gateway-service-bootstrap.md)) |
 | `community-service` | 📝 spec 작성 후 발행 |
 | `artist-service` | 📝 spec 작성 후 발행 |
 | `fan-platform-web` | 📝 백엔드 v1 안정화 후 |
