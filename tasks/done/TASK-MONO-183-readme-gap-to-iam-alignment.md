@@ -8,7 +8,7 @@ TASK-MONO-183
 
 # Status
 
-ready
+done
 
 # Owner
 
