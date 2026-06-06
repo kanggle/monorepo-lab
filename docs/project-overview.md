@@ -1,7 +1,7 @@
 # Project Overview — monorepo-lab
 
 > **목적**: 본 monorepo 전체 (플랫폼 전략 + 5 프로젝트 + 공유 인프라) 의 단일 진입 스냅샷.
-> **갱신 시점**: 2026-06-05 (마지막 의미 있는 변화: Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28 + **post-Phase-8 multi-tenant SaaS 실체화** 2026-05-31~06-02: ADR-MONO-019/020/021 ACCEPTED [customer-tenant entitlement-trust + operator N:M assume-tenant + `account_type` claim] + console overview consolidation [PC-FE-034] + console-web PR CI gate [MONO-166] + internal-system trait rules [MONO-167] + **console full-stack 로컬 데모 [MONO-170] 가 표면화한 런타임 producer↔consumer drift 청소 wave** 2026-06-02~03: ADR-MONO-020 D6 step4 "의도적 비실행" disposition [MONO-169 → ADR-020 사실상 완료] + SCM/WMS 런타임 federation 정합 8-fix [ERP-BE-006 / SCM-BE-020 decimal-string 계약 / MONO-171 seed UUID / BE-331·BE-332 read-model 42P18 PostgreSQL 쿼리 class / BE-333·BE-334 outbound 기동·security 전제층 / SCM-BE-021 read-model 422→500 관측성] + frontend Docker 빌드 캐시 최적화 [PC-FE-035 / FE-072, 60~82% 빌드시간↓] + **erp read-model-service 라이브화 + org_scope 데이터-스코프 3-stage authz 사슬** 2026-06-03~05: erp **read-model-service 첫 증분** [ERP-BE-007 — masterdata 변경이벤트 구독 → employee org-view 투영; §2.8 가 v2-deferred 로 잘못 분류하던 사실오류 교정] + 콘솔 통합 read 카드 [PC-FE-049] + **org_scope 3-stage** [BE-336 위임 `erp.write` scope / BE-337 assume-tenant `["*"]` bridge / BE-338 멤버십 출처 `operator_tenant_assignment.org_scope` / ERP-BE-008 erp subtree 소비 / BE-339 admin 관리 API / PC-FE-050 콘솔 설정 UI] + 콘솔 erp 마스터 write parity [PC-FE-046~048] + operators/audit active-tenant 스코핑 [MONO-175 / PC-FE-043] + self-service account 이동 [PC-FE-045] + demo redpanda 브로커 [MONO-174] + **erp 결재 워크플로 도메인 완성 (백엔드+콘솔 양면)** 2026-06-05: ADR-016 §D3 approval forward-declaration 3-증분 [ERP-BE-009 단일단계 → BE-012 다단계+IN_REVIEW → BE-013 대결/위임] + read-model approval-fact 투영 [ERP-BE-010] + notification-service [ERP-BE-011] + 콘솔 결재 surface [PC-FE-051 결재함 / 052 notification bell / 053 다단계 UI / 054 위임 grant 관리]).
+> **갱신 시점**: 2026-06-07 (마지막 의미 있는 변화: **gap→iam 전체 rename** 2026-06-06~07 [MONO-179/180/181 — `global-account-platform`→`iam-platform`(alias gap→iam): 디렉터리/Gradle/Docker/CI/hostname + Java 식별자 + user-token `iss` + 콘솔 도메인 slug/registry productKey/OIDC provider id/예약 tenant/console tenant_id + V0024 redirect_uris + spec dead-ref 16→0; 잔여 0] + Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28 + **post-Phase-8 multi-tenant SaaS 실체화** 2026-05-31~06-02: ADR-MONO-019/020/021 ACCEPTED [customer-tenant entitlement-trust + operator N:M assume-tenant + `account_type` claim] + console overview consolidation [PC-FE-034] + console-web PR CI gate [MONO-166] + internal-system trait rules [MONO-167] + **console full-stack 로컬 데모 [MONO-170] 가 표면화한 런타임 producer↔consumer drift 청소 wave** 2026-06-02~03: ADR-MONO-020 D6 step4 "의도적 비실행" disposition [MONO-169 → ADR-020 사실상 완료] + SCM/WMS 런타임 federation 정합 8-fix [ERP-BE-006 / SCM-BE-020 decimal-string 계약 / MONO-171 seed UUID / BE-331·BE-332 read-model 42P18 PostgreSQL 쿼리 class / BE-333·BE-334 outbound 기동·security 전제층 / SCM-BE-021 read-model 422→500 관측성] + frontend Docker 빌드 캐시 최적화 [PC-FE-035 / FE-072, 60~82% 빌드시간↓] + **erp read-model-service 라이브화 + org_scope 데이터-스코프 3-stage authz 사슬** 2026-06-03~05: erp **read-model-service 첫 증분** [ERP-BE-007 — masterdata 변경이벤트 구독 → employee org-view 투영; §2.8 가 v2-deferred 로 잘못 분류하던 사실오류 교정] + 콘솔 통합 read 카드 [PC-FE-049] + **org_scope 3-stage** [BE-336 위임 `erp.write` scope / BE-337 assume-tenant `["*"]` bridge / BE-338 멤버십 출처 `operator_tenant_assignment.org_scope` / ERP-BE-008 erp subtree 소비 / BE-339 admin 관리 API / PC-FE-050 콘솔 설정 UI] + 콘솔 erp 마스터 write parity [PC-FE-046~048] + operators/audit active-tenant 스코핑 [MONO-175 / PC-FE-043] + self-service account 이동 [PC-FE-045] + demo redpanda 브로커 [MONO-174] + **erp 결재 워크플로 도메인 완성 (백엔드+콘솔 양면)** 2026-06-05: ADR-016 §D3 approval forward-declaration 3-증분 [ERP-BE-009 단일단계 → BE-012 다단계+IN_REVIEW → BE-013 대결/위임] + read-model approval-fact 투영 [ERP-BE-010] + notification-service [ERP-BE-011] + 콘솔 결재 surface [PC-FE-051 결재함 / 052 notification bell / 053 다단계 UI / 054 위임 grant 관리]).
 > **위치**: `docs/project-overview.md` — `docs/adr/` (결정 기록) · `docs/guides/` (휴먼 워크플로우 가이드) 와 sibling.
 
 ---
@@ -10,7 +10,7 @@
 
 **multi-domain 백엔드/풀스택 포트폴리오 monorepo**. 5 도메인 프로젝트가 단일 라이브러리 (rules / platform / .claude / libs) 를 공유하면서 동거하고, 라이브러리가 stabilise 된 시점에 별도 Template 레포로 추출되는 **Discovery → Distribution** 전략을 따른다 ([TEMPLATE.md](../TEMPLATE.md)).
 
-- **현재 단계**: Phase 8 federation hardening **COMPLETE** (2026-05-28, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) ACCEPTED) — cross-product e2e MVP (2026-05-26) + D4 observability federation ([ADR-MONO-007a](adr/ADR-MONO-007a-trace-layer.md) trace layer, MONO-142~147) + D5 multi-tenant isolation regression 모두 종결. Phase 5 = **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) ACCEPTED, `kanggle/project-template` public + `is_template: true`). Phase 6 = **COMPLETE** finance + erp v1 양쪽 종결 2026-05-19/20 ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) ACCEPTED). Phase 7 = **LIVE** console-bff Operator Overview + Domain Health 2026-05-20 ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) ACCEPTED). 5/5 backend domains (gap·wms·scm·finance·erp) federated via platform-console.
+- **현재 단계**: Phase 8 federation hardening **COMPLETE** (2026-05-28, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) ACCEPTED) — cross-product e2e MVP (2026-05-26) + D4 observability federation ([ADR-MONO-007a](adr/ADR-MONO-007a-trace-layer.md) trace layer, MONO-142~147) + D5 multi-tenant isolation regression 모두 종결. Phase 5 = **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) ACCEPTED, `kanggle/project-template` public + `is_template: true`). Phase 6 = **COMPLETE** finance + erp v1 양쪽 종결 2026-05-19/20 ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) ACCEPTED). Phase 7 = **LIVE** console-bff Operator Overview + Domain Health 2026-05-20 ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) ACCEPTED). 5/5 backend domains (iam·wms·scm·finance·erp) federated via platform-console.
 - **AI-driven 운영**: Claude Code 기반 rule-driven · spec-driven · task-driven 워크플로우. 80+ skill / 12+ specialized agent / 도메인-trait 자동 dispatch.
 
 ---
@@ -37,13 +37,13 @@
 | `admin-service` | rest-api (Layered, ⚠️ override) | CQRS read-side (4 ProjectionConsumer × 18 source-topic) + dashboard + ops |
 
 - **architecture override**: `admin-service` 만 sibling 의 Hexagonal 에서 **Layered** 로 승격 (PROJECT.md § Overrides + service architecture.md 에 근거 명시). read-side / 단순 CRUD write surface 가 port/adapter 비용 정당화 못 함.
-- **ID provider**: GAP OIDC RS256 + `tenant_id=wms` claim ([specs/integration/iam-integration.md](../projects/wms-platform/specs/integration/iam-integration.md)).
+- **ID provider**: IAM OIDC RS256 + `tenant_id=wms` claim ([specs/integration/iam-integration.md](../projects/wms-platform/specs/integration/iam-integration.md)).
 - **런타임 정합 (2026-06-03, MONO-170 데모 표면화)**: `admin-service` read-model 의 nullable temporal `:p IS NULL` 가드가 PostgreSQL `42P18`(could not determine data type) 로 unfiltered 쿼리 시 500 → `CAST(:p AS string)` 일괄 수정 (alerts BE-331 + 전 `@Query` audit BE-332 = wms 7 repo). `outbound-service` non-standalone 기동 복구 (BE-333 `@ConditionalOnMissingBean` by-type 빈충돌 exclude + V4 Flyway 정본 교정 / BE-334 `SecurityConfig` `@ConditionalOnWebApplication(SERVLET)`). 미배포 outbound IT 전체 green+CI 배선은 저-ROI 로 deferred.
 
-### 2.2 [iam-platform](../projects/iam-platform/PROJECT.md) (GAP) — SaaS Identity / IdP (v1 ✅)
+### 2.2 [iam-platform](../projects/iam-platform/PROJECT.md) (IAM — 옛 GAP/global-account-platform, MONO-179/180 rename) — SaaS Identity / IdP (v1 ✅)
 
 - **domain**: `saas` · **traits**: `transactional`, `regulated`, `audit-heavy`, `integration-heavy`, `multi-tenant`
-- **포지션**: monorepo 의 **표준 OIDC IdP** (ADR-001 ACCEPTED). 모든 프로젝트가 GAP 의 RS256 access token 을 OAuth2 Resource Server 패턴으로 검증.
+- **포지션**: monorepo 의 **표준 OIDC IdP** (ADR-001 ACCEPTED). 모든 프로젝트가 IAM 의 RS256 access token 을 OAuth2 Resource Server 패턴으로 검증.
 - **상태**: 5 backend 운영 (**backend-only IdP**). `admin-web` 운영자 콘솔은 2026-05-18 폐기 — 운영자 UI 는 통합 platform console 이 흡수 ([ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) Phase 3, TASK-BE-299). 표준 `/oauth2/{authorize,token,jwks,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` 노출.
 - **service map (5 active + 2 frozen demo)**:
 
@@ -62,8 +62,8 @@
 - **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm/finance/erp) 가 사용자 일괄 생성.
 - **OIDC AS 운영 깊이 증명 (2026-05-09 closure)**: SAS public-client (PKCE) `refresh_token` rotation + reuse detection + `revoke` (custom converter + provider-side fallback) + 3 OAuth provider callback (Google/Kakao/Microsoft) 모두 main CI deterministic PASS. 13-cycle 미해결 9 deferred IT 회복 ([ADR-003](../projects/iam-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md), [ADR-004](../projects/iam-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md)). Cluster A 3/3 + Cluster B 1/1 + Cluster C 5/5 + token customizer bonus 1.
 - **multi-tenant SaaS 실체화 (2026-05-31~06-02, [ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md)/[020](adr/ADR-MONO-020-operator-multitenant-assignment.md)/[021](adr/ADR-MONO-021-account-type-claim-source.md))**: customer-tenant entitlement-trust (account `entitled_domains` keystone — BE-322/324/325) + operator↔customer **N:M assignment + assume-tenant RFC8693 token-exchange** (`operator_tenant_assignment` dual-read BE-326 + BE-327) + **`account_type` (CONSUMER\|OPERATOR) OIDC claim** (`credentials.account_type` denormalize, BE-329/330 + INT-024 e2e).
-- **org_scope 데이터-스코프 authz 출처/전파 (2026-06-04~05, [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) D3 amendment)**: 콘솔 도메인-write 가 3중 게이트(tenant → role/scope → **data-scope**)를 통과하도록 GAP 가 위임 scope + 데이터-스코프를 assume-tenant 토큰에 enrich — BE-336 (registered `erp.write` scope 위임 + `authorizedScopes` 전파; entitlement-trust=read visibility 와 직교한 write capability) → BE-337 (assume-tenant 토큰 `org_scope=["*"]` v1 bridge) → BE-338 (**멤버십 출처** `operator_tenant_assignment.org_scope` V0031 nullable 컬럼; `NULL ⟺ ["*"]` net-zero; 부서 subtree-root 배열) → BE-339 (admin 관리 API `GET .../operators/{id}/assignments` + `PUT .../assignments/{tenantId}/org-scope`, tenant-scope 불변식, SQL 시드 아닌 product surface 설정). erp 가 subtree-root 를 소비(ERP-BE-008), 콘솔이 설정(PC-FE-050).
-- **workload identity (2026-05-30, [ADR-005](../projects/iam-platform/docs/adr/ADR-005-service-to-service-workload-identity.md))**: 서비스 간 인증 `X-Internal-Token` → GAP `client_credentials` JWT 무중단 전환 (BE-317~321, account/security `/internal/**` = JWT 단일).
+- **org_scope 데이터-스코프 authz 출처/전파 (2026-06-04~05, [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) D3 amendment)**: 콘솔 도메인-write 가 3중 게이트(tenant → role/scope → **data-scope**)를 통과하도록 IAM 가 위임 scope + 데이터-스코프를 assume-tenant 토큰에 enrich — BE-336 (registered `erp.write` scope 위임 + `authorizedScopes` 전파; entitlement-trust=read visibility 와 직교한 write capability) → BE-337 (assume-tenant 토큰 `org_scope=["*"]` v1 bridge) → BE-338 (**멤버십 출처** `operator_tenant_assignment.org_scope` V0031 nullable 컬럼; `NULL ⟺ ["*"]` net-zero; 부서 subtree-root 배열) → BE-339 (admin 관리 API `GET .../operators/{id}/assignments` + `PUT .../assignments/{tenantId}/org-scope`, tenant-scope 불변식, SQL 시드 아닌 product surface 설정). erp 가 subtree-root 를 소비(ERP-BE-008), 콘솔이 설정(PC-FE-050).
+- **workload identity (2026-05-30, [ADR-005](../projects/iam-platform/docs/adr/ADR-005-service-to-service-workload-identity.md))**: 서비스 간 인증 `X-Internal-Token` → IAM `client_credentials` JWT 무중단 전환 (BE-317~321, account/security `/internal/**` = JWT 단일).
 
 ### 2.3 [ecommerce-microservices-platform](../projects/ecommerce-microservices-platform/PROJECT.md) — B2C 이커머스 (v1 ✅ 풀스택)
 
@@ -84,7 +84,7 @@
 | Frontend | `web-store` (Next.js 15), `admin-dashboard` |
 
 - **stack**: Java 21 / Spring Boot 3.4 / Postgres / Kafka / Redis / Elasticsearch / MinIO
-- **GAP migration**: 향후 (TASK-MONO-020) — 현재 자체 auth-service.
+- **IAM migration**: 향후 (TASK-MONO-020) — 현재 자체 auth-service.
 
 ### 2.4 [scm-platform](../projects/scm-platform/PROJECT.md) — 공급망 통합 (v1 ✅)
 
@@ -107,7 +107,7 @@
 
 - **domain**: `fan-platform` · **traits**: `transactional`, `content-heavy`, `read-heavy`, `integration-heavy`, `multi-tenant`
 - **포지션**: 두 번째 풀스택 B2C 도메인. **비대칭 콘텐츠 관계** (아티스트 1 : N 팬) 가 도메인 핵심.
-- **상태**: v1 종결 (2026-05-03 backend 3 + frontend + e2e + GAP V0011 client + 19 PR 완성)
+- **상태**: v1 종결 (2026-05-03 backend 3 + frontend + e2e + IAM V0011 client + 19 PR 완성)
 - **service map (v1)**:
 
 | Service | Type | 책임 |
@@ -122,18 +122,18 @@
 ### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 ✅ Phase 7 LIVE — 5/5 federated domains, 도메인 축 아님)
 
 - **domain**: `saas` · **traits**: `multi-tenant`, `integration-heavy`, `audit-heavy` · **service_types**: `frontend-app`
-- **포지션**: 포트폴리오 엔터프라이즈 스위트(gap·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
-- **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). GAP `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → GAP 백엔드-only IdP 회귀.
-- **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — 5/5 federated backend domains (`gap` + `wms` + `scm` + `finance` + `erp`) `available:true`. console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
-- **Phase 8 + multi-tenant 활성화 (2026-05-25~06-02)**: federation hardening (cross-product e2e + observability trace federation + isolation regression, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) + **런타임 entitlement-trust active-tenant 전환** (ADR-MONO-019/020 — console active-tenant switcher → assume-tenant A↔B GREEN, MONO-158~162) + **overview 화면 통폐합** (PC-FE-034 — 통합 개요 콘솔 홈 승격 / GAP-only 개요 = GAP-card drill-down / ERP 운영 nav 추가) + **console-web PR CI gate 편입** (MONO-166 — unit/tsc/lint).
-- **full-stack 로컬 데모 + 런타임 drift 청소 (2026-06-02~03, [MONO-170](../tasks/done/TASK-MONO-170-console-fullstack-local-dev-demo.md))**: 콘솔을 5/5 도메인 per-domain 운영 화면으로 실제 구동한 첫 full-stack 로컬 데모가 **producer↔consumer 런타임 drift 8건**을 표면화 → 전수 청소 (ERP-BE-006 effectivePeriod nesting / SCM-BE-020 decimal-string / MONO-171 seed / BE-331·332 read-model 42P18 / BE-333·334 outbound 전제층 / SCM-BE-021 422→500). 메타: 머지+CI GREEN ≠ 런타임 federation 정합 — full-stack 데모 구동이 mock/slice 테스트가 못 잡는 cross-service 계약·쿼리·시드 drift 의 sender. federation scm leg 경로는 MONO-162 에서 이미 정합. demo overlay 의 GAP outbox drain 을 위해 **실 redpanda 브로커** 를 federation-e2e 데모에 편입 (MONO-174).
-- **erp 운영 surface 심화 + org_scope 설정 + active-tenant 스코핑 (2026-06-03~05)**: 콘솔이 erp 를 read-only 조회를 넘어 **마스터데이터 write parity** 로 운영 — 부서 write 파일럿(PC-FE-046) → 상위부서 드롭다운(PC-FE-047) → **5개 마스터 전체 create/update/retire**(PC-FE-048, 직원/직급/비용센터/거래처) + read-model **통합 read 카드**(PC-FE-049 — ERP-BE-007 read-model-service 의 employee org-view 소비, 부서경로 breadcrumb + eventually-consistent 배너) + **org_scope 설정 UI**(PC-FE-050 — reason-gated `OrgScopeDialog`, 부서 picker + 전체/선택/차단 tri-state; org_scope 사슬 [설정→GAP 저장/전파→erp 소비→read 카드] 완결). **operators/audit active-tenant 스코핑** — 콘솔 스위처가 운영자 목록(MONO-175)·감사 조회(PC-FE-043)를 활성 테넌트로 따라가도록 (effective-scope 게이트, privilege 비확장). **self-service 이동** — 비밀번호/프로필 self-service 를 operators 화면 → account 화면으로 (PC-FE-045). 한글 사유 헤더 인코딩 fix (MONO-176).
+- **포지션**: 포트폴리오 엔터프라이즈 스위트(iam·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
+- **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). IAM `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → IAM 백엔드-only IdP 회귀.
+- **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — 5/5 federated backend domains (`iam` + `wms` + `scm` + `finance` + `erp`) `available:true`. console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
+- **Phase 8 + multi-tenant 활성화 (2026-05-25~06-02)**: federation hardening (cross-product e2e + observability trace federation + isolation regression, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) + **런타임 entitlement-trust active-tenant 전환** (ADR-MONO-019/020 — console active-tenant switcher → assume-tenant A↔B GREEN, MONO-158~162) + **overview 화면 통폐합** (PC-FE-034 — 통합 개요 콘솔 홈 승격 / IAM-only 개요 = IAM-card drill-down / ERP 운영 nav 추가) + **console-web PR CI gate 편입** (MONO-166 — unit/tsc/lint).
+- **full-stack 로컬 데모 + 런타임 drift 청소 (2026-06-02~03, [MONO-170](../tasks/done/TASK-MONO-170-console-fullstack-local-dev-demo.md))**: 콘솔을 5/5 도메인 per-domain 운영 화면으로 실제 구동한 첫 full-stack 로컬 데모가 **producer↔consumer 런타임 drift 8건**을 표면화 → 전수 청소 (ERP-BE-006 effectivePeriod nesting / SCM-BE-020 decimal-string / MONO-171 seed / BE-331·332 read-model 42P18 / BE-333·334 outbound 전제층 / SCM-BE-021 422→500). 메타: 머지+CI GREEN ≠ 런타임 federation 정합 — full-stack 데모 구동이 mock/slice 테스트가 못 잡는 cross-service 계약·쿼리·시드 drift 의 sender. federation scm leg 경로는 MONO-162 에서 이미 정합. demo overlay 의 IAM outbox drain 을 위해 **실 redpanda 브로커** 를 federation-e2e 데모에 편입 (MONO-174).
+- **erp 운영 surface 심화 + org_scope 설정 + active-tenant 스코핑 (2026-06-03~05)**: 콘솔이 erp 를 read-only 조회를 넘어 **마스터데이터 write parity** 로 운영 — 부서 write 파일럿(PC-FE-046) → 상위부서 드롭다운(PC-FE-047) → **5개 마스터 전체 create/update/retire**(PC-FE-048, 직원/직급/비용센터/거래처) + read-model **통합 read 카드**(PC-FE-049 — ERP-BE-007 read-model-service 의 employee org-view 소비, 부서경로 breadcrumb + eventually-consistent 배너) + **org_scope 설정 UI**(PC-FE-050 — reason-gated `OrgScopeDialog`, 부서 picker + 전체/선택/차단 tri-state; org_scope 사슬 [설정→IAM 저장/전파→erp 소비→read 카드] 완결). **operators/audit active-tenant 스코핑** — 콘솔 스위처가 운영자 목록(MONO-175)·감사 조회(PC-FE-043)를 활성 테넌트로 따라가도록 (effective-scope 게이트, privilege 비확장). **self-service 이동** — 비밀번호/프로필 self-service 를 operators 화면 → account 화면으로 (PC-FE-045). 한글 사유 헤더 인코딩 fix (MONO-176).
 - **erp 결재 워크플로 surface (2026-06-05)**: 콘솔이 erp approval-service(BE-009/012/013) 를 소비 — **결재함**(PC-FE-051 — 요청 list/inbox/detail history + create + 4 전이 reason-gated·Idempotency-Key + 상태기계 액션 가시성 + 403 graceful) → **다단계 결재 UI**(PC-FE-053 — 순서있는 1~N 결재선 create[approverIds] + 단계 진행 타임라인[현 단계·k/N] + `IN_REVIEW` badge + 대결 승인 read-only 표시[`actingForApproverId`]) + **위임 grant 관리**(PC-FE-054 — `/delegations` create/revoke/list, 내가 위임한/나에게 위임된, reason-gated 회수) + **notification bell**(PC-FE-052 — notification-service in-app inbox 소비, 헤더 unread badge + recipient-scoped 드롭다운 + 멱등 mark-read + approval deep-link; 비-erp 운영자/503 graceful degrade). erp 결재 도메인(단계/대결/위임)이 백엔드+콘솔 **양면 완성**.
 - **service map**:
 
 | Service | Type | 책임 |
 |---|---|---|
-| `console-web` | frontend-app | 단일 콘솔 UI (GAP OIDC public client · data-driven 카탈로그 · 테넌트 스위처 · 도메인 운영 화면) |
+| `console-web` | frontend-app | 단일 콘솔 UI (IAM OIDC public client · data-driven 카탈로그 · 테넌트 스위처 · 도메인 운영 화면) |
 | `console-bff` | rest-api | 교차 도메인 집약 API (ADR-MONO-013 Phase 7 LIVE — TASK-PC-BE-001 skeleton + § 2.4.9.1 Operator Overview + § 2.4.9.2 Domain Health) |
 
 ### 2.7 [finance-platform](../projects/finance-platform/PROJECT.md) — 비은행 금융 서비스 (v1 live — Phase 5 COMPLETE 2026-05-19/20)
@@ -150,7 +150,7 @@
 
 - **v2 deferred**: `ledger-service` (복식부기/GL/AP — fintech accounting 깊이, ADR-008 §D3), `wallet-service`, `kyc-service`, `notification-service`, `admin-service`
 - **framing 정합**: 7축 메모리의 "분개/GL/AP accounting" 은 ADR-MONO-008 SoT 상 명시적으로 v2 (ledger-service); v1 = fintech Account/Balance/Transaction/KYC (PROJECT.md § ADR-MONO-008 vs 7축 framing 정합).
-- **ID provider**: GAP OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
+- **ID provider**: IAM OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
 - **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
 
 ### 2.8 [erp-platform](../projects/erp-platform/PROJECT.md) — 전사 기간계 (v1 live — Phase 6 COMPLETE 2026-05-20)
@@ -172,7 +172,7 @@
 
 - **v2 deferred**: `permission-service` (권한 매트릭스 CRUD — ADR-016 §D3), `admin-service` (운영자 큐). (`approval-service` / `read-model-service` / `notification-service` 는 v1.x 라이브 — 위 상태 참조; 단 approval per-request/자동부재 위임 · notification 외부채널 · business-partner 등 풀 통합 조회 view 는 각 서비스 v2.)
 - **framing 정합**: 7축 메모리의 광의 erp("회계·구매·재고·HR 통합" + 자체 admin SPA) 는 ADR-MONO-016 SoT 상 v1=마스터데이터+결재+통합 read model (도메인 로직 미보유, 7축 책임 경계); UI=platform-console parity slice (ADR-MONO-013 바인딩, 자체 SPA superseded) (PROJECT.md § ADR-MONO-016 vs 7축 framing 정합).
-- **ID provider**: GAP OIDC RS256 + `tenant_id=erp` claim (V0018 ×2 시드: account tenant + auth client_credentials `erp-platform-internal-services-client`).
+- **ID provider**: IAM OIDC RS256 + `tenant_id=erp` claim (V0018 ×2 시드: account tenant + auth client_credentials `erp-platform-internal-services-client`).
 - **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
 
 ### 2.9 향후 도메인 (계획)
@@ -342,9 +342,9 @@ traits/<declared-trait>.md for each trait (if present)
 | [ADR-MONO-019](adr/ADR-MONO-019-platform-console-customer-tenant-model.md) | ACCEPTED (2026-05-31) | customer-tenant model + 런타임 entitlement-trust — 고객 테넌트가 `entitled_domains` 로 도메인 접근 통제 (acme-corp/globex 시드; BE-322/324/325 + PC-BE-007 BFF pass-through + MONO-154 런타임 증명). |
 | [ADR-MONO-020](adr/ADR-MONO-020-operator-multitenant-assignment.md) | ACCEPTED (2026-05-31, 사실상 완료 2026-06-02, D3 amendment 2026-06-05) | operator↔customer N:M assignment + active-tenant 토큰 스코핑 — assume-tenant RFC 8693 exchange (BE-326 dual-read + BE-327 + MONO-158~162 D4 A↔B switch GREEN). D6 step4 legacy read cleanup = **MONO-169 로 "의도적 비실행" disposition** (V0030 net-zero + `'*'` assignment-비표현 → dual-read steady state; 제거 시 전 운영자 회귀) → ADR-020 사실상 완료. **D3 amendment (2026-06-05)**: membership-derived **org_scope** 데이터-스코프 — `operator_tenant_assignment.org_scope` (V0031, 부서 subtree-root; `NULL ⟺ ["*"]` net-zero) 출처 (BE-338) + admin 관리 API (BE-339) + erp subtree 소비 (ERP-BE-008) + 콘솔 설정 UI (PC-FE-050); BE-336/337 위임 scope·v1 bridge 가 전제. |
 | [ADR-MONO-021](adr/ADR-MONO-021-account-type-claim-source.md) | ACCEPTED (2026-06-02) | `account_type` (CONSUMER\|OPERATOR) OIDC claim source — `auth_db.credentials` denormalize (BE-329 컬럼+토큰주입 / BE-330 provisioning / INT-024 e2e). gateway 403-on-absent 해소. |
-| GAP [ADR-001](../projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | GAP 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
-| GAP [ADR-003](../projects/iam-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
-| GAP [ADR-004](../projects/iam-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
+| IAM [ADR-001](../projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) | ACCEPTED | IAM 를 monorepo 표준 OIDC IdP 로 승급. Spring Authorization Server 도입. |
+| IAM [ADR-003](../projects/iam-platform/docs/adr/ADR-003-public-client-refresh-token-revoke-converter.md) | ACCEPTED — 옵션 B closure | SAS public-client `AuthenticationConverter` (옵션 A) + `SasRefreshTokenAuthenticationProvider` provider-side fallback (옵션 B) 으로 `refresh_token`/`revoke` grant 의 public-client 인증 경로 보강. Cluster A 3/3 회복. |
+| IAM [ADR-004](../projects/iam-platform/docs/adr/ADR-004-oauth-callback-ci-linux-503-isolation.md) | ACCEPTED — 옵션 1 | OAuth callback 5 IT 의 CI Linux 503 RC = JDK HttpClient HTTP/2 RST_STREAM race. JDK HttpClient 의 protocol 을 HTTP/1.1 강제 (4 outbound client + libs/java-common DRY) 로 회피. Cluster C 5/5 회복. |
 
 ---
 
@@ -355,7 +355,7 @@ traits/<declared-trait>.md for each trait (if present)
 | Project | Standalone repo | Status |
 |---|---|---|
 | wms-platform | `kanggle/wms-platform` | 2026-04-28 first publish + 2026-05-09 re-sync (228 commits) |
-| ecommerce-microservices-platform | `kanggle/ecommerce-microservices-platform` | v1 frozen (GAP cutover 영역만 `PROJECT_EXCLUDE_PATHS` 차단) |
+| ecommerce-microservices-platform | `kanggle/ecommerce-microservices-platform` | v1 frozen (IAM cutover 영역만 `PROJECT_EXCLUDE_PATHS` 차단) |
 | iam-platform | `kanggle/iam-platform` | 2026-05-09 first publish (153 commits) |
 | scm-platform | `kanggle/scm-platform` | 2026-05-09 first publish (140 commits) |
 | fan-platform | `kanggle/fan-platform` | 2026-05-09 first publish (147 commits) |
@@ -373,7 +373,7 @@ traits/<declared-trait>.md for each trait (if present)
 |---|---|---|
 | 1. Single project (wms) | ✅ 완료 | 룰/스킬/에이전트 시스템 검증 |
 | 2. Second project (ecommerce) | ✅ 완료 | 라이브러리 generality 검증 |
-| 3. Third project (GAP) — Rule of Three | ✅ 완료 | true generalization 필터 |
+| 3. Third project (IAM) — Rule of Three | ✅ 완료 | true generalization 필터 |
 | 4. catalyst (scm + fan-platform) | ✅ 완료 | 5 프로젝트 동거 + churn 안정화 |
 | 5. Template 추출 | ✅ **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md)) | `kanggle/project-template` public + `is_template: true` (TASK-MONO-070) |
 | 6. 새 도메인 부트스트랩 (finance + erp) | ✅ **COMPLETE 2026-05-19/20** (ADR-MONO-008 / ADR-MONO-016) | Template downstream 첫 2회 CONFIRMED — finance v1 + erp v1 monorepo+standalone 양쪽 종결 |
