@@ -4,7 +4,7 @@
 # Enable the per-domain ops DEMO on the federation-hardening-e2e stack (POSIX).
 # POSIX peer of console-demo-up.ps1.
 #
-# The fed-e2e harness already runs all 5 domains' producers + GAP + console as
+# The fed-e2e harness already runs all 5 domains' producers + IAM + console as
 # containers. This adds — as an ADDITIVE overlay (CI base compose byte-unchanged)
 # — scm-gateway + console-web per-domain ops base URLs, then seeds the
 # globex-corp SCM-PO + ERP delta so the globex ops pages render non-empty.
@@ -72,6 +72,6 @@ fi
 phase 'Ready'
 ok 'Open http://localhost:3000'
 echo '       Login:   multi-operator@example.com  /  devpassword123!'
-echo '       Demo:    acme-corp -> Finance/WMS 운영 ; switch globex-corp -> SCM/ERP 운영 ; GAP always.'
+echo '       Demo:    acme-corp -> Finance/WMS 운영 ; switch globex-corp -> SCM/ERP 운영 ; IAM always.'
 echo '       (Do NOT use super-admin / acme-operator for scm/erp — not entitled.)'
 echo '       Walkthrough: docs/guides/console-fullstack-local-dev.md'

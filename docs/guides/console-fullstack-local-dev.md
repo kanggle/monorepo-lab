@@ -11,7 +11,7 @@ served — by adding a thin **additive overlay** to the already-containerized
 | Screen | Proves | Active tenant |
 |---|---|---|
 | 운영자 통합 개요 / 도메인 상태 | BFF federation + health | any |
-| GAP 운영 (계정·감사·운영자) | operator-token surface | always |
+| IAM 운영 (계정·감사·운영자) | operator-token surface | always |
 | **WMS 운영** | direct domain call, inventory read-model | **acme-corp** |
 | **Finance 운영** | account / balances / transactions | **acme-corp** |
 | **SCM 운영** | gateway-routed PO + inventory-visibility | **globex-corp** |
@@ -20,12 +20,12 @@ served — by adding a thin **additive overlay** to the already-containerized
 ## Why an overlay (not `pnpm *:up`)
 
 The per-project `docker-compose.yml` files are **infrastructure only** — the
-application services (GAP auth/account/admin, the 5 producers, console-bff,
+application services (IAM auth/account/admin, the 5 producers, console-bff,
 console-web) run as containers ONLY via the `federation-hardening-e2e` harness
 (or as host JVMs via `bootRun`). `pnpm iam:up` etc. start just DBs/redis/kafka.
 
 The fed-e2e harness already runs the full app stack, but it was built for the
-**BFF overview/health** legs + GAP, so it lacks two things the per-domain ops
+**BFF overview/health** legs + IAM, so it lacks two things the per-domain ops
 pages need:
 
 1. **The SCM gateway** — the SCM ops client calls `scm.local/api/v1/procurement/po`
@@ -52,9 +52,9 @@ the harness (it builds + runs ~20 containers — see the CI workflow
 build+seed sequence, or the compose header in
 `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml`).
 
-> The base seeds: GAP operators (incl. **`multi-operator`**, N:M-assigned to
+> The base seeds: IAM operators (incl. **`multi-operator`**, N:M-assigned to
 > acme-corp + globex-corp) + acme finance account + wms inventory + globex
-> scm-inventory. GAP runs `SPRING_PROFILES_ACTIVE=e2e` so the globex-corp
+> scm-inventory. IAM runs `SPRING_PROFILES_ACTIVE=e2e` so the globex-corp
 > `[scm,erp]` subscription (account-service Flyway `migration-dev/V0021`) is
 > present.
 
@@ -94,7 +94,7 @@ multi-operator@example.com  /  devpassword123!
 > operator/tenant for that domain*, not a bug.
 
 1. **Active tenant `acme-corp`** (`[finance,wms]`): 통합 개요 + 도메인 상태;
-   **Finance 운영** (account balance) + **WMS 운영** (inventory snapshot); GAP 운영.
+   **Finance 운영** (account balance) + **WMS 운영** (inventory snapshot); IAM 운영.
    SCM/ERP gate (not entitled — correct).
 2. **Switch active tenant → `globex-corp`** (`[scm,erp]`): **SCM 운영** (PO
    `PO-DEMO-001` + inventory-visibility snapshot) + **ERP 운영** (department /
@@ -144,4 +144,4 @@ All idempotent (`INSERT IGNORE` / `ON CONFLICT DO NOTHING`).
 - Not a CI job — the fed-e2e harness remains the CI federation gate; this overlay
   is local-demo-only and leaves the CI base compose byte-unchanged.
 - Not a single-tenant all-5 view (the `multi-operator` 2-tenant switch covers all
-  domains; a single all-5-entitled tenant would need a new GAP Flyway migration).
+  domains; a single all-5-entitled tenant would need a new IAM Flyway migration).

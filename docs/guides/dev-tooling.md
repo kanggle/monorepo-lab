@@ -20,7 +20,7 @@ The simplest path: open a shell inside the container and use the native CLI.
 # wms-platform postgres
 docker exec -it wms-postgres psql -U wms_user -d wms_db
 
-# iam-platform postgres (for any GAP service's DB)
+# iam-platform postgres (for any IAM service's DB)
 docker exec -it iam-postgres psql -U auth_user -d auth_db
 ```
 
@@ -73,7 +73,7 @@ services:
       - "${LOCAL_KAFKA_PORT:-19092}:9092"
 ```
 
-Pick host ports that don't collide with anything else on your machine. Use prefixes like `1XXXX` (ecommerce), `2XXXX` (wms), `3XXXX` (GAP) for clarity, or whatever you prefer — these are local to your machine only.
+Pick host ports that don't collide with anything else on your machine. Use prefixes like `1XXXX` (ecommerce), `2XXXX` (wms), `3XXXX` (IAM) for clarity, or whatever you prefer — these are local to your machine only.
 
 ### Step 2 — Bring up with the overlay
 

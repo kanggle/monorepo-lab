@@ -82,7 +82,7 @@ fan-platform 도메인에서 공통으로 발생하는 에러는 [../../platform
 
 ### 외부 (플랫폼 경계 바깥)
 
-- **GAP (iam-platform)** — OIDC IdP. RS256 JWT 검증, `tenant_id=fan-platform` claim, account profile 조회. **표준 OAuth2 Resource Server 패턴** 으로 통합.
+- **IAM (iam-platform)** — OIDC IdP. RS256 JWT 검증, `tenant_id=fan-platform` claim, account profile 조회. **표준 OAuth2 Resource Server 패턴** 으로 통합.
 - **MinIO / S3** — 미디어 (포스트 이미지, 아티스트 프로필 사진) 저장. CDN 연동.
 - **PG (Payment Gateway)** — 멤버십 결제 (v2). mock 으로 시작 가능.
 - **푸시 알림 채널** — FCM / APNs / 이메일 / 카카오톡 알림톡 (v2 notification-service).
@@ -149,7 +149,7 @@ MEMBERS_ONLY / PREMIUM 콘텐츠 접근 시 멤버십 서비스 호출이 timeou
 1. **Bounded context 맵** — 각 context 의 책임·소유 데이터·통신 방향. 위치: `specs/services/` 전반 또는 `specs/architecture.md`
 2. **포스트 상태 머신** — DRAFT / PUBLISHED / HIDDEN / DELETED 전이 다이어그램. 위치: `specs/services/community-service/state-machines/post-status.md`
 3. **멤버십 등급 정의** — FREE / BASIC / PREMIUM 등급별 콘텐츠 접근 매트릭스. 위치: `specs/services/membership-service/membership-tiers.md` (v2)
-4. **GAP OIDC 통합 가이드** — `tenant_id=fan-platform` 검증, JWKS URI, role mapping. 위치: `specs/integration/iam-integration.md`
+4. **IAM OIDC 통합 가이드** — `tenant_id=fan-platform` 검증, JWKS URI, role mapping. 위치: `specs/integration/iam-integration.md`
 5. **에러 코드 등록** — 위 Standard Error Codes 가 [../../platform/error-handling.md](../../platform/error-handling.md) 에 존재
 6. **Frontend → Backend API 계약** — Next.js fan-platform-web 이 호출하는 gateway 라우트. 위치: `specs/contracts/http/community-api.md`, `artist-api.md` 등
 
@@ -162,7 +162,7 @@ MEMBERS_ONLY / PREMIUM 콘텐츠 접근 시 멤버십 서비스 호출이 timeou
 - [../traits/transactional.md](../traits/transactional.md) 의 트랜잭션·멱등성 규칙이 멤버십 결제·포스트 발행·댓글 모더레이션에 적용된다.
 - [../traits/content-heavy.md](../traits/content-heavy.md) 의 미디어·검색·캐시 규칙이 포스트·댓글에 적용된다.
 - [../traits/read-heavy.md](../traits/read-heavy.md) 의 캐시·페이지네이션 규칙이 피드·아티스트 디렉토리에 적용된다.
-- [../traits/integration-heavy.md](../traits/integration-heavy.md) 의 외부 연동 규칙이 GAP / MinIO / PG 연동에 적용된다.
+- [../traits/integration-heavy.md](../traits/integration-heavy.md) 의 외부 연동 규칙이 IAM / MinIO / PG 연동에 적용된다.
 
 ---
 
@@ -176,5 +176,5 @@ MEMBERS_ONLY / PREMIUM 콘텐츠 접근 시 멤버십 서비스 호출이 timeou
 - [ ] 모든 운영자 행위가 `admin_actions` 에 기록되는가? (F6)
 - [ ] 모든 도메인 테이블에 `tenant_id` NOT NULL + 쿼리에 명시되는가? (F7)
 - [ ] 표준 에러 코드가 플랫폼 카탈로그에 등록되었는가?
-- [ ] GAP OIDC 통합 가이드가 작성되었는가?
+- [ ] IAM OIDC 통합 가이드가 작성되었는가?
 - [ ] 멤버십 등급별 접근 매트릭스가 명시되어 있는가? (v2 시점)
