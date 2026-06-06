@@ -47,7 +47,7 @@ spring:
 
 ## OAuth Clients (등록은 GAP 의 시드 마이그레이션에서 생성)
 
-V0018 시드 ([TASK-MONO-119](../../../../tasks/ready/TASK-MONO-119-erp-platform-bootstrap-artifact.md)):
+V0018 시드 ([TASK-MONO-119](../../../../tasks/done/TASK-MONO-119-erp-platform-bootstrap-artifact.md)):
 
 | Client ID | Grant Types | PKCE | Redirect URIs | Flyway |
 |---|---|---|---|---|

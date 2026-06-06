@@ -291,7 +291,7 @@ defense-in-depth option, not a v1 path.
 ## Observability (D7.A)
 
 The BFF emits per-outbound-domain attribution metrics + per-domain tracing
-spans, reusing Vector + VictoriaMetrics ([ADR-MONO-006](../../../../../docs/adr/ADR-MONO-006-observability-stack.md))
+spans, reusing Vector + VictoriaMetrics ([ADR-MONO-007](../../../../../docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md))
 **without** introducing a new stack.
 
 Mandatory metric set (Micrometer):

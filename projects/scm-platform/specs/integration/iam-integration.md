@@ -50,7 +50,7 @@ spring:
 
 ## OAuth Clients (등록은 GAP 의 시드 마이그레이션에서 생성)
 
-V0013 시드 ([TASK-MONO-042](../../../../tasks/done/TASK-MONO-042-iam-v0013-scm-oidc-clients.md)):
+V0013 시드 ([TASK-MONO-042](../../../../tasks/done/TASK-MONO-042-gap-v0013-scm-oidc-clients.md)):
 
 | Client ID | Grant Types | PKCE | Redirect URIs | Flyway |
 |---|---|---|---|---|

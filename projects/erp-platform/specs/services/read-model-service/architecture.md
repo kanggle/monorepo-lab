@@ -303,7 +303,7 @@ processed_events(event_id VARCHAR PK, topic, aggregate_id, processed_at)
   {id, code, name, path[]}, costCenter: {id, code, name}, jobGrade: {id, code,
   name, displayOrder} }`; unresolved references → `null` + `meta.unresolved`.
 
-A dedicated [`data-model.md`](data-model.md) is a low-priority follow-up if the
+A dedicated `data-model.md` is a low-priority follow-up if the
 projection grows (masterdata-service / inventory-visibility precedent: inline the
 model until it warrants its own file). This first increment inlines it here +
 satisfies erp.md § Required Artifacts #4 (Integrated read model boundary map):

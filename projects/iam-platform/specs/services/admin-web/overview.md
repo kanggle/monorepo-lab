@@ -2,9 +2,9 @@
 
 > **This service no longer exists.** GAP `admin-web` (the operator-only Next.js
 > console, GAP's only `frontend-app`) was **retired on 2026-05-18** under
-> [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
+> [ADR-MONO-013](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
 > Phase 3. Its entire operator surface was **absorbed by the unified
-> [`projects/platform-console/`](../../../platform-console/PROJECT.md)**
+> [`projects/platform-console/`](../../../../platform-console/PROJECT.md)**
 > (Model B — the console is the single UI). GAP is now a **backend-only IdP**.
 >
 > This file is a deliberate **retirement record (tombstone)** kept at the
@@ -26,8 +26,8 @@ redundant and its continued existence would split the operator surface.
 Retirement was **not** a silent delete — ADR-MONO-013 § D4 mandates a
 parity-gated, recorded deprecation:
 
-- **Verified**: [ADR-MONO-013 § 6](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
-  additive note + [console-integration-contract § 3](../../../platform-console/specs/contracts/console-integration-contract.md)
+- **Verified**: [ADR-MONO-013 § 6](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
+  additive note + [console-integration-contract § 3](../../../../platform-console/specs/contracts/console-integration-contract.md)
   — a **16/16 verified parity matrix**, programmatically attested by
   `projects/platform-console/apps/console-web/tests/unit/parity-verification.test.ts`.
 - **Operator capability lost: none.** Every `admin-web` capability
@@ -52,11 +52,11 @@ GAP-side enablers: `TASK-BE-296` (console OIDC client + product registry),
 
 ## Governance
 
-- [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
+- [ADR-MONO-013](../../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
   § D4 (parity-gated retirement) + § D6 Phase 3 + § 6 (gate satisfied)
-- [ADR-MONO-014](../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md)
+- [ADR-MONO-014](../../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md)
   (operator-auth bridge — token exchange)
-- [ADR-MONO-015](../../../../docs/adr/ADR-MONO-015-platform-console-dashboards-model.md)
+- [ADR-MONO-015](../../../../../docs/adr/ADR-MONO-015-platform-console-dashboards-model.md)
   (dashboards = composed operator overview)
 - GAP changelog: [`docs/migration-notes.md`](../../../docs/migration-notes.md)
   § "admin-web retirement"
