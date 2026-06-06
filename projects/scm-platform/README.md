@@ -7,7 +7,7 @@
 | Domain | `scm` ([rules/domains/scm.md](../../rules/domains/scm.md)) |
 | Traits | `transactional`, `integration-heavy`, `batch-heavy` |
 | Service Types | `rest-api`, `event-consumer`, `batch-job` |
-| IdP | GAP (`tenant_id=scm`) — [GAP integration](../iam-platform/PROJECT.md) |
+| IdP | IAM (`tenant_id=scm`) — [IAM integration](../iam-platform/PROJECT.md) |
 | Hostname | `scm.local` (Traefik routing, ADR-MONO-001) |
 | Status | **v1 bootstrap (TASK-MONO-040)** — skeleton only, 첫 service 미가동 |
 
@@ -27,7 +27,7 @@
 
 | Service | 역할 | 후속 Task |
 |---|---|---|
-| `gateway-service` | 엣지 라우팅, GAP RS256 JWT 검증, `tenant_id=scm` gate | TASK-SCM-BE-001 |
+| `gateway-service` | 엣지 라우팅, IAM RS256 JWT 검증, `tenant_id=scm` gate | TASK-SCM-BE-001 |
 | `procurement-service` | PO / supplier ack / ASN 수신 처리 | TASK-SCM-BE-001+ |
 | `inventory-visibility-service` | cross-node 재고 가시성 read-model | TASK-SCM-BE-002+ |
 
@@ -65,7 +65,7 @@ curl -i http://scm.local/actuator/health
 # → 200 OK from gateway-service
 ```
 
-dev 토큰 발급 (GAP `scm-platform-internal-services-client` 등록 완료, TASK-MONO-042 V0013):
+dev 토큰 발급 (IAM `scm-platform-internal-services-client` 등록 완료, TASK-MONO-042 V0013):
 ```bash
 curl -u scm-platform-internal-services-client:scm-dev \
      -d "grant_type=client_credentials&scope=scm.read" \
@@ -74,16 +74,16 @@ curl -u scm-platform-internal-services-client:scm-dev \
 
 ---
 
-## GAP IdP Integration
+## IAM IdP Integration
 
-scm-platform 의 모든 서비스는 OAuth2 Resource Server 패턴으로 GAP RS256 JWT 를 검증하며 `tenant_id=scm` claim 만 통과시킨다.
+scm-platform 의 모든 서비스는 OAuth2 Resource Server 패턴으로 IAM RS256 JWT 를 검증하며 `tenant_id=scm` claim 만 통과시킨다.
 
-GAP 측 인프라 (TASK-MONO-042 머지 완료):
+IAM 측 인프라 (TASK-MONO-042 머지 완료):
 - `tenants.tenant_id='scm'` (B2B_ENTERPRISE) — account-service V0015
 - `oauth_clients.client_id='scm-platform-internal-services-client'` (client_credentials, scopes=`scm.read`/`scm.write`) — auth-service V0013
 - `oauth_scopes` — `scm.read`, `scm.write` — auth-service V0013
 
-상세는 [PROJECT.md § GAP IdP Integration](PROJECT.md#iam-idp-integration) + (후속) `specs/integration/iam-integration.md`.
+상세는 [PROJECT.md § IAM IdP Integration](PROJECT.md#iam-idp-integration) + (후속) `specs/integration/iam-integration.md`.
 
 ---
 
@@ -98,9 +98,9 @@ GAP 측 인프라 (TASK-MONO-042 머지 완료):
 
 ## References
 
-- [PROJECT.md](PROJECT.md) — domain · traits · service map · GAP integration · trait rationale
+- [PROJECT.md](PROJECT.md) — domain · traits · service map · IAM integration · trait rationale
 - [tasks/INDEX.md](tasks/INDEX.md) — project task lifecycle
 - [rules/domains/scm.md](../../rules/domains/scm.md) — scm 도메인 mandatory rules · bounded contexts · ubiquitous language
 - [ADR-MONO-002](../../docs/adr/ADR-MONO-002-phase-4-template-extraction-trigger.md) — Phase 4 catalyst 결정
-- [TASK-MONO-040](../../tasks/done/) (본 부트스트랩) / [TASK-MONO-042](../../tasks/done/) (GAP V0013/V0015 시드)
-- [TEMPLATE.md § GAP IdP Integration Pattern](../../TEMPLATE.md#iam-idp-integration-pattern-new-projects) — 신규 프로젝트의 GAP 통합 표준 절차
+- [TASK-MONO-040](../../tasks/done/) (본 부트스트랩) / [TASK-MONO-042](../../tasks/done/) (IAM V0013/V0015 시드)
+- [TEMPLATE.md § IAM IdP Integration Pattern](../../TEMPLATE.md#iam-idp-integration-pattern-new-projects) — 신규 프로젝트의 IAM 통합 표준 절차

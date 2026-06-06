@@ -1,7 +1,7 @@
 # fan-platform
 
 > **K-pop 류 아티스트↔팬 커뮤니티** 백엔드 + Next.js 프론트엔드. Weverse-style.
-> Built with Claude Code · spec-driven · GAP OIDC consumer · Traefik hostname routing
+> Built with Claude Code · spec-driven · IAM OIDC consumer · Traefik hostname routing
 
 [![CI](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
 [![Java 21](https://img.shields.io/badge/java-21-007396)](https://adoptium.net/)
@@ -15,7 +15,7 @@ AI-assisted 풀스택 포트폴리오 — 엔터테인먼트 회사 (HYBE / SM /
 도메인은 K-pop 으로 구체화했으나, 다음 엔지니어링 패턴은 모든 creator-community / 사회적 콘텐츠 플랫폼에 동일하게 적용됨:
 
 - **Event-driven 아키텍처** — Kafka outbox + audit trail
-- **OIDC IdP 통합** — GAP 를 OAuth2 Resource Server 로 소비 (RS256 + `tenant_id` claim)
+- **OIDC IdP 통합** — IAM 를 OAuth2 Resource Server 로 소비 (RS256 + `tenant_id` claim)
 - **multi-tenant 격리** — row-level `tenant_id=fan-platform`, 향후 팬덤 추가 시 인프라 보존
 - **content-heavy** — 미디어 스토리지 분리 (MinIO + CDN), 검색 인덱싱, 멀티계층 캐시
 - **fail-closed 멤버십 접근 제어** — 멤버십 서비스 503 시 보수적 거부
@@ -71,7 +71,7 @@ open http://fan-platform.local/
                       │ OIDC JWT (RS256, tenant_id=fan-platform)
                       │
               ┌───────┴────────┐
-              │      GAP       │  http://iam.local/
+              │      IAM       │  http://iam.local/
               │ (auth-service +│
               │ account-service│
               │  + admin)      │
@@ -89,14 +89,14 @@ open http://fan-platform.local/
 
 상세는 [tasks/INDEX.md](tasks/INDEX.md) 참조.
 
-## Differentiation from GAP's frozen `community-service`
+## Differentiation from IAM's frozen `community-service`
 
-GAP 안에 [`community-service`](../iam-platform/apps/community-service/) 가 frozen demo 로 존재하지만, 본 fan-platform 은 다음 점에서 차별화:
+IAM 안에 [`community-service`](../iam-platform/apps/community-service/) 가 frozen demo 로 존재하지만, 본 fan-platform 은 다음 점에서 차별화:
 
-| 측면 | GAP frozen demo | fan-platform |
+| 측면 | IAM frozen demo | fan-platform |
 |---|---|---|
-| 위치 | GAP 안 product-layer demo | 별도 프로젝트 |
-| 인증 | GAP 내부 API 직접 호출 | OAuth2 Resource Server 표준 패턴 |
+| 위치 | IAM 안 product-layer demo | 별도 프로젝트 |
+| 인증 | IAM 내부 API 직접 호출 | OAuth2 Resource Server 표준 패턴 |
 | Service split | community 단일 | community + artist (master data 분리) + membership (v2) |
 | Multi-tenant | 단일 tenant | `tenant_id=fan-platform` 격리 검증 |
 | Frontend | 없음 | Next.js 15 + Tailwind |
@@ -123,9 +123,9 @@ projects/fan-platform/
 
 ## References
 
-- [PROJECT.md](PROJECT.md) — 분류 + service map + GAP 통합 + scope
+- [PROJECT.md](PROJECT.md) — 분류 + service map + IAM 통합 + scope
 - [tasks/INDEX.md](tasks/INDEX.md) — task lifecycle
-- [GAP ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — OIDC 통합 결정
+- [IAM ADR-001](../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — OIDC 통합 결정
 - [ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) — hostname routing
 - [rules/domains/fan-platform.md](../../rules/domains/fan-platform.md) — 도메인 규칙
 

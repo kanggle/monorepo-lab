@@ -1,6 +1,8 @@
-# Global Account Platform (GAP)
+# Identity & Access Management (IAM)
 
-> Weverse Account에서 영감받은 **글로벌 계정/인증/보안 백엔드 플랫폼**. 다수의 하위 제품이 공유하는 계정 인프라 레이어를 프로덕션 수준으로 구현합니다.
+> Weverse Account에서 영감받은 **글로벌 계정/인증/보안 백엔드 플랫폼** (IdP / OIDC Authorization Server). 다수의 하위 제품이 공유하는 계정 인프라 레이어를 프로덕션 수준으로 구현합니다.
+>
+> _옛 명칭: **Global Account Platform** (`global-account-platform` / `gap`) — 2026-06-06 IAM 으로 rename (MONO-179/180)._
 
 [![CI](https://github.com/kanggle/iam-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/kanggle/iam-platform/actions/workflows/ci.yml)
 
@@ -44,9 +46,9 @@
                     └─────────────────────────┘
 ```
 
-> **운영자 콘솔**: GAP `admin-web` 은 2026-05-18 폐기되었다 (ADR-MONO-013 Phase 3).
+> **운영자 콘솔**: IAM `admin-web` 은 2026-05-18 폐기되었다 (ADR-MONO-013 Phase 3).
 > 운영자 UI 는 통합 [`projects/platform-console/`](../platform-console/PROJECT.md)
-> 가 흡수했고, GAP 은 **backend-only IdP** 로 회귀했다 — 아래 표기는 backend 5
+> 가 흡수했고, IAM 은 **backend-only IdP** 로 회귀했다 — 아래 표기는 backend 5
 > 서비스만 다룬다. 상세: [`docs/migration-notes.md`](docs/migration-notes.md)
 > § "admin-web retirement", [`PROJECT.md`](PROJECT.md) § "admin-web — RETIRED".
 
@@ -93,7 +95,7 @@
 | C — OAuth callback | Google / Kakao / Microsoft (happy + preferredUsername fallback + existing-email auto-link) (5) | **5/5** |
 | Bonus | TenantClaimTokenCustomizer REFRESH_TOKEN grantType 분기 누락 (기존 결함, RT IT enable 으로 unmasked) | **+1** |
 
-main CI 의 GAP Integration job 에서 모두 deterministic PASS. **portfolio 의 OIDC AS 운영 깊이 증명 완성**.
+main CI 의 IAM Integration job 에서 모두 deterministic PASS. **portfolio 의 OIDC AS 운영 깊이 증명 완성**.
 
 ### Admin Operations (RBAC)
 - **역할 기반 접근 제어** — SUPER_ADMIN, ACCOUNT_ADMIN, AUDITOR
@@ -190,7 +192,7 @@ pnpm iam:up                   # http://iam.local/ 으로 gateway 접근
 
 ### 3. Operator console
 
-GAP `admin-web` 은 폐기되었다 (2026-05-18, ADR-MONO-013 Phase 3). 운영자 UI 는
+IAM `admin-web` 은 폐기되었다 (2026-05-18, ADR-MONO-013 Phase 3). 운영자 UI 는
 통합 콘솔이 흡수했다 — [`projects/platform-console/`](../platform-console/) 의
 README / `pnpm console:dev` 참조.
 
