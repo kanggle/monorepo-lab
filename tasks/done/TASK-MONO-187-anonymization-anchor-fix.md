@@ -8,7 +8,7 @@ Fix the **2 remaining broken `#anchor` links** in the repo — `account-service/
 
 # Status
 
-ready
+done
 
 # Owner
 
