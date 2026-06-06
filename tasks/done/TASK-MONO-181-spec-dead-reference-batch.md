@@ -8,7 +8,7 @@ Fix **16 broken cross-references in spec markdown** surfaced by a `/refactor-spe
 
 # Status
 
-ready
+done
 
 # Owner
 
