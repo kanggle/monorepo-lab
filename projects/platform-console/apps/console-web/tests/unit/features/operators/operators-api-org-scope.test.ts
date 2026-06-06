@@ -127,7 +127,7 @@ describe('listOperatorAssignments â€” GET .../assignments parse (NON_NULL omit â
     expect(res2.assignments).toHaveLength(0);
   });
 
-  it('uses the operator token bearer (NOT the GAP OIDC access token) + active X-Tenant-Id', async () => {
+  it('uses the operator token bearer (NOT the IAM OIDC access token) + active X-Tenant-Id', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-must-not-leak');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-correct');
     cookieJar.set(TENANT_COOKIE, 'acme-corp');

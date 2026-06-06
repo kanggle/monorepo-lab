@@ -23,11 +23,11 @@ describe('useCatalog', () => {
     const initial: CatalogState = {
       products: [
         {
-          productKey: 'gap',
-          displayName: 'GAP',
+          productKey: 'iam',
+          displayName: 'IAM',
           available: true,
           tenants: ['wms'],
-          baseRoute: '/gap',
+          baseRoute: '/iam',
         },
       ],
       degraded: false,

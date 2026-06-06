@@ -5,9 +5,9 @@ import { newRequestId } from '@/shared/lib/logger';
 /**
  * Shared error → HTTP mapping for the finance-ops same-origin proxy
  * routes (console-integration-contract § 2.4.7 / § 2.5). The HttpOnly
- * **GAP OIDC access token** is attached server-side in
- * `finance-api.ts` — NOT the GAP exchanged operator token (finance
- * requires the GAP OIDC token; the #569 invariant is
+ * **IAM OIDC access token** is attached server-side in
+ * `finance-api.ts` — NOT the IAM exchanged operator token (finance
+ * requires the IAM OIDC token; the #569 invariant is
  * GAP-domain-scoped — the § 2.4.5 rule reused, NOT re-derived).
  * Mirrors the FE-008 scm `_proxy` shape for the flat envelope.
  *
@@ -28,7 +28,7 @@ import { newRequestId } from '@/shared/lib/logger';
  *     bounded backoff — a fabricated backoff would be cargo-culted
  *     from scm § 2.4.6, asserted absent by test).
  *   - 503 / timeout / network → 503 (ONLY the finance section
- *     degrades; the console shell + GAP / wms / scm sections stay
+ *     degrades; the console shell + IAM / wms / scm sections stay
  *     intact).
  *
  * No token / finance data is ever logged (confidential + F7).

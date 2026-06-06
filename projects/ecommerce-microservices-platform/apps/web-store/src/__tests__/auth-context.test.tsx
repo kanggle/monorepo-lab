@@ -93,7 +93,7 @@ describe('AuthContext (NextAuth + GAP)', () => {
     expect(getAccessToken()).toBe('gap-access-token');
   });
 
-  it('login() 호출 시 signIn("gap", {callbackUrl:"/"}) 가 호출된다', async () => {
+  it('login() 호출 시 signIn("iam", {callbackUrl:"/"}) 가 호출된다', async () => {
     mockUseSession.mockReturnValue({
       data: null,
       status: 'unauthenticated',
@@ -108,7 +108,7 @@ describe('AuthContext (NextAuth + GAP)', () => {
     );
 
     await user.click(screen.getByText('login'));
-    expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/' });
+    expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });
   });
 
   it('logout() 호출 시 end_session URL 조회 → signOut(redirect:false) → GAP 리다이렉트 (RP-initiated logout)', async () => {

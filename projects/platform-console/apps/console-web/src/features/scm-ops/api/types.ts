@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Feature-local types for the scm gateway's read-only procurement-PO +
  * inventory-visibility surface (TASK-PC-FE-008 — ADR-MONO-013 Phase 4
- * slice 2, the SECOND non-GAP federated domain — completes Phase 4).
+ * slice 2, the SECOND non-IAM federated domain — completes Phase 4).
  *
  * Authoritative producer contracts (do NOT redefine — consume read-only):
  *   `scm-platform/specs/contracts/http/procurement-api.md`

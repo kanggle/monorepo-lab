@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin erp employees LIST read proxy (GET) + CREATE proxy (POST —
- * TASK-PC-FE-048). GAP OIDC domain-facing token attached server-side; E3
+ * TASK-PC-FE-048). IAM OIDC domain-facing token attached server-side; E3
  * `?asOf=` threaded through on read. Confidential PII never logged. Create
  * carries an `Idempotency-Key` (no `X-Operator-Reason` — create has no
  * producer reason slot).

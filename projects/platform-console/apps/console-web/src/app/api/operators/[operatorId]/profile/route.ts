@@ -32,7 +32,7 @@ export const runtime = 'nodejs';
  * BODY shape: `{ defaultAccountId: string | null, reason: string }` (the
  * proxy-layer wire shape; the api fn reconstructs the GAP-side body
  * `{ operatorContext: { defaultAccountId } }` server-side). Explicit
- * `null` clears the column; a string is opaque to GAP (no cross-service
+ * `null` clears the column; a string is opaque to IAM (no cross-service
  * verification — TASK-BE-304 § Decision authority).
  */
 export async function POST(

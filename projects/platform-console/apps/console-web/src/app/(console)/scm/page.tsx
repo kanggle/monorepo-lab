@@ -8,15 +8,15 @@ export const dynamic = 'force-dynamic';
 
 /**
  * scm operations section route (TASK-PC-FE-008 — ADR-MONO-013 Phase 4
- * slice 2, the SECOND non-GAP domain federated by the console; completes
+ * slice 2, the SECOND non-IAM domain federated by the console; completes
  * Phase 4). An in-console nav destination, NOT a catalog product re-route
  * — the catalog `scm.baseRoute` stays data-driven (resolveConsoleRoute
- * leaves non-GAP products on their registry baseRoute; an
+ * leaves non-IAM products on their registry baseRoute; an
  * `available:false` scm is handled by the existing catalog "coming soon"
  * path — this route does not hard-crash when scm is unavailable).
  *
  * Server component. STRICTLY READ-ONLY. scm is reached server-side with
- * the HttpOnly **GAP OIDC access token** (NOT the GAP exchanged operator
+ * the HttpOnly **IAM OIDC access token** (NOT the IAM exchanged operator
  * token — § 2.4.6 reuses the § 2.4.5 per-domain credential rule; the #569
  * invariant is GAP-domain-scoped and the scm gateway *requires* the GAP
  * OIDC token).

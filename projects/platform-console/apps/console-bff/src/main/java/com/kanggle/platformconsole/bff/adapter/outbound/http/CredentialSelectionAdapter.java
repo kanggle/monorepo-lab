@@ -33,7 +33,7 @@ public class CredentialSelectionAdapter implements CredentialSelectionPort {
     @Override
     public OutboundCredential selectFor(DomainTarget domain) {
         return switch (domain) {
-            case GAP -> new OutboundCredential.OperatorToken(context.getOperatorToken());
+            case IAM -> new OutboundCredential.OperatorToken(context.getOperatorToken());
             case WMS, SCM, FINANCE, ERP ->
                     new OutboundCredential.IamOidcAccessToken(context.getIamOidcAccessToken());
         };

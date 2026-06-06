@@ -11,19 +11,19 @@ export const dynamic = 'force-dynamic';
 
 /**
  * erp operations section route (TASK-PC-FE-010 — ADR-MONO-013 Phase
- * 6; the FOURTH non-GAP domain federated by the console — the FIRST
+ * 6; the FOURTH non-IAM domain federated by the console — the FIRST
  * internal-system-primary). An in-console nav destination, NOT a
  * catalog product re-route — the catalog `erp.baseRoute` stays
- * data-driven (resolveConsoleRoute leaves non-GAP products on their
+ * data-driven (resolveConsoleRoute leaves non-IAM products on their
  * registry baseRoute; an `available:false` erp is handled by the
  * existing catalog "coming soon" path — this route does not
  * hard-crash when erp is unavailable).
  *
  * Server component. STRICTLY READ-ONLY. erp is reached server-side
- * with the HttpOnly **GAP OIDC access token** (NOT the GAP exchanged
+ * with the HttpOnly **IAM OIDC access token** (NOT the IAM exchanged
  * operator token — § 2.4.8 reuses the § 2.4.5 per-domain credential
  * rule; the #569 invariant is GAP-domain-scoped and erp *requires*
- * the GAP OIDC token).
+ * the IAM OIDC token).
  *
  * Eligibility (§ 2.4.8 reusing § 2.4.5 tenant-model divergence):
  * erp resolves the tenant from the JWT `tenant_id ∈ {erp,*}` claim
@@ -40,7 +40,7 @@ export const dynamic = 'force-dynamic';
  *
  * Resilience (§ 2.5): 401 → whole-session re-login; 403 → inline
  * "not scoped"; 503 / timeout → only this section degrades (the
- * `(console)` shell + GAP / wms / scm / finance sections stay).
+ * `(console)` shell + IAM / wms / scm / finance sections stay).
  * **No 429 handling** — erp has no documented 429 (identical to
  * finance).
  */

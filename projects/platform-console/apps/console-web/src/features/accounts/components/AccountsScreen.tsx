@@ -17,7 +17,7 @@ import { AccountStatusBadge } from './AccountStatusBadge';
 import { ConfirmActionDialog } from './ConfirmActionDialog';
 
 /**
- * GAP accounts operator surface (TASK-PC-FE-002 — Phase 2 slice 1).
+ * IAM accounts operator surface (TASK-PC-FE-002 — Phase 2 slice 1).
  *
  * Server-rendered initial page is passed in; client re-query handles
  * pagination / search / post-mutation invalidation. Every destructive op

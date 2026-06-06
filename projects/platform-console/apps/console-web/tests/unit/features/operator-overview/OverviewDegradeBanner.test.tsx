@@ -32,7 +32,7 @@ function envelope(cards: Card[]): OperatorOverview {
 }
 
 const ALL_DEGRADED: Card[] = [
-  { domain: 'gap', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
+  { domain: 'iam', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
   { domain: 'wms', status: 'degraded', reason: 'TIMEOUT' },
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'forbidden', reason: 'MISSING_PREREQUISITE' },
@@ -40,7 +40,7 @@ const ALL_DEGRADED: Card[] = [
 ];
 
 const MIXED: Card[] = [
-  { domain: 'gap', status: 'ok', data: { totalElements: 1 } },
+  { domain: 'iam', status: 'ok', data: { totalElements: 1 } },
   { domain: 'wms', status: 'degraded', reason: 'TIMEOUT' },
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'forbidden', reason: 'MISSING_PREREQUISITE' },
@@ -88,7 +88,7 @@ describe('OverviewDegradeBanner — rendering', () => {
 
   it('returns null on an all-ok envelope', () => {
     const allOk: Card[] = [
-      { domain: 'gap', status: 'ok', data: {} },
+      { domain: 'iam', status: 'ok', data: {} },
       { domain: 'wms', status: 'ok', data: {} },
       { domain: 'scm', status: 'ok', data: {} },
       { domain: 'finance', status: 'ok', data: {} },

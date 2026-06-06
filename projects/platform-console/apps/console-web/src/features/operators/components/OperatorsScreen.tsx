@@ -25,7 +25,7 @@ import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 import { OrgScopeDialog } from './OrgScopeDialog';
 
 /**
- * GAP operators-management surface (TASK-PC-FE-004 — Phase 2 slice 3, the
+ * IAM operators-management surface (TASK-PC-FE-004 — Phase 2 slice 3, the
  * most privilege-sensitive slice). Server-rendered initial page is passed
  * in; client re-query handles status filter / pagination / post-mutation
  * invalidation.

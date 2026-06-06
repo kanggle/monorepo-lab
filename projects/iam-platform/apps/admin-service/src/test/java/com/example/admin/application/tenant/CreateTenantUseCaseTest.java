@@ -88,7 +88,7 @@ class CreateTenantUseCaseTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"admin", "internal", "system", "null", "default",
-            "public", "gap", "auth", "oauth", "me"})
+            "public", "gap", "iam", "auth", "oauth", "me"})
     void reserved_word_throws_tenant_id_reserved_port_not_called(String reserved) {
         assertThatThrownBy(() ->
                 useCase.execute(reserved, "Display", "B2B_ENTERPRISE", SUPER_ADMIN, "r", "k"))

@@ -2,7 +2,7 @@ import { fetchRegistry } from '@/shared/api/registry-client';
 
 /**
  * Server-only helper that resolves the calling operator's finance default
- * account id from the GAP registry response.
+ * account id from the IAM registry response.
  *
  * <b>Server-only by construction</b>: this helper transitively imports
  * `next/headers` (via `fetchRegistry` → `getOperatorToken`), which throws
@@ -16,7 +16,7 @@ import { fetchRegistry } from '@/shared/api/registry-client';
  * enforcement).
  *
  * Source of truth: `productItem[finance].operatorContext.defaultAccountId`
- * on the GAP `GET /api/admin/console/registry` response (Phase 1 producer
+ * on the IAM `GET /api/admin/console/registry` response (Phase 1 producer
  * surface — TASK-BE-304; consumer-side wiring — TASK-PC-FE-014; specs:
  * `console-integration-contract.md § 2.2` + `§ 2.4.9.1 Implementation
  * guidance — Option (a) activation`; producer:

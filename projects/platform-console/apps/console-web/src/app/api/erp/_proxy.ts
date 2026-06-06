@@ -5,9 +5,9 @@ import { newRequestId } from '@/shared/lib/logger';
 /**
  * Shared error → HTTP mapping for the erp-ops same-origin proxy
  * routes (console-integration-contract § 2.4.8 / § 2.5). The
- * HttpOnly **GAP OIDC access token** is attached server-side in
- * `erp-api.ts` — NOT the GAP exchanged operator token (erp
- * requires the GAP OIDC token; the #569 invariant is
+ * HttpOnly **IAM OIDC access token** is attached server-side in
+ * `erp-api.ts` — NOT the IAM exchanged operator token (erp
+ * requires the IAM OIDC token; the #569 invariant is
  * GAP-domain-scoped — the § 2.4.5 rule reused, NOT re-derived).
  * Mirrors the FE-009 finance `_proxy` shape for the flat envelope.
  *
@@ -42,7 +42,7 @@ import { newRequestId } from '@/shared/lib/logger';
  *     fabricated backoff would be cargo-culted from scm § 2.4.6,
  *     asserted absent by test).
  *   - 503 / timeout / network → 503 (ONLY the erp section
- *     degrades; the console shell + GAP / wms / scm / finance
+ *     degrades; the console shell + IAM / wms / scm / finance
  *     sections stay intact).
  *
  * No token / erp data is ever logged (confidential + audit-heavy).

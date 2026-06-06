@@ -62,7 +62,7 @@ export type ChangePasswordBody = z.infer<typeof ChangePasswordBodySchema>;
  * means "clear the column"; a string must be non-empty after trim,
  * ≤ 36 chars, with no internal whitespace and no control chars / DEL
  * (regex `^[^\s\x00-\x1f\x7f]+$`). The producer is the final authority
- * (the same validation lives on GAP `admin-service`); this zod is the
+ * (the same validation lives on IAM `admin-service`); this zod is the
  * UX fail-fast pre-check at the same-origin proxy boundary.
  *
  * `.strict()` on both the outer + nested objects mirrors the producer's

@@ -9,19 +9,19 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
  * (GAP-scoped) registry returned. A single-tenant operator's derived
  * selectable set must contain only their own slug — no enumeration of other
  * tenants. Cross-tenant write rejection itself is enforced server-side in
- * `/api/tenant` + by GAP (covered by the route + producer regression test);
+ * `/api/tenant` + by IAM (covered by the route + producer regression test);
  * this guards the client-side derivation that feeds the switcher.
  */
 describe('multi-tenant isolation — selectableTenants', () => {
   it('a single-tenant operator only sees their own slug', () => {
-    // GAP already scoped this response to operator tenant 'wms'.
+    // IAM already scoped this response to operator tenant 'wms'.
     const products: RegistryProduct[] = [
       {
-        productKey: 'gap',
-        displayName: 'GAP',
+        productKey: 'iam',
+        displayName: 'IAM',
         available: true,
         tenants: ['wms'],
-        baseRoute: '/gap',
+        baseRoute: '/iam',
       },
       {
         productKey: 'wms',
@@ -51,11 +51,11 @@ describe('multi-tenant isolation — selectableTenants', () => {
   it('a platform operator sees the full registered set, de-duplicated', () => {
     const products: RegistryProduct[] = [
       {
-        productKey: 'gap',
-        displayName: 'GAP',
+        productKey: 'iam',
+        displayName: 'IAM',
         available: true,
         tenants: ['fan-platform', 'wms', 'scm'],
-        baseRoute: '/gap',
+        baseRoute: '/iam',
       },
       {
         productKey: 'wms',

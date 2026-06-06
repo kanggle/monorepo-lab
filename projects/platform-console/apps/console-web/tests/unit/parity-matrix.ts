@@ -55,7 +55,7 @@ export interface ParityRow {
   readonly routeFile: string;
   /** console-integration-contract.md § the binding lives under. */
   readonly contractSection: '2.4.1' | '2.4.2' | '2.4.3' | '2.4.4';
-  /** The GAP `admin-api.md` producer path the client targets (substring
+  /** The IAM `admin-api.md` producer path the client targets (substring
    *  match against the mocked fetch URL). Empty = composed/no dedicated
    *  producer endpoint (detail / dashboards). */
   readonly producerPath: string;
@@ -323,7 +323,7 @@ export const PARITY_MATRIX: readonly ParityRow[] = [
     routeFile: 'src/app/(console)/dashboards/page.tsx',
     contractSection: '2.4.4',
     // No dedicated producer endpoint — a bounded fan-out composing the
-    // EXISTING accounts/audit/operators reads (no new GAP producer;
+    // EXISTING accounts/audit/operators reads (no new IAM producer;
     // ADR-MONO-015 D1). The test asserts exactly those 3 reads are hit.
     producerPath: '',
     producerSection:
@@ -355,7 +355,7 @@ export const PARITY_MATRIX: readonly ParityRow[] = [
       'SELF only (no admin-set-other-profile); valid operator token only — ' +
       'no reason, no idem per the producer (204 No Content). Body shape ' +
       'mirrors read: { operatorContext: { defaultAccountId: string | null } }. ' +
-      'Opaque to GAP (TASK-BE-304 § Decision authority — no finance verify).',
+      'Opaque to IAM (TASK-BE-304 § Decision authority — no finance verify).',
     verified: true,
   },
   {
@@ -378,7 +378,7 @@ export const PARITY_MATRIX: readonly ParityRow[] = [
       'idempotent). Self via this path → producer ' +
       '400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH; UI gates the ' +
       'per-row button when row is self (UX layer; producer is the authority). ' +
-      'Body shape on the GAP wire: ' +
+      'Body shape on the IAM wire: ' +
       '{ operatorContext: { defaultAccountId: string | null } }.',
     verified: true,
   },

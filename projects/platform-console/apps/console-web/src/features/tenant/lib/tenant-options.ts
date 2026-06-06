@@ -3,7 +3,7 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
 /**
  * Derives the operator's selectable tenant set from the registry response.
  *
- * GAP already scopes the registry to the operator's tenant scope
+ * IAM already scopes the registry to the operator's tenant scope
  * (console-registry-api.md § Tenant selection rule / § Multi-tenant
  * isolation) — a single-tenant operator only ever sees their own slug, a
  * platform operator sees all registered+ACTIVE tenants. The console simply

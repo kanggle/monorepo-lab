@@ -107,7 +107,7 @@ class AssumeTenantAuthenticationProviderTest {
         return Jwt.withTokenValue(SUBJECT_TOKEN)
                 .header("alg", "RS256")
                 .subject(OIDC_SUBJECT)
-                .claim("tenant_id", "gap")
+                .claim("tenant_id", "iam")
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(300))
                 .build();

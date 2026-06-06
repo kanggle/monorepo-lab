@@ -15,7 +15,7 @@ import type {
  * Regression (TASK-PC-FE-008 AC): the `/scm` surface is an in-console NAV
  * destination and an ADDITIVE domain section. It must NOT disturb the
  * data-driven catalog routing (FE-001/FE-002/FE-007 unchanged):
- * `gap.baseRoute` still resolves to `/accounts`, and a non-GAP product
+ * `iam.baseRoute` still resolves to `/accounts`, and a non-IAM product
  * (incl. `wms` and `scm`) keeps its registry `baseRoute`
  * (resolveConsoleRoute is additive). The scm section mounts as an
  * in-console destination without the GAP-section operator-token /
@@ -23,11 +23,11 @@ import type {
  */
 
 const gap: RegistryProduct = {
-  productKey: 'gap',
+  productKey: 'iam',
   displayName: 'Global Account Platform',
   available: true,
   tenants: ['scm'],
-  baseRoute: '/gap',
+  baseRoute: '/iam',
 };
 const wms: RegistryProduct = {
   productKey: 'wms',
@@ -70,7 +70,7 @@ function wrapper() {
 }
 
 describe('scm nav — additive, does not disturb catalog routing (FE-001/002/007)', () => {
-  it('gap still resolves to /accounts (FE-002 contract unchanged)', () => {
+  it('iam still resolves to /accounts (FE-002 contract unchanged)', () => {
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
   });
 

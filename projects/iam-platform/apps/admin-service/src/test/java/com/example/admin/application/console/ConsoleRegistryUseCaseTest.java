@@ -154,12 +154,12 @@ class ConsoleRegistryUseCaseTest {
         ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
 
         assertThat(r.products()).extracting(ConsoleProduct::productKey)
-                .containsExactly("gap", "wms", "scm", "erp", "finance");
+                .containsExactly("iam", "wms", "scm", "erp", "finance");
         assertThat(product(r, "erp").available()).isTrue();
         assertThat(product(r, "erp").tenants()).isEmpty();
         assertThat(product(r, "finance").available()).isTrue();
         assertThat(product(r, "finance").tenants()).isEmpty();
-        assertThat(product(r, "gap").baseRoute()).isEqualTo("/gap");
+        assertThat(product(r, "iam").baseRoute()).isEqualTo("/iam");
     }
 
     @Test
@@ -174,7 +174,7 @@ class ConsoleRegistryUseCaseTest {
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
 
-        assertThat(product(r, "gap").tenants())
+        assertThat(product(r, "iam").tenants())
                 .containsExactlyInAnyOrder("fan-platform", "wms", "scm");
         assertThat(product(r, "wms").tenants()).containsExactly("wms");
         assertThat(product(r, "scm").tenants()).containsExactly("scm");
@@ -191,7 +191,7 @@ class ConsoleRegistryUseCaseTest {
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
 
-        assertThat(product(r, "gap").tenants()).containsExactly("fan-platform");
+        assertThat(product(r, "iam").tenants()).containsExactly("fan-platform");
         assertThat(product(r, "wms").tenants())
                 .as("wms tenant SUSPENDED → not selectable")
                 .isEmpty();
@@ -210,7 +210,7 @@ class ConsoleRegistryUseCaseTest {
         ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
 
         // gap federates all tenants, but a wms-scoped operator only sees its own.
-        assertThat(product(r, "gap").tenants())
+        assertThat(product(r, "iam").tenants())
                 .as("single-tenant operator: gap shows only own tenant, never fan-platform/scm")
                 .containsExactly("wms");
         assertThat(product(r, "wms").tenants()).containsExactly("wms");
@@ -233,7 +233,7 @@ class ConsoleRegistryUseCaseTest {
 
         ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
 
-        assertThat(product(r, "gap").tenants()).isEmpty();
+        assertThat(product(r, "iam").tenants()).isEmpty();
         assertThat(product(r, "wms").tenants()).isEmpty();
     }
 
@@ -270,7 +270,7 @@ class ConsoleRegistryUseCaseTest {
             assertThat(product(r, "wms").tenants()).containsExactly("wms");
             assertThat(product(r, "scm").tenants()).containsExactly("scm");
             // gap (bindsAllTenants) is unaffected by the subscription read
-            assertThat(product(r, "gap").tenants())
+            assertThat(product(r, "iam").tenants())
                     .containsExactlyInAnyOrder("fan-platform", "wms", "scm");
         }
 
@@ -400,7 +400,7 @@ class ConsoleRegistryUseCaseTest {
             ConsoleRegistry r = useCase().execute(new OperatorContext("super", "jti"));
 
             // gap federates ALL active tenants regardless of subscriptions
-            assertThat(product(r, "gap").tenants())
+            assertThat(product(r, "iam").tenants())
                     .as("gap.bindsAllTenants federates acme-corp automatically (no gap subscription row needed)")
                     .contains("acme-corp");
         }
@@ -454,7 +454,7 @@ class ConsoleRegistryUseCaseTest {
             ConsoleRegistry r = useCase().execute(new OperatorContext("wms-op", "jti"));
 
             // gap binds all tenants; effective {wms,scm} → gap shows wms + scm (not fan-platform)
-            assertThat(product(r, "gap").tenants())
+            assertThat(product(r, "iam").tenants())
                     .as("effective scope {wms,scm}: gap shows both, never the un-assigned fan-platform")
                     .containsExactlyInAnyOrder("wms", "scm");
             assertThat(product(r, "wms").tenants()).containsExactly("wms");

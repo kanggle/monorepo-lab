@@ -46,7 +46,7 @@ export function DomainHealthScreen({ health }: DomainHealthScreenProps) {
           도메인 상태 개요
         </h1>
         <p className="text-sm text-muted-foreground">
-          5개 도메인(GAP · WMS · SCM · Finance · ERP)의 자체 헬스 상태를
+          5개 도메인(IAM · WMS · SCM · Finance · ERP)의 자체 헬스 상태를
           한 번에 확인합니다. 각 도메인 카드는 독립적으로 동작하며, 한
           도메인의 일시 장애가 다른 도메인이나 콘솔 전체에 영향을 주지
           않습니다.

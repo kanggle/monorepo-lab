@@ -11,7 +11,7 @@ import {
 } from '../api/types';
 
 /**
- * GAP composed operator overview (TASK-PC-FE-005 — ADR-MONO-013 Phase 2
+ * IAM composed operator overview (TASK-PC-FE-005 — ADR-MONO-013 Phase 2
  * slice 4 / ADR-MONO-015 D1-B). READ-ONLY: there is NO mutation here — no
  * reason capture, no Idempotency-Key, NO destructive/confirm dialog (those
  * are FE-002/004 concerns; carrying them over would be a defect, mirroring
@@ -28,7 +28,7 @@ import {
  * card status — it is a whole-overview re-login handled server-side.
  *
  * Quick-links into the EXISTING in-console routes (FE-002/003/004);
- * `gap.baseRoute` (`/accounts`) is unchanged (these are nav destinations,
+ * `iam.baseRoute` (`/accounts`) is unchanged (these are nav destinations,
  * not catalog routes).
  */
 
@@ -165,7 +165,7 @@ export function OperatorOverviewScreen({
     <section aria-labelledby="overview-heading">
       <Link
         href="/dashboards/overview"
-        data-testid="gap-detail-back-link"
+        data-testid="iam-detail-back-link"
         className="mb-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         ← 통합 개요로 돌아가기
@@ -176,10 +176,10 @@ export function OperatorOverviewScreen({
             id="overview-heading"
             className="mb-2 text-2xl font-semibold"
           >
-            GAP 상세 (계정 · 감사 · 운영자)
+            IAM 상세 (계정 · 감사 · 운영자)
           </h1>
           <p className="text-sm text-muted-foreground">
-            통합 개요의 GAP 카드에서 진입한 GAP 플랫폼 운영 상세입니다. 계정 ·
+            통합 개요의 IAM 카드에서 진입한 IAM 플랫폼 운영 상세입니다. 계정 ·
             감사/보안 · 운영자 현황 합성 개요 (읽기 전용). 각 항목은 독립적으로
             동작하며, 한 항목 장애가 다른 항목이나 콘솔 전체에 영향을 주지
             않습니다.

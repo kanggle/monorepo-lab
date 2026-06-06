@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - **5-page user journey** — feed (`/`), artists directory (`/artists`), artist detail (`/artists/[id]`), post detail (`/posts/[id]`), membership stub (`/membership`), me (`/me`).
-- **Authentication via next-auth v5 + GAP OIDC PKCE** — `/login` → Server Action `signIn('gap')` → OIDC discovery + PKCE → GAP `/oauth2/authorize` → callback `/api/auth/callback/gap` → JWT session cookie (`access_token` / `refresh_token` / `tenant_id` on HttpOnly).
+- **Authentication via next-auth v5 + GAP OIDC PKCE** — `/login` → Server Action `signIn('iam')` → OIDC discovery + PKCE → GAP `/oauth2/authorize` → callback `/api/auth/callback/iam` → JWT session cookie (`access_token` / `refresh_token` / `tenant_id` on HttpOnly).
 - **Server Components data fetch** — feed / artists / posts pages fetch via RSC (`getFeed()`, `getArtists()`, `getArtist()`, `getPost()`); bearer token attached via `'server-only'` `getFanSession()`.
 - **Server Actions** — reactions (`setReaction`), follow / unfollow (`followArtist` / `unfollowArtist`) marked `'use server'`; tokens read on server only.
 - **Middleware redirect** — `middleware.ts` redirects unauthenticated visits to gated paths → `/login`.
@@ -32,7 +32,7 @@
 
 | Path | Pattern | Auth | Purpose |
 |---|---|---|---|
-| `/login` | Public RSC | unauth | OIDC sign-in trigger (`signIn('gap')`) |
+| `/login` | Public RSC | unauth | OIDC sign-in trigger (`signIn('iam')`) |
 | `/api/auth/[...nextauth]` | Route handler | unauth | next-auth v5 OIDC callback + token exchange |
 | `/` | RSC + Suspense | gated | feed (followed artists' PUBLISHED posts) |
 | `/artists` | RSC + Suspense | gated | artist directory (PUBLISHED only) |

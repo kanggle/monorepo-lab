@@ -43,14 +43,14 @@ describe('LoginForm (GAP)', () => {
     expect(screen.getByText('회원가입').closest('a')).toHaveAttribute('href', '/signup');
   });
 
-  it('버튼 클릭 시 signIn("gap", {callbackUrl: "/"}) 가 호출된다', async () => {
+  it('버튼 클릭 시 signIn("iam", {callbackUrl: "/"}) 가 호출된다', async () => {
     const user = userEvent.setup();
     renderLoginForm();
 
     await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
 
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/' });
+      expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });
     });
   });
 
@@ -62,7 +62,7 @@ describe('LoginForm (GAP)', () => {
     await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
 
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/products/p1' });
+      expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/products/p1' });
     });
   });
 
@@ -73,7 +73,7 @@ describe('LoginForm (GAP)', () => {
     await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
 
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('gap', { callbackUrl: '/' });
+      expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });
     });
   });
 

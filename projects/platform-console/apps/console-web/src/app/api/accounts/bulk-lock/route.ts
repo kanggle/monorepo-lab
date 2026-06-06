@@ -10,7 +10,7 @@ import {
 export const runtime = 'nodejs';
 
 /**
- * Same-origin bulk-lock proxy → GAP `POST /api/admin/accounts/bulk-lock`.
+ * Same-origin bulk-lock proxy → IAM `POST /api/admin/accounts/bulk-lock`.
  * Partial-failure aware: the producer returns 200 with per-account
  * `results[]`; the client renders each outcome (no all-or-nothing
  * implication). Reason-gated (≥ 8 chars producer-side) + idempotency-keyed

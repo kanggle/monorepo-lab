@@ -9,8 +9,8 @@ export const runtime = 'nodejs';
  * Same-origin wms inventory-snapshot read proxy for client components (the
  * typed API client's single backend entry point — no browser-direct wms
  * call, architecture.md § Forbidden Dependencies / contract § 2.3). The
- * HttpOnly **GAP OIDC access token** is attached server-side in
- * `listInventory()` (NOT the GAP operator token — § 2.4.5 per-domain
+ * HttpOnly **IAM OIDC access token** is attached server-side in
+ * `listInventory()` (NOT the IAM operator token — § 2.4.5 per-domain
  * credential divergence). READ-ONLY: GET only, no mutation branch, no
  * Idempotency-Key, no X-Operator-Reason.
  */

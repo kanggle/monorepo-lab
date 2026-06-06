@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin scm inventory-visibility node-list read proxy (read-only —
- * GET). GAP OIDC access token attached server-side (§ 2.4.6 reusing
+ * GET). IAM OIDC access token attached server-side (§ 2.4.6 reusing
  * § 2.4.5 — NOT the operator token). The full `{ data, meta }` envelope is
  * forwarded so the REQUIRED S5 `meta.warning` reaches the client (never
  * stripped).

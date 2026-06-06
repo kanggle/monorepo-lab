@@ -18,7 +18,7 @@ import {
  * Client-side finance-ops hooks (architecture.md § Server vs Client
  * Components — React Query is client-only). Every call goes to the
  * same-origin `/api/finance/**` proxy (the typed API client's single
- * backend entry point); the proxy attaches the HttpOnly **GAP OIDC
+ * backend entry point); the proxy attaches the HttpOnly **IAM OIDC
  * access token** server-side — the browser never reads a token or
  * calls finance directly (contract § 2.3). The § 2.4.5 per-domain
  * credential rule is reused, NOT re-derived (§ 2.4.7).

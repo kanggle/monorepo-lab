@@ -55,7 +55,7 @@ function jsonResponse(body: unknown, status = 200) {
 const HAPPY_ENVELOPE = {
   asOf: '2026-05-21T01:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { totalElements: 1 } },
+    { domain: 'iam', status: 'ok', data: { totalElements: 1 } },
     {
       domain: 'wms',
       status: 'ok',

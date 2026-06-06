@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * Same-origin self update-profile proxy (TASK-PC-FE-016):
  *   - (a) POST `{ operatorContext: { defaultAccountId: "<valid>" } }` → 204
- *     (forwards to GAP PATCH `me/profile` with NO reason / NO key);
+ *     (forwards to IAM PATCH `me/profile` with NO reason / NO key);
  *   - (b) POST `{ operatorContext: {} }` (missing `defaultAccountId`) → 422
- *     VALIDATION_ERROR (proxy zod fails first; GAP not called);
- *   - (c) GAP returns 503 CIRCUIT_OPEN → proxy maps to 503 via `mapError`;
+ *     VALIDATION_ERROR (proxy zod fails first; IAM not called);
+ *   - (c) IAM returns 503 CIRCUIT_OPEN → proxy maps to 503 via `mapError`;
  *
  * Plus: explicit `null` clears the column; an extra top-level key is
  * rejected at the proxy (`.strict()` mirror of FAIL_ON_UNKNOWN_PROPERTIES).
@@ -201,7 +201,7 @@ describe('POST /api/operators/me/profile proxy (b) — malformed body → 422', 
 });
 
 describe('POST /api/operators/me/profile proxy (c) — downstream error mapping', () => {
-  it('GAP 503 CIRCUIT_OPEN → proxy 503 (operators section degrades only)', async () => {
+  it('IAM 503 CIRCUIT_OPEN → proxy 503 (operators section degrades only)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -223,7 +223,7 @@ describe('POST /api/operators/me/profile proxy (c) — downstream error mapping'
     expect(res.status).toBe(503);
   });
 
-  it('GAP 409 OPTIMISTIC_LOCK_CONFLICT → proxy 409 (passthrough inline)', async () => {
+  it('IAM 409 OPTIMISTIC_LOCK_CONFLICT → proxy 409 (passthrough inline)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(

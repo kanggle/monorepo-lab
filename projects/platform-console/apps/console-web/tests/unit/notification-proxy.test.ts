@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - notifications/route: GET only (no POST/PUT/PATCH/DELETE)
  *   - notifications/[id]/route: GET only
  *   - notifications/[id]/read/route: POST only
- *   server-only domain-facing GAP token; no Idempotency-Key, no body on
+ *   server-only domain-facing IAM token; no Idempotency-Key, no body on
  *   mark-read; error mapping via the shared erp `_proxy` mapper; 404
  *   NOTIFICATION_NOT_FOUND passthrough.
  */
@@ -134,7 +134,7 @@ describe('notification proxy — method exposure', () => {
 // ===========================================================================
 
 describe('GET /api/erp/notifications', () => {
-  it('domain-facing GAP token; forwards unread/page/size; returns list', async () => {
+  it('domain-facing IAM token; forwards unread/page/size; returns list', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST));
     vi.stubGlobal('fetch', fetchMock);
@@ -164,7 +164,7 @@ describe('GET /api/erp/notifications', () => {
     expect(u.searchParams.has('unread')).toBe(false);
   });
 
-  it('no GAP session → 401, no upstream call', async () => {
+  it('no IAM session → 401, no upstream call', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await inboxGET(

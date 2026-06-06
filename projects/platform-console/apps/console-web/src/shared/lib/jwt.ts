@@ -46,7 +46,7 @@ export function decodeJwtPayload(
 }
 
 /**
- * The operator's home tenant from the GAP OIDC access token's `tenant_id`
+ * The operator's home tenant from the IAM OIDC access token's `tenant_id`
  * claim — the value the console defaults the active-tenant selection to on
  * login so the tenant-scoped overviews work on first load (TASK-PC-FE-036).
  *

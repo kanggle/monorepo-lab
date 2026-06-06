@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - status proxy → X-Operator-Reason ONLY, asserts Idempotency-Key ABSENT
  *   - me/password proxy → self path, NO reason / NO key, 204 passthrough
  *   - 403 PERMISSION_DENIED → 403 (inline-permission UX)
- *   - a malformed body → 422 without calling GAP (reason never fabricated)
+ *   - a malformed body → 422 without calling IAM (reason never fabricated)
  */
 
 const cookieJar = new Map<string, string>();
@@ -67,7 +67,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/operators proxy (list)', () => {
-  it('401 from GAP → 401 (forced re-login, no partial authed state)', async () => {
+  it('401 from IAM → 401 (forced re-login, no partial authed state)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -80,7 +80,7 @@ describe('GET /api/operators proxy (list)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('503 from GAP → 503 (operators section degrades only)', async () => {
+  it('503 from IAM → 503 (operators section degrades only)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -151,7 +151,7 @@ describe('POST /api/operators proxy (create) — reason + idempotency', () => {
     expect(h['Idempotency-Key']).toBe('idem-1');
   });
 
-  it('a malformed body → 422 without calling GAP (reason never fabricated)', async () => {
+  it('a malformed body → 422 without calling IAM (reason never fabricated)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn();
@@ -166,7 +166,7 @@ describe('POST /api/operators proxy (create) — reason + idempotency', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('409 OPERATOR_EMAIL_CONFLICT from GAP → 409 (inline email-field)', async () => {
+  it('409 OPERATOR_EMAIL_CONFLICT from IAM → 409 (inline email-field)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -264,7 +264,7 @@ describe('POST /api/operators/[id]/status proxy — reason ONLY (no key)', () =>
     expect(h['Idempotency-Key']).toBeUndefined();
   });
 
-  it('403 PERMISSION_DENIED from GAP → 403 (inline permission)', async () => {
+  it('403 PERMISSION_DENIED from IAM → 403 (inline permission)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(
@@ -310,7 +310,7 @@ describe('POST /api/operators/me/password proxy — self, no reason/key, 204', (
     expect(h['Idempotency-Key']).toBeUndefined();
   });
 
-  it('400 CURRENT_PASSWORD_MISMATCH from GAP → 400 (inline field error)', async () => {
+  it('400 CURRENT_PASSWORD_MISMATCH from IAM → 400 (inline field error)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');
     cookieJar.set(TENANT_COOKIE, 'wms');
     vi.stubGlobal(

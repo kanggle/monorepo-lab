@@ -28,7 +28,7 @@ import {
  * React Query is client-only). Every call goes to the same-origin
  * `/api/accounts/**` proxy (the typed API client's single backend entry
  * point); the proxy attaches the HttpOnly operator token + tenant
- * server-side — the browser never reads a token or calls GAP directly
+ * server-side — the browser never reads a token or calls IAM directly
  * (contract § 2.3).
  *
  * Idempotency-Key (§ 2.4.1 / integration-heavy I4): generated once per a

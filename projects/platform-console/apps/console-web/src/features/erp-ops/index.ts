@@ -2,7 +2,7 @@
  * `features/erp-ops` public API (Layered-by-Feature — app/ imports
  * only this barrel, never feature internals; architecture.md §
  * Allowed Dependencies). erp operations section, TASK-PC-FE-010 —
- * the FOURTH NON-GAP federated domain and the FIRST
+ * the FOURTH NON-IAM federated domain and the FIRST
  * internal-system-primary confirmation (ADR-MONO-013 Phase 6).
  * READ + DEPARTMENT WRITE PILOT (TASK-PC-FE-046 — § 2.4.8 *Department
  * write binding (PILOT)*): the department master is writable
@@ -11,8 +11,8 @@
  *
  * Auth (console-integration-contract § 2.4.8 — REUSE of the § 2.4.5
  * per-domain credential rule, NOT re-derived): this feature's
- * server client uses the **GAP OIDC access token**
- * (`getAccessToken()`), NEVER the GAP exchanged operator token
+ * server client uses the **IAM OIDC access token**
+ * (`getAccessToken()`), NEVER the IAM exchanged operator token
  * (`getOperatorToken()`) — the #569 invariant is GAP-domain-scoped.
  * Same outcome as wms / scm / finance.
  *

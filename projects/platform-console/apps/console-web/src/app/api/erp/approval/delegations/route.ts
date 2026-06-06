@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp delegation LIST proxy (read — GET). Forwards the optional
  * `?role=DELEGATOR|DELEGATE` query param verbatim to the producer. The
- * domain-facing GAP OIDC token is attached server-side in
+ * domain-facing IAM OIDC token is attached server-side in
  * `listDelegations()` — NEVER the operator token; NO `X-Tenant-Id`.
  */
 export async function GET(req: Request) {
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
  * the create body + a console-generated `idempotencyKey`; this route
  * validates it and forwards to the UNCHANGED producer
  * `POST /api/erp/approval/delegations` via `createDelegation()`, which
- * attaches the domain-facing GAP token + `Idempotency-Key` server-side.
+ * attaches the domain-facing IAM token + `Idempotency-Key` server-side.
  * The delegator identity is the JWT sub — NOT in the body. The reason rides
  * in the body (NOT `X-Operator-Reason`).
  *

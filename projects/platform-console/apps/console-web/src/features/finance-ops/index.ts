@@ -2,13 +2,13 @@
  * `features/finance-ops` public API (Layered-by-Feature — app/ imports
  * only this barrel, never feature internals; architecture.md § Allowed
  * Dependencies). finance operations section, TASK-PC-FE-009 — the
- * THIRD NON-GAP federated domain (ADR-MONO-013 Phase 5; closes the
- * non-GAP federation cycle). STRICTLY READ-ONLY.
+ * THIRD NON-IAM federated domain (ADR-MONO-013 Phase 5; closes the
+ * non-IAM federation cycle). STRICTLY READ-ONLY.
  *
  * Auth (console-integration-contract § 2.4.7 — REUSE of the § 2.4.5
  * per-domain credential rule, NOT re-derived): this feature's server
- * client uses the **GAP OIDC access token** (`getAccessToken()`),
- * NEVER the GAP exchanged operator token (`getOperatorToken()`) — the
+ * client uses the **IAM OIDC access token** (`getAccessToken()`),
+ * NEVER the IAM exchanged operator token (`getOperatorToken()`) — the
  * #569 invariant is GAP-domain-scoped. Same outcome as wms / scm.
  *
  * F5 money (§ 2.4.7): every money value is parsed / stored / rendered

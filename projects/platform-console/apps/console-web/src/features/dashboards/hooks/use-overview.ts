@@ -10,7 +10,7 @@ import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
  * same-origin `/api/dashboards` proxy (the typed API client's single
  * backend entry point); the proxy composes the bounded fan-out server-side
  * with the HttpOnly operator token + active tenant — the browser never
- * reads a token or calls GAP directly (contract § 2.3 / § 2.4.4).
+ * reads a token or calls IAM directly (contract § 2.3 / § 2.4.4).
  *
  * READ-ONLY + PRODUCER-META-AUDIT-RESPECTING (§ 2.4.4 / audit-heavy A5):
  * the audit leg of the fan-out is meta-audited producer-side. There is a

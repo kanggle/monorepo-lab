@@ -25,7 +25,7 @@ export interface AuthState {
 
 export interface AuthContextValue extends AuthState {
   /**
-   * Initiate GAP OIDC sign-in. Equivalent to `signIn('gap', { callbackUrl })`.
+   * Initiate GAP OIDC sign-in. Equivalent to `signIn('iam', { callbackUrl })`.
    * The legacy `(email, password)` shape was retired with TASK-FE-067 — the
    * password is now collected by GAP itself.
    */

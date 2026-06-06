@@ -16,8 +16,8 @@ import {
 
 /**
  * Server-side finance `account-service` operations client (TASK-PC-FE-009 —
- * ADR-MONO-013 Phase 5, the THIRD non-GAP federated domain — closes the
- * non-GAP federation cycle: wms → scm → finance). STRICTLY READ-ONLY.
+ * ADR-MONO-013 Phase 5, the THIRD non-IAM federated domain — closes the
+ * non-IAM federation cycle: wms → scm → finance). STRICTLY READ-ONLY.
  *
  * Server-only by construction (same posture as `scm-api.ts` / `wms-api.ts` /
  * `accounts-api.ts`): imported exclusively from server components and the
@@ -32,8 +32,8 @@ import {
  * console-integration-contract § 2.4.5 (each binding declares its own
  * credential against its producer; never blanket-apply one domain's auth
  * to another). finance REUSES it with the SAME outcome as wms / scm: the
- * finance `account-service` validates a GAP RS256 JWT (ADR-001) against
- * GAP JWKS, `tenant_id ∈ { finance, * }` enforced producer-side from
+ * finance `account-service` validates a IAM RS256 JWT (ADR-001) against
+ * IAM JWKS, `tenant_id ∈ { finance, * }` enforced producer-side from
  * the JWT claim (finance `iam-integration.md` § platform-console
  * Operator Read Consumer — TASK-FIN-BE-005). finance has NO
  * token-exchange.
@@ -50,7 +50,7 @@ import {
  * Tenant invariant (§ 2.4.7 / reuse of § 2.4.5): finance resolves the
  * tenant from the JWT `tenant_id` claim (`∈ {finance,*}`) — NOT an
  * `X-Tenant-Id` header. The console therefore does NOT send
- * `X-Tenant-Id` to finance; the tenant rides inside the GAP OIDC token.
+ * `X-Tenant-Id` to finance; the tenant rides inside the IAM OIDC token.
  * finance rejects cross-tenant producer-side (`403 TENANT_FORBIDDEN`).
  *
  * READ-ONLY (§ 2.4.7, NORMATIVE): every call is a pure GET. There is
@@ -84,7 +84,7 @@ import {
  *
  * Resilience (§ 2.5 / integration-heavy I1): AbortController hard
  * timeout (no unbounded default); `401` → `ApiError` (forced
- * WHOLE-SESSION GAP re-login — not a per-section degrade); `403` →
+ * WHOLE-SESSION IAM re-login — not a per-section degrade); `403` →
  * `ApiError` (inline "not available / not scoped"); `404
  * ACCOUNT_NOT_FOUND` → `ApiError` (inline actionable "no such
  * account"); `400` / `422` → `ApiError` (inline actionable, no crash);
@@ -92,7 +92,7 @@ import {
  * finance section degrades — shell + GAP/wms/scm sections intact).
  *
  * Confidential / F7 (§ 2.4.7): structured logs are server-side only;
- * the GAP access token and any finance data (balances, transactions,
+ * the IAM access token and any finance data (balances, transactions,
  * account refs, owner refs) are NEVER logged (redacted) — the log
  * payloads below carry ONLY `requestId` + `path` (no `accountId`
  * even in path-encoded form leaks because the log field is the
@@ -152,7 +152,7 @@ async function parseFinanceError(
 }
 
 /**
- * Single hardened call site. Resolves the GAP OIDC access token,
+ * Single hardened call site. Resolves the IAM OIDC access token,
  * applies the timeout, maps the finance FLAT error envelope to the
  * § 2.5 resilience taxonomy.
  *
@@ -170,11 +170,11 @@ async function callFinance<T>(
   const requestId = newRequestId();
 
   // ── Per-domain credential (§ 2.4.7 reusing § 2.4.5): finance requires
-  //    the GAP OIDC ACCESS token directly. NEVER getOperatorToken() —
+  //    the IAM OIDC ACCESS token directly. NEVER getOperatorToken() —
   //    that is the GAP-domain (§ 2.6 exchanged) credential; finance
   //    would reject it (wrong issuer/type). The #569 invariant is
   //    GAP-domain-scoped.
-  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING GAP OIDC token — the
+  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING IAM OIDC token — the
   //    ASSUMED (tenant-scoped) token when the operator has switched, else
   //    the base access token (net-zero). Still NOT the operator token.
   const token = await getDomainFacingToken();
@@ -183,9 +183,9 @@ async function callFinance<T>(
       requestId,
       path: opts.logPath,
     });
-    // No GAP OIDC session ⇒ whole-session re-login (not a per-section
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
     // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {
@@ -220,7 +220,7 @@ async function callFinance<T>(
         code: e.code,
         path: opts.logPath,
       });
-      // GAP OIDC session expired → whole-session re-login (no partial
+      // IAM OIDC session expired → whole-session re-login (no partial
       // authed state — NOT a per-section degrade).
       throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
     }

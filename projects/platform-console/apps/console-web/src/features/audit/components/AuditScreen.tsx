@@ -15,7 +15,7 @@ import {
 import { AuditRowCells, auditRowKey } from './AuditRowCells';
 
 /**
- * GAP unified audit + security read surface (TASK-PC-FE-003 — Phase 2
+ * IAM unified audit + security read surface (TASK-PC-FE-003 — Phase 2
  * slice 2). READ-ONLY: there is NO mutation here — no reason capture, no
  * Idempotency-Key, no destructive/confirm dialog (those are FE-002
  * concerns; carrying them over would be a defect).

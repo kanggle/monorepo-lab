@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * `features/scm-ops/api/scm-api.ts` — the security-critical core of
- * TASK-PC-FE-008 (the SECOND non-GAP federated domain; completes
+ * TASK-PC-FE-008 (the SECOND non-IAM federated domain; completes
  * ADR-MONO-013 Phase 4). STRICTLY READ-ONLY.
  *
  * THE CENTRAL ASSERTION (console-integration-contract § 2.4.6 — REUSE of
  * the § 2.4.5 per-domain credential rule, NOT re-derived; same outcome as
- * wms / the EXACT INVERSE of the FE-002..006 GAP assertion):
- *   - every scm call's bearer is the **GAP OIDC ACCESS token** (the
+ * wms / the EXACT INVERSE of the FE-002..006 IAM assertion):
+ *   - every scm call's bearer is the **IAM OIDC ACCESS token** (the
  *     `console_access_token` cookie), NEVER the exchanged operator token;
  *   - the operator-token path is ABSENT for scm (the scm client does NOT
  *     call `getOperatorToken()` — pinned so a future refactor cannot
@@ -203,7 +203,7 @@ beforeEach(() => {
 });
 
 describe('scm-api — per-domain credential selection (REUSE of § 2.4.5; the INVERSE of #569)', () => {
-  it('sends the GAP OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
+  it('sends the IAM OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-scm');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
 
@@ -223,7 +223,7 @@ describe('scm-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(String(url)).toContain('http://scm.local/api/v1/procurement/po');
   });
 
-  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for scm (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base IAM token) and NEVER getOperatorToken() for scm (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
     // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
@@ -243,7 +243,7 @@ describe('scm-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent (whole-session re-login signal)', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent (whole-session re-login signal)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 

@@ -68,7 +68,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
 
     private static final String KID = "test-key-d5";
     /** Operator's home tenant — the token claim. */
-    private static final String TOKEN_TENANT = "gap";
+    private static final String TOKEN_TENANT = "iam";
     /** Forged/foreign tenant requested via X-Tenant-Id (cross-tenant). */
     private static final String FORGED_TENANT = "scm";
 

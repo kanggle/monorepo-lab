@@ -76,7 +76,7 @@ class OperatorOverviewSliceTest {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
         when(compositionUseCase.compose(anyString(), nullable(String.class))).thenReturn(List.of(
-                CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("page", Map.of("totalElements", 12))),
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.IAM), Map.of("page", Map.of("totalElements", 12))),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("snapshotTotal", 34)),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("nodeCount", 5)),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("balance", 0)),
@@ -94,7 +94,7 @@ class OperatorOverviewSliceTest {
         assertThat(body).as("body shape:\n%s", body).contains("\"asOf\"");
         assertThat(body).as("body shape:\n%s", body).contains("\"cards\"");
         assertThat(body).as("body shape:\n%s", body)
-                .contains("\"domain\":\"gap\"")
+                .contains("\"domain\":\"iam\"")
                 .contains("\"domain\":\"wms\"")
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
@@ -102,7 +102,7 @@ class OperatorOverviewSliceTest {
         // All cards ok status; no degrade reason on ok cards (NON_NULL elides).
         assertThat(body).as("body shape:\n%s", body).contains("\"status\":\"ok\"");
         // Fixed order: gap before wms before scm before finance before erp.
-        int gapIdx = body.indexOf("\"domain\":\"gap\"");
+        int gapIdx = body.indexOf("\"domain\":\"iam\"");
         int wmsIdx = body.indexOf("\"domain\":\"wms\"");
         int scmIdx = body.indexOf("\"domain\":\"scm\"");
         int finIdx = body.indexOf("\"domain\":\"finance\"");
@@ -198,7 +198,7 @@ class OperatorOverviewSliceTest {
         when(credentialContext.getTenantId()).thenReturn("test-tenant");
         when(compositionUseCase.compose(eq("test-tenant"), nullable(String.class)))
                 .thenReturn(List.of(
-                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.IAM), Map.of("ok", true)),
                         CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("ok", true)),
                         CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("ok", true)),
                         CompositionLeg.outcomeOnly(LegOutcome.forbidden(DomainTarget.FINANCE, "MISSING_PREREQUISITE")),
@@ -228,7 +228,7 @@ class OperatorOverviewSliceTest {
         when(credentialContext.getTenantId()).thenReturn("test-tenant");
         when(compositionUseCase.compose(eq("test-tenant"), eq("acc-uuid-7")))
                 .thenReturn(List.of(
-                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.GAP), Map.of("ok", true)),
+                        CompositionLeg.ok(LegOutcome.ok(DomainTarget.IAM), Map.of("ok", true)),
                         CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("ok", true)),
                         CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("ok", true)),
                         CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("totalAmount", "1000")),

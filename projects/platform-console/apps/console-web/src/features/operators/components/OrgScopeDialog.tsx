@@ -20,7 +20,7 @@ import type { OperatorAssignment } from '../api/types';
  * operator's assignment row for the ACTIVE tenant
  * (`GET .../{operatorId}/assignments`) and sets / clears its `org_scope`
  * (`PUT .../assignments/{tenantId}/org-scope`) — the source half of the
- * org_scope end-to-end loop (설정 → GAP 저장(BE-339) → assume-tenant 전파 →
+ * org_scope end-to-end loop (설정 → IAM 저장(BE-339) → assume-tenant 전파 →
  * erp 소비(ERP-BE-008) → read 카드(PC-FE-049)).
  *
  * TRI-STATE (null ≠ [] is unambiguous in BOTH the UI and the wire):

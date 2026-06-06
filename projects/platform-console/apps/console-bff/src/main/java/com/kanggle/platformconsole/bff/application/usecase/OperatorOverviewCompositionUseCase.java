@@ -112,8 +112,8 @@ public class OperatorOverviewCompositionUseCase {
         }
 
         Map<DomainTarget, Supplier<CompositionLeg>> legBodies = new EnumMap<>(DomainTarget.class);
-        legBodies.put(DomainTarget.GAP, legBody(DomainTarget.GAP, earlyDecided, preResolved,
-                cred -> callRead(DomainTarget.GAP, tenantId, cred, gapPort::read)));
+        legBodies.put(DomainTarget.IAM, legBody(DomainTarget.IAM, earlyDecided, preResolved,
+                cred -> callRead(DomainTarget.IAM, tenantId, cred, gapPort::read)));
         legBodies.put(DomainTarget.WMS, legBody(DomainTarget.WMS, earlyDecided, preResolved,
                 cred -> callRead(DomainTarget.WMS, tenantId, cred, wmsPort::read)));
         legBodies.put(DomainTarget.SCM, legBody(DomainTarget.SCM, earlyDecided, preResolved,

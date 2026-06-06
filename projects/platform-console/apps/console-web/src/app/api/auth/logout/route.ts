@@ -17,7 +17,7 @@ export const runtime = 'nodejs';
  * Logout (TASK-PC-FE-033 — RP-initiated OIDC logout).
  *
  * Three layers, in order, so the operator is fully signed out:
- *   1. Best-effort GAP token revocation (RFC 7009, auth-api.md
+ *   1. Best-effort IAM token revocation (RFC 7009, auth-api.md
  *      § POST /oauth2/revoke — public client passes `client_id`, no secret).
  *      Invalidates the tokens but NOT the IdP login session.
  *   2. Clear ALL console session cookies (access / refresh / operator / tenant
@@ -73,7 +73,7 @@ export async function POST() {
   jar.delete(ID_TOKEN_COOKIE);
 
   // Post-logout landing — must EXACTLY match a registered
-  // `post-logout-redirect-uris` entry on the GAP `platform-console-web` client
+  // `post-logout-redirect-uris` entry on the IAM `platform-console-web` client
   // (auth-service V0021). No query string (SAS matches the URI exactly).
   const postLogout = new URL('/login', env.NEXT_PUBLIC_APP_URL).toString();
 

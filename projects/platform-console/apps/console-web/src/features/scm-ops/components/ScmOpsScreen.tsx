@@ -18,7 +18,7 @@ import { PoDetailDialog } from './PoDetailDialog';
 
 /**
  * scm operations section (TASK-PC-FE-008 — ADR-MONO-013 Phase 4 slice 2,
- * the SECOND non-GAP federated domain; completes Phase 4).
+ * the SECOND non-IAM federated domain; completes Phase 4).
  *
  * STRICTLY READ-ONLY. The section renders:
  *   - procurement PO list (filters + pagination) + read-only PO detail;

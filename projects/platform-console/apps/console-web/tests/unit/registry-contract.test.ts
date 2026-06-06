@@ -15,11 +15,11 @@ import {
 const PRODUCER_EXAMPLE = {
   products: [
     {
-      productKey: 'gap',
+      productKey: 'iam',
       displayName: 'Global Account Platform',
       available: true,
       tenants: ['fan-platform', 'wms', 'scm'],
-      baseRoute: '/gap',
+      baseRoute: '/iam',
     },
     {
       productKey: 'wms',
@@ -57,7 +57,7 @@ describe('registry contract (console-registry-api.md envelope)', () => {
     const parsed = RegistryResponseSchema.parse(PRODUCER_EXAMPLE);
     expect(parsed.products).toHaveLength(5);
     expect(parsed.products.map((p) => p.productKey)).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'erp',
@@ -83,8 +83,8 @@ describe('registry contract (console-registry-api.md envelope)', () => {
   it('rejects a missing required field (envelope drift surfaces)', () => {
     expect(() =>
       RegistryProductSchema.parse({
-        productKey: 'gap',
-        displayName: 'GAP',
+        productKey: 'iam',
+        displayName: 'IAM',
         available: true,
         tenants: ['wms'],
         // baseRoute missing

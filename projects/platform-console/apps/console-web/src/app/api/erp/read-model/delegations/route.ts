@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp read-model delegation-fact LIST proxy (GET only —
  * TASK-PC-FE-055). READ-ONLY (E5 — the read-model holds no domain
- * logic and has NO mutation surface). GAP OIDC domain-facing token
+ * logic and has NO mutation surface). IAM OIDC domain-facing token
  * attached server-side (same pattern as the employees read-model
  * proxy — PC-FE-049 precedent; NEVER `getOperatorToken()`).
  *

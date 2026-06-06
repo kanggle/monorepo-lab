@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 export const dynamic = 'force-dynamic';
 
 const ERROR_MESSAGES: Record<string, string> = {
-  provider_error: 'GAP 로그인 중 오류가 발생했습니다. 다시 시도해주세요.',
+  provider_error: 'IAM 로그인 중 오류가 발생했습니다. 다시 시도해주세요.',
   invalid_state: '로그인 세션이 만료되었습니다. 다시 로그인해주세요.',
   state_mismatch: '보안 검증에 실패했습니다. 다시 로그인해주세요.',
   token_exchange_failed:
@@ -13,7 +13,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 /**
- * Login entry (GAP OIDC Auth Code + PKCE). Server component — no client JS,
+ * Login entry (IAM OIDC Auth Code + PKCE). Server component — no client JS,
  * minimal first-load (perf budget: /login 180 KB). The actual PKCE generation
  * + redirect happens in the `/api/auth/login` route handler; this page only
  * renders the "Sign in with GAP" link and any returned error.
@@ -54,14 +54,14 @@ export default async function LoginPage({
         <Link
           href={loginHref}
           prefetch={false}
-          data-testid="gap-login"
+          data-testid="iam-login"
           className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          GAP 계정으로 로그인
+          IAM 계정으로 로그인
         </Link>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          GAP OIDC (Authorization Code + PKCE) 단일 로그인
+          IAM OIDC (Authorization Code + PKCE) 단일 로그인
         </p>
       </div>
     </main>

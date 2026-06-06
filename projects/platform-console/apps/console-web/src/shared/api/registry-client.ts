@@ -8,7 +8,7 @@ import {
 } from './registry-types';
 
 /**
- * Server-side client for the GAP product/tenant registry.
+ * Server-side client for the IAM product/tenant registry.
  *
  * Path / auth / envelope per the authoritative producer contract
  * `console-registry-api.md` (TASK-BE-296):
@@ -17,7 +17,7 @@ import {
  *     obtained via the server-side RFC 8693 exchange**
  *     (`operator-token-exchange.ts`; console-integration-contract § 2.6 /
  *     ADR-MONO-014), held in its own HttpOnly cookie (`getOperatorToken()`).
- *     This is NOT the GAP OIDC access token: the GAP token is only ever the
+ *     This is NOT the IAM OIDC access token: the IAM token is only ever the
  *     exchange `subject_token` and is never an `/api/admin/**` credential
  *     (§ 2.1 trust-boundary invariant — this closes the latent #569 defect).
  *     admin-service `OperatorAuthenticationFilter` verifies the token —
@@ -38,7 +38,7 @@ export async function fetchRegistry(): Promise<RegistryResponse> {
   const env = getServerEnv();
   const requestId = newRequestId();
   // The /api/admin/** credential is the EXCHANGED operator token — never the
-  // GAP OIDC access token (§ 2.1/§ 2.2/§ 2.6). Absent operator token ⇒ no
+  // IAM OIDC access token (§ 2.1/§ 2.2/§ 2.6). Absent operator token ⇒ no
   // usable operator session ⇒ 401 (caller re-logins; the exchange must run).
   const token = await getOperatorToken();
 

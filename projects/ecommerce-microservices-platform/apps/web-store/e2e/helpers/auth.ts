@@ -8,10 +8,10 @@ import { expect, type Page } from '@playwright/test';
  * ecommerce auth-service has been retired. Authentication now flows through:
  *
  *   1. Click "로그인" → `/login`
- *   2. Click "Global Account 로 로그인" → NextAuth `/api/auth/signin/gap`
+ *   2. Click "Global Account 로 로그인" → NextAuth `/api/auth/signin/iam`
  *   3. Browser is redirected to GAP `/oauth2/authorize?...&prompt=...`
  *   4. GAP renders signup-or-login page → user submits credentials
- *   5. GAP `/oauth2/callback` → web-store `/api/auth/callback/gap`
+ *   5. GAP `/oauth2/callback` → web-store `/api/auth/callback/iam`
  *   6. NextAuth completes session → redirects to `callbackUrl`
  *
  * Steps 3-5 are owned by GAP (see `projects/iam-platform/`),

@@ -35,7 +35,7 @@ import {
 
 /**
  * Server-side wms `admin-service` operations client (TASK-PC-FE-007 —
- * ADR-MONO-013 Phase 4 slice 1, the first NON-GAP federated domain).
+ * ADR-MONO-013 Phase 4 slice 1, the first NON-IAM federated domain).
  *
  * Server-only by construction (same posture as `accounts-api.ts` /
  * `audit-api.ts`): imported exclusively from server components and the
@@ -47,19 +47,19 @@ import {
  * ── THE AUTH-MODEL DIVERGENCE (the crux — console-integration-contract
  *    § 2.4.5 "per-domain credential selection") ──────────────────────────
  *
- * wms's `admin-service-api.md` requires `Authorization: Bearer <GAP OIDC
+ * wms's `admin-service-api.md` requires `Authorization: Bearer <IAM OIDC
  * access token>` DIRECTLY (RS256, ADR-001; the wms gateway + admin-service
- * validate it against GAP JWKS and enforce `tenant_id=wms` from the JWT
+ * validate it against IAM JWKS and enforce `tenant_id=wms` from the JWT
  * claim itself). wms has NO token-exchange.
  *
  * Therefore this client uses `getAccessToken()` (the GAP-session HttpOnly
  * cookie) and NEVER `getOperatorToken()`. This is the EXACT INVERSE of the
- * GAP `features/{accounts,audit,operators,dashboards}` clients — and that is
+ * IAM `features/{accounts,audit,operators,dashboards}` clients — and that is
  * correct: the #569 trust-boundary invariant is GAP-domain-scoped (it
- * forbids the GAP OIDC token on GAP's `/api/admin/**` because GAP requires
+ * forbids the IAM OIDC token on GAP's `/api/admin/**` because IAM requires
  * the § 2.6 exchanged operator token there). wms's gateway *requires* the
- * GAP OIDC token — not a conflict, a different per-domain binding. Carrying
- * the GAP operator-token-exchange to wms would misapply the GAP auth model
+ * IAM OIDC token — not a conflict, a different per-domain binding. Carrying
+ * the IAM operator-token-exchange to wms would misapply the IAM auth model
  * and be rejected by wms (wrong issuer/type). A test pins this (the
  * `getOperatorToken` path MUST be absent for wms).
  *
@@ -67,7 +67,7 @@ import {
  * `tenant_id` claim (`=wms`) — NOT an `X-Tenant-Id` header (the GAP
  * mechanism) and NOT a producer `admin_operators.tenant_id` lookup. The
  * console therefore does NOT send `X-Tenant-Id` to wms; the tenant rides
- * inside the GAP OIDC token. wms rejects cross-tenant producer-side.
+ * inside the IAM OIDC token. wms rejects cross-tenant producer-side.
  *
  * Mutation discipline (§ 2.4.5 / alert-ack only): the single mutation
  * (`acknowledgeAlert`) carries `Idempotency-Key` (caller-supplied, stable
@@ -86,14 +86,14 @@ import {
  * re-login — not a per-section degrade); `403` → `ApiError` (inline "not
  * available to your role"); `404`/`400`/`422`/`409` → `ApiError` (inline
  * actionable, no crash); `503`/timeout/network → `WmsUnavailableError`
- * (ONLY the wms section degrades — shell + GAP sections intact).
+ * (ONLY the wms section degrades — shell + IAM sections intact).
  *
  * Read-model lag honesty (§ 2.4.5): the `X-Read-Model-Lag-Seconds` response
  * header (set by the producer when the slowest projection lags > 5 s) is
  * surfaced on the result (`lagSeconds`) as a NON-blocking eventual-
  * consistency hint — the section still renders.
  *
- * Logging: structured, server-side only; the GAP access token and any wms
+ * Logging: structured, server-side only; the IAM access token and any wms
  * data are NEVER logged (redacted) — § 2.6 logging invariant extended.
  */
 
@@ -151,7 +151,7 @@ function readLagHeader(res: Response): number | null {
 }
 
 /**
- * Single hardened call site. Resolves the GAP OIDC access token, applies
+ * Single hardened call site. Resolves the IAM OIDC access token, applies
  * the timeout, maps the wms error envelope to the § 2.5 resilience
  * taxonomy, and surfaces the read-model-lag hint.
  */
@@ -165,7 +165,7 @@ async function callWmsAdmin<T>(
   // ── Per-domain credential selection (§ 2.4.5): wms requires the GAP
   //    OIDC ACCESS token directly. NEVER getOperatorToken() — that is the
   //    GAP-domain (§ 2.6 exchanged) credential; wms would reject it
-  //    (wrong issuer/type) and it would misapply the GAP auth model. The
+  //    (wrong issuer/type) and it would misapply the IAM auth model. The
   //    #569 invariant is GAP-domain-scoped and does NOT apply here.
   //    ── ADR-MONO-020 D4 / § 2.7: the credential is the DOMAIN-FACING GAP
   //    OIDC token — the ASSUMED (tenant-scoped) token when the operator has
@@ -175,9 +175,9 @@ async function callWmsAdmin<T>(
   const token = await getDomainFacingToken();
   if (!token) {
     logger.warn('wms_no_gap_session', { requestId, path: opts.path });
-    // No GAP OIDC session ⇒ whole-session re-login (not a per-section
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
     // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {
@@ -224,7 +224,7 @@ async function callWmsAdmin<T>(
         code: e.code,
         path: opts.path,
       });
-      // GAP OIDC session expired → whole-session re-login (no partial
+      // IAM OIDC session expired → whole-session re-login (no partial
       // authed state — NOT a per-section degrade).
       throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
     }
@@ -251,7 +251,7 @@ async function callWmsAdmin<T>(
         code: e.code,
         path: opts.path,
       });
-      // ONLY the wms section degrades — shell + GAP sections intact.
+      // ONLY the wms section degrades — shell + IAM sections intact.
       throw new WmsUnavailableError(
         e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
         e.code || 'SERVICE_UNAVAILABLE',

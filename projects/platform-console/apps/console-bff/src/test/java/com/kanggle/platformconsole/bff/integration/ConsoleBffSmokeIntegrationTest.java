@@ -122,10 +122,10 @@ class ConsoleBffSmokeIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @Test
     @DisplayName("CredentialSelectionAdapter: GAP → OperatorToken (dry-run, request context)")
     void credentialSelector_gapDomain_returnsOperatorToken() {
-        withRequestContext("op-tok-abc", "gap", gapOidcJwt, () -> {
+        withRequestContext("op-tok-abc", "iam", gapOidcJwt, () -> {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
-            OutboundCredential cred = adapter.selectFor(DomainTarget.GAP);
+            OutboundCredential cred = adapter.selectFor(DomainTarget.IAM);
             assertThat(cred).isInstanceOf(OutboundCredential.OperatorToken.class);
             assertThat(((OutboundCredential.OperatorToken) cred).token()).isEqualTo("op-tok-abc");
         });

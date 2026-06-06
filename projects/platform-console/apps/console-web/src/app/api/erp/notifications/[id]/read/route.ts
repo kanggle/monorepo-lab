@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin erp notification MARK-READ proxy (write — POST only). Forwards
  * to the UNCHANGED producer `POST /api/erp/notifications/{id}/read` via
- * `markNotificationRead()` (domain-facing GAP token server-side).
+ * `markNotificationRead()` (domain-facing IAM token server-side).
  *
  * The operation is **naturally idempotent** — re-marking an already-read
  * notification returns 200 with the same `readAt` (the original is preserved,

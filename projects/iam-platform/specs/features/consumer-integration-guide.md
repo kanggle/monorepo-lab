@@ -49,7 +49,7 @@ GAP는 6개 도메인 (`fan-platform`, `wms`, 향후 `erp`/`scm`/`mes`/`fan-comm
 
 Phase 1을 시작하기 전에 다음 항목을 확정해 둔다:
 
-- [ ] 도메인 이름 후보 (slug). 정규식 `^[a-z][a-z0-9-]{1,31}$`. 예: `erp`, `scm`, `mes`. 예약어(`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `auth`, `oauth`, `me`) 사용 불가.
+- [ ] 도메인 이름 후보 (slug). 정규식 `^[a-z][a-z0-9-]{1,31}$`. 예: `erp`, `scm`, `mes`. 예약어(`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `iam`, `auth`, `oauth`, `me`) 사용 불가.
 - [ ] 테넌트 유형 — `B2C_CONSUMER` (외부 사용자 직접 가입) 또는 `B2B_ENTERPRISE` (admin provisioning 으로만 사용자 생성).
 - [ ] redirect URI 목록 (사용자 인증 위임 시) — 정확히 일치하는 절대 URL. 와일드카드 미지원.
 - [ ] 필요한 grant type 조합 — `authorization_code` (사용자 로그인), `refresh_token` (토큰 갱신), `client_credentials` (S2S).
@@ -298,7 +298,7 @@ spring:
       client:
         registration:
           iam-erp:
-            provider: gap
+            provider: iam
             client-id: ${GAP_CLIENT_ID}
             client-secret: ${GAP_CLIENT_SECRET}
             authorization-grant-type: client_credentials

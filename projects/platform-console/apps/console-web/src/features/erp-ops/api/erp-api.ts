@@ -53,7 +53,7 @@ import {
 
 /**
  * Server-side erp `masterdata-service` operations client (TASK-PC-FE-010 —
- * ADR-MONO-013 Phase 6, the FOURTH non-GAP federated domain and the
+ * ADR-MONO-013 Phase 6, the FOURTH non-IAM federated domain and the
  * FIRST internal-system-primary confirmation: wms / scm / finance /
  * **erp**). STRICTLY READ-ONLY.
  *
@@ -71,8 +71,8 @@ import {
  * console-integration-contract § 2.4.5 (each binding declares its own
  * credential against its producer; never blanket-apply one domain's
  * auth to another). erp REUSES it with the SAME outcome as wms / scm /
- * finance: the erp `masterdata-service` validates a GAP RS256 JWT
- * (ADR-001) against GAP JWKS, `tenant_id ∈ { erp, * }` enforced
+ * finance: the erp `masterdata-service` validates a IAM RS256 JWT
+ * (ADR-001) against IAM JWKS, `tenant_id ∈ { erp, * }` enforced
  * producer-side from the JWT claim (erp `iam-integration.md` §
  * platform-console Operator Read Consumer — TASK-ERP-BE-002 merged
  * 2026-05-20). erp has NO token-exchange.
@@ -80,7 +80,7 @@ import {
  * Therefore this client uses `getAccessToken()` (the GAP-session
  * HttpOnly cookie) and NEVER `getOperatorToken()` — exactly like
  * `finance-api.ts` / `scm-api.ts` / `wms-api.ts`, and the EXACT
- * INVERSE of the GAP `features/{accounts,audit,operators,dashboards}`
+ * INVERSE of the IAM `features/{accounts,audit,operators,dashboards}`
  * clients. The #569 trust-boundary invariant is GAP-domain-scoped
  * and does NOT generalise to erp. A test pins this (the
  * `getOperatorToken` path MUST be absent for erp; the cross-domain
@@ -90,7 +90,7 @@ import {
  * Tenant invariant (§ 2.4.8 / reuse of § 2.4.5): erp resolves the
  * tenant from the JWT `tenant_id` claim (`∈ {erp,*}`) — NOT an
  * `X-Tenant-Id` header. The console therefore does NOT send
- * `X-Tenant-Id` to erp; the tenant rides inside the GAP OIDC token.
+ * `X-Tenant-Id` to erp; the tenant rides inside the IAM OIDC token.
  * erp rejects cross-tenant producer-side (`403 TENANT_FORBIDDEN`).
  *
  * READ + DEPARTMENT WRITE PILOT (§ 2.4.8): the 10 read functions
@@ -107,7 +107,7 @@ import {
  * (retire / move-parent) — the console NEVER sends `X-Operator-Reason`
  * (erp does not read it). The v2 `approval-service` /
  * `read-model-service` / future `admin-service` surfaces stay out of
- * scope. Carrying the FE-007 alert-ack OR the GAP § 2.4.1 mutation
+ * scope. Carrying the FE-007 alert-ack OR the IAM § 2.4.1 mutation
  * scaffolding (X-Operator-Reason) here is a defect (tests assert it).
  *
  * E3 ASOF THREAD-THROUGH (§ 2.4.8, CORE INVARIANT): the `asOf`
@@ -142,7 +142,7 @@ import {
  *
  * Resilience (§ 2.5 / integration-heavy I1): AbortController hard
  * timeout (no unbounded default); `401` → `ApiError` (forced
- * WHOLE-SESSION GAP re-login — not a per-section degrade); `403` →
+ * WHOLE-SESSION IAM re-login — not a per-section degrade); `403` →
  * `ApiError` (inline "not available / not scoped"); `404
  * MASTERDATA_NOT_FOUND` → `ApiError` (inline actionable "no such
  * record"); `400` / `422` → `ApiError` (inline actionable, no crash);
@@ -150,7 +150,7 @@ import {
  * section degrades — shell + GAP/wms/scm/finance sections intact).
  *
  * Confidential / audit-heavy (§ 2.4.8): structured logs are
- * server-side only; the GAP access token, employee PII (names /
+ * server-side only; the IAM access token, employee PII (names /
  * contact), business-partner financial details (`paymentTerms`),
  * cost-center sensitive attrs, and any record ids in path-form are
  * NEVER logged (redacted) — the log payloads below carry ONLY
@@ -227,7 +227,7 @@ async function parseErpError(
 }
 
 /**
- * Single hardened call site. Resolves the GAP OIDC access token,
+ * Single hardened call site. Resolves the IAM OIDC access token,
  * applies the timeout, maps the erp FLAT error envelope to the
  * § 2.5 resilience taxonomy.
  *
@@ -245,11 +245,11 @@ async function callErp<T>(
   const requestId = newRequestId();
 
   // ── Per-domain credential (§ 2.4.8 reusing § 2.4.5): erp requires
-  //    the GAP OIDC ACCESS token directly. NEVER getOperatorToken() —
+  //    the IAM OIDC ACCESS token directly. NEVER getOperatorToken() —
   //    that is the GAP-domain (§ 2.6 exchanged) credential; erp
   //    would reject it (wrong issuer/type). The #569 invariant is
   //    GAP-domain-scoped.
-  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING GAP OIDC token — the
+  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING IAM OIDC token — the
   //    ASSUMED (tenant-scoped) token when the operator has switched, else
   //    the base access token (net-zero). Still NOT the operator token.
   const token = await getDomainFacingToken();
@@ -258,9 +258,9 @@ async function callErp<T>(
       requestId,
       path: opts.logPath,
     });
-    // No GAP OIDC session ⇒ whole-session re-login (not a per-section
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
     // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {
@@ -306,7 +306,7 @@ async function callErp<T>(
         code: e.code,
         path: opts.logPath,
       });
-      // GAP OIDC session expired → whole-session re-login (no
+      // IAM OIDC session expired → whole-session re-login (no
       // partial authed state — NOT a per-section degrade).
       throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
     }
@@ -744,7 +744,7 @@ export async function getBusinessPartnerById(
 //   cost-centers / business-partners create/update/retire, generalising the
 //   department pilot to all 5 masters). Same hardened callErp (method/body/
 //   idempotencyKey); `reason` rides in the body on retire only (NEVER an
-//   X-Operator-Reason header); credential = GAP OIDC domain-facing token
+//   X-Operator-Reason header); credential = IAM OIDC domain-facing token
 //   (unchanged). Producer `masterdata-api.md` § <master> is canonical.
 // ---------------------------------------------------------------------------
 
@@ -991,7 +991,7 @@ export async function retireBusinessPartner(
 //
 //   READ-ONLY (E5) — the read-model holds no domain logic. There is NO
 //   mutation function here and no mutation call for this surface. The
-//   credential is UNCHANGED (same `getDomainFacingToken()` / GAP OIDC path
+//   credential is UNCHANGED (same `getDomainFacingToken()` / IAM OIDC path
 //   as the masterdata reads; NEVER `getOperatorToken()`). `?asOf` (E3)
 //   threads through verbatim via the same `callErp` helper.
 // ---------------------------------------------------------------------------
@@ -1056,7 +1056,7 @@ export async function getEmployeeOrgView(
 //
 //   READ-ONLY (E5) — the read-model holds no domain logic. There is NO
 //   mutation function here and no mutation call for this surface. The
-//   credential is UNCHANGED (same `getDomainFacingToken()` / GAP OIDC path
+//   credential is UNCHANGED (same `getDomainFacingToken()` / IAM OIDC path
 //   as all other erp reads; NEVER `getOperatorToken()`). NO `X-Tenant-Id`
 //   (erp resolves tenant from JWT claim). NO `X-Operator-Reason` (read-only).
 // ---------------------------------------------------------------------------

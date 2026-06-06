@@ -40,11 +40,11 @@ function registryWithFinanceItem(
   return {
     products: [
       {
-        productKey: 'gap' as const,
-        displayName: 'GAP',
+        productKey: 'iam' as const,
+        displayName: 'IAM',
         available: true,
         tenants: ['wms'],
-        baseRoute: '/gap',
+        baseRoute: '/iam',
       },
       {
         productKey: 'finance' as const,
@@ -129,11 +129,11 @@ describe('getFinanceDefaultAccountId — null paths (header omitted at the proxy
     vi.mocked(fetchRegistry).mockResolvedValueOnce({
       products: [
         {
-          productKey: 'gap' as const,
-          displayName: 'GAP',
+          productKey: 'iam' as const,
+          displayName: 'IAM',
           available: true,
           tenants: ['wms'],
-          baseRoute: '/gap',
+          baseRoute: '/iam',
         },
       ],
     } as unknown as Awaited<ReturnType<typeof fetchRegistry>>);

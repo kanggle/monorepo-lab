@@ -40,7 +40,7 @@ import { RetryButton } from './RetryButton';
  */
 
 const DOMAIN_TITLE: Record<DomainKey, string> = {
-  gap: 'GAP 계정',
+  iam: 'IAM 계정',
   wms: 'WMS 재고',
   scm: 'SCM 가시성',
   finance: 'Finance 잔액',
@@ -76,7 +76,7 @@ function GapSummary({ data }: { data: unknown }): ReactNode {
       <dt className="text-sm text-muted-foreground">전체 계정</dt>
       <dd
         className="text-2xl font-semibold tabular-nums text-foreground"
-        data-testid="operator-overview-card-gap-total"
+        data-testid="operator-overview-card-iam-total"
       >
         {total === null ? '—' : total.toLocaleString()}
       </dd>
@@ -205,7 +205,7 @@ function ErpSummary({ data }: { data: unknown }): ReactNode {
 
 function OkSummary({ card }: { card: Card & { status: 'ok' } }): ReactNode {
   switch (card.domain) {
-    case 'gap':
+    case 'iam':
       return <GapSummary data={card.data} />;
     case 'wms':
       return <WmsSummary data={card.data} />;
@@ -232,14 +232,14 @@ export function DomainCard({ card, overviewForRetry }: DomainCardProps) {
   const id = `domain-card-${card.domain}`;
 
   // GAP-card drill-down (TASK-PC-FE-034 / AC-5 + AC-6): on the home
-  // cross-domain overview the GAP card links to the GAP-only composed
+  // cross-domain overview the IAM card links to the GAP-only composed
   // overview detail (`/dashboards`, § 2.4.4 / ADR-MONO-015 D1-B —
   // accounts · audit · operators 3-leg). AC-6 default: the affordance is
-  // present ONLY when the GAP card is `ok` — on `degraded` / `forbidden`
-  // the GAP detail would itself degrade, so the link is suppressed and the
+  // present ONLY when the IAM card is `ok` — on `degraded` / `forbidden`
+  // the IAM detail would itself degrade, so the link is suppressed and the
   // card keeps its existing placeholder + retry behaviour. The other 4
   // domain cards are unchanged (no drill-down — a separate future task).
-  const gapDrilldown = card.domain === 'gap' && card.status === 'ok';
+  const gapDrilldown = card.domain === 'iam' && card.status === 'ok';
 
   return (
     <section
@@ -256,7 +256,7 @@ export function DomainCard({ card, overviewForRetry }: DomainCardProps) {
         {gapDrilldown ? (
           <Link
             href="/dashboards"
-            data-testid="operator-overview-card-gap-drilldown"
+            data-testid="operator-overview-card-iam-drilldown"
             className="inline-flex items-center gap-1 rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {DOMAIN_TITLE[card.domain]}

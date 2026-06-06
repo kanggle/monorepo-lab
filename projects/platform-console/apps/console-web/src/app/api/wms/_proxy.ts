@@ -6,9 +6,9 @@ import { newRequestId } from '@/shared/lib/logger';
 
 /**
  * Shared error → HTTP mapping for the wms-ops same-origin proxy routes
- * (console-integration-contract § 2.4.5 / § 2.5). The HttpOnly **GAP OIDC
+ * (console-integration-contract § 2.4.5 / § 2.5). The HttpOnly **IAM OIDC
  * access token** is attached server-side in `wms-api.ts` — NOT the GAP
- * exchanged operator token (the wms gateway requires the GAP OIDC token;
+ * exchanged operator token (the wms gateway requires the IAM OIDC token;
  * the #569 invariant is GAP-domain-scoped — § 2.4.5). Mirrors the FE-002
  * `_proxy` shape but for the wms (nested) envelope + GAP-token credential.
  *
@@ -18,7 +18,7 @@ import { newRequestId } from '@/shared/lib/logger';
  *   - 400 / 404 / 422 STATE_TRANSITION_INVALID / 409 DUPLICATE_REQUEST →
  *     passthrough (inline actionable, no crash).
  *   - 503 / timeout / network → 503 (ONLY the wms section degrades; the
- *     console shell + GAP sections stay intact).
+ *     console shell + IAM sections stay intact).
  *
  * No token / wms data is ever logged.
  */

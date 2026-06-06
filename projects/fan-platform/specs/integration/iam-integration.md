@@ -44,7 +44,7 @@ spring:
 
 | Client ID | Grant Types | PKCE | Redirect URIs | Flyway |
 |---|---|---|---|---|
-| `fan-platform-user-flow-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/gap`, `http://fan-platform.local/api/auth/callback/gap` | V0011 (TASK-MONO-026) |
+| `fan-platform-user-flow-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/iam`, `http://fan-platform.local/api/auth/callback/iam` | V0011 (TASK-MONO-026) |
 | `fan-platform-internal-services-client` | `client_credentials` | No | — | v2 DEFERRED |
 
 `fan-platform-user-flow-client` 는 confidential client (secret + PKCE 동시 사용) 로 등록됨:

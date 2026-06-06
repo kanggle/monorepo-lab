@@ -25,16 +25,16 @@ export const runtime = 'nodejs';
  * Public-client refresh_token grant against
  * `${OIDC_ISSUER_URL}/oauth2/token` (auth-api.md § POST /oauth2/token;
  * `grant_type=refresh_token` + `client_id`, no secret). V0015 seeds
- * `settings.token.reuse-refresh-tokens=false` → GAP rotates the refresh token
+ * `settings.token.reuse-refresh-tokens=false` → IAM rotates the refresh token
  * on every call (ADR-003), so the rotated token is re-stored.
  *
  * Re-exchange model (ADR-MONO-014 D2 / console-integration-contract § 2.6):
- * there is NO operator-refresh token/state — after the GAP access token
+ * there is NO operator-refresh token/state — after the IAM access token
  * rotates, the operator token is re-obtained via a fresh exchange and the
  * operator cookie is updated. Consistent with callback fail-closed handling:
  * exchange `401` (operator deactivated/locked since login) or unavailable
- * → drop the whole session (GAP + operator cookies) and 401; never keep a
- * stale operator token, never fall back to the GAP token on /api/admin/**.
+ * → drop the whole session (IAM + operator cookies) and 401; never keep a
+ * stale operator token, never fall back to the IAM token on /api/admin/**.
  *
  * On failure all session cookies are cleared so the API client falls back to
  * a clean re-login (no client-side token juggling — task Failure Scenario).
@@ -115,7 +115,7 @@ export async function POST() {
     }
 
     // --- Re-exchange the operator token (§ 2.6 / ADR-MONO-014 D2) ---------
-    // No operator-refresh state: the rotated GAP access token is re-exchanged
+    // No operator-refresh state: the rotated IAM access token is re-exchanged
     // for a fresh operator token. Any exchange failure (fail-closed 401 or
     // unavailable) drops the WHOLE session — no stale operator token, no
     // GAP-token fallback on the operator boundary.
@@ -147,11 +147,11 @@ export async function POST() {
 
     // --- Re-assume the active tenant (ADR-MONO-020 D4 / § 2.7) ------------
     // The assumed (domain-facing) token has NO refresh token (D2) — it is
-    // re-minted from the rotated base GAP access token. If an active tenant is
+    // re-minted from the rotated base IAM access token. If an active tenant is
     // set, re-assume it now so the domain-facing credential stays scoped to
     // the selected customer after a refresh. On any re-assume failure DROP
     // BOTH the assumed token AND the active tenant (the operator falls back to
-    // the base/no-tenant state — NEVER a stale assumed token). The base GAP +
+    // the base/no-tenant state — NEVER a stale assumed token). The base IAM +
     // operator session stays valid; only the tenant selection is reset.
     const activeTenant = jar.get(TENANT_COOKIE)?.value;
     if (activeTenant) {

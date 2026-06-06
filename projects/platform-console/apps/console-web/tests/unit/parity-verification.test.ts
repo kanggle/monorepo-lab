@@ -19,9 +19,9 @@ import {
  *
  *  - the route module file exists / the feature module exports the
  *    capability (capability is present);
- *  - the capability's server client targets the CORRECT GAP producer
+ *  - the capability's server client targets the CORRECT IAM producer
  *    path (the admin-api.md § in the matrix) with the OPERATOR token
- *    (`getOperatorToken()`, NEVER the GAP OIDC access token — the #569
+ *    (`getOperatorToken()`, NEVER the IAM OIDC access token — the #569
  *    boundary) and `X-Tenant-Id`;
  *  - mutation rows carry the contract-correct headers per § 2.4.1/§ 2.4.3
  *    — including the FE-004 per-endpoint Idempotency-Key NON-uniformity
@@ -38,7 +38,7 @@ import {
  * NOT trust the fixture's `verified` flag blindly. No gap was found.
  *
  * `next/headers` cookies() + getServerEnv() mocked (the established
- * FE-001..005 lane — same harness, same operator/GAP cookie fixtures).
+ * FE-001..005 lane — same harness, same operator/IAM cookie fixtures).
  */
 
 const cookieJar = new Map<string, string>();
@@ -458,11 +458,11 @@ describe('parity matrix — every capability is present (route + feature export)
 
   it('the four Phase-2 routes resolve to their in-console destinations', () => {
     const gap: RegistryProduct = {
-      productKey: 'gap',
+      productKey: 'iam',
       displayName: 'Global Account Platform',
       available: true,
       tenants: ['wms'],
-      baseRoute: '/gap',
+      baseRoute: '/iam',
     };
     // FE-002 contract unchanged: gap catalog tile → /accounts.
     expect(resolveConsoleRoute(gap)).toBe('/accounts');
@@ -506,7 +506,7 @@ describe('parity matrix — operator-token boundary + producer path + tenant sco
         ).toBe(true);
       }
 
-      // EVERY leg/call: operator-token bearer (NEVER the GAP OIDC token —
+      // EVERY leg/call: operator-token bearer (NEVER the IAM OIDC token —
       // the #569 trust-boundary invariant) + non-empty active tenant.
       for (const [, init] of calls) {
         const h = (init as RequestInit).headers as Record<string, string>;
@@ -520,7 +520,7 @@ describe('parity matrix — operator-token boundary + producer path + tenant sco
       // The #569 boundary: a GAP-token-only state must NEVER be used as an
       // /api/admin/** credential. Each reused client throws 401 (no fetch);
       // the composed overview re-throws a 401 as a whole-overview failure.
-      cookieJar.set(ACCESS_COOKIE, GAP_TOKEN_SENTINEL); // GAP token present…
+      cookieJar.set(ACCESS_COOKIE, GAP_TOKEN_SENTINEL); // IAM token present…
       cookieJar.set(TENANT_COOKIE, 'wms');
       // …but NO operator cookie.
       const fetchMock = routedFetch();

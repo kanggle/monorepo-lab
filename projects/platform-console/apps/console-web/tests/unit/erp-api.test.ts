@@ -4,16 +4,16 @@ import path from 'node:path';
 
 /**
  * `features/erp-ops/api/erp-api.ts` — the security-critical core of
- * TASK-PC-FE-010 (the FOURTH non-GAP federated domain; the FIRST
+ * TASK-PC-FE-010 (the FOURTH non-IAM federated domain; the FIRST
  * internal-system-primary confirmation; ADR-MONO-013 Phase 6).
  * STRICTLY READ-ONLY.
  *
  * THE CENTRAL ASSERTIONS (console-integration-contract § 2.4.8 —
  * REUSE of the § 2.4.5 per-domain credential rule, NOT re-derived;
  * same outcome as wms / scm / finance / the EXACT INVERSE of the
- * FE-002..006 GAP assertion):
+ * FE-002..006 IAM assertion):
  *
- *   - every erp call's bearer is the **GAP OIDC ACCESS token** (the
+ *   - every erp call's bearer is the **IAM OIDC ACCESS token** (the
  *     `console_access_token` cookie), NEVER the exchanged operator
  *     token;
  *   - the operator-token path is ABSENT for erp (the erp client
@@ -226,11 +226,11 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// 1. Per-domain credential — GAP OIDC token, NEVER getOperatorToken()
+// 1. Per-domain credential — IAM OIDC token, NEVER getOperatorToken()
 // ===========================================================================
 
 describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the INVERSE of #569)', () => {
-  it('sends the GAP OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
+  it('sends the IAM OIDC ACCESS cookie as the bearer (NOT the operator token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-erp');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
 
@@ -252,7 +252,7 @@ describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(String(url)).toContain('http://erp.local/api/erp/masterdata/departments');
   });
 
-  it('uses getDomainFacingToken() (net-zero → base GAP token) and NEVER getOperatorToken() for erp (pins the per-domain rule)', async () => {
+  it('uses getDomainFacingToken() (net-zero → base IAM token) and NEVER getOperatorToken() for erp (pins the per-domain rule)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
     // ADR-MONO-020 D4 / § 2.7: domain-facing token (assumed-when-switched,
@@ -273,7 +273,7 @@ describe('erp-api — per-domain credential selection (REUSE of § 2.4.5; the IN
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent (whole-session re-login signal)', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent (whole-session re-login signal)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -518,7 +518,7 @@ describe('erp-api — department WRITE PILOT (§ 2.4.8 Department write binding)
     };
   }
 
-  it('create → POST + Idempotency-Key + body; GAP OIDC token, NEVER operator token / X-Operator-Reason / X-Tenant-Id', async () => {
+  it('create → POST + Idempotency-Key + body; IAM OIDC token, NEVER operator token / X-Operator-Reason / X-Tenant-Id', async () => {
     const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
     const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(MUTATION_BODY, 201));
@@ -540,7 +540,7 @@ describe('erp-api — department WRITE PILOT (§ 2.4.8 Department write binding)
     expect(headers['X-Operator-Reason']).toBeUndefined();
     expect(headers['X-Tenant-Id']).toBeUndefined();
     expect(body).toMatchObject({ code: 'DEPT-001', name: 'Sales' });
-    // Credential reuse: the domain-facing GAP token, NEVER the
+    // Credential reuse: the domain-facing IAM token, NEVER the
     // operator token (the #569 invariant is GAP-domain-scoped).
     expect(getDomainFacingSpy).toHaveBeenCalled();
     expect(getOperatorSpy).not.toHaveBeenCalled();
@@ -650,7 +650,7 @@ describe('erp-api — employees/job-grades/cost-centers/business-partners WRITE 
     };
   }
 
-  it('create on each master → POST to its collection path + Idempotency-Key; GAP token, no X-Operator-Reason', async () => {
+  it('create on each master → POST to its collection path + Idempotency-Key; IAM token, no X-Operator-Reason', async () => {
     const cases: Array<[() => Promise<unknown>, string]> = [
       [
         () =>

@@ -36,9 +36,9 @@
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | `gap` \| `wms` \| `scm` \| `erp` \| `finance` |
+| `productKey` | string | `iam` \| `wms` \| `scm` \| `erp` \| `finance` |
 | `displayName` | string | Catalog tile label |
-| `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 5 federated v1 domains — `gap` + `wms` + `scm` + `erp` + `finance` — are `available:true` as of TASK-BE-305 2026-05-21) |
+| `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 5 federated v1 domains — `iam` + `wms` + `scm` + `erp` + `finance` — are `available:true` as of TASK-BE-305 2026-05-21) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
 | `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from GAP `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`iam-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../iam-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
@@ -1315,7 +1315,7 @@ For the inbound-validation errors **before** any outbound leg fires
 ##### Auth flow (verbatim from § 2.4.9, restated for cross-reference only)
 
 - **Inbound** (console-web SSR → console-bff): `Authorization` (GAP OIDC access token, inbound principal) + `X-Operator-Token` (RFC 8693 exchanged operator token, request-scoped via `OperatorCredentialContext`) + `X-Tenant-Id` (operator's selected active tenant). The browser **never** reaches console-bff directly.
-- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `GAP → OperatorToken`, `{wms,scm,finance,erp} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
+- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, 5-row sealed selector — `IAM → OperatorToken`, `{wms,scm,finance,erp} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate.
 
 ##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
 

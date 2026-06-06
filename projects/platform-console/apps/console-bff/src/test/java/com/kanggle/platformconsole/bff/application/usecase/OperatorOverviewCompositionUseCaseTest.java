@@ -104,7 +104,7 @@ class OperatorOverviewCompositionUseCaseTest {
     private void stubAllCredentialsHappy() {
         // Lenient — not every test exercises every credential resolution; STRICT_STUBS
         // would otherwise fail when a leg short-circuits (finance MISSING_PREREQUISITE).
-        lenient().when(credentialSelection.selectFor(DomainTarget.GAP))
+        lenient().when(credentialSelection.selectFor(DomainTarget.IAM))
                 .thenReturn(new OutboundCredential.OperatorToken(OPERATOR_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
                 .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
@@ -139,7 +139,7 @@ class OperatorOverviewCompositionUseCaseTest {
 
         assertThat(legs).hasSize(5);
         // Fixed order invariant
-        assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.GAP);
+        assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.IAM);
         assertThat(legs.get(1).outcome().domain()).isEqualTo(DomainTarget.WMS);
         assertThat(legs.get(2).outcome().domain()).isEqualTo(DomainTarget.SCM);
         assertThat(legs.get(3).outcome().domain()).isEqualTo(DomainTarget.FINANCE);
@@ -312,7 +312,7 @@ class OperatorOverviewCompositionUseCaseTest {
     @DisplayName("missing_operator_token: GAP credential resolution throws MissingCredentialException → leg forbidden/MISSING_PREREQUISITE")
     void missing_operator_token_yields_missing_prerequisite() {
         // GAP credential resolution fails closed (no operator token).
-        when(credentialSelection.selectFor(DomainTarget.GAP))
+        when(credentialSelection.selectFor(DomainTarget.IAM))
                 .thenThrow(new MissingCredentialException("operator token absent"));
         // Other legs ok.
         lenient().when(credentialSelection.selectFor(DomainTarget.WMS))
@@ -331,7 +331,7 @@ class OperatorOverviewCompositionUseCaseTest {
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
         CompositionLeg gap = legs.get(0);
-        assertThat(gap.outcome().domain()).isEqualTo(DomainTarget.GAP);
+        assertThat(gap.outcome().domain()).isEqualTo(DomainTarget.IAM);
         assertThat(gap.outcome().isForbidden()).isTrue();
         assertThat(gap.outcome().reason()).isEqualTo("MISSING_PREREQUISITE");
     }
@@ -354,7 +354,7 @@ class OperatorOverviewCompositionUseCaseTest {
 
         // Per-leg latency timer registered for the 4 legs that actually fire.
         // Finance is short-circuited (MVP option b) and does NOT register a timer.
-        for (DomainTarget d : List.of(DomainTarget.GAP, DomainTarget.WMS,
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.WMS,
                 DomainTarget.SCM, DomainTarget.ERP)) {
             Timer timer = meterRegistry.find("bff_fanout_latency")
                     .tag("domain", d.name().toLowerCase())
@@ -367,7 +367,7 @@ class OperatorOverviewCompositionUseCaseTest {
         }
 
         // No bff_fanout_errors counter for these 4 legs (happy path).
-        for (DomainTarget d : List.of(DomainTarget.GAP, DomainTarget.WMS,
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.WMS,
                 DomainTarget.SCM, DomainTarget.ERP)) {
             // We allow registry-search to return null when no error happened; we
             // explicitly assert the meter was NOT registered with any error tag.

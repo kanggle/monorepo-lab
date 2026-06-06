@@ -16,7 +16,7 @@ import {
  * Client-side scm-ops hooks (architecture.md § Server vs Client
  * Components — React Query is client-only). Every call goes to the
  * same-origin `/api/scm/**` proxy (the typed API client's single backend
- * entry point); the proxy attaches the HttpOnly **GAP OIDC access token**
+ * entry point); the proxy attaches the HttpOnly **IAM OIDC access token**
  * server-side — the browser never reads a token or calls scm directly
  * (contract § 2.3). The § 2.4.5 per-domain credential rule is reused, NOT
  * re-derived (§ 2.4.6).

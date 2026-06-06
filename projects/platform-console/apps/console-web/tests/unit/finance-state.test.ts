@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     fabricated (account-id-driven; finance v1 has no list/search
  *     GET — the honest constraint);
  *   - eligible + accountId → seeds account + balances + first-page
- *     transactions (GAP OIDC token, server-side);
+ *     transactions (IAM OIDC token, server-side);
  *   - 403 → `forbidden` (inline, no crash);
  *   - 404 ACCOUNT_NOT_FOUND → `notFound` (inline actionable, no
  *     crash);
@@ -153,7 +153,7 @@ describe('getFinanceSectionState — eligibility + account-id gates (§ 2.4.7)',
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible + accountId → seeds account + balances + transactions (GAP OIDC token)', async () => {
+  it('eligible + accountId → seeds account + balances + transactions (IAM OIDC token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = routed();
     vi.stubGlobal('fetch', fetchMock);
@@ -164,7 +164,7 @@ describe('getFinanceSectionState — eligibility + account-id gates (§ 2.4.7)',
     expect(state.account).not.toBeNull();
     expect(state.balances).not.toBeNull();
     expect(state.transactions).not.toBeNull();
-    // Every seeded read carries the GAP OIDC access token, no
+    // Every seeded read carries the IAM OIDC access token, no
     // X-Tenant-Id.
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;

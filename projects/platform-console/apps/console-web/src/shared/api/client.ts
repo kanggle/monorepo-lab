@@ -4,7 +4,7 @@ import { ApiError } from './errors';
  * The ONLY backend entry point for client components (architecture.md
  * § Forbidden Dependencies: no direct `fetch()` in components).
  *
- * Client components never talk to GAP / domain gateways directly — they call
+ * Client components never talk to IAM / domain gateways directly — they call
  * same-origin Next.js route handlers (`/api/...`) which attach the HttpOnly
  * cookie operator token server-side. JS never reads a token.
  *

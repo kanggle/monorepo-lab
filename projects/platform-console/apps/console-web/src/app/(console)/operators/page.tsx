@@ -7,12 +7,12 @@ import { selectableTenants } from '@/features/tenant';
 export const dynamic = 'force-dynamic';
 
 /**
- * GAP operators-management parity route (TASK-PC-FE-004 — ADR-MONO-013
+ * IAM operators-management parity route (TASK-PC-FE-004 — ADR-MONO-013
  * Phase 2 slice 3). An in-console nav destination (NOT a catalog product —
- * the catalog `gap.baseRoute` stays `/accounts`, FE-002 unchanged).
+ * the catalog `iam.baseRoute` stays `/accounts`, FE-002 unchanged).
  *
  * Server component: the initial operators page is fetched server-side via
- * the GAP admin-service client with the HttpOnly operator token + active
+ * the IAM admin-service client with the HttpOnly operator token + active
  * tenant (`getOperatorsListState()`). Resilience is handled there:
  *   - 401 → `redirect('/login')` (clean re-login, no partial authed state).
  *   - no active tenant → a "select a tenant" gate (never an empty
@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
  *     (the `(console)` layout still renders around this).
  *
  * The create-form tenant options come from the operator's own (GAP-scoped)
- * registry response — GAP enforces the operator's tenant scope
+ * registry response — IAM enforces the operator's tenant scope
  * producer-side; the `*` platform sentinel only appears when the operator
  * is platform-scope, so the UI never offers `*` to a non-platform operator
  * (task Edge Case; the producer is the final authority anyway).

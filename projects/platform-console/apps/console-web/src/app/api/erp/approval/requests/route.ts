@@ -46,7 +46,7 @@ export async function GET(req: Request) {
  * Same-origin erp approval CREATE proxy (write — POST). The client posts the
  * create body + a console-generated `idempotencyKey`; this route validates
  * it and forwards to the UNCHANGED producer `POST /api/erp/approval/requests`
- * via `createApprovalRequest()`, which attaches the domain-facing GAP token +
+ * via `createApprovalRequest()`, which attaches the domain-facing IAM token +
  * `Idempotency-Key` server-side (NEVER the operator token). Create is a DRAFT
  * — no master / route validation happens here (deferred to submit). The
  * mutation-only producer errors (`400 IDEMPOTENCY_KEY_REQUIRED`,

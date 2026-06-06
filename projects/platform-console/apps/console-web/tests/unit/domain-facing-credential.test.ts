@@ -4,9 +4,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Domain-facing credential after an active-tenant switch (ADR-MONO-020 D4 /
  * console-integration-contract § 2.7). Companion to per-domain-credential.test.ts
  * (which pins the NON-switched / net-zero state). Here an ASSUMED token is
- * present (the operator switched to a customer): the 4 non-GAP domain clients
+ * present (the operator switched to a customer): the 4 non-IAM domain clients
  * (wms/scm/finance/erp) MUST send the ASSUMED token as the GAP-OIDC bearer
- * (the re-scope is real), while the GAP clients keep using the OPERATOR token
+ * (the re-scope is real), while the IAM clients keep using the OPERATOR token
  * (§ 2.6 boundary unchanged — the #569 invariant holds).
  */
 
@@ -74,7 +74,7 @@ beforeEach(() => {
 });
 
 describe('domain-facing credential after switch (§ 2.7)', () => {
-  it('non-GAP domains send the ASSUMED token; GAP still sends the operator token', async () => {
+  it('non-IAM domains send the ASSUMED token; IAM still sends the operator token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'BASE-GAP-OIDC');
     cookieJar.set(OPERATOR_COOKIE, 'EXCHANGED-OPERATOR');
     cookieJar.set(ASSUMED_TOKEN_COOKIE, 'ASSUMED-FOR-GLOBEX');
@@ -129,7 +129,7 @@ describe('domain-facing credential after switch (§ 2.7)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    // GAP STILL uses the exchanged operator token — NOT the assumed token.
+    // IAM STILL uses the exchanged operator token — NOT the assumed token.
     await searchAccounts({ page: 0, size: 20 });
     const gapHeaders = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
@@ -137,7 +137,7 @@ describe('domain-facing credential after switch (§ 2.7)', () => {
     expect(gapHeaders.Authorization).not.toContain('ASSUMED-FOR-GLOBEX');
 
     // wms / scm / finance / erp send the ASSUMED (re-scoped) token — NOT the
-    // base GAP token, NOT the operator token.
+    // base IAM token, NOT the operator token.
     await listInventory({ page: 0, size: 20 });
     await listPurchaseOrders({ page: 0, size: 20 });
     await getAccount('acct-1');

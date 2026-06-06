@@ -28,7 +28,7 @@ import { test, expect } from '@playwright/test';
  *   - my-profile-success never visible → admin /api/admin/me/profile
  *     contract drift or the proxy route /api/operators/me/profile is
  *     mis-wired.
- *   - finance card stays `forbidden` after Save → the GAP registry's
+ *   - finance card stays `forbidden` after Save → the IAM registry's
  *     productItem[finance].operatorContext.defaultAccountId is not being
  *     refreshed (consumer caching surface).
  *   - finance card flips to `down` → check finance-account-service health

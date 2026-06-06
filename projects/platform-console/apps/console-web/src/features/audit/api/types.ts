@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Feature-local types for the GAP unified audit + security read surface.
+ * Feature-local types for the IAM unified audit + security read surface.
  *
  * Authoritative producer contract (do NOT redefine — consume only):
  *   `iam/specs/contracts/http/admin-api.md`

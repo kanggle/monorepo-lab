@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin registry proxy for client components (the typed API client's
- * single backend entry point — no browser-direct GAP call,
+ * single backend entry point — no browser-direct IAM call,
  * architecture.md § Forbidden Dependencies / contract § 2.3). Attaches the
  * HttpOnly operator token server-side via `fetchRegistry()`.
  *

@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * AC-3 pins:
  *   - both routes are **GET-only** (no POST / PATCH handler exists;
  *     the route files do NOT export POST).
- *   - credential = unchanged GAP OIDC domain-facing token (NOT the
+ *   - credential = unchanged IAM OIDC domain-facing token (NOT the
  *     operator token, NOT `getOperatorToken()`); no `X-Operator-Reason`;
  *     no `Idempotency-Key`; no body on GET.
  *   - E3 `?asOf=` threaded through verbatim.
@@ -160,11 +160,11 @@ describe('AC-3 — read-model routes export GET only (no POST / PATCH)', () => {
 });
 
 // ===========================================================================
-// AC-3: credential invariant — GAP OIDC access token, NOT operator token
+// AC-3: credential invariant — IAM OIDC access token, NOT operator token
 // ===========================================================================
 
 describe('GET /api/erp/read-model/employees — credential + path', () => {
-  it('attaches the GAP OIDC access token (NOT the operator token), targets /read-model/ path', async () => {
+  it('attaches the IAM OIDC access token (NOT the operator token), targets /read-model/ path', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS-READMODEL');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(RM_LIST_ENV));
@@ -177,7 +177,7 @@ describe('GET /api/erp/read-model/employees — credential + path', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     const h = (init as RequestInit).headers as Record<string, string>;
-    // AC-3: GAP OIDC token, never operator token.
+    // AC-3: IAM OIDC token, never operator token.
     expect(h.Authorization).toBe('Bearer GAP-ACCESS-READMODEL');
     expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
     // No mutation headers.
@@ -192,7 +192,7 @@ describe('GET /api/erp/read-model/employees — credential + path', () => {
     expect(String(url)).not.toContain('/masterdata/');
   });
 
-  it('no GAP session → 401 (no upstream call)', async () => {
+  it('no IAM session → 401 (no upstream call)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await rmListGET(
@@ -269,7 +269,7 @@ describe('GET /api/erp/read-model/employees — credential + path', () => {
 });
 
 describe('GET /api/erp/read-model/employees/{id} — credential + path + asOf', () => {
-  it('attaches GAP OIDC token + targets /read-model/{id} path', async () => {
+  it('attaches IAM OIDC token + targets /read-model/{id} path', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(RM_DETAIL_ENV));

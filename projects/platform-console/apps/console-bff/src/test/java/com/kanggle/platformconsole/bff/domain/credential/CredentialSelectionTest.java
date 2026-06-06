@@ -23,7 +23,7 @@ class CredentialSelectionTest {
 
     private OutboundCredential select(DomainTarget domain, String operatorToken, String gapOidcToken) {
         return switch (domain) {
-            case GAP -> new OutboundCredential.OperatorToken(operatorToken);
+            case IAM -> new OutboundCredential.OperatorToken(operatorToken);
             case WMS, SCM, FINANCE, ERP -> new OutboundCredential.IamOidcAccessToken(gapOidcToken);
         };
     }
@@ -31,7 +31,7 @@ class CredentialSelectionTest {
     @Test
     @DisplayName("Row 1: GAP domain → OperatorToken (RFC 8693 exchanged)")
     void gapDomain_returnsOperatorToken() {
-        OutboundCredential cred = select(DomainTarget.GAP, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
+        OutboundCredential cred = select(DomainTarget.IAM, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
         assertThat(cred).isInstanceOf(OutboundCredential.OperatorToken.class);
         assertThat(((OutboundCredential.OperatorToken) cred).token()).isEqualTo(OPERATOR_TOKEN);
     }

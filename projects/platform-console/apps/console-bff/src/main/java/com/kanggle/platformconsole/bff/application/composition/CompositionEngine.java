@@ -50,7 +50,7 @@ import java.util.function.Supplier;
  *   <li>Pending-leg fallback at composition-level timeout: emits the
  *       {@code timeout} error counter and surfaces
  *       {@code degraded / TIMEOUT}.</li>
- *   <li>Fixed leg order: {@link DomainTarget#GAP},
+ *   <li>Fixed leg order: {@link DomainTarget#IAM},
  *       {@link DomainTarget#WMS}, {@link DomainTarget#SCM},
  *       {@link DomainTarget#FINANCE}, {@link DomainTarget#ERP}.</li>
  * </ul>
@@ -88,7 +88,7 @@ public final class CompositionEngine {
      * Fixed leg order — § 2.4.9.1 / § 2.4.9.2 envelope schema invariant.
      */
     public static final List<DomainTarget> CARD_ORDER = List.of(
-            DomainTarget.GAP,
+            DomainTarget.IAM,
             DomainTarget.WMS,
             DomainTarget.SCM,
             DomainTarget.FINANCE,

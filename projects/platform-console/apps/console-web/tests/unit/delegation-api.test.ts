@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * delegation grant client (TASK-PC-FE-054).
  *
  * Pins:
- *   - per-domain credential REUSE of § 2.4.8: the domain-facing GAP OIDC
+ *   - per-domain credential REUSE of § 2.4.8: the domain-facing IAM OIDC
  *     token, NEVER `getOperatorToken()`; no `X-Tenant-Id` (erp resolves
  *     tenant from the JWT claim);
  *   - NO `X-Operator-Reason` — delegation reason rides in the BODY only;
@@ -149,7 +149,7 @@ function lastCall(fetchMock: ReturnType<typeof vi.fn>) {
 // ===========================================================================
 
 describe('delegation-api — per-domain credential (REUSE of § 2.4.8)', () => {
-  it('sends the domain-facing GAP token, NEVER the operator token / X-Tenant-Id / X-Operator-Reason', async () => {
+  it('sends the domain-facing IAM token, NEVER the operator token / X-Tenant-Id / X-Operator-Reason', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
@@ -169,7 +169,7 @@ describe('delegation-api — per-domain credential (REUSE of § 2.4.8)', () => {
     expect(getOperatorSpy).not.toHaveBeenCalled();
   });
 
-  it('throws 401 with NO fetch when the GAP session is absent', async () => {
+  it('throws 401 with NO fetch when the IAM session is absent', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const err = await listDelegations().catch((e) => e);

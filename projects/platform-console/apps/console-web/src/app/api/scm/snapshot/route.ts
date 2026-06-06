@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin scm inventory-visibility snapshot read proxy (read-only —
- * GET). The HttpOnly GAP OIDC access token is attached server-side in
+ * GET). The HttpOnly IAM OIDC access token is attached server-side in
  * `getSnapshot()` (§ 2.4.6 reusing § 2.4.5 — NOT the operator token). The
  * full `{ data, meta }` envelope is forwarded so the REQUIRED S5
  * `meta.warning` reaches the client and is rendered prominently — it is

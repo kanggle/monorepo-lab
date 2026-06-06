@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - requests/{id}: GET (detail) only
  *   - requests/{id}/{transition}: POST only (transition allow-list)
  *   - inbox: GET only
- *   server-only domain-facing GAP token; Idempotency-Key + X-Operator-Reason
+ *   server-only domain-facing IAM token; Idempotency-Key + X-Operator-Reason
  *   forwarded; reject/withdraw reason-required pre-guard; error mapping via
  *   the shared erp `_proxy` mapper.
  */
@@ -139,7 +139,7 @@ describe('approval proxy — method exposure (GET/POST per route; no PUT/PATCH/D
 // ===========================================================================
 
 describe('GET/POST /api/erp/approval/requests', () => {
-  it('GET list: domain-facing GAP token (NOT operator token); forwards status/role', async () => {
+  it('GET list: domain-facing IAM token (NOT operator token); forwards status/role', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST));
@@ -159,7 +159,7 @@ describe('GET/POST /api/erp/approval/requests', () => {
     expect(u.searchParams.get('role')).toBe('APPROVER');
   });
 
-  it('GET list: no GAP session → 401, no upstream call', async () => {
+  it('GET list: no IAM session → 401, no upstream call', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await requestsGET(

@@ -10,7 +10,7 @@ import type {
 /**
  * Server-side finance operations section state for the
  * `(console)/finance` route (TASK-PC-FE-009 — the THIRD non-GAP
- * federation; closes the non-GAP federation cycle). STRICTLY READ-ONLY
+ * federation; closes the non-IAM federation cycle). STRICTLY READ-ONLY
  * — no mutation ever.
  *
  * Eligibility gate (console-integration-contract § 2.4.7, reusing the
@@ -36,7 +36,7 @@ import type {
  * routes, OR a server-side fetch when accountId is provided).
  *
  * Resilience boundary (§ 2.4.7 / § 2.5, mirrors `scm-state.ts`):
- *   - `401` (GAP OIDC session expired) → `redirect('/login')` — a
+ *   - `401` (IAM OIDC session expired) → `redirect('/login')` — a
  *     WHOLE-SESSION re-login, NOT a per-section degrade (no partial
  *     authed state; consistent with the FE-002..008 401 discipline).
  *   - `403` (token not finance-scoped / insufficient scope) → a
@@ -44,7 +44,7 @@ import type {
  *   - `404 ACCOUNT_NOT_FOUND` → an inline actionable "no such account"
  *     state for the lookup (NOT a crash, NOT a re-login).
  *   - `503` / timeout / network → DEGRADED — ONLY the finance section
- *     renders a degraded notice; the console shell + the GAP / wms /
+ *     renders a degraded notice; the console shell + the IAM / wms /
  *     scm sections stay intact.
  *   - **no 429 handling** (§ 2.4.7): finance has no documented 429;
  *     a 429 would land as an unexpected ApiError → degrade rather
@@ -144,7 +144,7 @@ export async function getFinanceSectionState(
       return { ...EMPTY, notFound: true };
     }
     if (err instanceof FinanceUnavailableError) {
-      // Degrade ONLY the finance section — shell + GAP / wms / scm
+      // Degrade ONLY the finance section — shell + IAM / wms / scm
       // sections intact.
       return { ...EMPTY, degraded: true };
     }

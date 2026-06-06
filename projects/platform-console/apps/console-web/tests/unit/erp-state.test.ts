@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     tenant — erp resolves it from the JWT claim);
  *   - eligible → seeds first-page snapshots of every master
  *     (departments / employees / job-grades / cost-centers /
- *     business-partners) in parallel (GAP OIDC token, server-side);
+ *     business-partners) in parallel (IAM OIDC token, server-side);
  *   - eligible + asOf → asOf threads through to every leg
  *     verbatim (the CORE E3 invariant);
  *   - 403 → `forbidden` (inline, no crash);
@@ -131,7 +131,7 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds all 5 masters + read-model org-view + approval legs in parallel (GAP OIDC token)', async () => {
+  it('eligible → seeds all 5 masters + read-model org-view + approval legs in parallel (IAM OIDC token)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Each call must return a FRESH Response (Response bodies are
     // one-shot; the parallel legs would otherwise share a consumed

@@ -63,7 +63,7 @@ import {
  * documented rate-limit — identical to the masterdata surface).
  *
  * Confidential / audit-heavy: structured logs are server-side only; the
- * GAP token, the request title / subject / actor ids, and any reason text
+ * IAM token, the request title / subject / actor ids, and any reason text
  * are NEVER logged (redacted) — the log payloads carry ONLY `requestId` +
  * a sanitised route shape (a literal `{id}` placeholder, never the URL).
  */
@@ -120,7 +120,7 @@ async function parseApprovalError(
 }
 
 /**
- * Single hardened call site. Resolves the domain-facing GAP OIDC token,
+ * Single hardened call site. Resolves the domain-facing IAM OIDC token,
  * applies the timeout, maps the erp FLAT error envelope to the § 2.5
  * resilience taxonomy. No 429 / Retry-After / backoff branch (erp has no
  * documented rate-limit — identical to the masterdata surface).
@@ -132,7 +132,7 @@ async function callApproval<T>(
   const env = getServerEnv();
   const requestId = newRequestId();
 
-  // Domain-facing GAP OIDC token (assumed-when-switched, else base) —
+  // Domain-facing IAM OIDC token (assumed-when-switched, else base) —
   // NEVER getOperatorToken() (the #569 invariant is GAP-domain-scoped).
   const token = await getDomainFacingToken();
   if (!token) {
@@ -140,7 +140,7 @@ async function callApproval<T>(
       requestId,
       path: opts.logPath,
     });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No GAP session');
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
   }
 
   const headers: Record<string, string> = {

@@ -46,8 +46,8 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [
     {
-      id: 'gap',
-      name: 'Global Account Platform',
+      id: 'iam',
+      name: 'IAM',
       type: 'oidc',
       issuer: env.oidcIssuerUrl,
       clientId: env.oidcClientId,

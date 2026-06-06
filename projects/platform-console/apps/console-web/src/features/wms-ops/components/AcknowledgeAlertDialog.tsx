@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/Button';
  * REASON-FREE by design — wms's alert-ack does NOT define an
  * `X-Operator-Reason` (carrying GAP's § 2.4.1 reason-capture over is a
  * header-matrix-drift defect). There is therefore NO reason textarea here
- * (the deliberate contrast with the GAP `ConfirmActionDialog`). The single
+ * (the deliberate contrast with the IAM `ConfirmActionDialog`). The single
  * security gate is the explicit confirm (no one-click ack).
  *
  * Invariants:

@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
- * TASK-PC-FE-010 no-drift guard for the GAP § 3 parity matrix.
+ * TASK-PC-FE-010 no-drift guard for the IAM § 3 parity matrix.
  *
- * § 2.4.8 (erp) is an ADDITIVE non-GAP domain binding — it MUST
- * NOT mutate § 3 (the GAP `admin-web` absorption parity gate
+ * § 2.4.8 (erp) is an ADDITIVE non-IAM domain binding — it MUST
+ * NOT mutate § 3 (the IAM `admin-web` absorption parity gate
  * finalized by TASK-PC-FE-006 at 16/16 verified rows). This guard
  * pins the exact invariants the task AC requires:
  *
@@ -76,7 +76,7 @@ describe('§ 3.1 no-drift — § 2.4.8 (erp) preserves the FE-006 16-row attesta
     expect(spec).toMatch(
       /erp\s+(?:reuses|REUSE)[\s\S]+§\s*2\.4\.5|§\s*2\.4\.5[\s\S]+erp/i,
     );
-    // The credential is the GAP OIDC access token, NEVER the
+    // The credential is the IAM OIDC access token, NEVER the
     // operator token — recorded in prose for erp.
     expect(spec).toMatch(/getAccessToken/);
     expect(spec).toMatch(/never[\s\S]+getOperatorToken|getOperatorToken[\s\S]+never/i);

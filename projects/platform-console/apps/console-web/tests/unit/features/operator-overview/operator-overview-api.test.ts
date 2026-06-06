@@ -82,7 +82,7 @@ function jsonResponse(body: unknown, status = 200) {
 const HAPPY_ENVELOPE = {
   asOf: '2026-05-20T10:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { totalElements: 12345 } },
+    { domain: 'iam', status: 'ok', data: { totalElements: 12345 } },
     {
       domain: 'wms',
       status: 'ok',
@@ -125,7 +125,7 @@ describe('OperatorOverviewSchema — runtime validation', () => {
       ...HAPPY_ENVELOPE,
       cards: [
         ...HAPPY_ENVELOPE.cards.filter((c) => c.domain !== 'erp'),
-        { domain: 'gap', status: 'ok', data: {} },
+        { domain: 'iam', status: 'ok', data: {} },
       ],
     };
     expect(OperatorOverviewSchema.safeParse(bad).success).toBe(false);
@@ -179,7 +179,7 @@ describe('fetchOperatorOverview — happy path', () => {
     expect(overview.asOf).toBe('2026-05-20T10:30:00Z');
     expect(overview.cards).toHaveLength(5);
     expect(overview.cards.map((c) => c.domain)).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',

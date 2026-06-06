@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * GAP OIDC route-handler tests (PKCE login + callback + refresh).
+ * IAM OIDC route-handler tests (PKCE login + callback + refresh).
  * `next/headers` cookies() and getServerEnv() are mocked so handlers run
  * directly under jsdom.
  */
@@ -61,7 +61,7 @@ import {
 } from '@/shared/lib/session';
 
 /**
- * Helper: a fetch mock that returns the GAP OIDC token response for the
+ * Helper: a fetch mock that returns the IAM OIDC token response for the
  * `/oauth2/token` call and the operator-token-exchange 200 for the
  * `/api/admin/auth/token-exchange` call (the callback + refresh routes now
  * perform BOTH — § 2.6 / ADR-MONO-014 wiring).
@@ -99,7 +99,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/auth/login (PKCE initiation)', () => {
-  it('redirects to GAP /oauth2/authorize with PKCE S256 + state and sets transient HttpOnly cookies', async () => {
+  it('redirects to IAM /oauth2/authorize with PKCE S256 + state and sets transient HttpOnly cookies', async () => {
     const req = new Request('http://console.local/api/auth/login?redirect=/console');
     const res = await loginGET(req);
 
@@ -231,7 +231,7 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
   });
 
-  it('exchange 401 → redirect not_provisioned, NO operator cookie, GAP cookies cleared (no GAP token left as an admin credential)', async () => {
+  it('exchange 401 → redirect not_provisioned, NO operator cookie, IAM cookies cleared (no IAM token left as an admin credential)', async () => {
     cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
     cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });
     vi.stubGlobal(
@@ -267,7 +267,7 @@ describe('GET /api/auth/callback (token exchange)', () => {
       '/login?error=not_provisioned',
     );
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
-    // The GAP token must NOT be left usable as an /api/admin/** credential.
+    // The IAM token must NOT be left usable as an /api/admin/** credential.
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
     expect(cookieDeletes).toContain(ACCESS_COOKIE);
     expect(cookieDeletes).toContain(REFRESH_COOKIE);
@@ -345,7 +345,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
     });
   });
 
-  it('clears all session cookies (incl. operator) and 401s when GAP rejects the refresh token', async () => {
+  it('clears all session cookies (incl. operator) and 401s when IAM rejects the refresh token', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'reused.ref', opts: {} });
     cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op', opts: {} });
     vi.stubGlobal(
@@ -398,7 +398,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
             ),
           );
         }
-        // GAP refresh_token grant.
+        // IAM refresh_token grant.
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -463,14 +463,14 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
       }),
     );
     const res = await refreshPOST();
-    // The base GAP + operator session stays valid (200); only the tenant
+    // The base IAM + operator session stays valid (200); only the tenant
     // selection is reset — never a stale assumed token.
     expect(res.status).toBe(200);
     expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
     expect(cookieDeletes).toContain(TENANT_COOKIE);
   });
 
-  it('drops the whole session when GAP refresh succeeds but the re-exchange 401s (operator deactivated since login)', async () => {
+  it('drops the whole session when IAM refresh succeeds but the re-exchange 401s (operator deactivated since login)', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
     cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op', opts: {} });
     vi.stubGlobal(

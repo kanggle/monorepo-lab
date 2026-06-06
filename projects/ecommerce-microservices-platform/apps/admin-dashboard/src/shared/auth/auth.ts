@@ -7,8 +7,8 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  * GAP V0012 seed registers:
  *   - client_id:     `ecommerce-admin-dashboard-client`
  *   - client_secret: `ecommerce-dev` (plain, dev-only)
- *   - redirect_uris: http://localhost:3001/api/auth/callback/gap,
- *                    http://admin.ecommerce.local/api/auth/callback/gap
+ *   - redirect_uris: http://localhost:3001/api/auth/callback/iam,
+ *                    http://admin.ecommerce.local/api/auth/callback/iam
  *   - scopes:        openid profile email tenant.read ecommerce.operator
  *
  * admin-dashboard is the internal operations console. The `account_type`
@@ -44,8 +44,8 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [
     {
-      id: 'gap',
-      name: 'Global Account Platform',
+      id: 'iam',
+      name: 'IAM',
       type: 'oidc',
       issuer: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
       clientId: process.env.ECOMMERCE_ADMIN_DASHBOARD_CLIENT_ID ?? 'ecommerce-admin-dashboard-client',

@@ -30,14 +30,14 @@ export class RegistryUnavailableError extends Error {
  * Operator-token exchange (RFC 8693) failure taxonomy
  * (console-integration-contract § 2.6 fail-closed mapping / ADR-MONO-014):
  *
- *   - `fail_closed` — GAP returned `401 TOKEN_INVALID`: the subject token is
+ *   - `fail_closed` — IAM returned `401 TOKEN_INVALID`: the subject token is
  *     invalid OR the OIDC subject is not mapped to an active operator
  *     (not provisioned). The caller MUST force re-login (`not_provisioned`);
- *     NO operator cookie is set / an existing one is dropped. The GAP token
+ *     NO operator cookie is set / an existing one is dropped. The IAM token
  *     is never accepted as an `/api/admin/**` credential.
  *   - `unavailable` — `400`/`5xx`/timeout/network/unexpected `tokenType`:
  *     session-unavailable. NO operator cookie; the console never falls back
- *     to the GAP OIDC token on the operator boundary (the #569 defect).
+ *     to the IAM OIDC token on the operator boundary (the #569 defect).
  *
  * No `subject_token`/operator token value is ever placed in this error or
  * logged (security invariant).
@@ -100,9 +100,9 @@ export class AssumeTenantError extends Error {
 }
 
 /**
- * GAP accounts surface degrade signal (console-integration-contract § 2.4.1 /
+ * IAM accounts surface degrade signal (console-integration-contract § 2.4.1 /
  * § 2.5). Mirrors {@link RegistryUnavailableError}: a `503 DOWNSTREAM_ERROR` /
- * `503 CIRCUIT_OPEN` / timeout on a GAP accounts call must degrade ONLY the
+ * `503 CIRCUIT_OPEN` / timeout on a IAM accounts call must degrade ONLY the
  * accounts section — the console shell stays intact. Auth failures
  * (401/403) are raised as {@link ApiError} so the caller forces a clean
  * re-login (no partial authed state). Inline-recoverable producer errors
@@ -127,11 +127,11 @@ export class AccountsUnavailableError extends Error {
 }
 
 /**
- * GAP audit + security read surface degrade signal
+ * IAM audit + security read surface degrade signal
  * (console-integration-contract § 2.4.2 / § 2.5). Sibling of
  * {@link AccountsUnavailableError} — identical resilience posture for the
  * READ-ONLY audit slice: a `503 DOWNSTREAM_ERROR` / `503 CIRCUIT_OPEN` /
- * timeout on a GAP audit call degrades ONLY the audit section (the console
+ * timeout on a IAM audit call degrades ONLY the audit section (the console
  * shell stays intact). Auth failures (401) are raised as {@link ApiError}
  * so the caller forces a clean re-login (no partial authed state).
  * Inline-recoverable producer errors (`403 PERMISSION_DENIED` — incl. the
@@ -156,7 +156,7 @@ export class AuditUnavailableError extends Error {
 }
 
 /**
- * GAP operators-management surface degrade signal
+ * IAM operators-management surface degrade signal
  * (console-integration-contract § 2.4.3 / § 2.5). Sibling of
  * {@link AccountsUnavailableError} / {@link AuditUnavailableError} —
  * identical resilience posture for the most privilege-sensitive Phase-2
@@ -195,8 +195,8 @@ export class OperatorsUnavailableError extends Error {
  * {@link OperatorsUnavailableError} — identical resilience posture for the
  * first **non-GAP** federated domain section: a `503 SERVICE_UNAVAILABLE` /
  * timeout / network failure on a wms call degrades ONLY the wms section (the
- * console shell + the GAP sections stay intact). Auth failures (`401` —
- * the GAP OIDC session expired) are raised as {@link ApiError} so the caller
+ * console shell + the IAM sections stay intact). Auth failures (`401` —
+ * the IAM OIDC session expired) are raised as {@link ApiError} so the caller
  * forces a clean WHOLE-SESSION re-login (no partial authed state — this is
  * NOT a per-section degrade). Inline-recoverable producer errors
  * (`403 FORBIDDEN` role-insufficient, `404` not-found,
@@ -204,8 +204,8 @@ export class OperatorsUnavailableError extends Error {
  * acknowledged, `409 DUPLICATE_REQUEST`) are raised as {@link ApiError} so
  * the UI renders an inline actionable message without crashing.
  *
- * NOTE the credential divergence: unlike the GAP siblings, the wms
- * credential is the GAP OIDC access token itself (the wms gateway requires
+ * NOTE the credential divergence: unlike the IAM siblings, the wms
+ * credential is the IAM OIDC access token itself (the wms gateway requires
  * it; the #569 invariant is GAP-domain-scoped — § 2.4.5). No token / PII is
  * ever placed in this error.
  */
@@ -231,7 +231,7 @@ export class WmsUnavailableError extends Error {
  * section (read-only). A `503 SERVICE_UNAVAILABLE` / `503 NODE_UNREACHABLE`
  * / timeout / network failure on an scm call degrades ONLY the scm section
  * (the console shell + the GAP/wms sections stay intact). Auth failures
- * (`401` — the GAP OIDC session expired) are raised as {@link ApiError} so
+ * (`401` — the IAM OIDC session expired) are raised as {@link ApiError} so
  * the caller forces a clean WHOLE-SESSION re-login (no partial authed
  * state — NOT a per-section degrade). Inline-recoverable producer errors
  * (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`,
@@ -243,8 +243,8 @@ export class WmsUnavailableError extends Error {
  * {@link ScmRateLimitedError} (a bounded backoff, NOT a degrade) — the
  * console must not auto-retry-storm the rate-limited gateway.
  *
- * NOTE the credential reuse: like the wms sibling (NOT the GAP ones), the
- * scm credential is the GAP OIDC access token itself — the § 2.4.5
+ * NOTE the credential reuse: like the wms sibling (NOT the IAM ones), the
+ * scm credential is the IAM OIDC access token itself — the § 2.4.5
  * per-domain credential rule reused verbatim (the #569 invariant is
  * GAP-domain-scoped — § 2.4.6). The scm error envelope is **flat**
  * `{ code, message, timestamp }` (DISTINCT from wms's nested
@@ -290,8 +290,8 @@ export class ScmRateLimitedError extends Error {
  * **non-GAP** federated domain section (read-only). A
  * `503 SERVICE_UNAVAILABLE` / timeout / network failure on a finance
  * call degrades ONLY the finance section (the console shell + the
- * GAP / wms / scm sections stay intact). Auth failures (`401` — the
- * GAP OIDC session expired) are raised as {@link ApiError} so the
+ * IAM / wms / scm sections stay intact). Auth failures (`401` — the
+ * IAM OIDC session expired) are raised as {@link ApiError} so the
  * caller forces a clean WHOLE-SESSION re-login (no partial authed
  * state — NOT a per-section degrade). Inline-recoverable producer
  * errors (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`,
@@ -306,7 +306,7 @@ export class ScmRateLimitedError extends Error {
  * `RateLimitedError` is intentionally absent for finance.
  *
  * NOTE the credential reuse: like the wms + scm siblings (NOT the GAP
- * ones), the finance credential is the GAP OIDC access token itself —
+ * ones), the finance credential is the IAM OIDC access token itself —
  * the § 2.4.5 per-domain credential rule reused verbatim (the #569
  * invariant is GAP-domain-scoped — § 2.4.7). The finance error envelope
  * is **flat** `{ code, message, details?, timestamp }` — same wire shape
@@ -338,8 +338,8 @@ export class FinanceUnavailableError extends Error {
  * domain section and the **first internal-system-primary**
  * (read-only). A `503 SERVICE_UNAVAILABLE` / timeout / network
  * failure on an erp call degrades ONLY the erp section (the
- * console shell + the GAP / wms / scm / finance sections stay
- * intact). Auth failures (`401` — the GAP OIDC session expired)
+ * console shell + the IAM / wms / scm / finance sections stay
+ * intact). Auth failures (`401` — the IAM OIDC session expired)
  * are raised as {@link ApiError} so the caller forces a clean
  * WHOLE-SESSION re-login (no partial authed state — NOT a
  * per-section degrade). Inline-recoverable producer errors
@@ -357,7 +357,7 @@ export class FinanceUnavailableError extends Error {
  * intentionally absent for erp.
  *
  * NOTE the credential reuse: like the wms + scm + finance siblings
- * (NOT the GAP ones), the erp credential is the GAP OIDC access
+ * (NOT the IAM ones), the erp credential is the IAM OIDC access
  * token itself — the § 2.4.5 per-domain credential rule reused
  * verbatim (the #569 invariant is GAP-domain-scoped — § 2.4.8).
  * The erp error envelope is **flat** `{ code, message, details?,
@@ -444,7 +444,7 @@ const MESSAGES: Record<string, string> = {
   SCM_NOT_ELIGIBLE:
     'scm 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- finance operations (TASK-PC-FE-009 / §2.4.7) -----------------------
-  // (`ACCOUNT_NOT_FOUND` is shared verbatim with the GAP accounts surface —
+  // (`ACCOUNT_NOT_FOUND` is shared verbatim with the IAM accounts surface —
   // finance reuses the existing entry; the producer code is identical.)
   FINANCE_NOT_ELIGIBLE:
     'finance 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',

@@ -17,7 +17,7 @@ import { ApiError } from '@/shared/api/errors';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
- * verification-free from the GAP OIDC `id_token` (falling back to the access
+ * verification-free from the IAM OIDC `id_token` (falling back to the access
  * token, then a generic label) — DISPLAY ONLY, never an authorization input
  * (§ 2.1; the `id_token` is not a credential). TASK-PC-FE-041.
  */
@@ -41,7 +41,7 @@ export const dynamic = 'force-dynamic';
  * sidebar is `hidden md:block` (desktop ops console; a mobile drawer is a
  * deferred follow-up — the top bar controls stay visible on all sizes).
  *
- * Server-side session guard: no GAP access-token cookie → redirect to
+ * Server-side session guard: no IAM access-token cookie → redirect to
  * `/login` (no client-side token juggling — frontend-app.md
  * § Authentication). The tenant switcher options come from the operator's
  * own (GAP-scoped) registry response — multi-tenant isolation is enforced

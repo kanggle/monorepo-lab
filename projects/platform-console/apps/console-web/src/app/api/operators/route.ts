@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 /**
  * Same-origin operators LIST proxy (GET) + CREATE proxy (POST) for client
  * components — the typed API client's single backend entry point (no
- * browser-direct GAP call, architecture.md § Forbidden Dependencies /
+ * browser-direct IAM call, architecture.md § Forbidden Dependencies /
  * contract § 2.3). The HttpOnly operator token + active tenant are
  * attached server-side in the api layer.
  *

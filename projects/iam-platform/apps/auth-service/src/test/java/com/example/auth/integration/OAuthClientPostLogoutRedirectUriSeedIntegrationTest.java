@@ -161,8 +161,8 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                         AuthorizationGrantType.AUTHORIZATION_CODE,
                         AuthorizationGrantType.REFRESH_TOKEN);
         assertThat(client.getRedirectUris()).contains(
-                "http://localhost:3000/api/auth/callback/gap",
-                "http://fan-platform.local/api/auth/callback/gap");
+                "http://localhost:3000/api/auth/callback/iam",
+                "http://fan-platform.local/api/auth/callback/iam");
         assertThat(client.getScopes()).contains("openid", "profile", "email", "tenant.read");
         assertThat(client.getClientSettings().<String>getSetting("custom.tenant_id"))
                 .isEqualTo("fan-platform");
@@ -256,7 +256,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
         assertThat(console.getClientAuthenticationMethods())
                 .containsExactly(ClientAuthenticationMethod.NONE);
         assertThat(console.getClientSettings().<String>getSetting("custom.tenant_id"))
-                .isEqualTo("gap");
+                .isEqualTo("iam");
     }
 
     // -----------------------------------------------------------------------

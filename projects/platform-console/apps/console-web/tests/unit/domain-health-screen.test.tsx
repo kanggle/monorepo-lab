@@ -29,7 +29,7 @@ function wrapper() {
 const MIXED_VARIANTS: DomainHealth = {
   asOf: '2026-05-21T01:30:00Z',
   cards: [
-    { domain: 'gap', status: 'ok', data: { status: 'UP' } },
+    { domain: 'iam', status: 'ok', data: { status: 'UP' } },
     { domain: 'wms', status: 'ok', data: { status: 'DOWN' } },
     { domain: 'scm', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
     { domain: 'finance', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
@@ -38,7 +38,7 @@ const MIXED_VARIANTS: DomainHealth = {
 };
 
 const ALL_DEGRADED_CARDS: Card[] = [
-  { domain: 'gap', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
+  { domain: 'iam', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
   { domain: 'wms', status: 'degraded', reason: 'TIMEOUT' },
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
@@ -61,7 +61,7 @@ describe('DomainHealthScreen — fixed 5-card order', () => {
       .filter((el) => el.hasAttribute('data-domain'));
     expect(cardSections).toHaveLength(5);
     expect(cardSections.map((el) => el.getAttribute('data-domain'))).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',
@@ -88,7 +88,7 @@ describe('DomainHealthScreen — fixed 5-card order', () => {
       .getAllByTestId(/^domain-health-card-/)
       .filter((el) => el.hasAttribute('data-domain'));
     expect(cards.map((el) => el.getAttribute('data-domain'))).toEqual([
-      'gap',
+      'iam',
       'wms',
       'scm',
       'finance',
@@ -122,7 +122,7 @@ describe('DomainHealthScreen — 4 data.status variants + degraded', () => {
       wrapper: wrapper(),
     });
     // UP — gap
-    const gapVisual = screen.getByTestId('domain-health-card-gap-visual');
+    const gapVisual = screen.getByTestId('domain-health-card-iam-visual');
     expect(gapVisual.getAttribute('data-health-status')).toBe('UP');
     // DOWN — wms (red-cross; producer self-reported critical; NOT degraded)
     const wmsVisual = screen.getByTestId('domain-health-card-wms-visual');
@@ -202,7 +202,7 @@ describe('DomainHealthScreen — DegradeBanner', () => {
     const allOk: DomainHealth = {
       asOf: '2026-05-21T01:30:00Z',
       cards: [
-        { domain: 'gap', status: 'ok', data: { status: 'UP' } },
+        { domain: 'iam', status: 'ok', data: { status: 'UP' } },
         { domain: 'wms', status: 'ok', data: { status: 'UP' } },
         { domain: 'scm', status: 'ok', data: { status: 'UP' } },
         { domain: 'finance', status: 'ok', data: { status: 'UP' } },
@@ -218,16 +218,16 @@ describe('DomainHealthScreen — DegradeBanner', () => {
 
 describe('DomainHealthCard — sub-branches surface visual hint', () => {
   it('UP card renders glyph "OK" + label "정상"', () => {
-    const card: Card = { domain: 'gap', status: 'ok', data: { status: 'UP' } };
+    const card: Card = { domain: 'iam', status: 'ok', data: { status: 'UP' } };
     const health: DomainHealth = { asOf: 't', cards: [card] as never };
     render(<DomainHealthCard card={card} healthForRetry={health} />, {
       wrapper: wrapper(),
     });
     expect(
-      screen.getByTestId('domain-health-card-gap-glyph'),
+      screen.getByTestId('domain-health-card-iam-glyph'),
     ).toHaveTextContent('OK');
     expect(
-      screen.getByTestId('domain-health-card-gap-label'),
+      screen.getByTestId('domain-health-card-iam-label'),
     ).toHaveTextContent('정상');
   });
 

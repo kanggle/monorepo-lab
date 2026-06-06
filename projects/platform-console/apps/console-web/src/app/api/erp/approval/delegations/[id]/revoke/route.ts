@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
  * Same-origin erp delegation REVOKE proxy (write — POST only). Forwards the
  * `reason` (required) + console-generated `idempotencyKey` to the producer
  * `POST /api/erp/approval/delegations/{id}/revoke` via `revokeDelegation()`,
- * which attaches the domain-facing GAP token + `Idempotency-Key` server-side.
+ * which attaches the domain-facing IAM token + `Idempotency-Key` server-side.
  *
  * POST only — no GET / PUT / PATCH / DELETE handler. The reason rides in the
  * BODY (NOT `X-Operator-Reason`). The producer error 404

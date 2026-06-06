@@ -41,7 +41,7 @@ import { z } from 'zod';
 // --- domain enum ----------------------------------------------------------
 
 /** Fixed render order — § 2.4.9.2 envelope schema invariant. */
-export const CARD_ORDER = ['gap', 'wms', 'scm', 'finance', 'erp'] as const;
+export const CARD_ORDER = ['iam', 'wms', 'scm', 'finance', 'erp'] as const;
 export type DomainKey = (typeof CARD_ORDER)[number];
 
 const DomainKeySchema = z.enum(CARD_ORDER);

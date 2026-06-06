@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin erp departments LIST read proxy (read-only — GET).
- * The HttpOnly GAP OIDC access token is attached server-side in
+ * The HttpOnly IAM OIDC access token is attached server-side in
  * `listDepartments()` (§ 2.4.8 reusing § 2.4.5 — NOT the operator
  * token). E3 `?asOf=` threaded through to the producer verbatim.
  */
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
  * create body + a console-generated `idempotencyKey`; this route
  * validates it and forwards to the UNCHANGED producer
  * `POST /api/erp/masterdata/departments` via `createDepartment()`,
- * which attaches the GAP OIDC token + `Idempotency-Key` header
+ * which attaches the IAM OIDC token + `Idempotency-Key` header
  * server-side (NEVER the operator token, NEVER `X-Operator-Reason` —
  * create has no producer reason slot). The mutation-only producer
  * errors (`409 MASTERDATA_DUPLICATE_KEY` / `IDEMPOTENCY_KEY_CONFLICT`,

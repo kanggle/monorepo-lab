@@ -97,7 +97,7 @@ class DomainHealthCompositionUseCaseTest {
         List<CompositionLeg> legs = useCase.compose();
 
         assertThat(legs).hasSize(5);
-        assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.GAP);
+        assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.IAM);
         assertThat(legs.get(1).outcome().domain()).isEqualTo(DomainTarget.WMS);
         assertThat(legs.get(2).outcome().domain()).isEqualTo(DomainTarget.SCM);
         assertThat(legs.get(3).outcome().domain()).isEqualTo(DomainTarget.FINANCE);
@@ -123,7 +123,7 @@ class DomainHealthCompositionUseCaseTest {
 
         // The whole point of § 2.4.9.2: actuator legs are outside D4 scope.
         // The sealed-switch in CredentialSelectionAdapter is NEVER invoked.
-        verify(credentialSelection, never()).selectFor(DomainTarget.GAP);
+        verify(credentialSelection, never()).selectFor(DomainTarget.IAM);
         verify(credentialSelection, never()).selectFor(DomainTarget.WMS);
         verify(credentialSelection, never()).selectFor(DomainTarget.SCM);
         verify(credentialSelection, never()).selectFor(DomainTarget.FINANCE);

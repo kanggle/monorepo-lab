@@ -46,7 +46,7 @@ public class CreateTenantUseCase {
     /** Reserved words per specs/contracts/http/admin-api.md §Tenant ID 규칙. */
     private static final Set<String> RESERVED = Set.of(
             "admin", "internal", "system", "null", "default",
-            "public", "gap", "auth", "oauth", "me"
+            "public", "gap", "iam", "auth", "oauth", "me"
     );
 
     private final TenantProvisioningPort provisioningPort;

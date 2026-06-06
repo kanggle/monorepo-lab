@@ -16,7 +16,7 @@ import { logger, newRequestId } from '@/shared/lib/logger';
 export const runtime = 'nodejs';
 
 /**
- * GAP OIDC Authorization Code + PKCE — step 1 (login initiation).
+ * IAM OIDC Authorization Code + PKCE — step 1 (login initiation).
  *
  * Public client `platform-console-web` (no client secret — auth-service
  * V0015 seed, ADR-003 public-client lineage). Generates a PKCE

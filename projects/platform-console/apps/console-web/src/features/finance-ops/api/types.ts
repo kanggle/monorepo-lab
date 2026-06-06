@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Feature-local types for the finance `account-service`'s read-only
  * account + balances + transactions surface (TASK-PC-FE-009 — ADR-MONO-013
- * Phase 5, the THIRD non-GAP federated domain — closes the non-GAP
+ * Phase 5, the THIRD non-IAM federated domain — closes the non-GAP
  * federation cycle: wms → scm → finance).
  *
  * Authoritative producer contract (do NOT redefine — consume read-only):

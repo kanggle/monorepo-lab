@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin finance transactions read proxy (read-only — GET). The
- * HttpOnly GAP OIDC access token is attached server-side in
+ * HttpOnly IAM OIDC access token is attached server-side in
  * `listTransactions()` (§ 2.4.7 reusing § 2.4.5 — NOT the operator
  * token). Paginated; forwards the optional `type` + `status` filters.
  * No mutation artifacts. The full `{ data, meta }` envelope is

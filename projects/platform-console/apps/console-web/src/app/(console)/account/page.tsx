@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
  * 계정 설정 — TASK-PC-FE-041 (read-only identity) + TASK-PC-FE-045 (self-
  * service). Reached from the top-bar account menu (⋮ → 계정 설정). It surfaces
  * the signed-in operator's own identity, decoded **verification-free** from the
- * GAP OIDC `id_token` / access-token cookies (display only, NEVER an
+ * IAM OIDC `id_token` / access-token cookies (display only, NEVER an
  * authorization input — § 2.1; the `id_token` is not a credential), plus the
  * current active tenant.
  *
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * the initial default-finance-account value is read from the operator-scoped
  * registry (`getCatalog()`), identical to the prior `/operators` derivation.
  * API / proxy / endpoints are unchanged. Credentials + profile identity are
- * owned by GAP (the IdP).
+ * owned by IAM (the IdP).
  */
 function strClaim(claims: Record<string, unknown> | null, key: string): string | null {
   const v = claims?.[key];
