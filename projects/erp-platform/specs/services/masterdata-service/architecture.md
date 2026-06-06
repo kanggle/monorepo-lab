@@ -6,7 +6,7 @@ All implementation tasks targeting this service must follow this declaration,
 `PROJECT.md`'s declared `domain` (`erp`) and `traits`
 (`internal-system`, `transactional`, `audit-heavy`).
 
-> **Provenance**: Authored by [TASK-ERP-BE-001](../../../tasks/ready/TASK-ERP-BE-001-masterdata-service-bootstrap.md) **before**
+> **Provenance**: Authored by [TASK-ERP-BE-001](../../../tasks/done/TASK-ERP-BE-001-masterdata-service-bootstrap.md) **before**
 > implementation (HARDSTOP-09 — architecture decision precedes code). The
 > masterdata-service skeleton (`@SpringBootApplication`, `application.yml`,
 > empty `db/migration/`) and the GAP `erp-platform-internal-services-client`

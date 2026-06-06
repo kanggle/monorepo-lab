@@ -1156,7 +1156,7 @@ contract row (smoke-target for the IT harness and Traefik probe).
   placeholder (classification `forbidden`, distinct from degrade
   `degraded`). Mirrors the per-card isolation of § 2.4.4.
 
-##### Observability (D7.A — Vector + VictoriaMetrics reuse, [ADR-MONO-006](../../../../docs/adr/ADR-MONO-006-observability-stack.md))
+##### Observability (D7.A — Vector + VictoriaMetrics reuse, [ADR-MONO-007](../../../../docs/adr/ADR-MONO-007-worktree-ephemeral-observability-stack.md))
 
 Mandatory metric set every § 2.4.9.X composition route MUST emit (no
 opt-out):
