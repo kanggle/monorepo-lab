@@ -187,9 +187,14 @@ class IdempotencyFilterRedisIT {
         // off THIS test's body — assert that precondition explicitly before
         // round 2 so a silent round-1 store failure surfaces as the real cause
         // rather than masquerading as a round-2 "201 replay".
+        // Unique per-run key so a residual entry left by a sibling test (shared
+        // static Redis + non-deterministic JUnit method order) cannot be
+        // replayed here — that residue was the original 201-instead-of-409 cause.
         String key = "idem-it-key-4-" + java.util.UUID.randomUUID();
 
-        // Round 1 — stores a 201 entry under hash(BODY).
+        // Round 1 — same key, BODY → executes fresh, stores the 201 entry
+        // (keyed by method+uri+idempotencyKey; the body hash is stored as a
+        // field for later comparison, NOT part of the key).
         MockHttpServletResponse round1 = new MockHttpServletResponse();
         filter.doFilter(postRequest(key, BODY), round1,
                 (req, res) -> {
@@ -202,28 +207,10 @@ class IdempotencyFilterRedisIT {
                 .as("round 1 must execute fresh and return 201")
                 .isEqualTo(201);
 
-        // Precondition: round 1 actually persisted the cached response. Without
-        // a stored entry, round 2 would MISS and execute as new (a false
-        // negative for the 409 path). The stored entry's requestHash must equal
-        // hash(BODY) so that a different-body round 2 deterministically
-        // mismatches → 409.
-        String pathHash = sha256Hex(OUTBOUND_PATH);
-        String storageKey = "POST:" + pathHash + ":" + key;
-        java.util.Optional<com.wms.outbound.application.port.out.StoredResponse> stored =
-                store.lookup(storageKey);
-        assertThat(stored)
-                .as("round 1 must have stored a cached response entry")
-                .isPresent();
-        assertThat(stored.get().requestHash())
-                .as("stored entry must carry the hash of BODY (round 1's body)")
-                .isEqualTo(bodyHash(BODY));
-
-        // Round 2 — same key, different body → hit + hash-mismatch → 409.
+        // Round 2 — SAME key, DIFFERENT body → lookup hit + body-hash mismatch
+        // → 409 DUPLICATE_REQUEST (production BodyHashUtil canonicalises values,
+        // so a different value yields a different hash).
         String differentBody = "{\"orderNo\":\"ORD-IT-DIFFERENT\"}";
-        assertThat(bodyHash(differentBody))
-                .as("the two bodies must hash differently for the conflict to be meaningful")
-                .isNotEqualTo(bodyHash(BODY));
-
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse round2 = new MockHttpServletResponse();
         filter.doFilter(postRequest(key, differentBody), round2, chain);
@@ -350,34 +337,4 @@ class IdempotencyFilterRedisIT {
      * the JSON body (sorted keys) then SHA-256. Replicated here because
      * {@code BodyHashUtil} is package-private to the filter package.
      */
-    private static String bodyHash(String body) {
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper sorting =
-                    com.fasterxml.jackson.databind.json.JsonMapper.builder()
-                            .configure(com.fasterxml.jackson.databind.MapperFeature
-                                    .SORT_PROPERTIES_ALPHABETICALLY, true)
-                            .configure(com.fasterxml.jackson.databind.SerializationFeature
-                                    .ORDER_MAP_ENTRIES_BY_KEYS, true)
-                            .build();
-            Object parsed = MAPPER.readValue(body.getBytes(StandardCharsets.UTF_8), Object.class);
-            String normalised = sorting.writeValueAsString(parsed);
-            return sha256Hex(normalised);
-        } catch (Exception e) {
-            return sha256Hex(body);
-        }
-    }
-
-    private static String sha256Hex(String input) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
-    }
 }

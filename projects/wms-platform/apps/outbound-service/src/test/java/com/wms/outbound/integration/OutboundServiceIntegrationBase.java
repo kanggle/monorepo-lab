@@ -95,6 +95,14 @@ public abstract class OutboundServiceIntegrationBase {
                     "spring.flyway.enabled=true",
                     "spring.flyway.locations=classpath:db/migration",
                     "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
+                    // Deterministic publish→@KafkaListener consumption for the
+                    // cross-project fulfillment IT: read from the beginning, and
+                    // refresh metadata fast so a topic created in @BeforeEach is
+                    // discovered well within the test's await (default
+                    // metadata.max.age is 5 min). Complements the test's explicit
+                    // topic pre-creation + waitForAssignment.
+                    "spring.kafka.consumer.auto-offset-reset=earliest",
+                    "spring.kafka.consumer.properties.metadata.max.age.ms=2000",
                     "spring.data.redis.host=" + REDIS.getHost(),
                     "spring.data.redis.port=" + REDIS.getFirstMappedPort(),
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:0/.well-known/jwks.json",

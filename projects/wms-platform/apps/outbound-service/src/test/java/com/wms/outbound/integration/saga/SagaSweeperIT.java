@@ -156,24 +156,28 @@ class SagaSweeperIT extends OutboundServiceIntegrationBase {
 
         sweeper.sweep();
 
-        // Find the cloned row. The payload column is jsonb — cast to ::text so
-        // JdbcTemplate returns a String rather than an org.postgresql.util.PGobject
-        // (which is not assignable to String).
+        // Find the cloned row. The payload column is jsonb — extract envelope
+        // fields with the ->> operator (returns text) rather than matching a
+        // substring of payload::text (Postgres renders jsonb with a space after
+        // each colon, e.g. {"eventId": "..."}, which a "eventId":"..." substring
+        // would miss).
         Map<String, Object> cloned = jdbc.queryForMap("""
-                SELECT id, payload::text AS payload FROM outbound_outbox
+                SELECT id,
+                       payload->>'eventId' AS event_id,
+                       payload->>'actorId' AS actor_id
+                FROM outbound_outbox
                 WHERE event_type = 'outbound.picking.requested'
                   AND aggregate_id = ?
                   AND id <> ?
                 """, sagaId, originalEventId);
 
         UUID clonedId = (UUID) cloned.get("id");
-        String clonedPayload = (String) cloned.get("payload");
         assertThat(clonedId).isNotEqualTo(originalEventId);
         // The envelope's eventId should match the row PK (not the original).
-        assertThat(clonedPayload).contains("\"eventId\":\"" + clonedId + "\"");
-        assertThat(clonedPayload).doesNotContain("\"eventId\":\"" + originalEventId + "\"");
+        assertThat(cloned.get("event_id")).isEqualTo(clonedId.toString());
+        assertThat(cloned.get("event_id")).isNotEqualTo(originalEventId.toString());
         // Sweeper sets the envelope actorId.
-        assertThat(clonedPayload).contains("\"actorId\":\"system:saga-sweeper\"");
+        assertThat(cloned.get("actor_id")).isEqualTo("system:saga-sweeper");
     }
 
     // -- helpers ------------------------------------------------------------
