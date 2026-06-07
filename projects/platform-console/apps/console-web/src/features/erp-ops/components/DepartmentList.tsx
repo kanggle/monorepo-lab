@@ -142,6 +142,7 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
                         <div className="flex gap-1">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() =>
                               openWrite({ mode: 'update', target: d })
                             }
@@ -151,6 +152,7 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() =>
                               openWrite({ mode: 'move-parent', target: d })
                             }
@@ -160,6 +162,7 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() =>
                               openWrite({ mode: 'retire', target: d })
                             }

@@ -40,10 +40,10 @@ const GROUPS: NavGroup[] = [
   {
     label: '도메인 운영',
     items: [
-      { href: '/wms', label: 'WMS 운영', testid: 'nav-wms' },
-      { href: '/scm', label: 'SCM 운영', testid: 'nav-scm' },
-      { href: '/finance', label: 'Finance 운영', testid: 'nav-finance' },
-      { href: '/erp', label: 'ERP 운영', testid: 'nav-erp' },
+      { href: '/wms', label: 'WMS', testid: 'nav-wms' },
+      { href: '/scm', label: 'SCM', testid: 'nav-scm' },
+      { href: '/finance', label: 'Finance', testid: 'nav-finance' },
+      { href: '/erp', label: 'ERP', testid: 'nav-erp' },
     ],
   },
 ];

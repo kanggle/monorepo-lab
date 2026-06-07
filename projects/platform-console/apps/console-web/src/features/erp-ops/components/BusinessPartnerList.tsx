@@ -147,6 +147,7 @@ export function BusinessPartnerList({
                         <div className="flex gap-1">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openUpdate(p.id, `${p.code} · ${p.name}`)}
                             data-testid={`erp-businesspartner-edit-${i}`}
                           >
@@ -154,6 +155,7 @@ export function BusinessPartnerList({
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openRetire(p.id, `${p.code} · ${p.name}`)}
                             data-testid={`erp-businesspartner-retire-${i}`}
                             className="text-destructive"

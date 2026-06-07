@@ -244,6 +244,7 @@ export function ApprovalScreen({
                 <td className="p-2">
                   <Button
                     variant="secondary"
+                    size="sm"
                     onClick={() => setSelectedId(r.id)}
                     data-testid={`approval-open-${i}`}
                   >

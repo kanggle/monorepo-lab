@@ -445,6 +445,7 @@ export function OperatorsScreen({
                         <div className="flex flex-wrap gap-2">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openEditRoles(op)}
                             data-testid={`action-edit-roles-${op.operatorId}`}
                           >
@@ -452,6 +453,7 @@ export function OperatorsScreen({
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             className={
                               op.status === 'SUSPENDED'
                                 ? undefined
@@ -470,6 +472,7 @@ export function OperatorsScreen({
                               is the fail-safe; UX layer hides the always-400). */}
                           <Button
                             variant="secondary"
+                            size="sm"
                             disabled={
                               selfOperatorId !== null &&
                               selfOperatorId === op.operatorId
@@ -492,6 +495,7 @@ export function OperatorsScreen({
                               active tenant's assignment row. */}
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => setOrgScopeOperatorId(op.operatorId)}
                             data-testid={`action-org-scope-${op.operatorId}`}
                           >

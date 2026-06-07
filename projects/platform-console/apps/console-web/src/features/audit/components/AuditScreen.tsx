@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { showPickerOnClick } from '@/shared/lib/show-picker';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useAuditQuery } from '../hooks/use-audit';
 import {
@@ -299,6 +300,7 @@ export function AuditScreen({
             onChange={(e) =>
               setFilters((f) => ({ ...f, from: e.target.value }))
             }
+            onClick={showPickerOnClick}
             data-testid="audit-filter-from"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
@@ -318,6 +320,7 @@ export function AuditScreen({
             onChange={(e) =>
               setFilters((f) => ({ ...f, to: e.target.value }))
             }
+            onClick={showPickerOnClick}
             data-testid="audit-filter-to"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />

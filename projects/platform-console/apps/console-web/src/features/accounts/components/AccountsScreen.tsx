@@ -365,6 +365,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
+                        size="sm"
                         onClick={() => openAction('lock', acc)}
                         data-testid={`action-lock-${acc.id}`}
                       >
@@ -372,6 +373,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
                       </Button>
                       <Button
                         variant="secondary"
+                        size="sm"
                         onClick={() => openAction('unlock', acc)}
                         data-testid={`action-unlock-${acc.id}`}
                       >
@@ -379,6 +381,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
                       </Button>
                       <Button
                         variant="secondary"
+                        size="sm"
                         onClick={() => openAction('revoke-session', acc)}
                         data-testid={`action-revoke-${acc.id}`}
                       >
@@ -386,6 +389,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
                       </Button>
                       <Button
                         variant="secondary"
+                        size="sm"
                         onClick={() => exportAccount(acc)}
                         data-testid={`action-export-${acc.id}`}
                       >
@@ -393,6 +397,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
                       </Button>
                       <Button
                         variant="secondary"
+                        size="sm"
                         className="text-destructive"
                         onClick={() => openAction('gdpr-delete', acc)}
                         data-testid={`action-gdpr-${acc.id}`}

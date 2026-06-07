@@ -279,6 +279,7 @@ export function ScmOpsScreen({
                   <td className="p-2">
                     <Button
                       variant="secondary"
+                      size="sm"
                       onClick={() => setDetail(p)}
                       data-testid={`scm-po-detail-${i}`}
                     >

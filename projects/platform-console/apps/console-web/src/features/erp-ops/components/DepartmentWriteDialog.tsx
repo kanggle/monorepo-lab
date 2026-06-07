@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { showPickerOnClick } from '@/shared/lib/show-picker';
 import { ApiError } from '@/shared/api/errors';
 import { isRetired, type Department } from '../api/types';
 import {
@@ -302,6 +303,7 @@ export function DepartmentWriteDialog({
                 type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
+                onClick={showPickerOnClick}
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
               />
             </div>
@@ -346,6 +348,7 @@ export function DepartmentWriteDialog({
                 type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
+                onClick={showPickerOnClick}
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
               />
             </div>
