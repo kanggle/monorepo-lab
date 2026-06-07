@@ -9,7 +9,7 @@ All implementation tasks targeting this service must follow this declaration,
 > **Provenance**: Authored by [TASK-ERP-BE-001](../../../tasks/done/TASK-ERP-BE-001-masterdata-service-bootstrap.md) **before**
 > implementation (HARDSTOP-09 — architecture decision precedes code). The
 > masterdata-service skeleton (`@SpringBootApplication`, `application.yml`,
-> empty `db/migration/`) and the GAP `erp-platform-internal-services-client`
+> empty `db/migration/`) and the IAM `erp-platform-internal-services-client`
 > + `erp` tenant V0018 seed shipped in [TASK-MONO-119](../../../../../tasks/done/)
 > (ADR-MONO-016 ACCEPTED, Option C). Sections describe the **target v1
 > implementation**; the impl PR follows this spec.
@@ -31,7 +31,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Deployable unit | `apps/masterdata-service/` |
 | Data store | MySQL `erp_db` (Flyway) |
 | Event publication | Kafka via transactional outbox (`libs/java-messaging` `BaseEventPublisher`) — see § Outbox + audit_log invariants |
-| Outbound integration | None real in v1 — internal-only (E7); GAP JWKS for JWT verification only |
+| Outbound integration | None real in v1 — internal-only (E7); IAM JWKS for JWT verification only |
 
 ### Service Type Composition
 
@@ -90,7 +90,7 @@ erp-platform. It MUST:
   `after_state` / `reason`) to an immutable append-only `audit_log` in the
   same transaction as the mutation itself (E2·E8). UPDATE/DELETE on
   `audit_log` is structurally blocked.
-- Validate GAP RS256 JWT (OAuth2 Resource Server) and fail-closed on
+- Validate IAM RS256 JWT (OAuth2 Resource Server) and fail-closed on
   `tenant_id ∉ {erp, *}` (defense-in-depth, § Multi-tenancy). Reject
   external traffic at the network boundary (E7 — `EXTERNAL_TRAFFIC_REJECTED`).
 - Publish `erp.masterdata.<aggregate>.changed.v1` Kafka events through the
@@ -272,7 +272,7 @@ com.example.erp.masterdata/
 - Network directory / LDAP / external HR SDKs in `domain/` or `application/` —
   must be behind `infrastructure/` ports if ever introduced. erp v1 has
   none real (E7 internal-only; the only outbound external dependency is
-  GAP JWKS for JWT verification, which `libs:java-security` already wraps).
+  IAM JWKS for JWT verification, which `libs:java-security` already wraps).
 - Persistence frameworks beyond `spring-boot-starter-data-{jpa,redis}` — no
   reactive variants (Servlet stack).
 - Direct cross-tenant repository methods that omit `tenant_id` — every
@@ -471,7 +471,7 @@ Single un-bypassable application path:
    (v2 user-flow), the claim is resolved from the user's organizational
    membership. **v1 bridge (TASK-BE-337)**: the console **assume-tenant
    operator token** (`account_type=OPERATOR`, ADR-MONO-020 D4) is enriched
-   by GAP (`TenantClaimTokenCustomizer.customizeForAssumeTenant`) with
+   by IAM (`TenantClaimTokenCustomizer.customizeForAssumeTenant`) with
    `org_scope=["*"]` — the same platform-wide default as
    `client_credentials`, scoped WITHIN the already-tenant-gated request
    (the tenant gate isolates cross-tenant, so `*` = all departments of the
@@ -481,11 +481,11 @@ Single un-bypassable application path:
 
    **v2 membership-derived (TASK-BE-338 / TASK-ERP-BE-008, ADR-MONO-020 D3
    amendment 2026-06-05)** — supersedes the `["*"]` bridge for the
-   assume-tenant operator token: GAP injects the operator's **actual**
+   assume-tenant operator token: IAM injects the operator's **actual**
    `org_scope` from the per-assignment source
    (`operator_tenant_assignment.org_scope`, admin-service — `NULL ⟺ ["*"]`
    = whole tenant, net-zero). The claim carries department **subtree-root**
-   ids (NOT the expanded set — GAP does not know erp's department tree).
+   ids (NOT the expanded set — IAM does not know erp's department tree).
    `RoleScopeAuthorizationAdapter` therefore **expands each root → its
    descendants via the `department` hierarchy** and authorizes when the
    target department is within ANY scoped subtree (replacing the flat
@@ -579,7 +579,7 @@ broker downtime).
 ## Multi-tenancy
 
 erp-platform is **not** internally multi-tenant (single-org internal
-system per `PROJECT.md` Out-of-Scope `multi-tenant`). GAP supplies
+system per `PROJECT.md` Out-of-Scope `multi-tenant`). IAM supplies
 `tenant_id = erp`. Defense-in-depth (mirrors finance / scm):
 
 1. **Gateway** (v1 deferred) — domain gate at JWT decode.
@@ -598,20 +598,20 @@ filter). A token is accepted when **either**:
 
 - **(legacy slug)** `tenant_id ∈ {erp, *}` — `*` is SUPER_ADMIN
   platform-scope; **or**
-- **(entitlement-trust)** the GAP-signed `entitled_domains` claim (a list of
+- **(entitlement-trust)** the IAM-signed `entitled_domains` claim (a list of
   domain keys) contains `erp`.
 
 Rejection (403 `TENANT_FORBIDDEN`) requires **both** branches to fail
 (fail-closed; entitlement only *widens* the allowed set, never weakens the
 legacy reject). `entitled_domains` is read only from an RS256/JWKS-verified
-token, so it is unforgeable — **GAP is the entitlement authority**; a
+token, so it is unforgeable — **IAM is the entitlement authority**; a
 non-list / null / empty / non-string-element claim degrades to "not entitled".
 Row-level isolation is unchanged: row scoping still keys off `tenant_id`, so
 an entitled cross-slug token sees only its own `tenant_id` partition. While
-GAP has not yet populated `entitled_domains` the claim is absent → only the
+IAM has not yet populated `entitled_domains` the claim is absent → only the
 legacy path applies → **production net-zero**. This is the ADR-MONO-019
 **dual-accept window**; the legacy `tenant_id == slug` branch is removed in
-step 4 once GAP populates the claim (separate follow-up).
+step 4 once IAM populates the claim (separate follow-up).
 
 Config keys (TASK-MONO-119 skeleton `application.yml`):
 `erpplatform.oauth2.allowed-issuers` + `.required-tenant-id=erp`.
@@ -628,7 +628,7 @@ pollution).
 - **JWT (RS256)**: `oauth2-resource-server` against
   `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`.
-  GAP `erp-platform-internal-services-client` (client_credentials,
+  IAM `erp-platform-internal-services-client` (client_credentials,
   scopes `erp.read` / `erp.write`, V0018) is the v1 caller.
 - **External-traffic rejection (E7)** — `EXTERNAL_TRAFFIC_REJECTED` is
   enforced at two layers:
@@ -721,7 +721,7 @@ tenant_id)`.
 | In | erp `gateway-service` (v1 deferred) → direct JWT until then | HTTP `/api/erp/masterdata/**` | tenant-validated JWT |
 | Out | MySQL `erp_db` | JDBC | `department`, `employee`, `job_grade`, `cost_center`, `business_partner`, `audit_log`, `outbox`, `processed_events`, `idempotency_keys` (all effective-dated where applicable) |
 | Out | Kafka | TCP | `erp.masterdata.{department,employee,jobgrade,costcenter,businesspartner}.changed.v1`; `acks=all`, `enable.idempotence=true` |
-| Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 
 No cross-service inbound master-event consumption in v1 (masterdata-service
@@ -840,5 +840,5 @@ is a leaf — the `read-model-service` v2 will be the inbound consumer).
   masterdata-service; approval/read-model = v2),
   `docs/adr/ADR-MONO-013-platform-console-foundation.md` § 3.3
   (backend-only; UI is the platform-console parity slice)
-- TASK-MONO-119 — bootstrap (skeleton + GAP V0018), TASK-ERP-BE-001 — this
+- TASK-MONO-119 — bootstrap (skeleton + IAM V0018), TASK-ERP-BE-001 — this
   spec + impl task

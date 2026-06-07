@@ -2,7 +2,7 @@
 
 > Spec authored by **TASK-FAN-BE-008**. Implementation = **TASK-FAN-BE-009**.
 >
-> **Public** endpoints require an `Authorization: Bearer <RS256 JWT>` issued by GAP
+> **Public** endpoints require an `Authorization: Bearer <RS256 JWT>` issued by IAM
 > with `tenant_id ∈ { fan-platform, * }`. Tokens with any other tenant value get
 > 403 `TENANT_FORBIDDEN`.
 >
@@ -12,7 +12,7 @@
 >
 > The **internal** endpoint `/internal/membership/access` is NOT gateway-routed —
 > it is reachable only on the internal docker network and is authenticated by a
-> GAP `client_credentials` workload-identity JWT (ADR-MONO-005), NOT an end-user
+> IAM `client_credentials` workload-identity JWT (ADR-MONO-005), NOT an end-user
 > token.
 
 ## Envelope shapes
@@ -191,7 +191,7 @@ The **remote counterpart** of community-service's port
 `MembershipChecker.hasAccess(String accountId, String tier, String tenantId) → boolean`.
 Called by the FAN-BE-010 `HttpMembershipChecker` adapter.
 
-Auth: **GAP `client_credentials` workload-identity JWT** (ADR-MONO-005). NOT an
+Auth: **IAM `client_credentials` workload-identity JWT** (ADR-MONO-005). NOT an
 end-user access token. The internal security chain validates issuer + signature +
 a recognized internal client identity; an end-user token → 403 `FORBIDDEN`, no
 token → 401.

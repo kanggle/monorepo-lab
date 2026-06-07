@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - **Single external entry point** — all `/api/v1/**` traffic for scm-platform routes through this service per [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md).
-- **JWT validation** — OAuth2 Resource Server against GAP JWKS; validates RS256 signature + `aud=scm` + `tenant_id=scm` (or SUPER_ADMIN `*` wildcard).
+- **JWT validation** — OAuth2 Resource Server against IAM JWKS; validates RS256 signature + `aud=scm` + `tenant_id=scm` (or SUPER_ADMIN `*` wildcard).
 - **Tenant isolation** — cross-tenant tokens rejected at the edge with `403 TENANT_FORBIDDEN`. Fail-closed (misconfigured tokens → 403, never 500).
 - **Identity header pipeline** — `IdentityHeaderStripFilter` (highest precedence) strips client-supplied `X-Account-Id` / `X-Tenant-Id` / `X-Roles`; re-set from verified JWT claims.
 - **Rate limiting** — per `(account/client_id, route)`; keys project-prefixed (`rate:scm-platform:<route>:<id>`) to avoid cross-project Redis collisions; **fail-open** on Redis outage.
@@ -43,7 +43,7 @@
 1. **No business logic, no aggregates, no persistence** — Layered exception (intentional, architecture.md § Why This Architecture).
 2. **`IdentityHeaderStripFilter` runs at HIGHEST precedence** — client-supplied identity headers 가 downstream service 까지 leak 금지.
 3. **Rate-limit keys project-prefixed** — `rate:scm-platform:<route>:<id>` (cross-project Redis collision 방지).
-4. **JWKS reachability probed at startup** — GAP 도달 불가 시 fail-fast (service start 실패).
+4. **JWKS reachability probed at startup** — IAM 도달 불가 시 fail-fast (service start 실패).
 5. **Tenant check fail-closed** — `tenant_id` claim 부재 또는 `scm`/`*` 외의 값 → 403 (downstream 미도달).
 6. **Fail-open rate limit** — Redis outage 시 throw 금지; 통과 + WARN + 메트릭 (`platform/api-gateway-policy.md`).
 
@@ -57,7 +57,7 @@
 
 ## Dependent Systems
 
-- GAP (iam-platform) JWKS — JWT signature validation
+- IAM (iam-platform) JWKS — JWT signature validation
 - Redis — rate-limit store
 - `procurement-service`, `inventory-visibility-service` — route targets
 

@@ -12,7 +12,7 @@ Domain rules: [`rules/domains/erp.md`](../../../../../rules/domains/erp.md)
 All endpoints:
 - Require `Authorization: Bearer <token>` satisfying the **entitlement-trust
   dual-accept** gate (`tenant_id ∈ {erp, *}` ∪ signed `entitled_domains ∋ erp`,
-  RS256, GAP JWKS). Both branches fail → 403 `TENANT_FORBIDDEN`.
+  RS256, IAM JWKS). Both branches fail → 403 `TENANT_FORBIDDEN`.
 - Enforce the **READ authorization gate** (E6, fail-closed): `erp.read` scope ∨
   `isOperator()` ∨ entitled; else 403 `PERMISSION_DENIED`. The platform-console
   operator token that already reads `masterdata-service` satisfies this gate

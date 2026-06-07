@@ -40,8 +40,8 @@ outbox is publication-only.
 community-service has clearly delineated layers (controller → use case → domain →
 infrastructure) but the domain is small and not aggregate-heavy. Hexagonal
 ports/adapters add value when there are many cross-cutting infrastructure
-boundaries; community-service has only Postgres + Redis + Kafka + GAP IdP.
-**Layered** keeps the file count low and matches the GAP `community-service`
+boundaries; community-service has only Postgres + Redis + Kafka + IAM IdP.
+**Layered** keeps the file count low and matches the IAM `community-service`
 reference implementation directly (TASK-FAN-BE-002 § Implementation Notes).
 
 The **명시적 상태 기계** addition is the only architectural deviation from a
@@ -119,7 +119,7 @@ com.example.fanplatform.community/
 ### Boundary rules
 
 - `presentation/` MUST NOT call `infrastructure/` directly. All infrastructure access flows through `application/` use cases that depend on domain ports.
-- `domain/` MUST NOT depend on Spring or Jakarta annotations beyond `jakarta.persistence` (JPA) — chosen as a pragmatic exception so the entity types double as JPA-mapped objects (matches GAP reference). No Spring framework imports inside `domain/`.
+- `domain/` MUST NOT depend on Spring or Jakarta annotations beyond `jakarta.persistence` (JPA) — chosen as a pragmatic exception so the entity types double as JPA-mapped objects (matches IAM reference). No Spring framework imports inside `domain/`.
 - `application/event/CommunityEventPublisher` is the ONLY producer path. Any new event MUST extend the publisher; never call `OutboxWriter` directly from a use case or controller.
 - `infrastructure/security/` re-validates `tenant_id` even though the gateway already does — this is fail-closed defense-in-depth (see § Tenant Isolation below).
 

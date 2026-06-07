@@ -8,7 +8,7 @@ Domain rules: [`rules/domains/fintech.md`](../../../../../rules/domains/fintech.
 
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {finance, *}`
-  (RS256, GAP JWKS). Cross-tenant → 403 `TENANT_FORBIDDEN`.
+  (RS256, IAM JWKS). Cross-tenant → 403 `TENANT_FORBIDDEN`.
 - **Mutating** endpoints require `Idempotency-Key: <client-generated>`
   (fintech F1, transactional T1). Missing → 400 `IDEMPOTENCY_KEY_REQUIRED`.
   Same key + identical payload → first stored response replayed (no fund

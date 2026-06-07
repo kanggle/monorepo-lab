@@ -1,6 +1,6 @@
 # artist-api (artist-service HTTP contract)
 
-> All endpoints require an `Authorization: Bearer <RS256 JWT>` issued by GAP
+> All endpoints require an `Authorization: Bearer <RS256 JWT>` issued by IAM
 > with `tenant_id ∈ { fan-platform, * }`. Tokens with any other tenant value
 > get 403 `TENANT_FORBIDDEN`.
 >

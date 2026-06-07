@@ -1,10 +1,10 @@
 # Event Contract: auth-service (DEPRECATED)
 
-> **DEPRECATED — replaced by GAP (iam-platform) account events.**
+> **DEPRECATED — replaced by IAM (iam-platform) account events.**
 >
 > The ecommerce auth-service component was retired by TASK-BE-132 (PR #150).
 > Authentication, account lifecycle, and the events that signal those state
-> changes are now owned by GAP. New consumers must subscribe to GAP's
+> changes are now owned by IAM. New consumers must subscribe to IAM's
 > account events instead of these.
 >
 > See:

@@ -122,16 +122,16 @@ Dependencies flow **downward only**. Upper layers may import from lower layers, 
 - UI primitives must come from `@repo/ui` or `shared/`
 - Do not call backend services directly — all traffic goes through gateway-service
 
-## Authentication: GAP OIDC (post TASK-FE-067)
+## Authentication: IAM OIDC (post TASK-FE-067)
 - Auth library: `next-auth` v5 (auth.js) configured in `src/shared/auth/auth.ts`.
-- Identity provider: `iam-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://iam.local`) hosts the discovery doc + `/oauth2/authorize` + `/oauth2/token` endpoints.
-- Client: `ecommerce-web-store-client` (registered in GAP V0012 seed). Confidential client + PKCE.
+- Identity provider: `iam-platform` (IAM) — `OIDC_ISSUER_URL` (default `http://iam.local`) hosts the discovery doc + `/oauth2/authorize` + `/oauth2/token` endpoints.
+- Client: `ecommerce-web-store-client` (registered in IAM V0012 seed). Confidential client + PKCE.
 - Scope: `openid profile email tenant.read ecommerce.consumer`. Backend (gateway-service) asserts `tenant_id=ecommerce` via the JWT claim.
-- Account-type guard: only `account_type=CONSUMER` may sign in. An `OPERATOR` who completes the GAP flow is rejected by the `session()` callback (returned session has no `accountId`) and bounced to `/login?error=account_type_mismatch`.
-- Bearer token wiring: NextAuth keeps the GAP-issued access token in an HttpOnly JWT cookie. The client-side `AuthProvider` reads `useSession().data.accessToken` and pushes it into `src/shared/auth/token-bridge.ts`, which `@repo/api-client`'s axios interceptor reads synchronously to attach `Authorization: Bearer ...` on every outbound request.
+- Account-type guard: only `account_type=CONSUMER` may sign in. An `OPERATOR` who completes the IAM flow is rejected by the `session()` callback (returned session has no `accountId`) and bounced to `/login?error=account_type_mismatch`.
+- Bearer token wiring: NextAuth keeps the IAM-issued access token in an HttpOnly JWT cookie. The client-side `AuthProvider` reads `useSession().data.accessToken` and pushes it into `src/shared/auth/token-bridge.ts`, which `@repo/api-client`'s axios interceptor reads synchronously to attach `Authorization: Bearer ...` on every outbound request.
 - Server-side (RSC, route handlers, server actions): use `getWebStoreSession()` from `src/shared/auth/session.ts`. Do not import the bridge from server code.
-- 401 handling: NextAuth does not auto-refresh GAP tokens. On 401 the api-client's `onAuthError` clears the bridge and redirects to `/api/auth/signin/gap`, re-running the OIDC flow.
-- Public paths (no auth required): `/`, `/products/*`, `/login`, `/signup` (redirects into GAP), `/api/auth/*`. Everything else is gated by `src/middleware.ts`.
+- 401 handling: NextAuth does not auto-refresh IAM tokens. On 401 the api-client's `onAuthError` clears the bridge and redirects to `/api/auth/signin/gap`, re-running the OIDC flow.
+- Public paths (no auth required): `/`, `/products/*`, `/login`, `/signup` (redirects into IAM), `/api/auth/*`. Everything else is gated by `src/middleware.ts`.
 
 ## Testing Expectations
 Required emphasis:

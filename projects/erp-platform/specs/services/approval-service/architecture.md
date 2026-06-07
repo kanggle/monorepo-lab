@@ -232,7 +232,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Data store | MySQL `erp_db` (same instance as `masterdata-service`, **separate tables** `approval_request` / `approval_route` / `approval_action` / `approval_audit_log` / `outbox` / `processed_events` / `idempotency_keys`; no shared tables, no cross-service JOIN) |
 | Event publication | Kafka via transactional outbox (`libs/java-messaging` `BaseEventPublisher`) — `erp.approval.{submitted,approved,rejected,withdrawn}.v1`; see § Outbox + audit_log invariants |
 | Event consumption | **None in this increment** — approval is synchronous command/query; it publishes its own transition events but does NOT subscribe to any topic (no `event-consumer` type). The forward consumers (`notification-service` / read-model full-view) are v2 |
-| Outbound integration | erp `masterdata-service` REST (reference-integrity check of the approval subject before SUBMITTED, E1) + GAP JWKS for JWT verification only (E7 internal-only) |
+| Outbound integration | erp `masterdata-service` REST (reference-integrity check of the approval subject before SUBMITTED, E1) + IAM JWKS for JWT verification only (E7 internal-only) |
 
 ### Service Type Composition
 
@@ -300,7 +300,7 @@ the Approval Workflow bounded context's first realisation. It MUST:
   transactional outbox (partition key = `approvalRequestId`), establishing the v1.0
   forward interface for the v2 `notification-service` (fan-out) and the v2 read-model
   full-view (approval-fact projection). **No consumer exists in this increment.**
-- Validate GAP RS256 JWT (OAuth2 Resource Server) and fail-closed on
+- Validate IAM RS256 JWT (OAuth2 Resource Server) and fail-closed on
   `tenant_id ∉ {erp, *}` ∧ `entitled_domains ∌ erp` (entitlement-trust dual-accept,
   § Multi-tenancy, mirrors masterdata-service). Reject external traffic at the
   network boundary (E7 / I2 — `EXTERNAL_TRAFFIC_REJECTED`).
@@ -746,7 +746,7 @@ queue. When an audit-read endpoint is added (v2), the read itself is meta-audite
 ## Multi-tenancy
 
 erp-platform is **not** internally multi-tenant (single-org internal system per
-`PROJECT.md` Out-of-Scope `multi-tenant`). GAP supplies `tenant_id = erp`.
+`PROJECT.md` Out-of-Scope `multi-tenant`). IAM supplies `tenant_id = erp`.
 Defense-in-depth (mirrors masterdata-service / read-model-service exactly):
 
 1. **Gateway** (v1 deferred) — domain gate at JWT decode.
@@ -758,13 +758,13 @@ Defense-in-depth (mirrors masterdata-service / read-model-service exactly):
 
 **Domain gate — entitlement-trust dual-accept** (ADR-MONO-019 § D5). A token is
 accepted when **either** `tenant_id ∈ {erp, *}` (`*` = SUPER_ADMIN platform-scope)
-**or** the GAP-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
+**or** the IAM-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
 requires **both** branches to fail (fail-closed; entitlement only *widens* the
 allowed READ set, never weakens the legacy reject and never authorizes a transition).
-`entitled_domains` is read only from an RS256/JWKS-verified token (unforgeable — GAP
-is the entitlement authority). While GAP has not populated `entitled_domains` the
+`entitled_domains` is read only from an RS256/JWKS-verified token (unforgeable — IAM
+is the entitlement authority). While IAM has not populated `entitled_domains` the
 claim is absent → only the legacy path applies → **production net-zero** (ADR-MONO-019
-dual-accept window; legacy `tenant_id == slug` branch removed in step 4 once GAP
+dual-accept window; legacy `tenant_id == slug` branch removed in step 4 once IAM
 populates the claim — separate follow-up).
 
 Config keys (mirrors masterdata-service `application.yml`):
@@ -779,7 +779,7 @@ cross-project data pollution — even though only `erp` is expected).
 
 - **JWT (RS256)**: `oauth2-resource-server` against
   `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
-  `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`. GAP
+  `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`. IAM
   `erp-platform-internal-services-client` (client_credentials) + the console
   assume-tenant operator token are the v1.0 callers (E7 / I1 — SSO single auth, no
   self-credential store).
@@ -860,7 +860,7 @@ key + different payload → 409 `IDEMPOTENCY_KEY_CONFLICT`. Key scope =
 | Out | MySQL `erp_db` | JDBC | `approval_request`, `approval_route`, `approval_action`, `approval_audit_log`, `outbox`, `processed_events`, `idempotency_keys` (separate tables; no shared-table JOIN with masterdata) |
 | Out | erp `masterdata-service` | HTTPS REST | subject existence/ACTIVE check on submit (E1) — `GET /api/erp/masterdata/{departments,employees}/{id}`; synchronous; ADR-MONO-005 Category B (see § Saga / Long-running flow) |
 | Out | Kafka | TCP | `erp.approval.{submitted,approved,rejected,withdrawn}.v1`; `acks=all`, `enable.idempotence=true`; partition key = `approvalRequestId` |
-| Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 
 No inbound event consumption in this increment (approval-service is a producer + a
@@ -1056,8 +1056,8 @@ follow-up tasks, not this spec):
   up `:approval-service:integrationTest`.
 - `docker-compose` `erp.local` Traefik routing entry (ADR-MONO-001 Option C; no
   PORT_PREFIX) on the shared `infra/traefik/`.
-- GAP `erp-platform-internal-services-client` scope set may gain `erp.approval.create`
-  / `erp.approval.approve` (or reuse the coarse `erp.write`) — a GAP V-slot seed
+- IAM `erp-platform-internal-services-client` scope set may gain `erp.approval.create`
+  / `erp.approval.approve` (or reuse the coarse `erp.write`) — a IAM V-slot seed
   follow-up if fine-grained scopes are chosen.
 
 ---

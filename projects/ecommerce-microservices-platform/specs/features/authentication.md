@@ -1,12 +1,12 @@
-# Feature: Authentication & Authorization (DEPRECATED — see GAP)
+# Feature: Authentication & Authorization (DEPRECATED — see IAM)
 
 > **DEPRECATED — primary owner moved out of ecommerce.**
 >
 > TASK-MONO-027 (PR #145) + TASK-FE-067 (PR #148) + TASK-BE-132 (PR #150)
 > retired the in-tree ecommerce auth-service. Identity, signup/login/logout,
-> token issuance, and admin authorization are now owned by GAP
-> (iam-platform). The ecommerce gateway validates GAP-issued
-> RS256 JWTs via JWKS; the frontends use NextAuth v5 with the GAP OIDC
+> token issuance, and admin authorization are now owned by IAM
+> (iam-platform). The ecommerce gateway validates IAM-issued
+> RS256 JWTs via JWKS; the frontends use NextAuth v5 with the IAM OIDC
 > provider.
 >
 > Authoritative sources:
@@ -25,13 +25,13 @@ Provides user identity management and access control for the platform. Handles a
 
 | Service | Role |
 |---|---|
-| auth-service | ~~Primary owner — credential storage, token issuance/rotation, session management, audit logging~~ **REMOVED — replaced by GAP** |
-| gateway-service | JWT validation (now via GAP JWKS / RS256), user identity injection (X-User-Id, X-User-Email, X-User-Role headers), rate limiting |
-| user-service | Consumes UserSignedUp event to create initial user profile (now sourced from GAP account events) |
+| auth-service | ~~Primary owner — credential storage, token issuance/rotation, session management, audit logging~~ **REMOVED — replaced by IAM** |
+| gateway-service | JWT validation (now via IAM JWKS / RS256), user identity injection (X-User-Id, X-User-Email, X-User-Role headers), rate limiting |
+| user-service | Consumes UserSignedUp event to create initial user profile (now sourced from IAM account events) |
 
 ## User Flows
 
-> ~~아래 Signup / Login / Token Refresh / Logout 흐름은 폐기된 in-tree auth-service 의 과거 동작이며 런타임을 반영하지 않는다 — 현재 identity/token 은 GAP 가 소유 (상단 DEPRECATED 배너 + `specs/integration/iam-integration.md` 참조).~~
+> ~~아래 Signup / Login / Token Refresh / Logout 흐름은 폐기된 in-tree auth-service 의 과거 동작이며 런타임을 반영하지 않는다 — 현재 identity/token 은 IAM 가 소유 (상단 DEPRECATED 배너 + `specs/integration/iam-integration.md` 참조).~~
 
 ### Signup
 
@@ -86,7 +86,7 @@ Provides user identity management and access control for the platform. Handles a
 
 ## Related Events
 
-> ~~아래 이벤트는 폐기된 in-tree auth-service 가 발행하던 것이며 런타임을 반영하지 않는다 (상단 배너 참조). GAP 위임 후 ecommerce 는 GAP 계정 이벤트를 소비한다.~~
+> ~~아래 이벤트는 폐기된 in-tree auth-service 가 발행하던 것이며 런타임을 반영하지 않는다 (상단 배너 참조). IAM 위임 후 ecommerce 는 IAM 계정 이벤트를 소비한다.~~
 
 | Event | Publisher | Consumers |
 |---|---|---|

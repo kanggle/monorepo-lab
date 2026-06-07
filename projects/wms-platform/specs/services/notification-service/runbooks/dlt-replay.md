@@ -241,7 +241,7 @@ After replay:
 If replay does not resolve the backlog within 30 minutes, escalate to:
 
 - **wms-platform on-call** — primary owner of `notification-service`.
-- **GAP on-call** — if the failure is JWT-validation related (token
+- **IAM on-call** — if the failure is JWT-validation related (token
   refresh, JWKS staleness) on Slack adapter; unlikely but possible.
 - The originating service's on-call — for poison-pill / schema-drift
   cases (per § Step 3c).

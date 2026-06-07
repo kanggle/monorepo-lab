@@ -9,7 +9,7 @@ All implementation tasks targeting this service must follow this declaration,
 > **Provenance**: Authored by [TASK-FIN-BE-001](../../../tasks/review/) **before**
 > implementation (HARDSTOP-09 — architecture decision precedes code). The
 > account-service skeleton (`@SpringBootApplication`, `application.yml`,
-> empty `db/migration/`) and the GAP `finance-platform-internal-services-client`
+> empty `db/migration/`) and the IAM `finance-platform-internal-services-client`
 > + `finance` tenant V0017 seed shipped in [TASK-MONO-114](../../../../../tasks/done/)
 > (ADR-MONO-008 ACCEPTED, Option C). Sections describe the **target v1
 > implementation**; the impl PR follows this spec.
@@ -81,7 +81,7 @@ core for finance-platform. It MUST:
   append-only `audit_log` (actor / timestamp / before / after / reason) (F6).
 - Encrypt regulated PII / financial identifiers at rest; mask in
   logs/events/errors (F7).
-- Validate GAP RS256 JWT (OAuth2 Resource Server) and fail-closed on
+- Validate IAM RS256 JWT (OAuth2 Resource Server) and fail-closed on
   `tenant_id != finance` (defense-in-depth, § Multi-tenancy).
 - Publish `finance.account.* / finance.balance.* / finance.transaction.*`
   Kafka events through the transactional outbox.
@@ -369,7 +369,7 @@ auto-closed. Real external-statement matching = v2 (`ledger-service` /
 ## Multi-tenancy
 
 finance-platform is **not** internally multi-tenant (single financial
-service); GAP supplies `tenant_id=finance`. Defense-in-depth (mirrors scm):
+service); IAM supplies `tenant_id=finance`. Defense-in-depth (mirrors scm):
 
 1. **Gateway** (v1 deferred) — domain gate at JWT decode.
 2. **Service JWT validator chain** — `AllowedIssuersValidator` (SAS issuer +
@@ -387,20 +387,20 @@ filter). A token is accepted when **either**:
 
 - **(legacy slug)** `tenant_id ∈ {finance, *}` — `*` is SUPER_ADMIN
   platform-scope; **or**
-- **(entitlement-trust)** the GAP-signed `entitled_domains` claim (a list of
+- **(entitlement-trust)** the IAM-signed `entitled_domains` claim (a list of
   domain keys) contains `finance`.
 
 Rejection (403 `TENANT_FORBIDDEN`) requires **both** branches to fail
 (fail-closed; entitlement only *widens* the allowed set, never weakens the
 legacy reject). `entitled_domains` is read only from an RS256/JWKS-verified
-token, so it is unforgeable — **GAP is the entitlement authority**; a
+token, so it is unforgeable — **IAM is the entitlement authority**; a
 non-list / null / empty / non-string-element claim degrades to "not entitled".
 Row-level isolation is unchanged: `ActorContextJwtAuthenticationConverter`
 still keys row scoping off `tenant_id`, so an entitled cross-slug token sees
-only its own `tenant_id` partition. While GAP has not yet populated
+only its own `tenant_id` partition. While IAM has not yet populated
 `entitled_domains` the claim is absent → only the legacy path applies →
 **production net-zero**. This is the ADR-MONO-019 **dual-accept window**; the
-legacy `tenant_id == slug` branch is removed in step 4 once GAP populates the
+legacy `tenant_id == slug` branch is removed in step 4 once IAM populates the
 claim (separate follow-up).
 
 Config keys (TASK-MONO-114 skeleton `application.yml`):
@@ -413,7 +413,7 @@ always embed `tenant_id` in `WHERE` (no tenant-omitting method exists).
 - **JWT (RS256)**: `oauth2-resource-server` against
   `${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks`; RS256 only;
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`.
-  GAP `finance-platform-internal-services-client` (client_credentials,
+  IAM `finance-platform-internal-services-client` (client_credentials,
   scopes `finance.read`/`finance.write`, V0017) is the v1 caller.
 - **Column encryption (F7)**: `PiiEncryptor` AES-256-GCM
   (`[12-byte IV][ciphertext][16-byte tag]`) on regulated identifiers
@@ -479,7 +479,7 @@ All under `/api/finance/**` (gateway, when introduced, rewrites
 | Out | MySQL `finance_db` | JDBC | accounts, account_status_history, balances, holds, transactions, audit_log, compliance_review_queue, reconciliation_discrepancy, outbox, processed_events, idempotency_keys |
 | Out | Redis | TCP | idempotency primary (SET NX-EX) |
 | Out | Kafka | TCP | `finance.{account,balance,transaction,compliance}.*.v1`; `acks=all`, `enable.idempotence=true` |
-| Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 
 No cross-service master-event consumption in v1 (account-service is a leaf).
@@ -560,5 +560,5 @@ No cross-service master-event consumption in v1 (account-service is a leaf).
   (Hexagonal canonical-form shape reference; TASK-FIN-BE-001 § Related Specs)
 - `docs/adr/ADR-MONO-008-finance-platform-bootstrap.md` § D2/D3 (v1 =
   account-service; ledger = v2), `docs/adr/ADR-MONO-013` §3.3 (backend-only)
-- TASK-MONO-114 — bootstrap (skeleton + GAP V0017), TASK-FIN-BE-001 — this
+- TASK-MONO-114 — bootstrap (skeleton + IAM V0017), TASK-FIN-BE-001 — this
   spec + impl task

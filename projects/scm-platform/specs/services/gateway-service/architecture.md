@@ -41,10 +41,10 @@ traffic. Per `platform/api-gateway-policy.md` it MUST:
 - Route every `/api/v1/procurement/**` and `/api/v1/inventory-visibility/**`
   request (and future supplier/demand/logistics/settlement/notification/admin
   paths declared in v2) to the owning service.
-- Validate JWT bearer tokens (OAuth2 Resource Server) against GAP's JWKS.
+- Validate JWT bearer tokens (OAuth2 Resource Server) against IAM's JWKS.
 - Enforce tenant isolation via **entitlement-trust dual-accept** (ADR-MONO-019
   § D5): a token is admitted when the legacy slug `tenant_id ∈ {scm, *}` (`*` =
-  SUPER_ADMIN platform-scope) **or** the GAP-signed `entitled_domains` claim
+  SUPER_ADMIN platform-scope) **or** the IAM-signed `entitled_domains` claim
   contains `scm`; cross-tenant tokens that satisfy neither branch are rejected
   at the edge with 403 `TENANT_FORBIDDEN`.
 - Strip client-supplied identity headers and set them from verified claims.
@@ -201,7 +201,7 @@ Spring Security (path not in PUBLIC_PATHS).
 Per `platform/security-rules.md` and
 [iam-integration.md](../../integration/iam-integration.md):
 
-- Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at GAP
+- Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at IAM
   (`http://iam.local/oauth2/jwks` — Edge Case E2 alignment with V0013 SQL).
 - Algorithm: RS256 only.
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
@@ -209,17 +209,17 @@ Per `platform/security-rules.md` and
   legacy `"iam-platform"` string (D2-b deprecation window).
 - Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
   (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
-  (`*` = SUPER_ADMIN platform-scope) **or** the GAP-signed `entitled_domains`
+  (`*` = SUPER_ADMIN platform-scope) **or** the IAM-signed `entitled_domains`
   claim (a list of domain keys) contains `scm`. Rejection requires **both**
   branches to fail (fail-closed; entitlement only widens). The
   `entitled_domains` claim is read only from an RS256/JWKS-verified token, so
-  it is unforgeable — **GAP is the entitlement authority**; a non-list / null /
+  it is unforgeable — **IAM is the entitlement authority**; a non-list / null /
   empty / non-string-element claim degrades to "not entitled". The shared
   static `TenantClaimValidator.isEntitled(jwt, domain)` helper is the single
-  source of truth for the entitlement branch. While GAP has not yet populated
+  source of truth for the entitlement branch. While IAM has not yet populated
   `entitled_domains` the claim is absent → only the legacy path applies →
   **production net-zero**. This is the ADR-MONO-019 **dual-accept window**; the
-  legacy slug branch is removed in step 4 once GAP populates the claim
+  legacy slug branch is removed in step 4 once IAM populates the claim
   (separate follow-up).
 - Forwarded headers after successful validation:
   - `X-User-Id` ← `sub`
@@ -242,7 +242,7 @@ Per `platform/security-rules.md` and
 
 `JwksHealthProbe` runs once on `ApplicationReadyEvent`, retries with exponential
 backoff up to a configurable timeout (default 30s), and on final failure closes
-the application context so Spring Boot exits non-zero. This surfaces a GAP
+the application context so Spring Boot exits non-zero. This surfaces a IAM
 outage at boot rather than waiting for the first protected request to 401.
 Disabled in tests via `gateway.jwks.startup-probe.enabled=false`.
 
@@ -350,4 +350,4 @@ Disabled in tests via `gateway.jwks.startup-probe.enabled=false`.
 - `rules/traits/integration-heavy.md` (fail-open / circuit-breaker patterns)
 - `rules/traits/transactional.md` (idempotency expectations on downstream paths)
 - TASK-SCM-BE-001 — this service's bootstrap task
-- TASK-MONO-040 / TASK-MONO-042 — scm-platform skeleton + GAP V0013 seed
+- TASK-MONO-040 / TASK-MONO-042 — scm-platform skeleton + IAM V0013 seed

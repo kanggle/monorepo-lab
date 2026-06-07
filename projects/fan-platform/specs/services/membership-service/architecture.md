@@ -52,7 +52,7 @@ membership-service has clearly delineated layers (controller → use case → do
 infrastructure) with a small domain centered on a single `Membership`
 (subscription) aggregate plus a PG mock boundary. Hexagonal ports/adapters add
 value when there are many cross-cutting infrastructure boundaries;
-membership-service has only Postgres + Kafka + GAP IdP + a single
+membership-service has only Postgres + Kafka + IAM IdP + a single
 `PaymentGatewayPort`. **Layered** keeps the file count low and matches the
 sibling `community-service` / `artist-service` convention directly (fan-platform
 uses Layered, NOT Hexagonal).
@@ -146,7 +146,7 @@ account.
 |---|---|---|
 | `id` | string (UUID v7) | aggregate id |
 | `tenantId` | string | row-level isolation; always `fan-platform` in this project |
-| `accountId` | string | the fan = GAP `sub` claim |
+| `accountId` | string | the fan = IAM `sub` claim |
 | `tier` | `MembershipTier` | `MEMBERS_ONLY` \| `PREMIUM` |
 | `status` | `MembershipStatus` | `ACTIVE` \| `CANCELED` (state machine) |
 | `validFrom` | timestamptz | window start (subscribe time) |
@@ -297,7 +297,7 @@ calls this endpoint and returns `allowed` directly, **fail-closed on any error**
 evaluates the § Access Semantics fail-closed (infra error → `allowed=false`).
 
 **Authentication = workload identity, NOT an end-user token.** The `/internal/**`
-surface is authenticated by a **GAP `client_credentials` JWT** per ADR-MONO-005
+surface is authenticated by a **IAM `client_credentials` JWT** per ADR-MONO-005
 (workload identity), presented by community-service as the calling service —
 NOT by a fan's access token. The internal security chain validates the
 client-credentials token (issuer + signature + a recognized internal client/role),
@@ -452,7 +452,7 @@ This spec does NOT create build or infra files. FAN-BE-009 wires:
 - `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/contracts/http/membership-api.md`
 - `projects/fan-platform/specs/contracts/events/fan-membership-events.md`
-- ADR-MONO-005 (workload identity — GAP `client_credentials` JWT for `/internal/**`)
+- ADR-MONO-005 (workload identity — IAM `client_credentials` JWT for `/internal/**`)
 - `rules/traits/transactional.md` § T1 (idempotency) / T4 (state machine) / T5 (optimistic lock)
 - `rules/traits/multi-tenant.md` § M2 (tenant_id everywhere)
 - `rules/traits/integration-heavy.md` § I3 / I8 (fail-closed, outbox)

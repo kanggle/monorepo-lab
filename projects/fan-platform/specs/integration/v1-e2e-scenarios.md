@@ -254,8 +254,8 @@ follow-up TASK-FAN-INT-NNN.
 - **Performance / load testing** — separate task.
 - **`community.reaction.added` / `community.comment.added` consumer
   verification** — no v1 consumer exists (notification-service is v2).
-- **Cross-project E2E (real GAP IdP)** — GAP is mocked via WireMock JWKS
-  here; full GAP login/redirect is the frontend e2e's territory.
+- **Cross-project E2E (real IAM IdP)** — IAM is mocked via WireMock JWKS
+  here; full IAM login/redirect is the frontend e2e's territory.
 - **artist self-service** — admin-only in v1.
 - **MEMBERS_ONLY 403 branch** — see scenario 3 v1 limitation above.
 

@@ -12,7 +12,7 @@ All non-webhook endpoints:
 - Error envelope: `{ code, message, details?, timestamp }`.
 
 Webhook endpoints (`/api/procurement/webhooks/**`):
-- Public (no JWT) — supplier callers have no GAP identity.
+- Public (no JWT) — supplier callers have no IAM identity.
 - Verified by `X-Supplier-Signature: <shared-secret>` header (v1 simple
   shared secret; HMAC + timestamp + replay protection deferred to v2 per
   rules/traits/integration-heavy.md I6).

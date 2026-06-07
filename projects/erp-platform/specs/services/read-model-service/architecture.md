@@ -174,7 +174,7 @@ config/         ← Spring @Configuration beans only (Kafka consumer, security)
 ## Service Type Compliance
 
 ### rest-api
-- Stateless JWT auth (OAuth2 RS, GAP JWKS) — same chain as masterdata-service.
+- Stateless JWT auth (OAuth2 RS, IAM JWKS) — same chain as masterdata-service.
 - `tenant_id=erp` fail-closed via **entitlement-trust dual-accept** at gateway
   (when activated) + service level (§ Multi-tenancy / Security).
 - Read-only endpoints (no mutating REST).
@@ -228,7 +228,7 @@ org-view returns the employee with the unresolved reference fields `null` +
 
 ## Security
 
-- OAuth2 Resource Server (RS256), JWKS `${OIDC_ISSUER_URL}/oauth2/jwks` — GAP IdP.
+- OAuth2 Resource Server (RS256), JWKS `${OIDC_ISSUER_URL}/oauth2/jwks` — IAM IdP.
 - Validators (`ServiceLevelOAuth2Config`): JwtTimestampValidator +
   `AllowedIssuersValidator` + decode-time `tenantClaimValidator`.
 - **Decode-time** `tenantClaimValidator` applies the **entitlement-trust
@@ -258,7 +258,7 @@ org-view returns the employee with the unresolved reference fields `null` +
 | In | erp `masterdata-service` Kafka | Consumer subscribed to `erp.masterdata.{department,employee,jobgrade,costcenter}.changed.v1` | EventDedupe (T8) idempotent; first erp inbound consumer |
 | In | erp `approval-service` Kafka | Consumer subscribed to `erp.approval.{submitted,approved,rejected,withdrawn}.v1` (BE-010) + `erp.approval.delegated.v1` + `erp.approval.delegation.revoked.v1` (BE-015) | EventDedupe (T8); `approval_fact_proj` + `delegation_fact_proj` projections |
 | Out | MySQL `erp_read_model_db` | JDBC | `department_proj` / `employee_proj` / `job_grade_proj` / `cost_center_proj` / `approval_fact_proj` / `delegation_fact_proj` / `processed_events` |
-| Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 
 No outbound business call; no event publication; no write back to
@@ -368,17 +368,17 @@ straight to DLT (cannot key the dedupe table).
 ## Multi-tenancy
 
 **N/A as SaaS row-level isolation — single-tenant by project classification.**
-`erp-platform` does not declare `multi-tenant` (PROJECT.md § Out of Scope; GAP is
+`erp-platform` does not declare `multi-tenant` (PROJECT.md § Out of Scope; IAM is
 the multi-tenant IdP). All projected rows belong to the `erp` tenant.
 
 The domain claim is still **fail-closed enforced** at the gate via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
 defense-in-depth — identical to masterdata-service / TASK-ERP-BE-005). A token is
 accepted when **either** `tenant_id ∈ {erp, *}` (`*` = SUPER_ADMIN platform-scope)
-**or** the GAP-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
+**or** the IAM-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
 requires **both** branches to fail (fail-closed; entitlement only *widens*).
 `entitled_domains` is read only from an RS256/JWKS-verified token (unforgeable —
-GAP is the entitlement authority). Both the decode validator and the
+IAM is the entitlement authority). Both the decode validator and the
 `TenantClaimEnforcer` filter dual-accept independently.
 
 Per-operator `org_scope` data-scope (E6) was **not** applied in the BE-007 first
@@ -403,14 +403,14 @@ gate: an operator scoped to a subtree both writes and *sees* only that subtree.
 | **E4** Approval transition idempotent + audit | `processed_events` dedupe (T8) | Transition idempotency + the immutable audit `history` are owned by `approval-service`; this consumer only dedupes on `eventId` and holds the latest fact (NOT the history — source of record = approval-service REST). [BE-010] |
 | **E5** Integrated read model holds NO domain logic — read-only projection | ✅ **Primary subject** | **This service is E5's reference implementation**: read-only projection; no business rules re-implemented; each field's single source of record = `masterdata-service`; source-absent → `READ_MODEL_SOURCE_UNAVAILABLE` semantics (`null` + `meta.unresolved`, no fabrication); no event re-emission; no write-back. |
 | **E6** Authorization via permission matrix + data scope — fail-closed | ✅ (read gate) | READ gate fail-closed: `erp.read` ∨ operator ∨ entitled, else `PERMISSION_DENIED`. No mutating surface → no WRITE/data-scope gate this increment (tenant-scoped list). |
-| **E7** internal-system boundary — no external traffic, SSO enforced | ✅ | OAuth2 RS (GAP SSO) only; entitlement-trust tenant gate fail-closed; actuator scrape internal-network only; external traffic rejected at edge. |
+| **E7** internal-system boundary — no external traffic, SSO enforced | ✅ | OAuth2 RS (IAM SSO) only; entitlement-trust tenant gate fail-closed; actuator scrape internal-network only; external traffic rejected at edge. |
 | **E8** Permission/org change audited | N/A | No permission/org mutation surface (read-only). |
 
 ## Trait Rule mapping (rules/traits/)
 
 | Trait Rule | Status | Mechanism |
 |---|---|---|
-| **internal-system** RBAC / SSO / no external exposure | ✅ | § Security — GAP SSO, entitlement-trust dual-accept, actuator network-isolated, no anonymous/self-signup path. |
+| **internal-system** RBAC / SSO / no external exposure | ✅ | § Security — IAM SSO, entitlement-trust dual-accept, actuator network-isolated, no anonymous/self-signup path. |
 | **transactional T1** Idempotency on mutating endpoints | N/A | No mutating REST endpoints. Idempotency is event-side (T8). |
 | **transactional T8** Idempotent event consumption | ✅ | `processed_events` keyed on `eventId`; duplicate → skip without mutation. |
 | **transactional T2/T3** Atomic state-change + outbox/relay | N/A | No transactional outbox — terminal read-model (no published events). |

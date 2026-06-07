@@ -243,7 +243,7 @@ Formal request/response shapes live in
 > `X-Supplier-Signature` header. Per `rules/traits/integration-heavy.md` I6,
 > v2 webhook upgrade adds HMAC + timestamp + replay protection — tracked as
 > a follow-up. The webhook endpoints themselves are publicly routable (no
-> JWT) because the supplier issuing the call has no GAP identity.
+> JWT) because the supplier issuing the call has no IAM identity.
 
 ---
 
@@ -489,20 +489,20 @@ Defense-in-depth tenant enforcement (3 layers), each applying the same
 
 **Domain gate — entitlement-trust dual-accept.** A token is accepted when
 **either** the legacy slug `tenant_id ∈ {scm, *}` (`*` = SUPER_ADMIN
-platform-scope) **or** the GAP-signed `entitled_domains` claim (a list of
+platform-scope) **or** the IAM-signed `entitled_domains` claim (a list of
 domain keys) contains `scm`. Rejection (403 `TENANT_FORBIDDEN`) requires
 **both** branches to fail (fail-closed; entitlement only *widens* the allowed
 set, never weakens the legacy reject). `entitled_domains` is read only from an
-RS256/JWKS-verified token, so it is unforgeable — **GAP is the entitlement
+RS256/JWKS-verified token, so it is unforgeable — **IAM is the entitlement
 authority**; a non-list / null / empty / non-string-element claim degrades to
 "not entitled". Row-level isolation is unchanged: repository methods still scope
 every read by `tenant_id`, so an entitled cross-slug token sees only its own
-`tenant_id` partition. While GAP has not yet populated `entitled_domains` the
+`tenant_id` partition. While IAM has not yet populated `entitled_domains` the
 claim is absent → only the legacy path applies → **production net-zero**. This
 is the ADR-MONO-019 **dual-accept window**; the legacy slug branch is removed in
-step 4 once GAP populates the claim (separate follow-up).
+step 4 once IAM populates the claim (separate follow-up).
 
-Webhook endpoints are excluded from JWT enforcement (they have no GAP
+Webhook endpoints are excluded from JWT enforcement (they have no IAM
 identity) but are still tenant-scoped via the request body — the supplier
 includes `tenantId` and the database UNIQUE constraint
 `(tenant_id, supplier_asn_ref)` is the structural backstop.
@@ -599,7 +599,7 @@ All other paths require JWT or are denied (`anyRequest().denyAll()`).
 | Out | Redis | TCP | idempotency primary store (NX-EX) |
 | Out | Kafka | TCP | publishes 7 `scm.procurement.*.v1` topics; producer with `acks=all`, `enable.idempotence=true` |
 | Out | Supplier (mock) | HTTPS (configurable) | `RestSupplierAdapter` with Resilience4j; `SUPPLIER_MOCK_BASE_URL` env |
-| Out | GAP `/oauth2/jwks` | HTTPS | JWT signature verification (libs/java-security pattern) |
+| Out | IAM `/oauth2/jwks` | HTTPS | JWT signature verification (libs/java-security pattern) |
 | Out (observability) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` for traces |
 
 ### Master Reads

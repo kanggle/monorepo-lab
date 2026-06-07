@@ -162,7 +162,7 @@ realisation. It MUST:
   notification dispatch and inbox-read is operationally traceable via a
   lightweight append-only record (§ Dispatch traceability) — internal-system I6
   "최소한의 구조화 기록".
-- Validate GAP RS256 JWT (OAuth2 Resource Server) on the inbox surface and
+- Validate IAM RS256 JWT (OAuth2 Resource Server) on the inbox surface and
   fail-closed on `tenant_id ∉ {erp, *}` ∧ `entitled_domains ∌ erp`
   (entitlement-trust dual-accept, § Multi-tenancy, mirrors masterdata /
   read-model / approval). Reject external traffic at the network boundary
@@ -579,19 +579,19 @@ Invalid envelopes (null `eventId` / `payload`) bypass dedupe → DLT.
 ## Multi-tenancy
 
 **N/A as SaaS row-level isolation — single-tenant by project classification.**
-`erp-platform` does not declare `multi-tenant` (`PROJECT.md` § Out of Scope; GAP
+`erp-platform` does not declare `multi-tenant` (`PROJECT.md` § Out of Scope; IAM
 is the multi-tenant IdP). All notifications belong to the `erp` tenant.
 
 The domain claim is still **fail-closed enforced** on the inbox surface via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
 defense-in-depth — identical to masterdata / read-model / approval). A token is
 accepted when **either** `tenant_id ∈ {erp, *}` (`*` = SUPER_ADMIN platform-scope)
-**or** the GAP-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
+**or** the IAM-signed `entitled_domains ∋ erp`; rejection (403 `TENANT_FORBIDDEN`)
 requires **both** branches to fail (fail-closed; entitlement only *widens* the
 READ set). `entitled_domains` is read only from an RS256/JWKS-verified token
-(unforgeable — GAP is the entitlement authority). The decode validator and the
+(unforgeable — IAM is the entitlement authority). The decode validator and the
 `TenantClaimEnforcer` filter are **independent gates, both dual-accept**. While
-GAP has not populated `entitled_domains` the claim is absent → only the legacy
+IAM has not populated `entitled_domains` the claim is absent → only the legacy
 path applies → **production net-zero** (ADR-MONO-019 dual-accept window).
 
 Config keys (mirrors masterdata / approval `application.yml`):
@@ -645,7 +645,7 @@ The Kafka consumer trusts the producer's `tenantId = erp` envelope field
 | In | erp `gateway-service` (v1 deferred) → direct JWT until then | HTTP `/api/erp/notifications/**` | tenant-validated JWT (entitlement-trust dual-accept) |
 | In | erp `approval-service` Kafka | Consumer subscribed to `erp.approval.{submitted,approved,rejected,withdrawn}.v1` | `processed_events` (T8) idempotent; closes the approval → notification loop |
 | Out | MySQL `erp_db` | JDBC | `notification` / `notification_delivery` / `processed_events` (separate tables; no shared-table JOIN with approval / masterdata) |
-| Out | GAP `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 | Out (v2) | external channel (Slack/SMTP) | HTTPS/SMTP | **deferred** — `NoopExternalChannelAdapter` stub in v1; v2 wires the real adapter + Category C retry scheduler behind the same `NotificationChannelPort` |
 
@@ -789,7 +789,7 @@ project memory `project_testcontainers_docker_desktop_blocker`).
 | **E4** Approval transition idempotent + audit | `processed_events` dedupe (T8) | Transition idempotency + audit are owned by `approval-service`; this consumer only dedupes on `eventId` and dispatches at-most-once per event. |
 | **E5** Integrated read model holds NO domain logic — read-only | ✅ (boundary respected, with a note) | notification-service is **not** a read-model (it has recipient-resolution + render logic), **but** it holds **no domain business logic** and **re-emits no authoritative fact** (no outbox, no `erp.notification.*` — § Internal Event Catalog). Each rendered field traces to the source event; ids are not display-name-fabricated when absent (E5 no-fabrication spirit). |
 | **E6** Authorization via permission matrix + data scope — fail-closed | ✅ (read + recipient scope) | READ gate fail-closed: `erp.read` ∨ operator ∨ entitled, else `PERMISSION_DENIED`. Data-scope = recipient grain: a caller sees / marks only `recipient_id == sub` (non-owned → 404). |
-| **E7** internal-system boundary — no external traffic, SSO enforced | ✅ | OAuth2 RS (GAP SSO) only on the inbox; entitlement-trust tenant gate fail-closed; actuator network-isolated; external traffic rejected at edge; no anonymous/self-signup. |
+| **E7** internal-system boundary — no external traffic, SSO enforced | ✅ | OAuth2 RS (IAM SSO) only on the inbox; entitlement-trust tenant gate fail-closed; actuator network-isolated; external traffic rejected at edge; no anonymous/self-signup. |
 | **E8** Permission/org change audited | Partial (dispatch traceability) | No permission/org mutation surface. Notification **dispatch** is traceable via `processed_events` + the `NotificationDelivery` outcome + the lightweight dispatch trace (I6 "최소한의 구조화 기록"); inbox self-reads use the standard observability log (no separate operator-audit surface in this increment). |
 
 ---
@@ -798,7 +798,7 @@ project memory `project_testcontainers_docker_desktop_blocker`).
 
 | Trait Rule | Status | Mechanism |
 |---|---|---|
-| **internal-system I1** SSO single auth | ✅ | OAuth2 RS (GAP JWKS, RS256) on the inbox; no self-credential store; consumer trusts same-project internal topic. |
+| **internal-system I1** SSO single auth | ✅ | OAuth2 RS (IAM JWKS, RS256) on the inbox; no self-credential store; consumer trusts same-project internal topic. |
 | **internal-system I2** No external exposure / network boundary | ✅ | `erp.local` internal Traefik; actuator network-isolated; defense-in-depth (auth independent of network — `PublicPaths` rejects non-actuator unauthenticated). |
 | **internal-system I6** Operational traceability | ✅ (lightweight) | Dispatch trace (`processed_events` + delivery outcome, A2 shape) records "what notification was dispatched, when, with what outcome"; recording mechanism delegated to audit-heavy A2/A3/A7 (§ Dispatch traceability). |
 | **transactional T1** Idempotency on mutating endpoints | N/A | The only inbox mutation (`mark-read`) is a naturally-idempotent set-to-true; idempotency is event-side (T8). |
@@ -878,8 +878,8 @@ bootstrap / follow-up tasks, not this spec):
   surface is path-routed like read-model's `/api/erp/read-model` — ADR-MONO-001
   Option C, no PORT_PREFIX) on the shared `infra/traefik/`. The Kafka consumer
   needs no Traefik route (broker-internal).
-- GAP `erp-platform-internal-services-client` scope set already carries `erp.read`
-  (sufficient for the inbox READ gate) — no new GAP V-slot scope required for v1.
+- IAM `erp-platform-internal-services-client` scope set already carries `erp.read`
+  (sufficient for the inbox READ gate) — no new IAM V-slot scope required for v1.
 
 ---
 

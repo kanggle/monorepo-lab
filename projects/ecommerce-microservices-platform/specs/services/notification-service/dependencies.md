@@ -28,7 +28,7 @@
 | order-service | `specs/contracts/events/order-events.md` — topic `order.order.placed` | Trigger ORDER_PLACED notification email to user |
 | payment-service | `specs/contracts/events/payment-events.md` — topic `payment.payment.completed` | Trigger PAYMENT_COMPLETED notification email to user |
 | shipping-service | `specs/contracts/events/shipping-events.md` — topic `shipping.shipping.status-changed` | Trigger SHIPPING_STATUS_CHANGED notification email to user |
-| GAP (iam-platform) | topic `auth.user.signed-up` (auth-events.md DEPRECATED — see `specs/integration/iam-integration.md`) | Trigger WELCOME notification email on new account registration |
+| IAM (iam-platform) | topic `auth.user.signed-up` (auth-events.md DEPRECATED — see `specs/integration/iam-integration.md`) | Trigger WELCOME notification email on new account registration |
 
 ## Publishes To
 - None at current scope (notification-service is a pure event consumer; no domain events are published)

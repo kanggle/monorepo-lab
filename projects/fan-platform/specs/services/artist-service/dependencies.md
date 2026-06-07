@@ -7,7 +7,7 @@
 | Postgres 16 | YES | primary store (`fanplatform_artist` DB) | service returns 5xx; gateway surfaces 503 |
 | Redis 7 | NO | directory search read-through cache | fail-open — directory query bypasses cache and emits `artist_directory_cache_unavailable_total` |
 | Kafka 3.7 | YES (eventual) | outbox relay target | outbox rows accumulate as PENDING; metric `artist_outbox_publish_failures_total` increments; on broker recovery rows drain. Service writes still succeed. |
-| GAP IdP (OIDC) | YES | JWKS for JWT signature verification | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
+| IAM IdP (OIDC) | YES | JWKS for JWT signature verification | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
 
 ## Build dependencies
 
@@ -31,7 +31,7 @@ Declared in `apps/artist-service/build.gradle`:
 
 ## Cross-service contracts (consumed)
 
-### GAP IdP — OIDC Resource Server
+### IAM IdP — OIDC Resource Server
 
 - Issuer: `${OIDC_ISSUER_URL}` (default `http://iam.local`).
 - JWKS: `${OIDC_JWK_SET_URI}` or `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/.well-known/jwks.json`.

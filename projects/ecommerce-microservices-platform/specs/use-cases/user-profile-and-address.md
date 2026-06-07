@@ -197,7 +197,7 @@
 2. user-service가 사용자 상태를 WITHDRAWN으로 변경한다.
 3. user-service가 `UserWithdrawn` 이벤트를 발행한다 (userId, withdrawnAt).
 4. order-service가 이벤트를 수신하여 미완료 주문을 자동 취소한다.
-5. GAP (iam-platform)가 탈퇴 신호를 수신하여 해당 사용자의 모든 인증 세션을 GAP-internal 로 무효화한다 (ecommerce 비소유).
+5. IAM (iam-platform)가 탈퇴 신호를 수신하여 해당 사용자의 모든 인증 세션을 IAM-internal 로 무효화한다 (ecommerce 비소유).
 
 ### 대안 흐름
 
