@@ -8,7 +8,7 @@ Align **iam-platform's own `docs/`** (4 self-ADRs + migration-notes) project-nam
 
 # Status
 
-ready
+done
 
 # Owner
 
