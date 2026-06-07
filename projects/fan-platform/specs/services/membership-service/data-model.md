@@ -12,7 +12,7 @@
 ```
 memberships  (one windowed subscription per (account, tenant) lifecycle row)
    │
-   └── (logical) accountId → GAP account; no cross-service FK
+   └── (logical) accountId → IAM account; no cross-service FK
 
 idempotency_keys  (subscribe idempotency — (tenant_id, account_id, idempotency_key))
 outbox            (libs:java-messaging — at-least-once relay)
@@ -31,7 +31,7 @@ processed_events  (libs:java-messaging — inbox dedupe; required by Hibernate
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v7 string |
 | `tenant_id` | VARCHAR(64) NOT NULL | row-level isolation (`fan-platform`) |
-| `account_id` | VARCHAR(36) NOT NULL | the fan = GAP `sub` claim (logical FK) |
+| `account_id` | VARCHAR(36) NOT NULL | the fan = IAM `sub` claim (logical FK) |
 | `tier` | VARCHAR(20) NOT NULL CHECK | `MEMBERS_ONLY` / `PREMIUM` (`ck_membership_tier`) |
 | `status` | VARCHAR(20) NOT NULL CHECK | `ACTIVE` / `CANCELED` (`ck_membership_status`) |
 | `valid_from` | TIMESTAMPTZ NOT NULL | window start (subscribe time) |
@@ -78,7 +78,7 @@ the membership-service `V1__init.sql`.
 ## Logical FK / referential integrity
 
 The membership-service does NOT enforce FK constraints across services:
-- `account_id` is a GAP account UUID (`sub` claim) — a logical reference only.
+- `account_id` is a IAM account UUID (`sub` claim) — a logical reference only.
 - No `FOREIGN KEY` constraint is declared cross-service — keeping schemas
   independently deployable (matches the community-service convention).
 

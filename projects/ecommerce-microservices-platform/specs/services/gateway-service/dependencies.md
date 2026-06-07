@@ -8,14 +8,14 @@
 - Redis (rate limiting state — transient data only)
 
 ## Allowed Service Interactions
-- OIDC token validation against GAP (iam-platform) — issuer + JWKS endpoint configuration only; no shared secret
+- OIDC token validation against IAM (iam-platform) — issuer + JWKS endpoint configuration only; no shared secret
 - declarative routing to all downstream backend services via Spring Cloud Gateway configuration
 
 ## Consumes From
 
 | Source | Contract | Purpose |
 |---|---|---|
-| GAP (iam-platform) | OIDC RS256 / JWKS | Token signature validation + `aud=ecommerce` + `tenant_id=ecommerce` claim enforcement (see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)) |
+| IAM (iam-platform) | OIDC RS256 / JWKS | Token signature validation + `aud=ecommerce` + `tenant_id=ecommerce` claim enforcement (see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)) |
 
 ## Publishes To
 - None (gateway does not publish events or own APIs beyond proxied routes)

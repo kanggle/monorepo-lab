@@ -62,7 +62,7 @@
 - PostgreSQL — `scm_procurement` schema
 - Redis — idempotency / cache
 - Kafka — event publication
-- GAP (JWKS) — JWT validation (via gateway-service)
+- IAM (JWKS) — JWT validation (via gateway-service)
 - Supplier mock REST (v1) — supplier integration target
 - `libs/java-messaging` (outbox) + `libs/java-security` (HMAC verification)
 

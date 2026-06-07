@@ -64,6 +64,6 @@
 
 - Order processing / payment — `order-service` / `payment-service`.
 - Search indexing — `search-service` 가 events 로 자기 index 유지 (product-service 는 발행만).
-- User authentication — `auth-service` (deprecated) → GAP.
+- User authentication — `auth-service` (deprecated) → IAM.
 - Review / rating — `review-service`.
 - Stock reservation / hold — v2 (order placement 시 stock 차감 동기, 아직 reservation pattern 미적용).

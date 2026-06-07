@@ -9,7 +9,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 | Service | Role |
 |---|---|
 | user-service | Primary owner — profile CRUD, address management, withdrawal, event publishing |
-| ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — GAP (iam-platform) is now the identity source. Profile creation triggers from GAP `AccountSignedUp` events; credential invalidation is GAP-internal.** |
+| ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — IAM (iam-platform) is now the identity source. Profile creation triggers from IAM `AccountSignedUp` events; credential invalidation is IAM-internal.** |
 | order-service | Consumes UserWithdrawn event to cancel active orders |
 | web-store | Customer-facing profile view/edit, address management UI |
 | admin-dashboard | Admin user list and detail view |
@@ -19,7 +19,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 ### Profile Creation (Event-Driven)
 
-1. GAP (iam-platform) publishes the account-signup event (GAP `AccountSignedUp`, consumed by ecommerce as `UserSignedUp`) upon successful registration in GAP
+1. IAM (iam-platform) publishes the account-signup event (IAM `AccountSignedUp`, consumed by ecommerce as `UserSignedUp`) upon successful registration in IAM
 2. user-service consumes the event and creates initial profile (userId, email, name)
 3. Profile is created in ACTIVE status
 
@@ -47,7 +47,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 2. user-service transitions profile status to WITHDRAWN
 3. user-service publishes UserWithdrawn event
 4. order-service consumes event and cancels all active orders
-5. Credential/session invalidation for the withdrawn user is handled GAP-internally (GAP consumes the withdrawal signal) — ecommerce no longer owns this step
+5. Credential/session invalidation for the withdrawn user is handled IAM-internally (IAM consumes the withdrawal signal) — ecommerce no longer owns this step
 
 ### Admin User Management
 
@@ -63,7 +63,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 - Default address cannot be deleted while other addresses exist (DEFAULT_ADDRESS_CANNOT_BE_DELETED)
 - User ID is sourced from X-User-Id header injected by gateway
 - user-service must not expose or modify authentication credentials
-- Profile email and name are sourced from GAP (iam-platform) via the account-signup event and are not directly modifiable
+- Profile email and name are sourced from IAM (iam-platform) via the account-signup event and are not directly modifiable
 - Admin endpoints require admin role (enforced via gateway)
 - Concurrent address modifications are handled with proper synchronization
 
@@ -76,6 +76,6 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 | Event | Publisher | Consumers |
 |---|---|---|
-| UserSignedUp | GAP (iam-platform) | user-service |
+| UserSignedUp | IAM (iam-platform) | user-service |
 | UserProfileUpdated | user-service | admin-dashboard (future), notification-service (future) |
-| UserWithdrawn | user-service | order-service, GAP (credential/session invalidation, GAP-internal) |
+| UserWithdrawn | user-service | order-service, IAM (credential/session invalidation, IAM-internal) |

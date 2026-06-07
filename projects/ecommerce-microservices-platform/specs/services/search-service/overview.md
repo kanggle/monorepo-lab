@@ -65,6 +65,6 @@
 
 - Product data ownership — `product-service`.
 - Order / payment processing — `order-service` / `payment-service`.
-- User authentication — `auth-service` (deprecated) → GAP.
+- User authentication — `auth-service` (deprecated) → IAM.
 - Personalized search ranking (사용자별 맞춤) — v2 (recommendation 도입 시).
 - Search analytics (query log analysis) — v2.

@@ -1,7 +1,7 @@
-# Integration — iam-platform (GAP) OIDC
+# Integration — iam-platform (IAM) OIDC
 
-> 본 문서는 `erp-platform` 의 모든 서비스가 GAP 를 표준 OIDC IdP(SSO) 로 사용하는 방식을 1쪽으로 요약한다.
-> [GAP ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) 의 erp-platform 적용본이며,
+> 본 문서는 `erp-platform` 의 모든 서비스가 IAM 를 표준 OIDC IdP(SSO) 로 사용하는 방식을 1쪽으로 요약한다.
+> [IAM ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) 의 erp-platform 적용본이며,
 > [scm-platform](../../../scm-platform/specs/integration/iam-integration.md) /
 > [finance-platform](../../../finance-platform/specs/integration/iam-integration.md) 의 같은 통합 패턴을 따른다.
 
@@ -38,14 +38,14 @@ spring:
           jwk-set-uri: ${JWT_JWKS_URI}
 ```
 
-> **Edge Case — JWKS endpoint 정렬**: V0018 시드 SQL 은 GAP 의 표준
+> **Edge Case — JWKS endpoint 정렬**: V0018 시드 SQL 은 IAM 의 표준
 > `/oauth2/jwks` 엔드포인트를 사용한다 (`/.well-known/jwks.json` 아님). erp-platform
 > 서비스의 `application.yml` default 도 이 endpoint 와 정렬되어 있다 — scm / finance /
 > wms JWKS URI 정렬과 동일.
 
 ---
 
-## OAuth Clients (등록은 GAP 의 시드 마이그레이션에서 생성)
+## OAuth Clients (등록은 IAM 의 시드 마이그레이션에서 생성)
 
 V0018 시드 ([TASK-MONO-119](../../../../tasks/done/TASK-MONO-119-erp-platform-bootstrap-artifact.md)):
 
@@ -90,7 +90,7 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 
 ## Token 검증 규칙 (각 erp-platform 서비스의 Resource Server 가 적용)
 
-1. **서명 검증** — GAP 의 JWKS 로 RS256 서명 검증.
+1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증.
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Tenant 검증** — `tenant_id` claim 이 `erp` 또는 `*` (SUPER_ADMIN platform-scope) 인 경우만 통과. 그 외 (`wms`, `ecommerce`, `fan-platform`, `scm`, `finance`) → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
@@ -113,10 +113,10 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
   - `GET /api/erp/masterdata/business-partners` (list) + `/{id}` (detail)
 
   모두 `?asOf=<ISO-8601>` point-in-time read query 를 지원 (effective-period `[from, to)` half-open semantics; producer 의 E3 invariant). (gateway-service 도입 시 `/api/v1/erp/**` → `/api/erp/**` rewrite — 콘솔 계약에 투명. erp v1 = gateway-service v1-IN 선언이나 architecture spec 아직 미작성, masterdata-service 직접 JWT.)
-- **Credential = GAP 자신의 `platform-console-web` 콘솔 클라이언트 토큰** (GAP / ADR-MONO-013 / ADR-MONO-014 소유). 사람 운영자의 GAP OIDC access token (RS256, `tenant_id=erp` 또는 SUPER_ADMIN `*`, `X-Token-Type=user`) 을 `Authorization: Bearer` 로 server-side 전달한다. 이는 위 § OAuth Clients 의 **`erp-platform-internal-services-client` 가 아니며** (후자는 v1 의 유일한 erp OAuth client 이며 본 소비와 **무관** — 콘솔은 GAP 의 콘솔 클라이언트를 쓴다; erp 는 v1 user-flow client 미발행/미예정). 검증 경로는 위 § Token 검증 규칙 의 **기존** JWKS(#1) + issuer(#3) + tenant(#4) 체인 그대로 — **신규 erp OAuth client / gateway·service route / code / auth-model 변경 없음**.
-- **`internal-only 경계` 명료화 (위 #6 / 도메인 룰 E7, 약화가 아닌 명료화)**: #6 의 "외부(비-내부망·비-SSO) 트래픽" 은 *비-GAP-SSO* 트래픽 (raw public internet, 비신뢰 네트워크, 직접 호출) 을 지칭한다. ADR-MONO-013-governed `platform-console` 은 **GAP-SSO 로 인증된 사람 운영자 토큰**을 보유하고 **내부 Traefik 라우팅을 통과**하여 도달하므로 SSO 경계 **내부** 에 있다 — 외부 우회가 아니다. 본 절은 #6 을 byte-identical 로 보존하며, 콘솔이 #6 에 의해 어떻게 허용되는지를 명시적으로 기록할 뿐이다.
+- **Credential = IAM 자신의 `platform-console-web` 콘솔 클라이언트 토큰** (IAM / ADR-MONO-013 / ADR-MONO-014 소유). 사람 운영자의 IAM OIDC access token (RS256, `tenant_id=erp` 또는 SUPER_ADMIN `*`, `X-Token-Type=user`) 을 `Authorization: Bearer` 로 server-side 전달한다. 이는 위 § OAuth Clients 의 **`erp-platform-internal-services-client` 가 아니며** (후자는 v1 의 유일한 erp OAuth client 이며 본 소비와 **무관** — 콘솔은 IAM 의 콘솔 클라이언트를 쓴다; erp 는 v1 user-flow client 미발행/미예정). 검증 경로는 위 § Token 검증 규칙 의 **기존** JWKS(#1) + issuer(#3) + tenant(#4) 체인 그대로 — **신규 erp OAuth client / gateway·service route / code / auth-model 변경 없음**.
+- **`internal-only 경계` 명료화 (위 #6 / 도메인 룰 E7, 약화가 아닌 명료화)**: #6 의 "외부(비-내부망·비-SSO) 트래픽" 은 *비-IAM-SSO* 트래픽 (raw public internet, 비신뢰 네트워크, 직접 호출) 을 지칭한다. ADR-MONO-013-governed `platform-console` 은 **IAM-SSO 로 인증된 사람 운영자 토큰**을 보유하고 **내부 Traefik 라우팅을 통과**하여 도달하므로 SSO 경계 **내부** 에 있다 — 외부 우회가 아니다. 본 절은 #6 을 byte-identical 로 보존하며, 콘솔이 #6 에 의해 어떻게 허용되는지를 명시적으로 기록할 뿐이다.
 - **Read-only (write/mutation 미소비)**: erp 의 **write/mutation** 표면 ([`masterdata-api.md`](../contracts/http/masterdata-api.md) 의 16 non-GET endpoints — 5×`POST` create / 5×`PATCH` / 5×`POST /retire` / 1×`POST .../move-parent`) 은 콘솔이 소비하지 않는다. 이들은 운영자-도메인 mutation 으로 `Idempotency-Key` (도메인 룰 F1) + role-scoped authorization (E6 fail-CLOSED) + append-only audit (E8) 을 요구하며, v1 에서 operator-parity 콘솔 표면이 아니다 (erp 는 v1 `admin-service` 없음; v2 `approval-service` / `read-model-service` / future `admin-service` 운영자 표면은 ADR-MONO-016 § D3 v2 Service Map / `PROJECT.md` § v1 OUT 으로 deferred). scm/finance 선례가 write 를 제외한 것과 동일하게 read-only.
-- **단일-org 보존**: erp 의 의도적 `multi-tenant` 미선언 (`PROJECT.md` frontmatter `traits: [internal-system, transactional, audit-heavy]`) 은 **불변** — 테넌트 스코핑은 GAP claim + 위 § Token 검증 규칙 #4 의 기존 producer-side `tenant_id ∈ {erp,*}` 게이트로 유지된다. 콘솔의 `multi-tenant`/`integration-heavy`/`audit-heavy` trait 은 **콘솔의** 책임이지 erp 의 것이 아니다 — erp 분류(domain/traits/service_types/data_sensitivity) 는 변경되지 않는다.
+- **단일-org 보존**: erp 의 의도적 `multi-tenant` 미선언 (`PROJECT.md` frontmatter `traits: [internal-system, transactional, audit-heavy]`) 은 **불변** — 테넌트 스코핑은 IAM claim + 위 § Token 검증 규칙 #4 의 기존 producer-side `tenant_id ∈ {erp,*}` 게이트로 유지된다. 콘솔의 `multi-tenant`/`integration-heavy`/`audit-heavy` trait 은 **콘솔의** 책임이지 erp 의 것이 아니다 — erp 분류(domain/traits/service_types/data_sensitivity) 는 변경되지 않는다.
 - **erp internal-system producer 의무 (콘솔이 준수해야 할, producer-authoritative 사실의 cross-ref — 신규 erp 요구가 아님)**: ① **`data_sensitivity: confidential` + audit-heavy** — 콘솔은 직원 PII (이름·연락처) / 거래처 금융 식별자 / 비용센터 민감 속성을 로깅하지 않는다 (E7 의 외부 트래픽 거부 보호와 별개로 콘솔-side 의무). ② **E1 reference integrity** — 콘솔이 retire 된 master 를 참조해도, masterdata-service 가 reject 한 reason 을 충실히 표면화한다 (자체 sanitize 금지). ③ **E2 effective dating `[from, to)`** — `effective_to` 가 채워진 row (retired) 와 NULL row (active) 를 정직하게 시각적으로 구분 렌더한다. ④ **E3 point-in-time read** — `?asOf=<past>` 가 그 시점의 상태를 반환하는 것을 콘솔이 의도 그대로 렌더한다 (현재 상태로 substitute 금지). ⑤ **E8 append-only audit log** — 콘솔 read 자체는 audit_log 에 기록되지 않지만 (read-only), 콘솔이 표시하는 master 의 변경 history 는 producer-side audit 가 권위이며 콘솔은 그것을 충실히 렌더한다. 이들은 [`masterdata-api.md`](../contracts/http/masterdata-api.md) / [`masterdata-service/architecture.md`](../services/masterdata-service/architecture.md) 가 권위이며 본 절은 cross-ref 만 한다 (해당 spec 미변경).
 - **Producer immutability**: 본 절은 **cross-reference only**. erp read 계약의 변경은 erp project-internal spec-first 변경(`masterdata-api.md`)이며 본 절은 그것을 따를 뿐 재정의하지 않는다. 콘솔-side 의무는 platform-console [`console-integration-contract.md`](../../../platform-console/specs/contracts/console-integration-contract.md) **§ 2.4.8** (`TASK-PC-FE-010` 가 작성) 이며, 콘솔이 재사용하는 per-domain-credential 규칙은 같은 계약 § 2.4.5/§ 2.4.6/§ 2.4.7 (FE-007 wms / FE-008 scm / FE-009 finance) 이다 — 본 절은 **Phase 6** analog 로서 그 검증된 계약을 재구성 없이 상속한다.
 
@@ -158,16 +158,16 @@ curl -u erp-platform-internal-services-client:erp-dev \
 - [ ] 콘솔 user-flow 도입 시점에 `erp-platform-user-flow-client` 의 V0NN 시드 추가 + redirect URI 갱신.
 - [ ] `erp-platform-internal-services-client` 의 client_secret 을 secret manager 로 회전 (production).
 - [ ] D2-b deprecation 윈도우 종료 시 allowed-issuers 에서 `iam-platform` 제거.
-- [ ] GAP 의 `erp` 테넌트 (V0018 account-service 시드) 는 TASK-MONO-119 에서 등록됨.
+- [ ] IAM 의 `erp` 테넌트 (V0018 account-service 시드) 는 TASK-MONO-119 에서 등록됨.
 
 ---
 
 ## 참조
 
-- [GAP ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — GAP IdP 승급
-- [GAP auth-api.md § OAuth2 Clients](../../../iam-platform/specs/contracts/http/auth-api.md)
+- [IAM ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — IAM IdP 승급
+- [IAM auth-api.md § OAuth2 Clients](../../../iam-platform/specs/contracts/http/auth-api.md)
 - [platform/contracts/jwt-standard-claims.md](../../../../platform/contracts/jwt-standard-claims.md) — JWT 클레임 표준
 - [scm-platform 의 동일 통합](../../../scm-platform/specs/integration/iam-integration.md) — reference pattern
 - [finance-platform 의 동일 통합](../../../finance-platform/specs/integration/iam-integration.md) — reference pattern
-- TASK-MONO-119 — GAP V0018 erp-platform OIDC/tenant 시드 (V0018 auth: `erp-platform-internal-services-client`, V0018 account: `erp` tenant)
+- TASK-MONO-119 — IAM V0018 erp-platform OIDC/tenant 시드 (V0018 auth: `erp-platform-internal-services-client`, V0018 account: `erp` tenant)
 - TASK-ERP-BE-001 — 본 통합의 첫 구현 태스크 (masterdata-service bootstrap)

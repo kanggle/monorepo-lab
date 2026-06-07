@@ -14,7 +14,7 @@
 | Deployable unit | `web/admin-dashboard/` (or `apps/admin-dashboard/` per repo layout) |
 | Bounded Context | `ecommerce-admin` (internal ops) |
 | Persistent stores | none — auth session cookie only; transient client state for UI prefs |
-| Backend dependencies | `gateway-service` (all admin API traffic; `/api/admin/**` JWT + `ROLE_ADMIN`), GAP IdP (auth, indirect) |
+| Backend dependencies | `gateway-service` (all admin API traffic; `/api/admin/**` JWT + `ROLE_ADMIN`), IAM IdP (auth, indirect) |
 
 ## Responsibilities
 

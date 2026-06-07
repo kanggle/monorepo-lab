@@ -19,13 +19,13 @@ layers (`rules/common.md`, `rules/traits/content-heavy.md`,
 | Primary stack | Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 3.4, next-auth v5 (auth.js), TanStack Query v5 |
 | Bounded Context | `fan-platform-frontend` |
 | Deployable unit | `web/fan-platform-web/` |
-| Backend dependencies | gateway-service (`http://fan-platform.local`), GAP IdP (`http://iam.local`) |
+| Backend dependencies | gateway-service (`http://fan-platform.local`), IAM IdP (`http://iam.local`) |
 
 ### Service Type Composition
 
 `fan-platform-web` is a single-type `frontend-app` service per
 `platform/service-types/INDEX.md`. Next.js 15 App Router server-rendered
-+ client-side hybrid delivery with next-auth v5 PKCE flow against GAP
++ client-side hybrid delivery with next-auth v5 PKCE flow against IAM
 IdP. No backend service-type composition.
 
 ---
@@ -121,19 +121,19 @@ src/
 
 ---
 
-## Authentication (next-auth v5 + GAP OIDC)
+## Authentication (next-auth v5 + IAM OIDC)
 
 Flow:
 
-1. User clicks "GAP 로 로그인" on `/login` — Server Action calls
+1. User clicks "IAM 로 로그인" on `/login` — Server Action calls
    `signIn('gap', { redirectTo })`.
 2. next-auth performs OIDC discovery against `OIDC_ISSUER_URL`
    (`/.well-known/openid-configuration`), generates PKCE verifier + state,
-   and redirects the browser to GAP's `/oauth2/authorize`.
-3. GAP authenticates the user, redirects back to
+   and redirects the browser to IAM's `/oauth2/authorize`.
+3. IAM authenticates the user, redirects back to
    `/api/auth/callback/iam?code=...&state=...`.
-4. next-auth exchanges the code for tokens at GAP's `/oauth2/token`
-   (PKCE verifier supplied), validates ID-token signature against GAP's
+4. next-auth exchanges the code for tokens at IAM's `/oauth2/token`
+   (PKCE verifier supplied), validates ID-token signature against IAM's
    JWKS, and persists `access_token` + `refresh_token` + `tenant_id` claim
    onto an HttpOnly JWT session cookie.
 5. The `session` callback exposes `accountId` / `tenantId` / `roles` to RSC
@@ -146,7 +146,7 @@ token from the session via `'server-only'`.
 
 ### OIDC client registration
 
-GAP V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
+IAM V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
 + `fan-platform-internal-services-client` + `fan-platform` tenant 시드 적용.
 end-to-end OIDC `signIn('iam')` round-trip 정상 작동. dev secret = `fan-platform-dev`.
 
@@ -172,7 +172,7 @@ mutation that needs cache coordination — currently unused in v1 paths.
 ## Multi-tenant + Cross-tenant Defense
 
 The browser does not enforce `tenant_id` — that responsibility is the
-backend's. The frontend simply forwards GAP's bearer token via
+backend's. The frontend simply forwards IAM's bearer token via
 `Authorization: Bearer <token>`; the gateway/community-service/artist-service
 each re-validate `tenant_id == fan-platform`. A wrong-tenant token surfaces
 as `ApiError(403, TENANT_FORBIDDEN)` and the page renders an `ErrorState`
@@ -202,10 +202,10 @@ as `ApiError(403, TENANT_FORBIDDEN)` and the page renders an `ErrorState`
 - **Smoke (Playwright)** — `e2e-smoke/` runs against `next start` with the
   OIDC issuer / gateway URL forced to a closed loopback host. Three specs:
   - `home.spec.ts` — `/` redirects to `/login` when unauth'd.
-  - `login.spec.ts` — `/login` page renders with the GAP sign-in button.
+  - `login.spec.ts` — `/login` page renders with the IAM sign-in button.
   - `auth-guard.spec.ts` — protected routes redirect with `?from=` preserved.
 - **Full-stack E2E** — deferred to a follow-up task (`TASK-FAN-INT-002`),
-  which boots backend services + GAP + WireMock and clicks through the
+  which boots backend services + IAM + WireMock and clicks through the
   fan demo path.
 
 ---

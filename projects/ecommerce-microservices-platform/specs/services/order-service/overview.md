@@ -68,5 +68,5 @@
 
 - Payment processing — owned by `payment-service`.
 - Product catalog / inventory — owned by `product-service`; order snapshots product info at placement.
-- Authentication / token issuance — owned by `auth-service` (deprecated) → GAP.
+- Authentication / token issuance — owned by `auth-service` (deprecated) → IAM.
 - Stock reservation enforcement — `product-service` 가 stock 검증, order 는 결과 반영만.

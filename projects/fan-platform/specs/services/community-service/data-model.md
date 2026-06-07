@@ -31,7 +31,7 @@ processed_events  (libs:java-messaging — inbox dedupe; required by Hibernate
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v7 string |
 | `tenant_id` | VARCHAR(64) NOT NULL | row-level isolation |
-| `author_account_id` | VARCHAR(36) NOT NULL | logical FK to GAP account |
+| `author_account_id` | VARCHAR(36) NOT NULL | logical FK to IAM account |
 | `post_type` | VARCHAR(20) NOT NULL CHECK | `ARTIST_POST` / `FAN_POST` |
 | `visibility` | VARCHAR(20) NOT NULL CHECK | `PUBLIC` / `MEMBERS_ONLY` / `PREMIUM` |
 | `status` | VARCHAR(20) NOT NULL CHECK | `DRAFT` / `PUBLISHED` / `HIDDEN` / `DELETED` |
@@ -111,11 +111,11 @@ Schemas are inherited verbatim from `libs:java-messaging`. See
 ## Logical FK / referential integrity
 
 The community-service does NOT enforce FK constraints across services:
-- `author_account_id` / `reactor_account_id` / `fan_account_id` / `artist_account_id` are GAP account UUIDs (TASK-FAN-BE-002 § Hard rules — "artist accounts are GAP accounts").
+- `author_account_id` / `reactor_account_id` / `fan_account_id` / `artist_account_id` are IAM account UUIDs (TASK-FAN-BE-002 § Hard rules — "artist accounts are IAM accounts").
 - The artist-service (TASK-FAN-BE-003) holds artist profile metadata; community-service treats those as logical references only.
 - No `FOREIGN KEY` constraint is declared cross-table in v1 — keeping schemas independently deployable.
 
-Within the service, parent/child rows (post → comment / reaction / status_history) ARE conceptually related but the FK is also expressed at the application layer rather than the database layer, matching the GAP reference. This trades referential safety for cross-table-rename flexibility; deletes of a post are status transitions (DELETED) not `DELETE` SQL, so orphans are not produced in normal operation.
+Within the service, parent/child rows (post → comment / reaction / status_history) ARE conceptually related but the FK is also expressed at the application layer rather than the database layer, matching the IAM reference. This trades referential safety for cross-table-rename flexibility; deletes of a post are status transitions (DELETED) not `DELETE` SQL, so orphans are not produced in normal operation.
 
 ---
 

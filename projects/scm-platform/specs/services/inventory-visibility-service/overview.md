@@ -62,7 +62,7 @@
 - `wms-platform` Kafka (3 topics: `wms.inventory.{received,adjusted,transferred}.v1`)
 - PostgreSQL — `inventory-visibility` schema
 - Redis — aggregation cache (fail-open)
-- GAP (JWKS) — JWT validation (via gateway-service)
+- IAM (JWKS) — JWT validation (via gateway-service)
 - `gateway-service` — front entry
 
 ## Out of scope (v1)

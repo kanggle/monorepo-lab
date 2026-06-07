@@ -10,7 +10,7 @@ Domain rules: [`rules/domains/erp.md`](../../../../../rules/domains/erp.md) (E1�
 
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
-  (RS256, GAP JWKS). Cross-tenant → 403 `TENANT_FORBIDDEN`.
+  (RS256, IAM JWKS). Cross-tenant → 403 `TENANT_FORBIDDEN`.
 - Enforce the **authorization matrix + data scope** (E6) — insufficient
   role → 403 `PERMISSION_DENIED`; target row outside the caller's
   organization subtree → 403 `DATA_SCOPE_FORBIDDEN`. Both checks happen

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Postgres 16 | YES | primary store (`fanplatform_membership` DB) | service returns 5xx; gateway surfaces 503. Internal access-check → **fail-closed deny** (`allowed=false`). |
 | Kafka 3.7 | YES (eventual) | outbox relay target | outbox rows accumulate as PENDING; metric `membership_outbox_publish_failures_total` increments; on broker recovery rows drain. Service writes still succeed. |
-| GAP IdP (OIDC) | YES | JWKS for JWT signature verification — end-user tokens AND workload-identity (`client_credentials`) tokens on `/internal/**` | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
+| IAM IdP (OIDC) | YES | JWKS for JWT signature verification — end-user tokens AND workload-identity (`client_credentials`) tokens on `/internal/**` | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
 | Payment Gateway | NO (mock) | `PaymentGatewayPort` authorize | v1 ships `MockPaymentGatewayAdapter` (deterministic). No real external PG; no network dependency. A real adapter is a future increment. |
 
 > No Redis — membership-service has no read-cache case in v1 (access-check is a
@@ -33,7 +33,7 @@ Declared in `apps/membership-service/build.gradle` (authored by FAN-BE-009):
 
 ## Cross-service contracts (consumed)
 
-### GAP IdP — OIDC Resource Server (end-user tokens)
+### IAM IdP — OIDC Resource Server (end-user tokens)
 
 - Issuer: `${OIDC_ISSUER_URL}` (default `http://iam.local`).
 - JWKS: `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/oauth2/jwks`.
@@ -41,9 +41,9 @@ Declared in `apps/membership-service/build.gradle` (authored by FAN-BE-009):
 - Required claims: `iss` (∈ allowed-issuers), `sub`, `tenant_id` ∈ `{ fan-platform, * }`, `exp`, `nbf`, `iat`.
 - Optional: `roles[]` or `role` string.
 
-### GAP IdP — workload identity (`/internal/**` inbound)
+### IAM IdP — workload identity (`/internal/**` inbound)
 
-- The `/internal/membership/access` endpoint is authenticated by a GAP
+- The `/internal/membership/access` endpoint is authenticated by a IAM
   `client_credentials` JWT (ADR-MONO-005). membership-service is the **receiver**;
   community-service is the **caller**.
 - The internal security chain validates issuer + signature + a recognized internal

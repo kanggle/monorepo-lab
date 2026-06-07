@@ -64,5 +64,5 @@
 
 - Order management — `order-service`.
 - Product catalog / inventory — `product-service`.
-- Authentication — `auth-service` (deprecated) → GAP.
+- Authentication — `auth-service` (deprecated) → IAM.
 - PCI-DSS scope — card data never persisted; Toss widget delegates to PG (ecommerce `PROJECT.md` § Out of Scope, regulated).

@@ -80,7 +80,7 @@ Aggregate root for the PO lifecycle. State machine is enforced by
 | tenant_id | VARCHAR(64) NOT NULL | |
 | po_number | VARCHAR(40) NOT NULL | format = `"PO-" + UUID-v7-rand_b-tail-8-uppercase`; see § po_number format below |
 | supplier_id | VARCHAR(36) NOT NULL | references `suppliers.id` (no FK declared — supplier may be in v2 supplier-service) |
-| buyer_account_id | VARCHAR(36) NOT NULL | GAP `sub` claim of the actor who drafted the PO |
+| buyer_account_id | VARCHAR(36) NOT NULL | IAM `sub` claim of the actor who drafted the PO |
 | status | VARCHAR(30) NOT NULL | CHECK ∈ {`DRAFT`, `SUBMITTED`, `ACKNOWLEDGED`, `CONFIRMED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `SETTLED`, `CLOSED`, `CANCELED`} |
 | total_amount | NUMERIC(18,2) NOT NULL | sum of `line.quantity × line.unit_price` |
 | currency | VARCHAR(3) NOT NULL | ISO 4217 |

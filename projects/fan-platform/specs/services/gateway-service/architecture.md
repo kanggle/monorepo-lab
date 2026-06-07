@@ -40,7 +40,7 @@ Per `platform/api-gateway-policy.md` it MUST:
   `/api/v1/fandoms/**` request (and future membership/notification/admin paths) to
   the owning service. RewritePath filters strip the `/api/v1/...` public prefix to
   the service-internal path (see § Routes — TASK-FAN-BE-005 머지로 production 적용).
-- Validate JWT bearer tokens (OAuth2 Resource Server) against GAP's JWKS.
+- Validate JWT bearer tokens (OAuth2 Resource Server) against IAM's JWKS.
 - Enforce tenant isolation: only `tenant_id=fan-platform` (or the SUPER_ADMIN
   wildcard `*`) is admitted; cross-tenant tokens are rejected at the edge with
   403 `TENANT_FORBIDDEN`.
@@ -151,7 +151,7 @@ Downstream services do **not** use the `v1` prefix internally. The gateway
 
 > **membership-service `/internal/**` is NOT gateway-exposed.** The internal
 > access-check endpoint (`GET /internal/membership/access`) is reachable only on the
-> internal `fan-platform-net` docker network, authenticated by GAP
+> internal `fan-platform-net` docker network, authenticated by IAM
 > `client_credentials` workload identity (ADR-MONO-005). No gateway route admits
 > `/internal/**`. See
 > `projects/fan-platform/specs/services/membership-service/architecture.md`
@@ -221,7 +221,7 @@ For Prometheus job configuration and scrape interval guidance, see
 
 Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/iam-integration.md`:
 
-- Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at GAP.
+- Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` pointing at IAM.
 - Algorithm: RS256 only.
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the

@@ -22,8 +22,8 @@ exist.
 
 Every route under `/api/**` requires:
 
-- `Authorization: Bearer <RS256 JWT>` issued by GAP.
-- JWT signature verifies against GAP's JWKS (`http://iam.local/oauth2/jwks`).
+- `Authorization: Bearer <RS256 JWT>` issued by IAM.
+- JWT signature verifies against IAM's JWKS (`http://iam.local/oauth2/jwks`).
 - `iss` claim is one of: SAS issuer URL (default `http://iam.local`), legacy
   `iam-platform` (D2-b deprecation window).
 - `tenant_id` claim is `scm` or `*` (SUPER_ADMIN wildcard). Any other tenant
@@ -51,9 +51,9 @@ a **sanctioned external read consumer** of scm's existing read surface:
 | `GET /api/v1/inventory-visibility/{snapshot, sku/{sku}, staleness, nodes}` | [`inventory-visibility-api.md`](./inventory-visibility-api.md) |
 
 - **Credential — existing capability, no change.** The console calls these
-  **server-side** with a human operator's **GAP `platform-console-web` OIDC
-  access token** (RS256, issued by GAP per ADR-001). This token is validated by
-  the **already-existing** gateway chain exactly like any GAP RS256 token:
+  **server-side** with a human operator's **IAM `platform-console-web` OIDC
+  access token** (RS256, issued by IAM per ADR-001). This token is validated by
+  the **already-existing** gateway chain exactly like any IAM RS256 token:
   `AllowedIssuersValidator` + `TenantClaimValidator` (`tenant_id ∈ { scm, * }`)
   + `JwtHeaderEnrichmentFilter` surfacing `X-Token-Type=user` (the human-caller
   shape already specified in [`iam-integration.md`](../../integration/iam-integration.md)
@@ -65,7 +65,7 @@ a **sanctioned external read consumer** of scm's existing read surface:
   buyer/machine paths and are **not** console-consumed.
 - **Single-org preserved.** scm remains single-organization (the deliberate
   `multi-tenant` non-declaration in [`PROJECT.md`](../../../PROJECT.md) is
-  **unaffected**). Tenant scoping stays the GAP `tenant_id` claim enforced by
+  **unaffected**). Tenant scoping stays the IAM `tenant_id` claim enforced by
   the **existing** producer-side `TenantClaimValidator`; cross-tenant tokens are
   rejected `403 TENANT_FORBIDDEN` exactly as today. The console's own
   multi-tenant/audit-heavy obligations are the console's, not scm's.
@@ -74,10 +74,10 @@ a **sanctioned external read consumer** of scm's existing read surface:
   platform-console
   [`console-integration-contract.md`](../../../../platform-console/specs/contracts/console-integration-contract.md)
   § 2.4.6 (authored by `TASK-PC-FE-008`), reusing its § 2.4.5 per-domain
-  credential rule (GAP-token-direct for scm/wms, distinct from GAP's own
+  credential rule (IAM-token-direct for scm/wms, distinct from IAM's own
   operator-token exchange).
 - The deferred `scm-platform-user-flow-client` (V0013 table) stays deferred and
-  is **unrelated** — the console uses GAP's **own** `platform-console-web`
+  is **unrelated** — the console uses IAM's **own** `platform-console-web`
   client, never an scm-registered client.
 
 ## Error envelope

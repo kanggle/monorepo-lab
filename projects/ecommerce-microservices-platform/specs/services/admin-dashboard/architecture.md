@@ -116,15 +116,15 @@ Features compose these shared components with feature-specific configuration and
 - UI primitives must come from `@repo/ui` or `shared/`
 - Do not call backend services directly — all traffic goes through gateway-service
 
-## Authentication: GAP OIDC (post TASK-FE-067)
+## Authentication: IAM OIDC (post TASK-FE-067)
 - Auth library: `next-auth` v5 (auth.js) configured in `src/shared/auth/auth.ts`.
-- Identity provider: `iam-platform` (GAP) — `OIDC_ISSUER_URL` (default `http://iam.local`).
-- Client: `ecommerce-admin-dashboard-client` (registered in GAP V0012 seed). Confidential client + PKCE.
+- Identity provider: `iam-platform` (IAM) — `OIDC_ISSUER_URL` (default `http://iam.local`).
+- Client: `ecommerce-admin-dashboard-client` (registered in IAM V0012 seed). Confidential client + PKCE.
 - Scope: `openid profile email tenant.read ecommerce.operator`. Backend (gateway-service) asserts `tenant_id=ecommerce` via the JWT claim.
-- Account-type guard: only `account_type=OPERATOR` may sign in. A `CONSUMER` who completes the GAP flow is rejected by the `session()` callback and bounced to `/login?error=account_type_mismatch`.
+- Account-type guard: only `account_type=OPERATOR` may sign in. A `CONSUMER` who completes the IAM flow is rejected by the `session()` callback and bounced to `/login?error=account_type_mismatch`.
 - Bearer token wiring: same pattern as web-store — `AuthProvider` (in `src/shared/hooks/auth-context.tsx`) pushes `session.accessToken` into `src/shared/auth/token-bridge.ts`, which the axios interceptor reads synchronously.
 - Server-side (RSC, route handlers): use `getAdminSession()` from `src/shared/auth/session.ts`.
-- 401 handling: same as web-store — re-run the GAP signin flow via `/api/auth/signin/gap`.
+- 401 handling: same as web-store — re-run the IAM signin flow via `/api/auth/signin/gap`.
 - All paths except `/login` and `/api/auth/*` require an OPERATOR session — enforced in `src/middleware.ts`.
 
 ## Testing Expectations

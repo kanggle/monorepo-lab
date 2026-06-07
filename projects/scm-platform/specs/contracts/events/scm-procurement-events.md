@@ -84,7 +84,7 @@ below show only the **additional** fields each event appends.
 | `poNumber` | string | no | `"PO-" + uuidV7-rand_b-tail-8-uppercase` per data-model.md § po_number format. |
 | `tenantId` | string | no | Always `"scm"` in v1. |
 | `supplierId` | string (UUID) | no | Reference to `suppliers.id` (no FK enforced cross-service). |
-| `buyerAccountId` | string (UUID) | no | GAP `sub` claim of the actor who drafted the PO. |
+| `buyerAccountId` | string (UUID) | no | IAM `sub` claim of the actor who drafted the PO. |
 | `totalAmount` | string (BigDecimal plain) | no | Sum of line.quantity × line.unit_price as plain decimal string (e.g., `"125000.00"`); avoid float parsing. |
 | `currency` | string (ISO 4217) | no | 3-char currency code. |
 

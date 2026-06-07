@@ -21,7 +21,7 @@ acknowledgement.
 All endpoints:
 - Require `Authorization: Bearer <token>` satisfying the **entitlement-trust
   dual-accept** gate (`tenant_id ∈ {erp, *}` ∪ signed `entitled_domains ∋ erp`,
-  RS256, GAP JWKS). Both branches fail → 403 `TENANT_FORBIDDEN`.
+  RS256, IAM JWKS). Both branches fail → 403 `TENANT_FORBIDDEN`.
 - Enforce the **READ authorization gate** (E6, fail-closed): `erp.read` scope ∨
   `isOperator()` ∨ entitled; else 403 `PERMISSION_DENIED`. Same
   `RoleScopeAuthorizationAdapter` READ semantics as
@@ -218,7 +218,7 @@ transactional idempotency-key codes do not surface on this contract.
   recipient's notification is 404, never 403. This is the data-scope boundary
   for this service — the inbox is **personal**, there is no all-recipients view
   in v1.
-- **internal-only (E7)**: SSO/GAP-issued JWT required; no anonymous / external
+- **internal-only (E7)**: SSO/IAM-issued JWT required; no anonymous / external
   path. Network-layer `internal: true` is the primary enforcement; this contract
   is the application-layer surface.
 

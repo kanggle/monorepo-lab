@@ -62,4 +62,4 @@
 - 검색 인덱싱 (Elasticsearch) — v2 search-service
 - 아티스트 self-service (artist 본인이 자기 프로필 수정) — v1 admin only
 - 통계 / 대시보드 (팔로워 수 집계 등) — v2 admin-service
-- artist 인증 (artist 본인 로그인) — out of scope; GAP 통합 admin 계정 모델로 처리
+- artist 인증 (artist 본인 로그인) — out of scope; IAM 통합 admin 계정 모델로 처리

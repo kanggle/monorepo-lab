@@ -18,7 +18,7 @@
 
 ## Responsibilities
 
-- Create user profile on `UserSignedUp` event consumption (from `auth-service` — deprecated → GAP transition).
+- Create user profile on `UserSignedUp` event consumption (from `auth-service` — deprecated → IAM transition).
 - Manage user profile query and update (`email`, `name`, `nickname`, `phone`, `profileImageUrl`).
 - Own shipping address CRUD — add / update / delete / list + default address designation.
 - Handle user withdrawal — status → `WITHDRAWN` + publish `UserWithdrawn` event.
@@ -43,8 +43,8 @@
 
 ## Key invariants
 
-1. **No credential ownership** — user-service 는 password / hash / JWT token 직접 보관 / 검증 금지; GAP (iam-platform) 가 owner (in-tree auth-service 는 TASK-BE-132 으로 폐기).
-2. **`userId` is external identifier** — GAP 가 발급한 ID 를 그대로 사용, 자체 sequence 생성 안 함.
+1. **No credential ownership** — user-service 는 password / hash / JWT token 직접 보관 / 검증 금지; IAM (iam-platform) 가 owner (in-tree auth-service 는 TASK-BE-132 으로 폐기).
+2. **`userId` is external identifier** — IAM 가 발급한 ID 를 그대로 사용, 자체 sequence 생성 안 함.
 3. **No token cache** — JWT / refresh token 을 user-service 가 cache 하지 않음.
 4. **Profile data exposed via published contracts only** — DB 직접 조회 금지; HTTP / event 만 통과.
 5. **Presentation ↛ persistence** — controller 가 repository 직접 호출 금지 (architecture.md § Layered Rules).
@@ -63,11 +63,11 @@
 
 - PostgreSQL — user profile persistence
 - Kafka — event consumption + publication
-- ~~`auth-service`~~ (deprecated) → GAP (event source: `UserSignedUp`; GAP `AccountSignedUp` 위임)
+- ~~`auth-service`~~ (deprecated) → IAM (event source: `UserSignedUp`; IAM `AccountSignedUp` 위임)
 
 ## Out of scope (v1)
 
-- Authentication / credential management — `auth-service` (deprecated) → GAP.
+- Authentication / credential management — `auth-service` (deprecated) → IAM.
 - Order processing — `order-service`.
 - Payment processing — `payment-service`.
 - Product catalog — `product-service`.

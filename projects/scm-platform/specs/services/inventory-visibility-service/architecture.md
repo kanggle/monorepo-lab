@@ -64,7 +64,7 @@ config/         ← Spring @Configuration beans only
 ## Service Type Compliance
 
 ### rest-api
-- Stateless JWT auth (OAuth2 RS, GAP JWKS)
+- Stateless JWT auth (OAuth2 RS, IAM JWKS)
 - `tenant_id=scm` fail-closed at gateway + service level
 - Read-only endpoints (no mutating REST)
 - Standard error envelope `{ code, message }`
@@ -144,7 +144,7 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 | In | wms-platform Kafka | Consumer subscribed to `wms.inventory.{received,adjusted,transferred}.v1` | EventDedupe 멱등; cross-project 첫 사례 |
 | Out | PostgreSQL (inventory-visibility schema) | JDBC | InventoryNode / InventorySnapshot / NodeStaleness / EventDedupe |
 | Out | Redis | TCP | read-model cache (fail-OPEN) |
-| Out | GAP `/oauth2/jwks` | HTTPS | JWT 서명 검증 (libs/java-security) |
+| Out | IAM `/oauth2/jwks` | HTTPS | JWT 서명 검증 (libs/java-security) |
 
 ## Saga / Long-running Flow (ADR-MONO-005)
 
@@ -183,21 +183,21 @@ Invalid envelopes (null `eventId` or null `payload`) bypass dedupe and route str
 
 ## Multi-tenancy
 
-**N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a GAP `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant).
+**N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a IAM `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant).
 
 The domain claim is still **fail-closed enforced** at the gate via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
 defense-in-depth — consistent with `procurement-service`). A token is accepted
 when **either** the legacy slug `tenant_id ∈ {scm, *}` (`*` = SUPER_ADMIN
-platform-scope) **or** the GAP-signed `entitled_domains` claim (a list of domain
+platform-scope) **or** the IAM-signed `entitled_domains` claim (a list of domain
 keys) contains `scm`; rejection (403 `TENANT_FORBIDDEN`) requires **both**
 branches to fail (fail-closed; entitlement only *widens*). `entitled_domains` is
-read only from an RS256/JWKS-verified token, so it is unforgeable — **GAP is the
+read only from an RS256/JWKS-verified token, so it is unforgeable — **IAM is the
 entitlement authority**; a non-list / null / empty / non-string-element claim
-degrades to "not entitled". While GAP has not yet populated `entitled_domains`
+degrades to "not entitled". While IAM has not yet populated `entitled_domains`
 the claim is absent → only the legacy path applies → **production net-zero**
 (ADR-MONO-019 **dual-accept window**; the legacy slug branch is removed in step
-4 once GAP populates the claim — separate follow-up):
+4 once IAM populates the claim — separate follow-up):
 
 1. **Gateway** — `TenantClaimValidator` applies the dual-accept gate at JWT decode time.
 2. **Service JWT validator chain (decode-time)** — `AllowedIssuersValidator` + the decode-time `tenantClaimValidator` (`ServiceLevelOAuth2Config`) re-run during local decode (the gateway forwards the bearer; the service decodes again). The decode-time validator applies the **entitlement-trust dual-accept** itself (TASK-MONO-162) via a local `isEntitled` helper — without it a domain-entitled cross-tenant token (e.g. globex `entitled_domains ∋ scm`) is rejected at decode before the filter's dual-accept can run.

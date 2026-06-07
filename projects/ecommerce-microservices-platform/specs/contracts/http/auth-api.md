@@ -3,10 +3,10 @@
 > **DEPRECATED** — 2026-05-04 (TASK-BE-132)
 >
 > This contract is retired. The ecommerce auth-service has been decommissioned
-> and replaced by GAP (Global Account Platform) OIDC.
+> and replaced by IAM (Global Account Platform) OIDC.
 >
 > Replacement references:
-> - GAP auth contract: `projects/iam-platform/specs/contracts/http/auth-api.md`
+> - IAM auth contract: `projects/iam-platform/specs/contracts/http/auth-api.md`
 > - Integration spec: `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`
 >
 > This file is retained for historical reference only.

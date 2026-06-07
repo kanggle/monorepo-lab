@@ -105,7 +105,7 @@ exactly one approver (`approverId`).
 
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
-  (RS256, GAP JWKS — [`iam-integration.md`](../../integration/iam-integration.md)).
+  (RS256, IAM JWKS — [`iam-integration.md`](../../integration/iam-integration.md)).
   Cross-tenant → 403 `TENANT_FORBIDDEN`.
 - Enforce the **authorization matrix + data scope** (E6, fail-closed) — the
   caller must hold `erp.write` for mutations / `erp.read` for reads, and the
@@ -472,7 +472,7 @@ authorization sections.
 Identical to [`masterdata-api.md`](masterdata-api.md) and
 [`iam-integration.md`](../../integration/iam-integration.md):
 
-- **Authentication** — `Authorization: Bearer <RS256 JWT>` verified against GAP
+- **Authentication** — `Authorization: Bearer <RS256 JWT>` verified against IAM
   JWKS. `tenant_id ∈ {erp, *}`; else 403 `TENANT_FORBIDDEN`. `entitlement-trust`
   dual-accept applies wherever the platform-console operator token reaches this
   service (same `RoleScopeAuthorizationAdapter` semantics as the read surfaces).

@@ -1,7 +1,7 @@
-# Integration — iam-platform (GAP) OIDC
+# Integration — iam-platform (IAM) OIDC
 
-> 본 문서는 `finance-platform` 의 모든 서비스가 GAP 를 표준 OIDC IdP 로 사용하는 방식을 1쪽으로 요약한다.
-> [GAP ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) 의 finance-platform 적용본이며,
+> 본 문서는 `finance-platform` 의 모든 서비스가 IAM 를 표준 OIDC IdP 로 사용하는 방식을 1쪽으로 요약한다.
+> [IAM ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) 의 finance-platform 적용본이며,
 > [scm-platform](../../../scm-platform/specs/integration/iam-integration.md) /
 > [wms-platform](../../../wms-platform/specs/integration/iam-integration.md) 의 같은 통합 패턴을 따른다.
 
@@ -38,14 +38,14 @@ spring:
           jwk-set-uri: ${JWT_JWKS_URI}
 ```
 
-> **Edge Case — JWKS endpoint 정렬**: V0017 시드 SQL 은 GAP 의 표준
+> **Edge Case — JWKS endpoint 정렬**: V0017 시드 SQL 은 IAM 의 표준
 > `/oauth2/jwks` 엔드포인트를 사용한다 (`/.well-known/jwks.json` 아님). finance-platform
 > 서비스의 `application.yml` default 도 이 endpoint 와 정렬되어 있다 — scm / wms /
 > fan-platform JWKS URI 정렬과 동일.
 
 ---
 
-## OAuth Clients (등록은 GAP 의 시드 마이그레이션에서 생성)
+## OAuth Clients (등록은 IAM 의 시드 마이그레이션에서 생성)
 
 V0017 시드 ([TASK-MONO-114](../../../../tasks/done/TASK-MONO-114-finance-platform-bootstrap-artifact.md)):
 
@@ -90,7 +90,7 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 
 ## Token 검증 규칙 (각 finance-platform 서비스의 Resource Server 가 적용)
 
-1. **서명 검증** — GAP 의 JWKS 로 RS256 서명 검증.
+1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증.
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Tenant 검증** — `tenant_id` claim 이 `finance` 또는 `*` (SUPER_ADMIN platform-scope) 인 경우만 통과. 그 외 (`wms`, `ecommerce`, `fan-platform`, `scm`, 향후 `erp`) → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
@@ -110,9 +110,9 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
   - `GET /api/finance/accounts/{id}/transactions` (paginated)
 
   (gateway-service 도입 시 `/api/v1/finance/**` → `/api/finance/**` rewrite — 콘솔 계약에 투명. finance v1 = gateway-service deferred, account-service 직접 JWT.)
-- **Credential = GAP 자신의 `platform-console-web` 콘솔 클라이언트 토큰** (GAP / ADR-MONO-013 / ADR-MONO-014 소유). 사람 운영자의 GAP OIDC access token (RS256, `tenant_id=finance` 또는 SUPER_ADMIN `*`, `X-Token-Type=user`) 을 `Authorization: Bearer` 로 server-side 전달한다. 이는 **`finance-platform-internal-services-client` 가 아니며**, 위 § OAuth Clients 의 **deferred `finance-platform-user-flow-client` 도 아니다** (후자는 계속 deferred 이며 본 소비와 **무관** — 콘솔은 GAP 의 콘솔 클라이언트를 쓴다). 검증 경로는 위 § Token 검증 규칙 의 **기존** `AllowedIssuersValidator` (#3) + `TenantClaimValidator` (#4) + JWKS(#1) 체인 그대로 — **신규 finance OAuth client / gateway·service route / code / auth-model 변경 없음**.
+- **Credential = IAM 자신의 `platform-console-web` 콘솔 클라이언트 토큰** (IAM / ADR-MONO-013 / ADR-MONO-014 소유). 사람 운영자의 IAM OIDC access token (RS256, `tenant_id=finance` 또는 SUPER_ADMIN `*`, `X-Token-Type=user`) 을 `Authorization: Bearer` 로 server-side 전달한다. 이는 **`finance-platform-internal-services-client` 가 아니며**, 위 § OAuth Clients 의 **deferred `finance-platform-user-flow-client` 도 아니다** (후자는 계속 deferred 이며 본 소비와 **무관** — 콘솔은 IAM 의 콘솔 클라이언트를 쓴다). 검증 경로는 위 § Token 검증 규칙 의 **기존** `AllowedIssuersValidator` (#3) + `TenantClaimValidator` (#4) + JWKS(#1) 체인 그대로 — **신규 finance OAuth client / gateway·service route / code / auth-model 변경 없음**.
 - **Read-only (write/mutation 미소비)**: finance 의 **write/mutation** 표면 (`POST /accounts`, `/kyc/upgrade`, `/holds`, `/holds/{holdId}/capture`, `/holds/{holdId}/release`, `/transfers`) 은 콘솔이 소비하지 않는다. 이는 도메인 자금이동 / 운영자-도메인 mutation 으로 `Idempotency-Key` (fintech F1) 를 요구하며, v1 에서 operator-parity 콘솔 표면이 아니다 (finance 는 v1 `admin-service` 없음 — reconciliation 큐 / KYC-hold 검토 / 한도 정책의 v2 `admin-service` 운영자 표면은 ADR-MONO-008 § D3 / `PROJECT.md` v2 Service Map 으로 deferred). scm 선례가 PO write 를 제외한 것과 동일하게 read-only.
-- **단일-org 보존**: finance 의 의도적 `multi-tenant` 미선언 (`PROJECT.md` § Out of Scope) 은 **불변** — 테넌트 스코핑은 GAP claim + 위 § Token 검증 규칙 #4 의 기존 producer-side `TenantClaimValidator` 게이트로 유지된다. 콘솔의 `multi-tenant`/`integration-heavy`/`audit-heavy` trait 은 **콘솔의** 책임이지 finance 의 것이 아니다 — finance 분류(domain/traits/service_types) 는 변경되지 않는다.
+- **단일-org 보존**: finance 의 의도적 `multi-tenant` 미선언 (`PROJECT.md` § Out of Scope) 은 **불변** — 테넌트 스코핑은 IAM claim + 위 § Token 검증 규칙 #4 의 기존 producer-side `TenantClaimValidator` 게이트로 유지된다. 콘솔의 `multi-tenant`/`integration-heavy`/`audit-heavy` trait 은 **콘솔의** 책임이지 finance 의 것이 아니다 — finance 분류(domain/traits/service_types) 는 변경되지 않는다.
 - **fintech producer 의무 (콘솔이 준수해야 할, producer-authoritative 사실의 cross-ref — 신규 finance 요구가 아님)**: ① **F5 money shape** — 모든 금액은 `{ amount: "<string-integer-minor-units>", currency }` (통화별 minor-unit scale; **float 아님**) 가 producer wire 계약이다 ([`account-api.md`](../contracts/http/account-api.md) 참조). 콘솔은 이를 충실히 렌더해야 한다 (float 강제/정밀도 손실 금지). ② finance 는 `data_sensitivity: confidential` + **F7** (PII / 규제 식별자는 producer-side 마스킹) — 콘솔은 잔액 / 거래 / 계좌 ref 를 로깅하지 않는다. ③ 규제 상태 (`PENDING_KYC|ACTIVE|RESTRICTED|FROZEN|CLOSED`, txn `FAILED|REVERSED`, sanction-driven) 는 정직하게 표면화한다 (숨기지 않음; 미지/미래 enum 은 generic label, throw 금지). 이들은 `account-api.md` / `account-service/architecture.md` 가 권위이며 본 절은 cross-ref 만 한다 (해당 spec 미변경).
 - **Producer immutability**: 본 절은 **cross-reference only**. finance read 계약의 변경은 finance project-internal spec-first 변경(`account-api.md`)이며 본 절은 그것을 따를 뿐 재정의하지 않는다. 콘솔-side 의무는 platform-console [`console-integration-contract.md`](../../../platform-console/specs/contracts/console-integration-contract.md) **§ 2.4.7** (`TASK-PC-FE-009` 가 작성) 이며, 콘솔이 재사용하는 per-domain-credential 규칙은 같은 계약 § 2.4.5/§ 2.4.6 (FE-007 wms / FE-008 scm) 이다.
 
@@ -154,19 +154,19 @@ curl -u finance-platform-internal-services-client:finance-dev \
 - [ ] 콘솔 user-flow 도입 시점에 `finance-platform-user-flow-client` 의 V0NN 시드 추가 + redirect URI 갱신.
 - [ ] `finance-platform-internal-services-client` 의 client_secret 을 secret manager 로 회전 (production).
 - [ ] D2-b deprecation 윈도우 종료 시 allowed-issuers 에서 `iam-platform` 제거.
-- [ ] GAP 의 `finance` 테넌트 (V0017 account-service 시드) 는 TASK-MONO-114 에서 등록됨.
+- [ ] IAM 의 `finance` 테넌트 (V0017 account-service 시드) 는 TASK-MONO-114 에서 등록됨.
 
 ---
 
 ## 참조
 
-- [GAP ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — GAP IdP 승급
-- [GAP auth-api.md § OAuth2 Clients](../../../iam-platform/specs/contracts/http/auth-api.md)
+- [IAM ADR-001](../../../iam-platform/docs/adr/ADR-001-oidc-adoption.md) — IAM IdP 승급
+- [IAM auth-api.md § OAuth2 Clients](../../../iam-platform/specs/contracts/http/auth-api.md)
 - [platform/contracts/jwt-standard-claims.md](../../../../platform/contracts/jwt-standard-claims.md) — JWT 클레임 표준
 - [scm-platform 의 동일 통합](../../../scm-platform/specs/integration/iam-integration.md) — reference pattern
 - [wms-platform 의 동일 통합](../../../wms-platform/specs/integration/iam-integration.md) — reference pattern
 - [ADR-MONO-013](../../../../docs/adr/ADR-MONO-013-platform-console-foundation.md) — platform-console Model B (governing; § platform-console Operator Read Consumer 의 권위) / [ADR-MONO-008](../../../../docs/adr/ADR-MONO-008-finance-platform-bootstrap.md) — finance 도메인 거버넌스 (불변, cross-ref)
 - [platform-console `console-integration-contract.md`](../../../platform-console/specs/contracts/console-integration-contract.md) — 콘솔-side 소비 의무 (§ 2.4.7 = TASK-PC-FE-009; § 2.4.5/§ 2.4.6 per-domain-credential 규칙)
 - [scm `TASK-SCM-BE-015`](../../../scm-platform/tasks/done/TASK-SCM-BE-015-platform-console-operator-read-consumer-reconciliation.md) — Phase 4 선례 / TASK-FIN-BE-005 — 본 reconciliation (Phase 5 analog) / TASK-PC-FE-009 — 본 절이 unblock 하는 종속 태스크
-- TASK-MONO-114 — GAP V0017 finance-platform OIDC/tenant 시드 (V0017 auth: `finance-platform-internal-services-client`, V0017 account: `finance` tenant)
+- TASK-MONO-114 — IAM V0017 finance-platform OIDC/tenant 시드 (V0017 auth: `finance-platform-internal-services-client`, V0017 account: `finance` tenant)
 - TASK-FIN-BE-001 — 본 통합의 첫 구현 태스크 (account-service bootstrap)
