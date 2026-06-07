@@ -22,7 +22,7 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
 → MockHttpServletResponse Status = 503
 ```
 
-**환경 의존성**: 같은 5 method 가 local Rancher Desktop dockerd (Windows) + 단일 IT class run 으로는 7/7 PASS (15.3s, TASK-MONO-046-7a cycle 1 evidence). CI Linux + 전체 GAP IT suite (10 class) 에서만 deterministic FAIL.
+**환경 의존성**: 같은 5 method 가 local Rancher Desktop dockerd (Windows) + 단일 IT class run 으로는 7/7 PASS (15.3s, TASK-MONO-046-7a cycle 1 evidence). CI Linux + 전체 IAM IT suite (10 class) 에서만 deterministic FAIL.
 
 ### 시도된 가설 + 결과 (PR #264 + 046-7a, 총 13 cycle)
 
@@ -139,7 +139,7 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
 ### Positive (옵션 A → B/C 성공 시)
 
 - 5 IT method 회복 → portfolio 의 OAuth social login E2E 가드 완전 복구.
-- Linux-specific HTTP / network 행동에 대한 archived 진단 (다른 GAP IT class 에 같은 패턴 재발 시 즉시 참조).
+- Linux-specific HTTP / network 행동에 대한 archived 진단 (다른 IAM IT class 에 같은 패턴 재발 시 즉시 참조).
 - `AccountServiceClient` 의 log 개선 (root exception + cause chain) 은 production 운영 디버깅에도 도움 — diagnostic harness 의 log 는 production 으로 보존.
 
 ### Negative
@@ -210,7 +210,7 @@ ERROR c.e.a.p.e.AuthExceptionHandler -
 13-cycle 동안 deterministic FAIL 이었던 5 method 가 본 PR 에서 PASS 한 이유는 본 PR 의 변경 (log 강화 + listener) 이 RC 를 **건드릴 수 있는 표면이 없음** (production behaviour 무영향 + test code 는 listener 만 추가). 따라서 RC 가 본 PR 외 영역에서 **자연 해소** 됐다고 판단.
 
 후보:
-1. **누적 main 변경**: 046-7a (PR #289) 머지 이후 PR #287 (BE-047 admin-service Kafka IT) / #288 (security consumer) / #290~#293 등이 같은 GAP CI 환경에 영향. 특히 BE-047 의 Testcontainers Kafka 구성 추가가 GAP 와 같은 worker pool 에서 race window 를 좁혔을 가능성 (정확한 메커니즘은 추가 검증 필요).
+1. **누적 main 변경**: 046-7a (PR #289) 머지 이후 PR #287 (BE-047 admin-service Kafka IT) / #288 (security consumer) / #290~#293 등이 같은 IAM CI 환경에 영향. 특히 BE-047 의 Testcontainers Kafka 구성 추가가 IAM 와 같은 worker pool 에서 race window 를 좁혔을 가능성 (정확한 메커니즘은 추가 검증 필요).
 2. **GitHub Actions runner 이미지 갱신**: `ubuntu-latest` 의 transitive dependency (Docker / curl / network stack) 가 timing 변화. 본 ADR 은 task spec 의 Edge Case 에 이 가능성을 이미 적시 (line 158).
 3. **JVM / Spring Boot transitive 의존성**: build.gradle 의 plugin 또는 BOM 갱신이 race window 변화 야기.
 
@@ -363,7 +363,7 @@ HTTP/2 multiplexing race 는 HTTP/1.1 강제로 완전 제거. Linux epoll event
 - TASK-MONO-046-7 (PR #264) — 11-cycle burn 의 cycle 9-11 503 패턴
 - TASK-MONO-044c-1 (PR #218) — `@DirtiesContext(AFTER_CLASS)` + lazy `AccountServiceClient` URL resolution
 - ADR-003 (Public-client refresh_token converter) — Cluster A 의 architectural rework, 본 ADR 과 독립
-- `OAuthLoginUseCaseTest` (`projects/global-account-platform/apps/auth-service/src/test/java/com/example/auth/application/`) — 단위 coverage
+- `OAuthLoginUseCaseTest` (`projects/iam-platform/apps/auth-service/src/test/java/com/example/auth/application/`) — 단위 coverage
 - `AccountServiceClient` — log 강화 대상
 - Spring Boot reference — `RestClient` + JDK `HttpClient` configuration
 - WireMock 3.x docs — `addMockServiceRequestListener`, dynamic-port binding semantics on Linux
