@@ -8,7 +8,7 @@ Author **ADR-MONO-022 (PROPOSED)** — ecommerce ↔ wms cross-project order-ful
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ ADR-MONO-022 §D7 ① — Author the cross-project fulfillment **contracts** (So
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ ADR-MONO-022 §D7 ③ (ecommerce) — Publish `ecommerce.fulfillment.requested.v
 
 # Status
 
-ready
+done
 
 # Owner
 

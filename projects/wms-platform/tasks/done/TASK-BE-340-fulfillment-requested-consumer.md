@@ -8,7 +8,7 @@ ADR-MONO-022 §D7 ② (wms) — `FulfillmentRequestedConsumer` (ecommerce → wm
 
 # Status
 
-ready
+done
 
 # Owner
 
