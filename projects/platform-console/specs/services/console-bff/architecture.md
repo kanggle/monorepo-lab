@@ -38,7 +38,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`saas`) and
 | Domain | saas |
 | Traits | multi-tenant, integration-heavy, audit-heavy |
 | Primary language / stack | Java 21, Spring Boot 3.4 (Servlet stack) |
-| Bounded Context | Cross-domain composition for the unified operator console — owns no domain state; aggregates 5 backend domains (GAP + wms + scm + finance + erp) into server-side composed read views (ADR-MONO-017 D1) |
+| Bounded Context | Cross-domain composition for the unified operator console — owns no domain state; aggregates 5 backend domains (IAM + wms + scm + finance + erp) into server-side composed read views (ADR-MONO-017 D1) |
 | Deployable unit | `apps/console-bff/` |
 | Data store | **None** (no persistence — see § Persistence) |
 | Event publication | None (no outbox — composition reads only) |
@@ -132,7 +132,7 @@ caching.
 
 > **The per-domain credential rule defined in
 > [`console-integration-contract.md`](../../contracts/console-integration-contract.md)
-> §§ 2.4.5 / 2.4.6 / 2.4.7 / 2.4.8 (and the GAP-domain § 2.6 RFC 8693 exchanged
+> §§ 2.4.5 / 2.4.6 / 2.4.7 / 2.4.8 (and the IAM-domain § 2.6 RFC 8693 exchanged
 > operator token) is a HARD INVARIANT this BFF inherits byte-unchanged. The
 > BFF is the rule's *credential dispatcher*, never its rewriter.** Rejected
 > options ADR-MONO-017 D4.B (single unified BFF token) and D4.C (operator-token-only
@@ -142,19 +142,19 @@ caching.
 
 The BFF is called **server-side from `console-web`'s App-Router server routes**,
 not from the browser. `console-web`'s server route already holds both tokens
-established at the GAP OIDC login callback (per
+established at the IAM OIDC login callback (per
 [`console-web/architecture.md`](../console-web/architecture.md) § Auth Flow +
 [FE-002a](../../../tasks/done/TASK-PC-FE-002a-console-operator-token-exchange-wiring.md)):
 
-- the **GAP OIDC access token** (`getAccessToken()`) used today for the 4 non-GAP
+- the **IAM OIDC access token** (`getAccessToken()`) used today for the 4 non-IAM
   domains (wms / scm / finance / erp) — §§ 2.4.5–2.4.8 contract,
 - the **RFC 8693 exchanged operator token** (`getOperatorToken()`) used today for
-  the GAP `admin-api` surface — §§ 2.4.1–2.4.4 contract.
+  the IAM `admin-api` surface — §§ 2.4.1–2.4.4 contract.
 
 The console-web server route forwards **both** to the BFF on every call:
 
 - `Authorization: Bearer <iam-oidc-access-token>` (treated by Spring Security
-  OAuth2 Resource Server as the inbound principal — RS256, JWKS = GAP, standard
+  OAuth2 Resource Server as the inbound principal — RS256, JWKS = IAM, standard
   validation: issuer / audience / exp / sig).
 - `X-Operator-Token: <rfc8693-operator-token>` (carried request-scoped, not
   parsed by the inbound auth filter; available to outbound clients via a
@@ -174,21 +174,21 @@ console-web server routes today:
 | Outbound domain | Credential | Header on outbound | Selector predicate |
 |---|---|---|---|
 | IAM (`/api/admin/**`) | RFC 8693 exchanged operator token (§ 2.6) | `Authorization: Bearer <operator-token>` | `domain == IAM` |
-| wms (`/api/wms/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | `domain ∈ {wms,scm,finance,erp}` |
-| scm (`/api/scm/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
-| finance (`/api/finance/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
-| erp (`/api/erp/**`) | GAP OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
+| wms (`/api/wms/**`) | IAM OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | `domain ∈ {wms,scm,finance,erp}` |
+| scm (`/api/scm/**`) | IAM OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
+| finance (`/api/finance/**`) | IAM OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
+| erp (`/api/erp/**`) | IAM OIDC access token | `Authorization: Bearer <iam-oidc-access-token>` | (same) |
 
 The inbound `X-Tenant-Id` is forwarded verbatim on every outbound leg (no
 re-derivation — D6.A); each producer's `TenantClaimValidator` gates the call
 (`tenant_id ∈ {<domain>,*}` per-domain). Absent inbound token / absent
-operator-token-when-GAP-leg-needed / absent `X-Tenant-Id` are fail-closed
+operator-token-when-IAM-leg-needed / absent `X-Tenant-Id` are fail-closed
 before any outbound call (`401 TOKEN_INVALID` / `400 NO_ACTIVE_TENANT`).
 
 ### Trust boundary
 
 - The BFF **never** falls back from one credential to another. Missing operator
-  token on a GAP leg = `401`, not "try GAP OIDC access token instead" (#569
+  token on a IAM leg = `401`, not "try IAM OIDC access token instead" (#569
   invariant preserved).
 - The BFF **never** mints its own token (rejected D4.B).
 - The BFF **never** rewrites or expands the per-domain producer-side tenant
@@ -239,7 +239,7 @@ any producer — D3.B rejection):
 
 > **§ 3.3 zero-retrofit, fifth confirmation**: no per-domain producer spec or
 > implementation change is required for Phase 7 MVP. The BFF skeleton itself
-> introduces zero changes to wms / scm / finance / erp / GAP architecture.md
+> introduces zero changes to wms / scm / finance / erp / IAM architecture.md
 > files or contract files (other than the additive § 2.4.9 in
 > `console-integration-contract.md`).
 
@@ -354,7 +354,7 @@ identical structural exception `console-web` itself takes.
 | Domain unit | `CredentialSelectionPort` selector predicate, degrade-policy rules, tenant pass-through invariant | Pure JUnit, no Spring context |
 | Application unit | Per-composition use-case with `@ExtendWith(MockitoExtension.class)` STRICT_STUBS, stubbed outbound ports — assert per-leg success → composed envelope; per-leg `5xx`/`timeout`/`403` → degrade classification | One test per route shape × outcome |
 | Slice (`@WebMvcTest`) | Each inbound controller + Spring Security wiring + GlobalExceptionHandler | Stubs the application use-case bean |
-| Integration (`@SpringBootTest` + Testcontainers + WireMock) | Boots the full BFF + WireMock per-domain stubs + a fake GAP issuer; asserts per-domain credential dispatch (D4), tenant pass-through (D6), per-leg degrade (D5), zero log leakage of tokens/PII | Per-domain producer is stubbed; **no** Testcontainers per real downstream — composition is HTTP-only |
+| Integration (`@SpringBootTest` + Testcontainers + WireMock) | Boots the full BFF + WireMock per-domain stubs + a fake IAM issuer; asserts per-domain credential dispatch (D4), tenant pass-through (D6), per-leg degrade (D5), zero log leakage of tokens/PII | Per-domain producer is stubbed; **no** Testcontainers per real downstream — composition is HTTP-only |
 
 The skeleton task (TASK-PC-BE-001) lands the test harness + the first `GET
 /actuator/health` slice + a smoke IT that boots the application context. The
@@ -400,7 +400,7 @@ its spec-first `§ 2.4.9` extension.
   forbidden (introduces staleness operator-confusing; producer-side caching is
   already in scope per `cross-cutting/caching.md`, and producer rules apply
   there).
-- Token fallback (e.g. "try operator token; on 401, retry with GAP OIDC token")
+- Token fallback (e.g. "try operator token; on 401, retry with IAM OIDC token")
   — forbidden (#569 invariant + D4.A).
 - Producer-spec mutation from the BFF side — forbidden (D3.A / § 3.3 zero
   retrofit fifth confirmation).
