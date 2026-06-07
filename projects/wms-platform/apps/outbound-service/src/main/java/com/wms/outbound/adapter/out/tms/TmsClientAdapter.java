@@ -100,8 +100,8 @@ public class TmsClientAdapter implements ShipmentNotificationPort {
     }
 
     @Override
-    @CircuitBreaker(name = CIRCUIT_NAME, fallbackMethod = "notifyFallback")
-    @Retry(name = CIRCUIT_NAME)
+    @Retry(name = CIRCUIT_NAME, fallbackMethod = "notifyFallback")
+    @CircuitBreaker(name = CIRCUIT_NAME)
     @Bulkhead(name = CIRCUIT_NAME, type = Bulkhead.Type.SEMAPHORE)
     public TmsAcknowledgement notify(UUID shipmentId) {
         Timer.Sample sample = metrics.startTimer();
@@ -141,6 +141,18 @@ public class TmsClientAdapter implements ShipmentNotificationPort {
      * or bulkhead-full. Translates the underlying cause to
      * {@link ExternalServiceUnavailableException} so the listener can
      * uniformly route to {@code markFailed}.
+     *
+     * <p><strong>Wiring:</strong> the {@code fallbackMethod} is bound to the
+     * <em>outermost</em> aspect ({@code @Retry}), NOT {@code @CircuitBreaker}.
+     * With the default Resilience4j aspect order ({@code @Retry} wraps
+     * {@code @CircuitBreaker} wraps {@code @Bulkhead}), a fallback on the inner
+     * {@code @CircuitBreaker} fires on the FIRST {@link TmsTransientException}
+     * and converts it to {@link ExternalServiceUnavailableException} — a type
+     * absent from the retry's {@code retryExceptions} — so the outer
+     * {@code @Retry} never retries and only a single HTTP attempt is made.
+     * Binding the fallback to {@code @Retry} lets the breaker re-throw the raw
+     * {@link TmsTransientException} on each attempt so retry exhausts its 3
+     * configured attempts, then the outer fallback translates the final cause.
      *
      * <p>Method visibility must be {@code public} for Resilience4j AOP
      * to invoke it; signature must match the annotated method plus a

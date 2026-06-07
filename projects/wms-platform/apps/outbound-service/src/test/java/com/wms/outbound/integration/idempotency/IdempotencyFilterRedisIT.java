@@ -180,21 +180,40 @@ class IdempotencyFilterRedisIT {
     @Test
     @DisplayName("same key + different body → 409 DUPLICATE_REQUEST")
     void sameKeyDifferentBody_returns409() throws Exception {
-        // Round 1
-        filter.doFilter(postRequest("idem-it-key-4", BODY),
-                new MockHttpServletResponse(),
+        // Use a key unique to this run so a residual entry left by a sibling
+        // test (shared static Redis + non-deterministic JUnit method order)
+        // cannot be replayed here. The conflict branch only fires on a genuine
+        // hit-with-hash-mismatch, so round-1 MUST have stored an entry keyed
+        // off THIS test's body — assert that precondition explicitly before
+        // round 2 so a silent round-1 store failure surfaces as the real cause
+        // rather than masquerading as a round-2 "201 replay".
+        // Unique per-run key so a residual entry left by a sibling test (shared
+        // static Redis + non-deterministic JUnit method order) cannot be
+        // replayed here — that residue was the original 201-instead-of-409 cause.
+        String key = "idem-it-key-4-" + java.util.UUID.randomUUID();
+
+        // Round 1 — same key, BODY → executes fresh, stores the 201 entry
+        // (keyed by method+uri+idempotencyKey; the body hash is stored as a
+        // field for later comparison, NOT part of the key).
+        MockHttpServletResponse round1 = new MockHttpServletResponse();
+        filter.doFilter(postRequest(key, BODY), round1,
                 (req, res) -> {
                     HttpServletResponse httpResp = (HttpServletResponse) res;
                     httpResp.setStatus(201);
                     httpResp.setContentType("application/json");
                     httpResp.getWriter().write("{\"id\":\"first\"}");
                 });
+        assertThat(round1.getStatus())
+                .as("round 1 must execute fresh and return 201")
+                .isEqualTo(201);
 
-        // Round 2 — same key, different body
+        // Round 2 — SAME key, DIFFERENT body → lookup hit + body-hash mismatch
+        // → 409 DUPLICATE_REQUEST (production BodyHashUtil canonicalises values,
+        // so a different value yields a different hash).
         String differentBody = "{\"orderNo\":\"ORD-IT-DIFFERENT\"}";
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse round2 = new MockHttpServletResponse();
-        filter.doFilter(postRequest("idem-it-key-4", differentBody), round2, chain);
+        filter.doFilter(postRequest(key, differentBody), round2, chain);
 
         assertThat(round2.getStatus()).isEqualTo(409);
         assertThat(round2.getContentAsString()).contains("DUPLICATE_REQUEST");
@@ -312,4 +331,10 @@ class IdempotencyFilterRedisIT {
         req.setContent(body.getBytes(StandardCharsets.UTF_8));
         return req;
     }
+
+    /**
+     * Mirror of the production {@code BodyHashUtil#computeHash}: canonicalise
+     * the JSON body (sorted keys) then SHA-256. Replicated here because
+     * {@code BodyHashUtil} is package-private to the filter package.
+     */
 }

@@ -77,14 +77,18 @@ class TmsClientAdapterIT extends OutboundServiceIntegrationBase {
         // reset circuit so each test starts CLOSED
         CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("tms-client");
         cb.reset();
-        // clean dedupe + shipment + saga
-        jdbc.update("DELETE FROM tms_request_dedupe");
+        // clean dedupe + shipment + saga + order (children before parent for FK).
+        // tms_request_dedupe is append-only (V8 BEFORE DELETE trigger) — TRUNCATE
+        // bypasses the row-level trigger; DELETE is rejected.
+        jdbc.execute("TRUNCATE TABLE tms_request_dedupe");
         jdbc.update("DELETE FROM shipment");
         jdbc.update("DELETE FROM outbound_saga");
-        // shipment + saga rows for the test
+        jdbc.update("DELETE FROM outbound_order");
+        // order (FK parent) + shipment + saga rows for the test
         shipmentId = UUID.randomUUID();
         orderId = UUID.randomUUID();
         sagaId = UUID.randomUUID();
+        seedOrderRow(orderId);
         seedShipmentRow(shipmentId, orderId, "SHP-20260510-0001", TmsStatus.PENDING);
         seedSagaRow(sagaId, orderId, SagaStatus.SHIPPED);
     }
@@ -225,7 +229,7 @@ class TmsClientAdapterIT extends OutboundServiceIntegrationBase {
         // first-pass retries and clicked "Retry" in the ops console.
         jdbc.update("UPDATE shipment SET tms_status = ?, status = ? WHERE id = ?",
                 "NOTIFY_FAILED", "NOTIFY_FAILED", shipmentId);
-        jdbc.update("UPDATE outbound_saga SET state = ?, failure_reason = ? WHERE saga_id = ?",
+        jdbc.update("UPDATE outbound_saga SET status = ?, failure_reason = ? WHERE id = ?",
                 "SHIPPED_NOT_NOTIFIED", "TMS notify exhausted", sagaId);
 
         // WireMock now returns a clean ack.
@@ -246,13 +250,28 @@ class TmsClientAdapterIT extends OutboundServiceIntegrationBase {
         assertThat(tmsStatus).isEqualTo("NOTIFIED");
         // saga row updated
         String sagaState = jdbc.queryForObject(
-                "SELECT state FROM outbound_saga WHERE saga_id = ?", String.class, sagaId);
+                "SELECT status FROM outbound_saga WHERE id = ?", String.class, sagaId);
         assertThat(sagaState).isEqualTo("COMPLETED");
     }
 
     // ------------------------------------------------------------------
     //  Helpers
     // ------------------------------------------------------------------
+
+    /**
+     * Seeds the {@code outbound_order} parent row that {@code shipment.order_id}
+     * and {@code outbound_saga.order_id} reference (FK + saga lookup by orderId).
+     * Only the NOT NULL columns are populated; the rest default.
+     */
+    private void seedOrderRow(UUID order) {
+        jdbc.update("INSERT INTO outbound_order (id, erp_order_number, order_no, source, "
+                        + "warehouse_id, partner_id, customer_partner_id, status, "
+                        + "created_at, updated_at, version) "
+                        + "VALUES (?, ?, ?, 'MANUAL', ?, ?, ?, 'SHIPPED', ?, ?, 0)",
+                order, "ERP-" + order, "ORD-" + order,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                java.sql.Timestamp.from(NOW), java.sql.Timestamp.from(NOW));
+    }
 
     private void seedShipmentRow(UUID id, UUID order, String shipmentNo, TmsStatus status) {
         jdbc.update("INSERT INTO shipment (id, order_id, shipment_no, carrier, tracking_number, "
@@ -264,9 +283,9 @@ class TmsClientAdapterIT extends OutboundServiceIntegrationBase {
     }
 
     private void seedSagaRow(UUID id, UUID order, SagaStatus state) {
-        jdbc.update("INSERT INTO outbound_saga (saga_id, order_id, state, picking_request_id, "
-                        + "failure_reason, started_at, last_transition_at, version) "
-                        + "VALUES (?, ?, ?, ?, NULL, ?, ?, 0)",
+        jdbc.update("INSERT INTO outbound_saga (id, order_id, status, picking_request_id, "
+                        + "failure_reason, created_at, updated_at, version, re_emit_count) "
+                        + "VALUES (?, ?, ?, ?, NULL, ?, ?, 0, 0)",
                 id, order, state.name(), id,
                 java.sql.Timestamp.from(NOW), java.sql.Timestamp.from(NOW));
     }

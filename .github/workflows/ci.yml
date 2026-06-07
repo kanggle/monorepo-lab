@@ -835,16 +835,17 @@ jobs:
 
       - name: Run wms integration suites
         # TASK-BE-043: notification-service joins the wms integration job.
-        # TASK-BE-045: admin-service joins. All three services boot Postgres
-        # (+ Kafka where applicable) via Testcontainers; sharing the job
-        # avoids spinning up additional runners.
-        # NOTE (ADR-MONO-022 / TASK-BE-340): outbound-service:integrationTest is
-        # intentionally NOT wired here yet — that suite (SagaSweeperIT /
-        # TmsClientAdapterIT / IdempotencyFilterRedisIT + the new
-        # FulfillmentRequestedConsumerIT) is currently dev-only and 13/19 fail
-        # in the CI runner (pre-existing env/maintenance debt unrelated to the
-        # fulfillment feature). Wiring + repairing it is a separate follow-up
-        # (TASK-BE-342) so this feature PR is not coupled to that debt.
+        # TASK-BE-045: admin-service joins. All boot Postgres (+ Kafka where
+        # applicable) via Testcontainers; sharing the job avoids extra runners.
+        # TASK-BE-342: outbound-service:integrationTest is NOT yet wired here.
+        # Its suite had never been CI-validated; the repair pass fixed 17/19
+        # (SagaSweeperIT append-only TRUNCATE + jsonb ->> extraction;
+        # TmsClientAdapterIT FK parent seed + a REAL production retry bug in
+        # TmsClientAdapter — fallbackMethod moved from @CircuitBreaker to @Retry).
+        # The last 2 (IdempotencyFilterRedisIT runtime body-hash; the cross-project
+        # FulfillmentRequestedConsumerIT flaky Kafka consume) need a Docker-enabled
+        # debugging session — tracked in TASK-BE-342. Wiring this in is the final
+        # step of that task, once those 2 are green.
         run: >-
           ./gradlew
           :projects:wms-platform:apps:master-service:integrationTest

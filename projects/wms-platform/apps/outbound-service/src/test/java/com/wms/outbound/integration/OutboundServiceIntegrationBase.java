@@ -95,6 +95,14 @@ public abstract class OutboundServiceIntegrationBase {
                     "spring.flyway.enabled=true",
                     "spring.flyway.locations=classpath:db/migration",
                     "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
+                    // Deterministic publish→@KafkaListener consumption for the
+                    // cross-project fulfillment IT: read from the beginning, and
+                    // refresh metadata fast so a topic created in @BeforeEach is
+                    // discovered well within the test's await (default
+                    // metadata.max.age is 5 min). Complements the test's explicit
+                    // topic pre-creation + waitForAssignment.
+                    "spring.kafka.consumer.auto-offset-reset=earliest",
+                    "spring.kafka.consumer.properties.metadata.max.age.ms=2000",
                     "spring.data.redis.host=" + REDIS.getHost(),
                     "spring.data.redis.port=" + REDIS.getFirstMappedPort(),
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:0/.well-known/jwks.json",
@@ -110,9 +118,33 @@ public abstract class OutboundServiceIntegrationBase {
                     "resilience4j.retry.instances.tms-client.waitDuration=50ms",
                     "resilience4j.retry.instances.tms-client.exponentialBackoffMultiplier=2",
                     "resilience4j.retry.instances.tms-client.randomizedWaitFactor=0",
-                    // Lower minimumNumberOfCalls so circuit can open quickly in tests.
-                    "resilience4j.circuitbreaker.instances.tms-client.minimumNumberOfCalls=2",
-                    "resilience4j.circuitbreaker.instances.tms-client.slidingWindowSize=4",
+                    // Circuit-breaker tuning for tests.
+                    //
+                    // The default Resilience4j aspect order makes @Retry wrap
+                    // @CircuitBreaker, so EACH retry attempt passes through the
+                    // breaker. (The @Retry fallbackMethod — bound on the OUTER
+                    // aspect in TmsClientAdapter — only fires after all 3 retry
+                    // attempts exhaust; a fallback on the inner @CircuitBreaker
+                    // would convert the first TmsTransientException to the
+                    // non-retryable ExternalServiceUnavailableException and the
+                    // burst would stop at 1 call.)
+                    //
+                    // If minimumNumberOfCalls is too low the breaker OPENS
+                    // partway through a single 3-attempt retry burst — the
+                    // remaining attempt(s) then short-circuit with
+                    // CallNotPermittedException (a retry ignoreException), so the
+                    // burst stops early and WireMock sees < 3 calls. Scenarios 2
+                    // (timeout) and 3 (5xx) assert exactly 3 HTTP calls, so the
+                    // breaker MUST stay closed across a single burst (3 failures).
+                    //
+                    // minimumNumberOfCalls=4 (> the 3-attempt burst) keeps the
+                    // breaker closed during one notify(), while scenario 5's
+                    // 4-iteration loop still drives ≥4 failures and opens it on
+                    // the 2nd notify(). slidingWindowSize=10 holds enough samples
+                    // that the 100%-failure rate is evaluated as soon as the
+                    // minimum is reached.
+                    "resilience4j.circuitbreaker.instances.tms-client.minimumNumberOfCalls=4",
+                    "resilience4j.circuitbreaker.instances.tms-client.slidingWindowSize=10",
                     "resilience4j.circuitbreaker.instances.tms-client.waitDurationInOpenState=2s"
             ).applyTo(context.getEnvironment());
         }
