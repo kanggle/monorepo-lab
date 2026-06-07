@@ -191,7 +191,7 @@ class SagaSweeperIT extends OutboundServiceIntegrationBase {
                 VALUES (?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 sagaId, orderId, status.name(), sagaId,
-                Instant.parse("2026-05-10T09:00:00Z"),
+                java.sql.Timestamp.from(Instant.parse("2026-05-10T09:00:00Z")),
                 java.sql.Timestamp.from(tenMinAgo),
                 reEmitCount);
         return sagaId;
