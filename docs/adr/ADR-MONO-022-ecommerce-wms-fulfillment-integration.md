@@ -1,12 +1,12 @@
 # ADR-MONO-022 — ecommerce ↔ wms Cross-Project Order-Fulfillment Integration
 
-**Status:** PROPOSED
-**Date:** 2026-06-08
+**Status:** ACCEPTED
+**Date:** 2026-06-08 (PROPOSED 2026-06-08 · ACCEPTED 2026-06-08, same-session user-explicit intent "진행" on the §D7 plan — see § 6)
 **Decision driver:** User request (2026-06-08) — *"이 프로젝트들을 실전에서 사용할 수 있도록, 웹스토어에서 상품을 구매하면 연결된 창고에서 물건을 배송할 수 있도록"* (Coupang-style: order in the storefront → ship from the connected warehouse). User chose, via AskUserQuestion, **full bidirectional loop** (order → warehouse fulfillment → shipment-confirmed回신 → order auto-SHIPPED) over a Kafka **event-subscription** transport.
 **Supersedes:** none.
 **Related:** [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) (shared `libs/java-messaging` outbox/consumer scaffolding — the transport this ADR rides on), [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) (saga category taxonomy — the fulfillment loop is a cross-project Category-B saga), [`platform/service-boundaries.md`](../../platform/service-boundaries.md) §「Asynchronous (Events) — cross-project allowed」 (the rule that *permits* this), the live precedent **scm `inventory-visibility-service` ← wms inventory events** (`projects/scm-platform/specs/contracts/events/inventory-visibility-subscriptions.md`), memory `project_portfolio_7axis_architecture`, memory `project_wms_be_153_driven_audit_series`.
 
-> **Why PROPOSED, not ACCEPTED.** This ADR captures the design + the sub-decisions (B2C ship-to model, inventory SoT, correlation key, ACL mapping) so the user can review *those* before any code is written. Per the repo's ADR convention (ADR-MONO-008/016 two-stage path) **self-ACCEPT is prohibited** — the ACCEPTED transition + implementation-task creation happen on explicit user intent (§ D7). Cross-project runtime coupling between two *independently-published portfolio axes* is a genuine architecture decision, not a mechanical wiring task.
+> **PROPOSED→ACCEPTED (2026-06-08, same session).** This ADR was authored PROPOSED to let the user review the sub-decisions (B2C ship-to model, inventory SoT, correlation key, ACL mapping) before code. The user reviewed the §2 decisions and gave the §D7 affirmative intent ("진행") accepting the recommended options (D1 Kafka, D2-a optional `shipTo`, D4 independent-v1 inventory, D5 `orderNo` round-trip) → ACCEPTED. **NOT self-ACCEPT**: the dispatcher did not unilaterally decide; the user explicitly directed the transition + implementation. Cross-project runtime coupling between two *independently-published portfolio axes* is a genuine architecture decision, recorded here before the §D7 implementation tasks proceed.
 
 ---
 
@@ -156,8 +156,9 @@ Append-only.
 | Date | Transition | Transport | Ship-to (D2) | Inventory SoT (D4) | User intent quote | PR(s) |
 |---|---|---|---|---|---|---|
 | 2026-06-08 | created PROPOSED | Kafka event subscription (D1) | D2-a optional `shipTo` (proposed) | independent v1, reconcile v2 (proposed) | "웹스토어에서 상품을 구매하면 연결된 창고에서 물건을 배송… 쿠팡에서 시키면 연결된 창고에서 배송" + AskUserQuestion: 전체 루프 / Kafka 이벤트 구독 | spec PR (TASK-MONO-193) |
+| 2026-06-08 | ACCEPTED | Kafka event subscription (D1, chosen) | D2-a optional `shipTo` (accepted) | independent v1, reconcile v2 (accepted) | "진행" (on the §D7 plan: ADR ACCEPTED + create ①~④ implementation tasks + 실제 연결까지; recommended D2/D4/D5 options accepted, no overrides) | spec PR (TASK-MONO-193) + §D7 ①~④ follow-up PRs |
 
-(PROPOSED row appended 2026-06-08 per the ADR-MONO-008/016 § D6.3 format. ACCEPTED row appended only at the future user-intent transition — self-ACCEPT prohibited.)
+(PROPOSED row appended 2026-06-08 per the ADR-MONO-008/016 § D6.3 format. ACCEPTED row appended same-session on the user's explicit "진행" intent on the §D7 plan — NOT self-ACCEPT. D1–D8 decision bodies unchanged; only Status + this row + the §1 note reconciled to ACCEPTED tense. §D7 ①~④ implementation tasks created at ACCEPTED: contracts → wms → ecommerce → e2e.)
 
 ---
 

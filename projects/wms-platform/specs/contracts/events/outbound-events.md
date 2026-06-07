@@ -123,6 +123,7 @@ Partition key: `orderId`
   "customerPartnerCode": "CUST-001",
   "warehouseId": "uuid",
   "requiredShipDate": "2026-05-02",
+  "shipTo": null,
   "lines": [
     {
       "orderLineId": "uuid",
@@ -140,11 +141,12 @@ Partition key: `orderId`
 |---|---|---|---|
 | `orderId` | UUID | no | |
 | `orderNo` | string | no | Business identifier |
-| `source` | string | no | `MANUAL` \| `WEBHOOK_ERP` |
+| `source` | string | no | `MANUAL` \| `WEBHOOK_ERP` \| `FULFILLMENT_ECOMMERCE` (additive — ADR-MONO-022) |
 | `customerPartnerId` | UUID | no | |
 | `customerPartnerCode` | string | no | Denormalized from MasterReadModel for admin dashboards |
 | `warehouseId` | UUID | no | |
 | `requiredShipDate` | string (YYYY-MM-DD) | yes | |
+| `shipTo` | object | yes | **Additive (ADR-MONO-022 D2-a).** B2C drop-ship recipient for `FULFILLMENT_ECOMMERCE`-origin orders: `{ recipientName, address, phone }`. `null` for `MANUAL`/`WEBHOOK_ERP` (B2B — ship to customer partner). Additive ⇒ existing consumers (admin-service) ignore it. |
 | `lines[].orderLineId` | UUID | no | |
 | `lines[].lineNo` | int | no | |
 | `lines[].skuId` | UUID | no | |
@@ -428,6 +430,7 @@ Partition key: `sagaId`
   "sagaId": "uuid",
   "reservationId": "uuid",
   "orderId": "uuid",
+  "orderNo": "ORD-20260429-0001",
   "shipmentId": "uuid",
   "shipmentNo": "SHP-20260429-0001",
   "warehouseId": "uuid",
@@ -449,7 +452,8 @@ Partition key: `sagaId`
 |---|---|---|---|
 | `sagaId` | UUID | no | Partition key; inventory uses to complete the saga step |
 | `reservationId` | UUID | no | Equals `PickingRequest.id`; inventory matches on this to find the reservation to confirm |
-| `orderId` | UUID | no | |
+| `orderId` | UUID | no | wms-internal order id |
+| `orderNo` | string | no | **Additive (ADR-MONO-022 D5).** The order business id — for `FULFILLMENT_ECOMMERCE` orders this equals the ecommerce order id, the correlation key the ecommerce return-leg consumer (`wms-shipment-subscriptions.md`) matches on. Additive ⇒ existing consumers (inventory-service, admin-service) ignore it. |
 | `shipmentId` | UUID | no | `Shipment.id` |
 | `shipmentNo` | string | no | Business identifier for the shipment |
 | `warehouseId` | UUID | no | |
