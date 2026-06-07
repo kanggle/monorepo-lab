@@ -1,6 +1,7 @@
 package com.example.order.infrastructure.event;
 
 import com.example.order.application.event.OrderCancelledEvent;
+import com.example.order.application.event.OrderConfirmedEvent;
 import com.example.order.application.event.OrderPlacedEvent;
 import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
@@ -39,6 +40,12 @@ public class StandaloneOrderEventPublisher implements OrderEventPublisher {
                     "결제 레코드 생성 실패로 주문을 완료할 수 없습니다. payment-service 상태를 확인하세요. orderId="
                             + payload.orderId(), e);
         }
+    }
+
+    @Override
+    public void publishOrderConfirmed(OrderConfirmedEvent event) {
+        // No wms/Kafka in standalone — fulfillment forward leg is degraded (ADR-MONO-022 §D8).
+        log.debug("[standalone] OrderConfirmed event (no-op): {}", event.payload().orderId());
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.example.order.infrastructure.event;
 
 import com.example.order.application.event.OrderCancelledEvent;
+import com.example.order.application.event.OrderConfirmedEvent;
 import com.example.order.application.event.OrderPlacedEvent;
 import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
@@ -24,6 +25,12 @@ public class SpringOrderEventPublisher implements OrderEventPublisher {
     public void publishOrderPlaced(OrderPlacedEvent event) {
         String payload = serialize(event);
         outboxWriter.save("Order", event.payload().orderId(), "OrderPlaced", payload);
+    }
+
+    @Override
+    public void publishOrderConfirmed(OrderConfirmedEvent event) {
+        String payload = serialize(event);
+        outboxWriter.save("Order", event.payload().orderId(), "OrderConfirmed", payload);
     }
 
     @Override

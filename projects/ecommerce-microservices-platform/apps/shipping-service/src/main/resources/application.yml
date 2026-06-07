@@ -60,6 +60,13 @@ outbox:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
+# Cross-project fulfillment forward leg (ADR-MONO-022 §D7)
+fulfillment:
+  enabled: ${FULFILLMENT_ENABLED:true}
+  default-warehouse-code: ${FULFILLMENT_DEFAULT_WAREHOUSE_CODE:WH-MAIN}
+  require-sku-mapping: ${FULFILLMENT_REQUIRE_SKU_MAPPING:false}
+  sku-map: {}
+
 logging:
   level:
     com.example.shipping: INFO

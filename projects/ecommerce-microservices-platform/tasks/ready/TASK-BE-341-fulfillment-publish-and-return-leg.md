@@ -75,3 +75,51 @@ When a Shipping record reaches `PREPARING`, shipping-service publishes `ecommerc
 - Silent drop of unmapped SKU → forbidden (AC-4).
 - Changing ecommerce-internal event envelopes to camelCase → breaks order/payment/notification consumers. Only the NEW cross-project events are camelCase.
 - Double-SHIP on event re-delivery → prevented by dedupe + idempotent shipping transition (AC-2).
+
+# Implementation Notes
+
+## Data-availability approach — chosen: EVENT-DRIVEN ENRICHMENT (preferred)
+
+`OrderConfirmed` is enriched additively in order-service to carry `lines[]`
+(per-line `sku`/`productId`/`variantId`/`quantity`) + `shippingAddress`
+({recipientName, address, phone}). shipping-service's `OrderConfirmedEventConsumer`
+then has everything to build the cross-project fulfillment event with no
+synchronous REST call back to order-service. No new outbound client port was
+introduced (fallback avoided).
+
+### Pre-existing gap discovered + closed
+order-service did **not** publish `OrderConfirmed` at all before this task — the
+`confirmOrder` flow only flipped status; no outbox row, no `order.order.confirmed`
+topic in `resolveTopic`, no `publishOrderConfirmed`. shipping-service's
+`OrderConfirmedEventConsumer` was therefore dormant in production (nothing emitted
+the topic). This task wires the producer side: `OrderConfirmationService.confirmOrder`
+now co-commits an `OrderConfirmed` outbox row (only on the real PENDING→CONFIRMED
+transition; idempotent re-confirm publishes nothing), `SpringOrderEventPublisher`
+gained `publishOrderConfirmed`, and `OutboxPollingScheduler` maps `OrderConfirmed`
+→ `order.order.confirmed`. Standalone profile = no-op (D8). Envelope stays the
+ecommerce-internal `event_id`/`event_type` snake-ish shape; only the payload gained
+additive fields.
+
+### SKU identity
+order-service has no explicit `sku` field. The ecommerce sellable-unit id is the
+order line's `variantId` (falling back to `productId` when the variant is absent).
+That value travels as `OrderConfirmed.lines[].sku` and is ACL-mapped to a wms
+`skuCode` (config `fulfillment.sku-map`, identity default).
+
+## Layering
+ACL (`FulfillmentAcl`) + camelCase message DTO live in shipping-service
+`infrastructure/event`. The application port (`ShippingEventPublisher`) gained a
+String-JSON method (`publishFulfillmentRequested(orderId, messageJson)`) so the
+infrastructure DTO does not leak into the application layer; serialization happens
+in the consumer (which already holds an `ObjectMapper`).
+
+## Verification (2026-06-08, Docker unavailable on host)
+- Compile main+test BOTH modules: BUILD SUCCESSFUL.
+- `:order-service:test` → 282 tests, 0 failures/errors/skipped.
+- `:shipping-service:test` → 80 tests, 0 failures/errors/skipped.
+- The project `build.gradle` excludes `@Tag("integration")` from `:test`; the new
+  Testcontainers ITs (`shipping-service/FulfillmentIntegrationTest`) were therefore
+  NOT executed here (Docker down — `docker info` failed). They run in the
+  Docker-enabled CI integration job. Forward-leg outbox-row assertion + return-leg
+  PREPARING→SHIPPED + idempotency are covered by those ITs and by unit tests that
+  DID run.

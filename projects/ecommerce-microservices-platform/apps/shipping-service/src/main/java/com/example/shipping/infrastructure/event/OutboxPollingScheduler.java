@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxPollingScheduler {
 
     static final String TOPIC_SHIPPING_STATUS_CHANGED = "shipping.shipping.status-changed";
+    static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
 
     public OutboxPollingScheduler(OutboxPublisher outboxPublisher,
                                   KafkaTemplate<String, String> kafkaTemplate) {
@@ -20,6 +21,7 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
     protected String resolveTopic(String eventType) {
         return switch (eventType) {
             case "ShippingStatusChanged" -> TOPIC_SHIPPING_STATUS_CHANGED;
+            case "FulfillmentRequested" -> TOPIC_FULFILLMENT_REQUESTED;
             default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
         };
     }
