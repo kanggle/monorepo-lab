@@ -114,8 +114,15 @@ public abstract class OutboundServiceIntegrationBase {
                     //
                     // The default Resilience4j aspect order makes @Retry wrap
                     // @CircuitBreaker, so EACH retry attempt passes through the
-                    // breaker. If minimumNumberOfCalls is too low the breaker
-                    // OPENS partway through a single 3-attempt retry burst — the
+                    // breaker. (The @Retry fallbackMethod — bound on the OUTER
+                    // aspect in TmsClientAdapter — only fires after all 3 retry
+                    // attempts exhaust; a fallback on the inner @CircuitBreaker
+                    // would convert the first TmsTransientException to the
+                    // non-retryable ExternalServiceUnavailableException and the
+                    // burst would stop at 1 call.)
+                    //
+                    // If minimumNumberOfCalls is too low the breaker OPENS
+                    // partway through a single 3-attempt retry burst — the
                     // remaining attempt(s) then short-circuit with
                     // CallNotPermittedException (a retry ignoreException), so the
                     // burst stops early and WireMock sees < 3 calls. Scenarios 2

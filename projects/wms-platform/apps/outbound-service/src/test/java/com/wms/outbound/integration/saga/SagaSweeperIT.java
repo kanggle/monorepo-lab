@@ -156,9 +156,11 @@ class SagaSweeperIT extends OutboundServiceIntegrationBase {
 
         sweeper.sweep();
 
-        // Find the cloned row.
+        // Find the cloned row. The payload column is jsonb — cast to ::text so
+        // JdbcTemplate returns a String rather than an org.postgresql.util.PGobject
+        // (which is not assignable to String).
         Map<String, Object> cloned = jdbc.queryForMap("""
-                SELECT id, payload FROM outbound_outbox
+                SELECT id, payload::text AS payload FROM outbound_outbox
                 WHERE event_type = 'outbound.picking.requested'
                   AND aggregate_id = ?
                   AND id <> ?

@@ -72,6 +72,14 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
         createTopic();
         waitForListenerAssignment();
 
+        // Defensive clean start — outbound_outbox + outbound_event_dedupe are
+        // append-only (V8 BEFORE DELETE triggers); TRUNCATE bypasses the
+        // row-level triggers. Complements the @AfterEach cleanup so a prior
+        // class that failed mid-flight cannot leak rows into this test's
+        // (now order-scoped) outbox assertions.
+        jdbc.execute("TRUNCATE TABLE outbound_outbox");
+        jdbc.execute("TRUNCATE TABLE outbound_event_dedupe");
+
         partnerId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
         skuId = UUID.randomUUID();
@@ -117,37 +125,54 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
         String orderNo = "ECO-" + System.currentTimeMillis();
         publish(buildFulfillmentEvent(UUID.randomUUID(), orderNo));
 
+        // Capture THIS test's order id so the outbox assertions below can be
+        // scoped to exactly this order/saga (outbound_outbox is append-only and
+        // shared across the suite — global COUNT(*) collides with other tests'
+        // rows and is order-dependent, so every assertion must filter on the
+        // aggregate ids belonging to this order).
+        UUID[] orderIdHolder = new UUID[1];
+
         await().atMost(30, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
             List<Map<String, Object>> rows = jdbc.queryForList(
                     "SELECT * FROM outbound_order WHERE order_no = ?", orderNo);
             assertThat(rows).hasSize(1);
             Map<String, Object> row = rows.get(0);
+            orderIdHolder[0] = (UUID) row.get("id");
             assertThat(row.get("source")).isEqualTo("FULFILLMENT_ECOMMERCE");
             assertThat(row.get("ship_to_name")).isEqualTo("홍길동");
             assertThat(row.get("ship_to_address")).isEqualTo("서울시 강남구 1");
             assertThat(row.get("ship_to_phone")).isEqualTo("010-1234-5678");
         });
 
-        // order.received outbox row carries the shipTo block.
+        UUID orderId = orderIdHolder[0];
+        // The picking.requested outbox row's aggregate is the saga (see
+        // PickingRequestedEvent#aggregateId); the order.received row's aggregate
+        // is the order id (see OrderReceivedEvent#aggregateId).
+        UUID sagaId = jdbc.queryForObject(
+                "SELECT id FROM outbound_saga WHERE order_id = ?", UUID.class, orderId);
+
+        // order.received outbox row carries the shipTo block — scoped to this order.
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             Long received = jdbc.queryForObject("""
                     SELECT COUNT(*) FROM outbound_outbox
                     WHERE event_type = 'outbound.order.received'
-                      AND payload::text LIKE ?
-                    """, Long.class, "%\"orderNo\":\"" + orderNo + "\"%");
+                      AND aggregate_id = ?
+                    """, Long.class, orderId);
             assertThat(received).isEqualTo(1L);
 
             Long shipTo = jdbc.queryForObject("""
                     SELECT COUNT(*) FROM outbound_outbox
                     WHERE event_type = 'outbound.order.received'
+                      AND aggregate_id = ?
                       AND payload::text LIKE '%"recipientName":"홍길동"%'
-                    """, Long.class);
+                    """, Long.class, orderId);
             assertThat(shipTo).isEqualTo(1L);
 
             Long pickingRequested = jdbc.queryForObject("""
                     SELECT COUNT(*) FROM outbound_outbox
                     WHERE event_type = 'outbound.picking.requested'
-                    """, Long.class);
+                      AND aggregate_id = ?
+                    """, Long.class, sagaId);
             assertThat(pickingRequested).isEqualTo(1L);
         });
     }
