@@ -44,6 +44,11 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
         outboxWriter.save("Shipping", shippingId, "ShippingStatusChanged", payload);
     }
 
+    @Override
+    public void publishFulfillmentRequested(String orderId, String messageJson) {
+        outboxWriter.save("Fulfillment", orderId, "FulfillmentRequested", messageJson);
+    }
+
     private String serialize(Object event) {
         try {
             return objectMapper.writeValueAsString(event);

@@ -6,6 +6,7 @@ import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OrderSource;
 import com.wms.outbound.domain.model.OrderStatus;
+import com.wms.outbound.domain.model.ShipToAddress;
 import java.util.List;
 
 /**
@@ -32,6 +33,7 @@ final class OrderMapper {
                 e.getWarehouseId(),
                 e.getRequestedShipDate(),
                 e.getNotes(),
+                toShipTo(e),
                 OrderStatus.valueOf(e.getStatus()),
                 e.getVersion(),
                 e.getCreatedAt(),
@@ -39,6 +41,18 @@ final class OrderMapper {
                 e.getUpdatedAt(),
                 e.getUpdatedBy(),
                 lines);
+    }
+
+    /**
+     * Reconstructs the {@link ShipToAddress} value object from the entity's
+     * three nullable columns. Returns {@code null} when no recipient name is
+     * stored (B2B order).
+     */
+    private static ShipToAddress toShipTo(OrderEntity e) {
+        if (e.getShipToName() == null) {
+            return null;
+        }
+        return new ShipToAddress(e.getShipToName(), e.getShipToAddress(), e.getShipToPhone());
     }
 
     static OrderLine toLineDomain(OrderLineEntity e) {

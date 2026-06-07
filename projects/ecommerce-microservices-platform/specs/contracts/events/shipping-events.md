@@ -25,6 +25,12 @@ Published when a shipping record's status changes.
 
 **Consumers:** order-service, notification-service
 
+order-service's `ShippingStatusChangedEventConsumer` (group `order-service`) reads
+this event and, on `newStatus = SHIPPED`, flips the Order `CONFIRMED → SHIPPED`
+(return-leg tail of ADR-MONO-022 §D7). Other transitions are ignored by
+order-service. Consumption is idempotent (dedupe on `event_id` + idempotent
+`Order.ship`).
+
 **Topic:** `shipping.shipping.status-changed`
 
 **Payload**

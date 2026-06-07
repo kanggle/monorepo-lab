@@ -838,6 +838,13 @@ jobs:
         # TASK-BE-045: admin-service joins. All three services boot Postgres
         # (+ Kafka where applicable) via Testcontainers; sharing the job
         # avoids spinning up additional runners.
+        # NOTE (ADR-MONO-022 / TASK-BE-340): outbound-service:integrationTest is
+        # intentionally NOT wired here yet — that suite (SagaSweeperIT /
+        # TmsClientAdapterIT / IdempotencyFilterRedisIT + the new
+        # FulfillmentRequestedConsumerIT) is currently dev-only and 13/19 fail
+        # in the CI runner (pre-existing env/maintenance debt unrelated to the
+        # fulfillment feature). Wiring + repairing it is a separate follow-up
+        # (TASK-BE-342) so this feature PR is not coupled to that debt.
         run: >-
           ./gradlew
           :projects:wms-platform:apps:master-service:integrationTest

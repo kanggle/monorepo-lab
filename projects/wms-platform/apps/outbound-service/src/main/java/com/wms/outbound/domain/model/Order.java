@@ -50,6 +50,7 @@ public final class Order {
     private final UUID warehouseId;
     private final LocalDate requiredShipDate;
     private final String notes;
+    private final ShipToAddress shipTo;
     private OrderStatus status;
     private long version;
     private final Instant createdAt;
@@ -58,6 +59,10 @@ public final class Order {
     private String updatedBy;
     private final List<OrderLine> lines;
 
+    /**
+     * Backward-compatible constructor — B2B orders with no drop-ship recipient
+     * ({@code shipTo == null}). Used by the manual REST and ERP-webhook paths.
+     */
     public Order(UUID id,
                  String orderNo,
                  OrderSource source,
@@ -72,6 +77,29 @@ public final class Order {
                  Instant updatedAt,
                  String updatedBy,
                  List<OrderLine> lines) {
+        this(id, orderNo, source, customerPartnerId, warehouseId, requiredShipDate,
+                notes, null, status, version, createdAt, createdBy, updatedAt, updatedBy, lines);
+    }
+
+    /**
+     * Full constructor with an additive {@link ShipToAddress shipTo}
+     * (ADR-MONO-022 D2-a). {@code shipTo} may be {@code null} for B2B orders.
+     */
+    public Order(UUID id,
+                 String orderNo,
+                 OrderSource source,
+                 UUID customerPartnerId,
+                 UUID warehouseId,
+                 LocalDate requiredShipDate,
+                 String notes,
+                 ShipToAddress shipTo,
+                 OrderStatus status,
+                 long version,
+                 Instant createdAt,
+                 String createdBy,
+                 Instant updatedAt,
+                 String updatedBy,
+                 List<OrderLine> lines) {
         this.id = Objects.requireNonNull(id, "id");
         this.orderNo = Objects.requireNonNull(orderNo, "orderNo");
         this.source = Objects.requireNonNull(source, "source");
@@ -79,6 +107,7 @@ public final class Order {
         this.warehouseId = Objects.requireNonNull(warehouseId, "warehouseId");
         this.requiredShipDate = requiredShipDate;
         this.notes = notes;
+        this.shipTo = shipTo;
         this.status = Objects.requireNonNull(status, "status");
         this.version = version;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
@@ -208,6 +237,14 @@ public final class Order {
 
     public String getNotes() {
         return notes;
+    }
+
+    /**
+     * Drop-ship recipient for {@code FULFILLMENT_ECOMMERCE}-origin orders;
+     * {@code null} for B2B ({@code MANUAL} / {@code WEBHOOK_ERP}).
+     */
+    public ShipToAddress getShipTo() {
+        return shipTo;
     }
 
     public OrderStatus getStatus() {

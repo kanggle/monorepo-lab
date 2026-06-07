@@ -1,0 +1,65 @@
+# Task ID
+
+TASK-MONO-195
+
+# Title
+
+ADR-MONO-022 §D7 ④ — End-to-end scenario "storefront purchase → connected warehouse ships → order auto-SHIPPED" across ecommerce + wms (cross-project fulfillment loop).
+
+# Status
+
+ready
+
+# Owner
+
+claude (Opus 4.8) — cross-project e2e (federation/integration harness). Gated on TASK-BE-340 + TASK-BE-341 both merged.
+
+# Task Tags
+
+- test
+
+---
+
+# Dependency Markers
+
+- **선행**: TASK-BE-340 (wms) + TASK-BE-341 (ecommerce) both merged to main.
+- **맥락**: ADR-MONO-010 (e2e tag taxonomy), ADR-MONO-011 (nightly full e2e).
+
+# Goal
+
+A runnable e2e proving the full loop: place/confirm an ecommerce order → `ecommerce.fulfillment.requested.v1` → wms creates outbound order → saga ships → `wms.outbound.shipping.confirmed.v1` (with `orderNo`) → ecommerce Shipping SHIPPED → Order SHIPPED. Both stacks on the shared broker.
+
+# Scope
+
+## In Scope
+- e2e scenario under the integration harness (extend `tests/federation-hardening-e2e/` or a dedicated cross-project compose) that boots ecommerce shipping-service/order-service + wms outbound-service/inventory-service/master-service + shared Kafka, seeds `ECOMMERCE-STORE` partner + default warehouse + a mapped SKU with stock, drives the loop, asserts Order=SHIPPED + Shipping tracking populated + wms Order present with `shipTo`.
+- `@Tag` per ADR-MONO-010; nightly per ADR-MONO-011 (cross-project boot is heavy).
+- Backorder branch (optional): insufficient wms stock → `BACKORDERED` → `order.cancelled` → ecommerce alert (assert Shipping stays PREPARING flagged).
+
+## Out of Scope
+- product↔wms inventory reconciliation (D4 v2). Auto-refund.
+
+# Acceptance Criteria
+
+- AC-1: Happy-path loop asserted end to end (Order CONFIRMED → SHIPPED) with correlation by `orderNo`.
+- AC-2: wms outbound order created with `source=FULFILLMENT_ECOMMERCE` + `shipTo` populated.
+- AC-3: Tagged + wired into nightly (not the fast PR lane) — cross-project boot cost.
+- AC-4: Harness documented (README) — how to run locally; graceful skip if a stack is absent (D8).
+
+# Related Specs
+
+- ADR-MONO-022; `fulfillment-events.md`; `ecommerce-fulfillment-subscriptions.md`; `wms-shipment-subscriptions.md`; ADR-MONO-010/011.
+
+# Related Contracts
+
+- Exercises all of ADR-MONO-022's topics end to end.
+
+# Edge Cases
+
+- Eventual consistency: poll/await with timeout (saga + outbox polling have latency).
+- Shared broker topic isolation: distinct consumer groups (`outbound-service`, `shipping-service-wms`).
+
+# Failure Scenarios
+
+- Flaky on boot ordering (scm-gateway-style JWKS fail-fast) → start dependencies healthy first; document.
+- Putting this in the fast PR lane → CI time blowout. Must be nightly/tagged (AC-3).

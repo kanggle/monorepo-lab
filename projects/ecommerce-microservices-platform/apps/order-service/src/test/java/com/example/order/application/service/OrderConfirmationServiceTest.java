@@ -1,5 +1,7 @@
 package com.example.order.application.service;
 
+import com.example.order.application.event.OrderConfirmedEvent;
+import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.order.domain.model.Order;
@@ -36,6 +38,9 @@ class OrderConfirmationServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderEventPublisher orderEventPublisher;
+
+    @Mock
     private OrderMetricsPort orderMetrics;
 
     @Mock
@@ -64,6 +69,19 @@ class OrderConfirmationServiceTest {
         verify(orderRepository).save(order);
         verify(orderMetrics).recordOrderConfirmed();
         verify(orderMetrics).recordStatusTransition("PENDING", "CONFIRMED");
+
+        org.mockito.ArgumentCaptor<OrderConfirmedEvent> captor =
+                org.mockito.ArgumentCaptor.forClass(OrderConfirmedEvent.class);
+        verify(orderEventPublisher).publishOrderConfirmed(captor.capture());
+        OrderConfirmedEvent published = captor.getValue();
+        assertThat(published.eventType()).isEqualTo("OrderConfirmed");
+        assertThat(published.payload().orderId()).isEqualTo(order.getOrderId());
+        assertThat(published.payload().userId()).isEqualTo("user1");
+        assertThat(published.payload().lines()).hasSize(1);
+        assertThat(published.payload().lines().get(0).sku()).isEqualTo("v1");
+        assertThat(published.payload().lines().get(0).quantity()).isEqualTo(1);
+        assertThat(published.payload().shippingAddress().recipientName()).isEqualTo("홍길동");
+        assertThat(published.payload().shippingAddress().address()).isEqualTo("서울시 강남구 101호");
     }
 
     @Test
@@ -82,6 +100,7 @@ class OrderConfirmationServiceTest {
         verify(orderRepository).save(order);
         verify(orderMetrics, never()).recordOrderConfirmed();
         verify(orderMetrics, never()).recordStatusTransition(any(), any());
+        verify(orderEventPublisher, never()).publishOrderConfirmed(any());
     }
 
     @Test

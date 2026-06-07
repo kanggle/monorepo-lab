@@ -115,4 +115,46 @@ class ShippingCommandServiceTest {
                 new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", "USER")))
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    @DisplayName("markShippedByOrderId: orderNo로 조회해 PREPARING -> SHIPPED 전이 + 이벤트 발행")
+    void markShippedByOrderId_preparing_transitionsToShipped() {
+        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.markShippedByOrderId("order-1", "SHP-001", "CJ-LOGISTICS");
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
+        assertThat(shipping.getTrackingNumber()).isEqualTo("SHP-001");
+        assertThat(shipping.getCarrier()).isEqualTo("CJ-LOGISTICS");
+        verify(shippingEventPublisher).publishShippingStatusChanged(
+                eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
+                eq(ShippingStatus.PREPARING), eq(ShippingStatus.SHIPPED),
+                eq("SHP-001"), eq("CJ-LOGISTICS"));
+    }
+
+    @Test
+    @DisplayName("markShippedByOrderId: 이미 SHIPPED면 멱등 처리 (no-op)")
+    void markShippedByOrderId_alreadyShipped_idempotent() {
+        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        shipping.transitionTo(ShippingStatus.SHIPPED, "OLD-TRK", "OLD-CARRIER", fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        shippingCommandService.markShippedByOrderId("order-1", "SHP-002", "HANJIN");
+
+        assertThat(shipping.getTrackingNumber()).isEqualTo("OLD-TRK");
+        verify(shippingRepository, never()).save(any());
+        verify(shippingEventPublisher, never()).publishShippingStatusChanged(
+                any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("markShippedByOrderId: 미존재 주문이면 ShippingNotFoundException")
+    void markShippedByOrderId_notFound_throws() {
+        given(shippingRepository.findByOrderId("nope")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> shippingCommandService.markShippedByOrderId("nope", "SHP", "CJ"))
+                .isInstanceOf(ShippingNotFoundException.class);
+    }
 }

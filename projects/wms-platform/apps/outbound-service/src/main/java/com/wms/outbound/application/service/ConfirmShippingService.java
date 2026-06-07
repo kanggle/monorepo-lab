@@ -121,7 +121,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         List<PackingUnit> packingUnits = packingPersistence.findByOrderId(savedOrder.getId());
         List<ShippingConfirmedEvent.Line> eventLines =
                 buildShippingEventLines(savedOrder, packingUnits, agg.pickingConfirmation());
-        emitShippingOutbox(savedShipment, agg.saga(), agg.pickingRequest(),
+        emitShippingOutbox(savedShipment, savedOrder.getOrderNo(), agg.saga(), agg.pickingRequest(),
                 savedOrder.getWarehouseId(), eventLines, now, command.actorId());
 
         log.info("shipping_confirmed orderId={} shipmentId={} sagaId={}",
@@ -248,6 +248,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
      * current transaction boundary.
      */
     private void emitShippingOutbox(Shipment savedShipment,
+                                    String orderNo,
                                     OutboundSaga saga,
                                     PickingRequest pickingRequest,
                                     UUID warehouseId,
@@ -258,6 +259,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 saga.sagaId(),
                 pickingRequest.getId() /* reservationId */,
                 savedShipment.getOrderId(),
+                orderNo,
                 savedShipment.getId(),
                 savedShipment.getShipmentNo(),
                 warehouseId,

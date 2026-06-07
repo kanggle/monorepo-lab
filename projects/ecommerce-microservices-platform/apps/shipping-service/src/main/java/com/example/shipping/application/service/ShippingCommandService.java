@@ -38,6 +38,42 @@ public class ShippingCommandService {
         log.info("Shipping created: shippingId={}, orderId={}", shipping.getShippingId(), command.orderId());
     }
 
+    /**
+     * Return-leg transition (ADR-MONO-022 §D7): mark the Shipping for the given
+     * order {@code SHIPPED} with the wms-assigned tracking/carrier. Located by
+     * {@code orderId} (the wms {@code orderNo} correlation key). Idempotent: an
+     * already-SHIPPED record is a no-op. System-driven, so no admin role check.
+     *
+     * @throws ShippingNotFoundException if no Shipping exists for the order
+     *                                   (caller routes to DLT).
+     */
+    @Transactional
+    public void markShippedByOrderId(String orderId, String trackingNumber, String carrier) {
+        Shipping shipping = shippingRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new ShippingNotFoundException(orderId));
+
+        if (shipping.getStatus() == ShippingStatus.SHIPPED
+                || shipping.getStatus() == ShippingStatus.IN_TRANSIT
+                || shipping.getStatus() == ShippingStatus.DELIVERED) {
+            log.info("Shipping for orderId={} already past PREPARING (status={}), skipping (idempotent)",
+                    orderId, shipping.getStatus());
+            return;
+        }
+
+        ShippingStatus previousStatus = shipping.transitionTo(
+                ShippingStatus.SHIPPED, trackingNumber, carrier, clock);
+
+        Shipping saved = shippingRepository.save(shipping);
+
+        shippingEventPublisher.publishShippingStatusChanged(
+                saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
+                previousStatus, saved.getStatus(),
+                saved.getTrackingNumber(), saved.getCarrier());
+
+        log.info("Shipping marked SHIPPED via wms confirmation: shippingId={}, orderId={}, tracking={}, carrier={}",
+                saved.getShippingId(), orderId, trackingNumber, carrier);
+    }
+
     @Transactional
     public UpdateShippingStatusResult updateStatus(UpdateShippingStatusCommand command) {
         validateAdminRole(command.userRole());

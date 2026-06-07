@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxPollingScheduler {
 
     static final String TOPIC_ORDER_PLACED = "order.order.placed";
+    static final String TOPIC_ORDER_CONFIRMED = "order.order.confirmed";
     static final String TOPIC_ORDER_CANCELLED = "order.order.cancelled";
     static final String TOPIC_ORDER_SAGA_RECOVERY_EXHAUSTED =
             "order.alert.saga.recovery.exhausted";
@@ -29,6 +30,7 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
     protected String resolveTopic(String eventType) {
         return switch (eventType) {
             case "OrderPlaced" -> TOPIC_ORDER_PLACED;
+            case "OrderConfirmed" -> TOPIC_ORDER_CONFIRMED;
             case "OrderCancelled" -> TOPIC_ORDER_CANCELLED;
             case "OrderSagaRecoveryExhausted" -> TOPIC_ORDER_SAGA_RECOVERY_EXHAUSTED;
             default -> throw new IllegalArgumentException("Unknown event type: " + eventType);

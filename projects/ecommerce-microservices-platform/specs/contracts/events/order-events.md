@@ -55,7 +55,8 @@ Published when a new order is successfully created.
 
 ## OrderConfirmed
 
-Published when an order is confirmed (payment completed and order status transitions to CONFIRMED).
+Published when an order is confirmed (status transitions `PENDING → CONFIRMED`).
+Co-committed with the status transition via the transactional outbox.
 
 **Consumers:** shipping-service
 
@@ -66,9 +67,31 @@ Published when an order is confirmed (payment completed and order status transit
 {
   "orderId": "string (UUID)",
   "userId": "string (UUID)",
-  "confirmedAt": "string (ISO 8601)"
+  "confirmedAt": "string (ISO 8601)",
+  "lines": [
+    {
+      "sku": "string (ecommerce sellable-unit id: variantId, else productId)",
+      "productId": "string (UUID)",
+      "variantId": "string (UUID) | null",
+      "quantity": 2
+    }
+  ],
+  "shippingAddress": {
+    "recipientName": "string",
+    "address": "string (single-line full address)",
+    "phone": "string | null"
+  }
 }
 ```
+
+> **Additive enrichment (ADR-MONO-022 §D7).** `lines` and `shippingAddress` were
+> added so shipping-service can build the cross-project fulfillment-intent event
+> (`ecommerce.fulfillment.requested.v1`) without a synchronous call back to
+> order-service. Envelope stays in the ecommerce-internal `event_id`/`event_type`
+> shape — only the payload gained additive fields. Consumers that read only
+> `orderId`/`userId`/`confirmedAt` are unaffected. `shippingAddress` may be null
+> for orders without one; a line's `sku` is the ecommerce sellable-unit id (the
+> variant when present, else the product), to be ACL-mapped to a wms SKU code.
 
 ---
 

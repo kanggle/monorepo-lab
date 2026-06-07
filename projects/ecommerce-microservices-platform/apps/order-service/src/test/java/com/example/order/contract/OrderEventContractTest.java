@@ -1,6 +1,7 @@
 package com.example.order.contract;
 
 import com.example.order.application.event.OrderCancelledEvent;
+import com.example.order.application.event.OrderConfirmedEvent;
 import com.example.order.application.event.OrderPlacedEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +68,47 @@ class OrderEventContractTest {
         JsonNode addr = payload.get("shippingAddress");
         assertFieldsMatch(addr, Set.of("recipient", "phone", "zipCode", "address1", "address2"),
                 SPEC_REF + " OrderPlaced payload shippingAddress");
+    }
+
+    // ─── OrderConfirmed ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("OrderConfirmed envelope은 스펙 정의 필드만 포함한다")
+    void orderConfirmed_envelope_matchesSpec() throws Exception {
+        OrderConfirmedEvent event = OrderConfirmedEvent.of(
+                "order-1", "user-1", Instant.parse("2026-06-08T10:00:00Z"),
+                List.of(new OrderConfirmedEvent.Line("v1", "p1", "v1", 2)),
+                new OrderConfirmedEvent.ShippingAddress("홍길동", "서울시 강남구 101호", "010-1234-5678"),
+                FIXED_CLOCK
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        assertFieldsMatch(json, ENVELOPE_FIELDS, SPEC_REF + " envelope");
+    }
+
+    @Test
+    @DisplayName("OrderConfirmed payload는 스펙 정의 필드만 포함한다 (lines/shippingAddress 추가)")
+    void orderConfirmed_payload_matchesSpec() throws Exception {
+        OrderConfirmedEvent event = OrderConfirmedEvent.of(
+                "order-1", "user-1", Instant.parse("2026-06-08T10:00:00Z"),
+                List.of(new OrderConfirmedEvent.Line("v1", "p1", "v1", 2)),
+                new OrderConfirmedEvent.ShippingAddress("홍길동", "서울시 강남구 101호", "010-1234-5678"),
+                FIXED_CLOCK
+        );
+
+        JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(event));
+        JsonNode payload = root.get("payload");
+
+        assertFieldsMatch(payload, Set.of("orderId", "userId", "confirmedAt", "lines", "shippingAddress"),
+                SPEC_REF + " OrderConfirmed payload");
+
+        JsonNode line = payload.get("lines").get(0);
+        assertFieldsMatch(line, Set.of("sku", "productId", "variantId", "quantity"),
+                SPEC_REF + " OrderConfirmed payload lines[]");
+
+        JsonNode addr = payload.get("shippingAddress");
+        assertFieldsMatch(addr, Set.of("recipientName", "address", "phone"),
+                SPEC_REF + " OrderConfirmed payload shippingAddress");
     }
 
     // ─── OrderCancelled ─────────────────────────────────────────────────

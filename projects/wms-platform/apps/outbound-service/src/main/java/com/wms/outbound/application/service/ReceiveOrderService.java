@@ -177,6 +177,7 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
                 command.warehouseId(),
                 command.requiredShipDate(),
                 command.notes(),
+                command.shipTo(),
                 OrderStatus.RECEIVED,
                 0L,
                 now, command.actorId(),
@@ -204,6 +205,7 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
                 partner.partnerCode(),
                 saved.getWarehouseId(),
                 saved.getRequiredShipDate(),
+                saved.getShipTo(),
                 eventLines,
                 now,
                 command.actorId()));
