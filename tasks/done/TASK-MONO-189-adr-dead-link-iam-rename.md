@@ -8,7 +8,7 @@ Fix the **broken `docs/adr/` markdown navigation links** that still point at the
 
 # Status
 
-ready
+done
 
 # Owner
 
