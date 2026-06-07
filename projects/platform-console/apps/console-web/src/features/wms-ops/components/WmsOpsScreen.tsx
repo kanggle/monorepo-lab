@@ -450,6 +450,7 @@ export function WmsOpsScreen({
                   ) : (
                     <Button
                       variant="secondary"
+                      size="sm"
                       onClick={() => openAck(a)}
                       data-testid={`wms-alert-ack-${i}`}
                     >

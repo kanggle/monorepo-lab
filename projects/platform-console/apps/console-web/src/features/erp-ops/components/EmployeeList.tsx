@@ -163,6 +163,7 @@ export function EmployeeList({
                         <div className="flex gap-1">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() =>
                               openUpdate(e.id, `${e.employeeNumber} · ${e.name}`)
                             }
@@ -172,6 +173,7 @@ export function EmployeeList({
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() =>
                               openRetire(e.id, `${e.employeeNumber} · ${e.name}`)
                             }

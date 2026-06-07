@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { showPickerOnClick } from '@/shared/lib/show-picker';
 import type { DelegationGrant } from '../api/delegation-types';
 import { isActiveGrant } from '../api/delegation-types';
 import {
@@ -323,6 +324,7 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
             type="date"
             value={validFrom}
             onChange={(e) => setValidFrom(e.target.value)}
+            onClick={showPickerOnClick}
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
           />
         </div>
@@ -340,6 +342,7 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
             type="date"
             value={validTo}
             onChange={(e) => setValidTo(e.target.value)}
+            onClick={showPickerOnClick}
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
           />
         </div>

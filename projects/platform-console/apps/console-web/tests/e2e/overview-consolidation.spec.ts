@@ -65,7 +65,7 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     const erp = page.getByTestId('nav-erp');
     await expect(erp).toBeVisible();
     await expect(erp).toHaveAttribute('href', '/erp');
-    await expect(erp).toHaveText('ERP 운영');
+    await expect(erp).toHaveText('ERP');
     await erp.click();
     await page.waitForURL('**/erp', { timeout: 15_000 });
     await expect(

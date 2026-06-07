@@ -132,6 +132,7 @@ export function JobGradeList({ initial, writable = false }: JobGradeListProps) {
                         <div className="flex gap-1">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openUpdate(g.id, `${g.code} · ${g.name}`)}
                             data-testid={`erp-jobgrade-edit-${i}`}
                           >
@@ -139,6 +140,7 @@ export function JobGradeList({ initial, writable = false }: JobGradeListProps) {
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openRetire(g.id, `${g.code} · ${g.name}`)}
                             data-testid={`erp-jobgrade-retire-${i}`}
                             className="text-destructive"

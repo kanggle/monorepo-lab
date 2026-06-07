@@ -65,11 +65,13 @@ describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-
     expect(src).toContain('도메인 상태');
   });
 
-  it('keeps the "ERP 운영" entry (nav-erp) pointing at /erp, after Finance', () => {
+  it('keeps the "ERP" entry (nav-erp) pointing at /erp, after Finance', () => {
     const src = readFileSync(NAV_PATH, 'utf8');
     expect(src).toContain("'nav-erp'");
     expect(src).toContain("'/erp'");
-    expect(src).toContain('ERP 운영');
+    // Domain nav labels are the bare domain name (운영 suffix dropped); the
+    // section header "도메인 운영" still carries the grouping context.
+    expect(src).toContain("label: 'ERP'");
     const financeIdx = src.indexOf("'nav-finance'");
     const erpIdx = src.indexOf("'nav-erp'");
     expect(financeIdx).toBeGreaterThan(-1);

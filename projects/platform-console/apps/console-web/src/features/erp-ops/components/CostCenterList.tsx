@@ -142,6 +142,7 @@ export function CostCenterList({
                         <div className="flex gap-1">
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openUpdate(c.id, `${c.code} · ${c.name}`)}
                             data-testid={`erp-costcenter-edit-${i}`}
                           >
@@ -149,6 +150,7 @@ export function CostCenterList({
                           </Button>
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => openRetire(c.id, `${c.code} · ${c.name}`)}
                             data-testid={`erp-costcenter-retire-${i}`}
                             className="text-destructive"
