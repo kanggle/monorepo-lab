@@ -56,7 +56,7 @@ ports: ["${PORT_PREFIX:-N}XXXX:YYYY"]
 
 향후 추가 예정 프로젝트:
 
-1. fan-community (B2C 팬덤 — GAP IdP 1차 소비자, [ADR-001](../../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md))
+1. fan-community (B2C 팬덤 — GAP IdP 1차 소비자, [ADR-001](../../projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md))
 2. scm-platform (B2B 공급망)
 3. erp-platform (B2B 회계·구매·HR 기간계)
 4. mes-platform (B2B 제조 실행)
@@ -268,7 +268,7 @@ gateway:
 - monorepo:
   - [CLAUDE.md § Port Namespace Convention](../../CLAUDE.md)
   - [TEMPLATE.md § Port Namespace Convention](../../TEMPLATE.md)
-  - [ADR-001 (GAP) — OIDC Authorization Server](../../projects/global-account-platform/docs/adr/ADR-001-oidc-adoption.md) (fan-community 가 OIDC consumer 로 등장하는 근거)
+  - [ADR-001 (GAP) — OIDC Authorization Server](../../projects/iam-platform/docs/adr/ADR-001-oidc-adoption.md) (fan-community 가 OIDC consumer 로 등장하는 근거)
 - 메모리:
   - `project_port_prefix_convention.md` (현행 규약 요약)
 

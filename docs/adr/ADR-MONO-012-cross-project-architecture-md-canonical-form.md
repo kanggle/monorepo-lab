@@ -227,4 +227,4 @@ Post-ACCEPTED (migration cycle deliverables — not in this task):
 - Sample fan form: [`projects/fan-platform/specs/services/community-service/architecture.md`](../../projects/fan-platform/specs/services/community-service/architecture.md)
 - Sample SCM hybrid form: [`projects/scm-platform/specs/services/procurement-service/architecture.md`](../../projects/scm-platform/specs/services/procurement-service/architecture.md)
 - Sample ecommerce flat form: [`projects/ecommerce-microservices-platform/specs/services/order-service/architecture.md`](../../projects/ecommerce-microservices-platform/specs/services/order-service/architecture.md)
-- Sample GAP flat form: [`projects/global-account-platform/specs/services/auth-service/architecture.md`](../../projects/global-account-platform/specs/services/auth-service/architecture.md)
+- Sample GAP flat form: [`projects/global-account-platform/specs/services/auth-service/architecture.md`](../../projects/iam-platform/specs/services/auth-service/architecture.md)
