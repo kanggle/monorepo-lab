@@ -53,13 +53,15 @@ class SagaSweeperIT extends OutboundServiceIntegrationBase {
     @BeforeEach
     void cleanState() {
         // Tests share Postgres/ Kafka state across classes — wipe what we touch.
-        jdbc.update("DELETE FROM outbound_outbox");
+        // outbound_outbox is append-only (V8 BEFORE DELETE trigger) — TRUNCATE
+        // bypasses the row-level trigger; DELETE is rejected.
+        jdbc.execute("TRUNCATE TABLE outbound_outbox");
         jdbc.update("DELETE FROM outbound_saga");
     }
 
     @AfterEach
     void tearDown() {
-        jdbc.update("DELETE FROM outbound_outbox");
+        jdbc.execute("TRUNCATE TABLE outbound_outbox");
         jdbc.update("DELETE FROM outbound_saga");
     }
 

@@ -77,8 +77,10 @@ class TmsClientAdapterIT extends OutboundServiceIntegrationBase {
         // reset circuit so each test starts CLOSED
         CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("tms-client");
         cb.reset();
-        // clean dedupe + shipment + saga + order (children before parent for FK)
-        jdbc.update("DELETE FROM tms_request_dedupe");
+        // clean dedupe + shipment + saga + order (children before parent for FK).
+        // tms_request_dedupe is append-only (V8 BEFORE DELETE trigger) — TRUNCATE
+        // bypasses the row-level trigger; DELETE is rejected.
+        jdbc.execute("TRUNCATE TABLE tms_request_dedupe");
         jdbc.update("DELETE FROM shipment");
         jdbc.update("DELETE FROM outbound_saga");
         jdbc.update("DELETE FROM outbound_order");
