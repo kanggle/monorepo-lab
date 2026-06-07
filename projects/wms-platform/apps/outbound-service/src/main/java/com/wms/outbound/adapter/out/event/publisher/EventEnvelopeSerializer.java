@@ -86,6 +86,16 @@ public class EventEnvelopeSerializer {
         p.put("customerPartnerCode", e.customerPartnerCode());
         p.put("warehouseId", e.warehouseId().toString());
         p.put("requiredShipDate", e.requiredShipDate() != null ? e.requiredShipDate().toString() : null);
+        // Additive shipTo (ADR-MONO-022 D2-a) — null for B2B orders.
+        if (e.shipTo() != null) {
+            Map<String, Object> shipTo = new LinkedHashMap<>();
+            shipTo.put("recipientName", e.shipTo().recipientName());
+            shipTo.put("address", e.shipTo().address());
+            shipTo.put("phone", e.shipTo().phone());
+            p.put("shipTo", shipTo);
+        } else {
+            p.put("shipTo", null);
+        }
         List<Map<String, Object>> lines = e.lines().stream().map(l -> {
             Map<String, Object> lm = new LinkedHashMap<>();
             lm.put("orderLineId", l.orderLineId().toString());
@@ -203,6 +213,9 @@ public class EventEnvelopeSerializer {
         p.put("sagaId", e.sagaId().toString());
         p.put("reservationId", e.reservationId().toString());
         p.put("orderId", e.orderId().toString());
+        // Additive orderNo (ADR-MONO-022 D5) — correlation key for the
+        // ecommerce return-leg consumer.
+        p.put("orderNo", e.orderNo());
         p.put("shipmentId", e.shipmentId().toString());
         p.put("shipmentNo", e.shipmentNo());
         p.put("warehouseId", e.warehouseId().toString());

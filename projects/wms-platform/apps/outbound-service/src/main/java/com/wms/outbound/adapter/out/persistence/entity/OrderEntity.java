@@ -53,6 +53,16 @@ public class OrderEntity {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    /** Drop-ship recipient (ADR-MONO-022 D2-a). Null for B2B orders. */
+    @Column(name = "ship_to_name", length = 200)
+    private String shipToName;
+
+    @Column(name = "ship_to_address", length = 1000)
+    private String shipToAddress;
+
+    @Column(name = "ship_to_phone", length = 20)
+    private String shipToPhone;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -72,6 +82,7 @@ public class OrderEntity {
     protected OrderEntity() {
     }
 
+    /** Backward-compatible constructor — B2B order, no drop-ship recipient. */
     public OrderEntity(UUID id,
                        String orderNo,
                        String source,
@@ -80,6 +91,27 @@ public class OrderEntity {
                        String status,
                        LocalDate requestedShipDate,
                        String notes,
+                       Instant createdAt,
+                       String createdBy,
+                       Instant updatedAt,
+                       String updatedBy) {
+        this(id, orderNo, source, customerPartnerId, warehouseId, status,
+                requestedShipDate, notes, null, null, null,
+                createdAt, createdBy, updatedAt, updatedBy);
+    }
+
+    /** Full constructor with additive drop-ship recipient columns (ADR-MONO-022). */
+    public OrderEntity(UUID id,
+                       String orderNo,
+                       String source,
+                       UUID customerPartnerId,
+                       UUID warehouseId,
+                       String status,
+                       LocalDate requestedShipDate,
+                       String notes,
+                       String shipToName,
+                       String shipToAddress,
+                       String shipToPhone,
                        Instant createdAt,
                        String createdBy,
                        Instant updatedAt,
@@ -94,6 +126,9 @@ public class OrderEntity {
         this.status = status;
         this.requestedShipDate = requestedShipDate;
         this.notes = notes;
+        this.shipToName = shipToName;
+        this.shipToAddress = shipToAddress;
+        this.shipToPhone = shipToPhone;
         this.createdAt = createdAt;
         this.createdBy = createdBy;
         this.updatedAt = updatedAt;
@@ -108,6 +143,9 @@ public class OrderEntity {
     public String getStatus() { return status; }
     public LocalDate getRequestedShipDate() { return requestedShipDate; }
     public String getNotes() { return notes; }
+    public String getShipToName() { return shipToName; }
+    public String getShipToAddress() { return shipToAddress; }
+    public String getShipToPhone() { return shipToPhone; }
     public Instant getCreatedAt() { return createdAt; }
     public String getCreatedBy() { return createdBy; }
     public Instant getUpdatedAt() { return updatedAt; }

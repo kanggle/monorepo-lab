@@ -12,11 +12,17 @@ import java.util.UUID;
  * <p>Schema: {@code specs/contracts/events/outbound-events.md} §7.
  *
  * <p>Cross-service contract — jointly owned with {@code inventory-service}.
+ *
+ * <p>{@code orderNo} is additive (ADR-MONO-022 D5): the order business id —
+ * for {@code FULFILLMENT_ECOMMERCE} orders this equals the ecommerce order id,
+ * the correlation key the ecommerce return-leg consumer matches on. Additive ⇒
+ * existing consumers (inventory-service, admin-service) ignore it.
  */
 public record ShippingConfirmedEvent(
         UUID sagaId,
         UUID reservationId,
         UUID orderId,
+        String orderNo,
         UUID shipmentId,
         String shipmentNo,
         UUID warehouseId,

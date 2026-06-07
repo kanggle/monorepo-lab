@@ -11,9 +11,13 @@ package com.wms.outbound.domain.model;
  *       ({@code POST /api/v1/outbound/orders}).</li>
  *   <li>{@link #WEBHOOK_ERP} — pushed by the ERP via
  *       {@code POST /webhooks/erp/order} and applied by the inbox processor.</li>
+ *   <li>{@link #FULFILLMENT_ECOMMERCE} — pushed by ecommerce-platform via the
+ *       {@code ecommerce.fulfillment.requested.v1} event and applied by
+ *       {@code FulfillmentRequestedConsumer} (additive — ADR-MONO-022).</li>
  * </ul>
  */
 public enum OrderSource {
     MANUAL,
-    WEBHOOK_ERP
+    WEBHOOK_ERP,
+    FULFILLMENT_ECOMMERCE
 }
