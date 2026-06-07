@@ -8,7 +8,7 @@ Align **platform-console's specs** (3 files) to IAM — MONO-190 swept the "6 co
 
 # Status
 
-ready
+done
 
 # Owner
 
