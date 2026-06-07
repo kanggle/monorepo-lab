@@ -8,7 +8,7 @@ Align the **consumer-project spec prose** that still names the IdP "GAP" → **"
 
 # Status
 
-ready
+done
 
 # Owner
 
