@@ -90,7 +90,7 @@ standalone's last assigned number (`TASK-BE-247`).
 ## admin-web retirement (2026-05-18 · ADR-MONO-013 Phase 3 · TASK-BE-299)
 
 **Date:** 2026-05-18
-**Task:** TASK-BE-299 (GAP project-internal, spec-first)
+**Task:** TASK-BE-299 (IAM project-internal, spec-first)
 **Governance:** [ADR-MONO-013](../../../docs/adr/ADR-MONO-013-platform-console-foundation.md)
 § D4 (parity-gated retirement) + § D6 Phase 3 + § 6 (gate satisfied);
 [ADR-MONO-014](../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md)
@@ -98,15 +98,15 @@ standalone's last assigned number (`TASK-BE-247`).
 
 ### What changed
 
-GAP `admin-web` (the operator-only Next.js console — GAP's only `frontend-app`)
+IAM `admin-web` (the operator-only Next.js console — IAM's only `frontend-app`)
 was **retired**. Its entire operator surface was **absorbed by the unified
 [`projects/platform-console/`](../../platform-console/PROJECT.md)** (ADR-MONO-013
-Model B — the console is the single UI). GAP returns to **backend-only IdP**.
+Model B — the console is the single UI). IAM returns to **backend-only IdP**.
 
 | Removed | Replaced by |
 |---|---|
 | `apps/admin-web/` (deployable unit, ~95 files incl. `tests/e2e/*`) | platform-console `apps/console-web/` |
-| `pnpm-workspace.yaml` / `pnpm-lock.yaml` | — (GAP is now pure Java/Gradle, no JS workspace) |
+| `pnpm-workspace.yaml` / `pnpm-lock.yaml` | — (IAM is now pure Java/Gradle, no JS workspace) |
 | `specs/services/admin-web/{architecture,dependencies,observability}.md` | git history (`git log --follow`) |
 | `specs/services/admin-web/overview.md` (active spec) | rewritten → **RETIRED record** (tombstone) |
 | `PROJECT.md` `service_types: [...,frontend-app,...]` | `[rest-api, event-consumer, identity-platform]` + § "admin-web — RETIRED" record |
@@ -118,21 +118,21 @@ Retirement was **not** a silent delete (ADR-MONO-013 § D4). The console reached
 additive note + [console-integration-contract § 3](../../platform-console/specs/contracts/console-integration-contract.md)
 — a 16/16 verified parity matrix, programmatically attested by
 `projects/platform-console/apps/console-web/tests/unit/parity-verification.test.ts`.
-Absorption path = platform-console `TASK-PC-FE-002…006` + GAP `TASK-BE-296`
+Absorption path = platform-console `TASK-PC-FE-002…006` + IAM `TASK-BE-296`
 (console OIDC client + product registry) / `TASK-BE-298` (operator token
 exchange) / `TASK-BE-299` (this retirement). **Operator capability lost: none.**
 
 ### Monorepo-level ripple (same atomic PR)
 
-Removing GAP's only `frontend-app` deterministically invalidated shared files
+Removing IAM's only `frontend-app` deterministically invalidated shared files
 (authorized by ADR-MONO-013 § D6 Phase 3; CLAUDE.md § Cross-Project Changes
 one-atomic-PR): root `package.json` dead `iam:{install,dev,build,lint,admin-web,pnpm}`
-scripts removed (docker-compose `iam:*` kept); root `README.md` GAP row +
-`docs/project-overview.md` § 2.2 GAP service map updated to backend-only.
+scripts removed (docker-compose `iam:*` kept); root `README.md` IAM row +
+`docs/project-overview.md` § 2.2 IAM service map updated to backend-only.
 
 ### Not changed
 
-No GAP backend code, contract, Gradle module, Flyway migration, or CI workflow
+No IAM backend code, contract, Gradle module, Flyway migration, or CI workflow
 — `admin-web` was a thin consumer (owned no contract/persistence; not a Gradle
 module; zero `admin-web` references in `.github/workflows/*`). Historical
 `tasks/done/TASK-FE-*` / `TASK-BE-275/290` references are an immutable audit

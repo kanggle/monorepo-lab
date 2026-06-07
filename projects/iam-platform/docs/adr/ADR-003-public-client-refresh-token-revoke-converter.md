@@ -229,7 +229,7 @@ http.with(authorizationServerConfigurer, configurer ->
 | 2 (`51f8f988`) | clientAuthentication slot 으로 이동 + revoke 가드 | unit PASS, **CI 400 invalid_grant** (PKCE 강제) |
 | 3 (`606652d7`) | `PublicClientNoPkceAuthenticationProvider` (pass-through) 추가 | **revoke 1/3 회복**, RT 2 NPE |
 | 4 (`de8ebe3a`) | A1 회피 — `OAuth2TokenGenerator` 직접 inject | RT 2 가 NPE → A2 (`idx_rt_jti` UNIQUE violation) |
-| 5 (`e84e4d5b`) | RT 2 IT 재@Disabled + 사유 명시 | **CI GREEN** (Integration GAP success) |
+| 5 (`e84e4d5b`) | RT 2 IT 재@Disabled + 사유 명시 | **CI GREEN** (Integration IAM success) |
 
 ### 4 anti-pattern 회피 평가
 
@@ -331,7 +331,7 @@ if (Boolean.TRUE.equals(TransactionSynchronizationManager.getResource(SAS_ROTATI
 | Phase 2 cycle 2 | `a83a4d12` | TransactionTemplate programmatic 도입 (A3 회피) — rotation write+publish 한 tx wrap, reuse path 동일 | unit PASS, IT verify 는 Rancher Docker 회귀로 차단 → CI 검증 위임 |
 | Phase 2 cycle 3 | `7e7719c9` | TenantClaimTokenCustomizer 에 REFRESH_TOKEN grantType 분기 추가 (기존 결함 unmasked, fix) | 단위 24 cases PASS, CI verify 위임 |
 
-CI verify cycle 1+2 결과 (PR #296 / run `25596254251`, 2026-05-09 08:19 UTC): GAP Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
+CI verify cycle 1+2 결과 (PR #296 / run `25596254251`, 2026-05-09 08:19 UTC): IAM Integration 2m30s, **회귀 매트릭스 8/8 PASS**:
 
 | 흐름 | 기대 | 실제 |
 |---|---|---|
@@ -366,7 +366,7 @@ if (context.getAuthorizationGrantType().equals(AuthorizationGrantType.AUTHORIZAT
 
 ##### CI verify cycle 3 (PR #296 / run `25597001354` / 2026-05-09 08:58 UTC)
 
-GAP Integration **2m 14s SUCCESS**. **OAuth2RefreshTokenIntegrationTest 7/7 PASS** (refreshedAccessToken_hasTenantClaims 회복 포함). 다른 IT (Cluster A revoke / AuthCode/PKCE 7/7 / OAuth2AuthorizationServer 6/6 / OAuth2RevokeIntrospect 7/7 / OAuthLogin 7/7 / DeviceSession / AuthIntegration) 회귀 0.
+IAM Integration **2m 14s SUCCESS**. **OAuth2RefreshTokenIntegrationTest 7/7 PASS** (refreshedAccessToken_hasTenantClaims 회복 포함). 다른 IT (Cluster A revoke / AuthCode/PKCE 7/7 / OAuth2AuthorizationServer 6/6 / OAuth2RevokeIntrospect 7/7 / OAuthLogin 7/7 / DeviceSession / AuthIntegration) 회귀 0.
 
 ##### 4 anti-pattern 회피 평가
 
@@ -394,5 +394,5 @@ ADR-003 status: `ACCEPTED — partial (Cluster A 1/3 + RT 2 deferred)` → `ACCE
 - ADR-001 (OIDC Adoption) — SAS 도입 결정
 - Spring Authorization Server 1.4 docs — `OAuth2ClientAuthenticationFilter` lifecycle
 - RFC 8252 (OAuth 2.0 for Native Apps) + RFC 9700 (Best Current Practice for OAuth 2.0 Security)
-- `SasRefreshTokenAuthenticationProvider` (`projects/global-account-platform/apps/auth-service/src/main/java/com/example/auth/infrastructure/oauth2/`) — 도메인 로직 보존 영역
+- `SasRefreshTokenAuthenticationProvider` (`projects/iam-platform/apps/auth-service/src/main/java/com/example/auth/infrastructure/oauth2/`) — 도메인 로직 보존 영역
 - `SasRefreshTokenAuthenticationProviderTest` — 단위 coverage

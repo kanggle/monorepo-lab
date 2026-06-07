@@ -2,7 +2,7 @@
 
 **Status:** ACCEPTED
 **Date:** 2026-05-01 (ACCEPTED 2026-05-01)
-**Decision driver:** GAP IdP 승격 — 6개 도메인(fan-platform, wms, ecommerce[향후], erp[향후], scm[향후], mes[향후], fan-community[향후])의 공유 인증 공급자 역할
+**Decision driver:** IAM IdP 승격 — 6개 도메인(fan-platform, wms, ecommerce[향후], erp[향후], scm[향후], mes[향후], fan-community[향후])의 공유 인증 공급자 역할
 **Supersedes:** none
 **Related:** `specs/features/multi-tenancy.md`, `specs/features/authentication.md`, `specs/contracts/http/auth-api.md`
 
@@ -11,25 +11,25 @@
 - **D2 = D2-b** — 단계 폐기 (`POST /api/auth/login` 90일 deprecate 후 제거)
 - **D3 = D3-b** — 경량 bulk provisioning (`POST /accounts:bulk`), SCIM 풀 지원은 별도 ADR
 - **D4 = D4-c** — Consumer 라이브러리 없이 표준 OIDC + 통합 가이드 문서
-- **D5 = ACCEPTED** — Follow-up 태스크 TASK-BE-251~259 (9건, GAP 내부) + TASK-MONO-019 (1건, cross-project) 발행
+- **D5 = ACCEPTED** — Follow-up 태스크 TASK-BE-251~259 (9건, IAM 내부) + TASK-MONO-019 (1건, cross-project) 발행
 
 ---
 
 ## 1. Context
 
-`global-account-platform`(GAP)은 PROJECT.md 선언상 이미 multi-tenant 계정 플랫폼이며, 1차 소비자 `fan-platform`(B2C)과 2차 소비자 `wms`(B2B)가 이 플랫폼의 JWT를 사용한다. 향후 4개 B2B 도메인(`erp`, `scm`, `mes`, `fan-community`)이 추가 소비자로 합류할 계획이다.
+`iam-platform`(IAM)은 PROJECT.md 선언상 이미 multi-tenant 계정 플랫폼이며, 1차 소비자 `fan-platform`(B2C)과 2차 소비자 `wms`(B2B)가 이 플랫폼의 JWT를 사용한다. 향후 4개 B2B 도메인(`erp`, `scm`, `mes`, `fan-community`)이 추가 소비자로 합류할 계획이다.
 
 현재 인증 흐름은 **자체 JWT 발급**이다:
 
 - `POST /api/auth/login` (이메일·패스워드 + 옵션 `tenantId`) → access/refresh token pair 발급
 - access token은 RS256으로 서명되며 `iss=global-account-platform`, `tenant_id`, `tenant_type`, `scope`, `device_id` claim 포함
 - 소비 서비스는 `Authorization: Bearer <jwt>` 를 받아 자체적으로 검증
-- `POST /api/auth/oauth/{authorize,callback}` 은 GAP가 외부 소셜 provider(Google/Kakao 등)의 OAuth client 역할을 할 때 사용 — GAP 자체가 authorization server인 것은 아님
+- `POST /api/auth/oauth/{authorize,callback}` 은 IAM가 외부 소셜 provider(Google/Kakao 등)의 OAuth client 역할을 할 때 사용 — IAM 자체가 authorization server인 것은 아님
 
 **문제:**
 
-1. **표준 OIDC 미지원.** `/.well-known/openid-configuration`, `/oauth2/jwks` (계정 서비스용), `/oauth2/token` (`grant_type=*`), `/oauth2/userinfo` 가 specs에 없다. 소비 서비스는 표준 OIDC 클라이언트 라이브러리(Spring Security OAuth2 Client, Auth0 SDK, NextAuth 등)를 사용할 수 없고 GAP 전용 통합 코드를 매번 작성해야 한다.
-2. **Service-to-service 인증 모델 부재.** 사용자 로그인(`password` 흐름)만 있고, B2B 소비 서비스가 서버 간 호출에서 GAP 토큰을 획득하는 표준 경로(`client_credentials` grant)가 없다.
+1. **표준 OIDC 미지원.** `/.well-known/openid-configuration`, `/oauth2/jwks` (계정 서비스용), `/oauth2/token` (`grant_type=*`), `/oauth2/userinfo` 가 specs에 없다. 소비 서비스는 표준 OIDC 클라이언트 라이브러리(Spring Security OAuth2 Client, Auth0 SDK, NextAuth 등)를 사용할 수 없고 IAM 전용 통합 코드를 매번 작성해야 한다.
+2. **Service-to-service 인증 모델 부재.** 사용자 로그인(`password` 흐름)만 있고, B2B 소비 서비스가 서버 간 호출에서 IAM 토큰을 획득하는 표준 경로(`client_credentials` grant)가 없다.
 3. **외부 파트너 / 다언어 소비자 확장 어려움.** 모든 신규 통합이 Java + 자체 라이브러리 작성을 전제로 한다.
 
 이 ADR은 위 문제를 해결할 **3가지 옵션을 비교**하고, 권고안을 제시한 뒤 사용자 결정을 요청한다.
@@ -43,7 +43,7 @@
 - **포트폴리오 프로젝트.** 최종 사용자는 채용 평가자. "프로덕션 지향 설계" 가 PROJECT.md의 명시 목표이므로 표준 준수가 강한 가산점이 된다.
 - **Java 17 + Spring Boot 3.x.** Spring Authorization Server (SAS) 1.x는 안정적으로 사용 가능하다.
 - **multi-tenant 격리는 이미 구현됨.** JWT에 `tenant_id` claim이 들어가는 구조가 이미 있어, 어느 옵션을 선택해도 멀티테넌트 처리는 보존된다.
-- **현재 소비 서비스 = `fan-platform` (FE: Next.js, BE 없음, 직접 GAP 호출), `wms` (Java/Spring), `community-service` + `membership-service` (frozen demo).** 활성 변경 대상은 fan-platform 클라이언트와 wms뿐.
+- **현재 소비 서비스 = `fan-platform` (FE: Next.js, BE 없음, 직접 IAM 호출), `wms` (Java/Spring), `community-service` + `membership-service` (frozen demo).** 활성 변경 대상은 fan-platform 클라이언트와 wms뿐.
 - **신규 후보 도메인 4개는 specs도 없는 미래 항목.** 결정 시 무게는 "현재 소비자 마이그레이션 비용 < 미래 소비자 통합 비용 절감"으로 판단해야 한다.
 - **Standalone 레포 배포 전략.** 결정이 standalone wms-platform·gap-platform 레포 분리 전략과 충돌하지 않아야 한다.
 
@@ -53,7 +53,7 @@
 
 ### Option A — Full OIDC Authorization Server
 
-GAP `auth-service`를 표준 OIDC authorization server로 승격한다.
+IAM `auth-service`를 표준 OIDC authorization server로 승격한다.
 
 **추가/변경할 엔드포인트:**
 
@@ -78,7 +78,7 @@ GAP `auth-service`를 표준 OIDC authorization server로 승격한다.
 **소비 서비스 측:**
 
 - `wms`, 신규 ERP/SCM/MES: Spring Security OAuth2 Resource Server (`spring-security-oauth2-resource-server`) — 표준 라이브러리만 추가, JWKS URI 설정만 하면 검증 자동
-- `fan-platform` (Next.js): `next-auth` + GAP custom OIDC provider 설정
+- `fan-platform` (Next.js): `next-auth` + IAM custom OIDC provider 설정
 - 서비스 간 호출: `client_credentials` grant → `WebClient.filter(ServerOAuth2AuthorizedClientExchangeFilterFunction)` 패턴
 
 **Pros:**
@@ -122,9 +122,9 @@ GAP `auth-service`를 표준 OIDC authorization server로 승격한다.
 
 - Java 외 언어 소비자가 등장하면 매번 SDK 재작성. 다언어 지원이 사실상 봉쇄됨.
 - service-to-service 인증을 위한 별도 메커니즘이 여전히 필요 (현재 `X-Internal-Token` + mTLS).
-- 외부 파트너 통합 시 GAP 전용 문서·SDK를 학습시켜야 함.
+- 외부 파트너 통합 시 IAM 전용 문서·SDK를 학습시켜야 함.
 - 채용 평가자 시각: "표준이 있는데 자체 구현을 선택한 이유"를 설명 부담.
-- "GAP는 IdP" 라고 부르기 어려움 — 사실상 "공유 인증 API + 라이브러리".
+- "IAM는 IdP" 라고 부르기 어려움 — 사실상 "공유 인증 API + 라이브러리".
 
 **Estimated effort:** S (3~5 working days)
 
@@ -149,7 +149,7 @@ JWT **검증** 측면만 OIDC 표준에 맞추고, **발급** 측면은 현재 `
 **소비 서비스 측:**
 
 - Spring Security OAuth2 Resource Server를 사용해 access token 검증은 표준 라이브러리로 처리 가능 (이게 가장 실수 많은 부분이었으므로 큰 가치)
-- 발급 흐름은 여전히 GAP 전용 SDK 또는 직접 `POST /api/auth/login` 호출
+- 발급 흐름은 여전히 IAM 전용 SDK 또는 직접 `POST /api/auth/login` 호출
 
 **Pros:**
 
@@ -184,7 +184,7 @@ JWT **검증** 측면만 OIDC 표준에 맞추고, **발급** 측면은 현재 `
 
 권고하지 않는 이유:
 
-- **Option B**: 현재 비용은 작지만 "GAP를 IdP로 만들겠다"는 본 작업의 목적과 정면으로 어긋남. 다언어/외부 파트너 확장 봉쇄.
+- **Option B**: 현재 비용은 작지만 "IAM를 IdP로 만들겠다"는 본 작업의 목적과 정면으로 어긋남. 다언어/외부 파트너 확장 봉쇄.
 - **Option C**: "표준 절반 채택" 의 어색한 결과물. 검증 측 표준화의 이점은 크지만 발급 측 비표준이 곧 다시 문제로 돌아옴. 마이그레이션을 미루는 효과.
 
 ---
@@ -209,7 +209,7 @@ JWT **검증** 측면만 OIDC 표준에 맞추고, **발급** 측면은 현재 `
 
 ### D3. SCIM 2.0 채택 범위 (어느 옵션이든 별도 결정)
 
-B2B 소비자가 사용자 디렉터리를 GAP에 동기화할 때:
+B2B 소비자가 사용자 디렉터리를 IAM에 동기화할 때:
 
 - [ ] **D3-a** SCIM 2.0 표준 (`/scim/v2/Users`, `/scim/v2/Groups`) 풀 지원
 - [ ] **D3-b** 경량 bulk provisioning — `POST /internal/tenants/{id}/accounts:bulk` 만 추가
