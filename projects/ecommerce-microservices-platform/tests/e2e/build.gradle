@@ -1,0 +1,118 @@
+// ecommerce cross-project fulfillment E2E module (TASK-MONO-195, ADR-MONO-022 §D7).
+//
+// Boots the two ecommerce services that own the storefront→warehouse loop
+// (order-service + shipping-service) onto a shared Testcontainers network
+// (Postgres with order_db + shipping_db, Kafka KRaft) and drives the full
+// loop end to end:
+//
+//   POST /api/orders → synthetic product.product.stock-changed (ORDER_RESERVED)
+//     → order CONFIRMED → order.order.confirmed → shipping creates PREPARING +
+//     emits ecommerce.fulfillment.requested.v1 (forward contract asserted on the
+//     broker) → synthetic wms.outbound.shipping.confirmed.v1 (the wms boundary
+//     event, host-synthesised per the monorepo cross-project idiom — scm
+//     WmsInventoryAdjustedConsumedE2ETest precedent / ADR-MONO-022 §D7 "Failure
+//     Scenario B") → shipping SHIPPED → shipping.shipping.status-changed →
+//     order SHIPPED (asserted via REST, correlated by orderNo == orderId).
+//
+// The wms internal RECEIVED→SHIPPED saga is NOT booted here — it is wms-owned
+// coverage already gated by FulfillmentRequestedConsumerIT (TASK-BE-340/342).
+// This module proves the ecommerce side of the cross-project loop end to end.
+//
+// Conventions inherited from scm-platform tests/e2e (TASK-SCM-INT-001):
+//   - Pre-built service images via -Decommerce.e2e.{order,shipping}Image (CI
+//     path); ImageFromDockerfile fallback from build/libs/ bootJars (local dev).
+//   - @Tag("e2e") + @Tag("full") + @Testcontainers(disabledWithoutDocker=true)
+//     → nightly cadence (ADR-MONO-010/011) + graceful skip without Docker (D8).
+
+plugins {
+    id 'java'
+}
+
+group = 'com.example.ecommerce.e2e'
+
+dependencies {
+    // JUnit 5 + AssertJ
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.assertj:assertj-core:3.27.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+
+    // Testcontainers (Postgres, Kafka, plus generic for the two service containers)
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.testcontainers:kafka:1.21.3'
+
+    // Awaitility for eventual-consistency assertions (outbox → Kafka → consume)
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
+    // JSON build/parse for synthetic events + envelope assertions
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
+
+    // Kafka client — host-side producer (synthetic events) + consumer (forward-contract assertion)
+    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+    // Logging backend for Testcontainers + Awaitility diagnostics
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+    testImplementation 'ch.qos.logback:logback-classic:1.5.12'
+
+    // NOTE: libs:java-test-support intentionally NOT depended on here (same
+    // reasoning as scm tests/e2e — it drags in spring-test/spring-boot dependency
+    // management not applied to this stand-alone module). The harness only needs
+    // Testcontainers + JUnit 5 + Awaitility + a Kafka client + Jackson.
+}
+
+// Default `test` task is a no-op surface for this module — everything runs under
+// the dedicated e2e tasks so `./gradlew check` stays Docker-free.
+test {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+// -------------------------------------------------------------------------
+// E2E task family (ADR-MONO-010). This module is full-only (cross-project boot
+// is heavy → nightly per ADR-MONO-011); there is no smoke subset.
+// -------------------------------------------------------------------------
+def baseE2eConfig = { Test t ->
+    t.group = 'verification'
+    t.shouldRunAfter tasks.named('test')
+
+    // The two service boot jars must exist before the containers spin up — the
+    // base class' ImageFromDockerfile fallback COPYs each bootJar into a minimal
+    // image. CI may skip these via `-x` after restoring artifacts.
+    t.dependsOn ':projects:ecommerce-microservices-platform:apps:order-service:bootJar'
+    t.dependsOn ':projects:ecommerce-microservices-platform:apps:shipping-service:bootJar'
+
+    // Forward pre-built image names when set by CI; local dev falls back to
+    // ImageFromDockerfile in EcommerceFulfillmentE2EBase.
+    [
+        'ecommerce.e2e.orderImage',
+        'ecommerce.e2e.shippingImage'
+    ].each { prop ->
+        def val = System.getProperty(prop)
+        if (val) t.systemProperty prop, val
+    }
+
+    // Generous timeout — Kafka KRaft cold start + 2 Spring Boot services can
+    // exceed 60 s on a constrained CI runner.
+    t.systemProperty 'junit.jupiter.execution.timeout.default', '6m'
+
+    t.testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Back-compat umbrella: runs @Tag("e2e"). Not wired into `check`.'
+    useJUnitPlatform { includeTags 'e2e' }
+    baseE2eConfig.call(it)
+}
+
+tasks.register('e2eFullTest', Test) {
+    description = '@Tag("full") cross-project fulfillment loop — nightly + push to main (ADR-MONO-010/011).'
+    useJUnitPlatform { includeTags 'full' }
+    baseE2eConfig.call(it)
+}

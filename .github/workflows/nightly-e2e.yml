@@ -1,4 +1,4 @@
-name: Nightly E2E (full-stack web-store + 4 backend full suites)
+name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project fulfillment)
 
 # Runs against main HEAD every night:
 #
@@ -16,8 +16,12 @@ name: Nightly E2E (full-stack web-store + 4 backend full suites)
 #   5. iam-e2e-full                 — iam @Tag("full") class subset
 #                                      (3 class: RefreshReuse + DlqHandling +
 #                                      CrossServiceBulkLock).
+#   6. ecommerce-fulfillment-e2e-full — cross-project storefront→warehouse loop
+#                                      @Tag("full") (TASK-MONO-195, ADR-MONO-022
+#                                      §D7): boots ecommerce order + shipping,
+#                                      synthesises the wms boundary event.
 #
-# Total 10 backend full unit + ecommerce frontend-e2e-fullstack. All 5 jobs
+# Total 11 backend full unit + ecommerce frontend-e2e-fullstack. All jobs
 # run in parallel — backend jobs do NOT depend on ecommerce-boot-jars-nightly.
 #
 # Backend full jobs were introduced by ADR-MONO-011 (PROPOSED 2026-05-13,
@@ -580,6 +584,85 @@ jobs:
           path: |
             projects/iam-platform/tests/e2e/build/reports/tests/e2eFullTest/
             projects/iam-platform/tests/e2e/build/test-results/e2eFullTest/
+          retention-days: 7
+
+  ecommerce-fulfillment-e2e-full:
+    name: E2E full (ecommerce×wms fulfillment loop, Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    # TASK-MONO-195 (ADR-MONO-022 §D7 ④). Cross-project fulfillment loop: boots
+    # ecommerce order-service + shipping-service on a shared Kafka + Postgres
+    # (Testcontainers Network) and drives storefront purchase → CONFIRMED →
+    # ecommerce.fulfillment.requested.v1 (asserted) → synthetic wms
+    # shipping.confirmed → order SHIPPED. The wms boundary event is synthesised
+    # (the wms internal saga is gated by FulfillmentRequestedConsumerIT) per the
+    # scm WmsInventoryAdjustedConsumedE2ETest cross-project idiom.
+    #
+    # Images are built via Docker CLI into minimal jar-only images (Docker 28 +
+    # Testcontainers ImageFromDockerfile hang workaround — same rationale as the
+    # wms/fan/scm jobs above) and passed via -Decommerce.e2e.{order,shipping}Image.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build ecommerce order + shipping boot jars
+        run: >-
+          ./gradlew
+          :projects:ecommerce-microservices-platform:apps:order-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:shipping-service:bootJar
+          --no-daemon --stacktrace
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build minimal e2e service images (order + shipping)
+        run: |
+          set -e
+          build_img() {
+            local svc=$1 tag=$2 port=$3
+            local dir
+            dir=$(mktemp -d)
+            cp "$(ls projects/ecommerce-microservices-platform/apps/$svc/build/libs/*.jar | grep -v -- -plain.jar)" "$dir/app.jar"
+            cat > "$dir/Dockerfile" <<EOF
+          FROM eclipse-temurin:21-jre-alpine
+          COPY app.jar /app/app.jar
+          EXPOSE $port
+          ENTRYPOINT ["java","-XX:MaxRAMPercentage=75.0","-jar","/app/app.jar"]
+          EOF
+            docker build -t "$tag" "$dir"
+          }
+          build_img order-service ecommerce-order-service:e2e 8086
+          build_img shipping-service ecommerce-shipping-service:e2e 8090
+
+      - name: Run fulfillment loop e2e full suite
+        run: >-
+          ./gradlew
+          :projects:ecommerce-microservices-platform:tests:e2e:e2eFullTest
+          -x :projects:ecommerce-microservices-platform:apps:order-service:bootJar
+          -x :projects:ecommerce-microservices-platform:apps:shipping-service:bootJar
+          -Decommerce.e2e.orderImage=ecommerce-order-service:e2e
+          -Decommerce.e2e.shippingImage=ecommerce-shipping-service:e2e
+          --no-daemon --stacktrace
+
+      - name: Upload ecommerce fulfillment e2e reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-fulfillment-e2e-full-test-reports-nightly
+          path: |
+            projects/ecommerce-microservices-platform/tests/e2e/build/reports/tests/e2eFullTest/
+            projects/ecommerce-microservices-platform/tests/e2e/build/test-results/e2eFullTest/
           retention-days: 7
 
   # ===========================================================================
