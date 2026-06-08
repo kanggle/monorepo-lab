@@ -8,7 +8,7 @@ Make the outbound-service integration-test suite CI-runnable, then wire it into 
 
 # Status
 
-ready
+done
 
 # Owner
 
