@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.wms.outbound.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.outbound.application.port.in.QueryOrderUseCase;
 import com.wms.outbound.application.port.in.QueryPickingRequestUseCase;
+import com.wms.outbound.application.port.in.QuerySagaUseCase;
 import com.wms.outbound.application.result.OrderLineResult;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.application.result.PickingRequestLineResult;
@@ -67,6 +68,9 @@ class OrderQueryPickingRequestsControllerTest {
 
     @MockitoBean
     QueryPickingRequestUseCase queryPickingRequest;
+
+    @MockitoBean
+    QuerySagaUseCase querySaga;
 
     // ------------------------------------------------------------------
     //  Scenario 1: order WITH a picking request → 200 with lines

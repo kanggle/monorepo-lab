@@ -5,9 +5,11 @@ import com.wms.outbound.adapter.in.web.dto.response.OrderSummaryResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PagedResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PickingRequestListResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PickingRequestResponse;
+import com.wms.outbound.adapter.in.web.dto.response.SagaResponse;
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.in.QueryOrderUseCase;
 import com.wms.outbound.application.port.in.QueryPickingRequestUseCase;
+import com.wms.outbound.application.port.in.QuerySagaUseCase;
 import com.wms.outbound.application.result.OrderResult;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,11 +33,26 @@ public class OrderQueryController {
 
     private final QueryOrderUseCase queryOrder;
     private final QueryPickingRequestUseCase queryPickingRequest;
+    private final QuerySagaUseCase querySaga;
 
     public OrderQueryController(QueryOrderUseCase queryOrder,
-                                QueryPickingRequestUseCase queryPickingRequest) {
+                                QueryPickingRequestUseCase queryPickingRequest,
+                                QuerySagaUseCase querySaga) {
         this.queryOrder = queryOrder;
         this.queryPickingRequest = queryPickingRequest;
+        this.querySaga = querySaga;
+    }
+
+    @GetMapping("/{id}/saga")
+    public ResponseEntity<SagaResponse> getSaga(@PathVariable UUID id) {
+        // Assert the order exists first → ORDER_NOT_FOUND (404) per §5.1, with the
+        // canonical error envelope (the saga is created atomically with the order,
+        // so a present order always has a saga).
+        queryOrder.findById(id);
+        return querySaga.findByOrderId(id)
+                .map(SagaResponse::from)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.<SagaResponse>notFound().build());
     }
 
     @GetMapping("/{id}")
