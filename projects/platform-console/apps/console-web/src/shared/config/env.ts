@@ -106,6 +106,22 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for wms operations calls (integration-heavy I1 —
    *  same convention as ACCOUNTS_TIMEOUT_MS). */
   WMS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** wms `outbound-service` base for the outbound operations surface
+   *  (TASK-PC-FE-057 / § 2.4.5.1). The order-lifecycle reads + pick/pack/ship
+   *  mutations hang off `${WMS_OUTBOUND_BASE_URL}/orders/...` (+
+   *  `/picking-requests/...` + `/packing-units/...`) — request/response/error
+   *  owned by wms `outbound-service-api.md` (authoritative, consumed only).
+   *  Same wms gateway hostname + same domain-facing IAM-OIDC credential as
+   *  WMS_ADMIN_BASE_URL (§ 2.4.5), a DISTINCT `/api/v1/outbound` path prefix
+   *  (vs `/api/v1/admin`). NOT the IAM operator token — the wms gateway
+   *  requires the IAM OIDC token (the #569 invariant is GAP-domain-scoped). */
+  WMS_OUTBOUND_BASE_URL: z
+    .string()
+    .url()
+    .default('http://wms.local/api/v1/outbound'),
+  /** Outbound timeout (ms) for wms outbound operations calls
+   *  (integration-heavy I1 — same convention as WMS_TIMEOUT_MS). */
+  WMS_OUTBOUND_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** scm gateway base for the operations surface (TASK-PC-FE-008 /
    *  § 2.4.6). The read-only procurement-PO + inventory-visibility
    *  endpoints hang off `${SCM_GATEWAY_BASE_URL}/api/v1/procurement/...`
@@ -180,6 +196,8 @@ export function getServerEnv(): ServerEnv {
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
+    WMS_OUTBOUND_BASE_URL: process.env.WMS_OUTBOUND_BASE_URL,
+    WMS_OUTBOUND_TIMEOUT_MS: process.env.WMS_OUTBOUND_TIMEOUT_MS,
     SCM_GATEWAY_BASE_URL: process.env.SCM_GATEWAY_BASE_URL,
     SCM_TIMEOUT_MS: process.env.SCM_TIMEOUT_MS,
     FINANCE_BASE_URL: process.env.FINANCE_BASE_URL,

@@ -314,6 +314,105 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
 > is a federated **domain** section, the first verification of the
 > generalised per-domain integration contract, not a IAM parity capability.
 
+#### 2.4.5.1 wms outbound operations surface (TASK-PC-FE-057 — cross-reference, not a redefinition)
+
+A **second wms surface** federated by the console — the outbound fulfillment
+**operations** screen. Where § 2.4.5 binds the wms `admin-service` dashboard
+read-model (inventory/alerts), this sub-binding renders the wms
+**`outbound-service`** order lifecycle so an operator can drive an outbound
+order **pick → pack → ship** from inside the console. It is the on-screen
+operator leg of the ecommerce↔wms fulfillment loop (**ADR-MONO-022 § D7**): an
+ecommerce purchase auto-creates a wms outbound order (`source =
+FULFILLMENT_ECOMMERCE`, status `PICKING`); this screen advances it to
+`SHIPPED`, which (via the existing return-leg events) flips the ecommerce order
+to `SHIPPED`.
+
+This sub-binding **inherits every wms cross-cutting rule already stated in
+§ 2.4.5** and does not restate them: the **credential** (the domain-facing IAM
+OIDC access token — `getDomainFacingToken()`, **never** `getOperatorToken()`);
+the **tenant model** (tenant rides in the JWT `tenant_id=wms` claim — **no**
+`X-Tenant-Id` header; registry-`productKey=wms` eligibility gates the section,
+non-eligible → actionable "no wms-scoped access", no cross-tenant call
+fabricated); the **nested wms error envelope** `{ "error": { "code", "message",
+"timestamp", … } }`; the **resilience** taxonomy (401 → whole-session IAM
+re-login; 403 → inline "not available to your role"; 503/timeout → only this
+section degrades; AbortController hard timeout; tokens/PII never logged); and
+the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
+
+- **Authoritative producer (owned by wms, do NOT redefine here)**: wms
+  [`outbound-service-api.md`](../../../wms-platform/specs/contracts/http/outbound-service-api.md)
+  — **unchanged, consumed only** (incl. **§ 2.4**, the picking-requests-by-order
+  read added by TASK-BE-343, which this surface depends on). Consumed via the
+  wms gateway at `/api/v1/outbound/**` (base URL `WMS_OUTBOUND_BASE_URL`, default
+  `http://wms.local/api/v1/outbound` — the wms gateway hostname, **distinct from
+  the § 2.4.5 `WMS_ADMIN_BASE_URL`** `/api/v1/admin` prefix; same gateway, same
+  IAM-OIDC credential, different path prefix):
+
+  | # | Operation | Producer endpoint (`outbound-service-api.md` §) | Kind | Role |
+  |---|---|---|---|---|
+  | 1 | list outbound orders | `GET /orders` (§ 1.3) | read | `OUTBOUND_READ` |
+  | 2 | order detail (lines + status + version) | `GET /orders/{id}` (§ 1.2) | read | `OUTBOUND_READ` |
+  | 3 | saga state | `GET /orders/{id}/saga` (§ 5.1) | read | `OUTBOUND_READ` |
+  | 4 | picking requests + planned lines | `GET /orders/{id}/picking-requests` (§ 2.4 — TASK-BE-343) | read | `OUTBOUND_READ` |
+  | 5 | **confirm pick** | `POST /picking-requests/{id}/confirmations` (§ 2.3) | **mutation** | `OUTBOUND_WRITE` |
+  | 6 | **create packing unit** | `POST /orders/{id}/packing-units` (§ 3.1) | **mutation** | `OUTBOUND_WRITE` |
+  | 7 | **seal packing unit** | `PATCH /packing-units/{id}` (§ 3.2, `seal:true`) | **mutation** | `OUTBOUND_WRITE` |
+  | 8 | **confirm shipping** | `POST /orders/{id}/shipments` (§ 4.1) | **mutation** | `OUTBOUND_WRITE` |
+
+  The wms outbound **manual order-create** (`POST /orders`, § 1.1),
+  **cancel** (§ 1.4, post-pick needs `OUTBOUND_ADMIN`), and **TMS retry**
+  (§ 4.3, `OUTBOUND_ADMIN`) are **out of v1 console scope** — deferred, not
+  silently dropped. The console v1 outbound surface = the read set + the
+  forward pick→pack→ship lifecycle advance.
+
+- **"Confirm as planned" semantics (the correctness crux — normative)**: the
+  console does **not** invent warehouse master data. Each lifecycle-advance
+  action pre-fills the producer body from already-read planned/detail data:
+  - **Pick**: read `GET /orders/{id}/picking-requests` (op 4); take
+    `content[0].lines`; build the § 2.3 confirmation lines as
+    `actualLocationId = line.locationId`, `qtyConfirmed = line.qtyToPick`,
+    carrying `orderLineId`/`skuId`/`lotId` through verbatim. The operator
+    confirms the **system-planned** pick — the console never fabricates a
+    `locationId` or quantity. (Reachable only when the order is `PICKING` and
+    the saga is `RESERVED`; otherwise the action is disabled with the saga
+    state shown.)
+  - **Pack**: one `POST /orders/{id}/packing-units` (op 6) with all order
+    lines (`qty = order line ordered qty` from op 2), then `PATCH
+    /packing-units/{packingUnitId}` (op 7) `seal:true` using the
+    `packingUnitId` + `version` from op 6's response → order `PACKED`. Two
+    producer calls, **each with its own `Idempotency-Key`**.
+  - **Ship**: `POST /orders/{id}/shipments` (op 8) with the order `version`
+    from op 2 → `SHIPPED`.
+
+- **Mutation discipline**: every POST/PATCH (ops 5–8) carries an
+  `Idempotency-Key` (UUID; producer scope `(Idempotency-Key, method, path)`,
+  TTL 24h per `outbound-service-api.md` § Idempotency Semantics), is
+  **confirm-gated** in the UI, and is **reason-free** — the wms outbound
+  surface does **not** define `X-Operator-Reason` (carrying IAM's § 2.4.1
+  reason header is a header-matrix-drift defect, asserted absent). The key is
+  `crypto.randomUUID()`, **stable across one user-confirmed action** (a
+  replayed confirmed action reuses it → producer replays the cached response)
+  and **freshly regenerated per a new confirmed attempt**. The compound Pack
+  action's two calls each get their own stable key. All reads (ops 1–4) carry
+  **no** mutation artifacts (no `Idempotency-Key`, no body) — asserted.
+
+- **Optimistic-lock honesty**: the seal (op 7) and ship (op 8) — and the
+  producer-required `version` on each — assert "I have seen this state". On
+  `409 CONFLICT` (stale version) the console **refetches** the order/unit and
+  surfaces an actionable "state changed, review and retry" — it does **not**
+  silently auto-retry with a bumped version. `422 STATE_TRANSITION_INVALID`
+  (e.g. pack attempted before pick-confirm, ship before pack-complete) → inline
+  actionable with the current status shown.
+
+- **Producer immutability**: cross-reference only. Any change to the wms
+  outbound producer contract is a wms project-internal spec-first change in
+  `outbound-service-api.md`; this section follows it, never redefines it (§ 5
+  Change Rule).
+
+> **Not a § 3 parity row** (same as § 2.4.5): the wms outbound surface is
+> additive federated **domain** scope, not a IAM `admin-web` parity capability;
+> it adds no § 3 row and changes none.
+
 #### 2.4.6 scm operations surface (TASK-PC-FE-008 — cross-reference, not a redefinition)
 
 The **second non-IAM** per-domain binding of § 2.4 (ADR-MONO-013 Phase 4

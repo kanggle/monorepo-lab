@@ -41,6 +41,7 @@ const GROUPS: NavGroup[] = [
     label: '도메인 운영',
     items: [
       { href: '/wms', label: 'WMS', testid: 'nav-wms' },
+      { href: '/wms/outbound', label: 'WMS 출고', testid: 'nav-wms-outbound' },
       { href: '/scm', label: 'SCM', testid: 'nav-scm' },
       { href: '/finance', label: 'Finance', testid: 'nav-finance' },
       { href: '/erp', label: 'ERP', testid: 'nav-erp' },
