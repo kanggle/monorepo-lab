@@ -68,40 +68,34 @@ class PickingRequestByOrderIT extends OutboundServiceIntegrationBase {
 
         Instant now = Instant.now();
 
-        // Partner snapshot required by outbound_order FK check.
-        UUID partnerId = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO partner_snapshot
-                    (id, partner_code, partner_type, status, cached_at, master_version)
-                VALUES (?, 'TEST-PARTNER', 'CUSTOMER', 'ACTIVE', now(), 1)
-                """, partnerId);
-
-        // Seed the outbound order.
+        // Seed the outbound order (no partner_snapshot FK is enforced — random
+        // partner ids are fine; column set mirrors the proven TmsClientAdapterIT seed).
         jdbc.update("""
                 INSERT INTO outbound_order
-                    (id, order_no, source, customer_partner_id, warehouse_id,
-                     status, version, created_at, created_by, updated_at, updated_by)
-                VALUES (?, ?, 'MANUAL', ?, ?,
-                        'PICKING', 0, ?, 'test', ?, 'test')
+                    (id, erp_order_number, order_no, source, warehouse_id,
+                     partner_id, customer_partner_id, status,
+                     created_at, updated_at, version)
+                VALUES (?, ?, ?, 'MANUAL', ?, ?, ?, 'PICKING', ?, ?, 0)
                 """,
-                orderId, "ORD-IT-" + orderId, partnerId, warehouseId,
+                orderId, "ERP-" + orderId, "ORD-" + orderId, warehouseId,
+                UUID.randomUUID(), UUID.randomUUID(),
                 java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
 
-        // Seed the order line.
+        // Seed the order line (V2 schema: requested_qty + line_number).
         jdbc.update("""
                 INSERT INTO outbound_order_line
-                    (id, order_id, line_no, sku_id, lot_id, qty_ordered)
-                VALUES (?, ?, 1, ?, null, 30)
+                    (id, order_id, sku_id, lot_id, requested_qty, line_number)
+                VALUES (?, ?, ?, null, 30, 1)
                 """, orderLineId, orderId, skuId);
 
-        // Seed the picking request.
+        // Seed the picking request (saga_id added in V11).
         jdbc.update("""
                 INSERT INTO picking_request
-                    (id, order_id, warehouse_id, saga_id, status,
+                    (id, order_id, saga_id, warehouse_id, status,
                      created_at, updated_at, version)
                 VALUES (?, ?, ?, ?, 'SUBMITTED', ?, ?, 0)
                 """,
-                pickingId, orderId, warehouseId, sagaId,
+                pickingId, orderId, sagaId, warehouseId,
                 java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
 
         // Seed the picking request line.
@@ -120,7 +114,6 @@ class PickingRequestByOrderIT extends OutboundServiceIntegrationBase {
         jdbc.update("DELETE FROM picking_request WHERE id = ?", pickingId);
         jdbc.update("DELETE FROM outbound_order_line WHERE order_id = ?", orderId);
         jdbc.update("DELETE FROM outbound_order WHERE id = ?", orderId);
-        jdbc.update("DELETE FROM partner_snapshot WHERE partner_code = 'TEST-PARTNER'");
     }
 
     @Test
