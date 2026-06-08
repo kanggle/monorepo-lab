@@ -8,7 +8,7 @@ ADR-MONO-022 §D4 v2(a) — ecommerce-side auto-cancel + refund saga on warehous
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -111,3 +111,24 @@ Close the customer-facing half of the backorder leg. After MONO-196, when wms ca
 # Notes
 
 Why a monorepo `TASK-MONO` (not an ecommerce-project task) though the code is ecommerce-internal: this realizes a **monorepo ADR (ADR-MONO-022 §D4)** decision and reconciles cross-project return-leg contracts, continuing the TASK-MONO-193/195/196 cross-project series. v2(a) was **pre-named** in the ADR ("Auto-refund/auto-cancel saga = v2") → this is a realization, not a new architecture decision (no self-ACCEPT gate); a ledger row records it.
+
+---
+
+# Implementation Notes (DONE 2026-06-08)
+
+**Design realized as scoped** — the v2(a) work was a *trigger into the existing saga*, not new refund machinery. Net production code = **3 new files + 1 javadoc** in order-service/shipping-service.
+
+- **order-service** (only production code):
+  - `infrastructure/event/WmsOutboundCancelledEvent.java` (NEW) — wms camelCase envelope DTO (mirrors shipping-service's; `payload.orderNo`/`reason`).
+  - `infrastructure/event/WmsOutboundCancelledConsumer.java` (NEW) — `@KafkaListener(topics="wms.outbound.order.cancelled.v1", groupId="order-service-wms")`, `@Profile("!standalone")`, `@Transactional`. Dedupe on `eventId` (T8) + null-payload + blank-`orderNo` guards → delegates to the service. **Distinct group** `order-service-wms` from shipping-service's `shipping-service-wms` (both groups receive the event independently) and from order-service's internal `order-service` group.
+  - `application/service/OrderBackorderCancellationService.java` (NEW) — **system-initiated** (no userId ownership check, unlike `OrderCancellationService.cancelOrder`). Status-safe + idempotent: CANCELLED→no-op; SHIPPED/DELIVERED/STUCK→ALERT+skip; not-found→warn+skip; PENDING/CONFIRMED→`order.cancel(clock)` + save + `recordOrderCancelled("backorder")` + publish `OrderCancelled` → **reuses the existing `order.cancelled` fan-out** (payment-service refund + promotion-service coupon restore + order-service `markRefunded`). No new refund code.
+- **shipping-service**: javadoc-only on `WmsOutboundCancelledConsumer` (notes order cancel/refund now owned by order-service v2(a); behavior unchanged — stays alert-only).
+- **e2e**: `EcommerceFulfillmentE2EBase` +`order.order.cancelled` pre-created topic (7 total); `FulfillmentLoopE2ETest` backorder branch rewritten `backorderBranchDoesNotShipTheOrder` → `backorderBranchAutoCancelsTheOrder` — asserts Order→CANCELLED + `order.cancelled` observed on broker (refund-saga trigger; payment-service not booted in the 2-service topology, so emission proves the trigger).
+
+**Verification (local, all GREEN)**:
+- order-service unit: new `OrderBackorderCancellationServiceTest` (5 branches) + `WmsOutboundCancelledConsumerTest` (4) + **full order-service `:test` suite** (no regression — new beans wire into the existing Spring context cleanly) + shipping-service `compileJava`.
+- **ecommerce e2e `e2eFullTest` 2/2 PASS** (`tests=2 skipped=0 failures=0 errors=0`): backorder auto-CANCELLED + happy SHIPPED, Rancher Docker 29.1.3, 19m6s cold boot.
+
+**No new contract** — `wms.outbound.order.cancelled.v1` already existed (MONO-196); v2(a) only added a second consumer + reconciled the consumer-side contract + ADR §D4 v2(a) named→built ledger row. v2(b) inventory reconciliation stays named, not built.
+
+**Accepted residue**: the refund leg (payment-service consuming `order.cancelled`) is not asserted in the e2e (only order-service + shipping-service are booted) — it is the **unchanged** existing user-cancel saga, covered by payment-service's existing `OrderCancelledEventConsumerTest`; the e2e asserts emission (the new trigger), which is the only new edge.

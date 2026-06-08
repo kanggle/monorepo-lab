@@ -89,6 +89,7 @@ public abstract class EcommerceFulfillmentE2EBase {
     // first publish — the wms-IT / scm-e2e topic-metadata-race lesson).
     protected static final String TOPIC_STOCK_CHANGED = "product.product.stock-changed";
     protected static final String TOPIC_ORDER_CONFIRMED = "order.order.confirmed";
+    protected static final String TOPIC_ORDER_CANCELLED = "order.order.cancelled";
     protected static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
     protected static final String TOPIC_WMS_SHIPPING_CONFIRMED = "wms.outbound.shipping.confirmed.v1";
     protected static final String TOPIC_WMS_OUTBOUND_CANCELLED = "wms.outbound.order.cancelled.v1";
@@ -192,12 +193,13 @@ public abstract class EcommerceFulfillmentE2EBase {
             admin.createTopics(List.of(
                     new NewTopic(TOPIC_STOCK_CHANGED, 1, (short) 1),
                     new NewTopic(TOPIC_ORDER_CONFIRMED, 1, (short) 1),
+                    new NewTopic(TOPIC_ORDER_CANCELLED, 1, (short) 1),
                     new NewTopic(TOPIC_FULFILLMENT_REQUESTED, 1, (short) 1),
                     new NewTopic(TOPIC_WMS_SHIPPING_CONFIRMED, 1, (short) 1),
                     new NewTopic(TOPIC_WMS_OUTBOUND_CANCELLED, 1, (short) 1),
                     new NewTopic(TOPIC_SHIPPING_STATUS_CHANGED, 1, (short) 1)
             )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
-            log.info("Pre-created {} loop topics", 6);
+            log.info("Pre-created {} loop topics", 7);
         }
     }
 

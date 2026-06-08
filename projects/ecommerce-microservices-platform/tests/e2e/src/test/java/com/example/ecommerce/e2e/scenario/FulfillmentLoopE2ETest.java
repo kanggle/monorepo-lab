@@ -134,27 +134,41 @@ class FulfillmentLoopE2ETest extends EcommerceFulfillmentE2EBase {
     }
 
     @Test
-    @DisplayName("backorder: wms outbound.order.cancelled(INSUFFICIENT_STOCK) → ops alert, order NOT shipped (stays CONFIRMED)")
-    void backorderBranchDoesNotShipTheOrder() throws Exception {
+    @DisplayName("backorder: wms outbound.order.cancelled(INSUFFICIENT_STOCK) → order auto-CANCELLED + order.cancelled emitted (refund saga trigger)")
+    void backorderBranchAutoCancelsTheOrder() throws Exception {
         // ----- place + confirm an order (happy-path prefix) ------------------
         String orderId = placeOrder();
-        try (KafkaTestProducer producer = new KafkaTestProducer(kafkaBootstrapForHost())) {
+        try (KafkaTestProducer producer = new KafkaTestProducer(kafkaBootstrapForHost());
+             KafkaTestConsumer cancelledConsumer =
+                     new KafkaTestConsumer(kafkaBootstrapForHost(), TOPIC_ORDER_CANCELLED)) {
             producer.publishStockChangedOrderReserved(orderId, "PROD-1", "SKU-APPLE-001");
             await().atMost(Duration.ofSeconds(45))
                     .pollInterval(Duration.ofMillis(750))
                     .untilAsserted(() -> assertThat(orderStatus(orderId)).isEqualTo("CONFIRMED"));
 
-            // ----- wms cannot fulfil → backorder signal (ADR-MONO-022 §D4) ---
-            // The v1 ecommerce consumer raises an ops alert and intentionally
-            // does NOT ship: the order must stay CONFIRMED (never auto-SHIPPED).
+            // ----- wms cannot fulfil → backorder signal (ADR-MONO-022 §D4 v2(a)) ---
+            // order-service consumes the cancel and auto-cancels the order; emitting
+            // order.cancelled then drives the existing payment-refund + coupon-restore
+            // fan-out (payment-service is not booted here — emission proves the trigger).
             producer.publishWmsOutboundCancelled(orderId, "INSUFFICIENT_STOCK");
 
-            await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10))
+            // ----- order auto-CANCELLED (AC-1) -------------------------------
+            await().atMost(Duration.ofSeconds(45))
                     .pollInterval(Duration.ofMillis(750))
                     .untilAsserted(() -> assertThat(orderStatus(orderId))
-                            .as("backordered order is NOT auto-shipped")
-                            .isEqualTo("CONFIRMED"));
-            log.info("[e2e] backorder branch: order stayed CONFIRMED (not shipped) — alert-only v1");
+                            .as("backordered order is auto-CANCELLED (orderNo correlation)")
+                            .isEqualTo("CANCELLED"));
+            log.info("[e2e] backorder branch: order auto-CANCELLED");
+
+            // ----- order.cancelled emitted → refund saga trigger (AC-1/AC-2) --
+            JsonNode cancelled = cancelledConsumer.pollFor(
+                    n -> n.path("payload").path("orderId").asText("").equals(orderId),
+                    Duration.ofSeconds(30));
+            assertThat(cancelled)
+                    .as("order.cancelled emitted for orderId=%s (drives payment refund + coupon restore)", orderId)
+                    .isNotNull();
+            assertThat(cancelled.get("event_type").asText()).isEqualTo("OrderCancelled");
+            log.info("[e2e] backorder branch: order.cancelled emitted — refund saga trigger confirmed");
         }
     }
 
