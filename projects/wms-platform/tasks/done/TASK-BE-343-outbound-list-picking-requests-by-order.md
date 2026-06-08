@@ -8,7 +8,7 @@ outbound-service: expose `GET /api/v1/outbound/orders/{id}/picking-requests` —
 
 # Status
 
-ready
+done
 
 # Owner
 
