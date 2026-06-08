@@ -31,13 +31,37 @@ final class BodyHashUtil {
     }
 
     /**
+     * Canonicalising mapper — sorted keys, and CRUCIALLY a plain vanilla
+     * {@link JsonMapper} with <strong>no auto-registered modules</strong>.
+     *
+     * <p>The body round-trip MUST parse and serialise with the <em>same</em>
+     * module set. The injected application {@link ObjectMapper} has
+     * jackson-module-scala on the classpath (pulled transitively), so
+     * {@code readValue(json, Object.class)} returns a
+     * {@code scala.collection.immutable.Map} — which a module-less serialiser
+     * then renders by its Java-bean getters as {@code {"empty":...,
+     * "traversableAgain":...}}, a CONTENT-INDEPENDENT string. That made every
+     * body hash identical → idempotency body-conflict detection (409) silently
+     * broke (different bodies under the same key were treated as replays).
+     * Using one vanilla mapper for both read and write yields a
+     * {@code java.util.LinkedHashMap} that serialises faithfully (TASK-BE-342).
+     */
+    private static final ObjectMapper CANONICAL_MAPPER = JsonMapper.builder()
+            .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
+            .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+            .build();
+
+    /**
      * Returns the SHA-256 hex digest of the given bytes, interpreted as a
      * canonical (sorted-keys) JSON string when the content is valid JSON.
      * Falls back to hashing the raw bytes when the content is not valid JSON
      * (e.g. multipart or plain-text bodies).
      *
      * @param bodyBytes raw request body bytes (may be empty)
-     * @param mapper    Jackson {@link ObjectMapper} used for JSON round-trip
+     * @param mapper    retained for API compatibility but IGNORED — the
+     *                  round-trip uses the module-free {@link #CANONICAL_MAPPER}
+     *                  (a caller-supplied mapper with jackson-module-scala was
+     *                  the TASK-BE-342 bug; see {@link #CANONICAL_MAPPER})
      * @return lowercase hex SHA-256 digest
      */
     static String computeHash(byte[] bodyBytes, ObjectMapper mapper) {
@@ -56,18 +80,15 @@ final class BodyHashUtil {
     /**
      * Re-serialises {@code jsonBytes} with alphabetically-sorted keys so that
      * semantically equivalent JSON objects with different key orders produce
-     * the same canonical string.
+     * the same canonical string. Parses AND serialises with the same vanilla
+     * {@link #CANONICAL_MAPPER}; the {@code mapper} parameter is ignored
+     * (retained for API compatibility) — using it for parsing while a
+     * module-free mapper serialises is exactly the TASK-BE-342 correctness bug.
      */
+    @SuppressWarnings("unused")
     static String normalizedJson(byte[] jsonBytes, ObjectMapper mapper) throws Exception {
-        // SORT_PROPERTIES_ALPHABETICALLY handles POJO fields;
-        // ORDER_MAP_ENTRIES_BY_KEYS handles Map entries (the concrete type
-        // Jackson produces when deserialising into Object.class).
-        ObjectMapper sortingMapper = JsonMapper.builder()
-                .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
-                .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-                .build();
-        Object parsed = mapper.readValue(jsonBytes, Object.class);
-        return sortingMapper.writeValueAsString(parsed);
+        Object parsed = CANONICAL_MAPPER.readValue(jsonBytes, Object.class);
+        return CANONICAL_MAPPER.writeValueAsString(parsed);
     }
 
     /**

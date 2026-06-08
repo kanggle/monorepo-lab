@@ -160,11 +160,15 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
                     """, Long.class, orderId);
             assertThat(received).isEqualTo(1L);
 
+            // The recipient name lives only in payload.shipTo.recipientName.
+            // Match the value alone (not "key":"value") — Postgres renders the
+            // jsonb payload::text with a space after each colon, so a
+            // "recipientName":"…" substring would never match.
             Long shipTo = jdbc.queryForObject("""
                     SELECT COUNT(*) FROM outbound_outbox
                     WHERE event_type = 'outbound.order.received'
                       AND aggregate_id = ?
-                      AND payload::text LIKE '%"recipientName":"홍길동"%'
+                      AND payload::text LIKE '%홍길동%'
                     """, Long.class, orderId);
             assertThat(shipTo).isEqualTo(1L);
 

@@ -799,7 +799,7 @@ jobs:
           retention-days: 7
 
   integration-tests:
-    name: Integration (master-service + notification-service, Testcontainers)
+    name: Integration (master-service + notification-service + outbound-service, Testcontainers)
     runs-on: ubuntu-latest
     needs: [changes, build-and-test]
     timeout-minutes: 20
@@ -837,20 +837,19 @@ jobs:
         # TASK-BE-043: notification-service joins the wms integration job.
         # TASK-BE-045: admin-service joins. All boot Postgres (+ Kafka where
         # applicable) via Testcontainers; sharing the job avoids extra runners.
-        # TASK-BE-342: outbound-service:integrationTest is NOT yet wired here.
-        # Its suite had never been CI-validated; the repair pass fixed 17/19
-        # (SagaSweeperIT append-only TRUNCATE + jsonb ->> extraction;
-        # TmsClientAdapterIT FK parent seed + a REAL production retry bug in
-        # TmsClientAdapter — fallbackMethod moved from @CircuitBreaker to @Retry).
-        # The last 2 (IdempotencyFilterRedisIT runtime body-hash; the cross-project
-        # FulfillmentRequestedConsumerIT flaky Kafka consume) need a Docker-enabled
-        # debugging session — tracked in TASK-BE-342. Wiring this in is the final
-        # step of that task, once those 2 are green.
+        # TASK-BE-342: outbound-service joins (suite repaired 19/19 + two REAL
+        # production bugs fixed found via these ITs: TmsClientAdapter retry
+        # fallbackMethod on @CircuitBreaker→@Retry, and BodyHashUtil hashing a
+        # jackson-module-scala Map as a content-independent bean — plus the
+        # FULFILLMENT_ECOMMERCE source column widened from VARCHAR(20)). Now the
+        # cross-project FulfillmentRequestedConsumerIT (ADR-MONO-022 Kafka→order)
+        # is Docker-gated, not unit-only.
         run: >-
           ./gradlew
           :projects:wms-platform:apps:master-service:integrationTest
           :projects:wms-platform:apps:notification-service:integrationTest
           :projects:wms-platform:apps:admin-service:integrationTest
+          :projects:wms-platform:apps:outbound-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload integration test reports on failure
@@ -865,6 +864,8 @@ jobs:
             projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
             projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
             projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
+            projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
+            projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
           retention-days: 7
 
   iam-integration-tests:
