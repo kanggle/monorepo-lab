@@ -163,21 +163,52 @@ docker compose -f projects/ecommerce-microservices-platform/docker-compose.yml \
 
 ---
 
-## Extending to `SHIPPED` (the A/B options — not wired here)
+## Extending to `SHIPPED` — Option B (full on-screen loop, documented, not run here)
 
-The warehouse pick/pack/ship steps are **operator actions** (realistic for a WMS) and the
-`outbound-service` REST endpoints require an `OUTBOUND_WRITE` JWT, so they need IAM:
+The warehouse pick → pack → ship steps are **operator actions** (realistic for a WMS).
+As of TASK-PC-FE-057 + TASK-BE-343 the on-screen leg is **real, production code**:
 
-1. Add the IAM stack (`iam-platform` auth/account/gateway) + the wms `gateway-service`.
-2. Mint an `OUTBOUND_WRITE`-scoped token (client-credentials).
-3. Seed `inventory-service` stock for `SKU-APPLE-001` @ `WH-MAIN` so the reserve succeeds
-   (the saga advances REQUESTED → RESERVED).
-4. Call `POST /api/v1/outbound/.../{picking,packing}/confirm` then
-   `POST /…/{orderId}/shipments` → `outbound-service` emits
-   `wms.outbound.shipping.confirmed.v1` → `shipping-service` flips Shipping SHIPPED →
-   `order-service` flips the Order **SHIPPED** (observe via `admin-dashboard`).
+- **`platform-console` → `WMS 출고` menu (`/wms/outbound`)** (TASK-PC-FE-057) lists outbound
+  orders and exposes confirm-gated **Pick → Pack → Ship** actions. "Pick" is
+  *confirm-as-planned* — it reads the planned picking-request lines (TASK-BE-343
+  `GET /api/v1/outbound/orders/{id}/picking-requests`) and confirms the system-planned
+  location/qty, so the operator never types warehouse master data.
 
-Option **B** additionally drives steps 4 through the **platform-console** wms ops UI and
-places the order via the **web-store** UI — a full on-screen loop (~43 containers, higher
-host cost). The backorder auto-cancel/refund (v2(a)) + inventory reconciliation (v2(b))
-legs are likewise observable once IAM + inventory are wired.
+The forward-leg demo above runs without IAM (Option C). Reaching `SHIPPED` **through the
+console menu** needs the auth + inventory plumbing the forward leg skips, so this is a
+larger bring-up (**~43 containers**) — documented here, **not executed on this host**
+(memory `env_jdtls_oom_cascade` / Docker chunk-codec history make a 43-container live run
+a real failure risk; the code itself is CI-gated, so correctness does not depend on it).
+
+### What Option B adds on top of the forward-leg stack
+
+1. **IAM stack** (`iam-platform` auth/account/gateway) — the console authenticates the
+   operator (GAP/IAM OIDC) and the wms gateway requires that token (`tenant_id=wms`).
+2. **wms `gateway-service`** — routes `/api/v1/outbound/**` to `outbound-service` and
+   enforces the IAM JWT (`tenant_id=wms`). The console calls the gateway hostname
+   (`WMS_OUTBOUND_BASE_URL=http://wms.local/api/v1/outbound`), not outbound-service direct.
+3. **wms `inventory-service`** + seed: stock for `SKU-APPLE-001` at an `ACTIVE` location in
+   `WH-MAIN`, so the outbound saga's reservation succeeds (`REQUESTED → RESERVED`). Pick is
+   only enabled once the saga is `RESERVED`.
+4. **`platform-console`** (`console-bff` + `console-web`) — the operator UI.
+5. **`web-store`** (optional) — to place the order from the storefront UI instead of curl.
+6. An operator account provisioned with the **`wms` tenant** + the **`OUTBOUND_WRITE`** role
+   (the gateway/outbound-service authorize on the JWT role claim).
+
+### On-screen loop (operator)
+
+1. (web-store UI **or** the curl in §3 above) place the order → it auto-creates the wms
+   `outbound_order` (`source=FULFILLMENT_ECOMMERCE`, status `PICKING`).
+2. Log into **`platform-console`** as the wms operator → open the **`WMS 출고`** menu
+   (`/wms/outbound`). The order appears; once inventory has reserved it the saga shows
+   `RESERVED` and **Pick** enables.
+3. Click **Pick** (confirm-as-planned) → order `PICKED`. Click **Pack** (creates a packing
+   unit and seals it) → order `PACKED`. Click **Ship** → order `SHIPPED`; `outbound-service`
+   emits `wms.outbound.shipping.confirmed.v1`.
+4. The return leg flips the ecommerce side: `shipping-service` → Shipping `SHIPPED` →
+   `order-service` → Order **SHIPPED**. Observe in **web-store `/my/orders/{id}`** and
+   **admin-dashboard `/orders/{id}` + `/shippings`**.
+
+The backorder auto-cancel/refund (ADR-MONO-022 v2(a)) + inventory reconciliation (v2(b))
+legs are likewise observable once IAM + inventory are wired (each has its own return-leg
+event already in `origin/main`).
