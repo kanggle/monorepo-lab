@@ -8,7 +8,7 @@ console-web wms-outbound-ops: parse the live outbound-service list envelope (`{i
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ outbound-service: implement the documented-but-missing `GET /api/v1/outbound/ord
 
 # Status
 
-ready
+done
 
 # Owner
 
