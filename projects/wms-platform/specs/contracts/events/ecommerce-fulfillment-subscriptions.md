@@ -79,6 +79,9 @@ On ship, `outbound-service` emits `wms.outbound.shipping.confirmed.v1` (existing
 `RESERVE_FAILED`, the order goes `BACKORDERED`, and the coordinator emits
 `wms.outbound.order.cancelled.v1` carrying `orderNo` + `reason=INSUFFICIENT_STOCK`. Both are
 authoritative in `outbound-events.md`; consumed by ecommerce per `wms-shipment-subscriptions.md`.
+On the ecommerce side the cancel signal now (ADR-022 §D4 v2(a), TASK-MONO-197) **auto-cancels the
+ecommerce order + refunds** (order-service consumer), in addition to the ops alert (shipping-service)
+— wms emits the same event either way; the ecommerce-side reaction is wms-opaque.
 
 ## Standalone-publish degradation (ADR-022 D8)
 

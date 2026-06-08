@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-197-ecommerce-backorder-auto-cancel-refund-saga.md` — **READY**. ADR-MONO-022 §D4 **v2(a)** — ecommerce-side auto-cancel + refund saga on warehouse backorder. MONO-196 made wms emit `wms.outbound.order.cancelled.v1` on auto-backorder, but ecommerce only **alert-onlys** it (shipping-service); the Order stays CONFIRMED + payment captured + customer un-refunded. This task adds an **order-service consumer** (group `order-service-wms`) for the same event → system-initiated `Order CONFIRMED→CANCELLED` → emits the existing `order.cancelled` → **reuses** the already-wired `payment-service` (refund) + `promotion-service` (coupon restore) fan-out. No new refund machinery; v2(a) is the missing trigger. Status-safe + idempotent (CANCELLED no-op; SHIPPED/DELIVERED → ALERT+skip). shipping-service stays alert-only (no Shipping row at backorder time; no ShippingStatus CANCELLED). Contracts + ADR §D4 ledger reconciled. v2(b) inventory reconciliation stays named. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
