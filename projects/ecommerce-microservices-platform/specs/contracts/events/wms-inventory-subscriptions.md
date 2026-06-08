@@ -50,8 +50,10 @@ wms inventory events carry `skuId` (uuid), **not** `skuCode`. Resolution is two-
 
 1. `wms.master.sku.v1` → `WmsSkuSnapshot(skuId, skuCode)` (upserted as SKU master flows; out-of-order
    tolerant via `version`).
-2. `skuCode → variantId`: ecommerce **variant SKU == wms skuCode** (the forward `FulfillmentAcl`
-   identity). product-service looks up the variant whose SKU equals the resolved `skuCode`.
+2. `skuCode → variantId`: **this task adds a `sku` business key to `ProductVariant`** (it previously
+   had a UUID id only — no SKU). With `ProductVariant.sku == wms skuCode`, product-service resolves via
+   `findVariantBySku(skuCode)`. (Chosen over a config `skuCode→variantId-uuid` map — the proper model
+   fix, AskUserQuestion 2026-06-08.)
 
 A `skuId` with no snapshot yet (master event not arrived) or a `skuCode` mapping to no ecommerce
 variant (a wms SKU not sold on the storefront) → **skip silently** (log at debug). No fabricated stock.

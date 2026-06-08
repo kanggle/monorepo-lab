@@ -40,14 +40,15 @@ gate (Option B — not a wms-as-SoT projection).
 
 - ✅ wms publishes `wms.inventory.received.v1` / `.adjusted.v1` / `.transferred.v1` / reservation-lifecycle / `.master.sku.v1` (scm consumes a subset for visibility). **No wms change needed.**
 - ✅ ecommerce `product-service` `Inventory` = per-`variantId` flat `stock` (sellable); `AdjustStockService` mutates + emits `product.product.stock-changed`.
-- ✅ ecommerce variant SKU string **==** wms `skuCode` (the forward `FulfillmentAcl` identity default).
-- ❌ **GAP 1 — no reverse identity**: wms inventory events carry `skuId` (uuid), not `skuCode`; nothing maps wms `skuId → variantId`.
+- ❌ **GAP 0 — `ProductVariant` has no SKU business key** (verified: `product_variants` = UUID `id` + option_name + stock + price; zero `sku` anywhere in product-service). The forward `FulfillmentAcl` identity assumed `ecommerce-sku == wms skuCode`, but no ecommerce field backs it. **This task adds a `sku` business key to `ProductVariant`** (V12 migration + entity + unique + seed backfill) — the proper model fix (AskUserQuestion 2026-06-08, chosen over a brittle config-uuid map).
+- ❌ **GAP 1 — no reverse identity**: wms inventory events carry `skuId` (uuid), not `skuCode`; nothing maps wms `skuId → variantId`. Resolved by the new `ProductVariant.sku` (== skuCode) + a `wms.master.sku.v1` skuId→skuCode snapshot.
 - ❌ **GAP 2 — product-service has no inbound consumer infrastructure**: it is a pure producer today (no Kafka consumer config, no dedupe table). This task adds the first (via `libs/java-messaging`).
 - ❌ **GAP 3 — no reconciliation**: warehouse-origin stock changes never reach ecommerce.
 
 # Scope
 
 ## In Scope
+0. **`ProductVariant.sku` business key** (GAP 0): V12 migration (add `sku VARCHAR`, unique, backfill the V8 seed variants to match wms seed skuCodes) + `ProductVariant.sku` field + JPA entity/mapper + a `findVariantBySku(skuCode)` repository query. Variant creation/API paths updated minimally to carry `sku` (nullable-tolerant where not yet provided).
 1. **Reverse-identity stream**: `WmsMasterSkuConsumer` (`wms.master.sku.v1`, group `product-service-wms`) → upsert `WmsSkuSnapshot(skuId, skuCode, version)` (out-of-order tolerant). New table + migration.
 2. **Reconciliation consumer**: `WmsInventoryReconciliationConsumer` for `wms.inventory.received.v1` + `wms.inventory.adjusted.v1`. Per event/line: resolve `skuId → skuCode (snapshot) → variantId (variant whose SKU == skuCode)`; compute `delta = newAvailableQty − stored` against `WmsInventoryAvailable(inventoryId, skuId, availableQty)` (defaults stored=new on first sight → baseline delta 0); apply delta to the variant's stock; store new availableQty; emit `product.product.stock-changed` (`reason = WMS_RECONCILIATION`) on non-zero delta.
 3. **Excluded (asserted by NOT subscribing)**: reservation lifecycle (reserved/released/confirmed — double-count) + transferred (SKU-invariant) + reserve.failed/alert.
@@ -65,6 +66,7 @@ gate (Option B — not a wms-as-SoT projection).
 
 # Acceptance Criteria
 
+- AC-0: `ProductVariant` gains a `sku` business key (V12 migration, seed backfilled to wms seed skuCodes, unique where present); `findVariantBySku(skuCode)` resolves it. Existing product tests still pass.
 - AC-1: A `wms.inventory.adjusted.v1`(skuId=S, inventory.availableQty drops by N) for a SKU mapped to ecommerce variant V reduces V's sellable stock by N (after the baseline is established). (unit + IT.)
 - AC-2: A `wms.inventory.received.v1`(line availableQtyAfter up by N) increases the mapped variant's stock by N.
 - AC-3: **First sight of an `inventoryId`** establishes the baseline (applies delta 0 — no phantom jump); the **second** event applies the real delta.
@@ -103,7 +105,7 @@ gate (Option B — not a wms-as-SoT projection).
 
 # Impact on `projects/<name>/`
 
-- `projects/ecommerce-microservices-platform/apps/product-service/` — 2 consumers + 2 snapshot entities/repos/migrations + dedupe infra + config + `WMS_RECONCILIATION` reason + tests (the only production code).
+- `projects/ecommerce-microservices-platform/apps/product-service/` — **`ProductVariant.sku` business key (V12 migration + entity + seed backfill + findVariantBySku)** + 2 consumers + 2 snapshot entities/repos/migrations + dedupe infra + config + `WMS_RECONCILIATION` reason + tests (the only production code).
 - `projects/ecommerce-microservices-platform/specs/contracts/events/` — new `wms-inventory-subscriptions.md`.
 - `docs/adr/ADR-MONO-022-*` — §D4 v2(b) ACCEPTED + ledger row.
 - **wms-platform — none** (consumes only already-published events; D6 preserved).
