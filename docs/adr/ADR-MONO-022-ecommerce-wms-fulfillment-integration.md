@@ -89,8 +89,9 @@ The mapping layer (a new ecommerce-side **integration adapter**, or a thin wms i
 ### D4 — Inventory source of truth: keep independent for v1, reconcile in v2
 
 - v1: ecommerce `product-service` stock stays the **sellability** gate at order time (unchanged); wms `inventory-service` is the **physical** SoT at fulfillment. Dual bookkeeping is accepted and **documented as a known v1 limitation**.
-- **Failure path (must handle in v1):** if wms cannot reserve physical stock it moves the order to `BACKORDERED` and emits `wms.outbound.order.cancelled.v1` (or a backorder signal). ecommerce shipping-service consumes it → surfaces an ops alert / notification (the existing `OrderSagaRecoveryExhausted`/notification machinery is the hook). **Auto-refund/auto-cancel saga = v2** (named, not built).
-- v2 (named): wms already publishes `wms.inventory.*.v1` (scm consumes them) — ecommerce could consume the same to keep `product-service` availability in sync, collapsing the dual bookkeeping.
+- **Failure path (handled in v1, MONO-196):** if wms cannot reserve physical stock it moves the order to `BACKORDERED` and emits `wms.outbound.order.cancelled.v1` (orderNo + reason=INSUFFICIENT_STOCK). ecommerce shipping-service consumes it → surfaces an ops alert (Shipping stays PREPARING-flagged).
+- **v2(a) — auto-refund/auto-cancel saga (built, TASK-MONO-197):** ecommerce `order-service` also consumes `wms.outbound.order.cancelled.v1` → Order CONFIRMED→CANCELLED (system-initiated) → emits the existing `order.cancelled`, which the already-wired `payment-service` (refund) + `promotion-service` (coupon restore) fan-out consumes. No new refund machinery; v2(a) is the missing **trigger** into the existing cancel→refund saga. shipping-service stays alert-only (no Shipping row exists at backorder time; ShippingStatus has no terminal CANCELLED).
+- **v2(b) — inventory reconciliation (still named, not built):** wms already publishes `wms.inventory.*.v1` (scm consumes them) — ecommerce could consume the same to keep `product-service` availability in sync, collapsing the dual bookkeeping.
 
 ### D5 — Correlation key: ecommerce `orderId` round-trips as wms `orderNo`
 
@@ -159,8 +160,9 @@ Append-only.
 |---|---|---|---|---|---|---|
 | 2026-06-08 | created PROPOSED | Kafka event subscription (D1) | D2-a optional `shipTo` (proposed) | independent v1, reconcile v2 (proposed) | "웹스토어에서 상품을 구매하면 연결된 창고에서 물건을 배송… 쿠팡에서 시키면 연결된 창고에서 배송" + AskUserQuestion: 전체 루프 / Kafka 이벤트 구독 | spec PR (TASK-MONO-193) |
 | 2026-06-08 | ACCEPTED | Kafka event subscription (D1, chosen) | D2-a optional `shipTo` (accepted) | independent v1, reconcile v2 (accepted) | "진행" (on the §D7 plan: ADR ACCEPTED + create ①~④ implementation tasks + 실제 연결까지; recommended D2/D4/D5 options accepted, no overrides) | spec PR (TASK-MONO-193) + §D7 ①~④ follow-up PRs |
+| 2026-06-08 | D4 v2(a) realized | (unchanged) | (unchanged) | **auto-refund/cancel saga built** (v2(b) inventory reconciliation still named) | "다음 작업 추천" → "진행" (on the recommendation to realize §D4 v2 auto-refund/cancel saga) | spec + impl PR (TASK-MONO-197) |
 
-(PROPOSED row appended 2026-06-08 per the ADR-MONO-008/016 § D6.3 format. ACCEPTED row appended same-session on the user's explicit "진행" intent on the §D7 plan — NOT self-ACCEPT. D1–D8 decision bodies unchanged; only Status + this row + the §1 note reconciled to ACCEPTED tense. §D7 ①~④ implementation tasks created at ACCEPTED: contracts → wms → ecommerce → e2e.)
+(PROPOSED row appended 2026-06-08 per the ADR-MONO-008/016 § D6.3 format. ACCEPTED row appended same-session on the user's explicit "진행" intent on the §D7 plan — NOT self-ACCEPT. D1–D8 decision bodies unchanged; only Status + this row + the §1 note reconciled to ACCEPTED tense. §D7 ①~④ implementation tasks created at ACCEPTED: contracts → wms → ecommerce → e2e. **D4 v2(a) row (TASK-MONO-197): a realization of the already-named "auto-refund/cancel saga = v2", not a new architecture decision — no self-ACCEPT gate; D4's chosen approach is unchanged, only its v2(a) status flips named→built.**)
 
 ---
 
