@@ -56,6 +56,13 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
+    consumer:
+      # product-service's first inbound consumer — wms inventory reconciliation
+      # (ADR-MONO-022 §D4 v2(b)). Raw-JSON String payloads parsed via ObjectMapper.
+      group-id: product-service-wms
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 storage:
   s3:

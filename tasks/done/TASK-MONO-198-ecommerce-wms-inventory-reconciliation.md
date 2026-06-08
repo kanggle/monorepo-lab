@@ -8,7 +8,7 @@ ADR-MONO-022 §D4 v2(b) — ecommerce↔wms inventory reconciliation (Option B, 
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -116,3 +116,25 @@ Monorepo `TASK-MONO` (code is ecommerce-internal): realizes the monorepo ADR-022
 adds a cross-project subscription contract, continuing the 193/195/196/197 series. **Unlike v2(a), the
 v2(b) sync policy was a genuine new architecture decision** (A/B/C) → resolved by AskUserQuestion (user
 chose B) → the ACCEPTED transition is user-driven, not self-ACCEPT.
+
+---
+
+# Implementation Notes (DONE 2026-06-08)
+
+**product-service's first inbound consumer infrastructure** — built entirely ecommerce-side (wms untouched, D6).
+
+- **GAP 0 — `ProductVariant.sku` business key** (the mid-impl discovery, AskUserQuestion → add the field): `V12` migration adds `sku VARCHAR(64)` + UNIQUE (nulls allowed) + deterministic seed backfill (`SKU-EC-<last-12-hex-of-id>`); `ProductVariant.sku` (nullable; `reconstitute` extended, `create` unchanged → new variants are null, only seeded/SKU'd variants reconcile) + JPA column + `ProductVariantJpaRepository.findBySku` + `InventoryRepository.findVariantBySku` returning `VariantRef(variantId, productId, currentStock)` (resolve + productId for the event + stock for the clamp in one read).
+- **Reverse identity**: `WmsMasterSkuConsumer` (`wms.master.sku.v1`, group `product-service-wms`) → `WmsSkuSnapshotEntity(skuId→skuCode)` (version-guarded upsert).
+- **Reconciliation**: `WmsInventoryReconciliationConsumer` (`wms.inventory.received.v1` + `.adjusted.v1`, same group) → `WmsInventoryReconciliationService`. Per event resolves `skuId→skuCode (snapshot)→variant (findVariantBySku)`; computes `delta = newAvailableQty − stored` against `WmsInventoryAvailableEntity` (first sight = baseline, delta 0); applies to `product_variants.stock` via the existing `InventoryRepository.save(Inventory)`; emits `product.product.stock-changed`(reason=`WMS_RECONCILIATION`); underflow clamps at 0. **Reserved/released/confirmed + transferred NOT subscribed** (double-count / SKU-invariant).
+- **Infra**: local `WmsProcessedEventEntity` dedupe (T8, `WmsReconciliationDedupe` MANDATORY-tx) — a local table, NOT libs/java-messaging (avoids the OutboxAutoConfiguration baggage product-service doesn't use); `WmsReconciliationConfig` (Clock + retry→DLQ error handler); `spring.kafka.consumer` block added (String deserializers, group `product-service-wms`); `@EnableJpaRepositories` extended to scan the reconciliation package.
+
+**Verification (local, all GREEN)**:
+- unit: `WmsInventoryReconciliationServiceTest` (9 — baseline/±delta/underflow-clamp/zero/unresolved-sku/no-variant/version-guard) + `WmsReconciliationConsumersTest` (6) + `AdjustStockServiceTest` (reconstitute-sig regression) + **full product-service `:test` (Docker-free CI-equivalent) — no regression**.
+- **Testcontainers IT `WmsInventoryReconciliationIT`** (real Postgres, `-PrunIntegration`): V12 migration applies + JPA maps + seed variant stock `50 → 45` after a `-5` delta persisted to the DB (the §14 authoritative gate). The IT is `@Tag("integration")` → excluded from CI (ecommerce Docker-free convention); local-only.
+
+**Two infra fixes surfaced while running the first product-service IT** (pre-existing warts, fixed here):
+- ecommerce `build.gradle`: wired the documented-but-unimplemented `-PrunIntegration` flag (re-includes `@Tag("integration")`); CI never sets it → stays Docker-free.
+- product-service `build.gradle`: removed a hardcoded stale `DOCKER_HOST=…docker_engine_linux` named pipe that overrode the portable root convention + broke local ITs (MalformedChunkCodingException).
+- IT also needed `@SpringBootTest(classes = ProductServiceApplication.class)` — a `TestProductServiceApplication` (@WebMvcTest helper) created a second @SpringBootConfiguration → ambiguous default detection (latent; surfaced as product-service's first real IT).
+
+**Accepted residue (named v2(b) follow-ups)**: periodic full re-sum backstop (the snapshot table is the ledger) / initial absolute seed-gap / multi-warehouse partitioning / live wms↔ecommerce seed skuCode alignment / variant-create-with-sku path. The full Kafka→DB e2e (booting product-service in the loop) is deferred — consumer unit tests + the DB IT cover the two halves.

@@ -64,7 +64,7 @@ class AdjustStockServiceTest {
     }
 
     private Product makeProductWithVariant(UUID productId, UUID variantId, int stock, ProductStatus status) {
-        ProductVariant variant = ProductVariant.reconstitute(variantId, productId, "기본", new StockQuantity(stock), new Price(0));
+        ProductVariant variant = ProductVariant.reconstitute(variantId, productId, "기본", new StockQuantity(stock), new Price(0), null);
         return Product.reconstitute(productId, "테스트 상품", "설명", new Price(10000), status, null,
                 java.time.Instant.now(), java.time.Instant.now(), List.of(variant));
     }

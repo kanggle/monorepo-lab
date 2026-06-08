@@ -34,12 +34,14 @@ subprojects {
     // Default `test` task runs unit + slice tests only — Testcontainers /
     // @SpringBootTest-with-container classes carry @Tag("integration") and
     // are excluded so root CI's `./gradlew check` stays Docker-free. The
-    // 47 integration-tagged classes (TASK-MONO-003 inventory) still run
-    // locally via `./gradlew test --tests "*" -PrunIntegration` style
-    // overrides if needed, or via a future dedicated integration job.
+    // integration-tagged classes still run locally with `-PrunIntegration`
+    // (e.g. `./gradlew :…:product-service:test --tests "*IT" -PrunIntegration`),
+    // which re-includes them; CI never sets the flag so it stays Docker-free.
     test {
         useJUnitPlatform {
-            excludeTags 'integration'
+            if (!project.hasProperty('runIntegration')) {
+                excludeTags 'integration'
+            }
         }
         jvmArgs '-XX:+EnableDynamicAgentLoading'
         finalizedBy jacocoTestReport

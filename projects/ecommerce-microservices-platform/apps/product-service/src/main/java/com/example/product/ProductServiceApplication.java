@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication
 @EnableCaching
 @EntityScan(basePackages = {"com.example.product", "com.example.messaging"})
-@EnableJpaRepositories(basePackages = "com.example.product.infrastructure.persistence")
+@EnableJpaRepositories(basePackages = {
+        "com.example.product.infrastructure.persistence",
+        "com.example.product.infrastructure.reconciliation"})
 public class ProductServiceApplication {
 
     public static void main(String[] args) {
