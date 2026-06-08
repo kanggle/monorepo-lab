@@ -36,12 +36,47 @@ export const OutboundPageMetaSchema = z
   .passthrough();
 export type OutboundPageMeta = z.infer<typeof OutboundPageMetaSchema>;
 
+/**
+ * Normalise the producer's list envelope to `{ content, page:{…} }`.
+ *
+ * The contract (§ Pagination) documents `{ content, page:{number,size,
+ * totalElements,totalPages}, sort }`, but the live `outbound-service`
+ * `PagedResponse` DTO serialises FLAT as `{ items, page:<int>, size, total }`.
+ * Accept BOTH (tolerance invariant) so the console parses the real service AND
+ * the documented shape (the unit suite mocks the documented one).
+ */
+function normaliseOutboundPage(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const r = raw as Record<string, unknown>;
+  if (Array.isArray(r.content) && r.page && typeof r.page === 'object') {
+    return r; // already the documented nested shape
+  }
+  const content = Array.isArray(r.items)
+    ? r.items
+    : Array.isArray(r.content)
+      ? r.content
+      : [];
+  const size = typeof r.size === 'number' ? r.size : 20;
+  const number = typeof r.page === 'number' ? r.page : 0;
+  const totalElements =
+    typeof r.total === 'number'
+      ? r.total
+      : typeof r.totalElements === 'number'
+        ? r.totalElements
+        : content.length;
+  const totalPages = size > 0 ? Math.max(1, Math.ceil(totalElements / size)) : 1;
+  return { content, page: { number, size, totalElements, totalPages } };
+}
+
 function outboundPage<T extends z.ZodTypeAny>(row: T) {
-  return z.object({
-    content: z.array(row),
-    page: OutboundPageMetaSchema,
-    sort: z.string().optional(),
-  });
+  return z.preprocess(
+    normaliseOutboundPage,
+    z.object({
+      content: z.array(row),
+      page: OutboundPageMetaSchema,
+      sort: z.string().optional(),
+    }),
+  );
 }
 
 // --- 1.3 list — order summary row ----------------------------------------
