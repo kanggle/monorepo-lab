@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-196-ecommerce-wms-backorder-return-path.md` — **READY**. ADR-MONO-022 §D4 BACKORDER/insufficient-stock return path (negative-leg counterpart of MONO-195 happy path). Today dead: wms `OutboundSagaCoordinator.onReserveFailed()`(order→BACKORDERED) is never triggered (no consumer routes inventory shortfall) and emits nothing, so ecommerce never learns of a backorder. Scope: contract reconciliation (outbound-events.md "no backordered event" ↔ ecommerce-fulfillment-subscriptions.md "cancel-on-reserve-fail" contradiction) + wms trigger consumer + emit `wms.outbound.order.cancelled.v1`(orderNo) on auto-backorder + ecommerce consumer test (exists, untested) + `@Tag("full")` e2e backorder branch. 분석=Opus 4.8 / 구현 권장=Opus (saga negative-branch + cross-project event + contract reconcile).
 
 ## in-progress
 
