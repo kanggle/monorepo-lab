@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-198-ecommerce-wms-inventory-reconciliation.md` — **READY**. ADR-MONO-022 §D4 **v2(b)** — ecommerce↔wms inventory reconciliation (**Option B delta**, chosen by AskUserQuestion 2026-06-08 over A wms-as-SoT / C batch / D defer). product-service consumes warehouse-origin wms events (`wms.inventory.received.v1`+`.adjusted.v1`) and applies the **available-quantity delta** (per-`inventoryId` trajectory snapshot) to its sellable stock — keeping the order-time gate, narrowing dual-bookkeeping drift. Reverse identity (the ADR-flagged cost): wms events carry `skuId`(uuid) not skuCode → product-service consumes `wms.master.sku.v1` into a local `skuId→skuCode` snapshot, then `skuCode→variantId` via its own variant SKU (=wms skuCode, forward-ACL identity). **wms untouched** (D6). **Excluded by design**: reservation lifecycle (reserved/released/confirmed — double-count) + transferred (SKU-invariant). product-service gains its **first inbound consumer infra** (libs/java-messaging dedupe). 2 consumers + 2 snapshot tables + migrations + tests. v2(b) follow-ups named (periodic backstop / seed-gap / multi-warehouse). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
