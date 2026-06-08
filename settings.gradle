@@ -37,7 +37,10 @@ include(
     'projects:ecommerce-microservices-platform:apps:review-service',
     'projects:ecommerce-microservices-platform:apps:search-service',
     'projects:ecommerce-microservices-platform:apps:shipping-service',
-    'projects:ecommerce-microservices-platform:apps:user-service'
+    'projects:ecommerce-microservices-platform:apps:user-service',
+    // TASK-MONO-195 (ADR-MONO-022 §D7): cross-project fulfillment loop e2e —
+    // boots order-service + shipping-service, synthesises the wms boundary event.
+    'projects:ecommerce-microservices-platform:tests:e2e'
 )
 
 // Project: iam-platform (renamed from global-account-platform / alias gap — TASK-MONO-179)
