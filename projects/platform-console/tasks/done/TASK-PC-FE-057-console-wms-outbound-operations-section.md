@@ -8,7 +8,7 @@ console-web — wms **outbound operations** section: list outbound orders + driv
 
 # Status
 
-ready
+done
 
 # Owner
 
