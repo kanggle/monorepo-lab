@@ -1,8 +1,11 @@
 package com.wms.outbound.application.saga;
 
 import com.wms.outbound.application.port.out.OrderPersistencePort;
+import com.wms.outbound.application.port.out.OutboxWriterPort;
 import com.wms.outbound.application.port.out.SagaPersistencePort;
+import com.wms.outbound.domain.event.OrderCancelledEvent;
 import com.wms.outbound.domain.model.Order;
+import com.wms.outbound.domain.model.OrderStatus;
 import com.wms.outbound.domain.model.OutboundSaga;
 import com.wms.outbound.domain.model.SagaStatus;
 import java.time.Clock;
@@ -35,13 +38,16 @@ public class OutboundSagaCoordinator {
 
     private final SagaPersistencePort sagaPersistence;
     private final OrderPersistencePort orderPersistence;
+    private final OutboxWriterPort outboxWriter;
     private final Clock clock;
 
     public OutboundSagaCoordinator(SagaPersistencePort sagaPersistence,
                                    OrderPersistencePort orderPersistence,
+                                   OutboxWriterPort outboxWriter,
                                    Clock clock) {
         this.sagaPersistence = sagaPersistence;
         this.orderPersistence = orderPersistence;
+        this.outboxWriter = outboxWriter;
         this.clock = clock;
     }
 
@@ -193,11 +199,19 @@ public class OutboundSagaCoordinator {
         sagaPersistence.save(saga);
 
         Order order = orderPersistence.findById(saga.orderId()).orElse(null);
-        if (order != null && order.getStatus() != com.wms.outbound.domain.model.OrderStatus.BACKORDERED
-                && order.getStatus() != com.wms.outbound.domain.model.OrderStatus.CANCELLED
-                && order.getStatus() != com.wms.outbound.domain.model.OrderStatus.SHIPPED) {
+        if (order != null && order.getStatus() != OrderStatus.BACKORDERED
+                && order.getStatus() != OrderStatus.CANCELLED
+                && order.getStatus() != OrderStatus.SHIPPED) {
+            String previousStatus = order.getStatus().name();
             order.backorder(reason, now, "system:saga-coordinator");
             orderPersistence.save(order);
+            // Cross-project backorder signal (ADR-MONO-022 §D4, TASK-MONO-196):
+            // re-use outbound.order.cancelled with reason so the ecommerce side
+            // learns of the backorder (it cannot poll wms saga state). Emitted in
+            // this same TX as the saga + order mutation (outbox = atomic).
+            outboxWriter.publish(new OrderCancelledEvent(
+                    order.getId(), order.getOrderNo(), previousStatus, reason, now, now,
+                    "system:saga-coordinator"));
         }
         log.info("saga_reserve_failed sagaId={} reason={}", sagaId, reason);
     }

@@ -10,6 +10,7 @@ import com.wms.inventory.domain.event.InventoryLowStockDetectedEvent;
 import com.wms.inventory.domain.event.InventoryReceivedEvent;
 import com.wms.inventory.domain.event.InventoryReleasedEvent;
 import com.wms.inventory.domain.event.InventoryReservedEvent;
+import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
 import com.wms.inventory.domain.event.InventoryTransferredEvent;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,7 +76,26 @@ public class InventoryEventEnvelopeSerializer {
             case InventoryAdjustedEvent e -> adjustedPayload(e);
             case InventoryTransferredEvent e -> transferredPayload(e);
             case InventoryLowStockDetectedEvent e -> lowStockPayload(e);
+            case InventoryReserveFailedEvent e -> reserveFailedPayload(e);
         };
+    }
+
+    private static Map<String, Object> reserveFailedPayload(InventoryReserveFailedEvent e) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("pickingRequestId", e.pickingRequestId().toString());
+        payload.put("reason", e.reason());
+        List<Map<String, Object>> lines = e.insufficientLines().stream().map(line -> {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("inventoryId", line.inventoryId().toString());
+            l.put("skuId", line.skuId().toString());
+            l.put("lotId", line.lotId() == null ? null : line.lotId().toString());
+            l.put("locationId", line.locationId().toString());
+            l.put("qtyRequested", line.qtyRequested());
+            l.put("qtyAvailable", line.qtyAvailable());
+            return l;
+        }).toList();
+        payload.put("insufficientLines", lines);
+        return payload;
     }
 
     private static Map<String, Object> receivedPayload(InventoryReceivedEvent e) {

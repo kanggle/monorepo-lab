@@ -68,6 +68,7 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 | `wms.inventory.reserved.v1` | `inventory.reserved` | `locationId` of first line |
 | `wms.inventory.released.v1` | `inventory.released` | `locationId` of first line |
 | `wms.inventory.confirmed.v1` | `inventory.confirmed` | `locationId` of first line |
+| `wms.inventory.reserve.failed.v1` | `inventory.reserve.failed` | `pickingRequestId` |
 | `wms.inventory.alert.v1` | `inventory.low-stock-detected` | `locationId` |
 
 - `v1` in the topic name: contract version. Breaking schema changes require a parallel `v2`
@@ -225,6 +226,46 @@ Consumer expectations:
 - `outbound-service`: validates reservation was created successfully (correlation by
   `pickingRequestId`); updates `OutboundSaga` state machine
 - `admin-service`: increments active reservation count in `InventorySnapshot`
+
+### 4a. `inventory.reserve.failed`  ⚠️ Cross-service contract
+
+Triggered when `PickingRequestedConsumer` processes an
+`outbound.picking.requested` and the requested quantity exceeds availability for
+one or more lines (the reserve is **not** attempted — availability is pre-checked
+so no partial mutation occurs). The negative counterpart of `inventory.reserved`.
+Added by TASK-MONO-196 (ADR-MONO-022 §D4) — the dedicated reservation-failure
+signal that drives the outbound auto-backorder. It is **not** overloaded onto
+`inventory.adjusted` (that topic is a stock-mutation event consumed cross-project
+by scm `inventory-visibility-service`).
+
+Topic: `wms.inventory.reserve.failed.v1`
+`aggregateType`: `reservation`
+`aggregateId`: `pickingRequestId` (no `Reservation` is created on failure)
+Partition key: `pickingRequestId`
+
+```json
+"payload": {
+  "pickingRequestId": "uuid",
+  "reason": "INSUFFICIENT_STOCK",
+  "insufficientLines": [
+    {
+      "inventoryId": "uuid",
+      "skuId": "uuid",
+      "lotId": "uuid-or-null",
+      "locationId": "uuid",
+      "qtyRequested": 1000,
+      "qtyAvailable": 450
+    }
+  ]
+}
+```
+
+Consumer expectations:
+
+- `outbound-service` (`InventoryReserveFailedConsumer`): resolves `sagaId` from
+  `pickingRequestId`, advances `OutboundSaga REQUESTED → RESERVE_FAILED`, sets
+  `Order → BACKORDERED`, and emits `outbound.order.cancelled`
+  (reason=`INSUFFICIENT_STOCK`) for the cross-project backorder signal.
 
 ### 5. `inventory.released`
 

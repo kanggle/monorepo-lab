@@ -164,6 +164,16 @@ Consumer expectations:
 Triggered when an order is cancelled. Allowed from `PICKING`, `PICKED`,
 `PACKING`, or `PACKED` status. Post-`SHIPPED` cancellation is forbidden in v1.
 
+**Also emitted on auto-backorder** (TASK-MONO-196, ADR-MONO-022 §D4): when the
+saga transitions `REQUESTED → RESERVE_FAILED` on an inventory shortfall (§C1),
+the coordinator sets `Order → BACKORDERED` **and emits this same
+`outbound.order.cancelled` event** carrying `reason="INSUFFICIENT_STOCK"` (and
+`previousStatus ∈ {RECEIVED, PICKING}`). This is the cross-project backorder
+signal the ecommerce side consumes (`wms-shipment-subscriptions.md`): the
+wms-internal order status is `BACKORDERED`, but the cross-project notification
+rides this topic so the consumer needs only one subscription. `reason`
+distinguishes a manual cancel from an auto-backorder.
+
 Topic: `wms.outbound.order.cancelled.v1`
 Partition key: `orderId`
 `aggregateType`: `order`
@@ -183,9 +193,9 @@ Partition key: `orderId`
 |---|---|---|---|
 | `orderId` | UUID | no | |
 | `orderNo` | string | no | |
-| `previousStatus` | string | no | `PICKING` \| `PICKED` \| `PACKING` \| `PACKED` |
-| `reason` | string | no | |
-| `cancelledAt` | ISO-8601 UTC | no | |
+| `previousStatus` | string | no | `PICKING` \| `PICKED` \| `PACKING` \| `PACKED` (manual cancel); `RECEIVED` \| `PICKING` (auto-backorder) |
+| `reason` | string | no | free text for manual cancel; `INSUFFICIENT_STOCK` for auto-backorder |
+| `cancelledAt` | ISO-8601 UTC | no | for auto-backorder = the reserve-fail timestamp |
 
 Consumer expectations:
 
@@ -498,18 +508,30 @@ contract `outbound-service` expects.
 ### C1. Saga Reply Events from `inventory-service`
 
 Topics: `wms.inventory.reserved.v1`, `wms.inventory.released.v1`,
-`wms.inventory.confirmed.v1`, `wms.inventory.adjusted.v1`
+`wms.inventory.confirmed.v1`, `wms.inventory.reserve.failed.v1`
 Authoritative schema: `specs/contracts/events/inventory-events.md`
 Consumer group: `outbound-service`
-Partition key: `sagaId` (set by inventory as the Kafka partition key on reply
-events — ensures ordered delivery within a saga)
+Correlation: outbound resolves the `sagaId` from each reply via `pickingRequestId`
+(or `reservationId`) → `OutboundSaga` lookup (`SagaIdResolver`); inventory does
+not carry `sagaId` on its replies. Partition key is inventory-side per its topic
+layout (`locationId` on success replies; `pickingRequestId` on `reserve.failed`).
 
 | Consumed event | Saga effect | Handler |
 |---|---|---|
 | `inventory.reserved` | Saga `REQUESTED → RESERVED`; `Order` stays in `PICKING` | `InventoryReservedConsumer` |
 | `inventory.released` | Saga `CANCELLATION_REQUESTED → CANCELLED` | `InventoryReleasedConsumer` |
 | `inventory.confirmed` | Saga `SHIPPED → COMPLETED` | `InventoryConfirmedConsumer` |
-| `inventory.adjusted` (reason=`INSUFFICIENT_STOCK`) | Saga `REQUESTED → RESERVE_FAILED`; `Order → BACKORDERED` | `InventoryReservedConsumer` (negative branch) |
+| `inventory.reserve.failed` (reason=`INSUFFICIENT_STOCK`) | Saga `REQUESTED → RESERVE_FAILED`; `Order → BACKORDERED`; emits `outbound.order.cancelled` (§2, reason=`INSUFFICIENT_STOCK`) | `InventoryReserveFailedConsumer` → `OutboundSagaCoordinator.onReserveFailed` |
+
+> **TASK-MONO-196 / ADR-MONO-022 §D4 reconciliation.** Earlier drafts overloaded
+> `inventory.adjusted` (reason=`INSUFFICIENT_STOCK`) for the negative branch. That
+> topic (`wms.inventory.adjusted.v1`) is a stock-mutation event consumed
+> cross-project by scm `inventory-visibility-service`; routing reservation
+> failures through it would pollute that consumer. The negative branch now rides
+> a **dedicated** `inventory.reserve.failed` event (topic
+> `wms.inventory.reserve.failed.v1`), and the outbound coordinator emits
+> `outbound.order.cancelled` (§2) so the ecommerce side learns of the backorder
+> (it cannot poll wms saga state).
 
 Expected payload shape `outbound-service` reads from each reply:
 
@@ -541,15 +563,15 @@ Expected payload shape `outbound-service` reads from each reply:
 }
 ```
 
-**`inventory.adjusted` payload** (fields outbound reads when reason=`INSUFFICIENT_STOCK`):
+**`inventory.reserve.failed` payload** (fields outbound reads; reason=`INSUFFICIENT_STOCK`):
 
 ```json
 {
-  "sagaId": "uuid",
-  "reservationId": "uuid",
+  "pickingRequestId": "uuid",
   "reason": "INSUFFICIENT_STOCK",
   "insufficientLines": [
     {
+      "inventoryId": "uuid",
       "skuId": "uuid",
       "lotId": "uuid-or-null",
       "locationId": "uuid",
@@ -560,8 +582,8 @@ Expected payload shape `outbound-service` reads from each reply:
 }
 ```
 
-`insufficientLines` is stored in `OutboundSaga.failure_reason` (serialized)
-for ops visibility.
+Outbound resolves `sagaId` from `pickingRequestId`; `reason` is stored in
+`OutboundSaga.failure_reason` for ops visibility.
 
 Dedupe: `outbound_event_dedupe` table — 30-day retention.
 Saga-level idempotency: re-delivered `inventory.reserved` to an already-`RESERVED`
@@ -684,12 +706,13 @@ terminal `STUCK_RECOVERY_FAILED` and the
 - No `outbound.packing.unit.created` or `outbound.packing.unit.sealed` events
   — packing unit lifecycle is internal; downstream cares only about
   `outbound.packing.completed`.
-- No `outbound.order.backordered` separate event — the backordered state is
-  implicit from the absence of `outbound.picking.completed` / `order.cancelled`
-  and the presence of `RESERVE_FAILED` in the saga state (visible via
-  `GET /orders/{id}/saga`). Admin-service reads saga state via REST polling or
-  via the `outbound.picking.requested` topic's `RESERVE_FAILED` saga transition
-  signal.
+- No `outbound.order.backordered` separate event — the auto-backorder
+  (saga `RESERVE_FAILED`, `Order → BACKORDERED`) is signalled by re-using
+  `outbound.order.cancelled` (§2) with `reason="INSUFFICIENT_STOCK"`
+  (TASK-MONO-196). Adding a distinct topic would force every consumer (ecommerce
+  + admin) to add a second subscription for no semantic gain — the consumers
+  already branch on `reason`. wms-internal saga state remains visible via
+  `GET /orders/{id}/saga` for ops.
 - No wave/batch aggregation event (Wave aggregate is v2).
 - No returns / RMA event (v2).
 

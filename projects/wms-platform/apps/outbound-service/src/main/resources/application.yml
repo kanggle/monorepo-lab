@@ -144,6 +144,9 @@ outbound:
       master-partner: wms.master.partner.v1
       # TASK-BE-340 (ADR-MONO-022 D1): cross-project ecommerce fulfillment event.
       fulfillment-requested: ecommerce.fulfillment.requested.v1
+      # TASK-MONO-196 (ADR-MONO-022 D4): inventory reservation-shortfall signal
+      # → outbound auto-backorder.
+      inventory-reserve-failed: wms.inventory.reserve.failed.v1
 
   # TASK-BE-049: TMS HTTP client configuration. baseUrl + apiKey are loaded
   # from Secret Manager in prod (per external-integrations.md §6); env vars

@@ -91,6 +91,7 @@ public abstract class EcommerceFulfillmentE2EBase {
     protected static final String TOPIC_ORDER_CONFIRMED = "order.order.confirmed";
     protected static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
     protected static final String TOPIC_WMS_SHIPPING_CONFIRMED = "wms.outbound.shipping.confirmed.v1";
+    protected static final String TOPIC_WMS_OUTBOUND_CANCELLED = "wms.outbound.order.cancelled.v1";
     protected static final String TOPIC_SHIPPING_STATUS_CHANGED = "shipping.shipping.status-changed";
 
     private static final Path ORDER_JAR = locateOptionalJar(
@@ -193,9 +194,10 @@ public abstract class EcommerceFulfillmentE2EBase {
                     new NewTopic(TOPIC_ORDER_CONFIRMED, 1, (short) 1),
                     new NewTopic(TOPIC_FULFILLMENT_REQUESTED, 1, (short) 1),
                     new NewTopic(TOPIC_WMS_SHIPPING_CONFIRMED, 1, (short) 1),
+                    new NewTopic(TOPIC_WMS_OUTBOUND_CANCELLED, 1, (short) 1),
                     new NewTopic(TOPIC_SHIPPING_STATUS_CHANGED, 1, (short) 1)
             )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
-            log.info("Pre-created {} loop topics", 5);
+            log.info("Pre-created {} loop topics", 6);
         }
     }
 

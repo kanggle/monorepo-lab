@@ -74,9 +74,11 @@ echoed into `outbound.order.received` (ADR-022 D2-a). ERP-webhook / manual order
 ## Return leg (this service → ecommerce)
 
 On ship, `outbound-service` emits `wms.outbound.shipping.confirmed.v1` (existing) with the
-**additive `orderNo`** (D5) so ecommerce correlates. On reserve-failure the order goes
-`BACKORDERED` and `wms.outbound.order.cancelled.v1` carries `orderNo`. Both are authoritative in
-`outbound-events.md`; consumed by ecommerce per `wms-shipment-subscriptions.md`.
+**additive `orderNo`** (D5) so ecommerce correlates. On reserve-failure — inventory-service emits
+`inventory.reserve.failed` (TASK-MONO-196), `InventoryReserveFailedConsumer` advances the saga to
+`RESERVE_FAILED`, the order goes `BACKORDERED`, and the coordinator emits
+`wms.outbound.order.cancelled.v1` carrying `orderNo` + `reason=INSUFFICIENT_STOCK`. Both are
+authoritative in `outbound-events.md`; consumed by ecommerce per `wms-shipment-subscriptions.md`.
 
 ## Standalone-publish degradation (ADR-022 D8)
 

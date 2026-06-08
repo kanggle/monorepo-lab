@@ -3,7 +3,9 @@ package com.wms.outbound.application.saga;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
+import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
+import com.wms.outbound.domain.event.OrderCancelledEvent;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OrderSource;
@@ -25,13 +27,15 @@ class OutboundSagaCoordinatorTest {
 
     private FakeSagaPersistencePort sagaPersistence;
     private FakeOrderPersistencePort orderPersistence;
+    private FakeOutboxWriterPort outboxWriter;
     private OutboundSagaCoordinator coordinator;
 
     @BeforeEach
     void setUp() {
         sagaPersistence = new FakeSagaPersistencePort();
         orderPersistence = new FakeOrderPersistencePort();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, clock);
+        outboxWriter = new FakeOutboxWriterPort();
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, clock);
     }
 
     @Test
@@ -90,6 +94,12 @@ class OutboundSagaCoordinatorTest {
                 .isEqualTo(SagaStatus.RESERVE_FAILED);
         assertThat(orderPersistence.findById(order.getId()).orElseThrow().getStatus())
                 .isEqualTo(OrderStatus.BACKORDERED);
+        // TASK-MONO-196: auto-backorder emits the cross-project cancel signal.
+        assertThat(outboxWriter.countByType("outbound.order.cancelled")).isEqualTo(1);
+        OrderCancelledEvent emitted = (OrderCancelledEvent) outboxWriter.published.get(0);
+        assertThat(emitted.orderNo()).isEqualTo(order.getOrderNo());
+        assertThat(emitted.reason()).isEqualTo("INSUFFICIENT_STOCK");
+        assertThat(emitted.previousStatus()).isEqualTo(OrderStatus.PICKING.name());
     }
 
     @Test

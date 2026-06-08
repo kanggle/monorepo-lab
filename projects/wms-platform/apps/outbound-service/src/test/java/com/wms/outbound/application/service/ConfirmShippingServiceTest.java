@@ -77,7 +77,7 @@ class ConfirmShippingServiceTest {
         shipmentPersistence = new FakeShipmentPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
         eventPublisher = new FakeApplicationEventPublisher();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, fixedClock);
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new ConfirmShippingService(orderPersistence, pickingPersistence,
                 pickingConfirmationPersistence, packingPersistence, sagaPersistence,
                 shipmentPersistence, coordinator, outboxWriter, eventPublisher, fixedClock);

@@ -66,7 +66,7 @@ class ConfirmPickingServiceTest {
         sagaPersistence = new FakeSagaPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
         masterReadModel = new FakeMasterReadModelPort();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, fixedClock);
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new ConfirmPickingService(orderPersistence, pickingPersistence,
                 pickingConfirmationPersistence, sagaPersistence, coordinator,
                 outboxWriter, masterReadModel, fixedClock);

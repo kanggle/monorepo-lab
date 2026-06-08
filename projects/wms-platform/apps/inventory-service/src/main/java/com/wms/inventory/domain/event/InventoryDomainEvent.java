@@ -13,7 +13,7 @@ public sealed interface InventoryDomainEvent
         permits InventoryReceivedEvent, InventoryReservedEvent,
                 InventoryReleasedEvent, InventoryConfirmedEvent,
                 InventoryAdjustedEvent, InventoryTransferredEvent,
-                InventoryLowStockDetectedEvent {
+                InventoryLowStockDetectedEvent, InventoryReserveFailedEvent {
 
     /** Stable {@code eventType} string per the event contract, e.g., {@code inventory.received}. */
     String eventType();
