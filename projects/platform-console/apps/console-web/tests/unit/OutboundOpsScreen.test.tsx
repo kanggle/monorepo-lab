@@ -266,7 +266,7 @@ describe('OutboundOpsScreen — confirm-gated actions', () => {
   });
 
   it('confirming Pick posts to the pick proxy with an Idempotency-Key', async () => {
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).includes('/pick')
           ? jsonResponse({ orderStatus: 'PICKED' })
@@ -300,7 +300,7 @@ describe('OutboundOpsScreen — confirm-gated actions', () => {
   });
 
   it('422 STATE_TRANSITION_INVALID → inline error (no crash)', async () => {
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).includes('/pick')
           ? new Response(
@@ -332,7 +332,7 @@ describe('OutboundOpsScreen — confirm-gated actions', () => {
 
   it('409 CONFLICT → refetch + retry-prompt (no silent auto-retry)', async () => {
     let drillCalls = 0;
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/ship')) {
         return Promise.resolve(
           new Response(JSON.stringify({ code: 'CONFLICT', message: 'stale' }), {

@@ -166,7 +166,7 @@ describe('GET /api/wms/outbound (list) proxy', () => {
 describe('GET /api/wms/outbound/{orderId} (drill) proxy', () => {
   it('composes { detail, saga } from two reads with the domain-facing token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).endsWith('/saga')
           ? jsonResponse(SAGA)
@@ -195,7 +195,7 @@ describe('GET /api/wms/outbound/{orderId} (drill) proxy', () => {
 describe('POST /api/wms/outbound/{orderId}/pick (compound: list → confirm)', () => {
   it('reads picking-requests then confirms with planned lines mapped', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn((url: string) =>
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).includes('/picking-requests') &&
           !String(url).includes('/confirmations')
