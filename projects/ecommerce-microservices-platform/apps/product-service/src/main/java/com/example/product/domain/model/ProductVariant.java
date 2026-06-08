@@ -15,6 +15,12 @@ public class ProductVariant {
     private String optionName;
     private StockQuantity stock;
     private Price additionalPrice;
+    /**
+     * Business key (== wms {@code skuCode}). Nullable: variants created before
+     * TASK-MONO-198 (or via the create() path) may not carry one; only variants
+     * with a SKU participate in wms inventory reconciliation (ADR-MONO-022 §D4 v2(b)).
+     */
+    private String sku;
 
     public static ProductVariant create(String optionName, StockQuantity stock, Price additionalPrice) {
         validateOptionName(optionName);
@@ -34,13 +40,14 @@ public class ProductVariant {
     }
 
     public static ProductVariant reconstitute(UUID id, UUID productId, String optionName,
-                                              StockQuantity stock, Price additionalPrice) {
+                                              StockQuantity stock, Price additionalPrice, String sku) {
         ProductVariant variant = new ProductVariant();
         variant.id = id;
         variant.productId = productId;
         variant.optionName = optionName;
         variant.stock = stock;
         variant.additionalPrice = additionalPrice;
+        variant.sku = sku;
         return variant;
     }
 

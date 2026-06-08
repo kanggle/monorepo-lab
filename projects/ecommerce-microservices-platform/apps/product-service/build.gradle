@@ -53,10 +53,11 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
 }
 
-test {
-    environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
-    jvmArgs '-Dapi.version=1.44'
-}
+// Docker / Testcontainers env (DOCKER_HOST, DOCKER_API_VERSION, api.version) is
+// supplied portably by the root build.gradle `tasks.withType(Test)` convention from
+// the ambient environment — do NOT hardcode a Windows named pipe here (the prior
+// `docker_engine_linux` pipe is stale and breaks local IT runs). Integration-tagged
+// ITs run locally via `-PrunIntegration`; CI never runs them (Docker-free).
 
 dependencyManagement {
     imports {

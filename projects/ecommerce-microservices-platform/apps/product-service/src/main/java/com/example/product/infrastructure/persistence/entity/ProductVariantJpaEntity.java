@@ -33,6 +33,9 @@ public class ProductVariantJpaEntity {
     @Column(name = "additional_price", nullable = false)
     private long additionalPrice;
 
+    @Column(name = "sku", length = 64)
+    private String sku;
+
     @Version
     private long version;
 
@@ -43,6 +46,7 @@ public class ProductVariantJpaEntity {
         entity.optionName = variant.getOptionName();
         entity.stock = variant.getStock().value();
         entity.additionalPrice = variant.getAdditionalPrice().value();
+        entity.sku = variant.getSku();
         return entity;
     }
 
@@ -52,7 +56,8 @@ public class ProductVariantJpaEntity {
                 product.getId(),
                 optionName,
                 new StockQuantity(stock),
-                new Price(additionalPrice)
+                new Price(additionalPrice),
+                sku
         );
     }
 

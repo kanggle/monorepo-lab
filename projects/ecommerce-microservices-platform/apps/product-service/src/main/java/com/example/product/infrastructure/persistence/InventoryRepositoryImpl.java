@@ -36,4 +36,15 @@ class InventoryRepositoryImpl implements InventoryRepository {
         return jpaRepository.findById(variantId)
                 .map(entity -> Inventory.create(entity.getId(), new StockQuantity(entity.getStock())));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<VariantRef> findVariantBySku(String sku) {
+        if (sku == null || sku.isBlank()) {
+            return Optional.empty();
+        }
+        return jpaRepository.findBySku(sku)
+                .map(entity -> new VariantRef(
+                        entity.getId(), entity.getProduct().getId(), entity.getStock()));
+    }
 }
