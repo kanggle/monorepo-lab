@@ -8,7 +8,7 @@ ADR-MONO-022 §D4 — BACKORDER / insufficient-stock return path: wms auto-backo
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -86,3 +86,62 @@ Make the **insufficient-stock / backorder** leg of the storefront→warehouse lo
 - Wiring the consumer without the inventory-service producer actually emitting the shortfall signal → the path stays dead (silent). The wms IT must drive the real reservation-shortfall, not just unit-call `onReserveFailed()`.
 - Emitting on auto-backorder but leaving the contract saying "no event" → spec drift re-opens. Reconcile contracts in the same PR (specs-first).
 - Putting the e2e in the fast PR lane → CI blowout. Must be `@Tag("full")` nightly (AC-4).
+
+---
+
+# Implementation Notes (done 2026-06-08)
+
+**Design decision (vs the original `inventory.adjusted` overload):** a **dedicated**
+`inventory.reserve.failed` event (topic `wms.inventory.reserve.failed.v1`,
+TopicResolver auto-maps `inventory.reserve.failed`) carries the shortfall signal.
+The contract's earlier `inventory.adjusted(INSUFFICIENT_STOCK)` was rejected
+because `wms.inventory.adjusted.v1` is a stock-mutation topic **consumed
+cross-project by scm `inventory-visibility-service`** — routing reservation
+failures through it would corrupt that consumer's snapshots.
+
+**inventory-service (producer):** `InventoryReserveFailedEvent` (+ sealed-interface
+permit + serializer case). Event path `ReserveStockService.reserveForPickingEvent`
+(new in-port method, used only by `PickingRequestedConsumer`) **pre-checks
+availability before any mutation** and, on a shortfall, emits the failure event +
+returns `BACKORDERED` **instead of throwing**. Rationale: the REST `reserve()`
+path runs `doReserve` in a `TransactionTemplate` that *joins* the consumer's TX —
+letting `Inventory.reserve` throw would mark the shared TX rollback-only, so the
+outbox row + dedupe could never commit (→ DLT/redelivery loop). The REST path is
+unchanged (still throws `InsufficientStockException` → 422). A genuine concurrent
+race still throws → optimistic-lock retry → the re-check emits on retry.
+
+**outbound-service (consumer + emit):** `InventoryReserveFailedConsumer`
+(`wms.inventory.reserve.failed.v1`, group `outbound-service`) → resolves `sagaId`
+from `pickingRequestId` (`SagaIdResolver`) → `OutboundSagaCoordinator.onReserveFailed`.
+The coordinator now injects `OutboxWriterPort` and, on the auto-backorder, emits
+`outbound.order.cancelled` (reason=`INSUFFICIENT_STOCK`, carrying `orderNo`) in the
+same TX — the cross-project backorder signal (ecommerce can't poll wms saga state).
+Added `InventoryConsumerSupport.dispatchWithEnvelope` so the consumer can read the
+`reason` field. The coordinator constructor change touched 8 unit-test setUps.
+
+**ecommerce side:** the `WmsOutboundCancelledConsumer` already existed (v1 =
+ops alert, Shipping stays PREPARING — correct); added the missing unit test.
+
+**Contracts reconciled (specs-first):** `outbound-events.md` (§2 auto-backorder
+note + §C1 `inventory.reserve.failed` handler + "Not In v1" backordered bullet),
+`inventory-events.md` (§4a + topic table), `ecommerce-fulfillment-subscriptions.md`.
+
+**AC mapping:** AC-1 ✅ `InventoryReserveFailedConsumerIT` (Testcontainers) — order
+→BACKORDERED + `outbound.order.cancelled`(reason, orderNo) emitted +
+`OutboundSagaCoordinatorTest` unit assert. AC-2 ✅ `WmsOutboundCancelledConsumerTest`
++ inventory `ReserveStockServiceTest` producer cases. AC-3 ✅ contracts reconciled.
+AC-4 ✅ `FulfillmentLoopE2ETest.backorderBranchDoesNotShipTheOrder` (`@Tag("full")`).
+
+**Verification (local, Rancher Docker 29.1.3):** unit GREEN (inventory + outbound +
+ecommerce shipping); **outbound integrationTest 20/20 GREEN** (incl. new backorder
+IT 1/0/0/0); ecommerce e2e GREEN (happy + backorder). **Accepted residue:** the
+inventory producer→broker leg (PickingRequestedConsumer→reserve.failed on broker)
+is unit-tested only, not IT — the cross-project wiring is gated by the outbound IT
+(synthetic reserve.failed) + the e2e (synthetic cancel); a full inventory→outbound
+broker IT is out of v1 scope.
+
+**Test-query gotcha (recorded):** the outbound `outbound_outbox.payload` column
+stores the **whole envelope**, so payload fields are nested at
+`payload->'payload'->>'orderNo'`, not top-level `payload->>'orderNo'` (only the
+envelope-level `eventId`/`eventType` are top-level). Assert with `payload::text`
+contains, as the sibling ITs do.

@@ -88,6 +88,32 @@ public class KafkaTestProducer implements AutoCloseable {
         send("wms.outbound.shipping.confirmed.v1", orderId, envelope);
     }
 
+    /**
+     * Publishes a wms {@code outbound.order.cancelled} event (camelCase
+     * envelope) carrying {@code orderNo == orderId} + a backorder {@code reason}
+     * — the wms boundary signal for the BACKORDER/insufficient-stock path
+     * (TASK-MONO-196). v1 ecommerce consumer treats it as an ops alert and leaves
+     * Shipping PREPARING (no auto-ship).
+     */
+    public void publishWmsOutboundCancelled(String orderId, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderId", UUID.randomUUID().toString());
+        payload.put("orderNo", orderId);
+        payload.put("previousStatus", "PICKING");
+        payload.put("reason", reason);
+        payload.put("cancelledAt", Instant.now().toString());
+
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("eventId", UUID.randomUUID().toString());
+        envelope.put("eventType", "outbound.order.cancelled");
+        envelope.put("occurredAt", Instant.now().toString());
+        envelope.put("aggregateType", "order");
+        envelope.put("aggregateId", orderId);
+        envelope.put("payload", payload);
+
+        send("wms.outbound.order.cancelled.v1", orderId, envelope);
+    }
+
     private void send(String topic, String key, Map<String, Object> envelope) {
         try {
             String json = mapper.writeValueAsString(envelope);

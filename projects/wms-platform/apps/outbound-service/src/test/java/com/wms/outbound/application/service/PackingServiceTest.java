@@ -60,7 +60,7 @@ class PackingServiceTest {
         packingPersistence = new FakePackingPersistencePort();
         sagaPersistence = new FakeSagaPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, fixedClock);
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new PackingService(orderPersistence, packingPersistence,
                 sagaPersistence, coordinator, outboxWriter, fixedClock);
 

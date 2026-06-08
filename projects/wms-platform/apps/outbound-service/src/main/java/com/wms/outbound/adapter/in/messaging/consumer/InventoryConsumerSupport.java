@@ -3,6 +3,7 @@ package com.wms.outbound.adapter.in.messaging.consumer;
 import com.wms.outbound.application.port.out.EventDedupePort;
 import com.wms.outbound.application.saga.SagaIdResolver;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,20 @@ public class InventoryConsumerSupport {
                          String eventTypeForLog,
                          String rawJson,
                          Consumer<UUID> onSagaId) {
+        dispatchWithEnvelope(consumerName, eventTypeForLog, rawJson,
+                (sagaId, envelope) -> onSagaId.accept(sagaId));
+    }
+
+    /**
+     * Variant that also hands the parsed {@link EventEnvelope} to the handler —
+     * for consumers that need a payload field beyond the {@code sagaId} (e.g.
+     * {@code InventoryReserveFailedConsumer} reading {@code reason}). Same
+     * parse → MDC → dedupe → saga-resolution skeleton.
+     */
+    public void dispatchWithEnvelope(String consumerName,
+                                     String eventTypeForLog,
+                                     String rawJson,
+                                     BiConsumer<UUID, EventEnvelope> onSagaId) {
         EventEnvelope envelope = parser.parse(rawJson);
         MDC.put("eventId", envelope.eventId().toString());
         MDC.put("consumer", consumerName);
@@ -83,13 +98,13 @@ public class InventoryConsumerSupport {
 
     private void applyEvent(EventEnvelope envelope,
                             String eventTypeForLog,
-                            Consumer<UUID> onSagaId) {
+                            BiConsumer<UUID, EventEnvelope> onSagaId) {
         UUID sagaId = sagaIdResolver.resolve(envelope.payload());
         if (sagaId == null) {
             log.warn("{} without correlation keys; skipping payload={}",
                     eventTypeForLog, envelope.payload());
             return;
         }
-        onSagaId.accept(sagaId);
+        onSagaId.accept(sagaId, envelope);
     }
 }

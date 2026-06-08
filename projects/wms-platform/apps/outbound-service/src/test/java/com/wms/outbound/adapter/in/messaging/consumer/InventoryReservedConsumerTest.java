@@ -7,6 +7,7 @@ import com.wms.outbound.application.port.out.EventDedupePort;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.application.saga.SagaIdResolver;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
+import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
 import java.time.Clock;
@@ -36,7 +37,8 @@ class InventoryReservedConsumerTest {
         dedupePort = new FakeEventDedupePort();
         sagaPersistence = new FakeSagaPersistencePort();
         orderPersistence = new FakeOrderPersistencePort();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, clock);
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence,
+                new FakeOutboxWriterPort(), clock);
         InventoryConsumerSupport support = new InventoryConsumerSupport(
                 parser, dedupePort, new SagaIdResolver(sagaPersistence));
         consumer = new InventoryReservedConsumer(support, coordinator);

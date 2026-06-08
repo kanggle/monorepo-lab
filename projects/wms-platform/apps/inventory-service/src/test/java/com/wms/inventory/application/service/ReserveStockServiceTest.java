@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.wms.inventory.application.command.ReserveStockCommand;
+import com.wms.inventory.application.port.in.ReserveStockUseCase;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.OutboxWriter;
@@ -16,6 +17,7 @@ import com.wms.inventory.application.result.MovementView;
 import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import com.wms.inventory.domain.event.InventoryDomainEvent;
+import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
 import com.wms.inventory.domain.event.InventoryReservedEvent;
 import com.wms.inventory.domain.exception.InventoryNotFoundException;
 import com.wms.inventory.domain.model.Inventory;
@@ -157,6 +159,46 @@ class ReserveStockServiceTest {
         service.reserve(cmd);
 
         assertThat(invRepo.findByIdOrder).containsExactly(lowId, highId);
+    }
+
+    @Test
+    void reserveForPickingEventEmitsReserveFailedOnShortfall() {
+        UUID invId = seedInventory(1); // only 1 available
+        ReserveStockCommand cmd = new ReserveStockCommand(
+                UUID.randomUUID(), UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 5)), // request 5 > 1
+                86400, null, "system:picking-requested-consumer", null);
+
+        ReserveStockUseCase.ReserveOutcome outcome = service.reserveForPickingEvent(cmd);
+
+        assertThat(outcome).isEqualTo(ReserveStockUseCase.ReserveOutcome.BACKORDERED);
+        // No mutation, no reservation — only the failure event was emitted.
+        assertThat(invRepo.entries.get(invId).availableQty()).isEqualTo(1);
+        assertThat(reservationRepo.byId).isEmpty();
+        assertThat(outbox.events).hasSize(1);
+        assertThat(outbox.events.get(0)).isInstanceOf(InventoryReserveFailedEvent.class);
+        InventoryReserveFailedEvent e = (InventoryReserveFailedEvent) outbox.events.get(0);
+        assertThat(e.pickingRequestId()).isEqualTo(cmd.pickingRequestId());
+        assertThat(e.reason()).isEqualTo("INSUFFICIENT_STOCK");
+        assertThat(e.insufficientLines()).hasSize(1);
+        assertThat(e.insufficientLines().get(0).qtyRequested()).isEqualTo(5);
+        assertThat(e.insufficientLines().get(0).qtyAvailable()).isEqualTo(1);
+    }
+
+    @Test
+    void reserveForPickingEventReservesWhenSufficient() {
+        UUID invId = seedInventory(100);
+        ReserveStockCommand cmd = new ReserveStockCommand(
+                UUID.randomUUID(), UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 30)),
+                86400, null, "system:picking-requested-consumer", null);
+
+        ReserveStockUseCase.ReserveOutcome outcome = service.reserveForPickingEvent(cmd);
+
+        assertThat(outcome).isEqualTo(ReserveStockUseCase.ReserveOutcome.RESERVED);
+        assertThat(invRepo.entries.get(invId).availableQty()).isEqualTo(70);
+        assertThat(outbox.events).hasSize(1);
+        assertThat(outbox.events.get(0)).isInstanceOf(InventoryReservedEvent.class);
     }
 
     private UUID seedInventory(int qty) {

@@ -6,6 +6,7 @@ import com.wms.outbound.application.port.out.ShipmentNotificationPort;
 import com.wms.outbound.application.port.out.TmsAcknowledgement;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
+import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeShipmentPersistencePort;
 import com.wms.outbound.domain.model.OutboundSaga;
@@ -60,7 +61,8 @@ class ShipmentNotificationListenerTest {
         shipmentPersistence = new FakeShipmentPersistencePort();
         sagaPersistence = new FakeSagaPersistencePort();
         orderPersistence = new FakeOrderPersistencePort();
-        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, fixedClock);
+        coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence,
+                new FakeOutboxWriterPort(), fixedClock);
         persistence = new ShipmentNotificationPersistence(shipmentPersistence, coordinator);
 
         shipmentId = UUID.randomUUID();

@@ -133,6 +133,66 @@ class FulfillmentLoopE2ETest extends EcommerceFulfillmentE2EBase {
         }
     }
 
+    @Test
+    @DisplayName("backorder: wms outbound.order.cancelled(INSUFFICIENT_STOCK) → ops alert, order NOT shipped (stays CONFIRMED)")
+    void backorderBranchDoesNotShipTheOrder() throws Exception {
+        // ----- place + confirm an order (happy-path prefix) ------------------
+        String orderId = placeOrder();
+        try (KafkaTestProducer producer = new KafkaTestProducer(kafkaBootstrapForHost())) {
+            producer.publishStockChangedOrderReserved(orderId, "PROD-1", "SKU-APPLE-001");
+            await().atMost(Duration.ofSeconds(45))
+                    .pollInterval(Duration.ofMillis(750))
+                    .untilAsserted(() -> assertThat(orderStatus(orderId)).isEqualTo("CONFIRMED"));
+
+            // ----- wms cannot fulfil → backorder signal (ADR-MONO-022 §D4) ---
+            // The v1 ecommerce consumer raises an ops alert and intentionally
+            // does NOT ship: the order must stay CONFIRMED (never auto-SHIPPED).
+            producer.publishWmsOutboundCancelled(orderId, "INSUFFICIENT_STOCK");
+
+            await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(750))
+                    .untilAsserted(() -> assertThat(orderStatus(orderId))
+                            .as("backordered order is NOT auto-shipped")
+                            .isEqualTo("CONFIRMED"));
+            log.info("[e2e] backorder branch: order stayed CONFIRMED (not shipped) — alert-only v1");
+        }
+    }
+
+    /** POST /api/orders → returns the created orderId (PENDING). */
+    private String placeOrder() throws Exception {
+        String orderBody = """
+                {
+                  "items": [
+                    {
+                      "productId": "PROD-1",
+                      "variantId": "SKU-APPLE-001",
+                      "productName": "Apple",
+                      "optionName": "Red",
+                      "quantity": 2,
+                      "unitPrice": 1500
+                    }
+                  ],
+                  "shippingAddress": {
+                    "recipient": "홍길동",
+                    "phone": "010-1234-5678",
+                    "zipCode": "06236",
+                    "address1": "서울특별시 강남구 테헤란로 1",
+                    "address2": "10층"
+                  }
+                }
+                """;
+        HttpResponse<String> placed = send(HttpRequest.newBuilder()
+                .uri(orderBaseUri().resolve("/api/orders"))
+                .header("X-User-Id", USER_ID)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(orderBody))
+                .build());
+        assertThat(placed.statusCode()).as("POST /api/orders -> 201").isEqualTo(201);
+        String orderId = mapper.readTree(placed.body()).get("orderId").asText();
+        assertThat(orderId).isNotBlank();
+        return orderId;
+    }
+
     private String orderStatus(String orderId) throws Exception {
         HttpResponse<String> resp = send(HttpRequest.newBuilder()
                 .uri(orderBaseUri().resolve("/api/orders/" + orderId))

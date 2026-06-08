@@ -7,6 +7,7 @@ import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.OutboxWriter;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.application.result.ReservationView;
+import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
 import com.wms.inventory.domain.event.InventoryReservedEvent;
 import com.wms.inventory.domain.exception.DuplicateRequestException;
 import com.wms.inventory.domain.exception.InventoryNotFoundException;
@@ -102,11 +103,35 @@ public class ReserveStockService implements ReserveStockUseCase {
                     command.pickingRequestId());
             return ReservationView.from(existing.get());
         }
+        // REST path: a shortfall throws InsufficientStockException (→ 422).
+        return withRetry(command, () -> transactionTemplate.execute(status -> doReserve(command, false)));
+    }
 
+    @Override
+    public ReserveOutcome reserveForPickingEvent(ReserveStockCommand command) {
+        // Idempotent replay: an existing reservation means this picking request
+        // already reserved successfully — RESERVED, no re-emit.
+        var existing = reservationRepository.findByPickingRequestId(command.pickingRequestId());
+        if (existing.isPresent()) {
+            log.debug("Reservation already exists for pickingRequestId {}; idempotent RESERVED",
+                    command.pickingRequestId());
+            return ReserveOutcome.RESERVED;
+        }
+        // Event path: a shortfall emits inventory.reserve.failed and returns null
+        // (→ BACKORDERED) instead of throwing — so the consumer TX commits and the
+        // dedupe row is retained (no DLT / redelivery loop).
+        ReservationView view = withRetry(command,
+                () -> transactionTemplate.execute(status -> doReserve(command, true)));
+        return view == null ? ReserveOutcome.BACKORDERED : ReserveOutcome.RESERVED;
+    }
+
+    /** Optimistic-lock retry wrapper shared by the REST and event reserve paths. */
+    private ReservationView withRetry(ReserveStockCommand command,
+                                      java.util.function.Supplier<ReservationView> body) {
         OptimisticLockingFailureException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                return transactionTemplate.execute(status -> doReserve(command));
+                return body.get();
             } catch (OptimisticLockingFailureException conflict) {
                 lastConflict = conflict;
                 retryCounter.increment();
@@ -121,7 +146,15 @@ public class ReserveStockService implements ReserveStockUseCase {
         throw lastConflict;
     }
 
-    private ReservationView doReserve(ReserveStockCommand command) {
+    /**
+     * @param signalShortfall when {@code true} (event path), a pre-checked
+     *        availability shortfall emits {@code inventory.reserve.failed} and
+     *        returns {@code null} (→ BACKORDERED) rather than letting
+     *        {@code Inventory.reserve} throw (which would poison the shared TX and
+     *        DLT the message). When {@code false} (REST path), the shortfall path
+     *        is skipped and {@code Inventory.reserve} throws as before.
+     */
+    private ReservationView doReserve(ReserveStockCommand command, boolean signalShortfall) {
         Instant now = clock.instant();
 
         // Load Inventory rows first, in deterministic id-ascending order to
@@ -142,6 +175,31 @@ public class ReserveStockService implements ReserveStockUseCase {
             Inventory inv = inventoryRepository.findById(id)
                     .orElseThrow(() -> new InventoryNotFoundException("Inventory not found: " + id));
             loadedById.put(id, inv);
+        }
+
+        // Event path (TASK-MONO-196): pre-check availability BEFORE any mutation so
+        // a deterministic shortfall emits inventory.reserve.failed instead of
+        // letting Inventory.reserve throw (which would mark the shared consumer TX
+        // rollback-only — the outbox row + dedupe could not then commit). A
+        // genuine concurrent race still throws below → optimistic-lock retry → the
+        // re-check on retry sees the depletion and emits the failure event.
+        if (signalShortfall) {
+            List<InventoryReserveFailedEvent.Line> shortfall = new ArrayList<>();
+            for (Map.Entry<UUID, Integer> entry : qtyByInventory.entrySet()) {
+                Inventory inv = loadedById.get(entry.getKey());
+                if (inv.availableQty() < entry.getValue()) {
+                    shortfall.add(new InventoryReserveFailedEvent.Line(
+                            inv.id(), inv.skuId(), inv.lotId(), inv.locationId(),
+                            entry.getValue(), inv.availableQty()));
+                }
+            }
+            if (!shortfall.isEmpty()) {
+                outboxWriter.write(new InventoryReserveFailedEvent(
+                        command.pickingRequestId(), "INSUFFICIENT_STOCK", shortfall, now, command.actorId()));
+                log.info("inventory.reserve.failed emitted pickingRequestId={} shortLines={}",
+                        command.pickingRequestId(), shortfall.size());
+                return null;
+            }
         }
 
         UUID reservationId = UUID.randomUUID();

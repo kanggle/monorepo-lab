@@ -86,7 +86,9 @@ public class PickingRequestedConsumer {
                     envelope.eventId(), command.pickingRequestId());
             EventDedupePort.Outcome outcome = eventDedupePort.process(
                     envelope.eventId(), envelope.eventType(),
-                    () -> reserveStock.reserve(command));
+                    // TASK-MONO-196: event path emits inventory.reserve.failed on a
+                    // shortfall (→ outbound auto-backorder) instead of throwing/DLT.
+                    () -> reserveStock.reserveForPickingEvent(command));
             if (outcome == EventDedupePort.Outcome.IGNORED_DUPLICATE) {
                 log.debug("outbound.picking.requested eventId={} already applied; skipping",
                         envelope.eventId());
