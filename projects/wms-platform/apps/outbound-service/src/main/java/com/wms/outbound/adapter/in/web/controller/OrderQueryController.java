@@ -3,12 +3,16 @@ package com.wms.outbound.adapter.in.web.controller;
 import com.wms.outbound.adapter.in.web.dto.response.OrderResponse;
 import com.wms.outbound.adapter.in.web.dto.response.OrderSummaryResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PagedResponse;
+import com.wms.outbound.adapter.in.web.dto.response.PickingRequestListResponse;
+import com.wms.outbound.adapter.in.web.dto.response.PickingRequestResponse;
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.in.QueryOrderUseCase;
+import com.wms.outbound.application.port.in.QueryPickingRequestUseCase;
 import com.wms.outbound.application.result.OrderResult;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,16 +23,19 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Read endpoints for the {@code Order} aggregate. Per
- * {@code outbound-service-api.md} §1.2 / §1.3.
+ * {@code outbound-service-api.md} §1.2 / §1.3 / §2.4.
  */
 @RestController
 @RequestMapping("/api/v1/outbound/orders")
 public class OrderQueryController {
 
     private final QueryOrderUseCase queryOrder;
+    private final QueryPickingRequestUseCase queryPickingRequest;
 
-    public OrderQueryController(QueryOrderUseCase queryOrder) {
+    public OrderQueryController(QueryOrderUseCase queryOrder,
+                                QueryPickingRequestUseCase queryPickingRequest) {
         this.queryOrder = queryOrder;
+        this.queryPickingRequest = queryPickingRequest;
     }
 
     @GetMapping("/{id}")
@@ -62,5 +69,33 @@ public class OrderQueryController {
                 .map(OrderSummaryResponse::from)
                 .toList();
         return ResponseEntity.ok(new PagedResponse<>(items, page, size, result.total()));
+    }
+
+    /**
+     * §2.4 — List picking requests for an order.
+     *
+     * <p>Asserts the order exists first (throws {@code OrderNotFoundException} →
+     * 404 {@code ORDER_NOT_FOUND} if not). Then returns the order's picking
+     * request(s) including planned lines. Returns {@code 200 { content: [] }}
+     * (not 404) when the order exists but the saga has not yet created a picking
+     * request.
+     *
+     * <p>Auth: {@code OUTBOUND_READ} — enforced by the {@code SecurityConfig}
+     * HTTP-method gate (GET /api/** requires OUTBOUND_READ|WRITE|ADMIN).
+     */
+    @GetMapping("/{id}/picking-requests")
+    public ResponseEntity<PickingRequestListResponse> listPickingRequests(@PathVariable UUID id) {
+        // Assert order exists — propagates OrderNotFoundException → 404 ORDER_NOT_FOUND.
+        queryOrder.findById(id);
+
+        Optional<PickingRequestResponse> pickingResponse = queryPickingRequest
+                .findByOrderId(id)
+                .map(PickingRequestResponse::from);
+
+        List<PickingRequestResponse> content = pickingResponse
+                .map(List::of)
+                .orElseGet(List::of);
+
+        return ResponseEntity.ok(new PickingRequestListResponse(content));
     }
 }

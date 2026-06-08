@@ -486,6 +486,60 @@ Errors: `PICKING_REQUEST_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
 `LOT_REQUIRED` (422), `VALIDATION_ERROR` (400), `CONFLICT` (409),
 `DUPLICATE_REQUEST` (409).
 
+### 2.4 GET `/api/v1/outbound/orders/{id}/picking-requests` — List Picking Requests for Order
+
+Auth: `OUTBOUND_READ`.
+
+Returns every `PickingRequest` belonging to the order (v1: at most one — the
+saga creates a single picking request per order; returned as a list for
+forward-compatibility with v2 wave / partial picking).
+
+This read closes the **picking-request discovery gap**: a consumer holding only
+the `orderId` (e.g. an operations console driving the pick → pack → ship
+lifecycle) can locate the picking request and its planned lines — including the
+planned `locationId` and `qtyToPick` each confirmation line requires (§2.3) —
+without already knowing the `pickingRequestId`. Without it, §2.3 confirmation is
+only reachable by a caller that captured the `pickingRequestId` out-of-band at
+saga-creation time.
+
+Response `200` (not paginated — bounded by the order; each element matches the
+§2.1 / §2.2 picking-request shape):
+
+```json
+{
+  "content": [
+    {
+      "pickingRequestId": "uuid",
+      "orderId": "uuid",
+      "sagaId": "uuid",
+      "warehouseId": "uuid",
+      "status": "SUBMITTED",
+      "lines": [
+        {
+          "pickingRequestLineId": "uuid",
+          "orderLineId": "uuid",
+          "skuId": "uuid",
+          "lotId": "uuid-or-null",
+          "locationId": "uuid",
+          "qtyToPick": 50
+        }
+      ],
+      "version": 0,
+      "createdAt": "2026-04-29T10:00:00Z",
+      "updatedAt": "2026-04-29T10:00:00Z"
+    }
+  ]
+}
+```
+
+The `content` array is **empty** (`200` with `{ "content": [] }`, **not** `404`)
+when the order exists but the saga has not yet created its picking request (e.g.
+the order is still `PICKING` / saga `REQUESTED` and the picking-request row has
+not been written). A `404 ORDER_NOT_FOUND` is returned only when the order `id`
+itself does not exist.
+
+Errors: `ORDER_NOT_FOUND` (404).
+
 ---
 
 ## 3. Packing
