@@ -1,0 +1,232 @@
+import { z } from 'zod';
+
+/**
+ * Feature-local types for the wms `outbound-service` order-lifecycle surface
+ * (the second wms surface federated by the console — TASK-PC-FE-057).
+ *
+ * Authoritative producer contract (do NOT redefine — consume only):
+ *   `wms-platform/specs/contracts/http/outbound-service-api.md`
+ *   §1.2 (GET order) / §1.3 (list orders) / §2.3 (pick confirm) /
+ *   §2.4 (GET picking-requests, TASK-BE-343) / §3.1 (create packing-unit) /
+ *   §3.2 (PATCH seal) / §4.1 (ship) / §5.1 (saga).
+ * Consumer obligation: `console-integration-contract.md` § 2.4.5.1
+ * (inherits the § 2.4.5 wms credential/tenant/envelope/resilience rules).
+ *
+ * These zod schemas are the runtime parsers the api-client / tests assert
+ * against. They are feature-local (not cross-feature) per
+ * architecture.md § Allowed Dependencies.
+ *
+ * TOLERANCE invariant (console-integration-contract § 2.4.5 / task Edge Case
+ * "Unknown/future status/sagaState enum"): every read shape is permissive —
+ * unknown / future enum values (a new order `status`, `sagaState`, …) parse
+ * to a generic value and NEVER throw. Only the fields the UI strictly needs
+ * are required; everything else is passthrough.
+ */
+
+// --- shared paginated page envelope (outbound-service-api.md § Pagination) -
+// { content, page:{number,size,totalElements,totalPages}, sort }. Tolerant.
+
+export const OutboundPageMetaSchema = z
+  .object({
+    number: z.number().int().nonnegative(),
+    size: z.number().int().positive(),
+    totalElements: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type OutboundPageMeta = z.infer<typeof OutboundPageMetaSchema>;
+
+function outboundPage<T extends z.ZodTypeAny>(row: T) {
+  return z.object({
+    content: z.array(row),
+    page: OutboundPageMetaSchema,
+    sort: z.string().optional(),
+  });
+}
+
+// --- 1.3 list — order summary row ----------------------------------------
+// Status / sagaState kept as plain strings (tolerant): an unknown/future
+// enum renders as a generic label, never a parser throw.
+
+export const OutboundOrderSummarySchema = z
+  .object({
+    orderId: z.string(),
+    orderNo: z.string().optional(),
+    source: z.string().nullable().optional(),
+    customerPartnerId: z.string().nullable().optional(),
+    warehouseId: z.string().nullable().optional(),
+    status: z.string().optional(),
+    sagaState: z.string().nullable().optional(),
+    lineCount: z.number().optional(),
+    totalQtyOrdered: z.number().optional(),
+    requiredShipDate: z.string().nullable().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough();
+export type OutboundOrderSummary = z.infer<typeof OutboundOrderSummarySchema>;
+
+export const OutboundOrderPageSchema = outboundPage(OutboundOrderSummarySchema);
+export type OutboundOrderPage = z.infer<typeof OutboundOrderPageSchema>;
+
+// --- 1.2 detail — order with lines + status + version --------------------
+
+export const OutboundOrderLineSchema = z
+  .object({
+    orderLineId: z.string(),
+    lineNo: z.number().optional(),
+    skuId: z.string(),
+    lotId: z.string().nullable().optional(),
+    qtyOrdered: z.number(),
+  })
+  .passthrough();
+export type OutboundOrderLine = z.infer<typeof OutboundOrderLineSchema>;
+
+export const OutboundOrderDetailSchema = z
+  .object({
+    orderId: z.string(),
+    orderNo: z.string().optional(),
+    source: z.string().nullable().optional(),
+    customerPartnerId: z.string().nullable().optional(),
+    warehouseId: z.string().nullable().optional(),
+    status: z.string(),
+    sagaState: z.string().nullable().optional(),
+    lines: z.array(OutboundOrderLineSchema),
+    // Optimistic-lock version — required on the ship body (op 8).
+    version: z.number(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough();
+export type OutboundOrderDetail = z.infer<typeof OutboundOrderDetailSchema>;
+
+// --- 5.1 saga state -------------------------------------------------------
+
+export const OutboundSagaSchema = z
+  .object({
+    sagaId: z.string().optional(),
+    orderId: z.string().optional(),
+    // `state` ∈ REQUESTED|RESERVE_FAILED|RESERVED|PICKING_CONFIRMED|
+    //   PACKING_CONFIRMED|CANCELLATION_REQUESTED|CANCELLED|SHIPPED|
+    //   SHIPPED_NOT_NOTIFIED|COMPLETED — kept as a string (tolerant).
+    state: z.string(),
+    failureReason: z.string().nullable().optional(),
+    startedAt: z.string().nullable().optional(),
+    lastTransitionAt: z.string().nullable().optional(),
+    version: z.number().optional(),
+  })
+  .passthrough();
+export type OutboundSaga = z.infer<typeof OutboundSagaSchema>;
+
+// --- 2.4 picking-requests for order (TASK-BE-343) ------------------------
+// Planned lines: locationId + qtyToPick feed the §2.3 confirm body
+// (actualLocationId = locationId, qtyConfirmed = qtyToPick).
+
+export const PickingRequestLineSchema = z
+  .object({
+    pickingRequestLineId: z.string().optional(),
+    orderLineId: z.string(),
+    skuId: z.string(),
+    lotId: z.string().nullable().optional(),
+    locationId: z.string(),
+    qtyToPick: z.number(),
+  })
+  .passthrough();
+export type PickingRequestLine = z.infer<typeof PickingRequestLineSchema>;
+
+export const PickingRequestSchema = z
+  .object({
+    pickingRequestId: z.string(),
+    orderId: z.string().optional(),
+    sagaId: z.string().optional(),
+    warehouseId: z.string().nullable().optional(),
+    status: z.string().optional(),
+    lines: z.array(PickingRequestLineSchema),
+    version: z.number().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough();
+export type PickingRequest = z.infer<typeof PickingRequestSchema>;
+
+/** §2.4 is NOT paginated — `{ content: [...] }` only (may be `[]`). */
+export const PickingRequestListSchema = z.object({
+  content: z.array(PickingRequestSchema),
+});
+export type PickingRequestList = z.infer<typeof PickingRequestListSchema>;
+
+// --- 2.3 pick confirmation response --------------------------------------
+
+export const PickConfirmationSchema = z
+  .object({
+    pickingConfirmationId: z.string().optional(),
+    pickingRequestId: z.string().optional(),
+    orderId: z.string().optional(),
+    orderStatus: z.string().optional(),
+    sagaState: z.string().optional(),
+  })
+  .passthrough();
+export type PickConfirmation = z.infer<typeof PickConfirmationSchema>;
+
+// --- 3.1 create packing-unit response (carries packingUnitId + version) --
+
+export const PackingUnitSchema = z
+  .object({
+    packingUnitId: z.string(),
+    orderId: z.string().optional(),
+    cartonNo: z.string().optional(),
+    packingType: z.string().optional(),
+    status: z.string().optional(),
+    orderStatus: z.string().optional(),
+    // Optimistic-lock version — feeds the §3.2 seal body verbatim.
+    version: z.number(),
+  })
+  .passthrough();
+export type PackingUnit = z.infer<typeof PackingUnitSchema>;
+
+// --- 4.1 ship confirmation response --------------------------------------
+
+export const ShipmentSchema = z
+  .object({
+    shipmentId: z.string().optional(),
+    shipmentNo: z.string().optional(),
+    orderId: z.string().optional(),
+    orderStatus: z.string().optional(),
+    sagaState: z.string().optional(),
+    tmsStatus: z.string().optional(),
+  })
+  .passthrough();
+export type Shipment = z.infer<typeof ShipmentSchema>;
+
+// --- query params + pagination defaults ----------------------------------
+
+export const OUTBOUND_DEFAULT_PAGE_SIZE = 20;
+export const OUTBOUND_MAX_PAGE_SIZE = 100;
+
+export interface OutboundListParams {
+  status?: string;
+  warehouseId?: string;
+  orderNo?: string;
+  page?: number;
+  size?: number;
+}
+
+// --- action gating helpers (UI mirror of the producer state machine) -----
+// The console mirrors the producer state machine for UX only — the producer
+// is the final authority (a server 422 STATE_TRANSITION_INVALID is still
+// handled inline). Tolerant: unknown enums simply gate the action off.
+
+/** Pick is reachable only when order `PICKING` AND saga `RESERVED`. */
+export function canPick(status: string | undefined, saga: string | null | undefined): boolean {
+  return status === 'PICKING' && saga === 'RESERVED';
+}
+
+/** Pack is reachable only when order `PICKED` or `PACKING`. */
+export function canPack(status: string | undefined): boolean {
+  return status === 'PICKED' || status === 'PACKING';
+}
+
+/** Ship is reachable only when order `PACKED`. */
+export function canShip(status: string | undefined): boolean {
+  return status === 'PACKED';
+}

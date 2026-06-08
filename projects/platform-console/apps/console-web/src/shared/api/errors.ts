@@ -225,6 +225,46 @@ export class WmsUnavailableError extends Error {
 }
 
 /**
+ * wms `outbound-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.5.1 / § 2.5). The SECOND wms surface
+ * (after § 2.4.5 admin/dashboard) — the outbound pick → pack → ship operator
+ * leg (ADR-MONO-022 § D7). Identical resilience posture + nested wms error
+ * envelope `{ error: { code … } }` to {@link WmsUnavailableError}: a
+ * `503 SERVICE_UNAVAILABLE` / timeout / network failure on a wms outbound call
+ * degrades ONLY the wms outbound section (the console shell + every other
+ * section stay intact). Auth failures (`401` — the IAM OIDC session expired)
+ * are raised as {@link ApiError} so the caller forces a clean WHOLE-SESSION
+ * re-login (no partial authed state — NOT a per-section degrade).
+ * Inline-recoverable producer errors (`403 FORBIDDEN` role-insufficient —
+ * e.g. lacking `OUTBOUND_WRITE`, `404` not-found, `400 VALIDATION_ERROR`,
+ * `422 STATE_TRANSITION_INVALID` / `PICKING_INCOMPLETE` / `PACKING_INCOMPLETE`,
+ * `409 CONFLICT` optimistic-lock stale version, `409 DUPLICATE_REQUEST`) are
+ * raised as {@link ApiError} so the UI renders an inline actionable message
+ * (and the `409 CONFLICT` path drives a refetch + retry-prompt, never a silent
+ * auto-retry).
+ *
+ * NOTE the credential reuse: like {@link WmsUnavailableError} (the § 2.4.5
+ * admin surface), the credential is the domain-facing IAM OIDC access token
+ * (`getDomainFacingToken()`) — NEVER the IAM operator token (the wms gateway
+ * requires the IAM OIDC token; the #569 invariant is GAP-domain-scoped —
+ * § 2.4.5.1). No token / PII is ever placed in this error.
+ */
+export class WmsOutboundUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: WmsOutboundUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'WmsOutboundUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * scm gateway operations surface degrade signal
  * (console-integration-contract § 2.4.6 / § 2.5). Sibling of
  * {@link WmsUnavailableError} — the SECOND **non-GAP** federated domain
@@ -434,6 +474,21 @@ const MESSAGES: Record<string, string> = {
     'wms 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   ALERT_ALREADY_ACKNOWLEDGED:
     '이미 확인 처리된 알림입니다. 목록을 새로고침하세요.',
+  // --- wms outbound operations (TASK-PC-FE-057 / §2.4.5.1) ----------------
+  ORDER_NOT_FOUND: '대상 출고 주문을 찾을 수 없습니다.',
+  PICKING_REQUEST_NOT_FOUND: '대상 피킹 요청을 찾을 수 없습니다.',
+  PACKING_UNIT_NOT_FOUND: '대상 패킹 단위를 찾을 수 없습니다.',
+  CONFLICT:
+    '주문 상태가 다른 작업으로 변경되었습니다. 최신 상태를 확인한 뒤 다시 시도하세요.',
+  PICKING_INCOMPLETE:
+    '아직 피킹 확정이 완료되지 않아 패킹을 진행할 수 없습니다.',
+  PACKING_INCOMPLETE:
+    '아직 패킹이 완료되지 않아 출고를 진행할 수 없습니다.',
+  ORDER_ALREADY_SHIPPED: '이미 출고 완료된 주문입니다.',
+  OUTBOUND_NO_PICKING_REQUEST:
+    '아직 재고 예약(피킹 요청)이 생성되지 않았습니다. saga 상태가 RESERVED 가 된 뒤 다시 시도하세요.',
+  WMS_OUTBOUND_NOT_ELIGIBLE:
+    'wms 출고 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- scm operations (TASK-PC-FE-008 / §2.4.6) --------------------------
   PO_NOT_FOUND: '대상 발주(PO)를 찾을 수 없습니다.',
   NODE_NOT_FOUND: '대상 노드를 찾을 수 없습니다.',
