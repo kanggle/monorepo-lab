@@ -1,0 +1,109 @@
+# =============================================================================
+# TASK-MONO-200 — ecommerce↔wms fulfillment FORWARD-LEG demo overlay (ADR-MONO-022)
+# =============================================================================
+# An ADDITIVE overlay on top of the proven ecommerce docker-compose.yml. It adds
+# the ONE missing cross-project piece — wms `outbound-service` — onto the SAME
+# broker (`kafka`) + redis the ecommerce stack already runs, so a storefront/REST
+# purchase auto-creates a wms outbound order. The ecommerce compose is byte-
+# unchanged.
+#
+# What this overlay adds (the rest of the stack = the ecommerce compose):
+#   - fulfillment-demo-outbound-postgres : outbound_db for outbound-service
+#   - outbound-service                   : consumes ecommerce.fulfillment.requested.v1
+#                                          -> creates outbound order -> emits
+#                                          outbound.order.received / picking.requested
+#
+# Usage (from repo root) — see tests/fulfillment-demo/README.md for the full runbook:
+#   ./gradlew :projects:wms-platform:apps:outbound-service:bootJar
+#   docker compose \
+#     -f projects/ecommerce-microservices-platform/docker-compose.yml \
+#     -f tests/fulfillment-demo/docker-compose.fulfillment-demo.yml \
+#     up -d --build order-service payment-service shipping-service admin-dashboard \
+#                   outbound-service
+#   # then apply the read-model seed (see README) and place an order.
+#
+# Scope = Option C (forward leg). Reaching SHIPPED needs the manual wms
+# pick/pack/ship operator steps (an OUTBOUND_WRITE IAM token) — documented in the
+# README as the A/B extension, not wired here. No IAM required for C.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Publish the two ecommerce services the demo drives/observes to the host
+  # (the ecommerce compose leaves backends `expose`-only behind traefik). These
+  # blocks MERGE into the ecommerce compose's services — ports only, nothing else.
+  # ---------------------------------------------------------------------------
+  order-service:
+    ports:
+      - "8086:8086"
+  shipping-service:
+    ports:
+      - "8090:8090"
+
+  # ---------------------------------------------------------------------------
+  # outbound_db — dedicated Postgres for outbound-service (Flyway creates the
+  # schema incl. the read-model snapshot tables the seed targets).
+  # ---------------------------------------------------------------------------
+  fulfillment-demo-outbound-postgres:
+    image: postgres:16-alpine
+    container_name: fulfillment-demo-outbound-postgres
+    environment:
+      POSTGRES_USER: outbound
+      POSTGRES_PASSWORD: outbound
+      POSTGRES_DB: outbound_db
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outbound -d outbound_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # outbound-service — the wms cross-project consumer (the demo's added piece).
+  # Joins the ecommerce broker (`kafka`) + redis. OIDC is a lazy jwk-set-uri
+  # Resource Server, so it starts without IAM (the consume path carries no JWT;
+  # we never call its REST in Option C). OTel export disabled (no jaeger dep).
+  # ---------------------------------------------------------------------------
+  outbound-service:
+    build:
+      context: ../../projects/wms-platform/apps/outbound-service
+      dockerfile: Dockerfile
+    container_name: fulfillment-demo-outbound-service
+    init: true
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://fulfillment-demo-outbound-postgres:5432/outbound_db
+      DB_USERNAME: outbound
+      DB_PASSWORD: outbound
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: outbound-service-fulfillment-demo
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SERVER_PORT: "8084"
+      # OIDC is unused in this demo (no REST calls) — point it anywhere; the
+      # jwk-set-uri decoder is lazy so startup does not require IAM.
+      OIDC_ISSUER_URL: http://localhost:8081
+      # Keep OTel quiet (the ecommerce jaeger may not be up in a targeted bring-up).
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+    expose:
+      - "8084"
+    ports:
+      - "18084:8084"
+    networks:
+      - ecommerce-net
+    depends_on:
+      fulfillment-demo-outbound-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
