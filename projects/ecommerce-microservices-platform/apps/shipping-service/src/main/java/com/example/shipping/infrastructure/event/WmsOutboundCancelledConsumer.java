@@ -13,8 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
  * Backorder/cancel path of the storefront→warehouse loop (ADR-MONO-022 §D4):
  * consumes the wms {@code outbound.order.cancelled} event and raises an ops alert.
  *
- * <p>v1 intentionally leaves the Shipping in {@code PREPARING} (flagged via the
- * alert log). Auto-refund / cancel saga is v2 — out of scope. Dedupe on the wms
+ * <p>This consumer stays <b>alert-only</b> and intentionally leaves the Shipping in
+ * {@code PREPARING} (flagged via the alert log): at backorder time no Shipping row
+ * typically exists yet, and {@code ShippingStatus} has no terminal CANCELLED state.
+ *
+ * <p>As of ADR-022 §D4 <b>v2(a)</b> (TASK-MONO-197) the order cancel + refund is owned
+ * by <b>order-service</b>'s own consumer of this topic (group {@code order-service-wms}),
+ * which transitions the Order to CANCELLED and triggers the existing refund saga. This
+ * shipping-side handler remains the ops-signal half and is unchanged. Dedupe on the wms
  * camelCase {@code eventId}.
  */
 @Slf4j
