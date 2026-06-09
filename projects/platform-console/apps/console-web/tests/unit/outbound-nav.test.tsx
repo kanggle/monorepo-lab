@@ -8,8 +8,13 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
  * Regression (TASK-PC-FE-057 AC): the `/wms/outbound` surface is an additive
  * in-console NAV destination — the SECOND wms surface. It must NOT disturb the
  * data-driven catalog routing: `iam.baseRoute` still resolves to `/accounts`,
- * and a non-IAM product (incl. `wms`) keeps its registry `baseRoute`. The new
- * nav item resolves; the existing `/wms` nav is unchanged.
+ * and a non-IAM product (incl. `wms`) keeps its registry `baseRoute`.
+ *
+ * TASK-PC-FE-059: WMS is now a Vercel-style drill-in PARENT of 운영(/wms) +
+ * 출고(/wms/outbound). On the mocked `/wms/outbound` route the WMS group is
+ * auto-drilled — `nav-wms` is the pinned parent back-toggle (a button),
+ * `nav-wms-ops` is the 운영 child (→ `/wms`, the destination formerly reached
+ * via `nav-wms`), and `nav-wms-outbound` is the active 출고 child.
  */
 
 const gap: RegistryProduct = {
@@ -40,20 +45,27 @@ describe('wms outbound nav — additive, does not disturb the catalog routing', 
     expect(resolveConsoleRoute(wms)).toBe('/wms');
   });
 
-  it('the new /wms/outbound nav item renders and resolves', () => {
+  it('the new /wms/outbound nav item renders and resolves (출고 child)', () => {
     render(<ConsoleSidebarNav />);
     const link = screen.getByTestId('nav-wms-outbound');
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/wms/outbound');
-    // The existing /wms nav is unchanged (both present).
-    expect(screen.getByTestId('nav-wms')).toHaveAttribute('href', '/wms');
+    // WMS is now a drill-in parent: the /wms destination lives on the 운영
+    // child (nav-wms-ops); nav-wms is the pinned parent back-toggle (a button,
+    // not a link → no href).
+    expect(screen.getByTestId('nav-wms-ops')).toHaveAttribute('href', '/wms');
+    expect(screen.getByTestId('nav-wms')).not.toHaveAttribute('href');
   });
 
-  it('the /wms/outbound nav item is marked active on the outbound route', () => {
+  it('the /wms/outbound nav item is marked active on the outbound route (운영 is not)', () => {
     render(<ConsoleSidebarNav />);
+    // Longest-prefix active: 출고(/wms/outbound) lights up, 운영(/wms) does not.
     expect(screen.getByTestId('nav-wms-outbound')).toHaveAttribute(
       'aria-current',
       'page',
+    );
+    expect(screen.getByTestId('nav-wms-ops')).not.toHaveAttribute(
+      'aria-current',
     );
   });
 });
