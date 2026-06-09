@@ -3,8 +3,6 @@ package com.example.fanplatform.community.integration;
 import com.example.fanplatform.community.testsupport.JwksMockServer;
 import com.example.fanplatform.community.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -48,24 +46,29 @@ public abstract class CommunityServiceIntegrationBase {
     protected static final RedisContainer REDIS = new RedisContainer(
             DockerImageName.parse("redis:7-alpine"));
 
-    protected static JwtTestHelper jwt;
-    protected static JwksMockServer jwks;
+    protected static final JwtTestHelper jwt;
+    protected static final JwksMockServer jwks;
 
-    @BeforeAll
-    static void startSharedInfra() throws IOException {
+    // Containers + JWKS are started in a static initializer (NOT @BeforeAll) so
+    // they are running BEFORE the Spring context loads — @DynamicPropertySource
+    // is evaluated during context refresh, which happens before @BeforeAll, so a
+    // @BeforeAll start is too late ("Mapped port can only be obtained after the
+    // container is started"). Mirrors the proven CI-green membership-service /
+    // erp read-model bases (memory §19). @Testcontainers(disabledWithoutDocker =
+    // true) still skips cleanly on a Docker-less host: that ExecutionCondition is
+    // evaluated before JUnit uses the class, so this static block never runs when
+    // skipped. Singleton containers stop at JVM shutdown (Testcontainers Ryuk) —
+    // no @AfterAll teardown needed (and none that could race the next class).
+    static {
         POSTGRES.start();
         KAFKA.start();
         REDIS.start();
-        jwt = new JwtTestHelper();
-        jwks = new JwksMockServer(jwt);
-    }
-
-    @AfterAll
-    static void stopSharedInfra() throws IOException {
-        if (jwks != null) jwks.close();
-        if (REDIS != null) REDIS.stop();
-        if (KAFKA != null) KAFKA.stop();
-        if (POSTGRES != null) POSTGRES.stop();
+        try {
+            jwt = new JwtTestHelper();
+            jwks = new JwksMockServer(jwt);
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
     @DynamicPropertySource

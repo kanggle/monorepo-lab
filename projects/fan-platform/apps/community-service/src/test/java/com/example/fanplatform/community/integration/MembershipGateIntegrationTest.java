@@ -35,11 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Membership-gate integration test (TASK-FAN-BE-002 § Tests § Integration —
  * {@code MembershipGateIntegrationTest}).
  *
- * <p>Replaces the default {@code AlwaysAllowMembershipChecker} with a
- * {@link DenyAllMembershipChecker} via {@link TestConfiguration} so that
- * MEMBERS_ONLY visibility actually denies access. PREMIUM v1 always passes
- * (per {@code PostAccessGuard} — TODO until v2), so we assert PREMIUM access
- * without involving the membership checker.
+ * <p>Replaces the production {@code HttpMembershipChecker} with a
+ * {@link DenyAllMembershipChecker} via {@link TestConfiguration} so that both
+ * MEMBERS_ONLY and PREMIUM visibility actually deny access (FAN-BE-010 hard
+ * fail-close — PREMIUM no longer bypasses).
  */
 @ContextConfiguration(classes = MembershipGateIntegrationTest.DenyMembershipConfig.class)
 class MembershipGateIntegrationTest extends CommunityServiceIntegrationBase {
@@ -131,8 +130,8 @@ class MembershipGateIntegrationTest extends CommunityServiceIntegrationBase {
     }
 
     @Test
-    @DisplayName("PREMIUM post + non-member fan → 200 (v1 always-pass + WARN log; TODO v2)")
-    void premium_v1AlwaysPasses() throws Exception {
+    @DisplayName("PREMIUM post + non-member fan → 403 MEMBERSHIP_REQUIRED (FAN-BE-010 hard fail-close)")
+    void premium_denyForNonMember() throws Exception {
         Post post = seedPublishedPost("artist-y", PostVisibility.PREMIUM);
 
         String fanToken = jwt.signFanToken("fan-no-premium");
@@ -142,9 +141,12 @@ class MembershipGateIntegrationTest extends CommunityServiceIntegrationBase {
                 new HttpEntity<>(authHeaders(fanToken)),
                 String.class);
 
-        // v1: PostAccessGuard logs a WARN and passes through. v2 will hard
-        // fail-close via membership-service. Here we only assert the status.
-        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // FAN-BE-010: PREMIUM now routes through the (deny-all) MembershipChecker
+        // and hard fail-closes — no more v1 always-pass bypass.
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        JsonNode body = objectMapper.readTree(res.getBody());
+        assertThat(body.path("code").asText()).isEqualTo("MEMBERSHIP_REQUIRED");
+        assertThat(body.path("details").path("requiredTier").asText()).isEqualTo("PREMIUM");
     }
 
     /**
