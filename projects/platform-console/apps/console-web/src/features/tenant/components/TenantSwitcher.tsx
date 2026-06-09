@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTenantSwitch } from '../hooks/use-tenant-switch';
 
 interface Props {
@@ -26,6 +26,19 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
   // a confusing UI/server mismatch. The placeholder keeps the switcher honest;
   // the operator picks a customer, which sets the cookie via /api/tenant.
   const [selected, setSelected] = useState(activeTenant ?? '');
+
+  // TASK-PC-FE-066 — the switcher lives in the persistent `(console)` layout, so
+  // it stays MOUNTED across navigations and `router.refresh()`. When the active
+  // tenant is changed from ELSEWHERE (e.g. clicking a tenant inside the catalog
+  // grid → `/api/tenant` + `router.push` to that product's ops), the server
+  // layout re-renders with a new `activeTenant` prop, but the local `selected`
+  // state — seeded once at mount — would stay stale, leaving the top switcher on
+  // the previous tenant. Sync it to the prop so an external switch reflects here.
+  // The direct `onChange` path is unaffected (it setSelected()s immediately; the
+  // post-switch refresh re-feeds the same value → idempotent).
+  useEffect(() => {
+    setSelected(activeTenant ?? '');
+  }, [activeTenant]);
 
   if (tenants.length === 0) return null;
 
