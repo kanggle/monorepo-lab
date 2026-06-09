@@ -1,48 +1,46 @@
-/** Static membership info page — v2 will wire payments via membership-service. */
-export default function MembershipPage() {
-  const tiers = [
-    {
-      name: 'PUBLIC',
-      price: '무료',
-      perks: ['아티스트 디렉토리 열람', '공개 포스트 조회', '댓글 / 반응 작성'],
-    },
-    {
-      name: 'MEMBERS_ONLY',
-      price: '월 7,900원 (가상)',
-      perks: ['멤버 전용 포스트 열람', '아티스트 라이브 알림', '디지털 기념품'],
-    },
-    {
-      name: 'PREMIUM',
-      price: '월 17,900원 (가상)',
-      perks: ['프리미엄 포스트 / 라이브', 'V-card 디지털 굿즈', '오프라인 이벤트 우선 신청'],
-    },
-  ];
+import { getFanSession } from '@/shared/auth/session';
+import {
+  getMemberships,
+  currentActive,
+  SubscribePanel,
+  MembershipStatusCard,
+} from '@/features/membership';
+import type { MembershipTier } from '@/entities/membership';
+
+function parseTier(raw: string | undefined): MembershipTier | undefined {
+  return raw === 'MEMBERS_ONLY' || raw === 'PREMIUM' ? raw : undefined;
+}
+
+/**
+ * Membership page — current status + tier subscribe (membership-service via the
+ * gateway). Server Component: the access token stays on the server; the
+ * subscribe/cancel writes go through `'use server'` actions.
+ */
+export default async function MembershipPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tier?: string }>;
+}) {
+  const { tier } = await searchParams;
+  const highlightTier = parseTier(tier);
+
+  const session = await getFanSession();
+  const memberships = await getMemberships(session.accessToken);
+  const active = currentActive(memberships);
+  const heldActiveTiers = memberships.filter((m) => m.active).map((m) => m.tier);
+
   return (
-    <section>
-      <header className="mb-8">
+    <section className="flex flex-col gap-8">
+      <header>
         <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
         <p className="text-sm text-ink-600">
-          v1 은 안내 페이지입니다. 결제 흐름은 v2의 membership-service 도입과 함께 활성화됩니다.
+          멤버 전용·프리미엄 콘텐츠를 위한 구독입니다. 결제는 데모용 모의 PG로 처리됩니다.
         </p>
       </header>
-      <ul className="grid gap-4 md:grid-cols-3">
-        {tiers.map((tier) => (
-          <li
-            key={tier.name}
-            className="rounded-xl border border-ink-200 bg-white p-6 shadow-sm"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-              {tier.name}
-            </p>
-            <p className="mt-2 text-2xl font-bold text-ink-900">{tier.price}</p>
-            <ul className="mt-4 flex flex-col gap-2 text-sm text-ink-700">
-              {tier.perks.map((p) => (
-                <li key={p}>· {p}</li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
+
+      {active ? <MembershipStatusCard membership={active} /> : null}
+
+      <SubscribePanel heldActiveTiers={heldActiveTiers} highlightTier={highlightTier} />
     </section>
   );
 }
