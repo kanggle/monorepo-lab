@@ -24,6 +24,8 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** Optional JSON body (auto-serialized). */
   body?: unknown;
+  /** Optional extra request headers (e.g. `Idempotency-Key`). */
+  headers?: Record<string, string>;
   /** Optional query string params. */
   query?: Record<string, string | number | undefined>;
   /** Pass to RSC fetch for incremental cache (default 'no-store'). */
@@ -63,6 +65,7 @@ export async function gatewayFetch<TBody = unknown>(
   };
   if (opts.accessToken) headers.Authorization = `Bearer ${opts.accessToken}`;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (opts.headers) Object.assign(headers, opts.headers);
 
   const init: RequestInit & { next?: { revalidate?: number; tags?: string[] } } = {
     method: opts.method ?? 'GET',

@@ -45,16 +45,25 @@ async function PostDetail({ id }: { id: string }) {
     if (err instanceof ApiError) {
       if (err.status === 404) notFound();
       if (err.code === 'MEMBERSHIP_REQUIRED') {
+        const requiredTier = err.details?.requiredTier;
+        const href =
+          requiredTier === 'PREMIUM' || requiredTier === 'MEMBERS_ONLY'
+            ? `/membership?tier=${requiredTier}`
+            : '/membership';
         return (
           <ErrorState
             title="멤버십이 필요합니다"
-            description="이 포스트는 멤버십 전용입니다."
+            description={
+              requiredTier === 'PREMIUM'
+                ? '이 포스트는 프리미엄 멤버십 전용입니다.'
+                : '이 포스트는 멤버십 전용입니다.'
+            }
             action={
               <Link
-                href="/membership"
+                href={href}
                 className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
               >
-                멤버십 알아보기
+                멤버십 구독하기
               </Link>
             }
           />
