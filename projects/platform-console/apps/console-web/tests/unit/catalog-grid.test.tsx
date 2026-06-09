@@ -1,27 +1,40 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { CatalogGrid } from '@/features/catalog';
 import type { RegistryProduct } from '@/shared/api/registry-types';
 
 /**
- * TASK-PC-FE-064 — the catalog tenant filter + active-tenant select. The
- * active-tenant switch hook is mocked (the switch flow is covered elsewhere);
- * this asserts the filter behaviour + the header status dot.
+ * TASK-PC-FE-065 — the catalog ALWAYS shows the full product list (no tenant
+ * filter); clicking a tenant sets it active (mutate) and, on success, navigates
+ * to that product's domain ops (router.push to resolveConsoleRoute). The switch
+ * hook + router are mocked; mutate invokes its onSuccess so we can assert the
+ * navigation ordering.
  */
-const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
+const { mutateMock, pushMock } = vi.hoisted(() => ({
+  mutateMock: vi.fn(),
+  pushMock: vi.fn(),
+}));
 vi.mock('@/features/tenant', () => ({
   useTenantSwitch: () => ({ mutate: mutateMock, isPending: false, isError: false }),
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
 
+beforeEach(() => {
+  // mutate(tenant, { onSuccess }) → run onSuccess (the switch "lands").
+  mutateMock.mockImplementation((_tenant: string, opts?: { onSuccess?: () => void }) =>
+    opts?.onSuccess?.(),
+  );
+});
 afterEach(() => {
   cleanup();
   mutateMock.mockReset();
+  pushMock.mockReset();
 });
 
 const p = (productKey: RegistryProduct['productKey'], tenants: string[]): RegistryProduct => ({
@@ -32,55 +45,35 @@ const p = (productKey: RegistryProduct['productKey'], tenants: string[]): Regist
   baseRoute: `/${productKey}`,
 });
 
-// wms↔acme,globex / scm↔globex / finance↔acme
 const PRODUCTS = [p('wms', ['acme', 'globex']), p('scm', ['globex']), p('finance', ['acme'])];
 
-describe('CatalogGrid tenant filter + header dot (TASK-PC-FE-064)', () => {
-  it('unfiltered (no active tenant) shows all products; header dot from healthByDomain', () => {
+describe('CatalogGrid — always full list + tenant navigates to domain ops (TASK-PC-FE-065)', () => {
+  it('renders ALL products (no filter banner / no clear)', () => {
+    render(<CatalogGrid products={PRODUCTS} />);
+    expect(screen.getByTestId('tile-wms')).toBeInTheDocument();
+    expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
+    expect(screen.getByTestId('tile-finance')).toBeInTheDocument();
+    expect(screen.queryByTestId('catalog-tenant-filter')).toBeNull();
+    expect(screen.queryByTestId('catalog-filter-clear')).toBeNull();
+  });
+
+  it('clicking a tenant sets it active and navigates to that product\'s route; the list does NOT shrink', () => {
+    render(<CatalogGrid products={PRODUCTS} />);
+    fireEvent.click(screen.getByTestId('tile-wms-tenant-acme'));
+
+    expect(mutateMock).toHaveBeenCalledWith('acme', expect.objectContaining({ onSuccess: expect.any(Function) }));
+    expect(pushMock).toHaveBeenCalledWith('/wms'); // resolveConsoleRoute(wms baseRoute)
+    // No filtering — every product still shown.
+    expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
+    expect(screen.getByTestId('tile-finance')).toBeInTheDocument();
+  });
+
+  it('header dot + per-tenant dot come from healthByDomain (same product tone)', () => {
     render(<CatalogGrid products={PRODUCTS} healthByDomain={{ wms: 'healthy' }} />);
-    expect(screen.getByTestId('tile-wms')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-finance')).toBeInTheDocument();
-    expect(screen.queryByTestId('catalog-tenant-filter')).toBeNull();
-    // dot only where health is present
     expect(screen.getByTestId('tile-wms-status')).toHaveAttribute('data-tone', 'healthy');
+    expect(screen.getByTestId('tile-wms-tenant-acme-status')).toHaveAttribute('data-tone', 'healthy');
+    // no health for scm → no dots
     expect(screen.queryByTestId('tile-scm-status')).toBeNull();
-  });
-
-  it('clicking a tenant sets active (mutate) and filters to products including it', () => {
-    render(<CatalogGrid products={PRODUCTS} />);
-    fireEvent.click(screen.getByTestId('tile-wms-tenant-acme'));
-
-    expect(mutateMock).toHaveBeenCalledWith('acme');
-    // acme ∈ wms, finance — NOT scm(globex)
-    expect(screen.getByTestId('tile-wms')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-finance')).toBeInTheDocument();
-    expect(screen.queryByTestId('tile-scm')).toBeNull();
-    expect(screen.getByTestId('catalog-tenant-filter')).toHaveTextContent('acme');
-  });
-
-  it('"전체 보기" clears the filter and shows all products again', () => {
-    render(<CatalogGrid products={PRODUCTS} />);
-    fireEvent.click(screen.getByTestId('tile-wms-tenant-acme'));
-    expect(screen.queryByTestId('tile-scm')).toBeNull();
-
-    fireEvent.click(screen.getByTestId('catalog-filter-clear'));
-    expect(screen.queryByTestId('catalog-tenant-filter')).toBeNull();
-    expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
-  });
-
-  it('initialises the filter from the active tenant', () => {
-    render(<CatalogGrid products={PRODUCTS} activeTenant="globex" />);
-    // globex ∈ wms, scm — NOT finance(acme)
-    expect(screen.getByTestId('tile-wms')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
-    expect(screen.queryByTestId('tile-finance')).toBeNull();
-    expect(screen.getByTestId('catalog-tenant-filter')).toHaveTextContent('globex');
-  });
-
-  it('a filter matching no product shows the empty-filter note', () => {
-    render(<CatalogGrid products={PRODUCTS} activeTenant="nobody" />);
-    expect(screen.getByTestId('catalog-filter-empty')).toBeInTheDocument();
-    expect(screen.queryByTestId('catalog-grid')).toBeNull();
+    expect(screen.queryByTestId('tile-scm-tenant-globex-status')).toBeNull();
   });
 });

@@ -15,13 +15,11 @@ import type { CatalogState, ProductKey } from '@/shared/api/registry-types';
 export interface ServiceCatalogProps {
   catalog: CatalogState;
   healthByDomain?: Partial<Record<ProductKey, TileTone>>;
-  activeTenant?: string | null;
 }
 
 export function ServiceCatalog({
   catalog,
   healthByDomain,
-  activeTenant,
 }: ServiceCatalogProps) {
   return (
     <section aria-labelledby="catalog-heading">
@@ -48,7 +46,6 @@ export function ServiceCatalog({
         <CatalogGrid
           products={catalog.products}
           healthByDomain={healthByDomain}
-          activeTenant={activeTenant}
         />
       )}
     </section>

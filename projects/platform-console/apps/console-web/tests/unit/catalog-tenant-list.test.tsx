@@ -28,7 +28,7 @@ const product = (tenants: string[]): RegistryProduct => ({
 });
 
 describe('ServiceTile tenant buttons + header status dot', () => {
-  it('lists each tenant as a button; clicking calls onSelectTenant', () => {
+  it('lists each tenant as a button; clicking calls onSelectTenant with (tenant, productRoute)', () => {
     const onSelect = vi.fn();
     render(
       <ServiceTile product={product(['acme', 'globex'])} onSelectTenant={onSelect} />,
@@ -37,18 +37,23 @@ describe('ServiceTile tenant buttons + header status dot', () => {
     const acme = screen.getByTestId('tile-wms-tenant-acme');
     expect(acme.tagName).toBe('BUTTON');
     fireEvent.click(acme);
-    expect(onSelect).toHaveBeenCalledWith('acme');
+    // TASK-PC-FE-065: passes the product route so the grid navigates to its ops.
+    expect(onSelect).toHaveBeenCalledWith('acme', '/wms');
   });
 
-  it('renders the product header status dot from `tone`', () => {
+  it('renders the product header dot AND a per-tenant dot from `tone` (same tone)', () => {
     render(<ServiceTile product={product(['acme'])} tone="attention" />);
-    const dot = screen.getByTestId('tile-wms-status');
-    expect(dot).toHaveAttribute('data-tone', 'attention');
+    expect(screen.getByTestId('tile-wms-status')).toHaveAttribute('data-tone', 'attention');
+    expect(screen.getByTestId('tile-wms-tenant-acme-status')).toHaveAttribute(
+      'data-tone',
+      'attention',
+    );
   });
 
-  it('no tone → no status dot (health degrades gracefully)', () => {
+  it('no tone → no header dot and no per-tenant dot (health degrades gracefully)', () => {
     render(<ServiceTile product={product(['acme'])} />);
     expect(screen.queryByTestId('tile-wms-status')).toBeNull();
+    expect(screen.queryByTestId('tile-wms-tenant-acme-status')).toBeNull();
   });
 
   it('no tenants → "이용 가능", no tenant list', () => {
