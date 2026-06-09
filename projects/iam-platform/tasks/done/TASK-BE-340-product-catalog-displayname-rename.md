@@ -8,7 +8,7 @@ iam admin-service: rename 3 console product catalog displayNames — wms "Platfo
 
 # Status
 
-ready
+done
 
 # Owner
 
