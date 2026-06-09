@@ -1,14 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServiceCatalog, resolveConsoleRoute } from '@/features/catalog';
-import type { RegistryProduct } from '@/shared/api/registry-types';
+import type { CatalogState, RegistryProduct } from '@/shared/api/registry-types';
 
 /**
  * Regression (TASK-PC-FE-002 AC): the catalog `gap` tile must route to the
  * accounts operator surface — `iam.baseRoute` resolves to `/accounts`.
  * Other products keep their registry `baseRoute` unchanged (data-driven,
  * additive — no FE-001/FE-002a regression).
+ *
+ * The grid is interactive (TASK-PC-FE-064 — `CatalogGrid` → `useTenantSwitch`),
+ * so tile renders are wrapped with a QueryClientProvider + mocked router/link.
  */
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+}));
+vi.mock('next/link', () => ({
+  default: ({ children, href }: { children: ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
+
+function renderCatalog(catalog: CatalogState) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <ServiceCatalog catalog={catalog} />
+    </QueryClientProvider>,
+  );
+}
 const gap: RegistryProduct = {
   productKey: 'iam',
   displayName: 'Global Account Platform',
@@ -34,7 +56,7 @@ describe('catalog → accounts route resolution', () => {
   });
 
   it('the IAM catalog tile links to /accounts (not /iam)', () => {
-    render(<ServiceCatalog catalog={{ products: [gap], degraded: false }} />);
+    renderCatalog({ products: [gap], degraded: false });
     const link = screen.getByRole('link', {
       name: /Global Account Platform/,
     });
@@ -42,7 +64,7 @@ describe('catalog → accounts route resolution', () => {
   });
 
   it('a non-IAM tile is unaffected (FE-001 behaviour preserved)', () => {
-    render(<ServiceCatalog catalog={{ products: [wms], degraded: false }} />);
+    renderCatalog({ products: [wms], degraded: false });
     expect(screen.getByRole('link', { name: /WMS/ })).toHaveAttribute(
       'href',
       '/wms',

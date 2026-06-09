@@ -1,13 +1,28 @@
-import { ServiceTile } from './ServiceTile';
-import type { CatalogState } from '@/shared/api/registry-types';
+import { CatalogGrid } from './CatalogGrid';
+import type { TileTone } from './ServiceTile';
+import type { CatalogState, ProductKey } from '@/shared/api/registry-types';
 
 /**
  * Data-driven service catalog. Renders exactly the registry's products in
  * order. No hardcoded fallback list — `degraded` shows a non-blocking notice
  * while keeping the shell usable (integration-heavy resilience; task
  * Acceptance "app does not crash").
+ *
+ * The interactive grid (per-product health dot + tenant-filter / active-tenant
+ * select — TASK-PC-FE-064) lives in the client {@link CatalogGrid}; this server
+ * shell keeps the heading + degraded/empty notices.
  */
-export function ServiceCatalog({ catalog }: { catalog: CatalogState }) {
+export interface ServiceCatalogProps {
+  catalog: CatalogState;
+  healthByDomain?: Partial<Record<ProductKey, TileTone>>;
+  activeTenant?: string | null;
+}
+
+export function ServiceCatalog({
+  catalog,
+  healthByDomain,
+  activeTenant,
+}: ServiceCatalogProps) {
   return (
     <section aria-labelledby="catalog-heading">
       <h1 id="catalog-heading" className="mb-6 text-2xl font-semibold">
@@ -30,14 +45,11 @@ export function ServiceCatalog({ catalog }: { catalog: CatalogState }) {
           이용 가능한 서비스가 없습니다.
         </p>
       ) : (
-        <ul
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          data-testid="catalog-grid"
-        >
-          {catalog.products.map((product) => (
-            <ServiceTile key={product.productKey} product={product} />
-          ))}
-        </ul>
+        <CatalogGrid
+          products={catalog.products}
+          healthByDomain={healthByDomain}
+          activeTenant={activeTenant}
+        />
       )}
     </section>
   );
