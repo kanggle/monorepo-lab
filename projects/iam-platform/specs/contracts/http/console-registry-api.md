@@ -135,14 +135,14 @@ Returns the data-driven product/tenant catalog the console renders.
     },
     {
       "productKey": "wms",
-      "displayName": "Warehouse Management Platform",
+      "displayName": "Warehouse Management System",
       "available": true,
       "tenants": ["wms"],
       "baseRoute": "/wms"
     },
     {
       "productKey": "scm",
-      "displayName": "Supply Chain Management Platform",
+      "displayName": "Supply Chain Management",
       "available": true,
       "tenants": ["scm"],
       "baseRoute": "/scm"
@@ -156,7 +156,7 @@ Returns the data-driven product/tenant catalog the console renders.
     },
     {
       "productKey": "finance",
-      "displayName": "Finance Platform",
+      "displayName": "Finance",
       "available": true,
       "tenants": ["finance"],
       "baseRoute": "/finance",
@@ -244,10 +244,10 @@ The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
 | productKey | displayName | available rule |
 |---|---|---|
 | `iam` | Identity & Access Management | always `true` (this platform is live) |
-| `wms` | Warehouse Management Platform | `true` (bootstrapped — V0010/V0016 seeds) |
-| `scm` | Supply Chain Management Platform | `true` (bootstrapped — V0013/V0015 seeds) |
+| `wms` | Warehouse Management System | `true` (bootstrapped — V0010/V0016 seeds) |
+| `scm` | Supply Chain Management | `true` (bootstrapped — V0013/V0015 seeds) |
 | `erp` | Enterprise Resource Planning | `true` (V1 live per ADR-MONO-013 § D6 Phase 6 COMPLETE 2026-05-20 — ADR-MONO-016 ACCEPTED + ERP-BE-001 masterdata-service + ERP-BE-002 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
-| `finance` | Finance Platform | `true` (V1 live per ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 — ADR-MONO-008 ACCEPTED + FIN-BE-001 account-service + FIN-BE-005 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
+| `finance` | Finance | `true` (V1 live per ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 — ADR-MONO-008 ACCEPTED + FIN-BE-001 account-service + FIN-BE-005 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
 
 Adding a product or flipping `available` is a **registry change only** — zero
 `console-web` code change (console-integration-contract § 2.2 / ADR-MONO-013

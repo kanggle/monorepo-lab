@@ -45,10 +45,10 @@ public final class ProductCatalog {
 
     private static final List<Entry> ENTRIES = List.of(
             new Entry("iam", "Identity & Access Management", true, true, null, "/iam"),
-            new Entry("wms", "Warehouse Management Platform", true, false, "wms", "/wms"),
-            new Entry("scm", "Supply Chain Management Platform", true, false, "scm", "/scm"),
+            new Entry("wms", "Warehouse Management System", true, false, "wms", "/wms"),
+            new Entry("scm", "Supply Chain Management", true, false, "scm", "/scm"),
             new Entry("erp", "Enterprise Resource Planning", true, false, "erp", "/erp"),
-            new Entry("finance", "Finance Platform", true, false, "finance", "/finance")
+            new Entry("finance", "Finance", true, false, "finance", "/finance")
     );
 
     public static List<Entry> entries() {
