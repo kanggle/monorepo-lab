@@ -177,15 +177,17 @@ class AccountAdminControllerTest {
     }
 
     @Test
-    void search_noEmail_noAccountReadPermission_returns_empty() throws Exception {
+    void search_noEmail_noAccountReadPermission_returns_403() throws Exception {
+        // TASK-MONO-202 — the unfiltered list now requires account.read; absent
+        // ⇒ 403 PERMISSION_DENIED (was an empty-200 list). The console relies on
+        // this 403 to distinguish "no permission" from "zero accounts".
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
 
         mockMvc.perform(get("/api/admin/accounts")
                         .header("Authorization", bearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test

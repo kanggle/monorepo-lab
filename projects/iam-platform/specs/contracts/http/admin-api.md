@@ -94,7 +94,7 @@ base path: `/api/admin`
 **동작 규칙**:
 - `email` 파라미터 있음 → 이메일로 단건 검색. `account.read` 권한 불필요 (기존 동작 유지).
 - `email` 파라미터 없음 + `account.read` 권한 보유 → 전체 계정 목록 페이지네이션 반환.
-- `email` 파라미터 없음 + `account.read` 권한 미보유 → 빈 목록 반환 (403 아님).
+- `email` 파라미터 없음 + `account.read` 권한 미보유 → **403 `PERMISSION_DENIED`** (DENIED `admin_actions` 1행 기록). TASK-MONO-202 — 이전엔 빈 목록 200을 반환했으나, 이는 "권한 없음"과 "계정 0건"을 같은 응답으로 합쳐 소비자(콘솔)가 둘을 구분할 수 없게 만들었다. 이제 무권한은 403, 빈 목록 200은 **권한 보유 + 계정 0건**만 의미한다.
 - `size` > 100 → 400 `VALIDATION_ERROR`.
 
 **Response 200** (email 없음, account.read 보유):
@@ -115,7 +115,7 @@ base path: `/api/admin`
 }
 ```
 
-**Response 200** (email 있음 또는 account.read 미보유):
+**Response 200** (email 있음 → 단건 검색 결과, 또는 email 없음 + account.read 보유 + 계정 0건):
 ```json
 {
   "content": [],
@@ -131,6 +131,7 @@ base path: `/api/admin`
 | Status | Code | 조건 |
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | email 없음 + `account.read` 권한 미보유 (전체 목록 조회). email 단건 검색은 무권한 허용 |
 | 400 | `VALIDATION_ERROR` | size > 100 |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 |
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN |
