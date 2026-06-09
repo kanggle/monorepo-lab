@@ -74,6 +74,40 @@ describe('TenantSwitcher (multi-tenant)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('syncs the selection when the active tenant is changed externally (rerender new prop) — TASK-PC-FE-066', () => {
+    // The switcher lives in the persistent (console) layout, so it stays mounted
+    // when the active tenant is changed from elsewhere (e.g. clicking a tenant in
+    // the catalog grid → /api/tenant + navigate). The server layout re-renders
+    // with a new `activeTenant` prop; the local `selected` state must follow it,
+    // otherwise the top switcher shows the previous tenant (the reported bug).
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const switcher = (active: string | null) => (
+      <QueryClientProvider client={qc}>
+        <TenantSwitcher
+          tenants={['acme-corp', 'globex-corp']}
+          activeTenant={active}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(switcher('acme-corp'));
+    expect(
+      (screen.getByTestId('tenant-select') as HTMLSelectElement).value,
+    ).toBe('acme-corp');
+
+    rerender(switcher('globex-corp'));
+    expect(
+      (screen.getByTestId('tenant-select') as HTMLSelectElement).value,
+    ).toBe('globex-corp');
+
+    // …and back to an unset active tenant returns to the placeholder.
+    rerender(switcher(null));
+    expect(
+      (screen.getByTestId('tenant-select') as HTMLSelectElement).value,
+    ).toBe('');
+  });
+
   it('switches the active tenant via the /api/tenant route on change', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, activeTenant: 'scm' }), {
