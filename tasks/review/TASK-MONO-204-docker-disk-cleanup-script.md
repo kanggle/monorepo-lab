@@ -8,7 +8,7 @@ scripts/docker-cleanup.sh 추가 — 안 쓰는 컨테이너/dangling 이미지/
 
 # Status
 
-ready
+review
 
 # Owner
 
