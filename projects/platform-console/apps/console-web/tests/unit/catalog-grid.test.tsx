@@ -5,36 +5,51 @@ import { CatalogGrid } from '@/features/catalog';
 import type { RegistryProduct } from '@/shared/api/registry-types';
 
 /**
- * TASK-PC-FE-065 — the catalog ALWAYS shows the full product list (no tenant
- * filter); clicking a tenant sets it active (mutate) and, on success, navigates
- * to that product's domain ops (router.push to resolveConsoleRoute). The switch
- * hook + router are mocked; mutate invokes its onSuccess so we can assert the
- * navigation ordering.
+ * TASK-PC-FE-065/067 — the catalog ALWAYS shows the full product list (no tenant
+ * filter); clicking a tenant sets it active (mutate) and, on success, performs a
+ * HARD navigation to that product's domain ops (window.location.assign to
+ * resolveConsoleRoute, NOT router.push — see CatalogGrid for why: the active
+ * tenant is an httpOnly cookie only the server layout reads, and Next.js does
+ * not re-render a shared layout on SPA navigation, so a full load is required to
+ * refresh the top switcher). The switch hook is mocked; mutate invokes its
+ * onSuccess so we can assert the navigation; window.location is stubbed.
  */
-const { mutateMock, pushMock } = vi.hoisted(() => ({
-  mutateMock: vi.fn(),
-  pushMock: vi.fn(),
-}));
+const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
 vi.mock('@/features/tenant', () => ({
   useTenantSwitch: () => ({ mutate: mutateMock, isPending: false, isError: false }),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
 
+const assignMock = vi.fn();
+let originalLocation: Location;
+
 beforeEach(() => {
   // mutate(tenant, { onSuccess }) → run onSuccess (the switch "lands").
   mutateMock.mockImplementation((_tenant: string, opts?: { onSuccess?: () => void }) =>
     opts?.onSuccess?.(),
   );
+  // jsdom's window.location is read-only and assign() is a no-op; replace it
+  // with a stub so the hard navigation is observable.
+  originalLocation = window.location;
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    writable: true,
+    value: { assign: assignMock },
+  });
 });
 afterEach(() => {
   cleanup();
   mutateMock.mockReset();
-  pushMock.mockReset();
+  assignMock.mockReset();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    writable: true,
+    value: originalLocation,
+  });
 });
 
 const p = (productKey: RegistryProduct['productKey'], tenants: string[]): RegistryProduct => ({
@@ -57,12 +72,14 @@ describe('CatalogGrid — always full list + tenant navigates to domain ops (TAS
     expect(screen.queryByTestId('catalog-filter-clear')).toBeNull();
   });
 
-  it('clicking a tenant sets it active and navigates to that product\'s route; the list does NOT shrink', () => {
+  it('clicking a tenant sets it active and HARD-navigates to that product\'s route; the list does NOT shrink', () => {
     render(<CatalogGrid products={PRODUCTS} />);
     fireEvent.click(screen.getByTestId('tile-wms-tenant-acme'));
 
     expect(mutateMock).toHaveBeenCalledWith('acme', expect.objectContaining({ onSuccess: expect.any(Function) }));
-    expect(pushMock).toHaveBeenCalledWith('/wms'); // resolveConsoleRoute(wms baseRoute)
+    // Hard navigation (full load) — NOT SPA router.push — so the server layout
+    // re-renders the top switcher against the new httpOnly active-tenant cookie.
+    expect(assignMock).toHaveBeenCalledWith('/wms'); // resolveConsoleRoute(wms baseRoute)
     // No filtering — every product still shown.
     expect(screen.getByTestId('tile-scm')).toBeInTheDocument();
     expect(screen.getByTestId('tile-finance')).toBeInTheDocument();
