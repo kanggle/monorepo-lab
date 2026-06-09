@@ -8,7 +8,7 @@ console-web 상단 TenantSwitcher: 외부에서 바뀐 활성 테넌트(prop)를
 
 # Status
 
-review
+done
 
 # Owner
 
