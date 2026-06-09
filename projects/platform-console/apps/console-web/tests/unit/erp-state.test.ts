@@ -217,6 +217,38 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     expect(state.notEligible).toBe(false);
   });
 
+  it('read-model org-view leg fails alone → section NOT degraded, only org-view card empty (TASK-PC-FE-069 best-effort isolation)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    // Only the read-model employee org-view leg fails (503); every
+    // masterdata + approval + delegation leg succeeds. The org-view is a
+    // best-effort SECONDARY projection — its failure MUST NOT degrade the
+    // authoritative masterdata section.
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/api/erp/read-model/employees')) {
+        return Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503));
+      }
+      return Promise.resolve(jsonResponse(listEnv()));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getErpSectionState(true);
+    // Section stays up — the masterdata legs are the sole degrade authority.
+    expect(state.degraded).toBe(false);
+    expect(state.forbidden).toBe(false);
+    expect(state.notEligible).toBe(false);
+    // Authoritative masters render.
+    expect(state.departments).not.toBeNull();
+    expect(state.employees).not.toBeNull();
+    expect(state.jobGrades).not.toBeNull();
+    expect(state.costCenters).not.toBeNull();
+    expect(state.businessPartners).not.toBeNull();
+    // Only the org-view card is empty (best-effort caught to null).
+    expect(state.employeeOrgViews).toBeNull();
+    // The other best-effort legs (unaffected) still seed.
+    expect(state.approvalRequests).not.toBeNull();
+    expect(state.delegationFacts).not.toBeNull();
+  });
+
   it('a stray 429 (no documented erp 429) → degraded (NOT a fabricated backoff)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(

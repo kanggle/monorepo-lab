@@ -917,6 +917,22 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
   routes `/api/erp/read-model/**` to read-model-service via a path-prefix
   Traefik router (priority over the masterdata catch-all); the single-base
   `ERP_BASE_URL` console model is unchanged.
+  - **Resilience (§ 2.5 — best-effort leg, parity with the notification
+    bell; TASK-PC-FE-069)**: the org-view leg is **independent and
+    best-effort**. A `503` / timeout / network failure
+    (`ErpUnavailableError`), or any other non-auth error, on the read-model
+    leg degrades **only the org-view card** (rendered empty with a "동기화
+    중 / 일시적으로 불러올 수 없음" affordance) and **MUST NOT** degrade the
+    authoritative `masterdata-service` master reads (the read-model is an
+    eventually-consistent *secondary projection* of those authoritative
+    masters — its availability MUST NOT gate the authoritative data) or any
+    other section. This mirrors the *notification inbox binding*'s
+    shell-level best-effort degrade and the `approval` / delegation-fact
+    legs' `catch → null` isolation; **only a `masterdata` read failure
+    degrades the erp section as a whole**. A `401` on any leg still forces a
+    whole-session re-login (the IAM token is shared across all legs — auth is
+    never a per-leg degrade; in practice a read-model `401` co-occurs with a
+    masterdata `401`, which raises it).
 
 - **Notification inbox binding (TASK-PC-FE-052 — read + idempotent
   acknowledge; ADR-MONO-016 § D3 notification-service first increment)**:

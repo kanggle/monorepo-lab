@@ -177,6 +177,18 @@ export async function getErpSectionState(
   const delegationFactsP = listDelegationFacts({ page: 0, size: 20 }).catch(
     () => null,
   );
+  // TASK-PC-FE-069 — the read-model org-view leg is ALSO best-effort /
+  // independent (§ 2.4.8 *Integrated read-model binding* resilience). The
+  // read-model is an eventually-consistent SECONDARY projection of the
+  // authoritative masterdata masters — its availability MUST NOT gate the
+  // authoritative reads. A failure here (read-model unavailable / 503 /
+  // timeout) degrades ONLY the org-view card, NOT the whole section; the
+  // masterdata legs below remain the sole section-degrade authority. Caught
+  // to `null` here (parity with the approval + delegation legs); a 401 still
+  // surfaces via the shared-token masterdata legs (whole-session re-login).
+  const employeeOrgViewsP = listEmployeeOrgViews(orgViewParams).catch(
+    () => null,
+  );
 
   try {
     const [
@@ -185,23 +197,20 @@ export async function getErpSectionState(
       jobGrades,
       costCenters,
       businessPartners,
-      employeeOrgViews,
     ] = await Promise.all([
         listDepartments(params),
         listEmployees(params),
         listJobGrades(params),
         listCostCenters(params),
         listBusinessPartners(params),
-        // read-model leg — eventually consistent; a failure on this
-        // leg alone degrades the whole section (same resilience
-        // boundary as the other legs via the shared catch block).
-        listEmployeeOrgViews(orgViewParams),
       ]);
-    const [approvalRequests, approvalInbox, delegationFacts] = await Promise.all([
-      approvalRequestsP,
-      approvalInboxP,
-      delegationFactsP,
-    ]);
+    const [employeeOrgViews, approvalRequests, approvalInbox, delegationFacts] =
+      await Promise.all([
+        employeeOrgViewsP,
+        approvalRequestsP,
+        approvalInboxP,
+        delegationFactsP,
+      ]);
     return {
       departments,
       employees,
