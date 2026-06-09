@@ -25,6 +25,8 @@ export {
   getDomainHealthState,
 } from './api/domain-health-api';
 export type { DomainHealthState } from './api/domain-health-api';
+export { healthTone } from './lib/tone';
+export type { HealthTone } from './lib/tone';
 export {
   DomainHealthSchema,
   CardSchema,

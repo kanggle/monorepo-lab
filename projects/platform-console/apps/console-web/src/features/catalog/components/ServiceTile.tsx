@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import type { RegistryProduct } from '@/shared/api/registry-types';
@@ -6,12 +8,42 @@ import { resolveConsoleRoute } from '../lib/console-route';
 /**
  * One catalog tile. Rendered STRICTLY from the registry item — there is no
  * hardcoded product list (data-driven; flipping `available` in the registry
- * flips this tile with zero code change — task Acceptance).
+ * flips this tile with zero code change).
  *
- * `available:false` (erp/finance pre-bootstrap, present OR absent) →
- * non-interactive "coming soon" tile, identical treatment (task Edge Case).
+ * TASK-PC-FE-064:
+ *  - the product header shows a single domain-health status dot (`tone`),
+ *    resolved by the catalog page from `getDomainHealthState()` (domain health
+ *    is per-domain/global, so it lives on the product header — NOT per tenant);
+ *  - tenants are BUTTONS (`onSelectTenant`) — clicking sets the active tenant +
+ *    filters the catalog (handled by `CatalogGrid`). The tenant buttons live
+ *    OUTSIDE the header `<Link>` (interactive content cannot nest in `<a>`).
+ *
+ * `available:false` → non-interactive "coming soon" tile (no dot / no tenants).
  */
-export function ServiceTile({ product }: { product: RegistryProduct }) {
+export type TileTone = 'healthy' | 'attention' | 'unknown';
+
+const TONE_DOT: Record<TileTone, string> = {
+  healthy: 'bg-green-500',
+  attention: 'bg-red-500',
+  unknown: 'bg-muted-foreground/40',
+};
+const TONE_LABEL: Record<TileTone, string> = {
+  healthy: '정상',
+  attention: '주의',
+  unknown: '점검 불가',
+};
+
+export interface ServiceTileProps {
+  product: RegistryProduct;
+  tone?: TileTone;
+  onSelectTenant?: (tenant: string) => void;
+}
+
+export function ServiceTile({
+  product,
+  tone,
+  onSelectTenant,
+}: ServiceTileProps) {
   const { productKey, displayName, available, tenants } = product;
   const href = resolveConsoleRoute(product);
 
@@ -19,9 +51,7 @@ export function ServiceTile({ product }: { product: RegistryProduct }) {
     return (
       <li>
         {/* aria-disabled lives on the inner group, not the <li>: role
-            listitem does not support aria-disabled (jsx-a11y). The
-            non-interactive "coming soon" state stays programmatically
-            exposed + visible. data-testid co-located with aria-disabled. */}
+            listitem does not support aria-disabled (jsx-a11y). */}
         <div
           role="group"
           aria-disabled="true"
@@ -49,39 +79,52 @@ export function ServiceTile({ product }: { product: RegistryProduct }) {
 
   return (
     <li data-testid={`tile-${productKey}`}>
-      <Link
-        href={href}
-        className={cn(
-          'block rounded-lg border border-border bg-background p-5 transition-colors',
-          'hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-        )}
-      >
-        <h2 className="text-base font-medium text-foreground">{displayName}</h2>
-        {tenants.length > 0 ? (
-          <div className="mt-1">
-            <p className="text-sm text-muted-foreground">
-              {tenants.length}개 테넌트 이용 가능
-            </p>
-            {/* List each available tenant one per line (TASK-PC-FE-063). */}
-            <ul
-              data-testid={`tile-${productKey}-tenants`}
-              className="mt-1 space-y-0.5"
-            >
-              {tenants.map((tenant) => (
-                <li
-                  key={tenant}
+      <div className="rounded-lg border border-border bg-background p-5 transition-colors focus-within:border-primary hover:border-primary">
+        <Link
+          href={href}
+          className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <h2 className="flex items-center gap-2 text-base font-medium text-foreground">
+            {tone && (
+              <span
+                role="img"
+                data-testid={`tile-${productKey}-status`}
+                data-tone={tone}
+                aria-label={`상태: ${TONE_LABEL[tone]}`}
+                className={cn('h-2 w-2 shrink-0 rounded-full', TONE_DOT[tone])}
+              />
+            )}
+            {displayName}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {tenants.length > 0
+              ? `${tenants.length}개 테넌트 이용 가능`
+              : '이용 가능'}
+          </p>
+        </Link>
+        {tenants.length > 0 && (
+          <ul
+            data-testid={`tile-${productKey}-tenants`}
+            className="mt-2 space-y-0.5"
+          >
+            {tenants.map((tenant) => (
+              <li key={tenant}>
+                <button
+                  type="button"
                   data-testid={`tile-${productKey}-tenant-${tenant}`}
-                  className="text-xs text-muted-foreground"
+                  onClick={() => onSelectTenant?.(tenant)}
+                  className={cn(
+                    'w-full rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors',
+                    'hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  )}
                 >
                   {tenant}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="mt-1 text-sm text-muted-foreground">이용 가능</p>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
-      </Link>
+      </div>
     </li>
   );
 }

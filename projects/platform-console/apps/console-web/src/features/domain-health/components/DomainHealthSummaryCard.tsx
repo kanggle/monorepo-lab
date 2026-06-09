@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { CARD_ORDER, type Card, type DomainKey } from '../api/types';
 import type { DomainHealthState } from '../api/domain-health-api';
+import { healthTone, type HealthTone } from '../lib/tone';
 
 /**
  * TASK-PC-FE-061 — compact "도메인 상태 요약" band for the operator overview
@@ -24,24 +25,12 @@ const DOMAIN_LABEL: Record<DomainKey, string> = {
   erp: 'ERP',
 };
 
-type Tone = 'healthy' | 'attention' | 'unknown';
-
-/**
- * 3-tone classification: `ok`+`UP` → 정상(green); `ok`+non-`UP`
- * (DOWN/OUT_OF_SERVICE/UNKNOWN, producer self-reported) → 주의(red);
- * `degraded` (leg unreachable) → 점검 불가(gray).
- */
-function toneOf(card: Card): Tone {
-  if (card.status === 'degraded') return 'unknown';
-  return card.data.status === 'UP' ? 'healthy' : 'attention';
-}
-
-const TONE_DOT: Record<Tone, string> = {
+const TONE_DOT: Record<HealthTone, string> = {
   healthy: 'bg-green-500',
   attention: 'bg-red-500',
   unknown: 'bg-muted-foreground/40',
 };
-const TONE_LABEL: Record<Tone, string> = {
+const TONE_LABEL: Record<HealthTone, string> = {
   healthy: '정상',
   attention: '주의',
   unknown: '점검 불가',
@@ -102,7 +91,7 @@ function SummaryBody({ cards }: { cards: ReadonlyArray<Card> }) {
   let attention = 0;
   let unknown = 0;
   for (const c of cards) {
-    const t = toneOf(c);
+    const t = healthTone(c);
     if (t === 'healthy') healthy += 1;
     else if (t === 'attention') attention += 1;
     else unknown += 1;
@@ -126,7 +115,7 @@ function SummaryBody({ cards }: { cards: ReadonlyArray<Card> }) {
         {CARD_ORDER.map((domain) => {
           const card = byDomain.get(domain);
           if (!card) return null;
-          const tone = toneOf(card);
+          const tone = healthTone(card);
           return (
             <li
               key={domain}
