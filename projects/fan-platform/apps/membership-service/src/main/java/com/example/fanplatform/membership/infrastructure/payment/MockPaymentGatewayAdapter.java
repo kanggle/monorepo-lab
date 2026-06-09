@@ -1,0 +1,40 @@
+package com.example.fanplatform.membership.infrastructure.payment;
+
+import com.example.common.id.UuidV7;
+import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
+import org.springframework.stereotype.Component;
+
+/**
+ * Deterministic PG mock — there is NO real external PG integration in v1
+ * (architecture.md § PG Mock Boundary). No real PG SDK.
+ *
+ * <ul>
+ *   <li>{@code paymentToken == "tok_decline"} → declined.</li>
+ *   <li>any other token (incl. null) → approved with
+ *       {@code paymentRef = "pgmock_<uuid>"}.</li>
+ * </ul>
+ *
+ * <p>Plain {@code @Component} — the mock is the ONLY {@link PaymentGatewayPort}
+ * adapter in v1. ({@code @ConditionalOnMissingBean} is NOT used here: it is only
+ * reliable on auto-configuration {@code @Bean} methods, not on component-scanned
+ * {@code @Component} classes — on a {@code @Component} it evaluates during scan in
+ * non-deterministic order and can leave the port unsatisfied. A future real PG
+ * adapter replaces this via a profile or an auto-config {@code @Bean} that
+ * back-offs on the mock, not via a condition on this class.)
+ */
+@Component
+public class MockPaymentGatewayAdapter implements PaymentGatewayPort {
+
+    /** Reserved sentinel token that forces a decline (documented test boundary). */
+    public static final String DECLINE_TOKEN = "tok_decline";
+
+    private static final String PAYMENT_REF_PREFIX = "pgmock_";
+
+    @Override
+    public PaymentResult authorize(long amountMinor, int planMonths, String paymentToken, String idempotencyKey) {
+        if (DECLINE_TOKEN.equals(paymentToken)) {
+            return PaymentResult.declined();
+        }
+        return PaymentResult.approved(PAYMENT_REF_PREFIX + UuidV7.randomString());
+    }
+}

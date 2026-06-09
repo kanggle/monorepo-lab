@@ -44,6 +44,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       COMMUNITY_SERVICE_URI: http://community-service:8080
       ARTIST_SERVICE_URI: http://artist-service:8080
+      MEMBERSHIP_SERVICE_URI: http://membership-service:8080
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://fan-platform.local,http://localhost:3000}
     depends_on:
       redis:
@@ -156,7 +157,53 @@ services:
       start_period: 45s
 
   # ---------------------------------------------------------------------------
-  # Postgres 16 — backing store for community / artist services.
+  # membership-service — TASK-FAN-BE-009.
+  # Subscription state machine + PG mock + internal access-check + outbox.
+  # The /api/fan/** surface is reachable via the gateway; the /internal/**
+  # access-check surface is reachable only on fan-platform-net by community-service
+  # (workload-identity, ADR-MONO-005) and is NOT gateway-routed. No Traefik label.
+  # ---------------------------------------------------------------------------
+  membership-service:
+    image: fan-platform/membership-service:local
+    container_name: fan-platform-membership
+    build:
+      context: ./apps/membership-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/.well-known/jwks.json}
+      OIDC_REQUIRED_TENANT_ID: fan-platform
+      # Workload-identity (ADR-MONO-005) — /internal/** validates an IAM
+      # client_credentials JWT against this JWKS + issuer.
+      INTERNAL_JWT_JWK_SET_URI: ${INTERNAL_JWT_JWK_SET_URI:-http://iam.local/oauth2/jwks}
+      INTERNAL_JWT_ISSUER: ${INTERNAL_JWT_ISSUER:-http://iam.local}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB_MEMBERSHIP: ${POSTGRES_DB_MEMBERSHIP:-fanplatform_membership}
+      POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fan-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
+  # Postgres 16 — backing store for community / artist / membership services.
   # Multi-database: docker-entrypoint-initdb.d script creates per-service DBs
   # so each service has its own isolated schema namespace.
   # ---------------------------------------------------------------------------
@@ -172,6 +219,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-fanplatform}
       POSTGRES_DB_COMMUNITY: ${POSTGRES_DB_COMMUNITY:-fanplatform_community}
       POSTGRES_DB_ARTIST: ${POSTGRES_DB_ARTIST:-fanplatform_artist}
+      POSTGRES_DB_MEMBERSHIP: ${POSTGRES_DB_MEMBERSHIP:-fanplatform_membership}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
