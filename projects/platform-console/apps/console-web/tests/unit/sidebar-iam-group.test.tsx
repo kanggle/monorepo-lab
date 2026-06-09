@@ -27,10 +27,16 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals 감사·보안 + 운영자 관리 and pins IAM at the top', () => {
+  it('clicking IAM drills in: reveals 계정 운영 + 감사·보안 + 운영자 관리 and pins IAM at the top', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
+    // 계정 운영 (TASK-PC-FE-062) — the catalog IAM tile's target, now also a
+    // sidebar IAM child; first in the drill.
+    expect(screen.getByTestId('nav-accounts')).toHaveAttribute(
+      'href',
+      '/accounts',
+    );
     expect(screen.getByTestId('nav-audit')).toHaveAttribute('href', '/audit');
     expect(screen.getByTestId('nav-operators')).toHaveAttribute(
       'href',
@@ -77,5 +83,30 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       'page',
     );
     expect(screen.getByTestId('nav-audit')).not.toHaveAttribute('aria-current');
+  });
+
+  it('a deep link to /accounts auto-opens the IAM drill with 계정 운영 active (matches the catalog IAM tile target)', () => {
+    mockPath = '/accounts';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-accounts')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-audit')).not.toHaveAttribute('aria-current');
+    expect(screen.getByTestId('nav-operators')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('/account (singular, my settings) does NOT activate 계정 운영 — distinct from /accounts', () => {
+    // `/account` ⊄ `/accounts`; it must not auto-open the IAM drill nor light
+    // up 계정 운영 (the top-bar ⋮ → 계정 설정 path is unrelated to the sidebar).
+    mockPath = '/account';
+    render(<ConsoleSidebarNav />);
+    // Not drilled into IAM → 계정 운영 child not rendered at all.
+    expect(screen.queryByTestId('nav-accounts')).toBeNull();
+    // IAM renders as the collapsed toggle, top-level list intact.
+    expect(screen.getByTestId('nav-iam').tagName).toBe('BUTTON');
+    expect(screen.getByTestId('nav-dashboards')).toBeInTheDocument();
   });
 });

@@ -53,13 +53,16 @@ const GROUPS: NavGroup[] = [
     label: '관리',
     items: [
       {
-        // 감사·보안 + 운영자 관리 are both IAM-platform admin surfaces
-        // (`${IAM_ADMIN_API_BASE}/api/admin/{audit,operators}`), so they nest
-        // under one IAM drill parent (TASK-PC-FE-060) — same model as WMS.
+        // The 3 IAM surfaces nest under one IAM drill parent: 계정 운영
+        // (/accounts — the catalog IAM tile's target via resolveConsoleRoute,
+        // TASK-PC-FE-062) + 감사·보안 + 운영자 관리
+        // (`${IAM_ADMIN_API_BASE}/api/admin/{audit,operators}`). TASK-PC-FE-060
+        // / -062 — same drill model as WMS.
         key: 'iam',
         label: 'IAM',
         testid: 'nav-iam',
         children: [
+          { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
           { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
         ],
