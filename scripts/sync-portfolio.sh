@@ -362,7 +362,14 @@ sync_project() {
     local runner="$workdir/_filter_repo_run.sh"
     {
         printf '#!/bin/sh\n'
-        printf 'apk add --no-cache git >/dev/null 2>&1\n'
+        # Fail LOUDLY: a silent `apk add git` failure used to leave git
+        # uninstalled, so git-filter-repo (a git wrapper) died with an obscure
+        # FileNotFoundError mid-run, leaving the workdir unfiltered and the
+        # outer script aborting before push with no visible cause. `set -e` +
+        # an explicit git presence check surface the real failure point.
+        printf 'set -e\n'
+        printf 'apk add --no-cache git\n'
+        printf 'command -v git >/dev/null 2>&1 || { echo "FATAL: git not installed in container (apk add git failed — check container network/DNS to dl-cdn.alpinelinux.org)"; exit 1; }\n'
         printf 'pip install --quiet git-filter-repo\n'
         printf "git config --global user.email 'sync@portfolio'\n"
         printf "git config --global user.name 'Portfolio Sync'\n"
