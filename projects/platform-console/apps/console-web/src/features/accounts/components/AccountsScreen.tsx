@@ -74,6 +74,20 @@ const ACTION_META: Record<
   },
 };
 
+/**
+ * A 403 PERMISSION_DENIED (account.read absent) is an AUTHORIZATION denial, not
+ * a transient outage — suppress the degraded banner so the empty-state shows the
+ * dedicated 권한 없음 message instead (TASK-MONO-202). Initial-load denials are
+ * caught at the page level; this covers a mid-session permission revocation
+ * surfaced on a client re-query.
+ */
+function isForbidden(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 403 || error.code === 'PERMISSION_DENIED')
+  );
+}
+
 function newIdemKey(): string {
   const g = globalThis as unknown as { crypto?: { randomUUID?: () => string } };
   return (
@@ -261,7 +275,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
         )}
       </form>
 
-      {search.isError && (
+      {search.isError && !isForbidden(search.error) && (
         <div
           role="status"
           data-testid="accounts-degraded"

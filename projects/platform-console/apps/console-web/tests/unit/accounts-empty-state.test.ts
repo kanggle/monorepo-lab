@@ -3,11 +3,12 @@ import { classifyAccountsEmpty } from '@/features/accounts/lib/classify-empty';
 import { ApiError } from '@/shared/api/errors';
 
 /**
- * TASK-PC-FE-063 — distinguish 검색 결과 없음 vs 조회 권한 없음 on the 계정 운영
- * empty state, as far as the backend allows (the producer returns empty-200 for
- * no-permission, so the unfiltered-empty case is the honest union).
+ * TASK-PC-FE-063 → TASK-MONO-202 — distinguish 검색 결과 없음 vs 조회 권한 없음
+ * vs 등록된 계정 없음 on the 계정 운영 empty state. The producer now returns 403
+ * PERMISSION_DENIED when account.read is absent (no longer an empty-200), so the
+ * unfiltered-empty case is unambiguously "0 accounts" (no more honest union).
  */
-describe('classifyAccountsEmpty (TASK-PC-FE-063)', () => {
+describe('classifyAccountsEmpty (TASK-PC-FE-063 / MONO-202)', () => {
   it('client 403 → forbidden ("조회 권한이 없습니다.")', () => {
     const err = new ApiError(403, 'PERMISSION_DENIED', 'not permitted');
     expect(classifyAccountsEmpty(true, err, false)).toEqual({
@@ -42,10 +43,10 @@ describe('classifyAccountsEmpty (TASK-PC-FE-063)', () => {
     });
   });
 
-  it('no error + unfiltered + empty → forbidden-or-empty (honest union)', () => {
+  it('no error + unfiltered + empty → empty ("등록된 계정이 없습니다.") — MONO-202: no-permission would have 403d', () => {
     expect(classifyAccountsEmpty(false, null, false)).toEqual({
-      reason: 'forbidden-or-empty',
-      message: '조회 권한이 없거나 등록된 계정이 없습니다.',
+      reason: 'empty',
+      message: '등록된 계정이 없습니다.',
     });
   });
 });

@@ -1,6 +1,7 @@
 package com.example.admin.presentation;
 
 import com.example.admin.application.AccountAdminUseCase;
+import com.example.admin.application.AdminActionAuditor;
 import com.example.admin.application.BulkLockAccountCommand;
 import com.example.admin.application.BulkLockAccountResult;
 import com.example.admin.application.BulkLockAccountUseCase;
@@ -8,9 +9,11 @@ import com.example.admin.application.LockAccountCommand;
 import com.example.admin.application.LockAccountResult;
 import com.example.admin.application.UnlockAccountCommand;
 import com.example.admin.application.UnlockAccountResult;
+import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
+import jakarta.servlet.http.HttpServletRequest;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
@@ -46,27 +49,40 @@ import java.util.List;
 @Validated
 public class AccountAdminController {
 
-    private static final AccountServiceClient.AccountSearchResponse EMPTY_PAGE =
-            new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 20, 0);
-
     private final AccountAdminUseCase useCase;
     private final BulkLockAccountUseCase bulkLockUseCase;
     private final AccountServiceClient accountServiceClient;
     private final PermissionEvaluator permissionEvaluator;
+    private final AdminActionAuditor auditor;
 
     @GetMapping
     public ResponseEntity<AccountServiceClient.AccountSearchResponse> search(
             @RequestParam(required = false) String email,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            HttpServletRequest request) {
 
+        // Single-account lookup by email needs NO account.read (a SUPPORT_LOCK
+        // operator may look one up to lock it — admin-api.md). Unchanged.
         if (email != null && !email.isBlank()) {
             return ResponseEntity.ok(accountServiceClient.search(email));
         }
 
+        // Unfiltered list REQUIRES account.read. Absent ⇒ 403 PERMISSION_DENIED
+        // (TASK-MONO-202 — was an empty-200 list, which collapsed "no permission"
+        // and "zero accounts" into the same response and forced the console into
+        // an honest-but-vague union message). We mirror AuditController's manual
+        // pattern (the method can't carry a blanket @RequiresPermission because
+        // the email branch above is permission-free): record the DENIED
+        // admin_actions row centrally, then throw → AdminExceptionHandler maps it
+        // to 403 {code:PERMISSION_DENIED}.
         String operatorId = OperatorContextHolder.require().operatorId();
         if (!permissionEvaluator.hasPermission(operatorId, Permission.ACCOUNT_READ)) {
-            return ResponseEntity.ok(EMPTY_PAGE);
+            auditor.recordDenied(
+                    null, Permission.ACCOUNT_READ,
+                    request.getRequestURI(), request.getMethod(), null);
+            throw new PermissionDeniedException(
+                    "Operator lacks required permission: " + Permission.ACCOUNT_READ);
         }
 
         return ResponseEntity.ok(accountServiceClient.listAll(page, size));
