@@ -8,7 +8,7 @@ console-web 개요(operator overview): add a compact "도메인 상태 요약" c
 
 # Status
 
-ready
+done
 
 # Owner
 
