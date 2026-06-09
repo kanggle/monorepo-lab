@@ -8,7 +8,7 @@ console-web sidebar: group 감사·보안 + 운영자 관리 under a drill-in `I
 
 # Status
 
-ready
+done
 
 # Owner
 
