@@ -52,8 +52,18 @@ const GROUPS: NavGroup[] = [
   {
     label: '관리',
     items: [
-      { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
-      { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
+      {
+        // 감사·보안 + 운영자 관리 are both IAM-platform admin surfaces
+        // (`${IAM_ADMIN_API_BASE}/api/admin/{audit,operators}`), so they nest
+        // under one IAM drill parent (TASK-PC-FE-060) — same model as WMS.
+        key: 'iam',
+        label: 'IAM',
+        testid: 'nav-iam',
+        children: [
+          { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
+          { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
+        ],
+      },
     ],
   },
   {
