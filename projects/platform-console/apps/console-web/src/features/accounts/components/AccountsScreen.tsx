@@ -13,6 +13,7 @@ import {
   useBulkLockAccounts,
 } from '../hooks/use-accounts';
 import type { AccountPage, AccountSummary, BulkLockItem } from '../api/types';
+import { classifyAccountsEmpty } from '../lib/classify-empty';
 import { AccountStatusBadge } from './AccountStatusBadge';
 import { ConfirmActionDialog } from './ConfirmActionDialog';
 
@@ -304,14 +305,25 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
       )}
 
       {!page || rows.length === 0 ? (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid="accounts-empty"
-        >
-          {search.isError
-            ? '목록을 불러올 수 없습니다.'
-            : '표시할 계정이 없습니다. (검색 결과 없음 또는 조회 권한 없음)'}
-        </p>
+        (() => {
+          // Distinguish 검색 결과 없음 vs 조회 권한 없음 as far as the backend
+          // allows (the producer returns empty-200 for no-permission, so the
+          // unfiltered-empty case is an honest union). TASK-PC-FE-063.
+          const empty = classifyAccountsEmpty(
+            search.isError,
+            search.error,
+            !!query.email,
+          );
+          return (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="accounts-empty"
+              data-empty-reason={empty.reason}
+            >
+              {empty.message}
+            </p>
+          );
+        })()
       ) : (
         <>
           <table

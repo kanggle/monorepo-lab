@@ -57,11 +57,30 @@ export function ServiceTile({ product }: { product: RegistryProduct }) {
         )}
       >
         <h2 className="text-base font-medium text-foreground">{displayName}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {tenants.length > 0
-            ? `${tenants.length}개 테넌트 이용 가능`
-            : '이용 가능'}
-        </p>
+        {tenants.length > 0 ? (
+          <div className="mt-1">
+            <p className="text-sm text-muted-foreground">
+              {tenants.length}개 테넌트 이용 가능
+            </p>
+            {/* List each available tenant one per line (TASK-PC-FE-063). */}
+            <ul
+              data-testid={`tile-${productKey}-tenants`}
+              className="mt-1 space-y-0.5"
+            >
+              {tenants.map((tenant) => (
+                <li
+                  key={tenant}
+                  data-testid={`tile-${productKey}-tenant-${tenant}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {tenant}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground">이용 가능</p>
+        )}
       </Link>
     </li>
   );
