@@ -8,7 +8,7 @@ console-web UX clarity: (1) 계정 운영 empty state — distinguish 검색 결
 
 # Status
 
-ready
+done
 
 # Owner
 
