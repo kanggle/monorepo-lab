@@ -1,6 +1,6 @@
 # TASK-FAN-BE-011 — wire community + artist integrationTest into the fan CI job
 
-Status: review
+Status: done
 Type: backend (TASK-FAN-BE) — CI / test-infra
 Project: fan-platform
 Apps: community-service, artist-service (test infra) + `.github/workflows/ci.yml`
