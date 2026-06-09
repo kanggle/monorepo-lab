@@ -8,7 +8,7 @@ TASK-FAN-BE-009
 
 # Status
 
-ready
+done
 
 # Owner
 
