@@ -5,7 +5,9 @@ import com.example.fanplatform.community.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInstance;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -48,6 +50,27 @@ public abstract class CommunityServiceIntegrationBase {
 
     protected static final JwtTestHelper jwt;
     protected static final JwksMockServer jwks;
+
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
+
+    /**
+     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). The
+     * {@code outbox} / {@code processed_events} repositories come from
+     * java-messaging {@code OutboxJpaConfig} which declares
+     * {@code @EnableJpaRepositories(enableDefaultTransactions = false)}, so their
+     * {@code deleteAll()} runs without a transaction and fails
+     * ("No EntityManager with actual transaction available ... merge"). A JDBC
+     * TRUNCATE auto-commits on its own connection — no JPA transaction required —
+     * and clears every table so the shared singleton containers do not leak state
+     * across IT classes (memory §19c). Mirrors the CI-green membership-service /
+     * erp masterdata bases.
+     */
+    protected void truncateAll() {
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE posts, post_status_history, comments, reactions, "
+                        + "follows, outbox, processed_events RESTART IDENTITY CASCADE");
+    }
 
     // Containers + JWKS are started in a static initializer (NOT @BeforeAll) so
     // they are running BEFORE the Spring context loads — @DynamicPropertySource

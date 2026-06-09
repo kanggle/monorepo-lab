@@ -76,14 +76,13 @@ class OutboxRelayIntegrationTest extends CommunityServiceIntegrationBase {
 
     @BeforeEach
     void clean() {
-        outboxJpaRepository.deleteAll();
-        postJpaRepository.deleteAll();
+        // JDBC TRUNCATE — the outbox repo has no default tx (memory §19c).
+        truncateAll();
     }
 
     @AfterEach
     void cleanUp() {
-        outboxJpaRepository.deleteAll();
-        postJpaRepository.deleteAll();
+        truncateAll();
     }
 
     private HttpHeaders authHeaders(String bearer) {
