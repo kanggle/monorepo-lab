@@ -1,6 +1,6 @@
 # TASK-FAN-FE-003 — membership subscribe / status UI
 
-Status: review
+Status: done
 Type: frontend (TASK-FAN-FE)
 Project: fan-platform
 App: fan-platform-web (`projects/fan-platform/web/fan-platform-web`)
