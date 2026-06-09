@@ -59,9 +59,9 @@ class CommunityServiceIntegrationTest extends CommunityServiceIntegrationBase {
     @BeforeEach
     void seedFollow() {
         // Each test starts from a clean slate so feed queries are deterministic.
-        outboxJpaRepository.deleteAll();
-        followJpaRepository.deleteAll();
-        postJpaRepository.deleteAll();
+        // JDBC TRUNCATE (not repo deleteAll) — the outbox repo has no default tx
+        // (memory §19c).
+        truncateAll();
 
         artistId = "artist-" + System.nanoTime();
         fanId = "fan-" + System.nanoTime();
@@ -70,9 +70,7 @@ class CommunityServiceIntegrationTest extends CommunityServiceIntegrationBase {
 
     @AfterEach
     void cleanUp() {
-        outboxJpaRepository.deleteAll();
-        followJpaRepository.deleteAll();
-        postJpaRepository.deleteAll();
+        truncateAll();
     }
 
     private HttpHeaders authHeaders(String bearer) {

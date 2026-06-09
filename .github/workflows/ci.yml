@@ -934,11 +934,15 @@ jobs:
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction relies
     # on its own Docker-free `check` signal.
-    # TASK-FAN-BE-009: membership-service is the first fan service with a
-    # dedicated integrationTest CI gate (subscribe state machine + PG mock +
-    # workload-identity internal access-check + outbox relay — the authoritative
-    # Testcontainers gate per AC-7 §14). community/artist ITs continue to run via
-    # the fan-platform-e2e live-trio job.
+    # TASK-FAN-BE-009 introduced this job for membership-service (subscribe state
+    # machine + PG mock + workload-identity internal access-check + outbox relay).
+    # TASK-FAN-BE-011 added community-service + artist-service integrationTest here
+    # — previously their per-service @SpringBootTest ITs ran nowhere on CI (the
+    # fan-platform-e2e live-trio job runs the separate :tests:e2e:e2eSmokeTest
+    # module, NOT these per-service suites), so latent IT-infra bugs were skipped
+    # on Docker-less dev hosts (memory §19/§20). Activating them surfaced + fixed:
+    # §19a (containers @BeforeAll → static block), §19c (outbox repo deleteAll →
+    # JdbcTemplate TRUNCATE), and an artist application-test.yml YAML scalar quote.
     # Activate for fan changes or cross-project (libs/workflows).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
@@ -968,6 +972,8 @@ jobs:
       - name: Run fan-platform integration suites
         run: >-
           ./gradlew
+          :projects:fan-platform:apps:community-service:integrationTest
+          :projects:fan-platform:apps:artist-service:integrationTest
           :projects:fan-platform:apps:membership-service:integrationTest
           --no-daemon --stacktrace
 
