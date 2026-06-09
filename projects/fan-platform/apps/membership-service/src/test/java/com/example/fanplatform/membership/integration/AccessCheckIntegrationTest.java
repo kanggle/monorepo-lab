@@ -46,12 +46,12 @@ class AccessCheckIntegrationTest extends MembershipServiceIntegrationBase {
 
     @BeforeEach
     void clean() {
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @AfterEach
     void cleanUp() {
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     private void seed(String accountId, String tenantId, MembershipTier tier,

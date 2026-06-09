@@ -45,12 +45,12 @@ class MultiTenantIsolationTest extends MembershipServiceIntegrationBase {
 
     @BeforeEach
     void clean() {
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @AfterEach
     void cleanUp() {
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @Test

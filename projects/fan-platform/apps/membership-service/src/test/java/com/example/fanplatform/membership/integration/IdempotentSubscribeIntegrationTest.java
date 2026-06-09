@@ -43,14 +43,12 @@ class IdempotentSubscribeIntegrationTest extends MembershipServiceIntegrationBas
 
     @BeforeEach
     void clean() {
-        outboxJpaRepository.deleteAll();
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @AfterEach
     void cleanUp() {
-        outboxJpaRepository.deleteAll();
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     private HttpHeaders headers(String bearer, String key) {

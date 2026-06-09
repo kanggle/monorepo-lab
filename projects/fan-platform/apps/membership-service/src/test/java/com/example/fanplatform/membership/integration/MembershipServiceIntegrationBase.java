@@ -4,7 +4,9 @@ import com.example.fanplatform.membership.testsupport.JwksMockServer;
 import com.example.fanplatform.membership.testsupport.JwtTestHelper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInstance;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -48,6 +50,25 @@ public abstract class MembershipServiceIntegrationBase {
 
     protected static final JwtTestHelper jwt;
     protected static final JwksMockServer jwks;
+
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
+
+    /**
+     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). The
+     * {@code outbox} / {@code processed_events} repositories are configured with
+     * {@code enableDefaultTransactions = false} (java-messaging
+     * {@code OutboxJpaConfig}), so their {@code deleteAll()} runs without a
+     * transaction and fails ("No EntityManager with actual transaction available
+     * ... merge"). A JDBC TRUNCATE auto-commits on its own connection — no JPA
+     * transaction required — and also clears {@code idempotency_keys} so the
+     * shared singleton containers do not leak state across test classes.
+     */
+    protected void truncateAll() {
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE memberships, idempotency_keys, outbox, processed_events "
+                        + "RESTART IDENTITY CASCADE");
+    }
 
     // Containers + JWKS are started in a static initializer (NOT @BeforeAll) so
     // they are running BEFORE the Spring context loads — @DynamicPropertySource

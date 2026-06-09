@@ -37,14 +37,12 @@ class PaymentDeclineIntegrationTest extends MembershipServiceIntegrationBase {
 
     @BeforeEach
     void clean() {
-        outboxJpaRepository.deleteAll();
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @AfterEach
     void cleanUp() {
-        outboxJpaRepository.deleteAll();
-        membershipJpaRepository.deleteAll();
+        truncateAll();
     }
 
     @Test
