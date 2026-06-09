@@ -36,9 +36,23 @@ export default async function DomainHealthPage() {
     redirect('/login');
   }
 
+  // TASK-PC-FE-068 — 도메인 상태 개요 is reached from the 개요 page's "도메인 상태
+  // 요약" card (PC-FE-061), not a top-level sidebar entry. A back link returns to
+  // the 통합 개요 on every branch (success / no-tenant / bff-unavailable).
+  const backLink = (
+    <Link
+      href="/dashboards/overview"
+      data-testid="domain-health-back"
+      className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      ← 통합 개요로 돌아가기
+    </Link>
+  );
+
   if (state.noTenant) {
     return (
       <section aria-labelledby="domain-health-heading">
+        {backLink}
         <h1 id="domain-health-heading" className="mb-6 text-2xl font-semibold">
           도메인 상태 개요
         </h1>
@@ -69,6 +83,7 @@ export default async function DomainHealthPage() {
   if (state.bffUnavailable || !state.health) {
     return (
       <section aria-labelledby="domain-health-heading">
+        {backLink}
         <h1 id="domain-health-heading" className="mb-6 text-2xl font-semibold">
           도메인 상태 개요
         </h1>
@@ -89,5 +104,10 @@ export default async function DomainHealthPage() {
     );
   }
 
-  return <DomainHealthScreen health={state.health} />;
+  return (
+    <>
+      {backLink}
+      <DomainHealthScreen health={state.health} />
+    </>
+  );
 }
