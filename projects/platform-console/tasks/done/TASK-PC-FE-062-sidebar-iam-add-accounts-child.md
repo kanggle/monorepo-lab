@@ -8,7 +8,7 @@ console-web sidebar: add 계정 운영(`/accounts`) as a child of the IAM drill 
 
 # Status
 
-ready
+done
 
 # Owner
 
