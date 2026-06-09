@@ -1,6 +1,6 @@
 # TASK-FAN-BE-010 — community-service `HttpMembershipChecker` adapter swap
 
-Status: review
+Status: done
 Type: backend (TASK-FAN-BE)
 Project: fan-platform
 Service: community-service (caller) → membership-service (callee, FAN-BE-009)
