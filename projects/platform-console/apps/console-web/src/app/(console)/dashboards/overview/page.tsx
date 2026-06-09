@@ -4,6 +4,10 @@ import {
   OperatorOverviewScreen,
   getOperatorOverviewState,
 } from '@/features/operator-overview';
+import {
+  DomainHealthSummaryCard,
+  getDomainHealthState,
+} from '@/features/domain-health';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,5 +103,16 @@ export default async function OperatorOverviewPage() {
     );
   }
 
-  return <OperatorOverviewScreen overview={state.overview} />;
+  // Active tenant is guaranteed past the gates above, so the domain-health
+  // fan-out won't NO_ACTIVE_TENANT here. The summary card degrades on its own
+  // (null health → compact note) so it never blanks the overview. Fetched only
+  // in the success branch — no wasted call on a gated render. (TASK-PC-FE-061)
+  const healthState = await getDomainHealthState();
+
+  return (
+    <>
+      <OperatorOverviewScreen overview={state.overview} />
+      <DomainHealthSummaryCard state={healthState} />
+    </>
+  );
 }
