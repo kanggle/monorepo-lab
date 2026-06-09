@@ -15,6 +15,8 @@ export { DomainHealthScreen } from './components/DomainHealthScreen';
 export type { DomainHealthScreenProps } from './components/DomainHealthScreen';
 export { DomainHealthCard } from './components/DomainHealthCard';
 export type { DomainHealthCardProps } from './components/DomainHealthCard';
+export { DomainHealthSummaryCard } from './components/DomainHealthSummaryCard';
+export type { DomainHealthSummaryCardProps } from './components/DomainHealthSummaryCard';
 export { DegradeBanner, isAllDegraded } from './components/DegradeBanner';
 export { RetryButton } from './components/RetryButton';
 export { useDomainHealth } from './hooks/use-domain-health';
