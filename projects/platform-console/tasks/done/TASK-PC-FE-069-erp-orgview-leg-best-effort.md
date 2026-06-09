@@ -8,7 +8,7 @@ console-web `/erp` 운영 페이지의 read-model 조직뷰(org-view) leg를 bes
 
 # Status
 
-review
+done
 
 # Owner
 
