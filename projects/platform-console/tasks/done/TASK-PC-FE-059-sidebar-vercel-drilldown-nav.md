@@ -8,7 +8,7 @@ console-web sidebar: Vercel-style drill-in navigation — clicking a parent with
 
 # Status
 
-ready
+done
 
 # Owner
 
