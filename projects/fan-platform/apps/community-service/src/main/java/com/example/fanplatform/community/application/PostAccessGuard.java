@@ -8,7 +8,6 @@ import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.PostStatus;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,11 +18,11 @@ import org.springframework.stereotype.Component;
  *   <li>{@code PUBLIC} — any authenticated caller within the tenant.</li>
  *   <li>{@code MEMBERS_ONLY} — author + members verified by
  *       {@link MembershipChecker}.</li>
- *   <li>{@code PREMIUM} — v1 = always pass + WARN log + TODO. v2 will hard
- *       fail-close once membership-service exists.</li>
+ *   <li>{@code PREMIUM} — author + premium members verified by
+ *       {@link MembershipChecker} (TASK-FAN-BE-010 hard fail-close; required tier
+ *       {@code PREMIUM}). Tier hierarchy is resolved in membership-service.</li>
  * </ul>
  */
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class PostAccessGuard {
@@ -67,12 +66,14 @@ public class PostAccessGuard {
                 }
             }
             case PREMIUM -> {
-                // v1: membership-service does not exist yet (TASK-FAN-BE-002 §
-                // Out of Scope). Always pass + WARN log + TODO. v2 will hard
-                // fail-close once a real check exists.
-                // TODO(TASK-FAN-BE-MEMBERSHIP): replace with real PREMIUM gate.
-                log.warn("PREMIUM gate bypassed for post {} actor {} tenant {} (membership-service not yet integrated)",
-                        post.getId(), actor.accountId(), actor.tenantId());
+                // membership-service now enforces the gate (TASK-FAN-BE-010). The
+                // checker is fail-closed: any downstream/auth error denies. The
+                // required tier passed is PREMIUM; tier hierarchy (PREMIUM ⊇
+                // MEMBERS_ONLY) is resolved server-side in membership-service.
+                if (!membershipChecker.hasAccess(actor.accountId(),
+                        PostVisibility.PREMIUM.name(), actor.tenantId())) {
+                    throw new MembershipRequiredException(PostVisibility.PREMIUM);
+                }
             }
         }
     }

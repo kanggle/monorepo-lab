@@ -93,6 +93,21 @@ outbox:
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
     enabled: true
 
+# TASK-FAN-BE-010: outbound workload-identity call to membership-service.
+community:
+  membership-service:
+    base-url: ${MEMBERSHIP_SERVICE_BASE_URL:http://membership-service:8080}
+    connect-timeout-ms: ${MEMBERSHIP_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${MEMBERSHIP_SERVICE_READ_TIMEOUT_MS:3000}
+
+# IAM client_credentials token for the /internal/** call above (ADR-MONO-005).
+# Uses the pre-seeded community-service-client (IAM V0009, scope membership.read).
+iam:
+  internal-client:
+    token-uri: ${IAM_TOKEN_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/token}
+    client-id: ${COMMUNITY_SERVICE_CLIENT_ID:community-service-client}
+    client-secret: ${COMMUNITY_SERVICE_CLIENT_SECRET:secret}
+
 fanplatform:
   oauth2:
     # D2-b deprecation window: SAS issuer + legacy "iam" string.

@@ -79,12 +79,35 @@ class PostAccessGuardTest {
     }
 
     @Test
-    @DisplayName("PREMIUM v1 → 항상 통과 (membership-service 미존재, WARN log)")
-    void premiumAlwaysPassesV1() {
+    @DisplayName("PREMIUM + 비-멤버 → MembershipRequiredException (FAN-BE-010 hard fail-close)")
+    void premiumNonMemberRejected() {
+        Post post = publishedPost(PostVisibility.PREMIUM);
+        when(postRepository.findById("p1", TENANT)).thenReturn(Optional.of(post));
+        when(membershipChecker.hasAccess(OTHER, PostVisibility.PREMIUM.name(), TENANT))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> guard.requirePublishedAccess("p1", actor(OTHER)))
+                .isInstanceOf(MembershipRequiredException.class);
+    }
+
+    @Test
+    @DisplayName("PREMIUM + 프리미엄 멤버십 보유 → 통과")
+    void premiumWithMembershipPasses() {
+        Post post = publishedPost(PostVisibility.PREMIUM);
+        when(postRepository.findById("p1", TENANT)).thenReturn(Optional.of(post));
+        when(membershipChecker.hasAccess(OTHER, PostVisibility.PREMIUM.name(), TENANT))
+                .thenReturn(true);
+
+        assertThat(guard.requirePublishedAccess("p1", actor(OTHER))).isSameAs(post);
+    }
+
+    @Test
+    @DisplayName("PREMIUM + 작성자 본인 → 멤버십 검사 없이 통과 (HTTP 호출 없음)")
+    void premiumAuthorBypassesCheck() {
         Post post = publishedPost(PostVisibility.PREMIUM);
         when(postRepository.findById("p1", TENANT)).thenReturn(Optional.of(post));
 
-        assertThat(guard.requirePublishedAccess("p1", actor(OTHER))).isSameAs(post);
+        assertThat(guard.requirePublishedAccess("p1", actor(AUTHOR))).isSameAs(post);
     }
 
     @Test
