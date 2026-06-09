@@ -33,6 +33,15 @@ const LAYOUT_PATH = path.resolve(
   '(console)',
   'layout.tsx',
 );
+const HEALTH_PAGE_PATH = path.resolve(
+  APP_ROOT,
+  'src',
+  'app',
+  '(console)',
+  'dashboards',
+  'health',
+  'page.tsx',
+);
 
 describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-FE-034)', () => {
   it('the layout composes the left sidebar nav', () => {
@@ -58,11 +67,20 @@ describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-
     expect(src).not.toContain("'/dashboards'");
   });
 
-  it('keeps the "도메인 상태" entry pointing at /dashboards/health (unchanged)', () => {
+  it('removes the "도메인 상태" (nav-domain-health) top-level entry — reached from the 개요 "도메인 상태 요약" card only (TASK-PC-FE-068)', () => {
     const src = readFileSync(NAV_PATH, 'utf8');
-    expect(src).toContain("'nav-domain-health'");
-    expect(src).toContain("'/dashboards/health'");
-    expect(src).toContain('도메인 상태');
+    // The quoted testid + href LITERALS are gone (a `/dashboards/health` mention
+    // survives only inside the explanatory comment, unquoted).
+    expect(src).not.toContain("'nav-domain-health'");
+    expect(src).not.toContain("'/dashboards/health'");
+  });
+
+  it('the domain-health page carries a back link to the 통합 개요 (TASK-PC-FE-068)', () => {
+    const src = readFileSync(HEALTH_PAGE_PATH, 'utf8');
+    // The page uses JSX double-quoted attributes, so match bare substrings.
+    expect(src).toContain('domain-health-back');
+    expect(src).toContain('/dashboards/overview');
+    expect(src).toContain('통합 개요로 돌아가기');
   });
 
   it('keeps the "ERP" entry (nav-erp) pointing at /erp, after Finance', () => {
@@ -82,7 +100,6 @@ describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-
   it('does NOT remove any of the other pre-existing nav entries', () => {
     const src = readFileSync(NAV_PATH, 'utf8');
     expect(src).toContain("'nav-dashboards'");
-    expect(src).toContain("'nav-domain-health'");
     expect(src).toContain("'nav-catalog'");
     expect(src).toContain("'nav-audit'");
     expect(src).toContain("'nav-operators'");

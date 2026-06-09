@@ -12,7 +12,8 @@ import { test, expect } from '@playwright/test';
  *   - the top nav has exactly one "개요" entry (nav-dashboards →
  *     /dashboards/overview); the old "통합 개요" (nav-operator-overview)
  *     entry is gone;
- *   - "도메인 상태" (nav-domain-health) is unchanged + still reachable;
+ *   - "도메인 상태" has NO sidebar entry (TASK-PC-FE-068) — reached from the
+ *     개요 "도메인 상태 요약" card "전체 보기 →"; the page has a back link;
  *   - a new "ERP 운영" (nav-erp → /erp) entry renders the ERP ops screen;
  *   - the home IAM card is an accessible drill-down link to `/dashboards`;
  *     activating it renders the GAP-only composed overview (re-framed as
@@ -49,13 +50,24 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     ).toHaveCount(0);
   });
 
-  test('"도메인 상태" nav entry is unchanged + reachable', async ({ page }) => {
+  test('"도메인 상태" is reached from the 개요 "도메인 상태 요약" card (no sidebar entry) + the page has a back link (TASK-PC-FE-068)', async ({
+    page,
+  }) => {
     await page.goto('/dashboards/overview');
-    const health = page.getByTestId('nav-domain-health');
-    await expect(health).toBeVisible();
-    await expect(health).toHaveAttribute('href', '/dashboards/health');
-    await health.click();
+    // The top-level sidebar "도메인 상태" entry is removed.
+    await expect(page.getByTestId('nav-domain-health')).toHaveCount(0);
+    // It is reached via the 도메인 상태 요약 card's "전체 보기 →" link (PC-FE-061).
+    const viewAll = page.getByTestId('domain-health-summary-viewall');
+    await expect(viewAll).toBeVisible();
+    await expect(viewAll).toHaveAttribute('href', '/dashboards/health');
+    await viewAll.click();
     await page.waitForURL('**/dashboards/health', { timeout: 15_000 });
+    // The page carries a back link to the 통합 개요.
+    const back = page.getByTestId('domain-health-back');
+    await expect(back).toBeVisible();
+    await expect(back).toHaveAttribute('href', '/dashboards/overview');
+    await back.click();
+    await page.waitForURL('**/dashboards/overview', { timeout: 15_000 });
   });
 
   test('new "ERP 운영" nav entry → /erp renders the ERP ops screen', async ({

@@ -45,7 +45,10 @@ const GROUPS: NavGroup[] = [
   {
     items: [
       { href: '/dashboards/overview', label: '개요', testid: 'nav-dashboards' },
-      { href: '/dashboards/health', label: '도메인 상태', testid: 'nav-domain-health' },
+      // 도메인 상태(/dashboards/health) is NOT a top-level entry (TASK-PC-FE-068)
+      // — it is reached only from the 개요 page's "도메인 상태 요약" card
+      // "전체 보기 →" link (PC-FE-061), and that page carries a back link to the
+      // overview. Keeps the top group to the 1-click home + catalog.
       { href: '/console', label: '카탈로그', testid: 'nav-catalog' },
     ],
   },
