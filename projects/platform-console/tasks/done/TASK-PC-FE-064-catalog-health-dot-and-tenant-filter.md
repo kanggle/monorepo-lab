@@ -8,7 +8,7 @@ console-web 카탈로그: (1) 제품 헤더에 도메인 상태 dot 표시; (2) 
 
 # Status
 
-ready
+done
 
 # Owner
 
