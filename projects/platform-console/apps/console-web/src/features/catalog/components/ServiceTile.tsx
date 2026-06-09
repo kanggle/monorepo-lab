@@ -36,7 +36,9 @@ const TONE_LABEL: Record<TileTone, string> = {
 export interface ServiceTileProps {
   product: RegistryProduct;
   tone?: TileTone;
-  onSelectTenant?: (tenant: string) => void;
+  /** Called with the tenant + this product's console route (TASK-PC-FE-065 —
+   *  selecting a tenant activates it and navigates to the product's domain ops). */
+  onSelectTenant?: (tenant: string, productRoute: string) => void;
 }
 
 export function ServiceTile({
@@ -112,12 +114,24 @@ export function ServiceTile({
                 <button
                   type="button"
                   data-testid={`tile-${productKey}-tenant-${tenant}`}
-                  onClick={() => onSelectTenant?.(tenant)}
+                  onClick={() => onSelectTenant?.(tenant, href)}
                   className={cn(
-                    'w-full rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors',
+                    'flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground transition-colors',
                     'hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   )}
                 >
+                  {tone && (
+                    <span
+                      role="img"
+                      data-testid={`tile-${productKey}-tenant-${tenant}-status`}
+                      data-tone={tone}
+                      aria-label={`상태: ${TONE_LABEL[tone]}`}
+                      className={cn(
+                        'h-1.5 w-1.5 shrink-0 rounded-full',
+                        TONE_DOT[tone],
+                      )}
+                    />
+                  )}
                   {tenant}
                 </button>
               </li>

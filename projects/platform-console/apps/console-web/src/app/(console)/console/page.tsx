@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { getCatalog, ServiceCatalog } from '@/features/catalog';
 import type { TileTone } from '@/features/catalog';
 import { getDomainHealthState, healthTone } from '@/features/domain-health';
-import { getActiveTenant } from '@/shared/lib/session';
 import type { ProductKey } from '@/shared/api/registry-types';
 import { ApiError } from '@/shared/api/errors';
 
@@ -17,10 +16,11 @@ export const dynamic = 'force-dynamic';
  * a degraded-but-usable catalog (task Acceptance). An auth failure forces a
  * clean re-login.
  *
- * TASK-PC-FE-064 — also composes the per-domain health (for the product-header
- * status dot) + the active tenant (for the tenant-filter initial scope). Both
- * are best-effort: a null/degraded health simply yields no dots, and no active
- * tenant means the grid starts unfiltered (the catalog never blanks on either).
+ * TASK-PC-FE-064/065 — also composes the per-domain health (for the product
+ * header + per-tenant status dots). Best-effort: a null/degraded health simply
+ * yields no dots (the catalog never blanks). The grid always shows the full
+ * product list (no tenant filter); selecting a tenant navigates to that
+ * product's domain operations (TASK-PC-FE-065).
  */
 export default async function ConsoleHomePage() {
   let catalog;
@@ -31,10 +31,7 @@ export default async function ConsoleHomePage() {
     throw err;
   }
 
-  const [healthState, activeTenant] = await Promise.all([
-    getDomainHealthState(),
-    getActiveTenant(),
-  ]);
+  const healthState = await getDomainHealthState();
 
   // ProductKey ↔ domain-health domain key is 1:1 (iam/wms/scm/finance/erp).
   const healthByDomain: Partial<Record<ProductKey, TileTone>> = {};
@@ -44,11 +41,5 @@ export default async function ConsoleHomePage() {
     }
   }
 
-  return (
-    <ServiceCatalog
-      catalog={catalog}
-      healthByDomain={healthByDomain}
-      activeTenant={activeTenant}
-    />
-  );
+  return <ServiceCatalog catalog={catalog} healthByDomain={healthByDomain} />;
 }
