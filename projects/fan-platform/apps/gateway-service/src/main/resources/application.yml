@@ -123,6 +123,27 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
 
+        # membership-service — external path /api/v1/memberships/** is rewritten
+        # to the downstream service's /api/fan/memberships/** (TASK-FAN-BE-009).
+        # The /internal/membership/access surface is NOT routed here — it is
+        # reachable only on fan-platform-net by community-service using
+        # workload identity (ADR-MONO-005).
+        - id: membership-service
+          uri: ${MEMBERSHIP_SERVICE_URI:http://membership-service:8080}
+          predicates:
+            - Path=/api/v1/memberships/**
+          filters:
+            # See community-service route for the (?:/.*)? rationale.
+            # /api/v1/memberships              → /api/fan/memberships
+            # /api/v1/memberships/{id}/cancel  → /api/fan/memberships/{id}/cancel
+            - RewritePath=/api/v1/memberships(?<segment>(?:/.*)?), /api/fan/memberships${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework

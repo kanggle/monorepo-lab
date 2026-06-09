@@ -64,6 +64,10 @@ include(
     'projects:fan-platform:apps:gateway-service',
     'projects:fan-platform:apps:community-service',
     'projects:fan-platform:apps:artist-service',
+    // TASK-FAN-BE-009: membership-service — subscription state machine + PG mock
+    // + internal access-check (remote counterpart of community MembershipChecker)
+    // + outbox lifecycle events. Layered, Postgres fanplatform_membership.
+    'projects:fan-platform:apps:membership-service',
     'projects:fan-platform:tests:e2e'
 )
 

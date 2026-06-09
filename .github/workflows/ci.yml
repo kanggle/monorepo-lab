@@ -342,6 +342,7 @@ jobs:
           :projects:fan-platform:apps:gateway-service:check
           :projects:fan-platform:apps:community-service:check
           :projects:fan-platform:apps:artist-service:check
+          :projects:fan-platform:apps:membership-service:check
           :projects:fan-platform:tests:e2e:check
           --no-daemon --stacktrace
 
@@ -922,6 +923,62 @@ jobs:
           path: |
             projects/iam-platform/apps/*/build/reports/tests/integrationTest/
             projects/iam-platform/apps/*/build/test-results/integrationTest/
+          retention-days: 7
+
+  fan-integration-tests:
+    name: Integration (fan-platform, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # fan-platform integration suite boots Postgres + Kafka (libs/java-messaging
+    # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
+    # MockWebServer). Scoped to monorepo-lab; standalone repo extraction relies
+    # on its own Docker-free `check` signal.
+    # TASK-FAN-BE-009: membership-service is the first fan service with a
+    # dedicated integrationTest CI gate (subscribe state machine + PG mock +
+    # workload-identity internal access-check + outbox relay — the authoritative
+    # Testcontainers gate per AC-7 §14). community/artist ITs continue to run via
+    # the fan-platform-e2e live-trio job.
+    # Activate for fan changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.fan == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run fan-platform integration suites
+        run: >-
+          ./gradlew
+          :projects:fan-platform:apps:membership-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload fan integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-integration-test-reports
+          path: |
+            projects/fan-platform/apps/*/build/reports/tests/integrationTest/
+            projects/fan-platform/apps/*/build/test-results/integrationTest/
           retention-days: 7
 
   iam-platform-e2e-smoke:
