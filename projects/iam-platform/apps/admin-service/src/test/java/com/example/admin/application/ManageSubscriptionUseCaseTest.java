@@ -1,8 +1,10 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.SubscriptionTransitionInvalidException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.tenant.SubscriptionMutationSummary;
+import com.example.admin.domain.rbac.Permission;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,8 @@ import static com.example.admin.application.OperatorUseCaseTestSupport.actor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,12 +37,13 @@ class ManageSubscriptionUseCaseTest {
 
     @Mock TenantDomainSubscriptionPort port;
     @Mock AdminActionAuditor auditor;
+    @Mock TenantScopeGuard tenantScopeGuard;
 
     ManageSubscriptionUseCase useCase;
 
     @BeforeEach
     void init() {
-        useCase = new ManageSubscriptionUseCase(port, auditor);
+        useCase = new ManageSubscriptionUseCase(port, auditor, tenantScopeGuard);
         when(auditor.newAuditId()).thenReturn("audit-sub");
     }
 
@@ -56,6 +61,10 @@ class ManageSubscriptionUseCaseTest {
         assertThat(result.previousStatus()).isNull();
         verify(port).subscribe("acme", "scm", "new contract", "actor-uuid");
         verify(auditor).record(any(AdminActionAuditor.AuditRecord.class));
+        // ADR-MONO-024 D2 + D5-C (TASK-BE-345): the entitlement admin surface is
+        // gated by the tenant-scope confinement before delegation.
+        verify(tenantScopeGuard).requireTenantInScope(
+                any(), eq(Permission.SUBSCRIPTION_MANAGE), eq("acme"), eq(ActionCode.SUBSCRIPTION_SUBSCRIBE));
     }
 
     @Test
@@ -83,6 +92,22 @@ class ManageSubscriptionUseCaseTest {
         assertThatThrownBy(() -> useCase.changeStatus("acme", "wms", "ACTIVE", actor(), "resume"))
                 .isInstanceOf(SubscriptionTransitionInvalidException.class);
 
+        verify(auditor, never()).record(any(AdminActionAuditor.AuditRecord.class));
+    }
+
+    @Test
+    @DisplayName("ADR-024 D2: an out-of-scope target is denied by the guard BEFORE any delegation")
+    void changeStatus_outOfScope_deniedBeforeDelegation() {
+        doThrow(new TenantScopeDeniedException("out of scope"))
+                .when(tenantScopeGuard).requireTenantInScope(
+                        any(), eq(Permission.SUBSCRIPTION_MANAGE), eq("globex"),
+                        eq(ActionCode.SUBSCRIPTION_CHANGE_STATUS));
+
+        assertThatThrownBy(() -> useCase.changeStatus("globex", "wms", "SUSPENDED", actor(), "past due"))
+                .isInstanceOf(TenantScopeDeniedException.class);
+
+        // No entitlement write and no audit row — denied before the account-service call.
+        verify(port, never()).changeStatus(any(), any(), any(), any(), any());
         verify(auditor, never()).record(any(AdminActionAuditor.AuditRecord.class));
     }
 }

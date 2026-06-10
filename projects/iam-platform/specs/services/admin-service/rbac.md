@@ -168,6 +168,41 @@ function evaluate(request, annotationPermission):
 
 DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A10 fail-closed). 감사 기록 실패 시 응답도 실패(500)하여 로그 누락을 방지한다.
 
+### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
+
+권한 union 통과(step 4) 이후, **administration 표면의 변이**(operator/assignment/subscription 관리)는 추가로 **대상 테넌트 confinement**를 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D2). 한 operator 가 *어떤 테넌트를 관리(administer)* 할 수 있는지는 그 permission 을 부여하는 **role-grant 의 테넌트 스코프**로 결정된다 — assume-tenant 운영 스코프(`TenantScopeResolver` = home ∪ `operator_tenant_assignment`)와는 **별개의 축**이다.
+
+**effective admin-grant scope** 정의:
+
+```
+function effectiveAdminScope(operator, permission):
+    # operator 의 admin_operator_roles row 중 permission 을 부여하는 role 의 row 들의 tenant_id 집합
+    roleRows = admin_operator_roles.findByOperator(operator.id)         # 각 row 는 tenant_id 보유 (V0025/26)
+    grantingRoleIds = admin_role_permissions.roleIdsGranting(permission) ∩ roleRows.roleId
+    return { row.tenant_id for row in roleRows if row.roleId in grantingRoleIds }
+    # '*' 는 그대로 포함 → 플랫폼 전체 스코프
+```
+
+**confinement gate** (단일 결정 지점 — `TenantScopeGuard`):
+
+```
+function requireTenantInScope(actor, permission, targetTenantId, actionCode):
+    scope = effectiveAdminScope(actor, permission)
+    if '*' in scope:                          # 플랫폼 스코프 (SUPER_ADMIN) → 모든 테넌트 통과 (net-zero)
+        return                                # 통과
+    if targetTenantId != null and targetTenantId in scope:
+        return                                # 통과
+    recordCrossTenantDenied(actor, actionCode, permission, targetTenantId)   # best-effort DENIED row
+    respond 403 TENANT_SCOPE_DENIED
+```
+
+- **대상 테넌트 해소**는 엔드포인트별이다(생성/관리 대상 operator 의 home `tenant_id`, assignment 의 `tenant_id`, 또는 요청 path 의 `tenantId`). 각 변이 use-case 는 *대상 테넌트만* 해소하여 gate 를 호출하며, **규칙 자체를 재구현하지 않는다**(D2-A 중앙 규칙; per-endpoint 재구현 D2-B 는 거부됨).
+- `null` 대상 → **거부**(fail-closed). 모든 gated 변이는 구체적 대상 테넌트를 갖는다.
+- **DENIED row 는 best-effort**(architecture.md A10 override, BE-249/262 cross-tenant deny 와 동일): 감사 실패는 `admin.audit.cross_tenant_deny_failure` 카운터만 증가시키고 403 은 항상 성립한다.
+- **NET-ZERO**: 현재 `operator.manage` / `subscription.manage` 보유 role 은 `SUPER_ADMIN`(grant row `tenant_id='*'`) 뿐이라 gate 는 아무도 거부하지 않는다 — confinement 은 ADR-024 step 2 가 비-플랫폼 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`)을 seed 한 이후에만 발효한다.
+
+대상 표면: `POST /api/admin/operators`, `PATCH .../operators/{id}/roles`, `PATCH .../operators/{id}/status`, `PUT .../operators/{id}/assignments/{tenantId}/org-scope`, `POST /api/admin/subscriptions`, `PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status`. (assign/unassign 표면 + grant-menu confinement 은 ADR-024 step 2.)
+
 ### Conditional Cross-Permission: `GET /api/admin/audit`
 
 이 엔드포인트는 `source` query parameter 값에 따라 요구 권한이 달라진다. 컨트롤러 annotation은 최소 공통 권한(`audit.read`)만 선언하고, 내부에서 아래 알고리즘으로 추가 권한을 재검사한다.

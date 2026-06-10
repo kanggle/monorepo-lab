@@ -37,12 +37,14 @@ class PatchOperatorRoleUseCaseTest {
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
+    @Mock TenantScopeGuard tenantScopeGuard;
 
     PatchOperatorRoleUseCase useCase;
 
     @BeforeEach
     void initUseCase() {
-        useCase = new PatchOperatorRoleUseCase(operatorPort, auditor, cachingPermissionEvaluator);
+        useCase = new PatchOperatorRoleUseCase(
+                operatorPort, auditor, cachingPermissionEvaluator, tenantScopeGuard);
     }
 
     @Test

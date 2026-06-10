@@ -5,6 +5,7 @@ import com.example.admin.application.exception.SelfSuspendForbiddenException;
 import com.example.admin.application.exception.StateTransitionInvalidException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.AdminRefreshTokenPort;
+import com.example.admin.domain.rbac.Permission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class PatchOperatorStatusUseCase {
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
     private final AdminRefreshTokenPort refreshTokenPort;
+    private final TenantScopeGuard tenantScopeGuard;
 
     @Transactional
     public PatchStatusResult patchStatus(String operatorUuid,
@@ -43,6 +45,11 @@ public class PatchOperatorStatusUseCase {
         AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorUuid));
+
+        // ADR-MONO-024 D2 (TASK-BE-345): the actor must hold operator.manage scoped
+        // to the managed operator's home tenant. Net-zero for SUPER_ADMIN ('*').
+        tenantScopeGuard.requireTenantInScope(
+                actor, Permission.OPERATOR_MANAGE, operator.tenantId(), ActionCode.OPERATOR_STATUS_CHANGE);
 
         String previousStatus = operator.status();
         if (Objects.equals(previousStatus, newStatus)) {

@@ -2,6 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.tenant.SubscriptionMutationSummary;
+import com.example.admin.domain.rbac.Permission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,9 +33,15 @@ public class ManageSubscriptionUseCase {
 
     private final TenantDomainSubscriptionPort subscriptionPort;
     private final AdminActionAuditor auditor;
+    private final TenantScopeGuard tenantScopeGuard;
 
     public SubscriptionMutationSummary subscribe(String tenantId, String domainKey,
                                                  OperatorContext actor, String reason) {
+        // ADR-MONO-024 D2 + D5-C (TASK-BE-345): the confinement gate covers the
+        // entitlement admin surface too. Net-zero for SUPER_ADMIN ('*'); denies
+        // before the account-service delegation when out of scope.
+        tenantScopeGuard.requireTenantInScope(
+                actor, Permission.SUBSCRIPTION_MANAGE, tenantId, ActionCode.SUBSCRIPTION_SUBSCRIBE);
         String actorId = actor == null ? null : actor.operatorId();
         SubscriptionMutationSummary result = subscriptionPort.subscribe(tenantId, domainKey, reason, actorId);
         recordAudit(ActionCode.SUBSCRIPTION_SUBSCRIBE, tenantId, domainKey, actor, reason);
@@ -43,6 +50,8 @@ public class ManageSubscriptionUseCase {
 
     public SubscriptionMutationSummary changeStatus(String tenantId, String domainKey,
                                                     String targetStatus, OperatorContext actor, String reason) {
+        tenantScopeGuard.requireTenantInScope(
+                actor, Permission.SUBSCRIPTION_MANAGE, tenantId, ActionCode.SUBSCRIPTION_CHANGE_STATUS);
         String actorId = actor == null ? null : actor.operatorId();
         SubscriptionMutationSummary result =
                 subscriptionPort.changeStatus(tenantId, domainKey, targetStatus, reason, actorId);
