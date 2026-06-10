@@ -8,9 +8,11 @@ ADR-MONO-024 § 3.3 step 2a — seed the two delegated-administration roles (`TE
 
 # Status
 
-review
+done
 
-> **구현 완료 (2026-06-10)**: ADR-MONO-024 § 3.3 step 2a — 두 위임관리 역할 + `tenant.admin.delegate` 권한 시드 (inert/net-zero). `V0033__seed_tenant_admin_roles.sql`(INSERT IGNORE: `TENANT_ADMIN`→{operator.manage, tenant.admin.delegate}, `TENANT_BILLING_ADMIN`→{subscription.manage}, operator 배정 0) + `Permission.TENANT_ADMIN_DELEGATE` 상수 + `rbac.md`(Permission Keys/Seed Roles/Seed Matrix + net-zero 주석). **검증**: 신규 IT `TenantAdminRoleSeedIntegrationTest`(시드 정확성 + plane separation[subscription.manage∉TENANT_ADMIN, tenant.admin.delegate∉SUPER_ADMIN] + 실제 TENANT_ADMIN@tenant-x 의 step-1 D2 confinement: tenant-x 200 / tenant-y 403) PASS; net-zero 회귀(OperatorAdmin/OperatorAdminScopeConfinement) GREEN. 후속=step 2b(assign/unassign 표면 + grant-menu no-escalation). ⚠️ 2b 전까지 TENANT_ADMIN 을 어떤 operator 에도 grant 금지(grant-menu 보호 부재; 시드는 미배정이라 안전). 분석=Opus 4.8 / 구현=Opus 4.8.
+> **완료 (2026-06-10)**: impl PR #1256 (squash `af306f50f90da140f3423957e7bfdecbb7450b63`). 3차원 검증 ✓ (MERGED / origin/main tip=`af306f50` 일치 / CI 전부 pass — `Integration (iam, Testcontainers)` GREEN 으로 마이그레이션 + 신규 시드 IT 검증). 후속=step 2b(assign/unassign 표면 + grant-menu no-escalation).
+>
+> **구현 (2026-06-10)**: ADR-MONO-024 § 3.3 step 2a — 두 위임관리 역할 + `tenant.admin.delegate` 권한 시드 (inert/net-zero). `V0033__seed_tenant_admin_roles.sql`(INSERT IGNORE: `TENANT_ADMIN`→{operator.manage, tenant.admin.delegate}, `TENANT_BILLING_ADMIN`→{subscription.manage}, operator 배정 0) + `Permission.TENANT_ADMIN_DELEGATE` 상수 + `rbac.md`(Permission Keys/Seed Roles/Seed Matrix + net-zero 주석). **검증**: 신규 IT `TenantAdminRoleSeedIntegrationTest`(시드 정확성 + plane separation[subscription.manage∉TENANT_ADMIN, tenant.admin.delegate∉SUPER_ADMIN] + 실제 TENANT_ADMIN@tenant-x 의 step-1 D2 confinement: tenant-x 200 / tenant-y 403) PASS; net-zero 회귀(OperatorAdmin/OperatorAdminScopeConfinement) GREEN. 후속=step 2b(assign/unassign 표면 + grant-menu no-escalation). ⚠️ 2b 전까지 TENANT_ADMIN 을 어떤 operator 에도 grant 금지(grant-menu 보호 부재; 시드는 미배정이라 안전). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
