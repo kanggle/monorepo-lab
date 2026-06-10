@@ -179,18 +179,55 @@ class LocationRepositoryImplH2Test {
 
         PageResult<Location> byWarehouse = adapter.findPage(
                 new ListLocationsCriteria(z1.warehouseId, null, null, null, null),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
         assertThat(byWarehouse.totalElements()).isEqualTo(2);
 
         PageResult<Location> byType = adapter.findPage(
                 new ListLocationsCriteria(null, null, LocationType.DAMAGED, null, null),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
         assertThat(byType.totalElements()).isEqualTo(1);
 
         PageResult<Location> byCode = adapter.findPage(
                 new ListLocationsCriteria(null, null, null, "WH07-A-01-01-01", null),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
         assertThat(byCode.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("findPage data-scope confines the cross-warehouse page AND count to scoped warehouse codes (subquery)")
+    void findPageDataScopeConfinesAcrossWarehouses() {
+        ZoneHandle z1 = seedWarehouseAndZone("WH41");
+        ZoneHandle z2 = seedWarehouseAndZone("WH42");
+        ZoneHandle z3 = seedWarehouseAndZone("WH43");
+        adapter.insert(Location.create(z1.warehouseCode, z1.warehouseId, z1.zoneId,
+                "WH41-A-01-01-01", null, null, null, null, LocationType.STORAGE, null, ACTOR));
+        adapter.insert(Location.create(z2.warehouseCode, z2.warehouseId, z2.zoneId,
+                "WH42-A-01-01-01", null, null, null, null, LocationType.STORAGE, null, ACTOR));
+        adapter.insert(Location.create(z3.warehouseCode, z3.warehouseId, z3.zoneId,
+                "WH43-A-01-01-01", null, null, null, null, LocationType.STORAGE, null, ACTOR));
+
+        // Scoped to {WH41, WH42}: WH43's location must not appear or be counted.
+        PageResult<Location> scoped = adapter.findPage(
+                ListLocationsCriteria.empty(),
+                new PageQuery(0, 10, "locationCode", "asc"),
+                java.util.List.of("WH41", "WH42"));
+        assertThat(scoped.totalElements()).isEqualTo(2);
+        assertThat(scoped.content())
+                .extracting(Location::getLocationCode)
+                .containsExactlyInAnyOrder("WH41-A-01-01-01", "WH42-A-01-01-01");
+
+        // Net-zero (null scope) sees all three — the unchanged search() path.
+        PageResult<Location> unscoped = adapter.findPage(
+                ListLocationsCriteria.empty(),
+                new PageQuery(0, 10, "locationCode", "asc"), null);
+        assertThat(unscoped.totalElements()).isEqualTo(3);
+
+        // A scoped code matching no warehouse → empty subquery → deny-all.
+        PageResult<Location> noMatch = adapter.findPage(
+                ListLocationsCriteria.empty(),
+                new PageQuery(0, 10, "locationCode", "asc"),
+                java.util.List.of("WH99"));
+        assertThat(noMatch.totalElements()).isZero();
     }
 
     @Test

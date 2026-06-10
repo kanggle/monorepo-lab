@@ -4,6 +4,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.wms.master.application.query.ListLocationsCriteria;
 import com.wms.master.domain.model.Location;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,5 +34,14 @@ public interface LocationPersistencePort {
 
     Optional<Location> findByLocationCode(String locationCode);
 
-    PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery);
+    /**
+     * Page locations by {@code criteria}, optionally confined to an ABAC
+     * data-scope (ADR-MONO-025): when {@code scopeWarehouseCodes} is non-empty the
+     * adapter restricts the result (and its count) to locations whose parent
+     * warehouse code is in the set, via a DB-side {@code warehouseId IN (subquery
+     * on warehouse code)}. {@code null} or empty means unrestricted / unscoped —
+     * the net-zero path, no confinement.
+     */
+    PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery,
+                                  Collection<String> scopeWarehouseCodes);
 }

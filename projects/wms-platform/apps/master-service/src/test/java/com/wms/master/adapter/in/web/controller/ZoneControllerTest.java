@@ -1,6 +1,7 @@
 package com.wms.master.adapter.in.web.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -186,7 +187,7 @@ class ZoneControllerTest {
     @Test
     void getById_returns200_withEtag() throws Exception {
         ZoneResult result = sampleResult("Z-A", ZoneType.AMBIENT, WarehouseStatus.ACTIVE, 3L);
-        when(queryUseCase.findById(result.id())).thenReturn(result);
+        when(queryUseCase.findById(eq(result.id()), any())).thenReturn(result);
 
         mockMvc.perform(get("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones/" + result.id()))
                 .andExpect(status().isOk())
@@ -198,7 +199,7 @@ class ZoneControllerTest {
     @Test
     void getById_returns404_whenUnknown() throws Exception {
         UUID id = UUID.randomUUID();
-        when(queryUseCase.findById(id)).thenThrow(new ZoneNotFoundException(id.toString()));
+        when(queryUseCase.findById(eq(id), any())).thenThrow(new ZoneNotFoundException(id.toString()));
 
         mockMvc.perform(get("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones/" + id))
                 .andExpect(status().isNotFound())
@@ -211,7 +212,7 @@ class ZoneControllerTest {
         ZoneResult result = new ZoneResult(
                 UUID.randomUUID(), otherWarehouseId, "Z-A", "Name", ZoneType.AMBIENT,
                 WarehouseStatus.ACTIVE, 0L, NOW, ACTOR, NOW, ACTOR);
-        when(queryUseCase.findById(result.id())).thenReturn(result);
+        when(queryUseCase.findById(eq(result.id()), any())).thenReturn(result);
 
         mockMvc.perform(get("/api/v1/master/warehouses/" + WAREHOUSE_ID + "/zones/" + result.id()))
                 .andExpect(status().isNotFound())

@@ -57,6 +57,11 @@ wms (ADR-025 step 2) is the first adopter, enforced on both the single-resource 
 
 In both cases unrestricted (`"*"`) and unscoped (empty/absent) operators are unaffected.
 
+The reach rule's **zone/location** clause is enforced too (TASK-BE-350), interpreted per the entity's parent warehouse code:
+
+- Zone is nested under `/warehouses/{warehouseId}/zones`, so a zone list is already confined to one warehouse — the data-scope is a single **gate** (`ZoneController.getById` / `list` → 403 when the parent warehouse code is out of scope), not a row filter.
+- Location list is flat/cross-warehouse, so it is a per-row **DB filter**: `LocationController.list` confines the page (and its count) via `warehouseId IN (SELECT w.id FROM warehouses w WHERE w.warehouse_code IN :codes)`; `LocationController.getById` 403s an out-of-scope location. The net-zero path runs the unchanged query.
+
 ---
 
 ## 4. Where it is set

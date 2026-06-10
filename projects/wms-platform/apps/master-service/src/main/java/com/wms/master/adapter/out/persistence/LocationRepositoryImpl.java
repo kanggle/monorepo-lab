@@ -6,6 +6,7 @@ import com.wms.master.application.port.out.LocationPersistencePort;
 import com.wms.master.application.query.ListLocationsCriteria;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
 import com.wms.master.domain.model.Location;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -72,15 +73,29 @@ class LocationRepositoryImpl implements LocationPersistencePort {
     }
 
     @Override
-    public PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery) {
+    public PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery,
+                                         Collection<String> scopeWarehouseCodes) {
         Pageable pageable = PageableFactory.from(pageQuery);
-        Page<LocationJpaEntity> page = jpaRepository.search(
-                criteria.warehouseId(),
-                criteria.zoneId(),
-                criteria.locationType(),
-                criteria.locationCode(),
-                criteria.status(),
-                pageable);
+        // Net-zero (null/empty scope) routes through the unchanged search() so the
+        // golden path is byte-identical; only a deliberately-scoped operator hits
+        // searchScoped() (codes then guaranteed non-empty → never an empty IN).
+        Page<LocationJpaEntity> page =
+                (scopeWarehouseCodes == null || scopeWarehouseCodes.isEmpty())
+                        ? jpaRepository.search(
+                                criteria.warehouseId(),
+                                criteria.zoneId(),
+                                criteria.locationType(),
+                                criteria.locationCode(),
+                                criteria.status(),
+                                pageable)
+                        : jpaRepository.searchScoped(
+                                criteria.warehouseId(),
+                                criteria.zoneId(),
+                                criteria.locationType(),
+                                criteria.locationCode(),
+                                criteria.status(),
+                                scopeWarehouseCodes,
+                                pageable);
 
         return new PageResult<>(
                 page.getContent().stream().map(mapper::toDomain).toList(),
