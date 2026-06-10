@@ -8,7 +8,9 @@ ADR-MONO-025 § 3.3 follow-on — extend wms ABAC data-scope to the **child enti
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: impl PR #1278 (squash `619d9829`). 3차원 ✓ (MERGED / origin/main tip=`619d9829` 일치 / 20 체크 pass·0 fail). **AC-6 federation net-zero ✓**: workflow_dispatch run `27313607342` GREEN (14 passed) — wms 골든패스(base SUPER_ADMIN 토큰 data_scope 부재→null scope) 무영향. **계약 reach rule 2절(zone/location) 이행**: zone=nested route 단일창고 **게이트**(`ZoneService.findById/list` 403, `ZonePersistencePort` 무변경), location=횡단 **per-row DB 필터**(`JpaLocationRepository.searchScoped` = `warehouseId IN (SELECT w.id … WHERE w.warehouseCode IN :codes)` 서브쿼리, codes→ids 1문 해석·신규 포트메서드 불요). **net-zero 격리**: 기존 `search` byte-identical 유지. 스코프=공유 `DataScopeSupport` 헬퍼로 컨트롤러서 읽어 쿼리객체(2-arg 호환 ctor)+findById 오버로드로 전달. **`@PreAuthorize` self-invocation 우회 회피**: findById 1·2-arg 둘 다 명시 구현(인터페이스 default 금지). 테스트=zone/location 서비스 게이트+403+net-zero·location H2 searchScoped 서브쿼리(필터+count+미매칭 deny-all)·DataScopeSupport 클레임리더. **ABAC 데이터스코프 wms 3엔티티(warehouse/zone/location) 완성**. 잔여 follow-on=finance·erp re-point·2단계 조건식(보류). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
