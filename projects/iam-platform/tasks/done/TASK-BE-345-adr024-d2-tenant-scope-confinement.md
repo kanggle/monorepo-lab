@@ -8,9 +8,11 @@ ADR-MONO-024 § 3.3 step 1 — D2 target-tenant scope confinement in admin-servi
 
 # Status
 
-review
+done
 
-> **구현 완료 (2026-06-10)**: ADR-MONO-024 § 3.3 step 1 — D2 target-tenant scope confinement (net-zero). 신규 `AdminGrantScopeEvaluator`(permission별 `admin_operator_roles.tenant_id` grant 스코프, `'*'`=플랫폼, fail-closed) + 중앙 `TenantScopeGuard`(단일 결정 지점: `target ∈ scope` || `'*'` → 통과, else best-effort DENIED row + 403 `TENANT_SCOPE_DENIED`). 5개 변이 use-case 배선(create/roles/status/org-scope=`operator.manage`, subscribe/changeStatus=`subscription.manage` D5-C). `rbac.md` Permission Evaluation Algorithm 에 confinement 단계 문서화. **net-zero 검증**: admin-service 전체 unit+slice GREEN, 전체 integrationTest GREEN (SUPER_ADMIN `'*'` 모든 기존 엔드포인트 byte-identical). 신규 IT `OperatorAdminScopeConfinementIntegrationTest`: net-zero(SA 양 테넌트 200) + in-scope(tenant-x→tenant-x 200) + confinement(tenant-x→tenant-y 403+DENIED row, 무변이) + create confinement(tenant-y 403 / tenant-x 201) 전부 PASS. 신규 unit `AdminGrantScopeEvaluatorTest`(7) + `TenantScopeGuardTest`(2). 후속=ADR-024 step 2(roles+surface+menu) / step 3(delegation proof e2e). 분석=Opus 4.8 / 구현=Opus 4.8.
+> **완료 (2026-06-10)**: impl PR #1254 (squash `6f999c7d688a2b90a7d6b30e5ab49f761d38ac50`). 3차원 검증 ✓ (MERGED / origin/main tip=`6f999c7d` 일치 / CI 전부 pass — 특히 `Integration (iam, Testcontainers)` GREEN 으로 신규 confinement IT + net-zero 회귀를 CI 가 직접 검증). 후속=ADR-024 step 2(roles+surface+menu) / step 3(delegation proof e2e).
+>
+> **구현 (2026-06-10)**: ADR-MONO-024 § 3.3 step 1 — D2 target-tenant scope confinement (net-zero). 신규 `AdminGrantScopeEvaluator`(permission별 `admin_operator_roles.tenant_id` grant 스코프, `'*'`=플랫폼, fail-closed) + 중앙 `TenantScopeGuard`(단일 결정 지점: `target ∈ scope` || `'*'` → 통과, else best-effort DENIED row + 403 `TENANT_SCOPE_DENIED`). 5개 변이 use-case 배선(create/roles/status/org-scope=`operator.manage`, subscribe/changeStatus=`subscription.manage` D5-C). `rbac.md` Permission Evaluation Algorithm 에 confinement 단계 문서화. **net-zero 검증**: admin-service 전체 unit+slice GREEN, 전체 integrationTest GREEN (SUPER_ADMIN `'*'` 모든 기존 엔드포인트 byte-identical). 신규 IT `OperatorAdminScopeConfinementIntegrationTest`: net-zero(SA 양 테넌트 200) + in-scope(tenant-x→tenant-x 200) + confinement(tenant-x→tenant-y 403+DENIED row, 무변이) + create confinement(tenant-y 403 / tenant-x 201) 전부 PASS. 신규 unit `AdminGrantScopeEvaluatorTest`(7) + `TenantScopeGuardTest`(2). 후속=ADR-024 step 2(roles+surface+menu) / step 3(delegation proof e2e). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
