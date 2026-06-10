@@ -44,6 +44,8 @@ TASK-MONO-154's investigation established: the domain-facing GAP OIDC token's `t
 | B. Multi-value column on `admin_operators` (CSV / JSON tenant list) | Stuff several tenants into one column | Rejected — un-queryable, no per-assignment permission-set, no FK integrity, no audit surface. |
 | C. Derive multi-assignment from subscription | An operator of a domain sees every customer subscribed to it | Rejected — same least-privilege violation ADR-019 D3 Option C rejected: "customer subscribes to domain" ≠ "this operator may act for that customer". |
 
+> **Additive note (ADR-MONO-024, 2026-06-10 — HARDSTOP-04, D1 body byte-unchanged):** D1 created `operator_tenant_assignment` but specified neither *who, other than a platform `SUPER_ADMIN`, may create/mutate assignment rows* (rows are only seeded by SQL today — no assign/unassign surface) nor any *tenant-scope confinement of the administering actor*. [ADR-MONO-024](ADR-MONO-024-tenant-admin-delegation.md) decides that **delegated-administration** model: a tenant-scoped `TENANT_ADMIN` role (grant carries the tenant via `admin_operator_roles.tenant_id`) holding `operator.manage` confined by a central evaluator rule (`target tenant ∈ effective admin-scope`; `'*'` = platform-all, `SUPER_ADMIN` net-zero), plus the assign/unassign surface this D1 left unbuilt and a no-escalation grant-menu rule. The `operator_tenant_assignment` schema (D1) + the assume-tenant token pipeline (D2) are byte-unchanged; ADR-024 adds the administration authority *above* this store, not a change to it.
+
 ### D2 — active-tenant token scoping (the crux; AWS STS AssumeRole analog)
 
 | Option | Mechanics | Verdict |
