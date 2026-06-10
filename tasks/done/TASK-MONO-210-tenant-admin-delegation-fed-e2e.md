@@ -8,7 +8,13 @@ ADR-MONO-024 § 3.3 step 3 — tenant-admin delegation federation-e2e proof. Add
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1260 (`fb6578c0`) + 견고화 2건 #1261 (`069b408b` per-test timeout+serial) + #1262 (`15487a65` outbox warm-up gate + transient-500 retry). **federation-hardening-e2e workflow_dispatch GREEN: run 27275048263 (13 passed / 0 failed / 1 flaky=MONO-207 기존, 내 3 delegation 테스트 전부 clean pass).** 3차원 ✓ (3 PR 전부 MERGED / origin/main tip=`15487a65` / 각 PR 체크 0 fail) + AC-6 (federation GREEN) 충족. **ADR-MONO-024 step 3 종결 = 이니셔티브 전체 완료** (step1 BE-345 / 2a BE-346 / 2b BE-347 / 3 MONO-210).
+>
+> **증명**: 전용 `umbrella-corp` 테넌트(account-service Flyway-dev V9003 + seed.sql §15)서 라이브 OIDC 로그인→`console_operator_token` 교환→`/api/admin/**` 직호출. TENANT_ADMIN: 자기 테넌트 assign/scope/peer-appoint(2xx)·cross-tenant 403 TENANT_SCOPE_DENIED·SUPER_ADMIN/TENANT_BILLING_ADMIN grant 403 ROLE_GRANT_FORBIDDEN. TENANT_BILLING_ADMIN: 자기 구독 suspend/resume 200·foreign 403. SUPER_ADMIN net-zero 201.
+>
+> **진단 메타 (재사용)**: ① write-heavy admin e2e 는 audit→`outbox` INSERT 가 outbox poller 의 range `PESSIMISTIC_WRITE`(`WHERE status='PENDING'`, **SKIP LOCKED 없음**) gap-lock 에 막혀 Kafka warmup 동안 50s lock-wait→`PessimisticLockingFailureException`→500 (1205/40001). 공유 lib `OutboxJpaRepository.findPendingWithLock` 기존 결함 — MONO-207 spec flaky 의 동일 원인. 해법=spec `beforeAll` outbox warm-up 게이트 + 멱등/트랜잭션 write 의 transient-500 retry(`send()`). ② billing leg 의 suspend 가 실제 실행됨(account outbox event + admin 409 self-transition)이 "로직 정상·타이밍 문제" 의 결정적 단서였음. ③ 부하 시 30s 기본 test timeout 초과→retry 누적→스택 과부하 cascade; 다수 admin 호출 테스트는 per-test timeout 상향 필수. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
