@@ -50,9 +50,32 @@ public class TenantDomainSubscriptionJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    private TenantDomainSubscriptionJpaEntity(String tenantId, String domainKey,
+                                              SubscriptionStatus status,
+                                              Instant createdAt, Instant updatedAt) {
+        this.tenantId = tenantId;
+        this.domainKey = domainKey;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
     public TenantDomainSubscription toDomain() {
         return TenantDomainSubscription.reconstitute(
                 new TenantId(tenantId), domainKey, status, createdAt, updatedAt);
+    }
+
+    /**
+     * TASK-BE-342 (ADR-MONO-023 D3): write-path mapper — builds a persistable
+     * entity from a domain subscription. The composite natural key
+     * {@code (tenant_id, domain_key)} makes {@code save} an upsert (JPA merge by
+     * id), so a status transition on an existing row updates {@code status} +
+     * {@code updated_at} in place.
+     */
+    public static TenantDomainSubscriptionJpaEntity fromDomain(TenantDomainSubscription s) {
+        return new TenantDomainSubscriptionJpaEntity(
+                s.getTenantId().value(), s.getDomainKey(), s.getStatus(),
+                s.getCreatedAt(), s.getUpdatedAt());
     }
 
     /**

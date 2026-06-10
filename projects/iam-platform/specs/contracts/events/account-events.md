@@ -63,6 +63,38 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 
 ---
 
+## tenant.subscription.changed
+
+테넌트↔도메인 구독(`tenant_domain_subscription`)의 생명주기 상태 전이 시 발행 (ADR-MONO-023 D4). 구독 생성(`subscribe`)·정지(`suspend`)·재개(`resume`)·해지(`cancel`) 모든 mutation 에서 발행되는 일반 이벤트.
+
+**Topic**: `tenant.subscription.changed`
+
+**Schema version**: 1 (신규 — ADR-MONO-023 step 2)
+
+**Aggregate / 파티션 키**: 이 이벤트는 account 가 아니라 **구독** aggregate 이다. outbox `aggregate_type = "TenantDomainSubscription"`, `aggregate_id = "<tenantId>:<domainKey>"` (account_id 파티션 키 관례 비적용 — 본 이벤트 한정 예외).
+
+**Payload**:
+```json
+{
+  "eventId": "string (UUID v7)",
+  "tenantId": "string (slug, e.g. 'acme-corp')",
+  "domainKey": "string (catalog key: wms|scm|erp|finance)",
+  "previousStatus": "PENDING | ACTIVE | SUSPENDED | null",
+  "currentStatus": "PENDING | ACTIVE | SUSPENDED | CANCELLED",
+  "reason": "string | null (운영자 사유, 선택)",
+  "actorType": "operator | system",
+  "actorId": "string | null",
+  "occurredAt": "2026-06-10T10:00:00Z"
+}
+```
+
+> **`previousStatus = null`**: 신규 `subscribe`(생성) 시 — 이전 상태가 없음.
+> **평면 분리 (ADR-023 D2)**: 이 이벤트는 **entitlement 평면**의 변경만 알린다. consumer 는 이 이벤트로 IAM 평면(operator 할당·RBAC)을 변경해서는 안 된다 — suspend/cancel 시에도 할당·RBAC 는 보존된다(GCP billing↔IAM parity). 카탈로그(ADR-019 D4)와 `entitled_domains`(ADR-019 D5)는 ACTIVE 만 투영하므로, 비-ACTIVE 전이는 다음 카탈로그 읽기/토큰 발급 시 자연 반영된다(별도 wiring 불요).
+
+**Consumers**: (현재 필수 consumer 없음 — fire-and-forget) console cache 무효화·미래 billing/notification 등 비동기 소비자용. 발행 자체가 변경의 durable 기록이며, 운영자 행위 감사는 admin-service(`subscription.manage`) 측에서 별도 기록(ADR-023 D3).
+
+---
+
 ## account.locked
 
 상태가 LOCKED로 전이될 때 발행. `status.changed`와 동시 발행 (특화 이벤트).

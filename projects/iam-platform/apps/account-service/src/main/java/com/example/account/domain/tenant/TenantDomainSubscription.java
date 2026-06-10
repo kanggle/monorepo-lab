@@ -46,6 +46,50 @@ public class TenantDomainSubscription {
     }
 
     /**
+     * TASK-BE-342 (ADR-MONO-023 D1/D3): factory for a brand-new subscription
+     * (the {@code subscribe} mutation). A new subscription may only land in a
+     * {@link SubscriptionStatus#creatable()} state ({@code PENDING}/{@code ACTIVE}) —
+     * never directly {@code SUSPENDED}/{@code CANCELLED}.
+     *
+     * @throws IllegalArgumentException if {@code status} is not creatable
+     */
+    public static TenantDomainSubscription create(TenantId tenantId, String domainKey,
+                                                  SubscriptionStatus status, Instant now) {
+        if (!SubscriptionStatus.creatable().contains(status)) {
+            throw new IllegalArgumentException(
+                    "A new subscription must be PENDING or ACTIVE, not " + status);
+        }
+        TenantDomainSubscription s = new TenantDomainSubscription();
+        s.tenantId = tenantId;
+        s.domainKey = domainKey;
+        s.status = status;
+        s.createdAt = now;
+        s.updatedAt = now;
+        return s;
+    }
+
+    /**
+     * TASK-BE-342 (ADR-MONO-023 D1): apply a lifecycle transition, enforcing the
+     * {@link SubscriptionStatus} state machine guard. Mutates {@code status} +
+     * {@code updatedAt} and returns the previous status (for the
+     * {@code tenant.subscription.changed} event payload).
+     *
+     * @throws IllegalSubscriptionTransitionException if the transition is illegal
+     *         (e.g. {@code CANCELLED → *}, {@code PENDING → SUSPENDED}, or a
+     *         self-transition)
+     */
+    public SubscriptionStatus changeStatus(SubscriptionStatus target, Instant now) {
+        if (!this.status.canTransitionTo(target)) {
+            throw new IllegalSubscriptionTransitionException(
+                    tenantId.value(), domainKey, this.status, target);
+        }
+        SubscriptionStatus previous = this.status;
+        this.status = target;
+        this.updatedAt = now;
+        return previous;
+    }
+
+    /**
      * Returns {@code true} when this subscription's status is
      * {@link SubscriptionStatus#ACTIVE}.
      */

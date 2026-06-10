@@ -59,13 +59,79 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 
 ---
 
+## POST /internal/tenant-domain-subscriptions
+
+> **TASK-BE-342 (ADR-MONO-023 § 3.3 step 2 — D3 mutation surface).** 신규 구독 생성(`subscribe`). 호출 방향: admin-service(operator-facing `subscription.manage` 게이트 통과 후 위임) → account-service. **entitlement 평면의 쓰기는 account-service 가 소유**(ADR-023 D3-A); admin-service 는 RBAC 게이트 + 감사만 담당하고 본 endpoint 로 위임한다(account-service 는 IAM 을 읽지 않음 — ADR-023 D2).
+
+**Request Body**:
+```json
+{
+  "tenantId": "acme-corp",
+  "domainKey": "scm",
+  "status": "ACTIVE",
+  "actorType": "operator",
+  "actorId": "op-123",
+  "reason": "신규 계약"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `tenantId` | string | Yes | 구독 보유 테넌트 id (`tenants.tenant_id` FK — 미존재 시 404). |
+| `domainKey` | string | Yes | 구독 대상 product/domain key (`wms`\|`scm`\|`erp`\|`finance`). |
+| `status` | string | No | 생성 상태 — `PENDING` 또는 `ACTIVE`(기본). `SUSPENDED`/`CANCELLED` 로는 생성 불가. |
+| `actorType` | string | No | `operator`(기본) \| `system`. |
+| `actorId` | string | No | 운영자 식별자(감사·이벤트용). |
+| `reason` | string | No | 운영 사유. |
+
+**Response 201 Created**: `{ "tenantId", "domainKey", "previousStatus": null, "currentStatus", "occurredAt" }`
+
+발행: `tenant.subscription.changed` (previousStatus=null).
+
+---
+
+## PATCH /internal/tenant-domain-subscriptions/{tenantId}/{domainKey}
+
+> **TASK-BE-342 (ADR-MONO-023 D1/D4).** 기존 구독의 상태 전이(`suspend`/`resume`/`cancel`). 전이는 `SubscriptionStatus` 상태머신 가드(ADR-023 D1: PENDING→ACTIVE|CANCELLED; ACTIVE→SUSPENDED|CANCELLED; SUSPENDED→ACTIVE|CANCELLED; CANCELLED terminal)를 통과해야 한다.
+
+**Request Body**:
+```json
+{ "status": "SUSPENDED", "actorType": "operator", "actorId": "op-123", "reason": "미납" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `status` | string | Yes | 목표 상태 — `ACTIVE`\|`SUSPENDED`\|`CANCELLED`. |
+| `actorType` | string | No | `operator`(기본) \| `system`. |
+| `actorId` | string | No | 운영자 식별자. |
+| `reason` | string | No | 운영 사유. |
+
+**Response 200 OK**: `{ "tenantId", "domainKey", "previousStatus", "currentStatus", "occurredAt" }`
+
+발행: `tenant.subscription.changed`.
+
+> **평면 분리 (ADR-023 D2)**: `SUSPENDED`/`CANCELLED` 전이는 entitlement 평면만 바꾼다 — 그 테넌트의 도메인이 카탈로그(ADR-019 D4) + 다음-발급 `entitled_domains`(ADR-019 D5)에서 빠지지만, operator 할당·RBAC(admin-service)는 **보존**된다. `SUSPENDED→ACTIVE` 재개는 재부여 없이 접근을 복구한다(GCP billing↔IAM parity). 이미-발급된 단기 토큰은 즉시 폐기되지 않고 짧은 TTL 로 만료된다(ADR-019 ③).
+
+**Errors** (POST/PATCH 공통):
+
+| Status | Code | Condition |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 필수 필드 누락/형식 오류, 또는 생성 시 `status` 가 `creatable`(PENDING\|ACTIVE) 밖. |
+| 401 | `UNAUTHORIZED` | `Authorization: Bearer` JWT 누락/무효. |
+| 404 | `TENANT_NOT_FOUND` | `tenantId` 미등록 테넌트(POST). |
+| 404 | `SUBSCRIPTION_NOT_FOUND` | 대상 구독 부재(PATCH). |
+| 409 | `SUBSCRIPTION_ALREADY_EXISTS` | (POST) 동일 `(tenantId, domainKey)` 구독이 이미 존재 — 전이는 PATCH 사용. |
+| 409 | `SUBSCRIPTION_TRANSITION_INVALID` | (PATCH) `SubscriptionStatus` 가드 위반(예: CANCELLED→ACTIVE, PENDING→SUSPENDED, self). |
+
+---
+
 ## Caller Constraints (admin-service 측)
 
 - 타임아웃: 연결 3s, 읽기 10s (`AccountServiceTenantClient` 와 동일).
 - 재시도 / Circuit breaker: `accountService` 설정 공유 (`@Retry`/`@CircuitBreaker`).
-- 읽기 전용 — 감사 row 없음.
+- 읽기(GET)는 감사 row 없음; mutation(POST/PATCH) 운영자 행위 감사는 admin-service `subscription.manage` 게이트에서 `AdminActionAuditor` 로 기록(ADR-023 D3, step 2b).
 
 ## Server Constraints (account-service 측)
 
-- Read-only; 상태 변경 없음 (구독 관리 표면은 후속 step).
-- ACTIVE 구독만 반환 (SUSPENDED 구독 제외).
+- GET: Read-only; ACTIVE 구독만 반환 (SUSPENDED/CANCELLED 제외).
+- POST/PATCH: mutation 은 `@Transactional` 경계에서 (a) `SubscriptionStatus` 가드 적용 → (b) 저장 → (c) `tenant.subscription.changed` outbox 이벤트 발행을 원자적으로 수행한다. account-service 는 IAM(admin_db RBAC/할당)을 읽지 않는다 (ADR-023 D2 단방향 의존).

@@ -1,6 +1,8 @@
 package com.example.account.infrastructure.persistence;
 
 import com.example.account.domain.tenant.SubscriptionStatus;
+import com.example.account.domain.tenant.TenantDomainSubscription;
+import com.example.account.domain.tenant.TenantId;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +18,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -126,5 +130,60 @@ class TenantDomainSubscriptionJpaRepositoryTest {
         assertThat(domainKeys)
                 .as("acme-corp must not be subscribed to iam (bindsAllTenants), scm, or erp")
                 .doesNotContain("iam", "scm", "erp");
+    }
+
+    // ── TASK-BE-342 (ADR-MONO-023 step 2): write path + V0021 CHECK ──────────
+
+    @Nested
+    @DisplayName("AC: mutation persistence — save / findByTenantIdAndDomainKey + V0021 CHECK accepts all 4 states")
+    class MutationPersistence {
+
+        private static TenantDomainSubscriptionJpaEntity entity(String tenantId, String domainKey,
+                                                                SubscriptionStatus status) {
+            Instant t = Instant.parse("2026-06-10T00:00:00Z");
+            return TenantDomainSubscriptionJpaEntity.fromDomain(
+                    TenantDomainSubscription.reconstitute(new TenantId(tenantId), domainKey, status, t, t));
+        }
+
+        @Test
+        @DisplayName("save new (acme-corp, erp, PENDING) → findByTenantIdAndDomainKey returns it")
+        void save_andFindSingle() {
+            repository.saveAndFlush(entity("acme-corp", "erp", SubscriptionStatus.PENDING));
+
+            Optional<TenantDomainSubscriptionJpaEntity> found =
+                    repository.findByTenantIdAndDomainKey("acme-corp", "erp");
+
+            assertThat(found).isPresent();
+            assertThat(found.get().getStatus()).isEqualTo(SubscriptionStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("V0021 CHECK accepts SUSPENDED and CANCELLED (write round-trip, no constraint violation)")
+        void checkAcceptsSuspendedAndCancelled() {
+            repository.saveAndFlush(entity("acme-corp", "scm", SubscriptionStatus.SUSPENDED));
+            repository.saveAndFlush(entity("acme-corp", "erp", SubscriptionStatus.CANCELLED));
+
+            assertThat(repository.findByTenantIdAndDomainKey("acme-corp", "scm"))
+                    .get().extracting(TenantDomainSubscriptionJpaEntity::getStatus)
+                    .isEqualTo(SubscriptionStatus.SUSPENDED);
+            assertThat(repository.findByTenantIdAndDomainKey("acme-corp", "erp"))
+                    .get().extracting(TenantDomainSubscriptionJpaEntity::getStatus)
+                    .isEqualTo(SubscriptionStatus.CANCELLED);
+
+            // a SUSPENDED subscription must NOT appear in the ACTIVE reverse-lookup
+            // (net-zero read-path invariant: catalog/entitled_domains see ACTIVE only)
+            Set<String> activeForAcme = repository
+                    .findByStatusAndTenantId(SubscriptionStatus.ACTIVE, "acme-corp").stream()
+                    .map(TenantDomainSubscriptionJpaEntity::getDomainKey)
+                    .collect(Collectors.toSet());
+            assertThat(activeForAcme).doesNotContain("scm", "erp");
+        }
+
+        @Test
+        @DisplayName("missing pair → findByTenantIdAndDomainKey empty")
+        void findMissing_empty() {
+            assertThat(repository.findByTenantIdAndDomainKey("acme-corp", "nonexistent-domain"))
+                    .isEmpty();
+        }
     }
 }

@@ -1,7 +1,11 @@
 package com.example.account.presentation;
 
+import com.example.account.application.result.SubscriptionMutationResult;
 import com.example.account.application.result.TenantDomainSubscriptionResult;
+import com.example.account.application.service.TenantDomainSubscriptionMutationUseCase;
 import com.example.account.application.service.TenantDomainSubscriptionQueryUseCase;
+import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
+import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
 import com.example.account.presentation.internal.TenantDomainSubscriptionController;
@@ -10,16 +14,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,6 +43,9 @@ class TenantDomainSubscriptionControllerTest {
 
     @MockitoBean
     private TenantDomainSubscriptionQueryUseCase queryUseCase;
+
+    @MockitoBean
+    private TenantDomainSubscriptionMutationUseCase mutationUseCase;
 
     @Test
     @DisplayName("GET /internal/tenant-domain-subscriptions → 200 with items[]")
@@ -74,5 +86,55 @@ class TenantDomainSubscriptionControllerTest {
                 .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.items[0].tenantId").value("acme"))
                 .andExpect(jsonPath("$.items[0].domainKey").value("finance"));
+    }
+
+    // ── TASK-BE-342 (ADR-MONO-023 step 2a): mutation endpoints ───────────────
+
+    @Test
+    @DisplayName("POST → 201 with the created subscription (previousStatus null)")
+    void subscribe_created() throws Exception {
+        given(mutationUseCase.subscribe(eq("acme"), eq("scm"), isNull(), any(), any(), any()))
+                .willReturn(new SubscriptionMutationResult(
+                        "acme", "scm", null, SubscriptionStatus.ACTIVE,
+                        Instant.parse("2026-06-10T00:00:00Z")));
+
+        mockMvc.perform(post("/internal/tenant-domain-subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"acme\",\"domainKey\":\"scm\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.currentStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.previousStatus").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("PATCH → 200 with previous/current status (suspend)")
+    void changeStatus_ok() throws Exception {
+        given(mutationUseCase.changeStatus(eq("acme"), eq("wms"),
+                eq(SubscriptionStatus.SUSPENDED), any(), any(), any()))
+                .willReturn(new SubscriptionMutationResult(
+                        "acme", "wms", SubscriptionStatus.ACTIVE, SubscriptionStatus.SUSPENDED,
+                        Instant.parse("2026-06-10T00:00:00Z")));
+
+        mockMvc.perform(patch("/internal/tenant-domain-subscriptions/acme/wms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"past due\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previousStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentStatus").value("SUSPENDED"));
+    }
+
+    @Test
+    @DisplayName("PATCH illegal transition → 409 SUBSCRIPTION_TRANSITION_INVALID")
+    void changeStatus_illegal_409() throws Exception {
+        given(mutationUseCase.changeStatus(eq("acme"), eq("wms"),
+                eq(SubscriptionStatus.ACTIVE), any(), any(), any()))
+                .willThrow(new IllegalSubscriptionTransitionException(
+                        "acme", "wms", SubscriptionStatus.CANCELLED, SubscriptionStatus.ACTIVE));
+
+        mockMvc.perform(patch("/internal/tenant-domain-subscriptions/acme/wms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUBSCRIPTION_TRANSITION_INVALID"));
     }
 }
