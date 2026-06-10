@@ -39,6 +39,16 @@ class AccountOutboxPollingSchedulerTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-348 — tenant.subscription.changed 를 동일 이름의 토픽으로 매핑한다 (BE-342 누락 보완)")
+    void resolveTopic_subscriptionChanged_mappedToContractTopic() {
+        // account-events.md § tenant.subscription.changed declares Topic =
+        // "tenant.subscription.changed"; the resolver must honour it so the
+        // entitlement-plane event is published instead of terminally FAILED.
+        assertThat(scheduler().resolveTopic("tenant.subscription.changed"))
+                .isEqualTo("tenant.subscription.changed");
+    }
+
+    @Test
     @DisplayName("알 수 없는 이벤트 타입은 IllegalArgumentException을 던진다")
     void resolveTopic_unknownEventType_throws() {
         assertThatThrownBy(() -> scheduler().resolveTopic("unknown.event"))

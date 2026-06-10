@@ -16,6 +16,10 @@ public class AccountOutboxPollingScheduler extends OutboxPollingScheduler {
     static final String TOPIC_UNLOCKED = "account.unlocked";
     static final String TOPIC_ROLES_CHANGED = "account.roles.changed";
     static final String TOPIC_DELETED = "account.deleted";
+    // TASK-BE-348 — the entitlement-plane subscription-lifecycle event (BE-342 /
+    // ADR-MONO-023 D4). Identical-name mapping per account-events.md
+    // § tenant.subscription.changed (Topic = tenant.subscription.changed).
+    static final String TOPIC_SUBSCRIPTION_CHANGED = "tenant.subscription.changed";
 
     public AccountOutboxPollingScheduler(OutboxPublisher outboxPublisher,
                                          KafkaTemplate<String, String> kafkaTemplate) {
@@ -31,6 +35,7 @@ public class AccountOutboxPollingScheduler extends OutboxPollingScheduler {
             case "account.unlocked" -> TOPIC_UNLOCKED;
             case "account.roles.changed" -> TOPIC_ROLES_CHANGED;
             case "account.deleted" -> TOPIC_DELETED;
+            case "tenant.subscription.changed" -> TOPIC_SUBSCRIPTION_CHANGED;
             default -> throw new IllegalArgumentException("Unknown account event type: " + eventType);
         };
     }
