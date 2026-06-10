@@ -8,7 +8,9 @@ ADR-MONO-025 § 3.3 step 1 — the ABAC data-scope **contract + shared reader**.
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: impl PR #1272 (squash `cecf26ca`). 3차원 ✓ (MERGED / origin/main tip=`cecf26ca` 일치 / 20 체크 pass — Build & Test + 전 서비스 IT 매트릭스가 신규 공유 lib 회귀 검증). `platform/abac-data-scope.md` 계약 + `libs/java-security` `AbacDataScope`(framework-agnostic dual-read reader) + 단위테스트. **핵심: 형식화 전 erp `RoleScopeAuthorizationAdapter` 검증으로 net-zero 의미 정정** — `"*"`=unrestricted(producer가 unscoped 할당 NULL→`["*"]`), **empty/absent=fail-closed deny(unrestricted 아님)**. ADR-025 D1/D2/D4 wording 정정 + erp re-point을 선택/보류로 강등(회귀위험 회피). net-zero(신규 lib+doc, erp·producer 무변경). 다음=step 2(wms 창고 data-scope enforcement, `AbacDataScope` 소비). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
