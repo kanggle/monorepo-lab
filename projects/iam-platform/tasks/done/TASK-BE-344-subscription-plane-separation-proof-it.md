@@ -8,7 +8,9 @@ ADR-MONO-023 § 3.3 step 3 — plane-separation proof IT (entitlement plane). An
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1246 (squash `c5c202bf9ad3f3e57c7fea14c8318e1c2809ae85`). ADR-MONO-023 § 3.3 step 3 — 평면분리 증명 IT(entitlement plane). account-service `@SpringBootTest` Testcontainers IT: subscribe(ACTIVE)→카탈로그+entitled_domains+이벤트(prev=null) / suspend→양 읽기경로 제거 but **row 보존(SUSPENDED, reversible)**+이벤트(ACTIVE→SUSPENDED) / resume→동일 row 복원(재부여 없음) / cancel→terminal 제외 / 시드 finance+wms 불영향. **IAM-plane 보존은 service/DB 경계로 구조적 보장**(account-service admin_db 미접근)—IT에 문서화; cross-service 토큰 재발급 fidelity는 federation-e2e로 deferred. test-only(메커니즘=BE-341/342/343). `integrationTest` 태스크(@Tag("integration")). 검증: 3 tests/0 fail 실MySQL8 로컬(3m23s) + CI Integration(iam) GREEN. 3차원 ✓(20 pass/0 fail, MERGED `c5c202bf`/origin tip 일치). **ADR-MONO-023 § 3.3 실행 로드맵 D1~D6 전 단계 완료(step1 BE-341 / step2a BE-342 / step2b BE-343 / step3 BE-344)**. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
