@@ -8,7 +8,9 @@ ADR-MONO-023 § 3.3 step 1 (D1) — subscription lifecycle state machine (net-ze
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1240 (squash `be790137300418ae80bd1871087c6f82914db82b`). ADR-MONO-023 § 3.3 step 1 (D1) — 구독 생명주기 상태머신. NEW `SubscriptionStatus`(PENDING/ACTIVE/SUSPENDED/CANCELLED + 전이 가드, 테넌트 `TenantStatus`와 분리) + 도메인/엔티티/리포지토리 enum 전환 + V0021 CHECK(net-zero, 기존 행 전부 ACTIVE). 검증: 컴파일 clean + 단위(전이 가드 + QueryUseCase) + **실 MySQL8 Testcontainers IT**(V0019→V0020→V0021 적용, 역조회 net-zero) — 로컬·CI 양쪽 GREEN. 3차원 ✓(20 pass/0 fail, MERGED `be790137`/origin tip 일치). **후속**: TASK-BE-342(step2 admin API + `subscription.manage` + `tenant.subscription.changed` event) dependency-correct base = 본 머지 main. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
