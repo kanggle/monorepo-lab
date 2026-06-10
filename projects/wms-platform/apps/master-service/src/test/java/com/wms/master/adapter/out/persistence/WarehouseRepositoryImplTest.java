@@ -189,7 +189,7 @@ class WarehouseRepositoryImplTest {
 
         PageResult<Warehouse> activeOnly = adapter.findPage(
                 new WarehouseListCriteria(WarehouseStatus.ACTIVE, null),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
 
         assertThat(activeOnly.totalElements()).isEqualTo(2);
         assertThat(activeOnly.content())
@@ -198,14 +198,14 @@ class WarehouseRepositoryImplTest {
 
         PageResult<Warehouse> filteredByQuery = adapter.findPage(
                 new WarehouseListCriteria(null, "Bravo"),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
 
         assertThat(filteredByQuery.totalElements()).isEqualTo(1);
         assertThat(filteredByQuery.content().get(0).getWarehouseCode()).isEqualTo("WH11");
 
         PageResult<Warehouse> firstPage = adapter.findPage(
                 WarehouseListCriteria.any(),
-                new PageQuery(0, 2, "warehouseCode", "asc"));
+                new PageQuery(0, 2, "warehouseCode", "asc"), null);
 
         assertThat(firstPage.content()).hasSize(2);
         assertThat(firstPage.totalElements()).isEqualTo(3);

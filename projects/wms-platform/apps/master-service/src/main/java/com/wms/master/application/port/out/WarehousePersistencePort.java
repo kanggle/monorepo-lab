@@ -4,6 +4,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.wms.master.application.query.WarehouseListCriteria;
 import com.wms.master.domain.model.Warehouse;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,7 +44,15 @@ public interface WarehousePersistencePort {
 
     Optional<Warehouse> findByCode(String warehouseCode);
 
-    PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery);
+    /**
+     * Page warehouses by {@code criteria}, optionally confined to an ABAC
+     * data-scope (ADR-MONO-025): when {@code scopeWarehouseCodes} is non-empty the
+     * adapter restricts the result (and its count) to those warehouse codes via a
+     * DB-side {@code IN} filter; {@code null} or empty means unrestricted /
+     * unscoped — the net-zero path, no confinement.
+     */
+    PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery,
+                                   Collection<String> scopeWarehouseCodes);
 
     /**
      * Returns whether this warehouse currently has any ACTIVE child Zone.

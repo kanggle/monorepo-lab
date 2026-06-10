@@ -179,7 +179,7 @@ class WarehouseRepositoryImplH2Test {
 
         PageResult<Warehouse> activeOnly = adapter.findPage(
                 new WarehouseListCriteria(WarehouseStatus.ACTIVE, null),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
 
         assertThat(activeOnly.totalElements()).isEqualTo(2);
         assertThat(activeOnly.content())
@@ -188,19 +188,63 @@ class WarehouseRepositoryImplH2Test {
 
         PageResult<Warehouse> filteredByQuery = adapter.findPage(
                 new WarehouseListCriteria(null, "Bravo"),
-                new PageQuery(0, 10, "updatedAt", "desc"));
+                new PageQuery(0, 10, "updatedAt", "desc"), null);
 
         assertThat(filteredByQuery.totalElements()).isEqualTo(1);
         assertThat(filteredByQuery.content().get(0).getWarehouseCode()).isEqualTo("WH11");
 
         PageResult<Warehouse> firstPage = adapter.findPage(
                 WarehouseListCriteria.any(),
-                new PageQuery(0, 2, "warehouseCode", "asc"));
+                new PageQuery(0, 2, "warehouseCode", "asc"), null);
 
         assertThat(firstPage.content()).hasSize(2);
         assertThat(firstPage.totalElements()).isEqualTo(3);
         assertThat(firstPage.totalPages()).isEqualTo(2);
         assertThat(firstPage.content().get(0).getWarehouseCode()).isEqualTo("WH10");
+    }
+
+    @Test
+    @DisplayName("findPage with a data-scope confines the page AND its count to the scoped codes (DB-side IN)")
+    void findPageDataScopeConfinesPageAndCount() {
+        adapter.insert(Warehouse.create("WH31", "Alpha",   null, "UTC", ACTOR));
+        adapter.insert(Warehouse.create("WH32", "Bravo",   null, "UTC", ACTOR));
+        adapter.insert(Warehouse.create("WH33", "Charlie", null, "UTC", ACTOR));
+
+        // Deliberately scoped to {WH31, WH32}: WH33 must not appear and must not be counted.
+        PageResult<Warehouse> scoped = adapter.findPage(
+                WarehouseListCriteria.any(),
+                new PageQuery(0, 10, "warehouseCode", "asc"),
+                java.util.List.of("WH31", "WH32"));
+
+        assertThat(scoped.totalElements()).isEqualTo(2);
+        assertThat(scoped.content())
+                .extracting(Warehouse::getWarehouseCode)
+                .containsExactlyInAnyOrder("WH31", "WH32");
+
+        // Net-zero (null scope) sees all three — the unchanged search() path.
+        PageResult<Warehouse> unscoped = adapter.findPage(
+                WarehouseListCriteria.any(),
+                new PageQuery(0, 10, "warehouseCode", "asc"), null);
+        assertThat(unscoped.totalElements()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("findPage data-scope composes with the status/text filters in the same query")
+    void findPageDataScopeComposesWithCriteria() {
+        adapter.insert(Warehouse.create("WH34", "Alpha", null, "UTC", ACTOR));
+        adapter.insert(Warehouse.create("WH35", "Bravo", null, "UTC", ACTOR));
+        Warehouse b = adapter.findByCode("WH35").orElseThrow();
+        b.deactivate(ACTOR);
+        adapter.update(b);
+
+        // scope {WH34, WH35} ∩ status=ACTIVE → only WH34.
+        PageResult<Warehouse> page = adapter.findPage(
+                new WarehouseListCriteria(WarehouseStatus.ACTIVE, null),
+                new PageQuery(0, 10, "warehouseCode", "asc"),
+                java.util.List.of("WH34", "WH35"));
+
+        assertThat(page.totalElements()).isEqualTo(1);
+        assertThat(page.content().get(0).getWarehouseCode()).isEqualTo("WH34");
     }
 
     @Test

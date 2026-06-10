@@ -132,7 +132,7 @@ public class WarehouseService implements WarehouseCrudUseCase, WarehouseQueryUse
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public PageResult<WarehouseResult> list(ListWarehousesQuery query) {
-        return persistencePort.findPage(query.criteria(), query.pageQuery())
+        return persistencePort.findPage(query.criteria(), query.pageQuery(), query.scopeWarehouseCodes())
                 .map(WarehouseResult::from);
     }
 

@@ -19,6 +19,7 @@ import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.model.WarehouseStatus;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -103,12 +104,35 @@ public class WarehouseController {
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+            @RequestParam(defaultValue = DEFAULT_SORT) String sort,
+            @AuthenticationPrincipal Jwt jwt) {
         WarehouseListCriteria criteria = new WarehouseListCriteria(
                 ControllerSupport.parseEnum(status, WarehouseStatus.class, "status must be ACTIVE or INACTIVE"), q);
         PageQuery pageQuery = PageQuery.of(page, size, ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
-        PageResult<WarehouseResult> result = queryUseCase.list(new ListWarehousesQuery(criteria, pageQuery));
+        PageResult<WarehouseResult> result = queryUseCase.list(
+                new ListWarehousesQuery(criteria, pageQuery, scopeWarehouseCodes(jwt)));
         return PageResponse.from(result, sort, WarehouseResponse::from);
+    }
+
+    /**
+     * TASK-BE-349 (ADR-MONO-025 follow-on): the data-scope confinement for the
+     * warehouse LIST page — the sibling of {@link #requireWarehouseInScope} for
+     * the collection endpoint. Returns the set of warehouse codes a deliberately
+     * data-scoped operator may see, or {@code null} when the operator is
+     * unrestricted ({@code "*"}) or unscoped (empty/absent — base
+     * authorization_code and machine tokens carry no scope; the assume-tenant
+     * producer emits {@code ["*"]} for unscoped assignments). {@code null} = the
+     * net-zero path: the query runs unfiltered, exactly as before data-scoping.
+     */
+    private static Set<String> scopeWarehouseCodes(Jwt jwt) {
+        if (jwt == null) {
+            return null; // unauthenticated requests are already rejected by the resource server
+        }
+        AbacDataScope scope = AbacDataScope.fromClaimValues(
+                jwt.getClaim(AbacDataScope.CLAIM_DATA_SCOPE),
+                jwt.getClaim(AbacDataScope.CLAIM_ORG_SCOPE));
+        boolean restricted = !scope.isEmpty() && !scope.isUnrestricted();
+        return restricted ? scope.tokens() : null;
     }
 
     @PatchMapping("/{id}")

@@ -8,6 +8,7 @@ import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
 import com.wms.master.domain.model.Warehouse;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,7 +78,8 @@ class FakeWarehousePersistencePort implements WarehousePersistencePort {
     }
 
     @Override
-    public PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery) {
+    public PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery,
+                                          Collection<String> scopeWarehouseCodes) {
         Stream<Warehouse> filtered = byId.values().stream();
         if (criteria.status() != null) {
             filtered = filtered.filter(w -> w.getStatus() == criteria.status());
@@ -87,6 +89,10 @@ class FakeWarehousePersistencePort implements WarehousePersistencePort {
             filtered = filtered.filter(w ->
                     w.getWarehouseCode().toLowerCase().contains(q)
                             || w.getName().toLowerCase().contains(q));
+        }
+        // ADR-MONO-025 data-scope: net-zero when null/empty, else IN-filter by code.
+        if (scopeWarehouseCodes != null && !scopeWarehouseCodes.isEmpty()) {
+            filtered = filtered.filter(w -> scopeWarehouseCodes.contains(w.getWarehouseCode()));
         }
 
         List<Warehouse> all = filtered
