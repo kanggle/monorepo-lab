@@ -8,7 +8,9 @@ ADR-MONO-025 § 3.3 step 2 — first ABAC data-scope **extension domain (wms)**.
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: impl PR #1274 (squash `f5e1aa02`). 3차원 ✓ (MERGED / origin/main tip=`f5e1aa02` 일치 / 20 체크 pass — Build & Test[wms 슬라이스 5종 포함] + 전 서비스 IT 매트릭스[libs javadoc 변경 회귀]). **AC-5 federation net-zero 검증 ✓**: workflow_dispatch run `27304274286` GREEN — 13 passed / 0 failed, **wms golden path 통과 + DATA_SCOPE_FORBIDDEN 에러 0건**(SUPER_ADMIN base 토큰 data_scope 부재→unrestricted→무영향). wms `WarehouseController.getById`가 `AbacDataScope`로 `data_scope`/`org_scope` 읽어 warehouse-code 스코프 강제(deliberately-scoped만 403, unrestricted/empty=net-zero). **핵심 발견(재사용)**: org_scope는 **assume-tenant 토큰에만** 주입(producer `TenantClaimTokenCustomizer`, unscoped→`["*"]`); base authz_code·machine 토큰은 부재 → **empty=net-zero 필수**(fail-closed이면 golden path 깨짐). 계약+helper javadoc empty 의미 정정. **ADR-025 § 3.3 step 1+2 종결 = ABAC 데이터스코프 1단계 완성**(축 ② 1단계). 잔여 follow-on=LIST 필터·zone/location·finance·erp re-point·federation scoped-operator spec·2단계 조건식(보류). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
