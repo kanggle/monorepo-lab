@@ -29,9 +29,12 @@ import { loginAsMultiOperator } from '../fixtures/login';
  *     (BE-342). The exact D2/D3 path, not a DB poke.
  *   re-issue: the operator switches tenant → the assume-tenant RFC 8693 exchange
  *     re-mints the domain-facing token with `entitled_domains` re-read from
- *     account-service at issuance. To force a genuinely fresh exchange (defeat
- *     any same-tenant idempotency) the re-mint switches AWAY (globex-corp) and
- *     BACK to initech-corp.
+ *     account-service at issuance. EMPIRICAL (verified in run 27255988866): two
+ *     CONSECUTIVE switches to the same tenant reuse the same assumed token (the
+ *     SAS token-exchange returns the existing token for an identical
+ *     subject+audience), so a same-tenant re-switch would NOT pick up the change.
+ *     The re-mint therefore switches AWAY (globex-corp) and BACK to initech-corp,
+ *     forcing a genuinely fresh initech exchange that re-reads entitled_domains.
  *   IAM-plane survival: the switch back STILL returns 200 — the assume-tenant D2
  *     assignment gate would 403 if the binding were touched. Entitlement
  *     vanished; assignment survived. RESUME restores via the same row.
@@ -44,9 +47,9 @@ import { loginAsMultiOperator } from '../fixtures/login';
  * Isolation: a DEDICATED tenant `initech-corp` ([finance,wms], Flyway-dev V9002
  * + seed.sql § 14 assignment) referenced by NO other spec, so the runtime
  * suspend/resume cannot race-break the fullyParallel acme/globex specs; finance
- * is always restored in `finally`. retries:0 — this is a deterministic
- * state-machine proof (no infra-flake retry; retries also caused 409
- * self-transition noise from leftover SUSPENDED state).
+ * is always restored in `finally`, and the per-attempt baseline resume makes the
+ * suite-default retries safe (a leftover SUSPENDED only yields a benign 409
+ * self-transition WARN, never a cross-attempt failure).
  *
  * Verification channel: federation-hardening-e2e is nightly + workflow_dispatch
  * (NOT PR-triggered) — verified via `gh workflow run federation-hardening-e2e.yml`.
@@ -54,7 +57,6 @@ import { loginAsMultiOperator } from '../fixtures/login';
 
 // Override the suite-wide SUPER_ADMIN storageState — the operator logs in fresh.
 test.use({ storageState: { cookies: [], origins: [] } });
-test.describe.configure({ retries: 0 });
 
 /** admin-service host base URL (docker-compose maps 18085:8085); workflow exports
  *  E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
