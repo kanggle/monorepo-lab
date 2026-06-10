@@ -32,6 +32,7 @@ class PatchOperatorStatusUseCaseTest {
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
     @Mock AdminRefreshTokenPort refreshTokenPort;
+    @Mock TenantScopeGuard tenantScopeGuard;
 
     @InjectMocks PatchOperatorStatusUseCase useCase;
 

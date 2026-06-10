@@ -64,6 +64,7 @@ public class ManageOperatorOrgScopeUseCase {
     private final AdminOperatorPort operatorPort;
     private final OperatorTenantAssignmentPort assignmentPort;
     private final AdminActionAuditor auditor;
+    private final TenantScopeGuard tenantScopeGuard;
 
     /**
      * Lists the operator's assignment row scoped to the active tenant. Returns 0
@@ -118,6 +119,13 @@ public class ManageOperatorOrgScopeUseCase {
                     "Path tenantId '" + pathTenantId + "' does not match the active tenant '"
                             + activeTenant + "'");
         }
+
+        // ADR-MONO-024 D2 (TASK-BE-345): beyond the active-tenant equality check, the
+        // actor must actually hold operator.manage scoped to that tenant. Net-zero
+        // for SUPER_ADMIN ('*'); replaces the prior trust in the self-selected
+        // active tenant with the role-grant scope.
+        tenantScopeGuard.requireTenantInScope(
+                caller, Permission.OPERATOR_MANAGE, pathTenantId, ActionCode.OPERATOR_ORG_SCOPE_UPDATE);
 
         AdminOperatorPort.OperatorView operator = resolveOperator(operatorPublicId);
 

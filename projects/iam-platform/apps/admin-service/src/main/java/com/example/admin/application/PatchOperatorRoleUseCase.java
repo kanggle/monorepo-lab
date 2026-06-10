@@ -2,6 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ public class PatchOperatorRoleUseCase {
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
     private final CachingPermissionEvaluator cachingPermissionEvaluator;
+    private final TenantScopeGuard tenantScopeGuard;
 
     @Transactional
     public PatchRolesResult patchRoles(String operatorUuid,
@@ -30,6 +32,11 @@ public class PatchOperatorRoleUseCase {
         AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorUuid));
+
+        // ADR-MONO-024 D2 (TASK-BE-345): the actor must hold operator.manage scoped
+        // to the managed operator's home tenant. Net-zero for SUPER_ADMIN ('*').
+        tenantScopeGuard.requireTenantInScope(
+                actor, Permission.OPERATOR_MANAGE, operator.tenantId(), ActionCode.OPERATOR_ROLE_CHANGE);
 
         Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);
 

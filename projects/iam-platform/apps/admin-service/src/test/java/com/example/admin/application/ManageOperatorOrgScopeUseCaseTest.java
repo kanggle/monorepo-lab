@@ -53,6 +53,9 @@ class ManageOperatorOrgScopeUseCaseTest {
     @Mock
     private AdminActionAuditor auditor;
 
+    @Mock
+    private TenantScopeGuard tenantScopeGuard;
+
     @InjectMocks
     private ManageOperatorOrgScopeUseCase useCase;
 

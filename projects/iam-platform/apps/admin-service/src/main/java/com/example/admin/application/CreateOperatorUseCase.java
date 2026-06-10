@@ -5,6 +5,7 @@ import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.domain.rbac.Permission;
 import com.example.common.id.UuidV7;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class CreateOperatorUseCase {
     private final AdminActionAuditor auditor;
     private final PasswordHasher passwordHasher;
     private final OperatorLookupPort operatorLookupPort;
+    private final TenantScopeGuard tenantScopeGuard;
 
     /**
      * Creates a new operator.
@@ -60,6 +62,12 @@ public class CreateOperatorUseCase {
             throw new TenantScopeDeniedException(
                     "Only platform-scope operators may create operators with tenantId='*'");
         }
+
+        // ADR-MONO-024 D2 (TASK-BE-345): central target-tenant confinement — the
+        // actor must hold operator.manage scoped to the created operator's home
+        // tenant. Net-zero: SUPER_ADMIN ('*') passes for every tenant.
+        tenantScopeGuard.requireTenantInScope(
+                actor, Permission.OPERATOR_MANAGE, tenantId, ActionCode.OPERATOR_CREATE);
 
         // TASK-BE-262: use per-tenant check matching the (tenant_id, email) composite unique index
         // introduced by V0025. Same email in a different tenant is a separate, valid operator.
