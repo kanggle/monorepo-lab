@@ -11,11 +11,17 @@ spring:
       maximum-pool-size: 5
   flyway:
     enabled: true
-    # TASK-MONO-160: migration-dev carries the e2e-only globex-corp demo customer
-    # (V0021) so the ADR-020 D4 A↔B switch proof has a second customer with
-    # complementary [scm,erp] subscriptions, present at startup via Flyway
-    # (matching the acme-corp V0020 path). migration-dev is NOT loaded in
-    # production — globex-corp never reaches a real DB.
+    # migration-dev carries the e2e-only demo customers, present at startup via
+    # Flyway (matching the acme-corp production V0020 path) so account-service's
+    # keystone reverse-lookup resolves their entitled_domains. NOT loaded in
+    # production — these tenants never reach a real DB.
+    #   - V9001 globex-corp [scm,erp]  — TASK-MONO-160 (ADR-020 D4 A↔B switch)
+    #   - V9002 initech-corp [finance,wms] — TASK-MONO-207 (ADR-023 D2 proof)
+    # TASK-MONO-207: dev seeds use a high V9000+ band. The e2e timeline merges
+    # production db/migration + this dir under one version sequence; production
+    # grew a real V0021 (BE-341 status CHECK) that collided with the old globex
+    # V0021. The high band the (gapless) production timeline never reaches keeps
+    # them permanently decoupled.
     locations: classpath:db/migration,classpath:db/migration-dev
     baseline-on-migrate: false
   kafka:
