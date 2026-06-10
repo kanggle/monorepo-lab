@@ -354,3 +354,27 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
  WHERE o.operator_id = 'multi-operator';
+
+-- ===========================================================================
+-- TASK-MONO-207 — ADR-MONO-023 D2 cross-service plane-separation proof.
+--
+-- This block is ADD-ONLY. It grants the existing multi-operator a THIRD
+-- assignment — to `initech-corp`, the dedicated tenant the
+-- subscription-plane-separation spec mutates at runtime. The matching
+-- account_db side (initech-corp tenant + [finance,wms] subscriptions) is seeded
+-- by account-service Flyway-dev V9002 (present at startup, like globex V9001).
+--
+-- WHY this is the IAM-plane half of the D2 proof: this operator_tenant_assignment
+-- row is exactly what the assume-tenant exchange's D2 assignment gate checks. The
+-- spec suspends initech's `finance` ENTITLEMENT (account_db, entitlement plane)
+-- and proves the re-issued operator token drops `finance` from entitled_domains
+-- WHILE this assignment row stays byte-unchanged — the operator can still assume
+-- initech-corp (switch → 200), and `wms` stays entitled. Entitlement vanished;
+-- the IAM binding survived (GCP billing↔IAM parity).
+--
+-- Re-runnable: INSERT IGNORE (same discipline as § 12).
+-- ===========================================================================
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'initech-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id = 'multi-operator';

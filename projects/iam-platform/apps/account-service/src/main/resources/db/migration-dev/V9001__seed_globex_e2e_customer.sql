@@ -1,3 +1,14 @@
+-- TASK-MONO-207: renumbered V0021 → V9001. The e2e Flyway timeline merges
+-- db/migration (production) + db/migration-dev (this dir) under one version
+-- sequence. Production grew a real V0021 (tenant_domain_subscription status
+-- CHECK, TASK-BE-341 / ADR-MONO-023 step 1) that COLLIDED with this file's old
+-- V0021 → Flyway "more than one migration with version 21" → account-service
+-- failed to start under the e2e profile (federation-e2e RED). Dev-only seeds now
+-- live in a high V9000+ band the (contiguous) production timeline will never
+-- reach, permanently decoupling them. (admin-service dev seeds interleave into
+-- production gaps — V0014/23/28 — but account-service production is gapless, so
+-- the high band is the robust choice here.)
+--
 -- TASK-MONO-160 (fixes TASK-MONO-158 ADR-MONO-020 D4 federation-e2e B-side):
 -- Seed a SECOND demo customer `globex-corp` with COMPLEMENTARY subscriptions
 -- [scm, erp] so the active-tenant switcher A↔B proof can flip the entitled set

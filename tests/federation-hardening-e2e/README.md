@@ -18,6 +18,15 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 | `operator-overview-composition.spec.ts` | all 5 | 5-card grid renders, no error banner |
 | `domain-health-composition.spec.ts` | all 5 | 5 domains UP, no DOWN status |
 
+**Post-MVP specs (added as later ADRs went runtime):**
+
+| Spec | Proves |
+|---|---|
+| `observability-trace-tree.spec.ts` | ADR-018 D4 cross-product distributed trace tree (MONO-144) |
+| `entitlement-trust-crossdomain.spec.ts` | ADR-019 entitlement-trust gate (acme-corp finance/wms entitled, scm/erp denied) (MONO-154) |
+| `tenant-switch-rescope.spec.ts` | ADR-020 D4 active-tenant switch re-scopes the signed token (acme ↔ globex) (MONO-158) |
+| `subscription-plane-separation.spec.ts` | ADR-023 D2 entitlement↔IAM plane separation — runtime suspend drops the domain from the re-issued token while the IAM assignment survives; reversible (MONO-207) |
+
 ## CI trigger
 
 `.github/workflows/federation-hardening-e2e.yml` — nightly cron `0 19 * * *` UTC (KST 04:00, 1h offset from nightly-e2e.yml) + `workflow_dispatch`. NO push trigger (ADR-018 D1 explicit: nightly + on-demand sufficient).
