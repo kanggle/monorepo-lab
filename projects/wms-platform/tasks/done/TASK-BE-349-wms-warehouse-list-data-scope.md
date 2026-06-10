@@ -8,7 +8,9 @@ ADR-MONO-025 § 3.3 follow-on — close the wms ABAC data-scope **LIST leak**. `
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: impl PR #1276 (squash `cdbe4c86`). 3차원 ✓ (MERGED / origin/main tip=`cdbe4c86` 일치 / 20 체크 pass·0 fail — Build & Test[wms 슬라이스 + H2 searchScoped] + 전 서비스 IT 매트릭스). **AC-5 federation net-zero ✓**: nightly run `27307416360` GREEN (13 passed, 1 known-flaky=ADR-023 plane-separation·무관) — wms 골든패스(SUPER_ADMIN base 토큰 data_scope 부재→null scope→변경 없는 `search`)가 그대로 통과, DATA_SCOPE 에러 0. `WarehouseController.list`가 deliberately-scoped operator의 페이지+`totalElements`를 in-scope 창고코드로 DB측 `IN` 필터 confine. **회귀 위험 격리**: 기존 `search` 쿼리 byte-identical 유지(net-zero 경로), 신규 `searchScoped`는 non-empty 스코프에서만 실행. 스코프는 `ListWarehousesQuery`(2-arg 호환 ctor)에 싣고 공유 `AbacDataScope`로 해석. **ABAC 데이터스코프 LIST 누수 종결** — getById(MONO-215)+list(BE-349) 양면 enforcement. 잔여 follow-on=zone/location reachability·finance·erp re-point·2단계 조건식(보류). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
