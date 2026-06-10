@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
@@ -26,5 +27,16 @@ public class TenantDomainSubscriptionRepositoryImpl implements TenantDomainSubsc
         return jpaRepository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, tenantId).stream()
                 .map(TenantDomainSubscriptionJpaEntity::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<TenantDomainSubscription> findByTenantIdAndDomainKey(String tenantId, String domainKey) {
+        return jpaRepository.findByTenantIdAndDomainKey(tenantId, domainKey)
+                .map(TenantDomainSubscriptionJpaEntity::toDomain);
+    }
+
+    @Override
+    public TenantDomainSubscription save(TenantDomainSubscription subscription) {
+        return jpaRepository.save(TenantDomainSubscriptionJpaEntity.fromDomain(subscription)).toDomain();
     }
 }

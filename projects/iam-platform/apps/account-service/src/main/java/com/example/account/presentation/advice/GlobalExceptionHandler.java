@@ -6,12 +6,15 @@ import com.example.account.application.exception.BulkLimitExceededException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.RateLimitedException;
+import com.example.account.application.exception.SubscriptionAlreadyExistsException;
+import com.example.account.application.exception.SubscriptionNotFoundException;
 import com.example.account.application.exception.TenantAlreadyExistsException;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.status.StateTransitionException;
+import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
@@ -151,5 +154,26 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("TENANT_SUSPENDED",
                         "Tenant is suspended: " + e.getTenantId()));
+    }
+
+    // TASK-BE-342 (ADR-MONO-023 D3): tenant↔domain subscription mutation errors
+
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionNotFound(SubscriptionNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("SUBSCRIPTION_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(SubscriptionAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionAlreadyExists(SubscriptionAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SUBSCRIPTION_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalSubscriptionTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalSubscriptionTransition(
+            IllegalSubscriptionTransitionException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SUBSCRIPTION_TRANSITION_INVALID", e.getMessage()));
     }
 }
