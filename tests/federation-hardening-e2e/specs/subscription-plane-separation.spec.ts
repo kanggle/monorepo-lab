@@ -13,10 +13,8 @@ import { loginAsMultiOperator } from '../fixtures/login';
  * DEFERRED: the cross-service half of the D2 invariant. The IT proved the
  * entitlement-plane half in-process (suspend drops the domain from both read
  * paths, row preserved, reversible); IAM-plane preservation was argued
- * structurally (account-service has no admin_db access). This spec closes the
- * loop end-to-end on the full federation stack (auth + account + admin +
- * console-web + 5 domains), proving the thing only a running multi-service stack
- * can:
+ * structurally. This spec closes the loop end-to-end on the full federation
+ * stack (auth + account + admin + console-web + 5 domains):
  *
  *   an entitlement SUSPEND (entitlement plane, account_db) is reflected in a
  *   RE-ISSUED operator token's signed `entitled_domains` claim, WHILE the
@@ -25,60 +23,47 @@ import { loginAsMultiOperator } from '../fixtures/login';
  *   re-grant).
  *
  * Logic chain exercised:
- *   mutate (D3 surface → D2 delegation): the admin RBAC surface
- *     PATCH /api/admin/subscriptions/{tenant}/{domain}/status — gated by the
- *     `subscription.manage` permission (TASK-BE-343, V0032 seeds it on
- *     SUPER_ADMIN) — authorizes in the IAM plane, then delegates the entitlement
- *     write to account-service (TASK-BE-342). This is the EXACT D2/D3 path, not
- *     a DB poke.
- *   re-issue (the cross-service fidelity): the operator switches tenant, driving
- *     the assume-tenant RFC 8693 exchange, which re-mints the domain-facing token
- *     with `entitled_domains` re-read from account-service at issuance
- *     (TenantClaimTokenCustomizer.populateEntitledDomains). The suspended domain
- *     is gone from the fresh token; the control domain remains.
- *   IAM-plane survival (the discriminator): the switch STILL returns 200 — the
- *     assume-tenant D2 assignment gate (auth → admin
- *     /internal/operator-assignments/check) would 403 if the binding were
- *     touched. Entitlement vanished; assignment survived. RESUME restores via the
- *     same row, no re-grant.
+ *   mutate (D3 surface → D2 delegation): PATCH /api/admin/subscriptions/...
+ *     gated by `subscription.manage` (BE-343, V0032 on SUPER_ADMIN) authorizes
+ *     in the IAM plane, then delegates the entitlement write to account-service
+ *     (BE-342). The exact D2/D3 path, not a DB poke.
+ *   re-issue: the operator switches tenant → the assume-tenant RFC 8693 exchange
+ *     re-mints the domain-facing token with `entitled_domains` re-read from
+ *     account-service at issuance. To force a genuinely fresh exchange (defeat
+ *     any same-tenant idempotency) the re-mint switches AWAY (globex-corp) and
+ *     BACK to initech-corp.
+ *   IAM-plane survival: the switch back STILL returns 200 — the assume-tenant D2
+ *     assignment gate would 403 if the binding were touched. Entitlement
+ *     vanished; assignment survived. RESUME restores via the same row.
  *
- * Assertion channel: the SIGNED `entitled_domains` claim is decoded directly from
+ * Assertion channel: the SIGNED `entitled_domains` claim decoded directly from
  * the `console_assumed_token` HttpOnly cookie set by the real server-side
- * exchange — the most direct proof of token re-issuance fidelity (claim → card
- * is already proven by the MONO-154 / MONO-158 overview-card specs, so this spec
- * deliberately does not re-assert the cards, avoiding producer-health flakiness).
+ * exchange (claim → card is already proven by MONO-154 / MONO-158, so the cards
+ * are not re-asserted here — avoids producer-health flakiness).
  *
- * Isolation: a DEDICATED tenant `initech-corp` ([finance,wms], account-service
- * Flyway-dev V9002 + the multi-operator assignment in seed.sql § 14) that NO
- * other spec references. The suspend/resume cycle therefore cannot race-break the
- * fullyParallel acme-corp / globex-corp assertions; the suspend target `finance`
- * is always restored in `finally`.
- *
- * Session isolation: the multi-operator op context logs in fresh with empty
- * storageState (the suite-wide SUPER_ADMIN '*' wildcard would defeat the
- * entitlement gate). The admin context REUSES the persisted global-setup
- * SUPER_ADMIN storageState (it alone has subscription.manage) — no in-test login,
- * so it does not collide with Playwright-managed tracing (the MONO-155
- * `tracing.start already started` trap that bites in-test loginAsSuperAdmin) and
- * the exchanged operator token is read straight from the persisted cookies.
+ * Isolation: a DEDICATED tenant `initech-corp` ([finance,wms], Flyway-dev V9002
+ * + seed.sql § 14 assignment) referenced by NO other spec, so the runtime
+ * suspend/resume cannot race-break the fullyParallel acme/globex specs; finance
+ * is always restored in `finally`. retries:0 — this is a deterministic
+ * state-machine proof (no infra-flake retry; retries also caused 409
+ * self-transition noise from leftover SUSPENDED state).
  *
  * Verification channel: federation-hardening-e2e is nightly + workflow_dispatch
  * (NOT PR-triggered) — verified via `gh workflow run federation-hardening-e2e.yml`.
  */
 
-// Override the suite-wide SUPER_ADMIN storageState — both identities log in fresh.
+// Override the suite-wide SUPER_ADMIN storageState — the operator logs in fresh.
 test.use({ storageState: { cookies: [], origins: [] } });
+test.describe.configure({ retries: 0 });
 
-/** admin-service host base URL (docker-compose maps 18085:8085); the workflow
- *  exports E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
- *  exchanged operator token (there is no console-web subscription proxy route —
- *  unlike /api/tenant — so the spec drives the backend surface directly, which is
- *  the D2/D3 path under test). */
+/** admin-service host base URL (docker-compose maps 18085:8085); workflow exports
+ *  E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
+ *  exchanged operator token (no console-web subscription proxy route exists). */
 const ADMIN_BASE = process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085';
 
-/** The persisted global-setup SUPER_ADMIN session (playwright.config STORAGE_STATE).
- *  The admin context loads it instead of logging in, so it carries the exchanged
- *  operator token without an in-test OIDC round-trip. */
+/** The persisted global-setup SUPER_ADMIN session (playwright.config STORAGE_STATE):
+ *  loaded by the admin context (no in-test login → no tracing.start collision);
+ *  carries the exchanged operator token. */
 const STORAGE_STATE = path.join(__dirname, '../fixtures/.storage-state.json');
 
 /** session.ts cookie names (HttpOnly — readable via BrowserContext.cookies()). */
@@ -86,6 +71,7 @@ const OPERATOR_COOKIE = 'console_operator_token'; // the /api/admin/** credentia
 const ASSUMED_COOKIE = 'console_assumed_token'; // the re-scoped domain-facing token
 
 const TENANT = 'initech-corp';
+const INTERMEDIATE = 'globex-corp'; // switch-away target to force a fresh exchange
 const SUSPEND_DOMAIN = 'finance'; // the entitlement toggled by the proof
 const CONTROL_DOMAIN = 'wms'; // must stay entitled (only the target drops)
 
@@ -97,25 +83,41 @@ async function readCookie(
   return all.find((c) => c.name === name)?.value;
 }
 
-/** Decode a JWT payload (no verification needed — the token was just minted by
- *  the real exchange; we only read its claims). */
+/** Decode a JWT payload (no verification — the token was just minted by the real
+ *  exchange; we only read its claims). */
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
   const payload = jwt.split('.')[1];
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
 }
 
-/** The signed `entitled_domains` claim from the current assumed (re-scoped) token. */
-async function assumedEntitledDomains(ctx: BrowserContext): Promise<string[]> {
+/** The current assumed (re-scoped) token's claims, with a diagnostic log of the
+ *  re-scope target + issued-at + entitled set (so a stale-token vs stale-data
+ *  failure is distinguishable in the run log). */
+async function assumedClaims(
+  ctx: BrowserContext,
+  label: string,
+): Promise<Record<string, unknown>> {
   const tok = await readCookie(ctx, ASSUMED_COOKIE);
   expect(
     tok,
     'assumed token cookie must be present after an active-tenant switch',
   ).toBeTruthy();
   const claims = decodeJwtPayload(tok!);
-  expect(
-    claims.tenant_id,
-    'assumed token must be re-scoped to the selected tenant',
-  ).toBe(TENANT);
+  // eslint-disable-next-line no-console
+  console.log(
+    `[MONO-207] ${label}: tenant_id=${claims.tenant_id} iat=${claims.iat} entitled=${JSON.stringify(claims.entitled_domains)}`,
+  );
+  return claims;
+}
+
+async function entitledOf(
+  ctx: BrowserContext,
+  label: string,
+): Promise<string[]> {
+  const claims = await assumedClaims(ctx, label);
+  expect(claims.tenant_id, 'assumed token re-scoped to the selected tenant').toBe(
+    TENANT,
+  );
   return (claims.entitled_domains as string[] | undefined) ?? [];
 }
 
@@ -130,9 +132,16 @@ async function switchTenant(ctx: BrowserContext, tenant: string): Promise<void> 
   expect((await res.json()).activeTenant).toBe(tenant);
 }
 
+/** Re-mint the initech assumed token via a genuinely fresh exchange: switch AWAY
+ *  to globex then BACK to initech (so the second initech exchange cannot reuse a
+ *  same-audience idempotent result). */
+async function remintInitech(ctx: BrowserContext): Promise<void> {
+  await switchTenant(ctx, INTERMEDIATE);
+  await switchTenant(ctx, TENANT);
+}
+
 /** Mutate a subscription through the admin RBAC surface (D3 → D2 delegation),
- *  with the proven /api/admin/** header set (Bearer operator token + reason +
- *  active tenant). Asserts the producer 200. */
+ *  with the proven /api/admin/** header set. Logs + asserts the producer 200. */
 async function setStatus(
   adminCtx: BrowserContext,
   operatorToken: string,
@@ -153,6 +162,11 @@ async function setStatus(
       },
       data: { status },
     },
+  );
+  const bodyText = await res.text();
+  // eslint-disable-next-line no-console
+  console.log(
+    `[MONO-207] setStatus ${tenant}/${domain}→${status}: http=${res.status()} body=${bodyText}`,
   );
   expect(
     res.status(),
@@ -214,18 +228,19 @@ test.describe('ADR-MONO-023 D2 — entitlement↔IAM plane separation (cross-ser
       // ── A. baseline: switch to initech → entitled_domains = [finance, wms] ──
       await switchTenant(opCtx, TENANT);
       expect(
-        await assumedEntitledDomains(opCtx),
+        await entitledOf(opCtx, 'A/baseline'),
         'baseline: both subscriptions entitled in the freshly minted token',
       ).toEqual(expect.arrayContaining([SUSPEND_DOMAIN, CONTROL_DOMAIN]));
 
       // ── B. SUSPEND finance via the admin RBAC surface (D3 authz → D2 write) ─
       await setStatus(adminCtx, operatorToken, TENANT, SUSPEND_DOMAIN, 'SUSPENDED');
 
-      // ── C. re-issue: switch initech again → token RE-MINTED ────────────────
-      // The switch STILL returns 200 (inside switchTenant) → the IAM-plane
-      // operator_tenant_assignment row is intact: the assume-tenant D2 assignment
-      // gate would 403 if the binding had been touched. The discriminator:
-      const afterSuspend = await assumedEntitledDomains(opCtx);
+      // ── C. re-issue (away→back) → token RE-MINTED ──────────────────────────
+      // The switch back STILL returns 200 → the IAM-plane operator_tenant_assignment
+      // row is intact (the assume-tenant D2 gate would 403 if touched). The
+      // discriminator:
+      await remintInitech(opCtx);
+      const afterSuspend = await entitledOf(opCtx, 'C/after-suspend');
       expect(
         afterSuspend,
         'entitlement plane: the SUSPENDED domain is dropped from the re-issued token',
@@ -237,9 +252,9 @@ test.describe('ADR-MONO-023 D2 — entitlement↔IAM plane separation (cross-ser
 
       // ── D. RESUME → reversible via the SAME assignment, no re-grant ─────────
       await setStatus(adminCtx, operatorToken, TENANT, SUSPEND_DOMAIN, 'ACTIVE');
-      await switchTenant(opCtx, TENANT);
+      await remintInitech(opCtx);
       expect(
-        await assumedEntitledDomains(opCtx),
+        await entitledOf(opCtx, 'D/after-resume'),
         'resume restored the entitlement via the same subscription row (no re-create, no re-grant)',
       ).toEqual(expect.arrayContaining([SUSPEND_DOMAIN, CONTROL_DOMAIN]));
     } finally {
