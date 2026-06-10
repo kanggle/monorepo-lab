@@ -22,15 +22,17 @@ A domain-facing (assume-tenant) token MAY carry a **data-scope** claim: an array
 
 ## 2. Semantics (uniform across domains)
 
-`AbacDataScope` classifies the parsed token set into exactly three cases:
+`AbacDataScope` classifies the parsed token set into three cases. The **data-scope filter applies only when the operator is _deliberately scoped_** (`!isEmpty() && !isUnrestricted()`):
 
-| Case | Token set | Meaning | Rule |
+| Case | Token set | `isUnrestricted()` | Domain action |
 |---|---|---|---|
-| **Unrestricted** | contains `"*"` | platform / unscoped | no data filter — the operator sees everything (within their RBAC + tenant scope). |
-| **Scoped** | non-empty, no `"*"` | deliberately scoped | the domain filters to rows **reachable from** those tokens; **deny-by-default** for anything outside. |
-| **Empty / absent** | no tokens | fail-closed | **deny** — NOT "allow all". `isUnrestricted()` is `false`; `allows(x)` is `false` for every `x`. |
+| **Unrestricted** | contains `"*"` | `true` | no filter — sees everything (within RBAC + tenant scope). |
+| **Deliberately scoped** | non-empty, no `"*"` | `false` | filter to rows **reachable from** those tokens; **deny-by-default** outside. |
+| **Unscoped (empty / absent)** | no tokens | `false` | **no filter (net-zero)** — the operator has not been scoped, so behaves as before data-scoping. |
 
-**Net-zero:** the producer maps an UNSCOPED assignment (`operator_tenant_assignment.org_scope` NULL) to the claim `["*"]`. So every operator who has not been deliberately scoped carries `["*"]` ⇒ unrestricted ⇒ identical behaviour to before data-scoping. The empty/absent case is therefore a defensive fail-closed path (a correctly minted token always carries at least `["*"]`), never the net-zero default.
+**Why empty = net-zero (not fail-closed):** the `org_scope` claim is injected ONLY on the assume-tenant operator token, and the producer maps an UNSCOPED assignment (`operator_tenant_assignment.org_scope` NULL) to `["*"]`. A **base authorization_code token** and a **client_credentials machine token** carry NO data-scope claim at all — those legitimately reach a domain (e.g. a platform `tenant_id='*'` operator) and MUST keep working unchanged. So a domain's **data-scope filter treats empty/absent as unrestricted** (filter iff deliberately scoped) — the only net-zero-safe default for an opt-in feature.
+
+> `AbacDataScope.allows(token)` is a strict per-token primitive that returns `false` on empty (it answers "is this exact token listed"). A domain calls it ONLY inside the deliberately-scoped branch — never to decide the net-zero default. A domain MAY additionally **fail-closed** for a single high-security *targeted* decision when it can guarantee real operators always carry a scope (erp does this for department-targeted writes); that is a domain-local hardening, not the default for the visibility filter.
 
 **Narrowing-only invariant:** data-scope can only *reduce* what an already-authorised operator reaches. It is composed with — never a substitute for — the RBAC permission check and the tenant-scope check. All three must pass. Data-scope MUST NOT be consulted to *grant* access.
 
@@ -46,7 +48,9 @@ The scope tokens mean whatever the owning domain decides; each domain documents 
 | wms | warehouse ids | a row is in-scope iff its warehouse (or the warehouse of its zone/location) is a scoped id (ADR-025 D3, first extension). |
 | finance | accounting-unit ids | *(future)* a row is in-scope iff its accounting unit is a scoped id. |
 
-A new domain adopts data-scope by: (a) reading the claim via `AbacDataScope.fromClaimValues(jwt.getClaim("data_scope"), jwt.getClaim("org_scope"))`; (b) on `isUnrestricted()` → no filter; (c) else filter its query/results so only rows reachable from `tokens()` are returned (deny-by-default); (d) treating empty as deny (fail-closed). Adoption is **opt-in and net-zero** — a domain that has not adopted data-scope behaves exactly as today.
+A new domain adopts data-scope by: (a) reading the claim via `AbacDataScope.fromClaimValues(jwt.getClaim("data_scope"), jwt.getClaim("org_scope"))`; (b) computing `restricted = !scope.isEmpty() && !scope.isUnrestricted()`; (c) when `restricted` → filter its query/results so only rows reachable from `scope.tokens()` are returned (deny-by-default outside, e.g. via `scope.allows(rowToken)`); (d) otherwise (unrestricted OR unscoped) → **no filter (net-zero)**. Adoption is **opt-in and net-zero** — a domain that has not adopted data-scope, or an operator that has not been deliberately scoped, behaves exactly as today.
+
+wms (ADR-025 step 2) is the first adopter: `WarehouseController.getById` denies (403 `DATA_SCOPE_FORBIDDEN`) a deliberately-scoped operator targeting a warehouse whose code is outside its scope; unrestricted/unscoped operators are unaffected.
 
 ---
 

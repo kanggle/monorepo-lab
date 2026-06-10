@@ -13,12 +13,16 @@ import com.wms.master.application.port.in.WarehouseCrudUseCase;
 import com.wms.master.application.port.in.WarehouseQueryUseCase;
 import com.wms.master.application.query.ListWarehousesQuery;
 import com.wms.master.application.query.WarehouseListCriteria;
+import com.example.security.jwt.AbacDataScope;
 import com.wms.master.application.result.WarehouseResult;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.model.WarehouseStatus;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,11 +60,41 @@ public class WarehouseController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<WarehouseResponse> getById(@PathVariable UUID id) {
+    public ResponseEntity<WarehouseResponse> getById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
         WarehouseResult result = queryUseCase.findById(id);
+        requireWarehouseInScope(jwt, result.warehouseCode());
         return ResponseEntity.ok()
                 .eTag(ControllerSupport.etag(result.version()))
                 .body(WarehouseResponse.from(result));
+    }
+
+    /**
+     * TASK-MONO-215 (ADR-MONO-025 § 3.3 step 2): the first ABAC data-scope
+     * enforcement point in wms. The operator's {@code data_scope}/{@code org_scope}
+     * claim (read via the shared {@link AbacDataScope}) is interpreted by wms as a
+     * set of warehouse codes (per {@code platform/abac-data-scope.md} § 3).
+     *
+     * <p><b>Net-zero</b>: an unrestricted ({@code "*"}) or unscoped (empty/absent —
+     * base authorization_code tokens and machine tokens carry no data_scope; the
+     * assume-tenant producer emits {@code ["*"]} for unscoped assignments) operator
+     * is NOT confined. Only a deliberately-scoped operator (a non-empty set without
+     * {@code "*"}) is restricted: targeting a warehouse outside the set → 403
+     * {@code DATA_SCOPE_FORBIDDEN}.
+     */
+    private static void requireWarehouseInScope(Jwt jwt, String warehouseCode) {
+        if (jwt == null) {
+            return; // unauthenticated requests are already rejected by the resource server
+        }
+        AbacDataScope scope = AbacDataScope.fromClaimValues(
+                jwt.getClaim(AbacDataScope.CLAIM_DATA_SCOPE),
+                jwt.getClaim(AbacDataScope.CLAIM_ORG_SCOPE));
+        boolean restricted = !scope.isEmpty() && !scope.isUnrestricted();
+        if (restricted && !scope.allows(warehouseCode)) {
+            throw new DataScopeForbiddenException(
+                    "warehouse " + warehouseCode + " is outside the operator's data-scope");
+        }
     }
 
     @GetMapping

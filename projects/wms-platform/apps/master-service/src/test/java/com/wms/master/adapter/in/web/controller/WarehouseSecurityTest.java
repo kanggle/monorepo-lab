@@ -95,4 +95,64 @@ class WarehouseSecurityTest {
                                 List.of("MASTER_READ", "MASTER_WRITE")))))
                 .andExpect(status().isOk());
     }
+
+    // ─── TASK-MONO-215 (ADR-MONO-025 step 2) ABAC data-scope on getById ───────
+
+    private void stubWarehouse(UUID id, String code) {
+        when(queryUseCase.findById(id)).thenReturn(new WarehouseResult(
+                id, code, "X", null, "Asia/Seoul", WarehouseStatus.ACTIVE,
+                0L, Instant.now(), "a", Instant.now(), "a"));
+    }
+
+    @Test
+    void getById_scopedOperator_outOfScopeWarehouse_returns403DataScopeForbidden() throws Exception {
+        UUID id = UUID.randomUUID();
+        stubWarehouse(id, "WH-OTHER");
+        mockMvc.perform(get("/api/v1/master/warehouses/" + id)
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("data_scope", List.of("WH-A", "WH-B")))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("DATA_SCOPE_FORBIDDEN"));
+    }
+
+    @Test
+    void getById_scopedOperator_inScopeWarehouse_returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        stubWarehouse(id, "WH-A");
+        mockMvc.perform(get("/api/v1/master/warehouses/" + id)
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("data_scope", List.of("WH-A", "WH-B")))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void getById_legacyOrgScopeAlias_isHonoured() throws Exception {
+        UUID id = UUID.randomUUID();
+        stubWarehouse(id, "WH-OTHER");
+        mockMvc.perform(get("/api/v1/master/warehouses/" + id)
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("org_scope", List.of("WH-A")))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("DATA_SCOPE_FORBIDDEN"));
+    }
+
+    @Test
+    void getById_wildcardScope_returns200_netZero() throws Exception {
+        UUID id = UUID.randomUUID();
+        stubWarehouse(id, "WH-OTHER");
+        mockMvc.perform(get("/api/v1/master/warehouses/" + id)
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("data_scope", List.of("*")))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void getById_noDataScopeClaim_returns200_netZero() throws Exception {
+        // base authorization_code / machine tokens carry no data_scope → unrestricted.
+        UUID id = UUID.randomUUID();
+        stubWarehouse(id, "WH-OTHER");
+        mockMvc.perform(get("/api/v1/master/warehouses/" + id)
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ"))))
+                .andExpect(status().isOk());
+    }
 }

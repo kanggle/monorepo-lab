@@ -3,6 +3,7 @@ package com.wms.master.adapter.in.web.advice;
 import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.wms.master.domain.exception.BarcodeDuplicateException;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
@@ -191,6 +192,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorEnvelope.of("FORBIDDEN",
                         "Insufficient privileges for this operation"));
+    }
+
+    /**
+     * TASK-MONO-215 (ADR-MONO-025 § 3.3 step 2): a deliberately data-scoped
+     * operator targeted a warehouse outside its {@code data_scope} set → 403
+     * {@code DATA_SCOPE_FORBIDDEN} (distinct from the RBAC {@code FORBIDDEN} and
+     * the tenant {@code TENANT_FORBIDDEN}; ABAC data visibility, not privilege).
+     */
+    @ExceptionHandler(DataScopeForbiddenException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleDataScopeForbidden(DataScopeForbiddenException ex) {
+        return build(HttpStatus.FORBIDDEN, ex);
     }
 
     /**

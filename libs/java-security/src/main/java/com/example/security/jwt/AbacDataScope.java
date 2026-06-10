@@ -31,10 +31,15 @@ import java.util.Set;
  *       filters to rows reachable from those tokens; <b>deny-by-default</b> for
  *       anything outside ({@link #allows(String)} returns {@code false}).</li>
  *   <li><b>Empty / absent</b> — NOT unrestricted: {@link #isUnrestricted()} is
- *       {@code false} and {@link #allows(String)} denies everything. This is the
- *       <b>fail-closed</b> defensive case; a correctly minted token always
- *       carries at least {@code ["*"]}, so an empty scope means "deny", never
- *       "allow all".</li>
+ *       {@code false} and {@link #allows(String)} (a strict per-token primitive)
+ *       returns {@code false} for every token. For a <b>net-zero data-scope
+ *       FILTER</b> a domain must treat empty as "no filter" — i.e. only restrict
+ *       when DELIBERATELY scoped: {@code !isEmpty() && !isUnrestricted()}. Base
+ *       authorization_code / machine tokens legitimately carry no scope and must
+ *       keep working. A domain MAY fail-closed for a single high-security TARGET
+ *       decision via {@link #allows(String)} when it can guarantee real operators
+ *       always carry a scope — that is a domain-local hardening, not the default.
+ *       See {@code platform/abac-data-scope.md} § 2.</li>
  * </ul>
  *
  * <p>Data-scope is <b>narrowing only</b> — it can never widen what an already
