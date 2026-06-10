@@ -69,6 +69,8 @@ Six decision axes. Each table's first row is **CHOSEN (PROPOSED direction)**.
 | B. Subscription encoded only in JWT scope (no table) | The operator's token carries the subscribed-domain set as a scope claim; no persistent mapping | Rejected — no admin/audit surface; can't drive the catalog for a tenant the current operator isn't scoped to; entitlement is a durable business fact, not only a token-embedded ephemeral. (The token MAY *carry* the entitlement for D5 — but the source of truth is the table.) |
 | C. Per-domain subscriber config | Each domain lists its own subscribers | Rejected — fragments the entitlement source; a cross-tenant catalog can't be centrally assembled; guaranteed drift between the catalog's view and each domain's view. |
 
+> **Additive note (ADR-MONO-023, 2026-06-10 — HARDSTOP-04 extension record):** D2 created `tenant_domain_subscription (tenant_id, domain_key, status, …)` and the backward-compatible all-`ACTIVE` seed, but left the `status` column's **state set + transitions** undefined and deferred its **mutation/admin surface** as § 3.3-step-2 *"(optional)"*. The production form — the subscription **lifecycle state machine** (`ACTIVE`/`SUSPENDED`/`CANCELLED`), the **entitlement-plane ↔ IAM-plane separation invariant** (suspending a subscription affects entitlement only; operator assignments + RBAC are preserved — GCP billing↔IAM parity), and a `subscription.manage`-gated admin surface distinct from `operator.manage` — is decided in [ADR-MONO-023](ADR-MONO-023-entitlement-iam-plane-separation.md) (PROPOSED). This note is additive; the D2 decision table above is byte-unchanged.
+
 ### D3 — operator ↔ tenant assignment (AWS permission-set analog; least-privilege)
 
 | Option | Mechanics | Verdict |
