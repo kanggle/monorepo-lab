@@ -2,10 +2,14 @@ package com.example.admin.infrastructure.client;
 
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
+import com.example.admin.application.exception.SubscriptionAlreadyExistsException;
+import com.example.admin.application.exception.SubscriptionNotFoundException;
+import com.example.admin.application.exception.SubscriptionTransitionInvalidException;
 import com.example.admin.application.exception.TenantAlreadyExistsException;
 import com.example.admin.application.exception.TenantNotFoundException;
 import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.port.TenantProvisioningPort;
+import com.example.admin.application.tenant.SubscriptionMutationSummary;
 import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
@@ -243,6 +247,115 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
         }
     }
 
+    // TASK-BE-343 (ADR-MONO-023 D3): subscribe (create) — delegate the entitlement
+    // write to account-service. account-service 404 TENANT_NOT_FOUND → TenantNotFoundException,
+    // 409 SUBSCRIPTION_ALREADY_EXISTS → SubscriptionAlreadyExistsException,
+    // 5xx/CB-open → DownstreamFailureException.
+    @Override
+    @Retry(name = CB_NAME)
+    @CircuitBreaker(name = CB_NAME)
+    public SubscriptionMutationSummary subscribe(String tenantId, String domainKey,
+                                                 String reason, String actorId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("tenantId", tenantId);
+        body.put("domainKey", domainKey);
+        body.put("actorType", "operator");
+        if (actorId != null) body.put("actorId", actorId);
+        if (reason != null) body.put("reason", reason);
+        try {
+            SubscriptionMutationResponse response = restClient.post()
+                    .uri("/internal/tenant-domain-subscriptions")
+                    .headers(h -> addInternalHeaders(h))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(SubscriptionMutationResponse.class);
+            return toMutationSummary(response);
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            String code = extractErrorCode(e.getResponseBodyAsByteArray());
+            log.warn("account-service returned {} ({}) on POST /internal/tenant-domain-subscriptions: {}",
+                    status, code, e.getMessage());
+            if (status == 404) {
+                throw new TenantNotFoundException(tenantId);
+            }
+            if (status == 409) {
+                throw new SubscriptionAlreadyExistsException(
+                        "Subscription already exists: (" + tenantId + ", " + domainKey + ")");
+            }
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new NonRetryableDownstreamException("account-service error " + status, e, status, code);
+            }
+            throw new DownstreamFailureException("account-service error " + status, e);
+        } catch (Exception e) {
+            log.error("account-service POST /internal/tenant-domain-subscriptions failed", e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
+    // TASK-BE-343 (ADR-MONO-023 D1/D3): transition (suspend/resume/cancel).
+    // account-service 404 SUBSCRIPTION_NOT_FOUND → SubscriptionNotFoundException,
+    // 409 SUBSCRIPTION_TRANSITION_INVALID → SubscriptionTransitionInvalidException,
+    // 5xx/CB-open → DownstreamFailureException.
+    @Override
+    @Retry(name = CB_NAME)
+    @CircuitBreaker(name = CB_NAME)
+    public SubscriptionMutationSummary changeStatus(String tenantId, String domainKey,
+                                                    String targetStatus, String reason, String actorId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", targetStatus);
+        body.put("actorType", "operator");
+        if (actorId != null) body.put("actorId", actorId);
+        if (reason != null) body.put("reason", reason);
+        try {
+            SubscriptionMutationResponse response = restClient.patch()
+                    .uri("/internal/tenant-domain-subscriptions/" + tenantId + "/" + domainKey)
+                    .headers(h -> addInternalHeaders(h))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(SubscriptionMutationResponse.class);
+            return toMutationSummary(response);
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            String code = extractErrorCode(e.getResponseBodyAsByteArray());
+            log.warn("account-service returned {} ({}) on PATCH /internal/tenant-domain-subscriptions/{}/{}: {}",
+                    status, code, tenantId, domainKey, e.getMessage());
+            if (status == 404) {
+                throw new SubscriptionNotFoundException(
+                        "Subscription not found: (" + tenantId + ", " + domainKey + ")");
+            }
+            if (status == 409) {
+                throw new SubscriptionTransitionInvalidException(
+                        "Illegal subscription transition for (" + tenantId + ", " + domainKey + ")");
+            }
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new NonRetryableDownstreamException("account-service error " + status, e, status, code);
+            }
+            throw new DownstreamFailureException("account-service error " + status, e);
+        } catch (Exception e) {
+            log.error("account-service PATCH /internal/tenant-domain-subscriptions/{}/{} failed",
+                    tenantId, domainKey, e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
+    private static SubscriptionMutationSummary toMutationSummary(SubscriptionMutationResponse r) {
+        if (r == null) return null;
+        return new SubscriptionMutationSummary(
+                r.tenantId(), r.domainKey(), r.previousStatus(), r.currentStatus(), r.occurredAt());
+    }
+
     // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
     // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
     private void addInternalHeaders(org.springframework.http.HttpHeaders h) {
@@ -310,5 +423,14 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
     private record SubscriptionItemResponse(
             String tenantId,
             String domainKey
+    ) {}
+
+    // TASK-BE-343: account POST/PATCH /internal/tenant-domain-subscriptions response shape.
+    private record SubscriptionMutationResponse(
+            String tenantId,
+            String domainKey,
+            String previousStatus,
+            String currentStatus,
+            Instant occurredAt
     ) {}
 }

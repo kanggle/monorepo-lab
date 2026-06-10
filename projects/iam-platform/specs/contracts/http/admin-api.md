@@ -1535,6 +1535,80 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 ---
 
+## Subscription Management (TASK-BE-343, ADR-MONO-023 step 2b)
+
+테넌트↔도메인 구독(entitlement 평면)의 operator-facing 관리 표면. 실제 쓰기는 account-service(entitlement authority)로 위임된다 — admin-service 는 `subscription.manage` 게이트 + 운영자 감사만 담당하고 account-service `POST/PATCH /internal/tenant-domain-subscriptions` 로 위임한다(ADR-023 D2: account-service 는 IAM 미접근). `subscription.manage` 는 `operator.manage` 와 **분리된** 권한이다(D3 — 두 평면 독립 위임 가능).
+
+### POST /api/admin/subscriptions
+
+신규 구독 생성(subscribe, ACTIVE).
+
+**Auth required**: Yes (operator token, `token_type=admin`)
+**Required permission**: `subscription.manage`
+**Granted to roles**: `SUPER_ADMIN`
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: string (required)`
+
+**Request**:
+```json
+{ "tenantId": "acme-corp", "domainKey": "scm" }
+```
+
+**Response 201**:
+```json
+{
+  "tenantId": "acme-corp",
+  "domainKey": "scm",
+  "previousStatus": null,
+  "currentStatus": "ACTIVE",
+  "occurredAt": "2026-06-10T10:00:00Z"
+}
+```
+
+`admin_actions: action_code=SUBSCRIPTION_SUBSCRIBE`, `permission_used=subscription.manage`, `target_type=SUBSCRIPTION`, `target_id=<tenantId>:<domainKey>`. account-service 가 `tenant.subscription.changed` (previousStatus=null) 발행.
+
+### PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status
+
+기존 구독 상태 전이(suspend/resume/cancel). `SubscriptionStatus` 상태머신 가드(account-service) 통과 필요.
+
+**Required permission**: `subscription.manage`
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: string (required)`
+
+**Request**:
+```json
+{ "status": "SUSPENDED" }
+```
+
+**Response 200**:
+```json
+{
+  "tenantId": "acme-corp",
+  "domainKey": "wms",
+  "previousStatus": "ACTIVE",
+  "currentStatus": "SUSPENDED",
+  "occurredAt": "2026-06-10T10:00:00Z"
+}
+```
+
+`admin_actions: action_code=SUBSCRIPTION_CHANGE_STATUS`. account-service 가 `tenant.subscription.changed` 발행.
+
+> **평면 분리 (ADR-023 D2)**: SUSPENDED/CANCELLED 전이는 entitlement 평면만 바꾼다 — 그 테넌트의 도메인이 카탈로그 + 다음-발급 `entitled_domains` 에서 빠지지만 operator 할당·RBAC 는 보존된다. SUSPENDED→ACTIVE 재개는 재부여 없이 접근 복구(GCP billing↔IAM parity).
+
+**Errors** (POST/PATCH 공통):
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `subscription.manage` 권한 없음 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
+| 404 | `TENANT_NOT_FOUND` | (POST) 대상 테넌트 미등록 (account-service 404) |
+| 404 | `SUBSCRIPTION_NOT_FOUND` | (PATCH) 대상 구독 부재 (account-service 404) |
+| 409 | `SUBSCRIPTION_ALREADY_EXISTS` | (POST) 동일 `(tenantId, domainKey)` 구독 존재 |
+| 409 | `SUBSCRIPTION_TRANSITION_INVALID` | (PATCH) 상태머신 가드 위반 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | account-service 5xx/timeout / circuit open |
+
+---
+
 ## Common Error Format
 
 ```json

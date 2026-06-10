@@ -21,6 +21,9 @@ import com.example.admin.application.exception.RefreshTokenReuseDetectedExceptio
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.SelfSuspendForbiddenException;
 import com.example.admin.application.exception.StateTransitionInvalidException;
+import com.example.admin.application.exception.SubscriptionAlreadyExistsException;
+import com.example.admin.application.exception.SubscriptionNotFoundException;
+import com.example.admin.application.exception.SubscriptionTransitionInvalidException;
 import com.example.admin.application.exception.TenantAlreadyExistsException;
 import com.example.admin.application.exception.TenantIdReservedException;
 import com.example.admin.application.exception.TenantNotFoundException;
@@ -272,6 +275,27 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTenantNotFound(TenantNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("TENANT_NOT_FOUND", e.getMessage()));
+    }
+
+    // TASK-BE-343 (ADR-MONO-023 D3) — subscription management delegation errors
+    // (account-service 404/409 surfaced unchanged to the operator).
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionNotFound(SubscriptionNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("SUBSCRIPTION_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(SubscriptionAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionAlreadyExists(SubscriptionAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SUBSCRIPTION_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(SubscriptionTransitionInvalidException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionTransitionInvalid(
+            SubscriptionTransitionInvalidException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SUBSCRIPTION_TRANSITION_INVALID", e.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

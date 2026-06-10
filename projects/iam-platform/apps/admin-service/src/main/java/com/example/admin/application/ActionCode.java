@@ -46,5 +46,10 @@ public enum ActionCode {
     TENANT_CREATE,
     TENANT_SUSPEND,
     TENANT_REACTIVATE,
-    TENANT_UPDATE
+    TENANT_UPDATE,
+    // TASK-BE-343 (ADR-MONO-023 D3): tenant↔domain subscription lifecycle
+    // (operator-facing surface delegating to account-service). target_type=SUBSCRIPTION,
+    // target_id="<tenantId>:<domainKey>", permission_used=subscription.manage.
+    SUBSCRIPTION_SUBSCRIBE,
+    SUBSCRIPTION_CHANGE_STATUS
 }
