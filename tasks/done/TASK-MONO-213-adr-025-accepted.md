@@ -8,7 +8,9 @@ ADR-MONO-025 PROPOSED → ACCEPTED. Flip the ABAC data-scope generalization ADR 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: ACCEPTED 전환 PR #1270 (squash `1999b82b`). 3차원 ✓ (MERGED / origin/main tip=`1999b82b` 일치 / doc-only pass). ADR-MONO-025 Status=ACCEPTED, D3=wms warehouse-scope 확정, Status Transition History ACCEPTED row 추가. 사용자 게이트="wms 창고 스코프"+"ACCEPTED 후 구현까지 진행". 다음=§3.3 실행(MONO-214 contract+공유 dual-read util → wms enforcement). 분석=Opus 4.8.
 
 # Owner
 
