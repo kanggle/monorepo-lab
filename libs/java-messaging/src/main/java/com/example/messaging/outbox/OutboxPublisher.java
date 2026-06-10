@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -45,7 +46,25 @@ public class OutboxPublisher {
         SendOutcome send(String eventType, String aggregateId, String payload);
     }
 
-    @Transactional
+    /**
+     * TASK-MONO-211 (ADR-MONO-004 § 4.7) — runs at {@code READ_COMMITTED}, NOT the
+     * default {@code REPEATABLE_READ}. {@link OutboxJpaRepository#findPendingWithLock}
+     * is a {@code SELECT … WHERE status='PENDING' … FOR UPDATE}; under REPEATABLE
+     * READ that takes next-key/gap locks over the PENDING range, and because the
+     * Kafka publish ({@code kafkaTemplate.send(...).get()}) happens inside this
+     * transaction while the lock is held, a slow/warming broker made the poller
+     * block concurrent business {@code INSERT}s into {@code outbox} for up to
+     * {@code innodb_lock_wait_timeout} (50s → 1205 → PessimisticLockingFailureException
+     * → the business mutation 500s). READ COMMITTED drops gap locking (only the
+     * matched rows are locked, never the gaps), so business INSERTs proceed while
+     * the poller publishes. Delivery semantics are unchanged: the {@code FOR UPDATE}
+     * still row-locks the claimed PENDING rows (single-poller exclusivity, no
+     * double-publish), the batch is read once then written (no re-read, so RC's
+     * weaker repeatable-read is irrelevant), and at-least-once + FIFO
+     * ({@code ORDER BY created_at}) are preserved. A slow Kafka now only degrades
+     * poller throughput (its own batch waits) instead of failing business writes.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void publishPendingEvents(EventSender sender) {
         List<OutboxJpaEntity> pendingEntries = outboxJpaRepository
                 .findPendingWithLock(PageRequest.of(0, batchSize));
