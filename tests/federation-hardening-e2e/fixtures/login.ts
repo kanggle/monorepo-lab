@@ -64,6 +64,18 @@ const DEFAULTS = {
   // so the assumed (re-scoped) token is what gates the domain cards.
   multiOperatorEmail: 'multi-operator@example.com',
   multiOperatorPassword: 'devpassword123!',
+  // TASK-MONO-210 — ADR-MONO-024 step 3 delegated administrators. Both scoped to
+  // the dedicated `umbrella-corp` tenant via their admin_operator_roles grant row
+  // (seed.sql § 15), NOT '*': the TENANT_ADMIN holds {operator.manage,
+  // tenant.admin.delegate} and the TENANT_BILLING_ADMIN holds {subscription.manage},
+  // each confined to umbrella-corp. They log in only to obtain the
+  // `console_operator_token` (the /api/admin/** credential) — the proof calls the
+  // admin RBAC surface directly with it (no assume-tenant / no domain cards), so
+  // the active-tenant cookie is irrelevant (activeTenant=null, like the multi-op).
+  tenantAdminEmail: 'tenant-admin-umbrella@example.com',
+  tenantAdminPassword: 'devpassword123!',
+  tenantBillingAdminEmail: 'tenant-billing-admin-umbrella@example.com',
+  tenantBillingAdminPassword: 'devpassword123!',
 };
 
 /**
@@ -236,6 +248,46 @@ export async function loginAsMultiOperator(
     // NO pre-set active tenant — the spec drives the switch.
     null,
     // In-test caller — the test context already has Playwright-managed tracing.
+    false,
+  );
+}
+
+/**
+ * TASK-MONO-210 — authenticates a context as the seeded `umbrella-corp`
+ * TENANT_ADMIN (ADR-MONO-024 D1/D4-B) via the SAME production-identical OIDC
+ * PKCE flow. The minted operator token's `sub` resolves (via token-exchange)
+ * to the `tenant-admin-umbrella` operator whose TENANT_ADMIN role is granted
+ * @ umbrella-corp — so its effective admin-grant scope is {umbrella-corp}. The
+ * spec reads the resulting `console_operator_token` cookie and drives the admin
+ * RBAC surface directly; no active-tenant cookie is needed (null).
+ */
+export async function loginAsTenantAdmin(
+  context: BrowserContext,
+): Promise<void> {
+  await driveOidcPkceLogin(
+    context,
+    DEFAULTS.tenantAdminEmail,
+    DEFAULTS.tenantAdminPassword,
+    null,
+    false,
+  );
+}
+
+/**
+ * TASK-MONO-210 — authenticates a context as the seeded `umbrella-corp`
+ * TENANT_BILLING_ADMIN (ADR-MONO-024 D5-C) via the SAME OIDC PKCE flow. Its
+ * `subscription.manage` role is granted @ umbrella-corp, so its admin-grant
+ * scope is {umbrella-corp} — it may suspend/resume umbrella-corp subscriptions
+ * (200) but is denied any other tenant (403 TENANT_SCOPE_DENIED).
+ */
+export async function loginAsTenantBillingAdmin(
+  context: BrowserContext,
+): Promise<void> {
+  await driveOidcPkceLogin(
+    context,
+    DEFAULTS.tenantBillingAdminEmail,
+    DEFAULTS.tenantBillingAdminPassword,
+    null,
     false,
   );
 }
