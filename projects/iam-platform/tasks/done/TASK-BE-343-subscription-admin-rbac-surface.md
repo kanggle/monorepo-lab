@@ -8,7 +8,9 @@ ADR-MONO-023 § 3.3 step 2b (D3) — admin-service operator-facing subscription-
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1244 (squash `f97c77a54077ffeff836f5c3ee8838c17212e30c`). ADR-MONO-023 § 3.3 step 2b (D3) — admin-service operator-facing 구독 관리 표면. `Permission.SUBSCRIPTION_MANAGE`(≠operator.manage) + ActionCode 2종 + registry(permission+targetType 양쪽 매핑) + V0032 시드(SUPER_ADMIN) + 예외 3종+advice(404/409/409) + 포트/클라이언트(account-service POST/PATCH 위임, 4xx code→예외/5xx→503) + ManageSubscriptionUseCase(위임+성공시 감사) + SubscriptionAdminController(POST+PATCH, @RequiresPermission+X-Operator-Reason). 계약: rbac.md(권한키+seed matrix) + admin-api.md(Subscription Management). **D2: admin-service는 RBAC(IAM)로 인가 후 entitlement write를 account-service로 위임; account-service는 IAM 미접근**. 검증: 컴파일 + use-case 3 + 슬라이스 6(201/200/403/401/400/409) + registry 신규코드 단언 + **전체 :admin-service:test 566/0 fail**(targetTypeFor 커버리지 회귀 로컬 자체적발·수정). 3차원 ✓(20 pass/0 fail, MERGED `f97c77a5`/origin tip 일치). **후속**: Step 3 평면분리 증명 IT(suspend→카탈로그+entitled_domains 제거 + 할당/RBAC 보존 + 재활성 복구). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
