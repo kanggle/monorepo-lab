@@ -1,6 +1,6 @@
 # ADR-MONO-025 — ABAC Data-Scope Generalization (`data_scope` as a cross-domain attribute-based data-scope claim)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-11
 
@@ -60,9 +60,8 @@ Enforcement invariants (uniform across domains):
 
 The first generalisation case is **wms**: a `data_scope` of warehouse ids restricts an operator's wms reads to those warehouses (and their child zones/locations). Proves the pattern is reusable beyond erp with no IAM change (wms reads the same claim, applies its own interpretation).
 
-- **D3-A (chosen-PROPOSED)** — wms warehouse-scope first (most data-rich domain; user listed it first).
-- **D3-B (alternative)** — finance accounting-unit first.
-- (User may pick the first domain at the ACCEPTED gate.)
+- **D3-A (CHOSEN, ACCEPTED 2026-06-11)** — wms warehouse-scope first (most data-rich domain; user-selected at the ACCEPTED gate).
+- **D3-B (rejected)** — finance accounting-unit first.
 
 ### D4 — Net-zero migration
 
@@ -142,4 +141,5 @@ Append-only.
 
 | Date | Transition | Decision direction | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-06-11 | created PROPOSED | D1 = canonical `data_scope` claim + `org_scope` alias (consumers dual-read; absent/null/`["*"]`=unrestricted net-zero); D2 = per-domain opaque-token interpretation contract (`platform/abac-data-scope.md`) with deny-by-default; D3 = first extension = wms warehouse-scope; D4 = net-zero (erp byte-unchanged, new domain opt-in); D5 = producer unchanged, consumer-side canonicalisation (no token-customizer touch); D6 = 2단계 role+condition DEFERRED (no policy engine); D7 = staged (contract+shared dual-read → wms enforcement → optional producer/2단계) | "③ 먼저 / ① 두번째 / ② 마지막·보류 … ② 1단계(저비용): 이미 있는 org_scope 를 ABAC 일반화의 첫 사례로 정식화, '데이터 스코프 = JWT claim attribute' 패턴을 다른 도메인으로 확장; 2단계는 필요시 역할+조건식; 풀 정책 언어 회피" → "진행" (TASK-MONO-212 — after ③/① closure the user authorised axis ② 1단계, ADR-first per the ADR-019…024 pattern) | #<this> (TASK-MONO-212) |
+| 2026-06-11 | created PROPOSED | D1 = canonical `data_scope` claim + `org_scope` alias (consumers dual-read; absent/null/`["*"]`=unrestricted net-zero); D2 = per-domain opaque-token interpretation contract (`platform/abac-data-scope.md`) with deny-by-default; D3 = first extension = wms warehouse-scope; D4 = net-zero (erp byte-unchanged, new domain opt-in); D5 = producer unchanged, consumer-side canonicalisation (no token-customizer touch); D6 = 2단계 role+condition DEFERRED (no policy engine); D7 = staged (contract+shared dual-read → wms enforcement → optional producer/2단계) | "③ 먼저 / ① 두번째 / ② 마지막·보류 … ② 1단계(저비용): 이미 있는 org_scope 를 ABAC 일반화의 첫 사례로 정식화, '데이터 스코프 = JWT claim attribute' 패턴을 다른 도메인으로 확장; 2단계는 필요시 역할+조건식; 풀 정책 언어 회피" → "진행" (TASK-MONO-212 — after ③/① closure the user authorised axis ② 1단계, ADR-first per the ADR-019…024 pattern) | #1268 (TASK-MONO-212) |
+| 2026-06-11 | PROPOSED → ACCEPTED | D1-D2, D4-D7 directions **finalised unchanged** from PROPOSED #1268 squash `1484c611`; **D3 finalised = wms warehouse-scope** (the first generalisation domain). Authorises the § 3.3 execution roadmap (dependency-correct base = this ACCEPTED main): `platform/abac-data-scope.md` contract + shared dual-read utility (erp net-zero re-point) → wms warehouse data-scope enforcement + IT → optional federation-e2e proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024). | "wms 창고 스코프 (권장)" + "ACCEPTED 후 구현까지 진행 (권장)" (TASK-MONO-213 — user selected wms as the first data-scope domain and authorised ACCEPTED + execution at the gate) | #<this> (TASK-MONO-213) |
