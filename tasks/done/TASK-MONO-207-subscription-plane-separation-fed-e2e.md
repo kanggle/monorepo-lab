@@ -8,7 +8,9 @@ ADR-MONO-023 § 3.3 D2 cross-service plane-separation federation-e2e proof + fed
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1248 (squash `843c812ad78d24ea06ade06df64ab4a802236d38`). ADR-MONO-023 § 3.3 D2 cross-service plane-separation 라이브 증명 + federation-e2e nightly 회귀 2건 동반 수복. **proof**(`subscription-plane-separation.spec.ts`): SUPER_ADMIN이 `subscription.manage` admin 표면(D3 authz→D2 위임, BE-343/342)으로 `initech-corp/finance` SUSPEND → multi-operator 재발급 토큰의 서명 `entitled_domains`에서 finance drop·wms 유지 → resume 복원, 매 switch 200(operator_tenant_assignment=IAM 평면 불변). 전용 테넌트 initech-corp(Flyway-dev **V9002** + seed §14 할당, 무간섭)·assumed-token 쿠키 직접 디코드. **회귀#1**: gap→iam rename(#1149) jar-restore `iam/`→`iam-platform/`(2026-06-06부터 nightly RED, mv exit 1). **회귀#2**: BE-341(#1240) production V0021 ↔ dev V0021(globex) 충돌 → dev seed V9000+ 대역(globex→**V9001**)으로 영구 분리. **라이브 검증**: federation-hardening-e2e workflow_dispatch 27255988866(proof 첫 GREEN)·27256534954(최종 11 passed, 2연속 재현). 증명 로그: A=[finance,wms]→suspend(ACTIVE→SUSPENDED 200)→C=[wms]→resume→D=[finance,wms]. 발견(문서화): 연속 동일-테넌트 assume-tenant 교환은 토큰 재사용 → 재발급은 away(globex)→back. 3차원 ✓(MERGED `843c812a`/origin tip 일치/PR 체크 0 fail). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
