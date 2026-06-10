@@ -50,7 +50,12 @@ The scope tokens mean whatever the owning domain decides; each domain documents 
 
 A new domain adopts data-scope by: (a) reading the claim via `AbacDataScope.fromClaimValues(jwt.getClaim("data_scope"), jwt.getClaim("org_scope"))`; (b) computing `restricted = !scope.isEmpty() && !scope.isUnrestricted()`; (c) when `restricted` → filter its query/results so only rows reachable from `scope.tokens()` are returned (deny-by-default outside, e.g. via `scope.allows(rowToken)`); (d) otherwise (unrestricted OR unscoped) → **no filter (net-zero)**. Adoption is **opt-in and net-zero** — a domain that has not adopted data-scope, or an operator that has not been deliberately scoped, behaves exactly as today.
 
-wms (ADR-025 step 2) is the first adopter: `WarehouseController.getById` denies (403 `DATA_SCOPE_FORBIDDEN`) a deliberately-scoped operator targeting a warehouse whose code is outside its scope; unrestricted/unscoped operators are unaffected.
+wms (ADR-025 step 2) is the first adopter, enforced on both the single-resource read and the collection:
+
+- `WarehouseController.getById` denies (403 `DATA_SCOPE_FORBIDDEN`) a deliberately-scoped operator targeting a warehouse whose code is outside its scope.
+- `WarehouseController.list` (`GET /api/v1/master/warehouses`) confines a deliberately-scoped operator's page — and its `totalElements`/`totalPages` — to in-scope warehouse codes via a DB-side `WHERE … IN (:codes)` filter (TASK-BE-349), so a scoped operator cannot enumerate out-of-scope warehouses after being 403'd on `getById`. The net-zero path runs the unchanged query (no `IN`).
+
+In both cases unrestricted (`"*"`) and unscoped (empty/absent) operators are unaffected.
 
 ---
 

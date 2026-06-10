@@ -83,7 +83,7 @@ class WarehouseServiceAuthorizationTest {
     @Test
     @WithMockUser(authorities = "ROLE_MASTER_READ")
     void list_withReadRole_isAllowed() {
-        when(persistencePort.findPage(any(), any())).thenReturn(
+        when(persistencePort.findPage(any(), any(), any())).thenReturn(
                 new com.example.common.page.PageResult<>(java.util.List.of(), 0, 20, 0L, 0));
 
         assertThat(queryUseCase.list(new com.wms.master.application.query.ListWarehousesQuery(

@@ -7,6 +7,7 @@ import com.wms.master.application.query.WarehouseListCriteria;
 import com.wms.master.domain.exception.WarehouseCodeDuplicateException;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.WarehouseStatus;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -82,10 +83,17 @@ class WarehouseRepositoryImpl implements WarehousePersistencePort {
     }
 
     @Override
-    public PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery) {
+    public PageResult<Warehouse> findPage(WarehouseListCriteria criteria, PageQuery pageQuery,
+                                          Collection<String> scopeWarehouseCodes) {
         Pageable pageable = PageableFactory.from(pageQuery);
         String q = criteria.hasQueryText() ? criteria.q() : null;
-        Page<WarehouseJpaEntity> page = jpaRepository.search(criteria.status(), q, pageable);
+        // Net-zero (null/empty scope) routes through the unchanged search() so the
+        // golden path is byte-identical; only a deliberately-scoped operator hits
+        // the IN-filtered searchScoped() (codes is then guaranteed non-empty).
+        Page<WarehouseJpaEntity> page =
+                (scopeWarehouseCodes == null || scopeWarehouseCodes.isEmpty())
+                        ? jpaRepository.search(criteria.status(), q, pageable)
+                        : jpaRepository.searchScoped(criteria.status(), q, scopeWarehouseCodes, pageable);
 
         return new PageResult<>(
                 page.getContent().stream().map(mapper::toDomain).toList(),

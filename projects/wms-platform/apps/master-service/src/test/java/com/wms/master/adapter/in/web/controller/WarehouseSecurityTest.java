@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+
 import com.example.common.page.PageResult;
 import com.wms.master.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.master.application.port.in.WarehouseCrudUseCase;
@@ -20,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -154,5 +158,71 @@ class WarehouseSecurityTest {
         mockMvc.perform(get("/api/v1/master/warehouses/" + id)
                         .with(jwt().jwt(b -> b.claim("role", "MASTER_READ"))))
                 .andExpect(status().isOk());
+    }
+
+    // ─── TASK-BE-349 ABAC data-scope on the LIST endpoint ────────────────────
+    // The controller resolves the operator's scope into ListWarehousesQuery; the
+    // DB-side IN filter is covered by WarehouseRepositoryImplH2Test. Here we pin
+    // the controller→query wiring: a deliberately-scoped operator's tokens are
+    // threaded through; unrestricted/unscoped operators pass null (net-zero).
+
+    @Test
+    void list_scopedOperator_threadsScopeCodesIntoQuery() throws Exception {
+        when(queryUseCase.list(any(ListWarehousesQuery.class)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/v1/master/warehouses")
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("data_scope", List.of("WH-A", "WH-B")))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ListWarehousesQuery> captor = ArgumentCaptor.forClass(ListWarehousesQuery.class);
+        verify(queryUseCase).list(captor.capture());
+        assertThat(captor.getValue().scopeWarehouseCodes())
+                .containsExactlyInAnyOrder("WH-A", "WH-B");
+    }
+
+    @Test
+    void list_legacyOrgScopeAlias_threadsScopeCodesIntoQuery() throws Exception {
+        when(queryUseCase.list(any(ListWarehousesQuery.class)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/v1/master/warehouses")
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("org_scope", List.of("WH-A")))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ListWarehousesQuery> captor = ArgumentCaptor.forClass(ListWarehousesQuery.class);
+        verify(queryUseCase).list(captor.capture());
+        assertThat(captor.getValue().scopeWarehouseCodes()).containsExactly("WH-A");
+    }
+
+    @Test
+    void list_wildcardScope_passesNullScope_netZero() throws Exception {
+        when(queryUseCase.list(any(ListWarehousesQuery.class)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/v1/master/warehouses")
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ")
+                                .claim("data_scope", List.of("*")))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ListWarehousesQuery> captor = ArgumentCaptor.forClass(ListWarehousesQuery.class);
+        verify(queryUseCase).list(captor.capture());
+        assertThat(captor.getValue().scopeWarehouseCodes()).isNull();
+    }
+
+    @Test
+    void list_noDataScopeClaim_passesNullScope_netZero() throws Exception {
+        when(queryUseCase.list(any(ListWarehousesQuery.class)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/v1/master/warehouses")
+                        .with(jwt().jwt(b -> b.claim("role", "MASTER_READ"))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ListWarehousesQuery> captor = ArgumentCaptor.forClass(ListWarehousesQuery.class);
+        verify(queryUseCase).list(captor.capture());
+        assertThat(captor.getValue().scopeWarehouseCodes()).isNull();
     }
 }
