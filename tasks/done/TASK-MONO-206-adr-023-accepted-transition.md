@@ -8,7 +8,9 @@ TASK-MONO-206
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1238 (squash `662ff8593e57c1486424a7b816ad836427a43059`). ADR-MONO-023 PROPOSED → ACCEPTED 거버넌스 flip (finalise, not re-decide) — D1-D6 + § 1/2/3/4/5/7 byte-unchanged from PROPOSED #1237 `c4a30422`; flip = Status + History ACCEPTED clause + § 6 ACCEPTED row(#1237 해소) + § 1.3 past-tense. ADR-003a § 3 audit row #30. 본 PR 이 TASK-MONO-205 close chore(ready→done, #1237 3-dim verified, re-stage `done` 확인)도 동반. doc-only(apps/ 0). 3차원 ✓(docs fast-lane 전부 skipping+changes pass, MERGED `662ff859`/origin/main tip 일치/0 fail). **ADR-023 § 3.3 execution roadmap UNPAUSED** — 구현(subscription `status` state set D1 → admin API+`subscription.manage`+`tenant.subscription.changed` outbox D3/D4 → plane-separation proof IT D6 step3)은 iam-platform 내부 future tasks(사용자 결정 보류). sibling ADR-021/MONO-165 동형. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
