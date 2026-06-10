@@ -26,6 +26,7 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 | `entitlement-trust-crossdomain.spec.ts` | ADR-019 entitlement-trust gate (acme-corp finance/wms entitled, scm/erp denied) (MONO-154) |
 | `tenant-switch-rescope.spec.ts` | ADR-020 D4 active-tenant switch re-scopes the signed token (acme ↔ globex) (MONO-158) |
 | `subscription-plane-separation.spec.ts` | ADR-023 D2 entitlement↔IAM plane separation — runtime suspend drops the domain from the re-issued token while the IAM assignment survives; reversible (MONO-207) |
+| `tenant-admin-delegation.spec.ts` | ADR-024 step 3 tenant-admin delegation — a non-platform TENANT_ADMIN administers its own tenant (assign/scope/peer-appoint 2xx) but is denied cross-tenant (403 TENANT_SCOPE_DENIED) + escalating grants (403 ROLE_GRANT_FORBIDDEN); a TENANT_BILLING_ADMIN suspends/resumes its own subscription (200) but not a foreign tenant; SUPER_ADMIN unconstrained (net-zero) (MONO-210) |
 
 ## CI trigger
 

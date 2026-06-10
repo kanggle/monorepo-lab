@@ -378,3 +378,103 @@ INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_a
 SELECT o.id, 'initech-corp', NOW(6), NULL, NULL
   FROM admin_operators o
  WHERE o.operator_id = 'multi-operator';
+
+-- ===========================================================================
+-- TASK-MONO-210 — ADR-MONO-024 § 3.3 step 3 tenant-admin delegation proof.
+--
+-- This block is ADD-ONLY. It seeds, scoped to the DEDICATED `umbrella-corp`
+-- tenant (account_db side = account-service Flyway-dev V9003), the two delegated
+-- administrators the proof logs in as, plus one throwaway target operator they
+-- manage:
+--
+--   (a) `tenant-admin-umbrella`         — role TENANT_ADMIN @ umbrella-corp
+--       (holds {operator.manage, tenant.admin.delegate} confined to umbrella-corp).
+--   (b) `tenant-billing-admin-umbrella` — role TENANT_BILLING_ADMIN @ umbrella-corp
+--       (holds {subscription.manage} confined to umbrella-corp).
+--   (c) `deleg-target-umbrella`         — role SUPPORT_READONLY @ umbrella-corp,
+--       a dedicated operator the TENANT_ADMIN assigns / scopes / re-roles. It
+--       NEVER logs in (no auth_db credential), so it has no console session and
+--       is referenced by no other spec → mutating it is parallel-safe.
+--
+-- WHY the grant-row tenant_id is the crux: ADR-024 D2 confinement
+-- (AdminGrantScopeEvaluator) reads each operator's effective admin-grant scope
+-- as the set of `admin_operator_roles.tenant_id`s of the rows granting the
+-- permission. Binding (a)/(b) at tenant_id='umbrella-corp' (NOT '*') makes their
+-- scope = {umbrella-corp} — so they administer umbrella-corp (200) and are denied
+-- globex-corp (403 TENANT_SCOPE_DENIED). SUPER_ADMIN ('*') stays unconstrained
+-- (net-zero). This is exactly the runtime shape step 1/2a/2b built in-process.
+--
+-- WHY no auth_db credential for (c): the target is only ever the OBJECT of the
+-- delegated admins' mutations (path {operatorId}); it presents no token, so it
+-- needs only the admin_db operator + role rows.
+--
+-- Re-runnable: INSERT IGNORE / ON DUPLICATE KEY UPDATE (same discipline as
+-- the SUPER_ADMIN / acme / multi-operator blocks above).
+-- ===========================================================================
+
+-- 15a. auth_db — credentials for the two delegated administrators (they log in
+--      via the SAME production-identical OIDC PKCE flow). Same Argon2id hash
+--      ('devpassword123!'). tenant_id='umbrella-corp', account_type='OPERATOR'.
+USE `auth_db`;
+
+INSERT IGNORE INTO credentials (
+    tenant_id, account_type, account_id, email,
+    credential_hash, hash_algorithm, created_at, updated_at, version
+) VALUES
+    ('umbrella-corp', 'OPERATOR', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c401',
+     'tenant-admin-umbrella@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'argon2id', NOW(6), NOW(6), 0),
+    ('umbrella-corp', 'OPERATOR', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c402',
+     'tenant-billing-admin-umbrella@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'argon2id', NOW(6), NOW(6), 0);
+
+-- 15b. admin_db — the three operators + their tenant-scoped role bindings.
+USE `admin_db`;
+
+INSERT INTO admin_operators (
+    operator_id, tenant_id, email, password_hash, display_name, status,
+    oidc_subject, finance_default_account_id, created_at, updated_at, version
+) VALUES
+    ('tenant-admin-umbrella', 'umbrella-corp', 'tenant-admin-umbrella@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'Umbrella Tenant Admin', 'ACTIVE', 'tenant-admin-umbrella@example.com',
+     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a401', NOW(6), NOW(6), 0),
+    ('tenant-billing-admin-umbrella', 'umbrella-corp', 'tenant-billing-admin-umbrella@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'Umbrella Billing Admin', 'ACTIVE', 'tenant-billing-admin-umbrella@example.com',
+     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a402', NOW(6), NOW(6), 0),
+    ('deleg-target-umbrella', 'umbrella-corp', 'deleg-target-umbrella@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'Umbrella Delegation Target', 'ACTIVE', 'deleg-target-umbrella@example.com',
+     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a403', NOW(6), NOW(6), 0)
+ON DUPLICATE KEY UPDATE
+    tenant_id    = VALUES(tenant_id),
+    oidc_subject = VALUES(oidc_subject),
+    status       = 'ACTIVE',
+    updated_at   = NOW(6);
+
+-- TENANT_ADMIN @ umbrella-corp (grant-row tenant_id = the confinement scope).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'TENANT_ADMIN'
+ WHERE o.operator_id = 'tenant-admin-umbrella';
+
+-- TENANT_BILLING_ADMIN @ umbrella-corp.
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'TENANT_BILLING_ADMIN'
+ WHERE o.operator_id = 'tenant-billing-admin-umbrella';
+
+-- SUPPORT_READONLY @ umbrella-corp for the throwaway target (benign baseline so
+-- the grant-menu ALLOW is a visible role *change*; SUPPORT_READONLY's read perms
+-- are NOT a subset of TENANT_ADMIN's perms, which is irrelevant here — the target
+-- is the object, not the actor).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
+ WHERE o.operator_id = 'deleg-target-umbrella';
