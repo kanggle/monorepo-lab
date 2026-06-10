@@ -8,7 +8,9 @@ Author **ADR-MONO-023 PROPOSED** — Entitlement/Subscription Plane ↔ IAM Plan
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1237 (squash `c4a304228b21d7ad4607aeeec0c729cd34c4ea2e`). ADR-MONO-023 PROPOSED publish — entitlement/subscription 평면 ↔ IAM 평면 분리 + 구독 생명주기 상태머신 결정 기록(ADR-019 § D2 미명세 production form, HARDSTOP-09 해소). D1 = 생명주기(`ACTIVE`/`SUSPENDED`/`CANCELLED`(+`PENDING`), SUSPENDED reversible, billing 제외) / D2 = 평면분리 불변식(단방향 의존; suspend=entitlement만 영향, operator 할당+RBAC 보존, 재활성 시 재부여 없음 — GCP billing↔IAM parity) / D3 = account-service-owned admin API + NEW `subscription.manage`≠`operator.manage` / D4 = live-read + `tenant.subscription.changed` outbox + 단기TTL 자연만료 / D5 = billing 범위제외(future driver) / D6 = staged net-zero. ADR-019 § D2 additive note(D1-D6 byte-unchanged) + ADR-003a § 3 audit row #29. doc-only(apps/ 0, migration 0). 3차원 ✓(docs fast-lane 전부 skipping+changes pass, MERGED `c4a30422`/origin/main tip 일치/0 fail). **후속**: ADR-023 ACCEPTED transition = TASK-MONO-206(본 close 와 동반 PR) → 구현(state set / admin API+permission+event / plane-separation proof IT)은 iam-platform 내부 future tasks. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
