@@ -8,7 +8,9 @@ ADR-MONO-024 (Tenant-Admin Delegation) PROPOSED → ACCEPTED transition, incorpo
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1252 (squash `f50c85180955ebf0176c63e07c2647db5c1ed477`). ADR-MONO-024 PROPOSED→ACCEPTED doc-only flip + 사용자 게이트 조정 2건 반영. **D4 A→B**(in-tenant sub-delegation 허용 — `TENANT_ADMIN`+신규 `tenant.admin.delegate` 권한으로 자기 테넌트 한정 `TENANT_ADMIN` 임명; D2 confinement 로 cross-tenant 구조적 불가) + **D5 → C**(별도 `TENANT_BILLING_ADMIN` role[`subscription.manage`], `TENANT_ADMIN` 미번들 → IAM↔entitlement 위임 role 레벨 분리 유지, ADR-023 separability 실현). D1-D3/D6/D7 direction 불변. ADR-020 byte-unchanged(PROPOSED additive note 가 final). ADR-003a § 3 row #32 append-only(rows #1–#31 불변). 구현 0. 3차원 ✓(MERGED `f50c8518`/origin tip 일치/PR 체크 CLEAN). 후속=§ 3.3 roadmap UNPAUSED: ① D2 confinement(net-zero) → ② `TENANT_ADMIN`+`TENANT_BILLING_ADMIN`+`tenant.admin.delegate`+assign/unassign 표면+grant-menu → ③ delegation proof e2e(MONO-207 harness 재사용). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
