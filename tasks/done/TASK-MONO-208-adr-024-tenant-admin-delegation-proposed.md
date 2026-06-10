@@ -8,7 +8,9 @@ ADR-MONO-024 (Tenant-Admin Delegation) PROPOSED publish — author the decision 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1250 (squash `ca11909376d76c019185218daf809f77f223e653`). ADR-MONO-024 (Tenant-Admin Delegation) PROPOSED publish — ADR-023가 예고한 "①" 테넌트관리자 위임 축. Doc-only: ADR-024 신규(PROPOSED, D1-D7 CHOSEN-PROPOSED) + ADR-020 § D1 additive note(D1-D6 body byte-unchanged, 0 deletion = HARDSTOP-04 ✓) + ADR-003a § 3 audit row #31(append-only, rows #1–#30 불변). D1=신규 `TENANT_ADMIN` role(tenant-scoped by `admin_operator_roles.tenant_id`, `'*'`=platform net-zero) / D2=평가기 중앙 target-tenant 확정(crux) / D3=assign-unassign 표면 + no-escalation grant-menu / D4=SUPER_ADMIN만 부여·v1 sub-delegation 없음 / D5=`subscription.manage` 미포함(ADR-023 separability를 제외로 소비) / D6=토큰 claim 없음·assume-tenant 불변 / D7=staged net-zero. 구현 0. 3차원 ✓(MERGED `ca119093`/origin tip 일치/PR 체크 CLEAN). 후속=ACCEPTED transition(user-explicit-intent gated, sibling MONO-206) → 3-step 실행 roadmap(confinement 평가기 → role+assign 표면+menu → delegation proof e2e), 전부 PAUSED until ACCEPTED. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
