@@ -133,6 +133,13 @@ public class AdminActionAuditor {
         denyWriter.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId);
     }
 
+    /** Best-effort role-grant-forbidden deny row (ADR-024 D3); see {@link AdminActionDenyWriter#recordRoleGrantForbidden}. */
+    public void recordRoleGrantForbidden(OperatorContext operator,
+                                         ActionCode actionCode,
+                                         String attemptedRole) {
+        denyWriter.recordRoleGrantForbidden(operator, actionCode, attemptedRole);
+    }
+
     /** Login-path single-shot write (TASK-BE-029-3); stamps {@code twofa_used}. */
     public void recordLogin(LoginAuditRecord record) {
         writer.recordLogin(record);

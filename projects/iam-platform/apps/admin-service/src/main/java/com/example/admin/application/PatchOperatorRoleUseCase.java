@@ -23,6 +23,7 @@ public class PatchOperatorRoleUseCase {
     private final AdminActionAuditor auditor;
     private final CachingPermissionEvaluator cachingPermissionEvaluator;
     private final TenantScopeGuard tenantScopeGuard;
+    private final RoleGrantGuard roleGrantGuard;
 
     @Transactional
     public PatchRolesResult patchRoles(String operatorUuid,
@@ -39,6 +40,12 @@ public class PatchOperatorRoleUseCase {
                 actor, Permission.OPERATOR_MANAGE, operator.tenantId(), ActionCode.OPERATOR_ROLE_CHANGE);
 
         Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);
+
+        // ADR-MONO-024 D3 (TASK-BE-347): grant-menu no-escalation — the actor may
+        // grant only roles whose permissions ⊆ its own (never SUPER_ADMIN).
+        // Net-zero for SUPER_ADMIN ('*'). Admits TENANT_ADMIN/TENANT_BILLING_ADMIN
+        // only behind the matching delegating permission (≤-own).
+        roleGrantGuard.requireGrantable(actor, resolvedRoles.values(), ActionCode.OPERATOR_ROLE_CHANGE);
 
         Instant now = Instant.now();
         Long actorInternalId = operatorPort.resolveActorInternalId(

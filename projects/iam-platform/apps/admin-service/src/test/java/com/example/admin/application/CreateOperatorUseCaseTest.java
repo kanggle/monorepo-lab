@@ -43,13 +43,14 @@ class CreateOperatorUseCaseTest {
     @Mock PasswordHasher passwordHasher;
     @Mock OperatorLookupPort operatorLookupPort;
     @Mock TenantScopeGuard tenantScopeGuard;
+    @Mock RoleGrantGuard roleGrantGuard;
 
     CreateOperatorUseCase useCase;
 
     @BeforeEach
     void initUseCase() {
         useCase = new CreateOperatorUseCase(
-                operatorPort, auditor, passwordHasher, operatorLookupPort, tenantScopeGuard);
+                operatorPort, auditor, passwordHasher, operatorLookupPort, tenantScopeGuard, roleGrantGuard);
 
         // Default: actor is fan-platform (non-platform-scope)
         when(operatorLookupPort.findByOperatorId("actor-uuid"))

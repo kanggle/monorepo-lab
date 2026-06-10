@@ -207,7 +207,32 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 - **DENIED row 는 best-effort**(architecture.md A10 override, BE-249/262 cross-tenant deny 와 동일): 감사 실패는 `admin.audit.cross_tenant_deny_failure` 카운터만 증가시키고 403 은 항상 성립한다.
 - **NET-ZERO**: 현재 `operator.manage` / `subscription.manage` 보유 role 은 `SUPER_ADMIN`(grant row `tenant_id='*'`) 뿐이라 gate 는 아무도 거부하지 않는다 — confinement 은 ADR-024 step 2 가 비-플랫폼 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`)을 seed 한 이후에만 발효한다.
 
-대상 표면: `POST /api/admin/operators`, `PATCH .../operators/{id}/roles`, `PATCH .../operators/{id}/status`, `PUT .../operators/{id}/assignments/{tenantId}/org-scope`, `POST /api/admin/subscriptions`, `PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status`. (assign/unassign 표면 + grant-menu confinement 은 ADR-024 step 2.)
+대상 표면: `POST /api/admin/operators`, `PATCH .../operators/{id}/roles`, `PATCH .../operators/{id}/status`, `PUT .../operators/{id}/assignments/{tenantId}/org-scope`, `POST .../operators/{id}/assignments/{tenantId}` (assign, step 2b), `DELETE .../operators/{id}/assignments/{tenantId}` (unassign, step 2b), `POST /api/admin/subscriptions`, `PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status`.
+
+### Grant-Menu No-Escalation (ADR-MONO-024 D3, step 2b)
+
+역할을 *부여*하는 표면(`POST /api/admin/operators`, `PATCH .../operators/{id}/roles`)은 target-tenant confinement 에 더해 **grant-menu no-escalation** 규칙을 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D3, 단일 결정 지점 `RoleGrantGuard`):
+
+```
+function requireGrantable(actor, rolesToGrant, actionCode):
+    if '*' in effectiveAdminScope(actor, operator.manage):   # 플랫폼 스코프 (SUPER_ADMIN)
+        return                                                # unconstrained (net-zero)
+    for role in rolesToGrant:
+        if role.name == 'SUPER_ADMIN':                        # (a) 플랫폼/특권 role 금지
+            recordRoleGrantForbidden(...); respond 403 ROLE_GRANT_FORBIDDEN
+        rolePerms = admin_role_permissions(role)
+        if rolePerms nonempty and not actor.permissions ⊇ rolePerms:   # (b) ≤-own
+            recordRoleGrantForbidden(...); respond 403 ROLE_GRANT_FORBIDDEN
+```
+
+- **≤-own** (보유하지 않은 권한을 부여 불가)이 **위임 role 승인 규칙을 기계적으로 인코딩**한다: `TENANT_ADMIN` 의 권한집합은 `tenant.admin.delegate` 를 포함하므로 *그것을 보유한* actor 만 `TENANT_ADMIN` 을 부여(in-tenant sub-delegation, D4-B)할 수 있고, `subscription.manage` 보유자만 `TENANT_BILLING_ADMIN` 을 부여(D5-C)할 수 있다. 별도의 명시적 "이 role 은 이 권한 필요" 분기는 불필요.
+- **빈 권한집합 role** 은 누구나 부여 가능(≤-own 자명).
+- **플랫폼 스코프(SUPER_ADMIN `'*'`) 는 unconstrained** — 모든 role 부여 가능(플랫폼 온보딩 불변, net-zero).
+- 위반 → 403 `ROLE_GRANT_FORBIDDEN` + best-effort DENIED row(`admin.audit.role_grant_forbidden_failure` 카운터). **테넌트 confinement(어느 테넌트)** 와 **grant-menu(어느 role)** 는 별개 — 전자는 step-1 `TenantScopeGuard`, 후자는 `RoleGrantGuard`.
+
+### Assign/Unassign Surface (ADR-MONO-024 D3-i, step 2b)
+
+`POST/DELETE /api/admin/operators/{operatorId}/assignments/{tenantId}` — operator↔tenant `operator_tenant_assignment` row 생성/삭제("내 직원에게 내 테넌트 접근 부여"). `operator.manage` + step-1 target-tenant confinement(target=path `tenantId`) + reason-gated + audited(`OPERATOR_ASSIGNMENT_CREATE`/`OPERATOR_ASSIGNMENT_DELETE`). 생성 시 whole-tenant(`org_scope=null` ⟺ `["*"]`, `permission_set_id=null` = operator-level role 상속); 중복 → 409 `ASSIGNMENT_ALREADY_EXISTS`; 삭제 시 미존재 → 404 `ASSIGNMENT_NOT_FOUND`. SUPER_ADMIN(`'*'`) net-zero.
 
 ### Conditional Cross-Permission: `GET /api/admin/audit`
 

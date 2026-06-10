@@ -45,9 +45,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       (200) but is denied (403 {@code TENANT_SCOPE_DENIED}) for a tenant-y operator.</li>
  * </ol>
  *
- * <p>NOTE: the grant-menu no-escalation rule is step 2b — this test grants a
- * benign role and asserts the tenant gate only (the role being granted is not yet
- * menu-restricted).
+ * <p>The in-scope PATCH grants {@code TENANT_ADMIN} (perms ⊆ the actor's own), which
+ * the step-2b (TASK-BE-347) grant-menu admits as in-tenant sub-delegation; the
+ * tenant gate (step-1) is what this test isolates (tenant-x 200 vs tenant-y 403).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -143,23 +143,25 @@ class TenantAdminRoleSeedIntegrationTest extends AbstractIntegrationTest {
         seedOperator(TARGET_X_UUID, "tenant-x", "target-x-2a@example.com", "SUPPORT_READONLY");
         seedOperator(TARGET_Y_UUID, "tenant-y", "target-y-2a@example.com", "SUPPORT_READONLY");
 
-        // in-scope (tenant-x → tenant-x): 200
+        // in-scope (tenant-x → tenant-x): 200. Grant TENANT_ADMIN (perms ⊆ own) so
+        // the step-2b grant-menu admits it; this isolates the step-1 tenant gate.
         mockMvc.perform(patch("/api/admin/operators/" + TARGET_X_UUID + "/roles")
                         .header("Authorization", bearer(TENANT_X_ADMIN_UUID))
                         .header("X-Operator-Reason", "rotation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"roles": ["SUPPORT_READONLY"]}
+                                {"roles": ["TENANT_ADMIN"]}
                                 """))
                 .andExpect(status().isOk());
 
         // out-of-scope (tenant-x admin → tenant-y operator): 403 TENANT_SCOPE_DENIED
+        // (the step-1 tenant gate fires before the grant-menu, so the role is moot).
         mockMvc.perform(patch("/api/admin/operators/" + TARGET_Y_UUID + "/roles")
                         .header("Authorization", bearer(TENANT_X_ADMIN_UUID))
                         .header("X-Operator-Reason", "rotation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"roles": ["SUPPORT_READONLY"]}
+                                {"roles": ["TENANT_ADMIN"]}
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));

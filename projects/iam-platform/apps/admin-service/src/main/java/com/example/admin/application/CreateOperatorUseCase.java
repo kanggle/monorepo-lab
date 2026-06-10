@@ -28,6 +28,7 @@ public class CreateOperatorUseCase {
     private final PasswordHasher passwordHasher;
     private final OperatorLookupPort operatorLookupPort;
     private final TenantScopeGuard tenantScopeGuard;
+    private final RoleGrantGuard roleGrantGuard;
 
     /**
      * Creates a new operator.
@@ -77,6 +78,11 @@ public class CreateOperatorUseCase {
         }
 
         Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);
+
+        // ADR-MONO-024 D3 (TASK-BE-347): grant-menu no-escalation on the created
+        // operator's roles — the actor may grant only roles ⊆ its own permissions
+        // (never SUPER_ADMIN). Net-zero for SUPER_ADMIN ('*').
+        roleGrantGuard.requireGrantable(actor, resolvedRoles.values(), ActionCode.OPERATOR_CREATE);
 
         Instant now = Instant.now();
         String operatorUuid = UuidV7.randomString();

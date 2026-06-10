@@ -35,6 +35,8 @@ import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.exception.TenantScopeMismatchException;
 import com.example.admin.application.exception.AssignmentNotFoundException;
+import com.example.admin.application.exception.AssignmentAlreadyExistsException;
+import com.example.admin.application.exception.RoleGrantForbiddenException;
 import com.example.admin.presentation.dto.EnrollmentRequiredResponse;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -83,6 +85,20 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAssignmentNotFound(AssignmentNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("ASSIGNMENT_NOT_FOUND", e.getMessage()));
+    }
+
+    // TASK-BE-347 (ADR-MONO-024 D3-i) — assign surface: duplicate (operator, tenant) row.
+    @ExceptionHandler(AssignmentAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAssignmentAlreadyExists(AssignmentAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("ASSIGNMENT_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    // TASK-BE-347 (ADR-MONO-024 D3) — grant-menu no-escalation violation.
+    @ExceptionHandler(RoleGrantForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleRoleGrantForbidden(RoleGrantForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ROLE_GRANT_FORBIDDEN", e.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
