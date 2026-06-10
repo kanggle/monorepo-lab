@@ -38,7 +38,7 @@ A cross-domain authorization attribute + its enforcement contract is an architec
 
 ### D1 — Canonical claim: `data_scope` (generic), `org_scope` retained as alias
 
-The cross-domain ABAC data-scope attribute is the signed claim **`data_scope`**: a JSON array of **opaque scope tokens** (strings the producer copies verbatim from `operator_tenant_assignment.org_scope`; it does NOT interpret them). `org_scope` is kept as a **backward-compatible alias** — consumers MUST dual-read (`data_scope` then `org_scope`), exactly as erp already does. **Absent / `null` / `["*"]` ⟺ unrestricted (net-zero).**
+The cross-domain ABAC data-scope attribute is the signed claim **`data_scope`**: a JSON array of **opaque scope tokens** (strings the producer copies verbatim from `operator_tenant_assignment.org_scope`; it does NOT interpret them). `org_scope` is kept as a **backward-compatible alias** — consumers MUST dual-read (`data_scope` then `org_scope`), exactly as erp already does. **Net-zero invariant (verified against erp's `RoleScopeAuthorizationAdapter`):** `["*"]` ⟺ unrestricted; the producer maps an UNSCOPED assignment (`org_scope` NULL) to `["*"]`, so an un-scoped operator carries `["*"]` and sees everything (net-zero). An **empty / absent** claim is NOT unrestricted — it is **fail-closed (deny)** (a correctly minted token always carries at least `["*"]`; empty means deny, never allow-all).
 
 - **D1-A (chosen-PROPOSED)** — keep the storage column + producer claim name `org_scope`; introduce `data_scope` only as the canonical *consumer-facing* name + alias. Zero producer change (see D5).
 - **D1-B (rejected)** — hard-rename `org_scope` → `data_scope` everywhere (column + producer + erp). Breaking, churny, touches the token producer; no benefit over the alias.
@@ -52,8 +52,9 @@ The scope tokens are **opaque to the producer and to IAM**; each consuming domai
 - finance → accounting-unit ids (future).
 
 Enforcement invariants (uniform across domains):
-1. **Unrestricted**: claim absent / `null` / contains `"*"` → no data-scope filter (net-zero; today's behaviour).
-2. **Scoped**: a non-`*` token set → the domain filters its query/results to rows reachable from those tokens; **deny-by-default** for anything outside.
+1. **Unrestricted**: token set contains `"*"` → no data-scope filter (net-zero; the producer emits `["*"]` for unscoped assignments).
+2. **Scoped**: a non-empty token set WITHOUT `"*"` → the domain filters its query/results to rows reachable from those tokens; **deny-by-default** for anything outside.
+2b. **Empty / absent**: no tokens → **fail-closed deny** (NOT unrestricted) — defensive; a real token always carries at least `["*"]`.
 3. The data-scope filter is **orthogonal to and composed with** RBAC (permission) and tenant-scope (which tenant) — all three must pass.
 
 ### D3 — First extension domain: wms warehouse-scope
@@ -67,11 +68,11 @@ The first generalisation case is **wms**: a `data_scope` of warehouse ids restri
 
 - erp is byte-unchanged (it already dual-reads; the producer keeps emitting `org_scope`).
 - The producer is **unchanged** (D5) → no token-pipeline churn, no touch to the auth-service token customizer.
-- The new domain's enforcement is **opt-in** and **net-zero by default**: with no `data_scope`/`org_scope` claim (or `["*"]`), the new domain behaves exactly as today (unrestricted). The filter only bites once an operator is assigned a non-`*` scope.
+- The new domain's enforcement is **opt-in** and **net-zero by default**: an unscoped operator carries `["*"]` (producer maps NULL → `["*"]`), so the new domain behaves exactly as today (unrestricted). The filter only bites once an operator is assigned a non-`*` scope. (An empty/absent claim fail-closes to deny — defensive, not the net-zero path.)
 
 ### D5 — Producer unchanged; consumers dual-read
 
-The assume-tenant token producer continues to emit the existing `org_scope` claim (no change to `TenantClaimTokenCustomizer`). The canonicalisation to `data_scope` is realised purely on the **consumer** side (dual-read helper, promoted to a shared utility so wms/finance reuse erp's exact logic). This keeps the change additive and avoids the token-pipeline blast radius. (A future producer migration to emit `data_scope` is possible but unnecessary for 1단계.)
+The assume-tenant token producer continues to emit the existing `org_scope` claim (no change to `TenantClaimTokenCustomizer`). The canonicalisation to `data_scope` is realised purely on the **consumer** side: a shared `com.example.security.jwt.AbacDataScope` reader (`libs/java-security`) codifies the dual-read + the § D1/D2 semantics so new domains (wms/finance) reuse one implementation. erp's existing inline reader is the behavioural reference the shared helper matches; **re-pointing erp onto the shared helper is OPTIONAL/deferred** (erp already works and is verified — a re-point adds regression risk for no behaviour change), so the shared helper is introduced for new consumers first. This keeps the change additive and avoids the token-pipeline blast radius. (A future producer migration to emit `data_scope` is possible but unnecessary for 1단계.)
 
 ### D6 — 2단계 (role + condition) explicitly DEFERRED
 
@@ -80,7 +81,7 @@ Conditional policy — attaching a condition (time-of-day / source-IP / resource
 ### D7 — Staged execution (zero-regression)
 
 1. This ADR PROPOSED → ACCEPTED (doc-only).
-2. Shared contract doc `platform/abac-data-scope.md` + promote the dual-read helper to a shared utility (net-zero; erp re-points to it).
+2. Shared contract doc `platform/abac-data-scope.md` + a shared `AbacDataScope` reader (`libs/java-security`) for new consumers (erp re-point optional/deferred).
 3. wms data-scope enforcement (the chosen D3 domain) + IT proving scoped/unrestricted/deny-by-default.
 4. (optional, future) producer emits `data_scope`; (optional, future) 2단계 conditions — each its own ADR/task.
 
@@ -105,7 +106,7 @@ Conditional policy — attaching a condition (time-of-day / source-IP / resource
 ### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
 
 0. **`TASK-MONO-212` (this PROPOSED) + `TASK-MONO-2xx` (ACCEPTED transition)** — doc-only. Model = Opus (analysis) / the ACCEPTED flip is doc-only.
-1. **`TASK-MONO-2xx`** — `platform/abac-data-scope.md` contract + promote erp's dual-read (`data_scope`/`org_scope` → typed scope set) to a shared utility (`libs/` or platform spec), erp re-points (net-zero). Model = Sonnet (doc + small refactor).
+1. **`TASK-MONO-214` (DONE)** — `platform/abac-data-scope.md` contract + shared `com.example.security.jwt.AbacDataScope` reader (`libs/java-security`) codifying the dual-read + § D1/D2 semantics, with unit tests. erp re-point optional/deferred (erp's verified inline reader is the reference). Also corrected the D1/D2/D4 net-zero wording to the precise semantics (`["*"]`=unrestricted via producer NULL→`["*"]`; empty/absent=fail-closed deny), verified against erp's `RoleScopeAuthorizationAdapter`. Model = Sonnet→Opus (doc + lib + accuracy audit).
 2. **`TASK-<wms>-BE-xxx`** — wms warehouse data-scope enforcement on the wms read paths + opt-in net-zero + Testcontainers IT (scoped / unrestricted / deny-by-default). Model = Opus (authorization enforcement; security-critical).
 3. **(optional)** federation-e2e proof that a warehouse-scoped operator sees only its warehouses while an unscoped operator sees all — reuses the MONO-207/210 dedicated-tenant harness.
 
@@ -142,4 +143,5 @@ Append-only.
 | Date | Transition | Decision direction | User intent quote | PR(s) |
 |---|---|---|---|---|
 | 2026-06-11 | created PROPOSED | D1 = canonical `data_scope` claim + `org_scope` alias (consumers dual-read; absent/null/`["*"]`=unrestricted net-zero); D2 = per-domain opaque-token interpretation contract (`platform/abac-data-scope.md`) with deny-by-default; D3 = first extension = wms warehouse-scope; D4 = net-zero (erp byte-unchanged, new domain opt-in); D5 = producer unchanged, consumer-side canonicalisation (no token-customizer touch); D6 = 2단계 role+condition DEFERRED (no policy engine); D7 = staged (contract+shared dual-read → wms enforcement → optional producer/2단계) | "③ 먼저 / ① 두번째 / ② 마지막·보류 … ② 1단계(저비용): 이미 있는 org_scope 를 ABAC 일반화의 첫 사례로 정식화, '데이터 스코프 = JWT claim attribute' 패턴을 다른 도메인으로 확장; 2단계는 필요시 역할+조건식; 풀 정책 언어 회피" → "진행" (TASK-MONO-212 — after ③/① closure the user authorised axis ② 1단계, ADR-first per the ADR-019…024 pattern) | #1268 (TASK-MONO-212) |
-| 2026-06-11 | PROPOSED → ACCEPTED | D1-D2, D4-D7 directions **finalised unchanged** from PROPOSED #1268 squash `1484c611`; **D3 finalised = wms warehouse-scope** (the first generalisation domain). Authorises the § 3.3 execution roadmap (dependency-correct base = this ACCEPTED main): `platform/abac-data-scope.md` contract + shared dual-read utility (erp net-zero re-point) → wms warehouse data-scope enforcement + IT → optional federation-e2e proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024). | "wms 창고 스코프 (권장)" + "ACCEPTED 후 구현까지 진행 (권장)" (TASK-MONO-213 — user selected wms as the first data-scope domain and authorised ACCEPTED + execution at the gate) | #<this> (TASK-MONO-213) |
+| 2026-06-11 | PROPOSED → ACCEPTED | D1-D2, D4-D7 directions **finalised unchanged** from PROPOSED #1268 squash `1484c611`; **D3 finalised = wms warehouse-scope** (the first generalisation domain). Authorises the § 3.3 execution roadmap (dependency-correct base = this ACCEPTED main): `platform/abac-data-scope.md` contract + shared dual-read utility (erp net-zero re-point) → wms warehouse data-scope enforcement + IT → optional federation-e2e proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024). | "wms 창고 스코프 (권장)" + "ACCEPTED 후 구현까지 진행 (권장)" (TASK-MONO-213 — user selected wms as the first data-scope domain and authorised ACCEPTED + execution at the gate) | #1270 (TASK-MONO-213) |
+| 2026-06-11 | accuracy correction (post-ACCEPTED, § 3.3 step 1) | D1/D2/D4 net-zero wording corrected to the verified semantics: `["*"]`=unrestricted (producer maps unscoped assignment NULL→`["*"]`); **empty/absent=fail-closed deny, NOT unrestricted** (confirmed against erp's `RoleScopeAuthorizationAdapter` lines 92-102). D5/D7 erp re-point downgraded to OPTIONAL/deferred (regression-risk avoidance); the shared `AbacDataScope` reader is introduced for new consumers. No decision reversal — wording accuracy + the step-1 deliverable. | (execution of the ACCEPTED roadmap) | #<this> (TASK-MONO-214) |
