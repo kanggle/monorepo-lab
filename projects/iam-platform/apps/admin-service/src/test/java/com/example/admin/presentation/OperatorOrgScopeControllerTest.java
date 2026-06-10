@@ -77,6 +77,10 @@ class OperatorOrgScopeControllerTest {
     @MockitoBean
     ManageOperatorOrgScopeUseCase useCase;
 
+    // TASK-BE-347 — the controller now also depends on the assign/unassign use-case.
+    @MockitoBean
+    com.example.admin.application.ManageOperatorAssignmentUseCase assignmentUseCase;
+
     @MockitoBean
     PermissionEvaluator permissionEvaluator;
 

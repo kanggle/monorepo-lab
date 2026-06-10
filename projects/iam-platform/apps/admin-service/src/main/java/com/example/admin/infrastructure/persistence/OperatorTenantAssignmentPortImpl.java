@@ -75,4 +75,29 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
                     repository.saveAndFlush(entity);
                 });
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean assignmentExists(Long operatorInternalId, String tenantId) {
+        if (operatorInternalId == null || tenantId == null || tenantId.isBlank()) {
+            return false;
+        }
+        return repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId).isPresent();
+    }
+
+    @Override
+    @Transactional
+    public void createAssignment(Long operatorInternalId, String tenantId, Long grantedBy) {
+        // Whole-tenant assignment: org_scope=null (⟺ ["*"]), permission_set_id=null
+        // (inherit operator-level roles). Caller verified non-existence (ADR-024 D3-i).
+        repository.saveAndFlush(OperatorTenantAssignmentJpaEntity.create(
+                operatorInternalId, tenantId, java.time.Instant.now(), grantedBy, null));
+    }
+
+    @Override
+    @Transactional
+    public void deleteAssignment(Long operatorInternalId, String tenantId) {
+        repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
+                .ifPresent(repository::delete);
+    }
 }

@@ -167,8 +167,11 @@ public class RequiresPermissionAspect {
             if ("updateTenant".equals(name)) return ActionCode.TENANT_UPDATE;
         }
         // TASK-BE-339 — operator org_scope management controller.
+        // TASK-BE-347 (ADR-MONO-024 D3-i) — assign/unassign on the same controller.
         if ("OperatorOrgScopeController".equals(simple)) {
             if ("setOrgScope".equals(name)) return ActionCode.OPERATOR_ORG_SCOPE_UPDATE;
+            if ("assignOperator".equals(name)) return ActionCode.OPERATOR_ASSIGNMENT_CREATE;
+            if ("unassignOperator".equals(name)) return ActionCode.OPERATOR_ASSIGNMENT_DELETE;
             // listAssignments is a read; fall through to null
         }
         // Fallback for deny-by-default on unknown mutation endpoints.

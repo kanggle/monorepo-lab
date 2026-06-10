@@ -51,5 +51,11 @@ public enum ActionCode {
     // (operator-facing surface delegating to account-service). target_type=SUBSCRIPTION,
     // target_id="<tenantId>:<domainKey>", permission_used=subscription.manage.
     SUBSCRIPTION_SUBSCRIBE,
-    SUBSCRIPTION_CHANGE_STATUS
+    SUBSCRIPTION_CHANGE_STATUS,
+    // TASK-BE-347 (ADR-MONO-024 D3-i): operator↔tenant assignment create/remove
+    // ("grant my employee access to my tenant"). target_type=OPERATOR,
+    // target_id=external operator_id (UUID v7), target_tenant_id=assigned tenant,
+    // permission_used=operator.manage.
+    OPERATOR_ASSIGNMENT_CREATE,
+    OPERATOR_ASSIGNMENT_DELETE
 }

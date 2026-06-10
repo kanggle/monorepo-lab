@@ -1,5 +1,6 @@
 package com.example.admin.presentation;
 
+import com.example.admin.application.ManageOperatorAssignmentUseCase;
 import com.example.admin.application.ManageOperatorOrgScopeUseCase;
 import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
@@ -10,9 +11,12 @@ import com.example.admin.presentation.dto.OperatorAssignmentListResponse;
 import com.example.admin.presentation.dto.OperatorAssignmentResponse;
 import com.example.admin.presentation.dto.SetOrgScopeRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -51,6 +55,7 @@ import java.util.List;
 public class OperatorOrgScopeController {
 
     private final ManageOperatorOrgScopeUseCase manageOrgScopeUseCase;
+    private final ManageOperatorAssignmentUseCase manageAssignmentUseCase;
 
     @GetMapping
     @RequiresPermission(Permission.OPERATOR_MANAGE)
@@ -88,6 +93,39 @@ public class OperatorOrgScopeController {
                 reason);
 
         return ResponseEntity.ok(toResponse(updated));
+    }
+
+    /**
+     * ADR-MONO-024 D3-i (TASK-BE-347) — create the (operator, tenant) assignment.
+     * Tenant-confined (step-1): the actor must hold {@code operator.manage} scoped to
+     * {@code tenantId}. 409 {@code ASSIGNMENT_ALREADY_EXISTS} on a duplicate.
+     */
+    @PostMapping("/{tenantId}")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<OperatorAssignmentResponse> assignOperator(
+            @PathVariable String operatorId,
+            @PathVariable String tenantId,
+            @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
+
+        OperatorTenantAssignmentPort.AssignmentView created = manageAssignmentUseCase.assignOperator(
+                operatorId, tenantId, OperatorContextHolder.require(), requireReason(headerReason));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+
+    /**
+     * ADR-MONO-024 D3-i (TASK-BE-347) — remove the (operator, tenant) assignment.
+     * Tenant-confined (step-1). 404 {@code ASSIGNMENT_NOT_FOUND} when absent.
+     */
+    @DeleteMapping("/{tenantId}")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<Void> unassignOperator(
+            @PathVariable String operatorId,
+            @PathVariable String tenantId,
+            @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
+
+        manageAssignmentUseCase.unassignOperator(
+                operatorId, tenantId, OperatorContextHolder.require(), requireReason(headerReason));
+        return ResponseEntity.noContent().build();
     }
 
     private static OperatorAssignmentResponse toResponse(OperatorTenantAssignmentPort.AssignmentView a) {

@@ -174,4 +174,72 @@ public class AdminActionDenyWriter {
             }
         }
     }
+
+    /**
+     * TASK-BE-347 (ADR-MONO-024 D3) — best-effort DENIED row for a grant-menu
+     * no-escalation violation (the actor tried to grant a role it may not).
+     * NOT fail-closed (A10 override, mirrors {@link #recordCrossTenantDenied}):
+     * the 403 always succeeds; an audit failure only logs + bumps the
+     * {@code admin.audit.role_grant_forbidden_failure} counter.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordRoleGrantForbidden(OperatorContext operator,
+                                         ActionCode actionCode,
+                                         String attemptedRole) {
+        try {
+            AdminActionAuditWriter.OperatorResolved resolved =
+                    AdminActionAuditWriter.resolveOperatorOrFail(operatorLookupPort, operator.operatorId());
+
+            Instant now = Instant.now();
+            String auditId = UUID.randomUUID().toString();
+            String targetType = permissions.targetTypeFor(actionCode);
+            String detail = "ROLE_GRANT_FORBIDDEN attempted_role=" + attemptedRole;
+
+            AdminActionJpaEntity entity = AdminActionJpaEntity.create(
+                    auditId,
+                    actionCode != null ? actionCode.name() : "UNKNOWN",
+                    operator.operatorId(),
+                    "UNKNOWN",
+                    resolved.pk(),
+                    Permission.OPERATOR_MANAGE,
+                    targetType,
+                    operator.operatorId(),       // targetId: self (no external resource targeted)
+                    "<role_grant_forbidden>",     // reason: synthetic constant
+                    null,
+                    "denied:" + auditId,
+                    Outcome.DENIED.name(),
+                    detail,
+                    now,
+                    now,
+                    resolved.tenantId(),
+                    resolved.tenantId());
+            repository.save(entity);
+
+            eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
+                    operator.operatorId(),
+                    operator.jti(),
+                    Permission.OPERATOR_MANAGE,
+                    AdminAuditRequestContext.currentEndpoint(),
+                    AdminAuditRequestContext.currentMethod(),
+                    targetType,
+                    operator.operatorId(),
+                    Outcome.DENIED,
+                    detail,
+                    now));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to write role-grant-forbidden DENIED audit row (best-effort): " +
+                            "operatorId={} action={} attemptedRole={}",
+                    operator.operatorId(), actionCode, attemptedRole, ex);
+            try {
+                Counter counter = Counter.builder("admin.audit.role_grant_forbidden_failure")
+                        .tag("action", actionCode != null ? actionCode.name() : "UNKNOWN")
+                        .register(meterRegistry);
+                if (counter != null) {
+                    counter.increment();
+                }
+            } catch (RuntimeException metricEx) {
+                log.debug("Failed to increment role_grant_forbidden_failure counter", metricEx);
+            }
+        }
+    }
 }

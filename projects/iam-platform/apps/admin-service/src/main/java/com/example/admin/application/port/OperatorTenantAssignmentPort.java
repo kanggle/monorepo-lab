@@ -79,6 +79,31 @@ public interface OperatorTenantAssignmentPort {
     void updateOrgScope(Long operatorInternalId, String tenantId, List<String> orgScope);
 
     /**
+     * TASK-BE-347 (ADR-MONO-024 D3-i) — whether an explicit assignment row exists
+     * for the (operator, tenant) pair.
+     */
+    boolean assignmentExists(Long operatorInternalId, String tenantId);
+
+    /**
+     * TASK-BE-347 (ADR-MONO-024 D3-i) — create a whole-tenant assignment row
+     * (operator ↔ tenant): {@code org_scope=null} (⟺ {@code ["*"]}),
+     * {@code permission_set_id=null} (inherit operator-level roles). The caller MUST
+     * have verified the row does not already exist ({@link #assignmentExists}).
+     *
+     * @param operatorInternalId internal BIGINT id of the assigned operator
+     * @param tenantId           the ASSIGNED tenant
+     * @param grantedBy          internal BIGINT id of the granting operator, or {@code null}
+     */
+    void createAssignment(Long operatorInternalId, String tenantId, Long grantedBy);
+
+    /**
+     * TASK-BE-347 (ADR-MONO-024 D3-i) — remove the assignment row for the
+     * (operator, tenant) pair. No-op if it does not exist (the caller's
+     * {@code ASSIGNMENT_NOT_FOUND} gate is authoritative).
+     */
+    void deleteAssignment(Long operatorInternalId, String tenantId);
+
+    /**
      * Immutable projection of an {@code operator_tenant_assignment} row for the
      * admin-facing management surface. {@code orgScope} is {@code null} when the
      * column is unset (⟺ {@code ["*"]} net-zero) and is rendered ABSENT in JSON
