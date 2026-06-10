@@ -8,7 +8,9 @@ ADR-MONO-023 § 3.3 step 2a (D1/D3/D4) — account-service subscription mutation
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1242 (squash `7cf29a2e685373e0bb903513dea7975cad5e6a02`). ADR-MONO-023 § 3.3 step 2a (D1/D3/D4) — account-service 구독 mutation 표면 + `tenant.subscription.changed` outbox 이벤트. 계약 선행(account-events.md v1 + account-tenant-domain-subscriptions.md POST/PATCH). 코드: `create`/`changeStatus`(상태머신 가드) + 예외 3종(404/409/409) + JPA `fromDomain`/`findByTenantIdAndDomainKey` + repository save/find + event publisher + mutation use-case(가드→저장→발행 1tx) + 내부 POST/PATCH 컨트롤러. **D2: account-service는 IAM 미접근**(operator 인가는 2b 위임). 검증: 컴파일 + mutation 단위 11케이스 + 슬라이스 6케이스(POST/PATCH/409 추가) + 실 MySQL8 IT(write round-trip + V0021 CHECK가 SUSPENDED/CANCELLED/PENDING 수용 + SUSPENDED는 ACTIVE 역조회 제외) — account-service 400 tests/0 fail. **CI 회귀 1건 자체적발·수정**(기존 컨트롤러 @WebMvcTest가 새 의존성으로 깨짐→@MockitoBean 추가, c0a6f9b0). 3차원 ✓(20 pass/0 fail, MERGED `7cf29a2e`/origin tip 일치). **후속**: TASK-BE-343(step 2b admin-service `subscription.manage` + `/api/admin/subscriptions` 위임). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
