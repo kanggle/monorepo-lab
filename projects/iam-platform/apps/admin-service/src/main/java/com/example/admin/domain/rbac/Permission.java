@@ -29,6 +29,15 @@ public final class Permission {
      * write to account-service (the entitlement authority).
      */
     public static final String SUBSCRIPTION_MANAGE   = "subscription.manage";
+    /**
+     * TASK-BE-346 (ADR-MONO-024 D4-B): in-tenant sub-delegation authority. Held by
+     * the {@code TENANT_ADMIN} role only — a tenant-admin carrying this permission
+     * may appoint further {@code TENANT_ADMIN}s WITHIN ITS OWN TENANT (the D2
+     * confinement makes cross-tenant structurally impossible). NOT held by
+     * SUPER_ADMIN (which delegates via its platform-unconstrained authority, not
+     * via this key). The grant-menu admission rule lands in step 2b.
+     */
+    public static final String TENANT_ADMIN_DELEGATE = "tenant.admin.delegate";
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
