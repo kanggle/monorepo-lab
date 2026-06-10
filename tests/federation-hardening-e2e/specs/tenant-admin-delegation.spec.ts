@@ -137,7 +137,16 @@ async function quietResume(ctx: BrowserContext, token: string): Promise<void> {
 }
 
 test.describe('ADR-MONO-024 step 3 — tenant-admin delegation (federation runtime proof)', () => {
+  // Each test does a full OIDC login PLUS a long chain of sequential admin-RBAC
+  // calls; the default 30s budget is too tight on a loaded stack and was the
+  // deterministic failure (the timeout then pile-up degraded the whole suite).
+  // Run serially so this spec never adds more than one concurrent operator
+  // login/context to the fullyParallel cohort, and give each test a generous
+  // budget (login can take ~30s under load + ~13 admin calls).
+  test.describe.configure({ mode: 'serial' });
+
   test('TENANT_ADMIN administers its own tenant (assign/scope/grant) and is denied cross-tenant + escalating grants', async ({ browser }) => {
+    test.setTimeout(150_000);
     const adminCtx = await browser.newContext({ storageState: STORAGE_STATE });
     const opCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     let superToken = '';
@@ -193,6 +202,7 @@ test.describe('ADR-MONO-024 step 3 — tenant-admin delegation (federation runti
   });
 
   test('TENANT_BILLING_ADMIN suspends/resumes its own subscription and is denied cross-tenant', async ({ browser }) => {
+    test.setTimeout(120_000);
     const adminCtx = await browser.newContext({ storageState: STORAGE_STATE });
     const opCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     let superToken = '';
@@ -225,6 +235,7 @@ test.describe('ADR-MONO-024 step 3 — tenant-admin delegation (federation runti
   });
 
   test('SUPER_ADMIN is unconstrained on the same surface (net-zero — confinement is grant-scope-driven)', async ({ browser }) => {
+    test.setTimeout(90_000);
     const adminCtx = await browser.newContext({ storageState: STORAGE_STATE });
     let superToken = '';
     try {
