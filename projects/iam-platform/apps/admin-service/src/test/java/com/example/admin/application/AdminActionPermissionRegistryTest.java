@@ -86,6 +86,12 @@ class AdminActionPermissionRegistryTest {
     }
 
     @Test
+    void targetTypeFor_subscription_action_codes() {
+        assertThat(registry.targetTypeFor(ActionCode.SUBSCRIPTION_SUBSCRIBE)).isEqualTo("SUBSCRIPTION");
+        assertThat(registry.targetTypeFor(ActionCode.SUBSCRIPTION_CHANGE_STATUS)).isEqualTo("SUBSCRIPTION");
+    }
+
+    @Test
     void targetTypeFor_null_returns_unknown_sentinel() {
         assertThat(registry.targetTypeFor(null)).isEqualTo("UNKNOWN");
     }
@@ -197,6 +203,14 @@ class AdminActionPermissionRegistryTest {
                 .isEqualTo(Permission.TENANT_MANAGE);
         assertThat(registry.permissionForActionCode(ActionCode.TENANT_UPDATE))
                 .isEqualTo(Permission.TENANT_MANAGE);
+    }
+
+    @Test
+    void permissionForActionCode_subscription_lifecycle_share_subscription_manage() {
+        assertThat(registry.permissionForActionCode(ActionCode.SUBSCRIPTION_SUBSCRIBE))
+                .isEqualTo(Permission.SUBSCRIPTION_MANAGE);
+        assertThat(registry.permissionForActionCode(ActionCode.SUBSCRIPTION_CHANGE_STATUS))
+                .isEqualTo(Permission.SUBSCRIPTION_MANAGE);
     }
 
     @Test

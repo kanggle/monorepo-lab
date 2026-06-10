@@ -21,6 +21,14 @@ public final class Permission {
     public static final String OPERATOR_MANAGE       = "operator.manage";
     /** TASK-BE-250: tenant lifecycle management (SUPER_ADMIN only). */
     public static final String TENANT_MANAGE         = "tenant.manage";
+    /**
+     * TASK-BE-343 (ADR-MONO-023 D3): tenant↔domain subscription lifecycle
+     * management (SUPER_ADMIN only). DISTINCT from {@link #OPERATOR_MANAGE} — the
+     * entitlement plane and the IAM (operator) plane are separately delegable
+     * (ADR-023 D2/D3). The operator-facing subscription surface delegates the
+     * write to account-service (the entitlement authority).
+     */
+    public static final String SUBSCRIPTION_MANAGE   = "subscription.manage";
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";

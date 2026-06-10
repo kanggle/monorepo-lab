@@ -61,6 +61,9 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.OPERATOR_PROFILE_UPDATE, "OPERATOR");
         // TASK-BE-339 — per-assignment org_scope set/clear
         map.put(ActionCode.OPERATOR_ORG_SCOPE_UPDATE, "OPERATOR");
+        // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management
+        map.put(ActionCode.SUBSCRIPTION_SUBSCRIBE, "SUBSCRIPTION");
+        map.put(ActionCode.SUBSCRIPTION_CHANGE_STATUS, "SUBSCRIPTION");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -116,6 +119,8 @@ public class AdminActionPermissionRegistry {
                  OPERATOR_ORG_SCOPE_UPDATE -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
+            // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management
+            case SUBSCRIPTION_SUBSCRIBE, SUBSCRIPTION_CHANGE_STATUS -> Permission.SUBSCRIPTION_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;
