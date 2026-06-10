@@ -95,37 +95,58 @@ async function codeOf(res: APIResponse): Promise<string | undefined> {
 
 // ── admin-surface request helpers (absolute ADMIN_BASE URLs) ──────────────────
 
+/**
+ * Re-issue a request while it returns a transient infra 500/503. The admin
+ * audit write emits a row into the admin_db `outbox` table in the SAME (or a
+ * REQUIRES_NEW) transaction; the outbox poller takes a range `PESSIMISTIC_WRITE`
+ * lock on `status='PENDING'` (no SKIP LOCKED) and, while Kafka is still warming
+ * up on a cold federation stack, can hold it long enough to make the audit
+ * INSERT time out (1205 → PessimisticLockingFailureException → 500). The admin
+ * mutations are transactional (a failed write rolls back) + idempotent, so
+ * re-issuing once the poller releases the lock is safe and deterministic. The
+ * `beforeAll` gate below also blocks until the outbox is writable, so under
+ * normal warm conditions this retry is a no-op.
+ */
+async function send(fn: () => Promise<APIResponse>): Promise<APIResponse> {
+  let res = await fn();
+  for (let i = 0; i < 5 && (res.status() === 500 || res.status() === 503); i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    res = await fn();
+  }
+  return res;
+}
+
 function assign(ctx: BrowserContext, token: string, operatorId: string, tenant: string): Promise<APIResponse> {
-  return ctx.request.post(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}`, {
+  return send(() => ctx.request.post(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}`, {
     headers: headers(token, 'e2e ADR-024 step3 assign'),
-  });
+  }));
 }
 
 function unassign(ctx: BrowserContext, token: string, operatorId: string, tenant: string): Promise<APIResponse> {
-  return ctx.request.delete(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}`, {
+  return send(() => ctx.request.delete(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}`, {
     headers: headers(token, 'e2e ADR-024 step3 unassign'),
-  });
+  }));
 }
 
 function setOrgScope(ctx: BrowserContext, token: string, operatorId: string, tenant: string, scope: string[]): Promise<APIResponse> {
-  return ctx.request.put(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}/org-scope`, {
+  return send(() => ctx.request.put(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}/org-scope`, {
     headers: { ...headers(token, 'e2e ADR-024 step3 org-scope'), 'X-Tenant-Id': tenant },
     data: { orgScope: scope },
-  });
+  }));
 }
 
 function patchRoles(ctx: BrowserContext, token: string, operatorId: string, roles: string[]): Promise<APIResponse> {
-  return ctx.request.patch(`${ADMIN_BASE}/api/admin/operators/${operatorId}/roles`, {
+  return send(() => ctx.request.patch(`${ADMIN_BASE}/api/admin/operators/${operatorId}/roles`, {
     headers: headers(token, 'e2e ADR-024 step3 grant-menu'),
     data: { roles },
-  });
+  }));
 }
 
 function changeSub(ctx: BrowserContext, token: string, tenant: string, domain: string, status: string): Promise<APIResponse> {
-  return ctx.request.patch(`${ADMIN_BASE}/api/admin/subscriptions/${tenant}/${domain}/status`, {
+  return send(() => ctx.request.patch(`${ADMIN_BASE}/api/admin/subscriptions/${tenant}/${domain}/status`, {
     headers: headers(token, 'e2e ADR-024 step3 subscription'),
     data: { status },
-  });
+  }));
 }
 
 /** Best-effort teardown — never asserts (tolerates 404/409/transient). */
@@ -138,15 +159,45 @@ async function quietResume(ctx: BrowserContext, token: string): Promise<void> {
 
 test.describe('ADR-MONO-024 step 3 — tenant-admin delegation (federation runtime proof)', () => {
   // Each test does a full OIDC login PLUS a long chain of sequential admin-RBAC
-  // calls; the default 30s budget is too tight on a loaded stack and was the
-  // deterministic failure (the timeout then pile-up degraded the whole suite).
-  // Run serially so this spec never adds more than one concurrent operator
-  // login/context to the fullyParallel cohort, and give each test a generous
-  // budget (login can take ~30s under load + ~13 admin calls).
+  // calls; the default 30s budget is too tight on a loaded stack. Run serially so
+  // this spec never adds more than one concurrent operator login/context to the
+  // fullyParallel cohort, and give each test a generous budget.
   test.describe.configure({ mode: 'serial' });
 
+  // Outbox warm-up gate: a cold federation stack's admin_db `outbox` poller can
+  // hold its range PESSIMISTIC_WRITE lock long enough (while Kafka warms up) to
+  // make audit→outbox INSERTs time out (→ 500). Block here, using the SUPER_ADMIN
+  // platform credential, until an admin write (which exercises the audit→outbox
+  // path) succeeds — so the real assertions below run against a warm, writable
+  // stack and never observe the transient lock-timeout 500. `send()` already
+  // retries the transient 500; this gate just front-loads the wait once per
+  // worker instead of inside every test.
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(240_000);
+    const ctx = await browser.newContext({ storageState: STORAGE_STATE });
+    try {
+      const tok = await operatorToken(ctx, 'warm-up SUPER_ADMIN');
+      let warm = false;
+      for (let i = 0; i < 12 && !warm; i++) {
+        // assign→unassign a throwaway (writes two audit→outbox rows); 2xx ⇒ writable.
+        const res = await assign(ctx, tok, TARGET, FOREIGN);
+        if (res.status() === 201 || res.status() === 409) {
+          warm = true;
+        } else {
+          // eslint-disable-next-line no-console
+          console.log(`[MONO-210] outbox warm-up attempt ${i + 1}: assign http=${res.status()}`);
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+      }
+      await quietUnassign(ctx, tok, FOREIGN);
+      expect(warm, 'admin outbox must become writable (Kafka/poller warm) before the proof').toBe(true);
+    } finally {
+      await ctx.close();
+    }
+  });
+
   test('TENANT_ADMIN administers its own tenant (assign/scope/grant) and is denied cross-tenant + escalating grants', async ({ browser }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(200_000);
     const adminCtx = await browser.newContext({ storageState: STORAGE_STATE });
     const opCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     let superToken = '';
