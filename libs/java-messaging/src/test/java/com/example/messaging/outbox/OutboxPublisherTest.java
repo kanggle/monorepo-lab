@@ -9,7 +9,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,6 +122,21 @@ class OutboxPublisherTest {
         assertThat(entry1.getStatus()).isEqualTo("FAILED");
         assertThat(entry2.getStatus()).isEqualTo("PENDING");
         assertThat(entry3.getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-211 — publishPendingEvents 는 READ COMMITTED 격리로 실행된다 (gap-lock 경합 회귀 방지)")
+    void publishPendingEvents_runsAtReadCommitted() throws NoSuchMethodException {
+        // The poll holds a FOR UPDATE lock while doing a blocking Kafka publish;
+        // REPEATABLE READ gap-locks the PENDING range and blocks concurrent
+        // business outbox INSERTs (MONO-210 lock-wait 500). RC drops gap locks.
+        Method m = OutboxPublisher.class.getDeclaredMethod("publishPendingEvents",
+                OutboxPublisher.EventSender.class);
+        Transactional tx = m.getAnnotation(Transactional.class);
+        assertThat(tx).as("publishPendingEvents must stay transactional").isNotNull();
+        assertThat(tx.isolation())
+                .as("poll transaction must run at READ COMMITTED to avoid gap-lock contention")
+                .isEqualTo(Isolation.READ_COMMITTED);
     }
 
     @Test

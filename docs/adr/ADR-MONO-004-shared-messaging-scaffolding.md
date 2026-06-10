@@ -206,6 +206,32 @@ Surfaced by TASK-BE-136 (PR #345, payment-service outbox migration) self-review:
 
 ---
 
+## 4.7 Poller Lock-Contention amendment (TASK-MONO-211, 2026-06-10)
+
+Surfaced by TASK-MONO-207 (federation-e2e spec flakiness) and pinned by TASK-MONO-210 (deterministic 500 on a write-heavy admin e2e): `OutboxPublisher.publishPendingEvents` is `@Transactional` at the default **REPEATABLE READ**, and `OutboxJpaRepository.findPendingWithLock` is a `SELECT … WHERE status='PENDING' … FOR UPDATE`. Under REPEATABLE READ that `FOR UPDATE` takes **next-key/gap locks over the PENDING range**, and because the Kafka publish (`kafkaTemplate.send(...).get()`, synchronous) runs *inside* the same transaction while the lock is held, a slow/warming broker makes the poller hold those gap locks for the duration of the blocking `.get()`. Concurrent **business `INSERT`s into `outbox`** (emitted by any domain mutation) then block on the gap lock for up to `innodb_lock_wait_timeout` (50s) → MySQL `1205` → `PessimisticLockingFailureException` → the business write 500s. The compose-log dump in the MONO-210 run showed exactly this (`outbox` INSERT lock-wait while the poller held its lock during a cold-stack Kafka publish).
+
+**Amendment** (TASK-MONO-211, lands together with this ADR update):
+
+- `OutboxPublisher.publishPendingEvents` is annotated `@Transactional(isolation = Isolation.READ_COMMITTED)`. Under READ COMMITTED InnoDB does **not** take gap locks — `SELECT … FOR UPDATE` locks only the rows it actually matches/returns, never the gaps — so a concurrent business INSERT of a new PENDING row is no longer blocked by the poller. A slow Kafka now only degrades **poller throughput** (its own batch transaction waits on `.get()`), the intended degrade mode, instead of failing unrelated business writes.
+
+**Semantics preserved (no consumer-visible change):**
+
+- **Single-poller exclusivity / no double-publish** — the `FOR UPDATE` still row-locks the claimed PENDING rows for the transaction's duration; only the *gap* locks (which blocked INSERTs) are dropped.
+- **At-least-once** — a row is marked `PUBLISHED` only after the broker ACK, in the same transaction; a failure leaves it `PENDING` for the next poll.
+- **FIFO** — `ORDER BY created_at` is unchanged; the batch is read once then written (no re-read), so READ COMMITTED's weaker repeatable-read guarantee is irrelevant to correctness here.
+- The § 4.6 batch-resilience dispatch (SUCCESS/TRANSIENT/PERMANENT) is byte-unchanged.
+
+**Alternatives considered (deferred):**
+
+- **claim-then-publish** (mark rows `CLAIMED` in a short tx → commit/release locks → publish outside any tx → mark `PUBLISHED`): the fully structural fix (no lock held across blocking I/O at all), but introduces a new `CLAIMED` state + crash-recovery semantics across all 13+ service schemas. READ COMMITTED removes the observed contention with a one-line, schema-free, semantics-preserving change; claim-then-publish remains the future option if multi-instance throughput demands it.
+- **`SELECT … FOR UPDATE SKIP LOCKED`**: only helps when *multiple* poller instances contend for the same rows; today each service runs a single `@Scheduled` poller, and SKIP LOCKED does not remove the gap locks that block business INSERTs. Orthogonal to this fix; revisit alongside horizontal poller scaling.
+
+**Affected blast radius:** the change is in the shared `libs/java-messaging` poller, so it applies to every service's outbox uniformly. It is isolation-scoped to the poll transaction only — business transactions keep their own default isolation.
+
+**Verification:** `:libs:java-messaging:test` green incl. a new reflection guard asserting `publishPendingEvents` stays `@Transactional(READ_COMMITTED)`; behavioural proof via the federation-hardening-e2e workflow (the MONO-207 + MONO-210 specs run without the lock-wait 500). The MONO-210 spec's `beforeAll` warm-up gate stays as defence-in-depth.
+
+---
+
 ## 5. Verification
 
 - `./gradlew :libs:java-messaging:test` — 39/39 PASS (12 new + 27 existing).
