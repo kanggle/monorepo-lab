@@ -8,7 +8,9 @@ TASK-MONO-211
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1266 (squash `dce44436`). 3차원 ✓ (MERGED / origin/main tip=`dce44436` 일치 / PR 체크 20 pass 0 fail — Build & Test + **전 서비스 Integration(Testcontainers) 매트릭스**가 실DB로 RC 격리 poller 회귀 검증). **AC-4 행동 검증 ✓**: federation-hardening-e2e workflow_dispatch run `27281437532` GREEN — **14 passed / 0 failed / 0 flaky** (이전 MONO-207 상시 1 flaky 해소) + lock-wait/PessimisticLocking 에러 **0건** + 런타임 **4.2~4.9m → 1.3m** 급감(50s lock-wait 제거). `OutboxPublisher.publishPendingEvents` 를 `@Transactional(isolation=READ_COMMITTED)` 로 — RC 가 gap lock 제거(매칭 row 만 잠금)해 비즈니스 outbox INSERT 가 poller 의 Kafka publish 중에도 블록되지 않음. delivery semantics 불변(FOR UPDATE row-lock 배타성·at-least-once·FIFO). ADR-MONO-004 §4.7 amendment. 보류 대안: claim-then-publish(구조적, CLAIMED state+크래시복구), SKIP LOCKED(multi-poller 한정). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
