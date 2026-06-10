@@ -1,8 +1,8 @@
 package com.example.account.infrastructure.persistence;
 
+import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.account.domain.tenant.TenantDomainSubscription;
 import com.example.account.domain.tenant.TenantId;
-import com.example.account.domain.tenant.TenantStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -42,7 +42,7 @@ public class TenantDomainSubscriptionJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 10, nullable = false)
-    private TenantStatus status;
+    private SubscriptionStatus status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

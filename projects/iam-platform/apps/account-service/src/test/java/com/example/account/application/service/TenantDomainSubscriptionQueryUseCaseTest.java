@@ -3,8 +3,8 @@ package com.example.account.application.service;
 import com.example.account.application.result.TenantDomainSubscriptionResult;
 import com.example.account.domain.repository.TenantDomainSubscriptionRepository;
 import com.example.account.domain.tenant.TenantDomainSubscription;
+import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.account.domain.tenant.TenantId;
-import com.example.account.domain.tenant.TenantStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +37,7 @@ class TenantDomainSubscriptionQueryUseCaseTest {
 
     private static TenantDomainSubscription sub(String tenantId, String domainKey) {
         return TenantDomainSubscription.reconstitute(
-                new TenantId(tenantId), domainKey, TenantStatus.ACTIVE,
+                new TenantId(tenantId), domainKey, SubscriptionStatus.ACTIVE,
                 Instant.now(), Instant.now());
     }
 
