@@ -1,6 +1,7 @@
 package com.wms.master.adapter.in.web.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -61,7 +62,7 @@ class LocationControllerTest {
     @Test
     void getById_returns200_withEtag() throws Exception {
         LocationResult result = sampleResult(3L, WarehouseStatus.ACTIVE);
-        when(queryUseCase.findById(result.id())).thenReturn(result);
+        when(queryUseCase.findById(eq(result.id()), any())).thenReturn(result);
 
         mockMvc.perform(get("/api/v1/master/locations/" + result.id()))
                 .andExpect(status().isOk())
@@ -73,7 +74,7 @@ class LocationControllerTest {
     @Test
     void getById_returns404_whenUnknown() throws Exception {
         UUID id = UUID.randomUUID();
-        when(queryUseCase.findById(id)).thenThrow(new LocationNotFoundException(id.toString()));
+        when(queryUseCase.findById(eq(id), any())).thenThrow(new LocationNotFoundException(id.toString()));
 
         mockMvc.perform(get("/api/v1/master/locations/" + id))
                 .andExpect(status().isNotFound())

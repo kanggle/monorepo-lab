@@ -17,6 +17,7 @@ import com.wms.master.domain.event.ZoneDeactivatedEvent;
 import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
@@ -442,6 +443,64 @@ class ZoneServiceTest {
                     ListZonesCriteria.forWarehouse(UUID.randomUUID()),
                     new PageQuery(0, 10, "updatedAt", "desc"))))
                     .isInstanceOf(WarehouseNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("ADR-MONO-025 data-scope (TASK-BE-350) — parent-warehouse gate")
+    class DataScope {
+
+        private UUID seedZone() {
+            return service.create(new CreateZoneCommand(
+                    warehouseId, "Z-A", "Ambient A", ZoneType.AMBIENT, ACTOR)).id();
+        }
+
+        @Test
+        @DisplayName("getById: parent warehouse code out of scope → DataScopeForbiddenException")
+        void getByIdOutOfScope() {
+            UUID zoneId = seedZone();
+            assertThatThrownBy(() -> service.findById(zoneId, java.util.List.of("WH99")))
+                    .isInstanceOf(DataScopeForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("getById: parent warehouse code in scope → returns the zone")
+        void getByIdInScope() {
+            UUID zoneId = seedZone();
+            assertThat(service.findById(zoneId, java.util.List.of("WH01")).id()).isEqualTo(zoneId);
+        }
+
+        @Test
+        @DisplayName("getById: net-zero (null and empty scope) is unrestricted")
+        void getByIdNetZero() {
+            UUID zoneId = seedZone();
+            assertThat(service.findById(zoneId, null).id()).isEqualTo(zoneId);
+            assertThat(service.findById(zoneId, java.util.List.of()).id()).isEqualTo(zoneId);
+            assertThat(service.findById(zoneId).id()).isEqualTo(zoneId); // 1-arg net-zero overload
+        }
+
+        @Test
+        @DisplayName("list: parent warehouse out of scope → 403 gate (before any row is read)")
+        void listOutOfScopeGate() {
+            seedZone();
+            assertThatThrownBy(() -> service.list(new ListZonesQuery(
+                    ListZonesCriteria.forWarehouse(warehouseId),
+                    new PageQuery(0, 10, "updatedAt", "desc"),
+                    java.util.Set.of("WH99"))))
+                    .isInstanceOf(DataScopeForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("list: parent warehouse in scope → page returned; net-zero unaffected")
+        void listInScopeAndNetZero() {
+            seedZone();
+            assertThat(service.list(new ListZonesQuery(
+                    ListZonesCriteria.forWarehouse(warehouseId),
+                    new PageQuery(0, 10, "updatedAt", "desc"),
+                    java.util.Set.of("WH01"))).totalElements()).isEqualTo(1);
+            assertThat(service.list(new ListZonesQuery(
+                    ListZonesCriteria.forWarehouse(warehouseId),
+                    new PageQuery(0, 10, "updatedAt", "desc"))).totalElements()).isEqualTo(1);
         }
     }
 }

@@ -13,6 +13,7 @@ import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
 import com.wms.master.domain.exception.ConcurrencyConflictException;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.exception.ImmutableFieldException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationCodeDuplicateException;
@@ -430,5 +431,51 @@ class LocationServiceTest {
                 warehouseId, zoneId, code,
                 null, null, null, null,
                 LocationType.STORAGE, 500, ACTOR);
+    }
+
+    @Nested
+    @DisplayName("ADR-MONO-025 data-scope (TASK-BE-350) — parent-warehouse confinement")
+    class DataScope {
+
+        @Test
+        @DisplayName("getById: parent warehouse code out of scope → DataScopeForbiddenException")
+        void getByIdOutOfScope() {
+            UUID id = service.create(sampleCreate(CODE)).id();
+            assertThatThrownBy(() -> service.findById(id, java.util.List.of("WH99")))
+                    .isInstanceOf(DataScopeForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("getById: parent warehouse code in scope → returns the location")
+        void getByIdInScope() {
+            UUID id = service.create(sampleCreate(CODE)).id();
+            assertThat(service.findById(id, java.util.List.of("WH01")).id()).isEqualTo(id);
+        }
+
+        @Test
+        @DisplayName("getById: net-zero (null, empty, 1-arg) is unrestricted")
+        void getByIdNetZero() {
+            UUID id = service.create(sampleCreate(CODE)).id();
+            assertThat(service.findById(id, null).id()).isEqualTo(id);
+            assertThat(service.findById(id, java.util.List.of()).id()).isEqualTo(id);
+            assertThat(service.findById(id).id()).isEqualTo(id);
+        }
+
+        @Test
+        @DisplayName("list: threads the scope codes through to the persistence port (real filter is H2-tested)")
+        void listThreadsScopeCodes() {
+            service.list(new com.wms.master.application.query.ListLocationsQuery(
+                    com.wms.master.application.query.ListLocationsCriteria.empty(),
+                    com.example.common.page.PageQuery.of(0, 20, "updatedAt", "desc"),
+                    java.util.Set.of("WH01", "WH02")));
+            assertThat(locationPersistence.lastScopeWarehouseCodes())
+                    .containsExactlyInAnyOrder("WH01", "WH02");
+
+            // net-zero: null threaded through unchanged
+            service.list(new com.wms.master.application.query.ListLocationsQuery(
+                    com.wms.master.application.query.ListLocationsCriteria.empty(),
+                    com.example.common.page.PageQuery.of(0, 20, "updatedAt", "desc")));
+            assertThat(locationPersistence.lastScopeWarehouseCodes()).isNull();
+        }
     }
 }

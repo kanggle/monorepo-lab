@@ -13,6 +13,7 @@ import com.wms.master.application.port.in.ZoneCrudUseCase;
 import com.wms.master.application.port.in.ZoneQueryUseCase;
 import com.wms.master.application.query.ListZonesCriteria;
 import com.wms.master.application.query.ListZonesQuery;
+import com.wms.master.adapter.in.web.support.DataScopeSupport;
 import com.wms.master.application.result.ZoneResult;
 import com.wms.master.domain.model.WarehouseStatus;
 import com.wms.master.domain.model.ZoneType;
@@ -20,6 +21,8 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,8 +64,9 @@ public class ZoneController {
     @GetMapping("/{zoneId}")
     public ResponseEntity<ZoneResponse> getById(
             @PathVariable UUID warehouseId,
-            @PathVariable UUID zoneId) {
-        ZoneResult result = queryUseCase.findById(zoneId);
+            @PathVariable UUID zoneId,
+            @AuthenticationPrincipal Jwt jwt) {
+        ZoneResult result = queryUseCase.findById(zoneId, DataScopeSupport.warehouseScopeCodes(jwt));
         // Defensive: a zone's warehouseId must match the path variable. If they
         // disagree, surface a 404 rather than leaking a cross-warehouse id.
         if (!result.warehouseId().equals(warehouseId)) {
@@ -80,7 +84,8 @@ public class ZoneController {
             @RequestParam(required = false) String zoneType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+            @RequestParam(defaultValue = DEFAULT_SORT) String sort,
+            @AuthenticationPrincipal Jwt jwt) {
         ListZonesCriteria criteria = new ListZonesCriteria(
                 warehouseId,
                 ControllerSupport.parseEnum(status, WarehouseStatus.class,
@@ -89,7 +94,8 @@ public class ZoneController {
                         "zoneType must be one of AMBIENT|CHILLED|FROZEN|RETURNS|BULK|PICK"));
         PageQuery pageQuery = PageQuery.of(page, size,
                 ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
-        PageResult<ZoneResult> result = queryUseCase.list(new ListZonesQuery(criteria, pageQuery));
+        PageResult<ZoneResult> result = queryUseCase.list(
+                new ListZonesQuery(criteria, pageQuery, DataScopeSupport.warehouseScopeCodes(jwt)));
         return PageResponse.from(result, sort, ZoneResponse::from);
     }
 

@@ -12,12 +12,15 @@ import com.wms.master.application.port.in.LocationCrudUseCase;
 import com.wms.master.application.port.in.LocationQueryUseCase;
 import com.wms.master.application.query.ListLocationsCriteria;
 import com.wms.master.application.query.ListLocationsQuery;
+import com.wms.master.adapter.in.web.support.DataScopeSupport;
 import com.wms.master.application.result.LocationResult;
 import com.wms.master.domain.model.LocationType;
 import com.wms.master.domain.model.WarehouseStatus;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -51,8 +54,10 @@ public class LocationController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<LocationResponse> getById(@PathVariable UUID id) {
-        LocationResult result = queryUseCase.findById(id);
+    public ResponseEntity<LocationResponse> getById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        LocationResult result = queryUseCase.findById(id, DataScopeSupport.warehouseScopeCodes(jwt));
         return ResponseEntity.ok()
                 .eTag(ControllerSupport.etag(result.version()))
                 .body(LocationResponse.from(result));
@@ -67,7 +72,8 @@ public class LocationController {
             @RequestParam(defaultValue = "ACTIVE") String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = DEFAULT_SORT) String sort) {
+            @RequestParam(defaultValue = DEFAULT_SORT) String sort,
+            @AuthenticationPrincipal Jwt jwt) {
         ListLocationsCriteria criteria = new ListLocationsCriteria(
                 warehouseId,
                 zoneId,
@@ -79,8 +85,8 @@ public class LocationController {
                         "status must be ACTIVE or INACTIVE"));
         PageQuery pageQuery = PageQuery.of(page, size,
                 ControllerSupport.sortField(sort), ControllerSupport.sortDirection(sort));
-        PageResult<LocationResult> result =
-                queryUseCase.list(new ListLocationsQuery(criteria, pageQuery));
+        PageResult<LocationResult> result = queryUseCase.list(
+                new ListLocationsQuery(criteria, pageQuery, DataScopeSupport.warehouseScopeCodes(jwt)));
         return PageResponse.from(result, sort, LocationResponse::from);
     }
 

@@ -16,6 +16,7 @@ import com.wms.master.domain.event.ZoneCreatedEvent;
 import com.wms.master.domain.event.ZoneDeactivatedEvent;
 import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.ReferenceIntegrityViolationException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -23,6 +24,7 @@ import com.wms.master.domain.exception.ZoneNotFoundException;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.Zone;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -131,7 +133,20 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public ZoneResult findById(UUID id) {
-        return ZoneResult.from(loadOrThrow(id));
+        return findById(id, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
+    public ZoneResult findById(UUID id, Collection<String> scopeWarehouseCodes) {
+        Zone zone = loadOrThrow(id);
+        // ADR-MONO-025: a deliberately data-scoped operator may only read a zone
+        // whose parent warehouse code is in scope. Net-zero (null/empty scope —
+        // base/machine tokens) and unrestricted operators are unaffected. Zone
+        // carries only warehouseId, so the parent warehouse is loaded for its code.
+        requireParentWarehouseInScope(zone.getWarehouseId(), scopeWarehouseCodes);
+        return ZoneResult.from(zone);
     }
 
     @Override
@@ -140,9 +155,32 @@ public class ZoneService implements ZoneCrudUseCase, ZoneQueryUseCase {
     public PageResult<ZoneResult> list(ListZonesQuery query) {
         // Parent must exist even for listing — a nested 404 is clearer than an
         // empty page when the warehouseId is wrong.
-        requireWarehouseExists(query.criteria().warehouseId());
+        Warehouse parent = requireWarehouseExists(query.criteria().warehouseId());
+        // ADR-MONO-025: a zone list is already confined to one warehouse by the
+        // nested route, so the data-scope is a single gate on the parent
+        // warehouse code (not a per-row filter). Net-zero when scope is null/empty.
+        requireInScope(parent.getWarehouseCode(), query.scopeWarehouseCodes());
         return zonePersistencePort.findPage(query.criteria(), query.pageQuery())
                 .map(ZoneResult::from);
+    }
+
+    private void requireParentWarehouseInScope(UUID warehouseId, Collection<String> scopeWarehouseCodes) {
+        if (isNetZero(scopeWarehouseCodes)) {
+            return;
+        }
+        Warehouse warehouse = requireWarehouseExists(warehouseId);
+        requireInScope(warehouse.getWarehouseCode(), scopeWarehouseCodes);
+    }
+
+    private static void requireInScope(String warehouseCode, Collection<String> scopeWarehouseCodes) {
+        if (!isNetZero(scopeWarehouseCodes) && !scopeWarehouseCodes.contains(warehouseCode)) {
+            throw new DataScopeForbiddenException(
+                    "warehouse " + warehouseCode + " is outside the operator's data-scope");
+        }
+    }
+
+    private static boolean isNetZero(Collection<String> scopeWarehouseCodes) {
+        return scopeWarehouseCodes == null || scopeWarehouseCodes.isEmpty();
     }
 
     private Zone loadOrThrow(UUID id) {

@@ -8,6 +8,7 @@ import com.wms.master.domain.exception.LocationCodeDuplicateException;
 import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.model.Location;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -70,8 +71,16 @@ class FakeLocationPersistencePort implements LocationPersistencePort {
                 .map(FakeLocationPersistencePort::snapshot);
     }
 
+    private Collection<String> lastScopeWarehouseCodes;
+
     @Override
-    public PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery) {
+    public PageResult<Location> findPage(ListLocationsCriteria criteria, PageQuery pageQuery,
+                                         Collection<String> scopeWarehouseCodes) {
+        // The data-scope filter is a parent-warehouse-code → warehouseId subquery
+        // that this location-only fake cannot resolve (Location stores no code);
+        // the real filtering is proven by LocationRepositoryImplH2Test. We record
+        // the threaded codes so a service test can assert the pass-through.
+        this.lastScopeWarehouseCodes = scopeWarehouseCodes;
         Stream<Location> filtered = byId.values().stream();
         if (criteria.warehouseId() != null) {
             filtered = filtered.filter(l -> l.getWarehouseId().equals(criteria.warehouseId()));
@@ -109,6 +118,10 @@ class FakeLocationPersistencePort implements LocationPersistencePort {
     // test hooks
     void triggerOptimisticLockOnNextUpdate() {
         this.failNextUpdateAsOptimisticLock = true;
+    }
+
+    Collection<String> lastScopeWarehouseCodes() {
+        return lastScopeWarehouseCodes;
     }
 
     int size() {

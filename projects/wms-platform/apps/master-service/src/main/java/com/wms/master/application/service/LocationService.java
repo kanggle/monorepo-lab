@@ -17,6 +17,7 @@ import com.wms.master.domain.event.LocationCreatedEvent;
 import com.wms.master.domain.event.LocationDeactivatedEvent;
 import com.wms.master.domain.event.LocationReactivatedEvent;
 import com.wms.master.domain.event.LocationUpdatedEvent;
+import com.wms.master.domain.exception.DataScopeForbiddenException;
 import com.wms.master.domain.exception.InvalidStateTransitionException;
 import com.wms.master.domain.exception.LocationNotFoundException;
 import com.wms.master.domain.exception.WarehouseNotFoundException;
@@ -25,6 +26,7 @@ import com.wms.master.domain.model.Location;
 import com.wms.master.domain.model.Warehouse;
 import com.wms.master.domain.model.Zone;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -170,15 +172,40 @@ public class LocationService implements LocationCrudUseCase, LocationQueryUseCas
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public LocationResult findById(UUID id) {
-        return LocationResult.from(loadOrThrow(id));
+        return findById(id, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
+    public LocationResult findById(UUID id, Collection<String> scopeWarehouseCodes) {
+        Location location = loadOrThrow(id);
+        // ADR-MONO-025: a deliberately data-scoped operator may only read a
+        // location whose parent warehouse code is in scope. Net-zero (null/empty
+        // scope — base/machine tokens) and unrestricted operators are unaffected.
+        // Location carries only warehouseId, so the parent warehouse is loaded
+        // for its code (the list path resolves codes→ids in SQL instead).
+        if (!isNetZero(scopeWarehouseCodes)) {
+            Warehouse parent = requireWarehouseExists(location.getWarehouseId());
+            if (!scopeWarehouseCodes.contains(parent.getWarehouseCode())) {
+                throw new DataScopeForbiddenException(
+                        "warehouse " + parent.getWarehouseCode() + " is outside the operator's data-scope");
+            }
+        }
+        return LocationResult.from(location);
     }
 
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('MASTER_READ') or hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")
     public PageResult<LocationResult> list(ListLocationsQuery query) {
-        return locationPersistencePort.findPage(query.criteria(), query.pageQuery())
+        return locationPersistencePort
+                .findPage(query.criteria(), query.pageQuery(), query.scopeWarehouseCodes())
                 .map(LocationResult::from);
+    }
+
+    private static boolean isNetZero(Collection<String> scopeWarehouseCodes) {
+        return scopeWarehouseCodes == null || scopeWarehouseCodes.isEmpty();
     }
 
     private Location loadOrThrow(UUID id) {
