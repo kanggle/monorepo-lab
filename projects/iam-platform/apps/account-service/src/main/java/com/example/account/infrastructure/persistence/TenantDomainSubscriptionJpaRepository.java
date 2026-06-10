@@ -1,6 +1,6 @@
 package com.example.account.infrastructure.persistence;
 
-import com.example.account.domain.tenant.TenantStatus;
+import com.example.account.domain.tenant.SubscriptionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +15,7 @@ public interface TenantDomainSubscriptionJpaRepository
             WHERE s.status = :status
             ORDER BY s.domainKey ASC, s.tenantId ASC
             """)
-    List<TenantDomainSubscriptionJpaEntity> findByStatus(@Param("status") TenantStatus status);
+    List<TenantDomainSubscriptionJpaEntity> findByStatus(@Param("status") SubscriptionStatus status);
 
     @Query("""
             SELECT s FROM TenantDomainSubscriptionJpaEntity s
@@ -23,5 +23,5 @@ public interface TenantDomainSubscriptionJpaRepository
             ORDER BY s.domainKey ASC, s.tenantId ASC
             """)
     List<TenantDomainSubscriptionJpaEntity> findByStatusAndTenantId(
-            @Param("status") TenantStatus status, @Param("tenantId") String tenantId);
+            @Param("status") SubscriptionStatus status, @Param("tenantId") String tenantId);
 }

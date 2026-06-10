@@ -1,8 +1,8 @@
 package com.example.account.infrastructure.persistence;
 
 import com.example.account.domain.repository.TenantDomainSubscriptionRepository;
+import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.account.domain.tenant.TenantDomainSubscription;
-import com.example.account.domain.tenant.TenantStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -16,14 +16,14 @@ public class TenantDomainSubscriptionRepositoryImpl implements TenantDomainSubsc
 
     @Override
     public List<TenantDomainSubscription> findAllActive() {
-        return jpaRepository.findByStatus(TenantStatus.ACTIVE).stream()
+        return jpaRepository.findByStatus(SubscriptionStatus.ACTIVE).stream()
                 .map(TenantDomainSubscriptionJpaEntity::toDomain)
                 .toList();
     }
 
     @Override
     public List<TenantDomainSubscription> findActiveByTenantId(String tenantId) {
-        return jpaRepository.findByStatusAndTenantId(TenantStatus.ACTIVE, tenantId).stream()
+        return jpaRepository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, tenantId).stream()
                 .map(TenantDomainSubscriptionJpaEntity::toDomain)
                 .toList();
     }

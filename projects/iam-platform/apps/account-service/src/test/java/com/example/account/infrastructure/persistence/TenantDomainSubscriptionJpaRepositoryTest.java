@@ -1,6 +1,6 @@
 package com.example.account.infrastructure.persistence;
 
-import com.example.account.domain.tenant.TenantStatus;
+import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.testsupport.integration.DockerAvailableCondition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -73,7 +73,7 @@ class TenantDomainSubscriptionJpaRepositoryTest {
         @DisplayName("acme-corp → {finance, wms} exactly (set equality, order-agnostic)")
         void acmeCorp_returnsFinanceAndWms() {
             List<TenantDomainSubscriptionJpaEntity> results =
-                    repository.findByStatusAndTenantId(TenantStatus.ACTIVE, "acme-corp");
+                    repository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, "acme-corp");
 
             Set<String> domainKeys = results.stream()
                     .map(TenantDomainSubscriptionJpaEntity::getDomainKey)
@@ -88,7 +88,7 @@ class TenantDomainSubscriptionJpaRepositoryTest {
         @DisplayName("wms → {wms} (V0019 self-subscription still present — no regression)")
         void wms_returnsSelf() {
             List<TenantDomainSubscriptionJpaEntity> results =
-                    repository.findByStatusAndTenantId(TenantStatus.ACTIVE, "wms");
+                    repository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, "wms");
 
             Set<String> domainKeys = results.stream()
                     .map(TenantDomainSubscriptionJpaEntity::getDomainKey)
@@ -103,7 +103,7 @@ class TenantDomainSubscriptionJpaRepositoryTest {
         @DisplayName("nonexistent-tenant → empty list")
         void nonexistentTenant_returnsEmpty() {
             List<TenantDomainSubscriptionJpaEntity> results =
-                    repository.findByStatusAndTenantId(TenantStatus.ACTIVE, "nonexistent-tenant");
+                    repository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, "nonexistent-tenant");
 
             assertThat(results)
                     .as("unknown tenantId must produce an empty result (no FK violation)")
@@ -117,7 +117,7 @@ class TenantDomainSubscriptionJpaRepositoryTest {
     @DisplayName("acme-corp has no iam/scm/erp subscription (deliberate non-entitlement)")
     void acmeCorp_noGapScmErpSubscription() {
         List<TenantDomainSubscriptionJpaEntity> results =
-                repository.findByStatusAndTenantId(TenantStatus.ACTIVE, "acme-corp");
+                repository.findByStatusAndTenantId(SubscriptionStatus.ACTIVE, "acme-corp");
 
         Set<String> domainKeys = results.stream()
                 .map(TenantDomainSubscriptionJpaEntity::getDomainKey)
