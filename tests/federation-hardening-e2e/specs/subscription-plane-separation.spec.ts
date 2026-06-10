@@ -1,9 +1,10 @@
+import path from 'node:path';
 import {
   test,
   expect,
   type BrowserContext,
 } from '@playwright/test';
-import { loginAsSuperAdmin, loginAsMultiOperator } from '../fixtures/login';
+import { loginAsMultiOperator } from '../fixtures/login';
 
 /**
  * TASK-MONO-207 — ADR-MONO-023 § 3.3 D2 cross-service plane-separation proof.
@@ -53,10 +54,13 @@ import { loginAsSuperAdmin, loginAsMultiOperator } from '../fixtures/login';
  * fullyParallel acme-corp / globex-corp assertions; the suspend target `finance`
  * is always restored in `finally`.
  *
- * Session isolation: empty storageState + a fresh OIDC PKCE login (the suite-wide
- * SUPER_ADMIN '*' wildcard would defeat the entitlement gate). Two contexts: the
- * SUPER_ADMIN admin context owns the mutation (it alone has subscription.manage);
- * the multi-operator op context observes the re-scoped token.
+ * Session isolation: the multi-operator op context logs in fresh with empty
+ * storageState (the suite-wide SUPER_ADMIN '*' wildcard would defeat the
+ * entitlement gate). The admin context REUSES the persisted global-setup
+ * SUPER_ADMIN storageState (it alone has subscription.manage) — no in-test login,
+ * so it does not collide with Playwright-managed tracing (the MONO-155
+ * `tracing.start already started` trap that bites in-test loginAsSuperAdmin) and
+ * the exchanged operator token is read straight from the persisted cookies.
  *
  * Verification channel: federation-hardening-e2e is nightly + workflow_dispatch
  * (NOT PR-triggered) — verified via `gh workflow run federation-hardening-e2e.yml`.
@@ -71,6 +75,11 @@ test.use({ storageState: { cookies: [], origins: [] } });
  *  unlike /api/tenant — so the spec drives the backend surface directly, which is
  *  the D2/D3 path under test). */
 const ADMIN_BASE = process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085';
+
+/** The persisted global-setup SUPER_ADMIN session (playwright.config STORAGE_STATE).
+ *  The admin context loads it instead of logging in, so it carries the exchanged
+ *  operator token without an in-test OIDC round-trip. */
+const STORAGE_STATE = path.join(__dirname, '../fixtures/.storage-state.json');
 
 /** session.ts cookie names (HttpOnly — readable via BrowserContext.cookies()). */
 const OPERATOR_COOKIE = 'console_operator_token'; // the /api/admin/** credential
@@ -180,9 +189,9 @@ test.describe('ADR-MONO-023 D2 — entitlement↔IAM plane separation (cross-ser
     browser,
   }) => {
     // Admin context: SUPER_ADMIN — the only identity with subscription.manage.
-    const adminCtx = await browser.newContext({
-      storageState: { cookies: [], origins: [] },
-    });
+    // Reuses the persisted global-setup session (no in-test login → no
+    // tracing.start collision); the exchanged operator token is in its cookies.
+    const adminCtx = await browser.newContext({ storageState: STORAGE_STATE });
     // Operator context: the multi-operator, assigned to initech-corp (seed § 14).
     const opCtx = await browser.newContext({
       storageState: { cookies: [], origins: [] },
@@ -190,11 +199,10 @@ test.describe('ADR-MONO-023 D2 — entitlement↔IAM plane separation (cross-ser
 
     let operatorToken = '';
     try {
-      await loginAsSuperAdmin(adminCtx);
       const tok = await readCookie(adminCtx, OPERATOR_COOKIE);
       expect(
         tok,
-        'the exchanged SUPER_ADMIN operator token (the /api/admin/** credential) must be present',
+        'the exchanged SUPER_ADMIN operator token (the /api/admin/** credential) must be present in the persisted global-setup session',
       ).toBeTruthy();
       operatorToken = tok!;
 
