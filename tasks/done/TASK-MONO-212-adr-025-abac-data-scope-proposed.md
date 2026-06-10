@@ -8,7 +8,9 @@ ADR-MONO-025 (PROPOSED) — ABAC Data-Scope Generalization. Author the committed
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: PROPOSED ADR 작성 PR #1268 (squash `1484c611`). 3차원 ✓ (MERGED / origin/main tip=`1484c611` 일치 / doc-only 체크 pass). `ADR-MONO-025` Status=PROPOSED, D1~D7 + alternatives + 019~024 관계 + Status Transition History 작성. 핵심 발견 반영: erp converter 가 이미 `org_scope`/`data_scope` dual-read(latent hook) → D1 canonical `data_scope`+`org_scope` alias 무손실 / 주입 producer=`TenantClaimTokenCustomizer`(데모 워킹트리 파일) → D5 producer 무변경(consumer-side canonicalisation)으로 데모파일 미접촉. 다음=ACCEPTED 전환(사용자 게이트: D3 첫 도메인 wms vs finance 등) 후 §3.3 실행. 분석=Opus 4.8.
 
 # Owner
 
