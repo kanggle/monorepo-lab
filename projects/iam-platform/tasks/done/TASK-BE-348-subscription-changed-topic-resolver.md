@@ -8,7 +8,9 @@ account-service — map the `tenant.subscription.changed` outbox event type to i
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-10)**: impl PR #1264 (squash `6ed03766`). 3차원 ✓ (MERGED / origin/main tip=`6ed03766` 일치 / PR 체크 20 pass 0 fail — Build & Test + Integration(iam) GREEN). `AccountOutboxPollingScheduler.resolveTopic` switch 에 `case "tenant.subscription.changed" -> TOPIC_SUBSCRIPTION_CHANGED`("tenant.subscription.changed", account.* 동일이름 관례) 추가 → BE-342 가 발행만 하고 토픽맵 누락해 매 구독변경마다 FAILED 처리되던 이벤트가 이제 정상 발행. 계약 account-events.md §tenant.subscription.changed 준수(코드-only, 스펙 무변경). forward-only(과거 FAILED row 재발행 안 함, fire-and-forget 알림이라 무해). unknown-type throw 유지(deny-by-default). MONO-210 federation-e2e 로그 dump 에서 발견된 결함. 분석=Opus 4.8 / 구현=Sonnet 권장→Opus 4.8 수행(단순 fix).
 
 # Owner
 
