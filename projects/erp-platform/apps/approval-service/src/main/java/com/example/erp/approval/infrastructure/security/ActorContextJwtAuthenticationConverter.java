@@ -1,6 +1,7 @@
 package com.example.erp.approval.infrastructure.security;
 
 import com.example.erp.approval.application.ActorContext;
+import com.example.security.jwt.AbacDataScope;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -17,9 +18,14 @@ import java.util.Set;
 /**
  * Converts a verified {@link Jwt} into an authentication token whose principal
  * is an {@link ActorContext} — lifts {@code sub}, {@code tenant_id},
- * {@code roles}/{@code role}/{@code scope} (claim aliases), {@code org_scope},
+ * {@code roles}/{@code role}/{@code scope} (claim aliases), the data-scope claim,
  * and the signed {@code entitled_domains} claim (ADR-MONO-019 § D5) into a typed
  * value so use cases never touch Spring Security. Mirrors masterdata-service.
+ *
+ * <p>The data-scope token set is parsed by the shared canonical reader
+ * {@link AbacDataScope} (ADR-MONO-025; dual-reads {@code org_scope} +
+ * {@code data_scope}); only the domain-local {@code client_credentials → ["*"]}
+ * default is kept here.
  */
 public class ActorContextJwtAuthenticationConverter
         implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -35,7 +41,8 @@ public class ActorContextJwtAuthenticationConverter
             throw new IllegalStateException("tenant_id claim is missing on the JWT");
         }
         Set<String> roles = extractClaim(jwt, "roles", "role", "scope", "scopes");
-        Set<String> scope = extractClaim(jwt, "org_scope", "data_scope");
+        Set<String> scope = new HashSet<>(AbacDataScope.fromClaimValues(
+                jwt.getClaim("org_scope"), jwt.getClaim("data_scope")).tokens());
         if (scope.isEmpty() && roles.contains("client_credentials")) {
             scope = Set.of("*");
         }

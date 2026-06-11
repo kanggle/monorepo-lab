@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-019-abac-data-scope-reader-repoint.md` — re-point erp's three inline `org_scope`/`data_scope` parsing sites (masterdata + approval `ActorContextJwtAuthenticationConverter`, read-model `ReadAuthorizationGate`) onto the shared `com.example.security.jwt.AbacDataScope` reader. **Net-zero** (parsing-only; domain interpretation + `client_credentials`→`["*"]` default + read-model `claimPresent` zero-scope preserved). Executes ADR-MONO-025 § D7 optional/deferred re-point. Gate = Integration (erp-platform, Testcontainers).
+(empty)
 
 ## in-progress
 
