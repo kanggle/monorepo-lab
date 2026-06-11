@@ -12,6 +12,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -127,6 +128,20 @@ public abstract class AbstractDemandPlanningIntegrationTest {
 
     @Autowired
     protected ObjectMapper objectMapper;
+
+    /**
+     * Reset all tables before each test. @DirtiesContext(AFTER_CLASS) reuses the
+     * containers across the class, so without this the per-test @BeforeEach seeds
+     * accumulate and re-seeding a fixed key (e.g. reorder_policy) collides. Runs in
+     * the superclass so it executes before each subclass's own @BeforeEach seed.
+     */
+    @BeforeEach
+    void cleanDatabase() {
+        processedEventJpa.deleteAll();
+        suggestionJpa.deleteAll();
+        policyJpa.deleteAll();
+        mappingJpa.deleteAll();
+    }
 
     /**
      * Build a wms inventory.low-stock-detected envelope (camelCase, wms convention).

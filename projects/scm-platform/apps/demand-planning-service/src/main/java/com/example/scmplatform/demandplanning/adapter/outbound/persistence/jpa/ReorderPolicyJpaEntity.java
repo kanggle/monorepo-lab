@@ -4,22 +4,31 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.domain.Persistable;
 
 import java.io.Serializable;
 import java.time.Instant;
 
+// Persistable (like ReorderSuggestion): an assigned id + @Version makes Spring
+// Data's default isNew() merge a fresh entity -> Hibernate treats it as detached
+// -> UPDATE ... WHERE version -> 0 rows -> StaleObjectStateException. The adapter's
+// findBy-then-save upsert still works (a loaded entity is marked persisted=true via
+// @PostLoad -> merge/update), while a brand-new row inserts cleanly.
 @Entity
 @Table(name = "reorder_policy")
 @IdClass(ReorderPolicyJpaEntity.PK.class)
 @Getter
 @Setter
 @NoArgsConstructor
-public class ReorderPolicyJpaEntity {
+public class ReorderPolicyJpaEntity implements Persistable<ReorderPolicyJpaEntity.PK> {
 
     @Id
     @Column(name = "tenant_id", nullable = false)
@@ -44,6 +53,25 @@ public class ReorderPolicyJpaEntity {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Transient
+    private boolean persisted;
+
+    @Override
+    public PK getId() {
+        return new PK(tenantId, skuCode);
+    }
+
+    @Override
+    public boolean isNew() {
+        return !persisted;
+    }
+
+    @PostLoad
+    @PostPersist
+    void markPersisted() {
+        this.persisted = true;
+    }
 
     public static class PK implements Serializable {
         public String tenantId;
