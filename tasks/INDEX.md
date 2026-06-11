@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- TASK-MONO-216 — ADR-MONO-026 (PROPOSED) Role-Grant Access Conditions (axis ② 2단계): closed condition enum (TIME_WINDOW/SOURCE_IP/RESOURCE_TAG, AND-only), restriction-only + fail-safe 4th gate, NOT a policy engine. Lifts ADR-025 § D6 deferral. Carrier (signed claim vs domain guard-config) + pilot domain left for the ACCEPTED gate. Doc-only.
 
 ## in-progress
 
