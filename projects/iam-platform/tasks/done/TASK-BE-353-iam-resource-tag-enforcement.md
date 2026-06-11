@@ -8,7 +8,9 @@ ADR-MONO-029 step 3 — iam admin `RESOURCE_TAG` enforcement (deny-if-present on
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-12)**: enforcement PR #1325 (squash `754192a4`). 3차원 ✓ (MERGED / origin/main tip 일치 / 머지 전 20 pass·0 fail — Build & Test + Integration(iam) V0034 마이그+빈 배선 GREEN). `RequiresPermissionAspect`에 RESOURCE_TAG를 **SOURCE_IP/TIME_WINDOW와 AND 합성**(`anyConditionUnmet`) — `protected` 태그 operator의 role/status/profile 변이→403 `ACCESS_CONDITION_UNMET`. **단일 결정지점 유지(D2-A)**: aspect가 `OperatorResourceTagResolver`(path 매칭 `/operators/{id}/{roles\|status\|profile}`, `/me`·컬렉션·비-operator=not-applicable skip)로 신뢰 `admin_operators.tags` 컬럼 조회(**anti-spoof**, native projection `findTagsByOperatorId`=엔티티필드 무추가, V0034). NULL/absent→empty set(untagged allow). config `ResourceTag.forbidden`+`ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN` env(empty=net-zero). 슬라이스 `AdminResourceTagConditionEnforcementTest`(tagged403/untagged200/not-applicable200, mocked resolver) + `OperatorResourceTagResolverTest`(path+tag split 8). **닫힌 enum {SOURCE_IP,TIME_WINDOW,RESOURCE_TAG} 3타입 enforcement 완성**. ⚠️재사용: `Optional<String>` native projection은 NULL컬럼/not-found 둘 다 empty→resolver서 동일 empty-set 처리(applicable은 path로 판정, DB아님). 다음=결정적 fed-e2e(per-resource). 분석/구현=Opus 4.8.
 
 # Owner
 
