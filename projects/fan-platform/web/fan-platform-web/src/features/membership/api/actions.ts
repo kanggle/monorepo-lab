@@ -17,6 +17,7 @@ export type SubscribeResult =
   | { ok: false; code: string; message: string };
 
 const DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_TIER_INVALID']);
+const RENEW_DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_NOT_RENEWABLE']);
 
 /**
  * Subscribe to a tier. A fresh `Idempotency-Key` is generated server-side per
@@ -44,6 +45,39 @@ export async function subscribe(
     return { ok: true, membership: res.data };
   } catch (err) {
     if (err instanceof ApiError && DECLINE_CODES.has(err.code)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Renew a membership (`POST /{id}/renew`) — seamless re-activation of the same
+ * tier (the backend stacks the new window onto `max(now, prior.validTo)`). Like
+ * subscribe, a fresh `Idempotency-Key` is generated server-side and the expected
+ * business decline (422 PAYMENT_DECLINED / MEMBERSHIP_NOT_RENEWABLE) is returned
+ * as `{ ok: false }` rather than thrown.
+ */
+export async function renewMembership(
+  membershipId: string,
+  planMonths: number,
+  paymentToken: string,
+): Promise<SubscribeResult> {
+  const session = await getFanSession();
+  try {
+    const res = await gatewayFetch<Membership>(
+      `/api/v1/memberships/${encodeURIComponent(membershipId)}/renew`,
+      {
+        accessToken: session.accessToken,
+        method: 'POST',
+        headers: { 'Idempotency-Key': randomUUID() },
+        body: { planMonths, paymentToken: paymentToken.trim() || 'tok_visa_demo' },
+      },
+    );
+    revalidatePath('/membership');
+    return { ok: true, membership: res.data };
+  } catch (err) {
+    if (err instanceof ApiError && RENEW_DECLINE_CODES.has(err.code)) {
       return { ok: false, code: err.code, message: err.message };
     }
     throw err;

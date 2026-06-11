@@ -5,6 +5,8 @@ import com.example.fanplatform.membership.application.ActorContextResolver;
 import com.example.fanplatform.membership.application.CancelMembershipUseCase;
 import com.example.fanplatform.membership.application.GetMembershipUseCase;
 import com.example.fanplatform.membership.application.ListMembershipsUseCase;
+import com.example.fanplatform.membership.application.RenewCommand;
+import com.example.fanplatform.membership.application.RenewMembershipUseCase;
 import com.example.fanplatform.membership.application.SubscribeCommand;
 import com.example.fanplatform.membership.application.SubscribeUseCase;
 import com.example.fanplatform.membership.application.exception.MembershipTierInvalidException;
@@ -13,6 +15,7 @@ import com.example.fanplatform.membership.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.membership.presentation.dto.CancelRequest;
 import com.example.fanplatform.membership.presentation.dto.MembershipListResponse;
 import com.example.fanplatform.membership.presentation.dto.MembershipResponse;
+import com.example.fanplatform.membership.presentation.dto.RenewRequest;
 import com.example.fanplatform.membership.presentation.dto.SubscribeRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MembershipController {
 
     private final SubscribeUseCase subscribeUseCase;
+    private final RenewMembershipUseCase renewMembershipUseCase;
     private final CancelMembershipUseCase cancelMembershipUseCase;
     private final ListMembershipsUseCase listMembershipsUseCase;
     private final GetMembershipUseCase getMembershipUseCase;
@@ -50,6 +54,18 @@ public class MembershipController {
         SubscribeCommand cmd = new SubscribeCommand(
                 actor, tier, req.planMonths(), req.paymentToken(), idempotencyKey);
         MembershipResponse body = MembershipResponse.from(subscribeUseCase.execute(cmd));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
+    }
+
+    @PostMapping("/{id}/renew")
+    public ResponseEntity<ApiEnvelope<MembershipResponse>> renew(
+            @PathVariable String id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody RenewRequest req) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        RenewCommand cmd = new RenewCommand(
+                actor, id, req.planMonths(), req.paymentToken(), idempotencyKey);
+        MembershipResponse body = MembershipResponse.from(renewMembershipUseCase.execute(cmd));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
     }
 

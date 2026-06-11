@@ -50,6 +50,7 @@
 | 409 | CONFLICT | optimistic-lock collision |
 | 422 | PAYMENT_DECLINED | PG mock declined authorization; no membership created |
 | 422 | MEMBERSHIP_TIER_INVALID | `tier` not in `{ MEMBERS_ONLY, PREMIUM }` |
+| 422 | MEMBERSHIP_NOT_RENEWABLE | renew called on a CANCELED membership (deliberate opt-out — subscribe fresh instead) |
 | 422 | VALIDATION_ERROR | constraint violation (`@Valid`, e.g. `planMonths < 1`) |
 
 ---
@@ -138,6 +139,46 @@ Response 200:
 
 Errors: 401, 403, 404 (MEMBERSHIP_NOT_FOUND — unknown id / cross-account /
 cross-tenant), 409 (CONFLICT — optimistic-lock race).
+
+### `POST /api/fan/memberships/{id}/renew` — Renew (seamless re-activation)
+
+Auth: the membership owner (`accountId` = `sub`). **`Idempotency-Key` header is
+required** (same as subscribe). Creates a **new** membership continuing the prior
+one's `tier` with a **seamless window**:
+
+- `validFrom = max(now, prior.validTo)` — renewing **early** stacks onto the end of
+  the current window (no lost days); renewing **after expiry** starts from `now`.
+- `validTo = validFrom + planMonths·30d`.
+
+The prior membership row is **never mutated**. The renewed membership is a fresh
+activation and emits `fan.membership.activated.v1` (→ a WELCOME notification); there
+is no distinct `renewed.v1` event in this increment. A **CANCELED** prior cannot be
+renewed (422 `MEMBERSHIP_NOT_RENEWABLE`) — subscribe fresh instead.
+
+Headers:
+```
+Idempotency-Key: <client-generated opaque key, ≤ 80 chars>   # REQUIRED
+```
+
+Request (the `tier` is inherited from the prior membership — not in the body):
+```json
+{
+  "planMonths": 1,
+  "paymentToken": "tok_visa_demo (optional; mock — 'tok_decline' forces a decline)"
+}
+```
+
+Response 201: the full membership payload (same shape as Subscribe) for the **new**
+membership — `status: "ACTIVE"`, the seamless `validFrom`/`validTo`, a fresh
+`membershipId` and `paymentRef`.
+
+Idempotent replay: a repeat with the same `(accountId, Idempotency-Key)` + identical
+payload returns the same renewed membership (no new row, no re-authorization).
+
+Errors: 400 (missing `Idempotency-Key`), 401, 403 (TENANT_FORBIDDEN), 404
+(MEMBERSHIP_NOT_FOUND — unknown id / cross-account / cross-tenant), 409
+(IDEMPOTENCY_KEY_CONFLICT), 422 (PAYMENT_DECLINED / MEMBERSHIP_NOT_RENEWABLE —
+CANCELED prior / VALIDATION_ERROR for `planMonths < 1`).
 
 ### `GET /api/fan/memberships` — List (the caller's memberships)
 

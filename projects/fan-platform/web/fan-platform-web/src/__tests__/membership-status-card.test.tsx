@@ -4,8 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { MembershipStatusCard } from '@/features/membership/ui/MembershipStatusCard';
 import type { MembershipListItem } from '@/entities/membership';
 
-const { cancelMembership } = vi.hoisted(() => ({ cancelMembership: vi.fn(async () => {}) }));
-vi.mock('@/features/membership/api/actions', () => ({ cancelMembership }));
+const { cancelMembership, renewMembership } = vi.hoisted(() => ({
+  cancelMembership: vi.fn(async () => {}),
+  renewMembership: vi.fn(async () => ({
+    ok: true as const,
+    membership: { validTo: '2026-08-01T00:00:00Z' },
+  })),
+}));
+vi.mock('@/features/membership/api/actions', () => ({ cancelMembership, renewMembership }));
 
 const active: MembershipListItem = {
   membershipId: 'm-1',
@@ -20,7 +26,10 @@ const active: MembershipListItem = {
 };
 
 describe('MembershipStatusCard', () => {
-  beforeEach(() => cancelMembership.mockClear());
+  beforeEach(() => {
+    cancelMembership.mockClear();
+    renewMembership.mockClear();
+  });
 
   it('renders the active tier and window', () => {
     render(<MembershipStatusCard membership={active} />);
@@ -40,5 +49,15 @@ describe('MembershipStatusCard', () => {
     // Confirming calls the server action with the membership id.
     await user.click(screen.getByRole('button', { name: '해지 확정' }));
     expect(cancelMembership).toHaveBeenCalledWith('m-1');
+  });
+
+  it('renews (extends) the active membership and shows the new window end', async () => {
+    const user = userEvent.setup();
+    render(<MembershipStatusCard membership={active} />);
+
+    await user.click(screen.getByTestId('renew-button'));
+
+    expect(renewMembership).toHaveBeenCalledWith('m-1', 1, '');
+    expect(await screen.findByText(/까지 연장되었습니다/)).toBeInTheDocument();
   });
 });

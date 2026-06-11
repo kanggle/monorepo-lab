@@ -5,8 +5,11 @@ import com.example.fanplatform.membership.application.CancelMembershipUseCase;
 import com.example.fanplatform.membership.application.GetMembershipUseCase;
 import com.example.fanplatform.membership.application.ListMembershipsUseCase;
 import com.example.fanplatform.membership.application.MembershipView;
+import com.example.fanplatform.membership.application.RenewCommand;
+import com.example.fanplatform.membership.application.RenewMembershipUseCase;
 import com.example.fanplatform.membership.application.SubscribeCommand;
 import com.example.fanplatform.membership.application.SubscribeUseCase;
+import com.example.fanplatform.membership.application.exception.MembershipNotRenewableException;
 import com.example.fanplatform.membership.application.exception.PaymentDeclinedException;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.domain.membership.status.MembershipStatus;
@@ -49,6 +52,7 @@ class MembershipControllerSliceTest {
     MockMvc mockMvc;
 
     @MockitoBean SubscribeUseCase subscribeUseCase;
+    @MockitoBean RenewMembershipUseCase renewMembershipUseCase;
     @MockitoBean CancelMembershipUseCase cancelMembershipUseCase;
     @MockitoBean ListMembershipsUseCase listMembershipsUseCase;
     @MockitoBean GetMembershipUseCase getMembershipUseCase;
@@ -141,6 +145,48 @@ class MembershipControllerSliceTest {
                         .content("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_decline\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PAYMENT_DECLINED"));
+    }
+
+    @Test
+    @DisplayName("POST /{id}/renew (valid, Idempotency-Key) → 201 + envelope")
+    void renew201() throws Exception {
+        when(renewMembershipUseCase.execute(any(RenewCommand.class))).thenReturn(view());
+
+        mockMvc.perform(post("/api/fan/memberships/m0/renew")
+                        .header("Authorization", fanBearer("acc1"))
+                        .header("Idempotency-Key", "renew-key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.membershipId").value("m1"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.meta.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("POST /{id}/renew on a canceled membership → 422 MEMBERSHIP_NOT_RENEWABLE")
+    void renewNotRenewable() throws Exception {
+        when(renewMembershipUseCase.execute(any(RenewCommand.class)))
+                .thenThrow(new MembershipNotRenewableException("m0"));
+
+        mockMvc.perform(post("/api/fan/memberships/m0/renew")
+                        .header("Authorization", fanBearer("acc1"))
+                        .header("Idempotency-Key", "renew-key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planMonths\":1}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("MEMBERSHIP_NOT_RENEWABLE"));
+    }
+
+    @Test
+    @DisplayName("POST /{id}/renew missing Idempotency-Key → 400 VALIDATION_ERROR")
+    void renewMissingIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/fan/memberships/m0/renew")
+                        .header("Authorization", fanBearer("acc1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planMonths\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test
