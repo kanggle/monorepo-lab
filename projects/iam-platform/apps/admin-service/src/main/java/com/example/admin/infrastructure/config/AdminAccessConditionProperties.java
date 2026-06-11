@@ -40,6 +40,12 @@ public class AdminAccessConditionProperties {
      */
     private TimeWindow timeWindow = new TimeWindow();
 
+    /**
+     * ADR-MONO-029 — the {@code RESOURCE_TAG} condition (deny-if-present) for the
+     * admin mutation surface. An empty forbidden-tag list (the default) ⇒ net-zero.
+     */
+    private ResourceTag resourceTag = new ResourceTag();
+
     public List<String> getSourceIpAllowedCidrs() {
         return sourceIpAllowedCidrs;
     }
@@ -54,6 +60,14 @@ public class AdminAccessConditionProperties {
 
     public void setTimeWindow(TimeWindow timeWindow) {
         this.timeWindow = timeWindow == null ? new TimeWindow() : timeWindow;
+    }
+
+    public ResourceTag getResourceTag() {
+        return resourceTag;
+    }
+
+    public void setResourceTag(ResourceTag resourceTag) {
+        this.resourceTag = resourceTag == null ? new ResourceTag() : resourceTag;
     }
 
     /**
@@ -97,6 +111,23 @@ public class AdminAccessConditionProperties {
 
         public void setEnd(String end) {
             this.end = end == null ? "" : end;
+        }
+    }
+
+    /**
+     * The {@code RESOURCE_TAG} guard-config (ADR-MONO-029 § D3): the deny-if-present
+     * forbidden tags. An operator carrying any of these tags has its role/status/
+     * profile mutation denied. Empty (the default) ⇒ net-zero (no gate).
+     */
+    public static class ResourceTag {
+        private List<String> forbidden = List.of();
+
+        public List<String> getForbidden() {
+            return forbidden;
+        }
+
+        public void setForbidden(List<String> forbidden) {
+            this.forbidden = forbidden == null ? List.of() : forbidden;
         }
     }
 }

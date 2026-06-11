@@ -12,6 +12,18 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     Optional<AdminOperatorJpaEntity> findByEmail(String email);
 
     /**
+     * TASK-BE-353 (ADR-MONO-029) — the raw {@code tags} column for the target
+     * operator (RESOURCE_TAG access condition). A <b>native projection</b> so no
+     * entity field is added: the aspect's {@code ResourceTagResolver} splits the
+     * comma-separated string into a tag set. Returns the (possibly {@code null} /
+     * empty) tags string when the operator exists; {@code Optional.empty()} when it
+     * does not. {@code tags} is itself nullable, so the projected value may be
+     * {@code null} even for a present row (an untagged operator).
+     */
+    @Query(value = "SELECT tags FROM admin_operators WHERE operator_id = :operatorId", nativeQuery = true)
+    Optional<String> findTagsByOperatorId(@Param("operatorId") String operatorId);
+
+    /**
      * Look up an operator by the external UUID (JWT {@code sub} claim).
      * The internal BIGINT {@code id} is never exposed to callers.
      */
