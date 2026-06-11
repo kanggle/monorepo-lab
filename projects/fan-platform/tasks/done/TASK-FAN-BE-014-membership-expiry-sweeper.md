@@ -1,6 +1,6 @@
 # TASK-FAN-BE-014 — membership expiry sweeper + notification (close the lifecycle loop)
 
-Status: ready
+Status: done
 Type: backend (TASK-FAN-BE)
 Project: fan-platform
 Apps: membership-service (producer) + notification-service (consumer) + fan-platform-web (label)
@@ -151,3 +151,19 @@ FE `tsc`/`vitest`/`lint`/`build` run locally; Docker ITs delegated to CI.
 - **Partition stall on a bad expired event** — the consumer rethrows; the
   `DefaultErrorHandler` routes unsupported/malformed straight to `<topic>.dlq`
   (emit-not-throw §18).
+
+## Completion
+
+Implemented + merged as **PR #1298** (squash `2a925c17`). Verified in an isolated
+git worktree before merge: membership + notification `:test` (unit) BUILD
+SUCCESSFUL; FE `tsc` 0, `vitest` 50/50, `next lint` 0, `next build` OK. CI
+all-green — crucially **Integration (fan-platform) Testcontainers** (the
+authoritative gate for the two V2 migrations §16 + the `ExpirySweepIntegrationTest`
+once-only/re-sweep-no-op + the `expired.v1 → EXPIRY_REMINDER` consume IT); 3-dim
+merge verified: state=MERGED, `origin/main` tip == `2a925c17`, pre-merge 0 failing
+required checks.
+
+Closes the last forward-declared leg of the membership lifecycle — the
+activate / cancel / **expire** event loop is complete, and the FAN-FE-004 bell /
+inbox surface expiries via the new `EXPIRY_REMINDER` label. Deferred: multi-instance
+`SKIP LOCKED` claim; renewal flow; real push channels.
