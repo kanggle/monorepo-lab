@@ -8,7 +8,7 @@ demand-planning batch sweep — wire the real IVS read adapter (replace the Phas
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -105,3 +105,9 @@ Complete the demand-planning **batch-job** facet (ADR-MONO-027 §D7): the nightl
 
 - 분석=Opus 4.8 / 구현 권장=Opus (cross-service batch + security surface [permitAll internal endpoint] + cross-tenant read semantics).
 - All `SweepReorderUseCase` decision logic is already implemented (BE-024); this task is the IVS read seam + its security/contract. Both services are scm-platform → **one atomic PR**.
+
+# Closure
+
+- Merged PR #1330 squash `33450a875` (3-dim verified: state=MERGED · origin/main tip = `33450a875` · pre-merge `gh pr checks` 0 failing required, incl. `Integration (scm-platform, Testcontainers)` pass). Auth decision A (IVS internal network-trusted endpoint) recorded in ADR-MONO-027 §D7.1.
+- **CI flake root-caused + fixed (2 iterations):** the scm Integration suite failed `sweep_idempotent_openGuard` (expected 1, was 0). True cause = **ShedLock**: `ReorderSweepScheduler.runSweep()` is `@SchedulerLock(lockAtLeastFor=PT5M)`, so the FIRST `runSweep` in the test JVM holds the lock 5 min and every later call (other tests + the idempotent test's 2nd sweep) is a silent no-op (the "no IVS-read log for 3 of 4 tests" tell). Fix: the IT calls `SweepReorderUseCase.sweep()` directly (the inner method has no `@SchedulerLock`) — deterministic by construction, and the open-guard re-run is genuinely exercised. Also hardened the IVS stub to a `Dispatcher` (request-count-independent) + unique SKU + filtered asserts (defends the shared Kafka consumer's earliest-offset re-processing of sibling-class alerts).
+- AC-1..AC-5 satisfied. ADR-MONO-027 demand-planning 3-facet (event-consumer + rest-api + **batch-job**) now fully implemented; the Phase-1 IVS stub is retired.
