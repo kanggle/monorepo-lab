@@ -27,6 +27,7 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 | `tenant-switch-rescope.spec.ts` | ADR-020 D4 active-tenant switch re-scopes the signed token (acme ↔ globex) (MONO-158) |
 | `subscription-plane-separation.spec.ts` | ADR-023 D2 entitlement↔IAM plane separation — runtime suspend drops the domain from the re-issued token while the IAM assignment survives; reversible (MONO-207) |
 | `tenant-admin-delegation.spec.ts` | ADR-024 step 3 tenant-admin delegation — a non-platform TENANT_ADMIN administers its own tenant (assign/scope/peer-appoint 2xx) but is denied cross-tenant (403 TENANT_SCOPE_DENIED) + escalating grants (403 ROLE_GRANT_FORBIDDEN); a TENANT_BILLING_ADMIN suspends/resumes its own subscription (200) but not a foreign tenant; SUPER_ADMIN unconstrained (net-zero) (MONO-210) |
+| `iam-admin-source-ip-condition.spec.ts` | ADR-026 step 3 iam admin SOURCE_IP access condition (the 4th authorization gate) — with the admin-service allowlist ON (`ADMIN_ACCESS_SOURCE_IP_CIDRS`), an RBAC-granted admin mutation from an out-of-range source IP is gated (403 ACCESS_CONDITION_UNMET, not executed) while the same mutation from an in-range source IP proceeds (201/204), and reads are never gated even from the blocked IP (mutation-only); source IP set per-request via X-Forwarded-For; allowlist covers RFC1918+loopback so the existing suite is unaffected (net-zero) (MONO-221) |
 
 ## CI trigger
 

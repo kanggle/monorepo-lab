@@ -1,0 +1,34 @@
+-- TASK-MONO-221 (ADR-MONO-026 § D7 step 3 — iam admin SOURCE_IP access-condition
+-- federation-e2e proof): seed a FIFTH demo customer `ip-pilot-corp`, dedicated to
+-- the iam-admin-source-ip-condition spec.
+--
+-- WHY a dedicated tenant (not acme / globex / initech / umbrella): the proof
+-- assigns/unassigns a throwaway operator (`ip-pilot-target`) to/from this tenant
+-- AT RUNTIME via the `operator.manage` admin RBAC surface, to exercise the
+-- SOURCE_IP access condition (out-of-range X-Forwarded-For → 403; in-range → 201).
+-- The federation-e2e suite runs fullyParallel; acme-corp / globex-corp /
+-- initech-corp / umbrella-corp are each owned by other specs (entitlement-trust,
+-- A↔B switch, plane-separation, tenant-admin-delegation). Binding the proof's
+-- assign target to a tenant referenced by NO other spec keeps the assign/unassign
+-- cycle fully isolated — it mirrors the MONO-207 initech-corp / MONO-210
+-- umbrella-corp discipline exactly.
+--
+-- WHY no subscription (unlike V9003 umbrella-corp, which seeded [finance] for its
+-- billing-admin leg): this proof's only mutation is operator assignment, which
+-- does not depend on a tenant_domain_subscription row. The tenant row alone is
+-- seeded so the assign target tenant exists at account-service startup.
+--
+-- WHY migration-dev V9000+ (not seed.sql, not production db/migration): identical
+-- rationale to V9001 (globex) / V9002 (initech) / V9003 (umbrella) — dev-only
+-- seeds live in the high V9000+ band to never collide with the (gapless)
+-- production timeline. `db/migration-dev` is loaded ONLY under the e2e Flyway
+-- locations (application-e2e.yml) — ip-pilot-corp never reaches a production DB.
+--
+-- The matching admin_db side (the throwaway target operator `ip-pilot-target`
+-- scoped to ip-pilot-corp) is seeded in
+-- tests/federation-hardening-e2e/fixtures/seed.sql § 16.
+--
+-- INSERT IGNORE keeps it idempotent (mirrors V9001 / V9002 / V9003).
+
+INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
+VALUES ('ip-pilot-corp', 'IP Pilot Corporation', 'B2B_ENTERPRISE', 'ACTIVE', NOW(6), NOW(6));
