@@ -13,6 +13,8 @@ import java.time.Instant;
  *       validity window + plan length.</li>
  *   <li>{@link NotificationType#CANCELLATION} — "Your {tier} membership was
  *       canceled" + the cancel time + optional reason.</li>
+ *   <li>{@link NotificationType#EXPIRY_REMINDER} — "Your {tier} membership has
+ *       expired" + the window end ({@code validTo}).</li>
  * </ul>
  */
 public final class NotificationTemplate {
@@ -46,5 +48,13 @@ public final class NotificationTemplate {
             body.append(" Reason: ").append(reason).append('.');
         }
         return new RenderedContent(title, body.toString());
+    }
+
+    /** Renders the EXPIRY_REMINDER content for an {@code expired} event payload. */
+    public static RenderedContent expiry(String tier, Instant validTo) {
+        String title = "Your " + tier + " membership has expired";
+        String body = "Your " + tier + " membership ended on " + validTo
+                + ". Renew to keep your member benefits.";
+        return new RenderedContent(title, body);
     }
 }

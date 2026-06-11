@@ -32,8 +32,9 @@ describe('formatRelative', () => {
 });
 
 describe('TYPE_LABEL', () => {
-  it('covers both notification kinds', () => {
+  it('covers all notification kinds', () => {
     expect(TYPE_LABEL.WELCOME).toBeTruthy();
     expect(TYPE_LABEL.CANCELLATION).toBeTruthy();
+    expect(TYPE_LABEL.EXPIRY_REMINDER).toBe('멤버십 만료');
   });
 });

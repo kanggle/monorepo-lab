@@ -80,6 +80,7 @@ public class MembershipEventParser {
                 reason = optionalText(payload, "reason");
                 canceledAt = requireInstant(payload, "canceledAt");
             }
+            case NotificationType.EVENT_EXPIRED -> validTo = requireInstant(payload, "validTo");
             default -> throw new MalformedEventException("Unsupported eventType: " + eventType);
         }
 

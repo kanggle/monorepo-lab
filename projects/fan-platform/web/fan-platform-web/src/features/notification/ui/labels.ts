@@ -4,12 +4,14 @@ import type { NotificationType } from '@/entities/notification';
 export const TYPE_LABEL: Record<NotificationType, string> = {
   WELCOME: '멤버십 시작',
   CANCELLATION: '멤버십 해지',
+  EXPIRY_REMINDER: '멤버십 만료',
 };
 
 /** Accent classes per kind (small dot / badge tint). */
 export const TYPE_ACCENT: Record<NotificationType, string> = {
   WELCOME: 'bg-emerald-100 text-emerald-700',
   CANCELLATION: 'bg-ink-100 text-ink-600',
+  EXPIRY_REMINDER: 'bg-amber-100 text-amber-700',
 };
 
 const MINUTE = 60_000;

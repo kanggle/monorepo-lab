@@ -61,4 +61,19 @@ class MembershipEventConsumeIntegrationTest extends NotificationServiceIntegrati
             assertThat(all.get(0).getTitle()).isEqualTo("Your MEMBERS_ONLY membership was canceled");
         });
     }
+
+    @Test
+    @DisplayName("expired.v1 → EXPIRY_REMINDER notification persisted (V2 type allow-list)")
+    void expiredCreatesExpiryReminder() {
+        producer().send(TOPIC_EXPIRED, "mem-3",
+                expiredEnvelope("evt-exp-1", "mem-3", "acc-3", "PREMIUM"));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            var all = notifications.findAll();
+            assertThat(all).hasSize(1);
+            assertThat(all.get(0).getType()).isEqualTo(NotificationType.EXPIRY_REMINDER);
+            assertThat(all.get(0).getAccountId()).isEqualTo("acc-3");
+            assertThat(all.get(0).getTitle()).isEqualTo("Your PREMIUM membership has expired");
+        });
+    }
 }

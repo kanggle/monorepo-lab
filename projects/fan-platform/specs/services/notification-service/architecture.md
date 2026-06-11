@@ -151,12 +151,12 @@ for one fan account, derived from one membership lifecycle event.
 | `id` | string (UUID v7) | aggregate id |
 | `tenantId` | string | row-level isolation; always `fan-platform` in this project |
 | `accountId` | string | the recipient fan = IAM `sub` claim (from the event payload `accountId`) |
-| `type` | `NotificationType` | `WELCOME` \| `CANCELLATION` |
+| `type` | `NotificationType` | `WELCOME` \| `CANCELLATION` \| `EXPIRY_REMINDER` |
 | `title` | string | rendered from the type template |
 | `body` | string | rendered from the event payload (tier, plan window, etc.) |
 | `status` | `NotificationStatus` | `UNREAD` \| `READ` |
 | `sourceEventId` | string (UUID) | the consumed envelope `eventId` — also the idempotency key |
-| `sourceEventType` | string | `fan.membership.activated` \| `fan.membership.canceled` |
+| `sourceEventType` | string | `fan.membership.activated` \| `fan.membership.canceled` \| `fan.membership.expired` |
 | `membershipId` | string (UUID) | the originating membership aggregate id |
 | `createdAt` | timestamptz | consume time |
 | `readAt` | timestamptz? | set on UNREAD → READ; null while UNREAD |
@@ -168,12 +168,16 @@ for one fan account, derived from one membership lifecycle event.
 |---|---|---|---|
 | `fan.membership.activated.v1` | `WELCOME` | "Welcome to {tier} membership" | window `[validFrom … validTo]`, `planMonths` |
 | `fan.membership.canceled.v1` | `CANCELLATION` | "Your {tier} membership was canceled" | `canceledAt`, optional `reason` |
+| `fan.membership.expired.v1` | `EXPIRY_REMINDER` | "Your {tier} membership has expired" | `validTo` (window end) |
 
-`fan.membership.expired.v1` is **forward-declared but NOT consumed** — the producer
-does not emit it (read-time expiry, no sweeper; see `fan-membership-events.md`).
-A future increment that adds the producer sweeper will also add an `EXPIRY_REMINDER`
-type + subscription here. Until then notification-service MUST NOT subscribe to it
-(a dead consumer).
+All three membership lifecycle topics are now consumed (`expired.v1` since
+TASK-FAN-BE-014 — the producer's expiry sweeper emits it; see
+`fan-membership-events.md`). The expiry payload carries only `validTo` (plus the
+common id/tenant/account/tier fields); `planMonths` / `validFrom` / `canceledAt` /
+`reason` are absent, so the parser's `EVENT_EXPIRED` case reads only `validTo`.
+Adding `EXPIRY_REMINDER` to the stored `type` requires a **V2 migration** to extend
+the `ck_notification_type` CHECK allow-list (§16 — the Testcontainers IT is the
+authoritative gate).
 
 ---
 
@@ -183,7 +187,7 @@ type + subscription here. Until then notification-service MUST NOT subscribe to 
 |---|---|---|---|---|---|
 | `fan.membership.activated.v1` | membership-service | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onActivated` | consumed |
 | `fan.membership.canceled.v1` | membership-service | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onCanceled` | consumed |
-| `fan.membership.expired.v1` | (membership-service, future sweeper) | — | `membershipId` | — | **forward-declared, NOT subscribed** (not emitted upstream) |
+| `fan.membership.expired.v1` | membership-service (expiry sweeper) | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onExpired` | consumed (TASK-FAN-BE-014) |
 
 - **Consumer group**: `notification-service-membership-events` — one team-owned
   group for the membership-event subscription (`<service>-<purpose>` convention).

@@ -1,5 +1,6 @@
 package com.example.fanplatform.membership.domain.membership;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,4 +24,15 @@ public interface MembershipRepository {
      * candidate set (window + tier are evaluated in-memory by the use case).
      */
     List<Membership> findActiveByAccount(String accountId, String tenantId);
+
+    /**
+     * The expiry-sweeper candidate batch: ACTIVE memberships whose window has
+     * ended (`validTo < now`) and that have not yet been expiry-notified
+     * (`expiryNotifiedAt IS NULL`), oldest window first, capped at {@code limit}.
+     *
+     * <p><b>Cross-tenant</b> by design — the sweeper is a system background job
+     * (like the outbox poller), not a user request; the emitted event carries the
+     * membership's own {@code tenantId}.
+     */
+    List<Membership> findExpirable(Instant now, int limit);
 }

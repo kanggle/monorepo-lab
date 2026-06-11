@@ -87,6 +87,17 @@ outbox:
     enabled: true
 
 fanplatform:
+  # Expiry sweeper (TASK-FAN-BE-014). Detects ACTIVE memberships past their window
+  # (expiry_notified_at IS NULL) and emits fan.membership.expired.v1 once each.
+  # initial-delay keeps the scheduler quiet at startup so short ITs are unaffected;
+  # ITs that exercise the sweep set enabled=false and drive the use case directly.
+  membership:
+    expiry-sweep:
+      enabled: ${EXPIRY_SWEEP_ENABLED:true}
+      interval-ms: ${EXPIRY_SWEEP_INTERVAL_MS:60000}
+      initial-delay-ms: ${EXPIRY_SWEEP_INITIAL_DELAY_MS:60000}
+      max-batch: ${EXPIRY_SWEEP_MAX_BATCH:100}
+
   oauth2:
     # D2-b deprecation window: SAS issuer + legacy "iam" string. MUST stay
     # byte-identical to gateway-service's allowed-issuers (cross-service issuer

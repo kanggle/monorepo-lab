@@ -38,19 +38,24 @@ Idempotency key for consumers = `eventId` (UUID, persisted by
 |---|---|---|---|---|
 | `fan.membership.activated.v1` | subscribe → ACTIVE (PG mock approved) | `membershipId` | 14 d | **emitted** |
 | `fan.membership.canceled.v1` | ACTIVE → CANCELED (cancel) | `membershipId` | 14 d | **emitted** |
-| `fan.membership.expired.v1` | window end (`now > validTo`) | `membershipId` | 14 d | **forward-declared, NOT emitted in v1** |
+| `fan.membership.expired.v1` | window end (`now > validTo`), detected by the expiry sweeper | `membershipId` | 14 d | **emitted (TASK-FAN-BE-014)** |
 
-> **`fan.membership.expired.v1` gap (honest record).** Expiry is computed at
-> **read-time** (architecture.md § State Machine) — there is no stored `EXPIRED`
-> transition and no scheduler in this increment to detect the window boundary, so
-> NO `fan.membership.expired.v1` event is produced in v1. The topic + payload are
-> declared here so a future sweeper increment (and the notification-service v2
-> consumer) can be designed against a stable contract. Until that increment ships,
-> consumers MUST derive "expired" from `validTo` rather than expect an event. This
-> mirrors how community-events records its v2 gaps.
+> **`fan.membership.expired.v1` — emitted by the expiry sweeper (TASK-FAN-BE-014).**
+> Expiry is still **read-time** for the stored model (architecture.md § State
+> Machine) — there is **no stored `EXPIRED` status**. A scheduled sweeper
+> (`MembershipExpirySweepScheduler`) detects memberships whose window has just
+> ended (`status=ACTIVE AND now > validTo AND expiry_notified_at IS NULL`),
+> sets a one-time `expiry_notified_at` marker, and emits `fan.membership.expired.v1`
+> **exactly once** per membership (the marker + outbox append share one
+> transaction). The stored `status` stays `ACTIVE` (the event is a notification
+> trigger, not a lifecycle transition — Option B, architecture.md § Expiry
+> Sweeper). Read-time `active` and event-time are intentionally decoupled: a
+> membership reads `active=false` the instant `now > validTo`, but the event
+> follows on the next sweep tick. Consumers MUST treat the event as at-least-once
+> (dedupe on `eventId`).
 
-Consumer (planned, all topics): **notification-service v2** (not built in this
-increment — producer-only forward interface).
+Consumer: **notification-service** (`EXPIRY_REMINDER`, TASK-FAN-BE-014) — all three
+topics now consumed.
 
 ---
 
@@ -94,10 +99,11 @@ new event.
 
 Consumer (planned): notification-service v2 (cancellation notice).
 
-## `fan.membership.expired.v1` (forward-declared — NOT emitted in v1)
+## `fan.membership.expired.v1` (emitted by the expiry sweeper — TASK-FAN-BE-014)
 
-Reserved payload for a future expiry sweeper increment. NOT produced in this
-increment.
+Emitted once per membership when the sweeper first observes a passed window
+(`status=ACTIVE AND now > validTo AND expiry_notified_at IS NULL`). The membership
+keeps `status=ACTIVE` (read-time expiry; no stored EXPIRED).
 
 ```json
 {
@@ -110,8 +116,8 @@ increment.
 }
 ```
 
-Consumer (planned): notification-service v2 (expiry / renewal prompt) — pending the
-sweeper increment.
+Consumer: notification-service → `EXPIRY_REMINDER` in-app notification (expiry /
+renewal prompt).
 
 ---
 

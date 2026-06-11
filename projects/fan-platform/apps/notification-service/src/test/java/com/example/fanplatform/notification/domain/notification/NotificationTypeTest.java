@@ -20,10 +20,14 @@ class NotificationTypeTest {
     }
 
     @Test
-    void rejectsExpiredAndUnknownTypes() {
-        // expired is forward-declared but NOT emitted/consumed — never mapped.
-        assertThatThrownBy(() -> NotificationType.fromEventType("fan.membership.expired"))
-                .isInstanceOf(IllegalArgumentException.class);
+    void mapsExpiredToExpiryReminder() {
+        // TASK-FAN-BE-014: the producer's expiry sweeper now emits expired.v1.
+        assertThat(NotificationType.fromEventType("fan.membership.expired"))
+                .isEqualTo(NotificationType.EXPIRY_REMINDER);
+    }
+
+    @Test
+    void rejectsUnknownTypes() {
         assertThatThrownBy(() -> NotificationType.fromEventType("something.else"))
                 .isInstanceOf(IllegalArgumentException.class);
     }

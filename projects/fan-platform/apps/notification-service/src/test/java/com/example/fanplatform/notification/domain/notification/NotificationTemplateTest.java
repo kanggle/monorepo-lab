@@ -56,4 +56,17 @@ class NotificationTemplateTest {
                 "PREMIUM", Instant.parse("2026-06-11T12:00:00Z"), "user requested");
         assertThat(c.body()).contains("Reason: user requested.");
     }
+
+    @Test
+    @DisplayName("EXPIRY_REMINDER renders the tier and window end")
+    void expiryRendersFromPayload() {
+        Instant validTo = Instant.parse("2026-07-11T00:00:00Z");
+        NotificationTemplate.RenderedContent c = NotificationTemplate.expiry("MEMBERS_ONLY", validTo);
+
+        assertThat(c.title()).isEqualTo("Your MEMBERS_ONLY membership has expired");
+        assertThat(c.body())
+                .contains("MEMBERS_ONLY")
+                .contains(validTo.toString())
+                .contains("Renew");
+    }
 }

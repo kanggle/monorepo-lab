@@ -33,6 +33,15 @@ class MembershipEventParserTest {
                 """;
     }
 
+    private static String expiredEnvelope() {
+        return """
+                {"eventId":"evt-3","eventType":"fan.membership.expired","source":"fan-platform-membership-service",
+                 "occurredAt":"2026-07-11T00:00:01Z","schemaVersion":1,"partitionKey":"mem-1",
+                 "payload":{"membershipId":"mem-1","tenantId":"fan-platform","accountId":"acc-1",
+                   "tier":"MEMBERS_ONLY","validTo":"2026-07-11T00:00:00Z","occurredAt":"2026-07-11T00:00:01Z"}}
+                """;
+    }
+
     @Test
     @DisplayName("parses an activated envelope into a MembershipEvent")
     void parsesActivated() {
@@ -55,6 +64,19 @@ class MembershipEventParserTest {
         assertThat(e.eventType()).isEqualTo("fan.membership.canceled");
         assertThat(e.reason()).isEqualTo("user requested");
         assertThat(e.canceledAt()).isEqualTo(Instant.parse("2026-06-11T12:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("parses an expired envelope (validTo only; other fields null)")
+    void parsesExpired() {
+        MembershipEvent e = parser.parse(expiredEnvelope());
+        assertThat(e.eventType()).isEqualTo("fan.membership.expired");
+        assertThat(e.tier()).isEqualTo("MEMBERS_ONLY");
+        assertThat(e.validTo()).isEqualTo(Instant.parse("2026-07-11T00:00:00Z"));
+        assertThat(e.planMonths()).isNull();
+        assertThat(e.validFrom()).isNull();
+        assertThat(e.canceledAt()).isNull();
+        assertThat(e.reason()).isNull();
     }
 
     @Test

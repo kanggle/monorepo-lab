@@ -58,6 +58,12 @@ class HandleMembershipEventUseCaseTest {
                 Instant.parse("2026-06-11T12:00:00Z"));
     }
 
+    private static MembershipEvent expired(String eventId) {
+        return new MembershipEvent(eventId, "fan.membership.expired", "fan-platform", "acc-1",
+                "mem-1", "MEMBERS_ONLY", null, null,
+                Instant.parse("2026-07-11T00:00:00Z"), null, null);
+    }
+
     @Test
     @DisplayName("activated event → WELCOME notification, dispatched to every channel, marked processed")
     void activatedCreatesWelcome() {
@@ -90,6 +96,20 @@ class HandleMembershipEventUseCaseTest {
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getType()).isEqualTo(NotificationType.CANCELLATION);
         assertThat(captor.getValue().getTitle()).isEqualTo("Your PREMIUM membership was canceled");
+    }
+
+    @Test
+    @DisplayName("expired event → EXPIRY_REMINDER notification")
+    void expiredCreatesExpiryReminder() {
+        when(processedEvents.alreadyProcessed("evt-3")).thenReturn(false);
+
+        useCase.handle(expired("evt-3"));
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo(NotificationType.EXPIRY_REMINDER);
+        assertThat(captor.getValue().getTitle()).isEqualTo("Your MEMBERS_ONLY membership has expired");
+        verify(processedEvents).markProcessed("evt-3", "fan.membership.expired");
     }
 
     @Test

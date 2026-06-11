@@ -31,6 +31,7 @@ public class MembershipEventPublisher extends BaseEventPublisher {
 
     public static final String EVENT_ACTIVATED = "fan.membership.activated";
     public static final String EVENT_CANCELED = "fan.membership.canceled";
+    public static final String EVENT_EXPIRED = "fan.membership.expired";
 
     public MembershipEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
         super(outboxWriter, objectMapper);
@@ -65,5 +66,22 @@ public class MembershipEventPublisher extends BaseEventPublisher {
         payload.put("canceledAt", canceledAt.toString());
         payload.put("occurredAt", occurredAt.toString());
         writeEvent(AGGREGATE_TYPE, membershipId, EVENT_CANCELED, SOURCE, payload);
+    }
+
+    /**
+     * Emitted once per membership by the expiry sweeper (TASK-FAN-BE-014) when its
+     * window has ended. The membership keeps {@code status=ACTIVE} (read-time
+     * expiry — Option B); this is a notification trigger, not a lifecycle change.
+     */
+    public void publishExpired(String membershipId, String tenantId, String accountId,
+                               MembershipTier tier, Instant validTo, Instant occurredAt) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("membershipId", membershipId);
+        payload.put("tenantId", tenantId);
+        payload.put("accountId", accountId);
+        payload.put("tier", tier.name());
+        payload.put("validTo", validTo.toString());
+        payload.put("occurredAt", occurredAt.toString());
+        writeEvent(AGGREGATE_TYPE, membershipId, EVENT_EXPIRED, SOURCE, payload);
     }
 }

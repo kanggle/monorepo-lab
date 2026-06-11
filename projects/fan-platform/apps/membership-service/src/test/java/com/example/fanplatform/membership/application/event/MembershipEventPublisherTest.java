@@ -65,4 +65,25 @@ class MembershipEventPublisherTest {
         assertThat(envelope.path("eventType").asText()).isEqualTo("fan.membership.canceled");
         assertThat(envelope.path("payload").path("reason").asText()).isEqualTo("done");
     }
+
+    @Test
+    @DisplayName("publishExpired writes a fan.membership.expired envelope (validTo, no plan/cancel fields)")
+    void expiredEnvelope() throws Exception {
+        MembershipEventPublisher publisher = new MembershipEventPublisher(outboxWriter, mapper);
+        Instant validTo = NOW.plusSeconds(100);
+        publisher.publishExpired("m1", "fan-platform", "acc1", MembershipTier.MEMBERS_ONLY, validTo, NOW);
+
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter).save(eq("membership"), eq("m1"),
+                eq(MembershipEventPublisher.EVENT_EXPIRED), payloadCaptor.capture());
+
+        JsonNode envelope = mapper.readTree(payloadCaptor.getValue());
+        assertThat(envelope.path("eventType").asText()).isEqualTo("fan.membership.expired");
+        assertThat(envelope.path("partitionKey").asText()).isEqualTo("m1");
+        JsonNode payload = envelope.path("payload");
+        assertThat(payload.path("tier").asText()).isEqualTo("MEMBERS_ONLY");
+        assertThat(payload.path("validTo").asText()).isEqualTo(validTo.toString());
+        assertThat(payload.has("planMonths")).isFalse();
+        assertThat(payload.has("canceledAt")).isFalse();
+    }
 }

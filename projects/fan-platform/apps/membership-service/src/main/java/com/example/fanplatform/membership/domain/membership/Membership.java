@@ -66,6 +66,15 @@ public class Membership {
     @Column(name = "canceled_at")
     private Instant canceledAt;
 
+    /**
+     * One-time marker set by the expiry sweeper (TASK-FAN-BE-014) when it emits
+     * {@code fan.membership.expired.v1} for this membership. {@code null} until
+     * swept. Does NOT change {@link #status} (read-time expiry — Option B); it
+     * exists solely to make the sweep idempotent.
+     */
+    @Column(name = "expiry_notified_at")
+    private Instant expiryNotifiedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -106,5 +115,18 @@ public class Membership {
 
     public boolean isCanceled() {
         return this.status == MembershipStatus.CANCELED;
+    }
+
+    /**
+     * Records that the expiry sweeper has emitted {@code fan.membership.expired.v1}
+     * for this membership. Idempotency marker only — {@link #status} is unchanged
+     * (no stored EXPIRED; read-time expiry stays authoritative).
+     */
+    public void markExpiryNotified(Instant notifiedAt) {
+        this.expiryNotifiedAt = notifiedAt;
+    }
+
+    public boolean isExpiryNotified() {
+        return this.expiryNotifiedAt != null;
     }
 }
