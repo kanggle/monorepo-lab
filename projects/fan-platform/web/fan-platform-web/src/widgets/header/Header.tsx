@@ -2,11 +2,21 @@ import Link from 'next/link';
 import { signOut } from '@/shared/auth/auth';
 import { buildGapEndSessionUrl } from '@/shared/auth/federated-logout';
 import { getFanSession, isAuthenticated } from '@/shared/auth/session';
+import { NotificationBell, getRecentNotifications, getUnreadCount } from '@/features/notification';
 
 /** Top navigation. Server Component — reads session via the server boundary. */
 export async function Header() {
   const authed = await isAuthenticated();
   const session = authed ? await getFanSession() : null;
+  // Notification bell data — fetched server-side (token never leaves the server),
+  // in parallel. Both degrade to empty/0 on a notification-service outage so the
+  // header never breaks an authed page.
+  const [recent, unread] = session
+    ? await Promise.all([
+        getRecentNotifications(session.accessToken),
+        getUnreadCount(session.accessToken),
+      ])
+    : [[], 0];
 
   return (
     <header className="sticky top-0 z-10 border-b border-ink-200 bg-white/80 backdrop-blur dark:bg-ink-900/80 dark:border-ink-800">
@@ -35,6 +45,7 @@ export async function Header() {
         <div className="ml-auto flex items-center gap-3">
           {authed ? (
             <>
+              <NotificationBell initialItems={recent} initialUnread={unread} />
               <Link
                 href="/me"
                 className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
