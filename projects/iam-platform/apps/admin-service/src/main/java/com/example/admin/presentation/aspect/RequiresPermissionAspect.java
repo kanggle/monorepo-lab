@@ -8,6 +8,7 @@ import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
+import com.example.security.access.ResourceTagCondition;
 import com.example.security.access.SourceIpCondition;
 import com.example.security.access.TimeWindowCondition;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +33,8 @@ import java.lang.reflect.Method;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Centralised RBAC enforcement for admin-service controllers.
@@ -77,6 +80,14 @@ public class RequiresPermissionAspect {
      * bean if present (slice tests inject a fixed one), else {@code Clock.systemUTC()}.
      */
     private final ObjectProvider<Clock> clockProvider;
+    /** ADR-MONO-029 — the RESOURCE_TAG condition, composed AND-only. */
+    private final ObjectProvider<ResourceTagCondition> resourceTagConditionProvider;
+    /**
+     * ADR-MONO-029 § D2-A — resolves the target resource's tags so the
+     * RESOURCE_TAG condition is evaluated at this single decision site. When no
+     * resolver bean is present the condition is net-zero (skipped).
+     */
+    private final ObjectProvider<ResourceTagResolver> resourceTagResolverProvider;
 
     /** Annotated path: explicit permission requirement. */
     @Around("@annotation(requires)")
@@ -123,11 +134,11 @@ public class RequiresPermissionAspect {
 
     /**
      * AND-only composition of the configured access conditions (ADR-026 SOURCE_IP +
-     * ADR-028 TIME_WINDOW). Returns {@code true} iff ANY <i>configured</i> condition
-     * is unsatisfied for this request — an unconfigured condition is skipped
-     * (net-zero), so the gate degrades cleanly to whichever conditions are
-     * configured. Fail-safe: an unresolvable input denies (the evaluators return
-     * {@code false} on bad input).
+     * ADR-028 TIME_WINDOW + ADR-029 RESOURCE_TAG). Returns {@code true} iff ANY
+     * <i>configured</i> condition is unsatisfied for this request — an unconfigured
+     * condition is skipped (net-zero), so the gate degrades cleanly to whichever
+     * conditions are configured. Fail-safe: an unresolvable input denies (the
+     * evaluators return {@code false} on bad input).
      */
     private boolean anyConditionUnmet(HttpServletRequest request) {
         SourceIpCondition sourceIp = sourceIpConditionProvider.getIfAvailable();
@@ -139,6 +150,20 @@ public class RequiresPermissionAspect {
         if (timeWindow != null && timeWindow.isConfigured()
                 && !timeWindow.isSatisfiedBy(currentClock().instant())) {
             return true;
+        }
+        // ADR-MONO-029 — RESOURCE_TAG: gate by the TARGET resource's tags, resolved
+        // at this single decision site (D2-A). The resolver returns empty when the
+        // request targets no resolvable resource → the condition is skipped (the
+        // mutation is not a tagged-resource mutation; net-zero).
+        ResourceTagCondition resourceTag = resourceTagConditionProvider.getIfAvailable();
+        if (resourceTag != null && resourceTag.isConfigured()) {
+            ResourceTagResolver resolver = resourceTagResolverProvider.getIfAvailable();
+            if (resolver != null) {
+                Optional<Set<String>> tags = resolver.resolveResourceTags(request);
+                if (tags.isPresent() && !resourceTag.isSatisfiedBy(tags.get())) {
+                    return true;
+                }
+            }
         }
         return false;
     }
