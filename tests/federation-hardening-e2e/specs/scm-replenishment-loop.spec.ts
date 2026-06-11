@@ -31,11 +31,15 @@ import { Kafka } from 'kafkajs';
  * asserts the scm side + the production-token operator approve end-to-end.
  *
  * Auth: demand-planning + procurement have no fine-grained role gate (just an
- * authenticated, tenant `scm`/`*`/entitled token). The seeded SUPER_ADMIN's
- * `console_operator_token` (tenant_id='*') is accepted by both producers
- * (login.ts: the wildcard token is accepted by all producers). The approve
- * propagates that bearer to procurement (intra-scm trust, ADR-027 D5), so the
- * DRAFT PO is created under the same tenant the GET reads it under.
+ * authenticated, tenant `scm`/`*`/entitled token). The DOMAIN-FACING IAM OIDC
+ * access token is used — the `console_assumed_token` when the operator has
+ * switched tenant, else the base `console_access_token` (net-zero), exactly as
+ * console-web's scm-ops client resolves it (`getDomainFacingToken()` — NEVER the
+ * `console_operator_token`, which is admin-service-minted and rejected by the
+ * domain producers' auth-service-JWKS resource servers). The seeded SUPER_ADMIN
+ * base token carries tenant_id='*', accepted by all producers (login.ts). The
+ * approve propagates that bearer to procurement (intra-scm trust, ADR-027 D5),
+ * so the DRAFT PO is created under the same tenant the GET reads it under.
  */
 test.describe('scm replenishment loop — federation live (ADR-MONO-027 leg 2)', () => {
   // Nightly-only, not PR-gated; tolerate the documented federation flake classes
@@ -49,15 +53,21 @@ test.describe('scm replenishment loop — federation live (ADR-MONO-027 leg 2)',
   const REDPANDA_BROKER =
     process.env.E2E_REDPANDA_BROKER ?? 'localhost:19092';
   const ALERT_TOPIC = 'wms.inventory.alert.v1';
-  const OPERATOR_COOKIE = 'console_operator_token';
+  // Domain-facing IAM OIDC access token (session.ts): the assumed token when a
+  // tenant is active, else the base access token (net-zero). NOT the operator
+  // token — see the header note.
+  const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
+  const ACCESS_COOKIE = 'console_access_token';
 
   test('real broker wms alert -> demand-planning suggestion -> approve -> procurement DRAFT PO', async ({
     page,
   }) => {
-    // ---- production operator token (SUPER_ADMIN, tenant_id='*') ----
+    // ---- domain-facing IAM OIDC access token (SUPER_ADMIN base = tenant_id='*') ----
     const cookies = await page.context().cookies();
-    const token = cookies.find((c) => c.name === OPERATOR_COOKIE)?.value;
-    expect(token, `${OPERATOR_COOKIE} cookie present`).toBeTruthy();
+    const token =
+      cookies.find((c) => c.name === ASSUMED_TOKEN_COOKIE)?.value ??
+      cookies.find((c) => c.name === ACCESS_COOKIE)?.value;
+    expect(token, 'domain-facing IAM OIDC access token cookie present').toBeTruthy();
     const authed = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
