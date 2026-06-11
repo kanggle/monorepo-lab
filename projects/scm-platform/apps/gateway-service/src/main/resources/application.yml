@@ -88,6 +88,21 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
 
+        # demand-planning-service — activated by TASK-SCM-BE-024 (ADR-027 Phase 1).
+        # Routes /api/v1/demand-planning/** to demand-planning-service internal path.
+        - id: demand-planning-service
+          uri: ${DEMAND_PLANNING_SERVICE_URI:http://demand-planning-service:8080}
+          predicates:
+            - Path=/api/v1/demand-planning/**
+          filters:
+            - RewritePath=/api/v1/demand-planning/(?<segment>.*), /api/demand-planning/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework

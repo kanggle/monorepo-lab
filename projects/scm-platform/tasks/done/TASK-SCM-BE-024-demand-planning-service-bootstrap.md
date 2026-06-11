@@ -8,7 +8,9 @@ Bootstrap `demand-planning-service` — Spring Boot Hexagonal service: low-stock
 
 # Status
 
-backlog
+done
+
+> **DONE (2026-06-11, ADR-MONO-027 Phase 1 impl)**: `demand-planning-service` (scm 4th domain service) bootstrapped. New module `apps/demand-planning-service/` (Hexagonal, Java 21 / Spring Boot 3.4, pkg `com.example.scmplatform.demandplanning`): `WmsLowStockAlertConsumer` (@RetryableTopic 3×→DLT, `wms.inventory.alert.v1`, group `scm-demand-planning-v1`) → `EvaluateReorderUseCase` (T8 dedup → unmapped-SKU fail-closed → D4 policy eval w/ degraded fallback → D6 open-suggestion guard → save+metrics) ; domain `ReorderPolicy`/`SkuSupplierMapping`/`ReorderSuggestion`(status machine) ; `ReorderSweepScheduler` (@Scheduled + @SchedulerLock ShedLock) ; REST suggestions list/detail/dismiss + policy/mapping seed (approve = **501 stub → BE-025**) ; Flyway V1 (5 tables incl. **D6 partial-unique open-guard** `WHERE status IN ('SUGGESTED','APPROVED')` + shedlock ; `dp_processed_events` prefixed to avoid shared-outbox collision) ; OAuth2 RS `tenant_id=scm` fail-closed + entitlement-trust dual-accept (SCM-BE-019 pattern) ; gateway `/api/v1/demand-planning/**` activated ; docker-compose + infra DB + CI wiring (Build&Test + scm Integration). **구현=backend-engineer (Sonnet 4.6 dispatch, IVS blueprint 미러)**. **독립 재검증(Opus)**: `:check --rerun-tasks` **BUILD SUCCESSFUL 1m27s / 40 tests / 0 fail** (unit+slice) ; Flyway D6 partial-unique + EvaluateReorderUseCase 로직(T8/D4/D6/fail-closed/observability) 스펙 정확 부합 확인. Testcontainers IT 4종 컴파일 OK, Docker 없는 로컬서 skip → CI runner 실행 (TASK-SCM-INT-002 권위 검증). **스텁(후속)**: approve 엔드포인트 501 (BE-025 procurement materialization) / IVS read = `InventoryVisibilityStubAdapter` empty (BE-025서 실 RestClient) / OpsAlert = logging adapter. 분석=Opus 4.8 / 구현=Sonnet 4.6 / 검증=Opus 4.8.
 
 # Owner
 

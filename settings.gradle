@@ -82,6 +82,9 @@ include(
     'projects:scm-platform:apps:gateway-service',
     'projects:scm-platform:apps:procurement-service',
     'projects:scm-platform:apps:inventory-visibility-service',
+    // TASK-SCM-BE-024: demand-planning-service — ADR-027 Phase 1 replenishment loop.
+    // event-consumer (wms alert) + batch-job (nightly sweep) + rest-api (operator surface).
+    'projects:scm-platform:apps:demand-planning-service',
     'projects:scm-platform:tests:e2e'
 )
 

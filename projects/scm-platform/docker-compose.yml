@@ -194,6 +194,44 @@ services:
       - scm-platform-net
 
   # ---------------------------------------------------------------------------
+  # demand-planning-service — activated by TASK-SCM-BE-024.
+  # ADR-027 Phase 1: wms low-stock alert consumer → reorder-policy eval →
+  # reorder suggestion. Nightly batch sweep + REST operator surface.
+  # ---------------------------------------------------------------------------
+  demand-planning-service:
+    image: scm-platform/demand-planning-service:local
+    container_name: scm-platform-demand-planning
+    build:
+      context: ./apps/demand-planning-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: scm_demand_planning
+      POSTGRES_USER: ${POSTGRES_USER:-scm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
+      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - scm-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # inventory-visibility-service — activated by TASK-SCM-BE-003.
   # Cross-node read-model: wms event consumer + staleness batch + REST API.
   # ---------------------------------------------------------------------------
