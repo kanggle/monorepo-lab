@@ -143,8 +143,10 @@ function listAssignments(ctx: BrowserContext, token: string, sourceIp?: string):
 async function assignmentCount(ctx: BrowserContext, token: string, sourceIp?: string): Promise<number> {
   const res = await listAssignments(ctx, token, sourceIp);
   expect(res.status(), 'list assignments (a read) is never gated by the SOURCE_IP condition').toBe(200);
-  const body = (await res.json()) as { items?: unknown[] };
-  return Array.isArray(body.items) ? body.items.length : 0;
+  // Wire shape: OperatorAssignmentListResponse(assignments) — the JSON key is
+  // `assignments` (BE-339), a list of 0 or 1 element scoped to X-Tenant-Id.
+  const body = (await res.json()) as { assignments?: unknown[] };
+  return Array.isArray(body.assignments) ? body.assignments.length : 0;
 }
 
 /** Best-effort teardown — never asserts (tolerates 404/transient). In-range so the
