@@ -8,7 +8,9 @@ Author `replenishment-subscriptions.md` — scm `demand-planning-service` cross-
 
 # Status
 
-ready
+done
+
+> **DONE (2026-06-11, spec-only self-review)**: ADR-MONO-027 D1 cross-project subscription contract authored. NEW `replenishment-subscriptions.md` — `demand-planning-service` consumes the **existing** `wms.inventory.alert.v1` (`inventory.low-stock-detected`), group `scm-demand-planning-v1`, consumed-subset (skuCode join key, availableQty vs scm reorder_point, wms threshold informational-only per D4), `eventId` T8 dedup + open-suggestion-guard note (D6), retry 3×→DLT with null-envelope/unmapped-SKU non-retryable fail-closed (D8 degradation). wms `inventory-events.md` §7 +1 cross-project consumer bullet (zero schema/payload change — read-only). spec-only, markdown fast-lane. 선행=ADR-027 ACCEPTED (MONO-220 ✓). 후속=BE-023 (service spec consumes this). 분석=Opus 4.8 / 구현=Opus(직접).
 
 # Owner
 

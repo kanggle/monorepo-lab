@@ -373,6 +373,7 @@ Consumer expectations:
 
 - `notification-service`: sends low-stock alert to configured operators
 - `admin-service`: projects into `AlertLog`
+- `scm-platform demand-planning-service` (cross-project, ADR-MONO-027): consumes for replenishment reorder-suggestion decisioning. Subscription contract: scm `replenishment-subscriptions.md` (group `scm-demand-planning-v1`). No schema/payload change — read-only consumer.
 
 ---
 
