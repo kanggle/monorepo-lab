@@ -132,6 +132,28 @@ Node list with status.
 
 ---
 
+## Internal endpoints (non-gateway, network-trusted) — ADR-MONO-027 §D7.1
+
+These are **NOT** routed by scm-gateway (the gateway routes only `/api/v1/**`) and **NOT** exposed on any public host route. They are reachable only on the intra-scm container network and carry **no JWT** (`permitAll`). The trust boundary is network isolation; production must keep IVS un-routed externally. Used only by the demand-planning `ReorderSweepScheduler` (unattended `@Scheduled`, no operator token).
+
+### GET /internal/inventory-visibility/snapshot
+
+Current inventory snapshot **across all tenants** (the replenishment batch is tenant-agnostic — see ADR-MONO-027 §D7.1). Returns a flat list; the caller filters each row against its own reorder policy.
+
+**Response 200:**
+```json
+{
+  "data": [
+    { "sku": "SKU-001", "nodeId": "uuid", "availableQty": 42 }
+  ],
+  "meta": { "count": 1 }
+}
+```
+
+`availableQty` is the snapshot quantity as an integer (whole units). No pagination at v1 demo scale.
+
+---
+
 ## Error Codes
 
 | Code | HTTP | Description |

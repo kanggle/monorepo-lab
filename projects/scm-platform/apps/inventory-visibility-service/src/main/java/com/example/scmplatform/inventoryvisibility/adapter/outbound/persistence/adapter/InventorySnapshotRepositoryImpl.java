@@ -51,6 +51,11 @@ public class InventorySnapshotRepositoryImpl implements InventorySnapshotReposit
     }
 
     @Override
+    public List<InventorySnapshot> findAllAcrossTenants() {
+        return jpaRepository.findAll().stream().map(this::toDomain).toList();
+    }
+
+    @Override
     public long countAll(String tenantId) {
         return jpaRepository.countByTenantId(tenantId);
     }

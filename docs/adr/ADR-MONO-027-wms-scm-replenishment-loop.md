@@ -124,6 +124,15 @@ demand-planning and procurement are **same-project** services, so this leg is in
 
 demand-planning **does not**: own physical inventory (wms), own the PO lifecycle/supplier dispatch (procurement), or fulfill customer orders (ecommerce/wms). It is a **decisioning** service: trigger in (alert), suggestion out, DRAFT PO handed to procurement.
 
+#### D7.1 — batch sweep reads IVS via an internal network-trusted endpoint (TASK-SCM-BE-026)
+
+The nightly `ReorderSweepScheduler` runs **unattended** (`@Scheduled`, no inbound request) — there is no operator JWT in context to present to the inventory-visibility-service (IVS) read API, and scm has no workload-identity infrastructure (the same v1 gap noted in D5, where the live approve leg propagates the *operator's* bearer). Decision (user-directed, 2026-06-12): IVS exposes a dedicated **internal endpoint** `GET /internal/inventory-visibility/snapshot` that is `permitAll` (no JWT) and is **NOT routed by scm-gateway** (the gateway only routes `/api/v1/**`; `/internal/**` is reachable only on the intra-scm container network). The demand-planning batch calls it directly with no token. This extends the **v1 intra-scm trust** posture from D5 (operator-bearer propagation) to the unattended batch case.
+
+- The endpoint returns the current snapshot **across all tenants** (the batch is tenant-agnostic — demand-planning raises suggestions under the static `scm` domain slug, exactly as the live alert path does; the alert envelope itself carries no tenant). The sweep then filters each row against demand-planning's own `reorder_policy`.
+- **Trust boundary**: network isolation only. The endpoint must never be exposed through the gateway or a public host route. Production deployments must keep IVS un-routed externally (only the gateway is a registered hostname).
+- **Rejected for v1**: a service/workload JWT issuer (proper, but a new auth subsystem — its own ADR) and a static shared secret (secret-management + rotation burden, redundant with network isolation). Both remain open upgrades if IVS is ever externally reachable.
+- The live alert path is unchanged and remains fully decoupled from IVS (S5): if the internal endpoint is unavailable, the sweep skips the run (metric `reorder_sweep_ivs_unavailable_total`) and the alert path is unaffected.
+
 ### D8 — Standalone-publish degradation (no hard dependency)
 
 Without wms present (scm published standalone), the `wms.inventory.alert.v1` topic never arrives; demand-planning simply holds an empty suggestion list. The nightly batch over inventory-visibility still runs (and is also empty without wms data). No hard dependency — same posture as the scm `inventory-visibility-service` precedent and ADR-022 §D8.

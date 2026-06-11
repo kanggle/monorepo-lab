@@ -119,6 +119,10 @@ services:
       OIDC_REQUIRED_TENANT_ID: scm
       # Intra-scm procurement leg (ADR-027 D5) — direct internal call, not gateway.
       PROCUREMENT_BASE_URL: http://scm-procurement-service:8080
+      # Nightly sweep IVS read (ADR-027 §D7.1) — internal network-trusted endpoint.
+      # Cron-only (02:00 UTC), so it does not fire during an e2e run; wired for
+      # correctness so a manual/scheduled sweep reaches the right IVS host.
+      INVENTORY_VISIBILITY_BASE_URL: http://scm-inventory-visibility-service:8080
       OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
     depends_on:

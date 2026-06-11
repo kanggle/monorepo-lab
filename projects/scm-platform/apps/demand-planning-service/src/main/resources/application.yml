@@ -101,6 +101,13 @@ scmplatform:
       base-url: ${PROCUREMENT_BASE_URL:http://procurement-service:8080}
       connect-timeout-ms: ${PROCUREMENT_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${PROCUREMENT_READ_TIMEOUT_MS:10000}
+    # Nightly batch sweep IVS read (ADR-MONO-027 §D7.1). The unattended sweep reads
+    # the IVS internal network-trusted endpoint /internal/inventory-visibility/snapshot
+    # (no token). Never used by the live alert path.
+    inventory-visibility:
+      base-url: ${INVENTORY_VISIBILITY_BASE_URL:http://inventory-visibility-service:8080}
+      connect-timeout-ms: ${INVENTORY_VISIBILITY_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${INVENTORY_VISIBILITY_READ_TIMEOUT_MS:10000}
 
 demand-planning:
   sweep:
