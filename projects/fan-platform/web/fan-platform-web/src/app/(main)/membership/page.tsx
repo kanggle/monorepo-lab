@@ -4,6 +4,7 @@ import {
   currentActive,
   SubscribePanel,
   MembershipStatusCard,
+  RenewPanel,
 } from '@/features/membership';
 import type { MembershipTier } from '@/entities/membership';
 
@@ -28,6 +29,12 @@ export default async function MembershipPage({
   const memberships = await getMemberships(session.accessToken);
   const active = currentActive(memberships);
   const heldActiveTiers = memberships.filter((m) => m.active).map((m) => m.tier);
+  // A just-expired membership (stored ACTIVE, read-time inactive, not canceled) is
+  // renewable. The list is newest-window first, so the first match is the most
+  // recent. Only surfaced when nothing is currently active.
+  const expired = active
+    ? null
+    : (memberships.find((m) => m.status === 'ACTIVE' && !m.active) ?? null);
 
   return (
     <section className="flex flex-col gap-8">
@@ -39,6 +46,7 @@ export default async function MembershipPage({
       </header>
 
       {active ? <MembershipStatusCard membership={active} /> : null}
+      {expired ? <RenewPanel membership={expired} /> : null}
 
       <SubscribePanel heldActiveTiers={heldActiveTiers} highlightTier={highlightTier} />
     </section>

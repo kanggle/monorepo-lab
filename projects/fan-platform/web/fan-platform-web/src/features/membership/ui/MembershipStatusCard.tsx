@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
-import { cancelMembership } from '@/features/membership/api/actions';
+import { cancelMembership, renewMembership } from '@/features/membership/api/actions';
 import type { MembershipListItem } from '@/entities/membership';
 
 const TIER_LABEL: Record<MembershipListItem['tier'], string> = {
@@ -14,16 +14,30 @@ function fmt(date: string): string {
 }
 
 /**
- * Current active membership summary + cancel. Receives only plain data (no
- * access token); the cancel write goes through the `'use server'` action.
+ * Current active membership summary + renew (extend) / cancel. Receives only
+ * plain data (no access token); the writes go through the `'use server'` actions.
  */
 export function MembershipStatusCard({ membership }: { membership: MembershipListItem }) {
   const [isPending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
+  const [renewedTo, setRenewedTo] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   const onCancel = () => {
     startTransition(() => {
       void cancelMembership(membership.membershipId);
+    });
+  };
+
+  const onRenew = () => {
+    setRenewError(null);
+    startTransition(async () => {
+      const result = await renewMembership(membership.membershipId, membership.planMonths, '');
+      if (result.ok) {
+        setRenewedTo(result.membership.validTo);
+      } else {
+        setRenewError(result.message);
+      }
     });
   };
 
@@ -67,11 +81,30 @@ export function MembershipStatusCard({ membership }: { membership: MembershipLis
             </div>
           </div>
         ) : (
-          <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
-            멤버십 해지
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isPending}
+              onClick={onRenew}
+              data-testid="renew-button"
+            >
+              {isPending ? '연장 중...' : '연장하기'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
+              멤버십 해지
+            </Button>
+          </div>
         )}
       </div>
+      {renewedTo ? (
+        <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          {fmt(renewedTo)}까지 연장되었습니다.
+        </p>
+      ) : null}
+      {renewError ? (
+        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{renewError}</p>
+      ) : null}
     </div>
   );
 }

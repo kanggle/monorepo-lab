@@ -2,6 +2,7 @@ package com.example.fanplatform.membership.presentation.advice;
 
 import com.example.fanplatform.membership.application.exception.IdempotencyKeyConflictException;
 import com.example.fanplatform.membership.application.exception.MembershipNotFoundException;
+import com.example.fanplatform.membership.application.exception.MembershipNotRenewableException;
 import com.example.fanplatform.membership.application.exception.MembershipTierInvalidException;
 import com.example.fanplatform.membership.application.exception.PaymentDeclinedException;
 import com.example.fanplatform.membership.domain.membership.status.InvalidStateTransitionException;
@@ -49,6 +50,12 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
     public ResponseEntity<ApiErrorBody> handleTierInvalid(MembershipTierInvalidException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("MEMBERSHIP_TIER_INVALID", e.getMessage()));
+    }
+
+    @ExceptionHandler(MembershipNotRenewableException.class)
+    public ResponseEntity<ApiErrorBody> handleNotRenewable(MembershipNotRenewableException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiErrorBody.of("MEMBERSHIP_NOT_RENEWABLE", e.getMessage()));
     }
 
     @ExceptionHandler(IdempotencyKeyConflictException.class)
