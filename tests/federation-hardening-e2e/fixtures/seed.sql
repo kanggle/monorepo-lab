@@ -478,3 +478,54 @@ SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
  WHERE o.operator_id = 'deleg-target-umbrella';
+
+-- ===========================================================================
+-- TASK-MONO-221 — ADR-MONO-026 § D7 step 3 iam admin SOURCE_IP access-condition
+-- proof.
+--
+-- This block is ADD-ONLY. It seeds ONE throwaway target operator
+-- `ip-pilot-target`, scoped to the DEDICATED `ip-pilot-corp` tenant (account_db
+-- side = account-service Flyway-dev V9004), which the proof assigns / unassigns
+-- to exercise the SOURCE_IP access condition (the 4th authorization gate on the
+-- admin mutation surface, ADR-026 D4 / TASK-BE-351).
+--
+-- WHY only a target (no new actor): the proof's actor is the persisted
+-- SUPER_ADMIN (global-setup storageState) — the SOURCE_IP gate is service-level
+-- and orthogonal to RBAC, so it gates even SUPER_ADMIN ('*'). The proof reads
+-- SUPER_ADMIN's `console_operator_token` and drives the admin surface directly,
+-- setting the perceived source IP per-request via X-Forwarded-For. No new login
+-- helper / auth_db credential is needed.
+--
+-- WHY no auth_db credential for `ip-pilot-target`: identical to
+-- `deleg-target-umbrella` (§ 15) — the target is only ever the OBJECT of the
+-- assign/unassign mutation (path {operatorId}); it presents no token, so it needs
+-- only the admin_db operator + role rows.
+--
+-- Re-runnable: INSERT IGNORE / ON DUPLICATE KEY UPDATE (same discipline as the
+-- blocks above).
+-- ===========================================================================
+
+USE `admin_db`;
+
+INSERT INTO admin_operators (
+    operator_id, tenant_id, email, password_hash, display_name, status,
+    oidc_subject, finance_default_account_id, created_at, updated_at, version
+) VALUES
+    ('ip-pilot-target', 'ip-pilot-corp', 'ip-pilot-target@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'IP Pilot Target', 'ACTIVE', 'ip-pilot-target@example.com',
+     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a501', NOW(6), NOW(6), 0)
+ON DUPLICATE KEY UPDATE
+    tenant_id    = VALUES(tenant_id),
+    oidc_subject = VALUES(oidc_subject),
+    status       = 'ACTIVE',
+    updated_at   = NOW(6);
+
+-- SUPPORT_READONLY @ ip-pilot-corp — a benign baseline role so the operator
+-- exists (the assign/unassign target is the OBJECT, not the actor; its own role
+-- is irrelevant to the SOURCE_IP gate, which applies to the SUPER_ADMIN caller).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
+ WHERE o.operator_id = 'ip-pilot-target';

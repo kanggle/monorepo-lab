@@ -346,6 +346,16 @@ services:
         fOIvQyaNDTvxW+mx0Ds4Huo=
         -----END PRIVATE KEY-----
       ADMIN_TOTP_V1_KEY: REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=
+      # TASK-MONO-221 (ADR-MONO-026 § D7 step 3) — turn ON the SOURCE_IP access
+      # condition (the 4th authorization gate) for the iam admin mutation surface.
+      # Bound into admin.access.source-ip-allowed-cidrs (comma-separated → List).
+      # The allowlist covers every RFC1918 + loopback range so the EXISTING suite's
+      # admin mutations — which call ADMIN_BASE directly with NO X-Forwarded-For and
+      # thus resolve to the docker-network remote address — stay in-range and are
+      # unaffected (suite-level net-zero). The iam-admin-source-ip-condition spec
+      # overrides the perceived source IP per-request via X-Forwarded-For to prove
+      # out-of-range → 403 ACCESS_CONDITION_UNMET vs in-range → 2xx.
+      ADMIN_ACCESS_SOURCE_IP_CIDRS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128"
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
