@@ -24,3 +24,4 @@ create_db_if_missing() {
 create_db_if_missing "${POSTGRES_DB_COMMUNITY:-fanplatform_community}"
 create_db_if_missing "${POSTGRES_DB_ARTIST:-fanplatform_artist}"
 create_db_if_missing "${POSTGRES_DB_MEMBERSHIP:-fanplatform_membership}"
+create_db_if_missing "${POSTGRES_DB_NOTIFICATION:-fanplatform_notification}"

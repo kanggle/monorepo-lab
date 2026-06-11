@@ -144,6 +144,26 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
 
+        # notification-service — external path /api/v1/notifications/** is
+        # rewritten to the downstream service's /api/fan/notifications/**
+        # (TASK-FAN-BE-013). The consume path (Kafka inbound) has no gateway
+        # surface; only the in-app inbox read API is routed here.
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:http://notification-service:8080}
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            # See community-service route for the (?:/.*)? rationale.
+            # /api/v1/notifications              → /api/fan/notifications
+            # /api/v1/notifications/{id}/read    → /api/fan/notifications/{id}/read
+            - RewritePath=/api/v1/notifications(?<segment>(?:/.*)?), /api/fan/notifications${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework

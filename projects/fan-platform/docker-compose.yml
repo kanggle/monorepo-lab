@@ -45,6 +45,7 @@ services:
       COMMUNITY_SERVICE_URI: http://community-service:8080
       ARTIST_SERVICE_URI: http://artist-service:8080
       MEMBERSHIP_SERVICE_URI: http://membership-service:8080
+      NOTIFICATION_SERVICE_URI: http://notification-service:8080
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://fan-platform.local,http://localhost:3000}
     depends_on:
       redis:
@@ -203,7 +204,50 @@ services:
       start_period: 45s
 
   # ---------------------------------------------------------------------------
-  # Postgres 16 — backing store for community / artist / membership services.
+  # notification-service — TASK-FAN-BE-013.
+  # event-consumer (membership lifecycle events) + thin rest-api inbox. Consumes
+  # fan.membership.{activated,canceled}.v1, records a per-fan notification
+  # idempotently, fans out via mock channels, serves a recipient-scoped inbox.
+  # The /api/fan/notifications surface is reachable via the gateway; the consume
+  # path is Kafka-only. Terminal consumer (no outbox). No Traefik label.
+  # ---------------------------------------------------------------------------
+  notification-service:
+    image: fan-platform/notification-service:local
+    container_name: fan-platform-notification
+    build:
+      context: ./apps/notification-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/.well-known/jwks.json}
+      OIDC_REQUIRED_TENANT_ID: fan-platform
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB_NOTIFICATION: ${POSTGRES_DB_NOTIFICATION:-fanplatform_notification}
+      POSTGRES_USER: ${POSTGRES_USER:-fanplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanplatform}
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fan-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
+  # Postgres 16 — backing store for community / artist / membership / notification.
   # Multi-database: docker-entrypoint-initdb.d script creates per-service DBs
   # so each service has its own isolated schema namespace.
   # ---------------------------------------------------------------------------
@@ -220,6 +264,7 @@ services:
       POSTGRES_DB_COMMUNITY: ${POSTGRES_DB_COMMUNITY:-fanplatform_community}
       POSTGRES_DB_ARTIST: ${POSTGRES_DB_ARTIST:-fanplatform_artist}
       POSTGRES_DB_MEMBERSHIP: ${POSTGRES_DB_MEMBERSHIP:-fanplatform_membership}
+      POSTGRES_DB_NOTIFICATION: ${POSTGRES_DB_NOTIFICATION:-fanplatform_notification}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
