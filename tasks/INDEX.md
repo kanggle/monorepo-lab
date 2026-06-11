@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-229-abac-data-scope-finance-non-adoption-clarify.md` — doc-only: correct `platform/abac-data-scope.md` § 3 (finance is single-tenant → non-adopting, not `*(future)*`) + append ADR-MONO-025 § 6 history row (erp re-point executed in TASK-ERP-BE-019). No code, no decision reversal.
 
 ## in-progress
 
