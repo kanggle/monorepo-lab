@@ -1,6 +1,6 @@
 # ADR-MONO-026 — Role-Grant Access Conditions (closed-enum condition clauses — the 2단계 of axis ②)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-11
 
@@ -72,21 +72,19 @@ A condition can **only gate** an action that has already passed RBAC + tenant-sc
 
 Where a grant's conditions live and how they reach the enforcement seam. PROPOSED options for the ACCEPTED gate:
 
-- **D3-A — signed claim** `access_conditions` on the assume-tenant token (sibling to `data_scope`): a structured value the producer copies from a new per-grant condition field; the domain evaluates it via the shared evaluator. *Pro:* per-operator, travels with the identity, stateless enforcement, true "condition on a grant". *Con:* requires a **producer touch** (`TenantClaimTokenCustomizer` + a grant-storage field) — the main cost, and the inverse of ADR-025 § D5's "producer unchanged".
-- **D3-B — domain/endpoint-side guard config**: the condition is attached to a resource/endpoint policy in the consuming domain (e.g. "the admin write endpoints require `SOURCE_IP ∈ corp-CIDR`"), not to a per-operator grant. *Pro:* **zero producer/claim/IAM change** — purely consumer-side, the cheapest credible 2단계 demonstration; matches ADR-025's consumer-side spirit. *Con:* condition is per-resource/endpoint, not per-operator-grant (coarser; closer to a "guarded endpoint" than an "AWS-`Condition` on a grant").
+- **D3-A — signed claim** `access_conditions` on the assume-tenant token (sibling to `data_scope`): a structured value the producer copies from a new per-grant condition field; the domain evaluates it via the shared evaluator. *Pro:* per-operator, travels with the identity, stateless enforcement, true "condition on a grant". *Con:* requires a **producer touch** (`TenantClaimTokenCustomizer` + a grant-storage field) — the main cost, and the inverse of ADR-025 § D5's "producer unchanged". **(deferred — promotable later if per-operator conditions are wanted.)**
+- **D3-B (CHOSEN, ACCEPTED 2026-06-11)** — domain/endpoint-side guard config: the condition is attached to a resource/endpoint policy in the consuming domain (e.g. "the admin write endpoints require `SOURCE_IP ∈ corp-CIDR`"), not to a per-operator grant. *Pro:* **zero producer/claim/IAM change** — purely consumer-side, the cheapest credible 2단계 demonstration; matches ADR-025's consumer-side spirit. *Con:* condition is per-resource/endpoint, not per-operator-grant (coarser; closer to a "guarded endpoint" than an "AWS-`Condition` on a grant"). **User-selected at the ACCEPTED gate** as the net-zero, producer-untouched pilot — proves the closed-enum evaluator and the 4th-gate composition at the lowest blast radius, exactly as ADR-025 stayed consumer-side first.
 - **D3-C (rejected)** — domain calls IAM at enforcement to resolve a grant's conditions. Chatty; couples domain↔IAM on the hot path.
-
-> **Recommendation framing for the gate** (not binding): start with **D3-B** as the net-zero, producer-untouched pilot — it proves the closed-enum evaluator and the 4th-gate composition at the lowest blast radius, exactly as ADR-025 stayed consumer-side first and deferred the producer migration. Promote to **D3-A** later only if genuinely per-operator conditions are wanted.
 
 ### D4 — Pilot domain + condition subset (gate choice)
 
 Which one domain and which of the 3 condition types the first enforcement proves (keep the blast radius minimal, exactly as ADR-025 § D3 picked a single domain). PROPOSED candidates:
 
-- **iam admin endpoints + `SOURCE_IP`** — gate the operator/admin write surface to the corporate CIDR. Security-natural, single condition, smallest pilot.
-- **wms write endpoints + `TIME_WINDOW`** — e.g. outbound-confirm only during business hours.
-- **a `RESOURCE_TAG` pilot** — e.g. deny mutating actions on rows tagged `confidential`.
+- **iam admin endpoints + `SOURCE_IP` (CHOSEN, ACCEPTED 2026-06-11)** — gate the operator/admin write surface to the corporate CIDR. Security-natural, single condition, smallest pilot. **User-selected at the gate.**
+- **wms write endpoints + `TIME_WINDOW` (not chosen)** — e.g. outbound-confirm only during business hours.
+- **a `RESOURCE_TAG` pilot (not chosen)** — e.g. deny mutating actions on rows tagged `confidential`.
 
-The gate selects exactly one pilot (one domain, ≥1 condition type).
+The gate selected exactly one pilot: **iam admin endpoints + `SOURCE_IP`** (one domain, one condition type), keeping the first enforcement's blast radius minimal exactly as ADR-025 § D3 picked a single wms entity.
 
 ### D5 — Net-zero / opt-in
 
@@ -124,9 +122,9 @@ This ADR does **NOT** introduce: a policy document/language; a runtime-registrab
 
 ### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
 
-0. **`TASK-MONO-216` (this PROPOSED) + `TASK-MONO-2xx` (ACCEPTED transition)** — doc-only. The ACCEPTED gate fixes the D3 carrier + the D4 pilot. Model = Opus (analysis); the ACCEPTED flip is doc-only.
-1. **`TASK-MONO-2xx`** — `platform/access-conditions.md` contract + shared `com.example.security.jwt.AccessCondition` evaluator (closed enum, fail-safe, AND-only) in `libs/java-security`, with unit tests. Producer touched only if D3-A. Model = Sonnet→Opus (doc + security-lib).
-2. **`TASK-<pilot>-BE-xxx`** — the chosen D4 pilot's condition enforcement on its endpoints + opt-in net-zero + IT (met / unmet / absent). Model = Opus (authorization enforcement; security-critical).
+0. **`TASK-MONO-216` (PROPOSED, DONE #1284) + `TASK-MONO-217` (ACCEPTED transition, this)** — doc-only. The ACCEPTED gate fixed **D3 = D3-B** (domain/endpoint guard-config — producer untouched) + **D4 = iam admin endpoints + `SOURCE_IP`**. Model = Opus (analysis); the ACCEPTED flip is doc-only.
+1. **`TASK-MONO-218`** — `platform/access-conditions.md` contract + shared `com.example.security.jwt.AccessCondition` evaluator (closed enum, fail-safe, AND-only) in `libs/java-security`, with unit tests. Producer untouched (D3-B). Model = Sonnet→Opus (doc + security-lib).
+2. **`TASK-<iam>-BE-xxx`** — the iam pilot's `SOURCE_IP` condition enforcement on the admin write endpoints + opt-in net-zero + IT (met / unmet / absent). Model = Opus (authorization enforcement; security-critical).
 3. **(optional)** federation-e2e proof that a conditioned operator is gated while an unconditioned operator is unaffected — reuses the MONO-207/210 dedicated-tenant harness.
 
 No full engine and no additive conditions are scoped here.
@@ -163,4 +161,5 @@ Append-only.
 
 | Date | Transition | Decision direction | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-06-11 | created PROPOSED | D1 = closed condition enum `{TIME_WINDOW, SOURCE_IP, RESOURCE_TAG}`, AND-only, code-not-data (no policy language / open SPI); D2 = restriction-only + fail-safe, 4th composed gate, no additive/elevation (owned by 020/024); D3 = condition carrier (A signed `access_conditions` claim **vs** B domain/endpoint guard-config) — gate to fix; D4 = single pilot domain + condition subset — gate to fix; D5 = net-zero/opt-in; D6 = still NO full policy engine (standing boundary); D7 = staged (contract+evaluator → pilot enforcement+IT → optional fed-e2e), mirroring ADR-025 § D7. Lifts the ADR-025 § D6 deferral additively (no change to 025's data-scope). | "2단계 진행" — after the axis ② 1단계 (data-scope) closure and a design discussion that fixed 2단계 as a **closed-enum, restriction-only, fail-safe** condition gate ("역할 + 조건식 한 겹, AWS-IAM-Condition 축소판; 풀 정책 엔진은 거부; 더하기(elevation)는 assume-tenant/위임이 소유; enum 을 코드에 박아 닫아둔 재사용 패턴"). ADR-first per the established ADR-019…025 staged pattern. | #<this> (TASK-MONO-216) |
+| 2026-06-11 | created PROPOSED | D1 = closed condition enum `{TIME_WINDOW, SOURCE_IP, RESOURCE_TAG}`, AND-only, code-not-data (no policy language / open SPI); D2 = restriction-only + fail-safe, 4th composed gate, no additive/elevation (owned by 020/024); D3 = condition carrier (A signed `access_conditions` claim **vs** B domain/endpoint guard-config) — gate to fix; D4 = single pilot domain + condition subset — gate to fix; D5 = net-zero/opt-in; D6 = still NO full policy engine (standing boundary); D7 = staged (contract+evaluator → pilot enforcement+IT → optional fed-e2e), mirroring ADR-025 § D7. Lifts the ADR-025 § D6 deferral additively (no change to 025's data-scope). | "2단계 진행" — after the axis ② 1단계 (data-scope) closure and a design discussion that fixed 2단계 as a **closed-enum, restriction-only, fail-safe** condition gate ("역할 + 조건식 한 겹, AWS-IAM-Condition 축소판; 풀 정책 엔진은 거부; 더하기(elevation)는 assume-tenant/위임이 소유; enum 을 코드에 박아 닫아둔 재사용 패턴"). ADR-first per the established ADR-019…025 staged pattern. | #1284 (TASK-MONO-216) |
+| 2026-06-11 | PROPOSED → ACCEPTED | D1-D2, D5-D7 directions **finalised unchanged** from PROPOSED #1284 squash `58905a654`; **D3 finalised = D3-B** (domain/endpoint guard-config — producer/token/IAM unchanged, net-zero consumer-side like ADR-025 § D5; D3-A signed-claim deferred/promotable); **D4 finalised = iam admin endpoints + `SOURCE_IP`** (the single first pilot — smallest, security-natural). Authorises the § 3.3 execution roadmap (dependency-correct base = this ACCEPTED main): `platform/access-conditions.md` contract + shared `AccessCondition` evaluator (`libs/java-security`) → iam `SOURCE_IP` enforcement + IT → optional federation-e2e proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024/025). | "도메인 가드설정 (D3-B)" + "iam admin + SOURCE_IP" + "Draft PR 열기" → "진행해줘" (TASK-MONO-217 — user fixed the carrier=D3-B + pilot=iam/SOURCE_IP at the gate and authorised ACCEPTED + execution) | #<this> (TASK-MONO-217) |
