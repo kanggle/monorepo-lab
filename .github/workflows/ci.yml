@@ -343,6 +343,7 @@ jobs:
           :projects:fan-platform:apps:community-service:check
           :projects:fan-platform:apps:artist-service:check
           :projects:fan-platform:apps:membership-service:check
+          :projects:fan-platform:apps:notification-service:check
           :projects:fan-platform:tests:e2e:check
           --no-daemon --stacktrace
 
@@ -970,11 +971,15 @@ jobs:
         run: docker info
 
       - name: Run fan-platform integration suites
+        # TASK-FAN-BE-013: notification-service joins — event-consumer (membership
+        # lifecycle topics) + inbox ITs (Postgres + Kafka Testcontainers, WireMock
+        # JWKS). Its disabledWithoutDocker ITs run for the first time on CI here.
         run: >-
           ./gradlew
           :projects:fan-platform:apps:community-service:integrationTest
           :projects:fan-platform:apps:artist-service:integrationTest
           :projects:fan-platform:apps:membership-service:integrationTest
+          :projects:fan-platform:apps:notification-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload fan integration test reports on failure
