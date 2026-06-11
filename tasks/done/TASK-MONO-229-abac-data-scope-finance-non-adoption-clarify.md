@@ -1,6 +1,6 @@
 # TASK-MONO-229 — Clarify ABAC data-scope: finance non-adoption + erp re-point recorded
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (shared platform docs)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (doc-only correction)
