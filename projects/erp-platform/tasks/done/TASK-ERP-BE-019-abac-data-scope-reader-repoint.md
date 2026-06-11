@@ -1,6 +1,6 @@
 # TASK-ERP-BE-019 — Re-point erp data-scope claim parsing onto the shared `AbacDataScope` reader
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (security-sensitive authorization code — net-zero refactor)
