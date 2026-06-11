@@ -44,9 +44,10 @@ The scope tokens mean whatever the owning domain decides; each domain documents 
 
 | Domain | Token meaning | Reach rule |
 |---|---|---|
-| erp | department **subtree-root** ids | a target is in-scope iff it equals, or is a descendant of, a scoped root (ancestor-chain walk). |
+| erp | department **subtree-root** ids | a target is in-scope iff it equals, or is a descendant of, a scoped root (ancestor-chain walk). erp consumes the claim through the canonical `AbacDataScope` reader (TASK-ERP-BE-019). |
 | wms | warehouse ids | a row is in-scope iff its warehouse (or the warehouse of its zone/location) is a scoped id (ADR-025 D3, first extension). |
-| finance | accounting-unit ids | *(future)* a row is in-scope iff its accounting unit is a scoped id. |
+
+**Non-adopting domains.** A domain only adopts data-scope when it has a natural *organizational partition* axis an operator can be confined to. A single-tenant domain has none, so adopting would mean **inventing** a partition dimension (a HARDSTOP-09 architecture decision), not following this pattern — and forcing ABAC onto a single-tenant service is an anti-pattern. **finance** is such a case: it is single-tenant by design (`PROJECT.md` § Out of Scope — "다수 organization 을 격리하는 SaaS 가 아님"), its accounts partition by per-customer owner reference (encrypted PII), not by any org/accounting/cost-center unit, and it exposes no list surface to scope. Finance therefore **does not adopt** data-scope. (An earlier draft of this table listed a `finance → accounting-unit ids *(future)*` row; the finance domain has no accounting-unit axis, so that row was a false forward-promise and is removed — TASK-MONO-229.)
 
 A new domain adopts data-scope by: (a) reading the claim via `AbacDataScope.fromClaimValues(jwt.getClaim("data_scope"), jwt.getClaim("org_scope"))`; (b) computing `restricted = !scope.isEmpty() && !scope.isUnrestricted()`; (c) when `restricted` → filter its query/results so only rows reachable from `scope.tokens()` are returned (deny-by-default outside, e.g. via `scope.allows(rowToken)`); (d) otherwise (unrestricted OR unscoped) → **no filter (net-zero)**. Adoption is **opt-in and net-zero** — a domain that has not adopted data-scope, or an operator that has not been deliberately scoped, behaves exactly as today.
 
