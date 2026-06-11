@@ -68,6 +68,12 @@ include(
     // + internal access-check (remote counterpart of community MembershipChecker)
     // + outbox lifecycle events. Layered, Postgres fanplatform_membership.
     'projects:fan-platform:apps:membership-service',
+    // TASK-FAN-BE-013: notification-service — event-consumer (membership lifecycle
+    // events) + thin rest-api inbox. Closes the membership loop: consumes
+    // fan.membership.{activated,canceled}.v1, records a per-fan notification
+    // idempotently, fans out via mock channels. Layered, Postgres
+    // fanplatform_notification, terminal consumer (no outbox).
+    'projects:fan-platform:apps:notification-service',
     'projects:fan-platform:tests:e2e'
 )
 
