@@ -8,7 +8,13 @@ ADR-MONO-026 § D7 step 3 — iam admin `SOURCE_IP` access-condition federation-
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: impl PR #1305 (squash `3fdf81f0`) — spec + compose allowlist + V9004 + seed.sql §16 + README. **federation-hardening-e2e workflow_dispatch GREEN: run 27334730514 (17 passed / 0 failed) on fixed SHA `4e6ace363`** — 신규 3 테스트(gated/unaffected/mutation-only) clean pass + 기존 14 테스트 전부 GREEN(suite-level net-zero 실증). 3차원 ✓ (PR MERGED / origin/main tip=`3fdf81f0` / 머지 전 PR 표준체크 20 pass·0 fail) + AC-5 (federation GREEN) 충족. **ADR-MONO-026 § D7 step 3 종결 = access-conditions 이니셔티브(축 ② 2단계) 전체 완료** (step0 MONO-216/217 / step1 MONO-218 / step2 BE-351 / step3 MONO-221).
+>
+> **증명**: 공유 admin-service에 allowlist ON(`ADMIN_ACCESS_SOURCE_IP_CIDRS`=사설+loopback) → SUPER_ADMIN이 `console_operator_token`으로 `/api/admin/**` 직호출, source IP를 `X-Forwarded-For`로 per-request 제어. out-of-range(203.0.113.7)→403 `ACCESS_CONDITION_UNMET`(미실행) / in-range(10.20.30.40)→201·204 / blocked-IP GET→200(mutation-only). 게이트는 RBAC와 직교(granted 후 실행)라 SUPER_ADMIN도 게이트됨 → 진짜 조건거부(`ACCESS_CONDITION_UNMET`, RBAC `PERMISSION_DENIED` 아님).
+>
+> **진단 메타 (재사용)**: ① 1차 run(27333924441) 15 pass/1 fail — 실패는 read-back 파싱뿐: `OperatorAssignmentListResponse` JSON 키는 `assignments`(BE-339)인데 스펙이 `items`로 가정 → `body.items` 항상 undefined→0 → "count==0" 단언은 vacuous 통과·"count==1"만 실패. 게이팅(403/201) 자체는 정상·net-zero(다른 15 GREEN)도 정상이었음. **교훈: e2e read-back은 producer DTO의 정확한 JSON 필드명을 코드로 확인(추정 금지)**. ② net-zero 보존 핵심=SOURCE_IP는 서비스-레벨 config라 공유 admin-service에 켜면 전 스위트 영향 → allowlist에 RFC1918+loopback 전부 포함시켜 기존 스펙(XFF 없이 remoteAddr fallback=docker 사설IP)을 in-range로 유지. ③ federation-e2e는 nightly/dispatch(PR 미게이트)라 `gh workflow run … --ref <branch>`로 머지 전 권위검증 필수. 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
