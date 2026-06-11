@@ -41,8 +41,18 @@ public class AccessConditionConfig {
 
     @Bean
     public ResourceTagCondition resourceTagCondition(AdminAccessConditionProperties properties) {
-        // Pilot semantics = deny-if-present (ADR-029 § D3): an operator carrying any
+        // deny-if-present (ADR-029 § D3, TASK-BE-353): an operator carrying any
         // forbidden tag (e.g. `protected`) is denied. Empty list ⇒ net-zero.
         return ResourceTagCondition.forbidden(properties.getResourceTag().getForbidden());
+    }
+
+    @Bean
+    public ResourceTagCondition requiredResourceTagCondition(AdminAccessConditionProperties properties) {
+        // require / deny-if-absent (ADR-029, TASK-BE-354): a mutation is allowed only
+        // when the target resource carries ALL required tags (e.g. only `certified`
+        // operators may have their roles changed). Empty list ⇒ net-zero. Composed
+        // AND-only with the forbidden condition by RequiresPermissionAspect — both are
+        // ResourceTagCondition beans, consumed via ObjectProvider.orderedStream().
+        return ResourceTagCondition.required(properties.getResourceTag().getRequired());
     }
 }

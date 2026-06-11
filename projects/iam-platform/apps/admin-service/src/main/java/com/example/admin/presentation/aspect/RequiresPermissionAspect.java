@@ -152,16 +152,25 @@ public class RequiresPermissionAspect {
             return true;
         }
         // ADR-MONO-029 — RESOURCE_TAG: gate by the TARGET resource's tags, resolved
-        // at this single decision site (D2-A). The resolver returns empty when the
-        // request targets no resolvable resource → the condition is skipped (the
-        // mutation is not a tagged-resource mutation; net-zero).
-        ResourceTagCondition resourceTag = resourceTagConditionProvider.getIfAvailable();
-        if (resourceTag != null && resourceTag.isConfigured()) {
+        // at this single decision site (D2-A). Both modes (deny-if-present AND require,
+        // TASK-BE-354) are carried as separate ResourceTagCondition beans and composed
+        // AND-only — every configured condition must hold. The resolver is consulted
+        // once; it returns empty when the request targets no resolvable resource → the
+        // condition is skipped (not a tagged-resource mutation; net-zero).
+        List<ResourceTagCondition> resourceTagConditions = resourceTagConditionProvider.orderedStream()
+                .filter(ResourceTagCondition::isConfigured)
+                .toList();
+        if (!resourceTagConditions.isEmpty()) {
             ResourceTagResolver resolver = resourceTagResolverProvider.getIfAvailable();
             if (resolver != null) {
                 Optional<Set<String>> tags = resolver.resolveResourceTags(request);
-                if (tags.isPresent() && !resourceTag.isSatisfiedBy(tags.get())) {
-                    return true;
+                if (tags.isPresent()) {
+                    Set<String> resolved = tags.get();
+                    for (ResourceTagCondition condition : resourceTagConditions) {
+                        if (!condition.isSatisfiedBy(resolved)) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
