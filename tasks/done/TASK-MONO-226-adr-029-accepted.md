@@ -8,7 +8,9 @@ ADR-MONO-029 (PROPOSED → ACCEPTED) — fix the `RESOURCE_TAG` pilot gates. Fli
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: ACCEPTED 전환 PR #1320 (squash `340ac222`). 3차원 ✓ (MERGED / origin/main tip 일치 / 코드 all-skip, 0 failing). `ADR-MONO-029` Status=ACCEPTED — **D2=D2-A**(aspect + `ResourceTagResolver`=단일 결정지점 유지, RESOURCE_TAG을 SOURCE_IP/TIME_WINDOW와 AND 합성) + **D3**(iam admin operators `protected` 태그 deny-if-present, admin_db 자체완결). D1/D4-D6 inherit-unchanged. §3.3 로드맵 인가: MONO-227(evaluator+계약)→iam BE 태그모델+resolver+enforcement→**결정적 fed-e2e**. 다음=MONO-227. 분석=Opus 4.8.
 
 # Owner
 
