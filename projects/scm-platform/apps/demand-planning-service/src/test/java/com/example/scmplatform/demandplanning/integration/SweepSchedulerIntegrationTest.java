@@ -6,10 +6,11 @@ import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.R
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.SkuSupplierMappingJpaEntity;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionSource;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
+import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,28 +33,41 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * {@code InventoryVisibilityRestAdapter} + {@code SweepReorderUseCase} +
  * {@code ReorderSweepScheduler} are exercised end-to-end against real Postgres.
  *
- * <ul>
- *   <li>AC-2: below-reorder SKU in the snapshot → one BATCH suggestion.</li>
- *   <li>above reorder point → no suggestion.</li>
- *   <li>AC-3: re-run funnels through the open-suggestion guard → no duplicate.</li>
- *   <li>AC-4: IVS unavailable (5xx) → sweep skips the run, raises 0, never throws.</li>
- * </ul>
+ * <p>Determinism: the IVS stub uses a {@link Dispatcher} (not FIFO enqueue) so the
+ * response is independent of request count — the {@code ResilienceClientFactory}
+ * RestClient retries up to 3×, and a FIFO queue would mis-align across retries.
+ * Each test uses a <b>unique SKU + warehouse</b> and asserts only on that SKU, so
+ * the shared Kafka consumer re-processing leaked alerts from sibling IT classes
+ * (earliest-offset group) cannot perturb the count.
  */
 @DisplayName("IT: batch sweep → IVS internal read → BATCH suggestion (ADR-027 §D7.1)")
 class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTest {
 
     private static MockWebServer ivsMock;
 
-    static final String SKU = "SKU-SWEEP-IT";
-    static final UUID WAREHOUSE_ID = UUID.randomUUID();
-    static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // Dispatcher state — set per test before triggering the sweep.
+    private static volatile boolean ivsUnavailable = false;
+    private static volatile String ivsSku = "";
+    private static volatile String ivsNodeId = "";
+    private static volatile int ivsQty = 0;
 
-    // One MockWebServer for the class — the adapter binds its base-url at bean
-    // construction, so the port must stay stable. Each test enqueues exactly the
-    // responses its sweeps consume (one GET per runSweep()).
     @DynamicPropertySource
     static void ivsMockUrl(DynamicPropertyRegistry registry) throws IOException {
         ivsMock = new MockWebServer();
+        ivsMock.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                if (ivsUnavailable) {
+                    return new MockResponse().setResponseCode(503);
+                }
+                String body = "{\"data\":[{\"sku\":\"" + ivsSku + "\",\"nodeId\":\"" + ivsNodeId
+                        + "\",\"availableQty\":" + ivsQty + "}],\"meta\":{\"count\":1}}";
+                return new MockResponse()
+                        .setResponseCode(200)
+                        .setHeader("Content-Type", "application/json")
+                        .setBody(body);
+            }
+        });
         ivsMock.start();
         registry.add("scmplatform.demand-planning.inventory-visibility.base-url",
                 () -> "http://" + ivsMock.getHostName() + ":" + ivsMock.getPort());
@@ -69,12 +83,16 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     @Autowired
     ReorderSweepScheduler sweepScheduler;
 
-    @BeforeEach
-    void seedPolicyAndMapping() {
+    /** A fresh, collision-proof SKU + warehouse per test (open-guard is keyed on both). */
+    private String uniqueSku() {
+        return "SKU-SWEEP-IT-" + UUID.randomUUID();
+    }
+
+    private void seedPolicyAndMapping(String sku, UUID supplierId, int reorderPoint, int reorderQty) {
         SkuSupplierMappingJpaEntity mapping = new SkuSupplierMappingJpaEntity();
         mapping.setTenantId(TENANT_SCM);
-        mapping.setSkuCode(SKU);
-        mapping.setSupplierId(SUPPLIER_ID);
+        mapping.setSkuCode(sku);
+        mapping.setSupplierId(supplierId);
         mapping.setDefaultOrderQty(100);
         mapping.setLeadTimeDays(5);
         mapping.setCurrency("USD");
@@ -82,63 +100,79 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
 
         ReorderPolicyJpaEntity policy = new ReorderPolicyJpaEntity();
         policy.setTenantId(TENANT_SCM);
-        policy.setSkuCode(SKU);
-        policy.setReorderPoint(20);
+        policy.setSkuCode(sku);
+        policy.setReorderPoint(reorderPoint);
         policy.setSafetyStock(5);
-        policy.setReorderQty(50);
+        policy.setReorderQty(reorderQty);
         policy.setVersion(0);
         policy.setUpdatedAt(Instant.now());
         policyJpa.save(policy);
     }
 
-    /** Enqueue one IVS internal-snapshot response (the envelope the controller returns). */
-    private void enqueueSnapshot(String sku, UUID nodeId, int availableQty) {
-        String body = "{\"data\":[{\"sku\":\"" + sku + "\",\"nodeId\":\"" + nodeId
-                + "\",\"availableQty\":" + availableQty + "}],\"meta\":{\"count\":1}}";
-        ivsMock.enqueue(new MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody(body));
+    /** Point the IVS stub at one snapshot row for {@code sku}@{@code nodeId} with {@code qty}. */
+    private void expectSnapshot(String sku, UUID nodeId, int qty) {
+        ivsUnavailable = false;
+        ivsSku = sku;
+        ivsNodeId = nodeId.toString();
+        ivsQty = qty;
+    }
+
+    private void expectIvsUnavailable() {
+        ivsUnavailable = true;
+    }
+
+    private List<ReorderSuggestionJpaEntity> suggestionsFor(String sku) {
+        return suggestionJpa.findAll().stream()
+                .filter(s -> sku.equals(s.getSkuCode()))
+                .toList();
     }
 
     @Test
     @DisplayName("below reorder point in IVS snapshot → one BATCH suggestion")
     void sweep_belowReorderPoint_raisesBatchSuggestion() {
-        enqueueSnapshot(SKU, WAREHOUSE_ID, 5); // 5 <= reorderPoint(20)
+        String sku = uniqueSku();
+        UUID warehouse = UUID.randomUUID();
+        UUID supplier = UUID.randomUUID();
+        seedPolicyAndMapping(sku, supplier, 20, 50);
+        expectSnapshot(sku, warehouse, 5); // 5 <= reorderPoint(20)
 
         sweepScheduler.runSweep();
 
-        List<ReorderSuggestionJpaEntity> all = suggestionJpa.findAll();
-        assertThat(all).hasSize(1);
-        ReorderSuggestionJpaEntity s = all.get(0);
-        assertThat(s.getSkuCode()).isEqualTo(SKU);
-        assertThat(s.getWarehouseId()).isEqualTo(WAREHOUSE_ID);
+        List<ReorderSuggestionJpaEntity> mine = suggestionsFor(sku);
+        assertThat(mine).hasSize(1);
+        ReorderSuggestionJpaEntity s = mine.get(0);
+        assertThat(s.getWarehouseId()).isEqualTo(warehouse);
         assertThat(s.getStatus()).isEqualTo(SuggestionStatus.SUGGESTED);
         assertThat(s.getSource()).isEqualTo(SuggestionSource.BATCH);
         assertThat(s.getSuggestedQty()).isEqualTo(50); // reorderQty
-        assertThat(s.getSupplierId()).isEqualTo(SUPPLIER_ID);
+        assertThat(s.getSupplierId()).isEqualTo(supplier);
     }
 
     @Test
     @DisplayName("above reorder point → no suggestion")
     void sweep_aboveReorderPoint_raisesNothing() {
-        enqueueSnapshot(SKU, WAREHOUSE_ID, 50); // 50 > reorderPoint(20)
+        String sku = uniqueSku();
+        UUID warehouse = UUID.randomUUID();
+        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        expectSnapshot(sku, warehouse, 50); // 50 > reorderPoint(20)
 
         sweepScheduler.runSweep();
 
-        assertThat(suggestionJpa.findAll()).isEmpty();
+        assertThat(suggestionsFor(sku)).isEmpty();
     }
 
     @Test
     @DisplayName("re-run funnels through the open-suggestion guard → no duplicate (AC-3)")
     void sweep_idempotent_openGuard() {
-        enqueueSnapshot(SKU, WAREHOUSE_ID, 5);
-        enqueueSnapshot(SKU, WAREHOUSE_ID, 5);
+        String sku = uniqueSku();
+        UUID warehouse = UUID.randomUUID();
+        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        expectSnapshot(sku, warehouse, 5);
 
         sweepScheduler.runSweep();
         sweepScheduler.runSweep();
 
-        long suggested = suggestionJpa.findAll().stream()
+        long suggested = suggestionsFor(sku).stream()
                 .filter(s -> s.getStatus() == SuggestionStatus.SUGGESTED)
                 .count();
         assertThat(suggested).isEqualTo(1);
@@ -147,9 +181,12 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     @Test
     @DisplayName("IVS unavailable (5xx) → sweep skips the run, raises 0, never throws (AC-4)")
     void sweep_ivsUnavailable_skipsRun_noThrow() {
-        ivsMock.enqueue(new MockResponse().setResponseCode(503));
+        String sku = uniqueSku();
+        UUID warehouse = UUID.randomUUID();
+        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        expectIvsUnavailable();
 
         assertThatCode(() -> sweepScheduler.runSweep()).doesNotThrowAnyException();
-        assertThat(suggestionJpa.findAll()).isEmpty();
+        assertThat(suggestionsFor(sku)).isEmpty();
     }
 }
