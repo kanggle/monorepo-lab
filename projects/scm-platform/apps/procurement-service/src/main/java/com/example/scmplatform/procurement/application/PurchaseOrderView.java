@@ -1,5 +1,6 @@
 package com.example.scmplatform.procurement.application;
 
+import com.example.scmplatform.procurement.domain.po.PoOrigin;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrderLine;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
@@ -20,6 +21,8 @@ public record PurchaseOrderView(
         String supplierId,
         String buyerAccountId,
         PoStatus status,
+        PoOrigin origin,
+        String sourceSuggestionId,
         BigDecimal totalAmount,
         String currency,
         Instant submittedAt,
@@ -51,6 +54,8 @@ public record PurchaseOrderView(
                 po.getSupplierId(),
                 po.getBuyerAccountId(),
                 po.getStatus(),
+                po.getOrigin(),
+                po.getSourceSuggestionId(),
                 po.getTotalAmount().getAmount(),
                 po.getTotalAmount().getCurrency(),
                 po.getSubmittedAt(),

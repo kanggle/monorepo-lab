@@ -2,8 +2,10 @@ package com.example.scmplatform.demandplanning.adapter.inbound.web;
 
 import com.example.scmplatform.demandplanning.adapter.inbound.web.advice.GlobalExceptionHandler;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.controller.SuggestionController;
+import com.example.scmplatform.demandplanning.application.usecase.ApproveSuggestionUseCase;
 import com.example.scmplatform.demandplanning.application.usecase.SuggestionQueryUseCase;
 import com.example.scmplatform.demandplanning.config.SecurityConfig;
+import com.example.scmplatform.demandplanning.domain.error.SkuSupplierUnmappedException;
 import com.example.scmplatform.demandplanning.domain.error.SuggestionNotFoundException;
 import com.example.scmplatform.demandplanning.domain.model.ReorderSuggestion;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionSource;
@@ -40,6 +42,7 @@ class SuggestionControllerTest {
 
     @Autowired MockMvc mockMvc;
     @MockBean SuggestionQueryUseCase suggestionQueryUseCase;
+    @MockBean ApproveSuggestionUseCase approveSuggestionUseCase;
 
     static final UUID SUGGESTION_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000001");
     static final UUID WAREHOUSE_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000002");
@@ -111,10 +114,32 @@ class SuggestionControllerTest {
 
     @Test
     @WithMockUser
-    void approve_returns501_notImplemented() throws Exception {
+    void approve_returns200_materialized() throws Exception {
+        UUID poId = UUID.fromString("0192cccc-0000-0000-0000-0000000000aa");
+        when(approveSuggestionUseCase.approve(eq(SUGGESTION_ID), any()))
+                .thenReturn(new ApproveSuggestionUseCase.ApproveResult(
+                        SUGGESTION_ID, SuggestionStatus.MATERIALIZED, poId, "DRAFT"));
+
         mockMvc.perform(post("/api/demand-planning/suggestions/" + SUGGESTION_ID + "/approve")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().is(501));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(SUGGESTION_ID.toString()))
+                .andExpect(jsonPath("$.data.status").value("MATERIALIZED"))
+                .andExpect(jsonPath("$.data.poId").value(poId.toString()))
+                .andExpect(jsonPath("$.data.poStatus").value("DRAFT"));
+    }
+
+    @Test
+    @WithMockUser
+    void approve_returns422_whenSkuUnmapped() throws Exception {
+        when(approveSuggestionUseCase.approve(eq(SUGGESTION_ID), any()))
+                .thenThrow(new SkuSupplierUnmappedException("SKU-APPLE-001"));
+
+        mockMvc.perform(post("/api/demand-planning/suggestions/" + SUGGESTION_ID + "/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SKU_SUPPLIER_UNMAPPED"));
     }
 }

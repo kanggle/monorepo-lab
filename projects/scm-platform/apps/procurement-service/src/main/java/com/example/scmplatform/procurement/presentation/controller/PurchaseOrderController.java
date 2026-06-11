@@ -7,12 +7,14 @@ import com.example.scmplatform.procurement.application.PurchaseOrderApplicationS
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.application.command.CancelPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.ConfirmPurchaseOrderCommand;
+import com.example.scmplatform.procurement.application.command.DraftFromSuggestionCommand;
 import com.example.scmplatform.procurement.application.command.DraftPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.example.scmplatform.procurement.application.security.ActorContextResolver;
 import com.example.scmplatform.procurement.presentation.dto.ApiEnvelope;
 import com.example.scmplatform.procurement.presentation.dto.CancelPurchaseOrderRequest;
+import com.example.scmplatform.procurement.presentation.dto.DraftFromSuggestionRequest;
 import com.example.scmplatform.procurement.presentation.dto.DraftPurchaseOrderRequest;
 import com.example.scmplatform.procurement.presentation.dto.PageResponse;
 import com.example.scmplatform.procurement.presentation.dto.PurchaseOrderResponse;
@@ -61,6 +63,33 @@ public class PurchaseOrderController {
                         .toList()
         );
         PurchaseOrderView view = service.draft(cmd);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
+    }
+
+    /**
+     * Additive internal entry (ADR-MONO-027 D5): materialize an approved reorder
+     * suggestion into a DRAFT PO. Caller is {@code demand-planning-service}.
+     *
+     * <p>No {@code Idempotency-Key} header — idempotency is keyed on
+     * {@code sourceSuggestionId}. The PO is created in DRAFT only; never
+     * auto-SUBMITted.
+     */
+    @PostMapping("/from-suggestion")
+    public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> draftFromSuggestion(
+            @Valid @RequestBody DraftFromSuggestionRequest req) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        DraftFromSuggestionCommand cmd = new DraftFromSuggestionCommand(
+                actor,
+                req.supplierId(),
+                req.currency(),
+                req.sourceSuggestionId(),
+                req.lines().stream()
+                        .map(l -> new DraftFromSuggestionCommand.Line(
+                                l.lineNo(), l.sku(), l.quantity(), l.unitPriceRef()))
+                        .toList()
+        );
+        PurchaseOrderView view = service.draftFromSuggestion(cmd);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
     }

@@ -1,26 +1,30 @@
 package com.example.scmplatform.demandplanning.adapter.inbound.web.controller;
 
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApiEnvelope;
+import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApproveRequest;
+import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApproveResponse;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.DismissRequest;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.PageMeta;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.SuggestionResponse;
+import com.example.scmplatform.demandplanning.application.usecase.ApproveSuggestionUseCase;
 import com.example.scmplatform.demandplanning.application.usecase.SuggestionQueryUseCase;
 import com.example.scmplatform.demandplanning.domain.model.ReorderSuggestion;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -35,6 +39,7 @@ public class SuggestionController {
     static final String TENANT_ID = "scm";
 
     private final SuggestionQueryUseCase suggestionQueryUseCase;
+    private final ApproveSuggestionUseCase approveSuggestionUseCase;
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<SuggestionResponse>>> listSuggestions(
@@ -61,15 +66,20 @@ public class SuggestionController {
     }
 
     /**
-     * POST /suggestions/{id}/approve — BE-025 (procurement materialization).
-     * Returns 501 Not Implemented in this task scope.
+     * POST /suggestions/{id}/approve — operator approves a suggestion, which
+     * resolves the supplier mapping and materializes a procurement DRAFT PO
+     * (ADR-MONO-027 D5). Idempotent: re-approving a MATERIALIZED suggestion
+     * returns the existing poId. The operator's bearer token is propagated to
+     * procurement for intra-scm trust.
      */
     @PostMapping("/{id}/approve")
-    public ResponseEntity<ApiEnvelope<Map<String, String>>> approve(@PathVariable UUID id,
-                                                                     @RequestBody(required = false) Object body) {
-        return ResponseEntity.status(501)
-                .body(ApiEnvelope.of(Map.of("code", "NOT_IMPLEMENTED",
-                        "message", "approve endpoint is implemented in BE-025")));
+    public ResponseEntity<ApiEnvelope<ApproveResponse>> approve(
+            @PathVariable UUID id,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestBody(required = false) ApproveRequest request) {
+        ApproveSuggestionUseCase.ApproveResult result =
+                approveSuggestionUseCase.approve(id, authorization);
+        return ResponseEntity.ok(ApiEnvelope.of(ApproveResponse.from(result)));
     }
 
     @PostMapping("/{id}/dismiss")

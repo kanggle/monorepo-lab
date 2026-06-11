@@ -4,9 +4,11 @@ import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApiErrorBo
 import com.example.scmplatform.demandplanning.domain.error.InvalidSuggestionStateException;
 import com.example.scmplatform.demandplanning.domain.error.MappingNotFoundException;
 import com.example.scmplatform.demandplanning.domain.error.PolicyNotFoundException;
+import com.example.scmplatform.demandplanning.domain.error.ProcurementUnavailableException;
 import com.example.scmplatform.demandplanning.domain.error.SkuSupplierUnmappedException;
 import com.example.scmplatform.demandplanning.domain.error.SuggestionNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -50,6 +52,27 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorBody> handleSkuUnmapped(SkuSupplierUnmappedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("SKU_SUPPLIER_UNMAPPED", e.getMessage()));
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorBody> handleOptimisticLock(OptimisticLockingFailureException e) {
+        // Two operators approving the same suggestion concurrently — one wins the
+        // version bump; the loser retries. Procurement idempotency on
+        // sourceSuggestionId still guarantees a single PO.
+        log.warn("Concurrent modification on suggestion: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION",
+                        "The suggestion was modified concurrently; retry the request"));
+    }
+
+    @ExceptionHandler(ProcurementUnavailableException.class)
+    public ResponseEntity<ApiErrorBody> handleProcurementUnavailable(ProcurementUnavailableException e) {
+        // Suggestion stays APPROVED (architecture.md failure mode); operator
+        // retries — the procurement call is idempotent on sourceSuggestionId.
+        log.error("Procurement DRAFT-PO leg unavailable: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiErrorBody.of("PROCUREMENT_UNAVAILABLE",
+                        "Procurement is unavailable; the suggestion stays APPROVED — retry"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

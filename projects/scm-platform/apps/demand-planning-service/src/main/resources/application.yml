@@ -93,6 +93,14 @@ scmplatform:
   oauth2:
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
+  demand-planning:
+    # Intra-scm procurement leg (ADR-MONO-027 D5). demand-planning calls
+    # procurement-service directly (internal trust) to materialize an approved
+    # suggestion into a DRAFT PO.
+    procurement:
+      base-url: ${PROCUREMENT_BASE_URL:http://procurement-service:8080}
+      connect-timeout-ms: ${PROCUREMENT_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${PROCUREMENT_READ_TIMEOUT_MS:10000}
 
 demand-planning:
   sweep:

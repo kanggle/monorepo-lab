@@ -64,6 +64,23 @@ public class PurchaseOrder {
     @Column(name = "status", length = 30, nullable = false)
     private PoStatus status;
 
+    /**
+     * Provenance (ADR-MONO-027 D5). Defaults to OPERATOR for the operator-authored
+     * flow; DEMAND_PLANNING for POs materialized from a reorder suggestion.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origin", length = 30, nullable = false)
+    private PoOrigin origin;
+
+    /**
+     * Cross-service idempotency key (S2): the demand-planning reorder_suggestion
+     * this PO was materialized from. NULL for operator-authored POs. A partial
+     * UNIQUE (tenant_id, source_suggestion_id) enforces at-most-one PO per
+     * suggestion at the DB layer.
+     */
+    @Column(name = "source_suggestion_id", length = 36)
+    private String sourceSuggestionId;
+
     @Embedded
     private Money totalAmount;
 
@@ -106,6 +123,38 @@ public class PurchaseOrder {
                                             String supplierId,
                                             String buyerAccountId,
                                             String currency) {
+        return newDraft(id, tenantId, poNumber, supplierId, buyerAccountId, currency,
+                PoOrigin.OPERATOR, null);
+    }
+
+    /**
+     * Create a DRAFT PO materialized from an approved reorder suggestion
+     * (ADR-MONO-027 D5). Identical lifecycle to {@link #createDraft}; differs only
+     * in provenance ({@code origin=DEMAND_PLANNING}) and the cross-service
+     * idempotency key {@code sourceSuggestionId}. The supplier is NOT FK-validated
+     * here (FK-free cross-service convention) — the operator validates the
+     * supplier reference at DRAFT review.
+     */
+    public static PurchaseOrder createDraftFromSuggestion(String id,
+                                                          String tenantId,
+                                                          String poNumber,
+                                                          String supplierId,
+                                                          String buyerAccountId,
+                                                          String currency,
+                                                          String sourceSuggestionId) {
+        Objects.requireNonNull(sourceSuggestionId, "sourceSuggestionId");
+        return newDraft(id, tenantId, poNumber, supplierId, buyerAccountId, currency,
+                PoOrigin.DEMAND_PLANNING, sourceSuggestionId);
+    }
+
+    private static PurchaseOrder newDraft(String id,
+                                          String tenantId,
+                                          String poNumber,
+                                          String supplierId,
+                                          String buyerAccountId,
+                                          String currency,
+                                          PoOrigin origin,
+                                          String sourceSuggestionId) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(poNumber, "poNumber");
@@ -119,6 +168,8 @@ public class PurchaseOrder {
         po.supplierId = supplierId;
         po.buyerAccountId = buyerAccountId;
         po.status = PoStatus.DRAFT;
+        po.origin = origin;
+        po.sourceSuggestionId = sourceSuggestionId;
         po.totalAmount = Money.zero(currency);
         Instant now = Instant.now();
         po.createdAt = now;

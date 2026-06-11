@@ -16,6 +16,8 @@ public interface PurchaseOrderJpaRepository extends JpaRepository<PurchaseOrder,
 
     Optional<PurchaseOrder> findByPoNumberAndTenantId(String poNumber, String tenantId);
 
+    Optional<PurchaseOrder> findBySourceSuggestionIdAndTenantId(String sourceSuggestionId, String tenantId);
+
     @Query("""
             SELECT p FROM PurchaseOrder p
             WHERE p.tenantId = :tenantId
