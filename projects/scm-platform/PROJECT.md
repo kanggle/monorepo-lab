@@ -50,13 +50,13 @@ taxonomy_version: 0.1
 | `gateway-service` | rest-api | 엣지 라우팅, GAP RS256 JWT 검증 (OAuth2 Resource Server), `tenant_id=scm` 게이트, rate limit |
 | `procurement-service` | rest-api | PO(구매 발주) 작성·확정·취소, supplier ack 교환, ASN 수신 처리. 첫 service skeleton 의 1차 대상. |
 | `inventory-visibility-service` | rest-api | cross-node (자사 wms / supplier / 3PL / in-transit) 재고 가시성. read-model. wms 의 inventory snapshot 이벤트 구독. |
+| `demand-planning-service` | event-consumer + batch-job + rest-api | wms 저재고 alert (`wms.inventory.alert.v1`) 구독 → scm 재주문점 평가 → 발주 추천(DRAFT suggestion) → 운영자 승인 시 procurement DRAFT PO 생성. v1 = 고정 재주문점 규칙 (수요 예측은 v2). ADR-MONO-027 로 v2-deferred 에서 승급. |
 
 ### v2 (deferred — 별도 부트스트랩 task)
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
-| `supplier-service` | rest-api | supplier 마스터, contract / SLA, supplier 별 adapter, catalog sync |
-| `demand-planning-service` | batch-job + rest-api | 수요 예측 batch, 안전재고/재주문점 계산, 발주 추천 |
+| `supplier-service` | rest-api | supplier 마스터, contract / SLA, supplier 별 adapter, catalog sync. `demand-planning-service` 의 `sku_supplier_map` 최소 매핑이 v2 에서 이관 대상 (ADR-MONO-027 D3). |
 | `logistics-service` | rest-api | shipment 단위 생성/조회, carrier 연동, ETA/추적 |
 | `settlement-service` | batch-job + rest-api | 정산 기간, PO ↔ ASN ↔ invoice reconciliation, ERP 분개 feed |
 | `notification-service` | event-consumer | supplier SLA / settlement / reorder 알림 fanout |

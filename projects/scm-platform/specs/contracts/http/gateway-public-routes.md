@@ -174,7 +174,7 @@ These appear once the v2 services bootstrap (separate tasks):
 | External path | Owner | Bootstrap task |
 |---|---|---|
 | `/api/v1/suppliers/**` | supplier-service | deferred |
-| `/api/v1/demand/**` | demand-planning-service | deferred |
+| `/api/v1/demand-planning/**` | demand-planning-service | **route reserved (ADR-MONO-027)** — activated by TASK-SCM-BE-024 impl; contract [`demand-planning-api.md`](./demand-planning-api.md) |
 | `/api/v1/logistics/**` | logistics-service | deferred |
 | `/api/v1/settlement/**` | settlement-service | deferred |
 | `/api/v1/admin/**` | admin-service | deferred |
