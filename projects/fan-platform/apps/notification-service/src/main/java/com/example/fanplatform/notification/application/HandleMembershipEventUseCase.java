@@ -93,6 +93,8 @@ public class HandleMembershipEventUseCase {
                     event.tier(), event.planMonths(), event.validFrom(), event.validTo());
             case CANCELLATION -> NotificationTemplate.cancellation(
                     event.tier(), event.canceledAt(), event.reason());
+            case EXPIRY_REMINDER -> NotificationTemplate.expiry(
+                    event.tier(), event.validTo());
         };
     }
 }

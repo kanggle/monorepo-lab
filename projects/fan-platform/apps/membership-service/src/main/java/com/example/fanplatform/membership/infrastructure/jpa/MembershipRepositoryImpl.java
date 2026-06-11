@@ -4,8 +4,10 @@ import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.membership.status.MembershipStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,5 +38,11 @@ public class MembershipRepositoryImpl implements MembershipRepository {
     @Override
     public List<Membership> findActiveByAccount(String accountId, String tenantId) {
         return jpa.findByAccountIdAndTenantIdAndStatus(accountId, tenantId, MembershipStatus.ACTIVE);
+    }
+
+    @Override
+    public List<Membership> findExpirable(Instant now, int limit) {
+        return jpa.findByStatusAndValidToLessThanAndExpiryNotifiedAtIsNullOrderByValidToAsc(
+                MembershipStatus.ACTIVE, now, PageRequest.of(0, limit));
     }
 }

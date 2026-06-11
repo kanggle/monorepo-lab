@@ -6,20 +6,21 @@ package com.example.fanplatform.notification.domain.notification;
  * <ul>
  *   <li>{@code fan.membership.activated} → {@link #WELCOME}</li>
  *   <li>{@code fan.membership.canceled}  → {@link #CANCELLATION}</li>
+ *   <li>{@code fan.membership.expired}   → {@link #EXPIRY_REMINDER}</li>
  * </ul>
  *
- * <p>{@code fan.membership.expired} is intentionally NOT mapped — the producer
- * does not emit it (read-time expiry, no sweeper), so this service does not
- * subscribe to it. A future increment that adds the sweeper would add an
- * {@code EXPIRY_REMINDER} type here (and a V2 migration to extend the
- * {@code ck_notification_type} allow-list).
+ * <p>{@code EXPIRY_REMINDER} was added by TASK-FAN-BE-014 when the producer's
+ * expiry sweeper began emitting {@code fan.membership.expired.v1}; a V2 migration
+ * extends the {@code ck_notification_type} CHECK allow-list to match.
  */
 public enum NotificationType {
     WELCOME,
-    CANCELLATION;
+    CANCELLATION,
+    EXPIRY_REMINDER;
 
     public static final String EVENT_ACTIVATED = "fan.membership.activated";
     public static final String EVENT_CANCELED = "fan.membership.canceled";
+    public static final String EVENT_EXPIRED = "fan.membership.expired";
 
     /**
      * Maps an envelope {@code eventType} to its notification type.
@@ -31,6 +32,7 @@ public enum NotificationType {
         return switch (eventType) {
             case EVENT_ACTIVATED -> WELCOME;
             case EVENT_CANCELED -> CANCELLATION;
+            case EVENT_EXPIRED -> EXPIRY_REMINDER;
             default -> throw new IllegalArgumentException(
                     "Unsupported membership event type: " + eventType);
         };

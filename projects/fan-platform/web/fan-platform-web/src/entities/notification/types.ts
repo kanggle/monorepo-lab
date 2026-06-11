@@ -1,5 +1,5 @@
 /** Notification kind — produced by the membership lifecycle consumer. */
-export type NotificationType = 'WELCOME' | 'CANCELLATION';
+export type NotificationType = 'WELCOME' | 'CANCELLATION' | 'EXPIRY_REMINDER';
 
 /** Stored read state. */
 export type NotificationStatus = 'UNREAD' | 'READ';

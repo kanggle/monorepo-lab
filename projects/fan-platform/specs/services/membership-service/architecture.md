@@ -193,9 +193,12 @@ is the strict superset. The rule is centralized in `AccessPolicy.tierGrants`:
 - **Expiry is read-time, NOT a stored transition.** When `now ∉ [validFrom,
   validTo]` the membership is *not active for access purposes*, but its stored
   `status` stays `ACTIVE` through its natural lifecycle (it is never auto-flipped
-  to a stored `EXPIRED`). This mirrors the delegation / `isActiveAt` precedent and
-  avoids requiring a scheduler in this increment. The only stored terminal state
-  is `CANCELED` (an explicit user action).
+  to a stored `EXPIRED`). This mirrors the delegation / `isActiveAt` precedent.
+  The only stored terminal state is `CANCELED` (an explicit user action).
+- **The expiry sweeper (TASK-FAN-BE-014) emits an event WITHOUT changing the
+  stored status** — see § Expiry Sweeper. It sets a one-time `expiry_notified_at`
+  marker and emits `fan.membership.expired.v1`; `status` stays `ACTIVE` (Option B).
+  Read-time `active` is unaffected (still `false` once `now > validTo`).
 - Forbidden / illegal transitions throw `InvalidStateTransitionException`
   (HTTP 422). In practice the only reachable transition besides `subscribe` is
   `cancel`, and re-cancel is an idempotent no-op (NOT an error).
@@ -346,16 +349,49 @@ simply not found → `allowed=false` (deny), never leaked.
 - Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`):
   - `fan.membership.activated` → `fan.membership.activated.v1` (on subscribe → ACTIVE)
   - `fan.membership.canceled` → `fan.membership.canceled.v1` (on cancel → CANCELED)
-- **`fan.membership.expired.v1` is forward-declared but NOT emitted in this
-  increment.** Because expiry is read-time (§ State Machine), there is no
-  scheduler that detects the boundary and no transition to publish. The topic is
-  reserved for a future increment that adds a sweeper/scheduler; until then,
-  consumers MUST derive "expired" from `validTo` rather than expect an event. This
-  gap is recorded honestly (mirrors how community-service records its v2 gaps).
+  - `fan.membership.expired` → `fan.membership.expired.v1` (on expiry sweep — TASK-FAN-BE-014)
+- **`fan.membership.expired.v1` is emitted by the expiry sweeper (TASK-FAN-BE-014).**
+  See § Expiry Sweeper. The membership keeps `status=ACTIVE` (read-time expiry);
+  the event is a one-time notification trigger gated by the `expiry_notified_at`
+  marker.
 - Envelope shape (from `BaseEventPublisher`): `{ eventId, eventType, source,
-  occurredAt, schemaVersion, partitionKey, payload }`. Consumer (planned) =
-  notification-service v2 (not built in this increment) — producer-only forward
-  interface.
+  occurredAt, schemaVersion, partitionKey, payload }`. Consumer =
+  notification-service (`EXPIRY_REMINDER`).
+
+---
+
+## Expiry Sweeper (TASK-FAN-BE-014)
+
+A scheduled background job that closes the gap between **read-time expiry** and an
+emitted **`fan.membership.expired.v1`** event — without introducing a stored
+`EXPIRED` status (**Option B**).
+
+- **Marker, not a status.** A nullable `expiry_notified_at` column on `memberships`
+  records that the one-time expiry event was emitted. The stored `status` is never
+  changed by the sweep; `ck_membership_status` stays `('ACTIVE','CANCELED')` (no V2
+  status change). The `membership-api.md` list/detail `status` enum is unchanged.
+- **Sweep predicate** — `status = 'ACTIVE' AND valid_to < now AND
+  expiry_notified_at IS NULL`, ordered by `valid_to` ascending, limited to a
+  configurable batch. A **partial index** `(valid_to) WHERE status='ACTIVE' AND
+  expiry_notified_at IS NULL` keeps the scan cheap as the table grows. The query is
+  **cross-tenant** by design — this is a system background job (like the outbox
+  poller), not a user request; the emitted event carries `tenantId` in its payload.
+- **One transaction per tick.** `SweepExpiredMembershipsUseCase` (`@Transactional`)
+  loads the batch, and for each membership sets the marker (`markExpiryNotified(now)`)
+  and appends the `expired.v1` outbox event in the **same transaction**. The marker
+  + outbox append are atomic, so the event is produced **exactly once** per
+  membership (a later tick no longer matches the `IS NULL` predicate).
+- **Scheduling** — `MembershipExpirySweepScheduler` (`@Scheduled`, reusing the
+  service's existing `@EnableScheduling`) ticks every `fan.membership.expiry-sweep.
+  interval` (default 60s), batch `…max-batch` (default 100). Increments
+  `membership_expiry_swept_total`.
+- **Concurrency** — within a single instance, ticks do not overlap (Spring's
+  single-threaded scheduler). Across instances, optimistic `@Version` on
+  `Membership` makes a racing second writer's save fail; the row is simply picked
+  again next tick (marker still null on the loser) — at-most-once net effect is
+  preserved by the marker on the winner. A multi-instance `SELECT … FOR UPDATE SKIP
+  LOCKED` claim is **deferred** (single-instance demo; mirrors the outbox poller's
+  recorded gap).
 
 ---
 

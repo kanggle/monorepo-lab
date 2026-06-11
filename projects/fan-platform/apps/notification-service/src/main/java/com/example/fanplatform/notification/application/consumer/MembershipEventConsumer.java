@@ -8,10 +8,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * The ONLY inbound Kafka surface. Subscribes to the two <b>emitted</b> membership
- * lifecycle topics (architecture.md § Subscribed Topics); it does NOT subscribe
- * to {@code fan.membership.expired.v1} (forward-declared but not emitted upstream
- * — a dead consumer). Both listeners share one consumer group
+ * The ONLY inbound Kafka surface. Subscribes to all three <b>emitted</b> membership
+ * lifecycle topics (architecture.md § Subscribed Topics): activated / canceled /
+ * expired (the last since TASK-FAN-BE-014, when the producer's expiry sweeper began
+ * emitting it). The listeners share one consumer group
  * ({@code notification-service-membership-events}); the producer's
  * {@code membershipId} partition key preserves per-membership ordering.
  *
@@ -29,6 +29,7 @@ public class MembershipEventConsumer {
 
     static final String TOPIC_ACTIVATED = "fan.membership.activated.v1";
     static final String TOPIC_CANCELED = "fan.membership.canceled.v1";
+    static final String TOPIC_EXPIRED = "fan.membership.expired.v1";
     static final String GROUP = "notification-service-membership-events";
 
     private final MembershipEventParser parser;
@@ -50,6 +51,11 @@ public class MembershipEventConsumer {
 
     @KafkaListener(topics = TOPIC_CANCELED, groupId = GROUP)
     public void onCanceled(ConsumerRecord<String, String> record) {
+        handle(record);
+    }
+
+    @KafkaListener(topics = TOPIC_EXPIRED, groupId = GROUP)
+    public void onExpired(ConsumerRecord<String, String> record) {
         handle(record);
     }
 

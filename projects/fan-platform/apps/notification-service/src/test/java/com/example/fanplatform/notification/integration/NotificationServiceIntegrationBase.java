@@ -47,6 +47,7 @@ public abstract class NotificationServiceIntegrationBase {
 
     protected static final String TOPIC_ACTIVATED = "fan.membership.activated.v1";
     protected static final String TOPIC_CANCELED = "fan.membership.canceled.v1";
+    protected static final String TOPIC_EXPIRED = "fan.membership.expired.v1";
 
     protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
             DockerImageName.parse("postgres:16-alpine"))
@@ -142,6 +143,17 @@ public abstract class NotificationServiceIntegrationBase {
                  "payload":{"membershipId":"%s","tenantId":"fan-platform","accountId":"%s",
                    "tier":"%s","reason":"user requested","canceledAt":"2026-06-11T12:00:00Z",
                    "occurredAt":"2026-06-11T12:00:00Z"}}
+                """).formatted(eventId, membershipId, membershipId, accountId, tier);
+    }
+
+    protected static String expiredEnvelope(String eventId, String membershipId,
+                                            String accountId, String tier) {
+        return ("""
+                {"eventId":"%s","eventType":"fan.membership.expired",
+                 "source":"fan-platform-membership-service","occurredAt":"2026-07-11T00:00:01Z",
+                 "schemaVersion":1,"partitionKey":"%s",
+                 "payload":{"membershipId":"%s","tenantId":"fan-platform","accountId":"%s",
+                   "tier":"%s","validTo":"2026-07-11T00:00:00Z","occurredAt":"2026-07-11T00:00:01Z"}}
                 """).formatted(eventId, membershipId, membershipId, accountId, tier);
     }
 }

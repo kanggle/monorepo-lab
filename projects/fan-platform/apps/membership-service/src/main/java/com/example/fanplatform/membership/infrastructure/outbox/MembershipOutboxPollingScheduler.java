@@ -25,6 +25,7 @@ public class MembershipOutboxPollingScheduler extends OutboxPollingScheduler {
 
     static final String TOPIC_ACTIVATED = "fan.membership.activated.v1";
     static final String TOPIC_CANCELED = "fan.membership.canceled.v1";
+    static final String TOPIC_EXPIRED = "fan.membership.expired.v1";
 
     private final Counter publishFailures;
 
@@ -42,6 +43,7 @@ public class MembershipOutboxPollingScheduler extends OutboxPollingScheduler {
         return switch (eventType) {
             case MembershipEventPublisher.EVENT_ACTIVATED -> TOPIC_ACTIVATED;
             case MembershipEventPublisher.EVENT_CANCELED -> TOPIC_CANCELED;
+            case MembershipEventPublisher.EVENT_EXPIRED -> TOPIC_EXPIRED;
             default -> throw new IllegalArgumentException("Unknown membership event type: " + eventType);
         };
     }
