@@ -8,7 +8,9 @@ ADR-MONO-026 PROPOSED → ACCEPTED transition. Flip `ADR-MONO-026` (Role-Grant A
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: ACCEPTED 전환 PR #1286 (squash `2914c23b8`). 3차원 ✓ (MERGED / origin/main tip=`2914c23b8` 일치 / 코드 체크 path-filter skip, 0 failing required). `ADR-MONO-026` Status=ACCEPTED. D3=**D3-B 도메인/엔드포인트 가드설정**(producer 무변경), D4=**iam admin + SOURCE_IP** 파일럿 확정. §6 ACCEPTED row 추가(사용자 게이트 인용). 다음=MONO-218 계약+evaluator → iam SOURCE_IP enforcement+IT. 분석=Opus 4.8.
 
 # Owner
 
