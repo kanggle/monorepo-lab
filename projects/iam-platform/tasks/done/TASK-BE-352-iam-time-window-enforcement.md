@@ -8,7 +8,9 @@ ADR-MONO-028 step 3 — iam admin `TIME_WINDOW` enforcement composed AND-only wi
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: enforcement PR #1316 (squash `2011f900`). 3차원 ✓ (MERGED / origin/main tip=`2011f900` 일치 / 머지 전 20 pass·0 fail — Build & Test + Integration(iam) + iam e2e smoke GREEN). `RequiresPermissionAspect` 4번째 게이트를 **조건 set AND-only**(`anyConditionUnmet`)로 일반화 — SOURCE_IP AND TIME_WINDOW, 어느 하나 unsatisfied→403 `ACCESS_CONDITION_UNMET`(변이만·RBAC 후·fail-safe). `TimeWindowCondition` 빈(AccessConditionConfig)+nested `TimeWindow` config(AdminAccessConditionProperties)+`ADMIN_ACCESS_TIME_WINDOW_*` env, **request time=`ObjectProvider<Clock>.getIfUnique(systemUTC)`**(prod 시스템시계·슬라이스 fixed @MockitoBean). 슬라이스 2종: TIME_WINDOW(in/out/ordering) + **합성**(in-CIDR+in-window 200 / in-CIDR+out-window 403 / out-CIDR 403=AND 단락). net-zero·producer 무변경(D3-B). **첫 다중조건 합성 실증**(BE-351 단일조건이 미검증). ⚠️재사용: @WebMvcTest 슬라이스의 @MockitoBean은 MockitoExtension 밖이라 lenient(deny 테스트의 미사용 useCase/clock stub 안전)·AND 단락 시 clock 미stub. 다음=optional fed-e2e 합성 증명. 분석/구현=Opus 4.8.
 
 # Owner
 
