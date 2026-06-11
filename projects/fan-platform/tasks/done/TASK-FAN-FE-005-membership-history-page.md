@@ -1,6 +1,6 @@
 # TASK-FAN-FE-005 — membership history page
 
-Status: ready
+Status: done
 Type: frontend (TASK-FAN-FE)
 Project: fan-platform
 App: fan-platform-web (`projects/fan-platform/web/fan-platform-web`)
@@ -88,3 +88,17 @@ read-only); a per-membership detail drill-in.
   Mitigation: `historyStatus` checks `now < validFrom` → `scheduled` ("예정").
 - **History read failure breaking the page** — `getMemberships` already degrades to
   `[]` on error, so an outage shows the EmptyState rather than an error boundary.
+
+## Completion
+
+Implemented + merged as **PR #1303** (squash `d499e006`). Verified in an isolated
+git worktree before merge: `tsc` 0, `vitest` 60/60 (7 new — `historyStatus` 4-state
++ `MembershipHistoryList`), `next lint` 0, `next build` OK (`/membership/history`
+dynamic route). CI all-green after a **rerun** of the `fan-platform live-trio smoke`
+job, which had hit the known Docker Hub registry-timeout flake (`eclipse-temurin:
+21-jre-alpine` pull i/o timeout — infra, unrelated to this FE-only change). 3-dim
+merge verified: state=MERGED, `origin/main` tip == `d499e006`, pre-merge 0 failing
+required checks (after the rerun went green).
+
+Gives the full subscribe / renew / expire / cancel lifecycle a visible read-only
+payoff. Deferred: history pagination; per-membership detail drill-in.
