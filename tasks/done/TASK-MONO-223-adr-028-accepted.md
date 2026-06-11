@@ -8,7 +8,9 @@ ADR-MONO-028 (PROPOSED → ACCEPTED) — fix the `TIME_WINDOW` pilot gates. Flip
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: ACCEPTED 전환 PR #1311 (squash `10415413`). 3차원 ✓ (MERGED / origin/main tip=`10415413` 일치 / 코드 all-skip path-filter, 0 failing). `ADR-MONO-028` Status=ACCEPTED — **D2=D2-A**(iam admin, TIME_WINDOW을 기존 SOURCE_IP와 AND 합성=다중조건 합성 파일럿) + **D3** 스키마 확정(IANA zone+days+same-day `[start,end)`·fail-safe·net-zero, midnight-wrap deferred). D1/D4-D6 ADR-026 inherit-unchanged. §3.3 로드맵 인가: MONO-224(evaluator+계약)→iam BE enforcement→optional fed-e2e. 다음=MONO-224. 분석=Opus 4.8.
 
 # Owner
 
