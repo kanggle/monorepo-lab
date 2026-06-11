@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getFanSession } from '@/shared/auth/session';
 import {
   getMemberships,
@@ -38,11 +39,19 @@ export default async function MembershipPage({
 
   return (
     <section className="flex flex-col gap-8">
-      <header>
-        <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
-        <p className="text-sm text-ink-600">
-          멤버 전용·프리미엄 콘텐츠를 위한 구독입니다. 결제는 데모용 모의 PG로 처리됩니다.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
+          <p className="text-sm text-ink-600">
+            멤버 전용·프리미엄 콘텐츠를 위한 구독입니다. 결제는 데모용 모의 PG로 처리됩니다.
+          </p>
+        </div>
+        <Link
+          href="/membership/history"
+          className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          이력 보기
+        </Link>
       </header>
 
       {active ? <MembershipStatusCard membership={active} /> : null}
