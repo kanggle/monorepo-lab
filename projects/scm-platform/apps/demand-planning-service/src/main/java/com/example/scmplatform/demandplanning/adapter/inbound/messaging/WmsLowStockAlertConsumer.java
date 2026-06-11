@@ -39,7 +39,6 @@ public class WmsLowStockAlertConsumer {
             backoff = @Backoff(delay = 1000, multiplier = 2.0),
             topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
             dltTopicSuffix = ".DLT",
-            include = {Exception.class},
             exclude = {NonRetryableConsumerException.class}
     )
     @KafkaListener(topics = TOPIC, groupId = GROUP)
