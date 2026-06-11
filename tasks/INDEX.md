@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- TASK-MONO-217 — ADR-MONO-026 PROPOSED → ACCEPTED transition (axis ② 2단계). Finalises D3 = D3-B (domain/endpoint guard-config, producer untouched) + D4 = iam admin + SOURCE_IP pilot. Doc-only. Bases on merged PROPOSED #1284. Blocks the contract+evaluator (MONO-218) + iam enforcement.
 
 ## in-progress
 
