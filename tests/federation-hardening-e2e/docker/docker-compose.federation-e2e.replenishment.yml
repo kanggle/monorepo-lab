@@ -1,0 +1,148 @@
+# =============================================================================
+# Federation Hardening E2E — replenishment-loop overlay (TASK-SCM-INT-002 leg 2)
+#
+# ADR-MONO-027 §5 nightly live proof of the wms → scm stock-replenishment loop.
+# Composed ON TOP of docker-compose.federation-e2e.yml ONLY by the nightly
+# federation-hardening-e2e.yml workflow (`-f base -f replenishment`).
+#
+# WHY AN OVERLAY (not edits to the base): the base CI compose is deliberately
+# event-free — its `kafka` service is an `alpine sleep infinity` DNS placeholder
+# and every service points KAFKA at 127.0.0.1:9999 ("specs never exercise event
+# paths", base compose L75; overlay-only invariant TASK-MONO-170). leg 2 is the
+# FIRST committed nightly spec that drives a real Kafka event path, so the event
+# infrastructure (a real broker + the scm demand-planning consumer) is isolated
+# here, leaving the base byte-unchanged for every other invocation.
+#
+# WHAT IT ADDS:
+#   - redpanda                      a real single-node Kafka broker (dual listener:
+#                                   internal redpanda:9092 for in-network services,
+#                                   external localhost:19092 for the host-side
+#                                   Playwright kafkajs producer that injects the
+#                                   canonical wms alert envelope).
+#   - scm-dp-postgres               PostgreSQL for demand-planning (scm_demand_planning).
+#   - scm-demand-planning-service   the REAL ADR-027 consumer of wms.inventory.alert.v1
+#                                   → raises a reorder suggestion → (on operator
+#                                   approve) materializes a procurement DRAFT PO.
+#
+# WHAT IT OVERRIDES:
+#   - scm-procurement-service       repointed at redpanda so its transactional-
+#                                   outbox relay drains instead of blocking 60s
+#                                   per send against the dead placeholder (which
+#                                   would starve its HikariCP pool — the same
+#                                   failure mode TASK-MONO-174 documents for the
+#                                   IAM outbox relay). No procurement events are
+#                                   consumed in this stack; draining is harmless.
+#
+# ZERO wms change (ADR-027 §D1/§5): wms-inventory-service is NOT booted. The
+# canonical `inventory.low-stock-detected` envelope (the exact shape wms emits,
+# per wms inventory-events.md §7) is injected onto the real broker by the spec.
+# Producer-envelope fidelity stays guarded by the deterministic leg-1
+# KafkaTestProducer (PR-gated). This leg proves the REAL scm consumer +
+# materialization + production-token operator approve end-to-end in the
+# federation stack.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # redpanda — real Kafka broker for the replenishment event path. Dual listener:
+  #   internal://redpanda:9092   — in-network (scm-demand-planning-service consumer)
+  #   external://localhost:19092 — host (Playwright kafkajs producer injects the
+  #                                canonical wms alert envelope)
+  # Definition mirrors the demo overlay's redpanda (TASK-MONO-174) plus the
+  # external listener; auto-create lets the consumer's subscribe + the @RetryableTopic
+  # DLT create their topics on demand.
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --default-log-level=warn
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --set
+      - redpanda.auto_create_topics_enabled=true
+    ports: ["19092:19092"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health 2>/dev/null | grep -qE 'Healthy:\\s+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # scm-dp-postgres — PostgreSQL for demand-planning-service (scm_demand_planning).
+  # Own sidecar, mirroring the base scm-postgres / scm-inv-postgres pattern (a
+  # shared instance would fail Flyway/validate across services).
+  # ---------------------------------------------------------------------------
+  scm-dp-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scm_demand_planning
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scm -d scm_demand_planning"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15436:5432"]
+    networks: [fed-e2e]
+
+  # ---------------------------------------------------------------------------
+  # scm-demand-planning-service — the ADR-027 demand-planning consumer + REST.
+  # Consumes wms.inventory.alert.v1 from redpanda → reorder-policy eval → raises
+  # a reorder_suggestion; on operator approve, calls procurement DIRECTLY (intra-
+  # scm REST, ADR-027 D5) to materialize a DRAFT PO. eclipse-temurin jre-alpine
+  # has no curl → wget healthcheck (same as scm-inventory-visibility-service).
+  # ---------------------------------------------------------------------------
+  scm-demand-planning-service:
+    build:
+      context: ../../../projects/scm-platform/apps/demand-planning-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      POSTGRES_HOST: scm-dp-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: scm_demand_planning
+      POSTGRES_USER: scm
+      POSTGRES_PASSWORD: scm
+      KAFKA_BOOTSTRAP: redpanda:9092
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      OIDC_REQUIRED_TENANT_ID: scm
+      # Intra-scm procurement leg (ADR-027 D5) — direct internal call, not gateway.
+      PROCUREMENT_BASE_URL: http://scm-procurement-service:8080
+      OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      scm-dp-postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      scm-procurement-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
+    ports: ["18100:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # scm-procurement-service — override: repoint the outbox relay at the real
+  # broker so it drains instead of blocking on the dead placeholder. All other
+  # fields inherit from the base compose.
+  # ---------------------------------------------------------------------------
+  scm-procurement-service:
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+    depends_on:
+      redpanda: { condition: service_healthy }
