@@ -8,7 +8,9 @@ ADR-MONO-026 § D7 step 1 — Access-Conditions contract + shared evaluator. Aut
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: 계약 + 공유 evaluator PR #1288 (squash `6379561d3`). 3차원 ✓ (MERGED / origin/main tip=`6379561d3` 일치 / **Build & Test + Integration(iam) + 전 체크 GREEN, 0 fail**). `platform/access-conditions.md` 계약(닫힌 enum·restriction-only/fail-safe/net-zero·AND-only·4번째 게이트·D3-B 가드설정 carrier) + `com.example.security.access.SourceIpCondition`(`libs/java-security`, CIDR allowlist IPv4/IPv6·DNS-free 리터럴 파싱·`isConfigured()` net-zero·`isSatisfiedBy()` fail-safe) + 11 단위테스트. ⚠️재사용: `InetAddress.ofLiteral`(Java18+) 이 컴파일 타깃에 없어 **수동 IPv4 파싱(DNS 회피)+IPv6 getByName(`:`=hostname 불가)** 으로 대체. 다음=iam admin-service SOURCE_IP enforcement(`RequiresPermissionAspect` 4번째 게이트 + config + 슬라이스 IT). 분석=Opus 4.8 / 구현=Opus.
 
 # Owner
 
