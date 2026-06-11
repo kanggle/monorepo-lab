@@ -8,7 +8,7 @@ Materialize an approved reorder suggestion into a procurement DRAFT PO (ADR-MONO
 
 # Status
 
-backlog
+ready
 
 # Owner
 

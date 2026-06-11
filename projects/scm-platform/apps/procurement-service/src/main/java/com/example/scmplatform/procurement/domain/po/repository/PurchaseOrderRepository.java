@@ -24,6 +24,12 @@ public interface PurchaseOrderRepository {
     Optional<PurchaseOrder> findByPoNumber(String poNumber, String tenantId);
 
     /**
+     * Find the PO previously materialized from the given reorder suggestion
+     * (ADR-MONO-027 D5 cross-service idempotency). Tenant-scoped.
+     */
+    Optional<PurchaseOrder> findBySourceSuggestionId(String sourceSuggestionId, String tenantId);
+
+    /**
      * Search with optional filters. {@code status} and {@code supplierId}
      * may be null. Results are ordered by createdAt DESC.
      */

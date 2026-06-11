@@ -6,6 +6,7 @@ import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.application.command.AcknowledgePurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.CancelPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.ConfirmPurchaseOrderCommand;
+import com.example.scmplatform.procurement.application.command.DraftFromSuggestionCommand;
 import com.example.scmplatform.procurement.application.command.DraftPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.ReceiveAsnCommand;
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
@@ -29,12 +30,14 @@ import com.example.scmplatform.procurement.domain.supplier.Supplier;
 import com.example.scmplatform.procurement.domain.supplier.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
@@ -122,6 +125,86 @@ public class PurchaseOrderApplicationService {
         auditLogRepository.save(AuditLog.of(
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(), "DRAFT",
                 actor.accountId(), actor.actorType(), null, null));
+
+        return PurchaseOrderView.from(saved);
+    }
+
+    // ---------------- DRAFT PO FROM SUGGESTION (ADR-MONO-027 D5) ----------------
+
+    /**
+     * Materialize an approved reorder suggestion into a DRAFT purchase order
+     * (ADR-MONO-027 D5). Reuses the existing DRAFT state + PoStatusMachine +
+     * audit — <strong>no new PO state, no auto-SUBMIT</strong>.
+     *
+     * <p><strong>Idempotent on {@code sourceSuggestionId}</strong> (the
+     * cross-service idempotency key, S2): a repeated call for the same suggestion
+     * returns the <em>existing</em> PO rather than creating a duplicate. The
+     * find-or-create is backed by the partial-unique
+     * {@code (tenant_id, source_suggestion_id)} index — a concurrent double-call
+     * trips it, and we re-read the winner.
+     *
+     * <p><strong>No supplier FK validation</strong> (FK-free cross-service
+     * convention, Edge Case): an unknown supplier reference is caught by the
+     * operator at DRAFT review, not rejected here.
+     */
+    @Transactional
+    public PurchaseOrderView draftFromSuggestion(DraftFromSuggestionCommand cmd) {
+        ActorContext actor = cmd.actor();
+
+        // Idempotency: a PO already materialized from this suggestion wins.
+        Optional<PurchaseOrder> existing =
+                poRepository.findBySourceSuggestionId(cmd.sourceSuggestionId(), actor.tenantId());
+        if (existing.isPresent()) {
+            log.info("from-suggestion idempotent hit: suggestion={} returns existing PO {}",
+                    cmd.sourceSuggestionId(), existing.get().getId());
+            return PurchaseOrderView.from(existing.get());
+        }
+
+        String poId = UuidV7.randomString();
+        String poNumber = "PO-" + poId.substring(poId.length() - 8).toUpperCase();
+        PurchaseOrder po = PurchaseOrder.createDraftFromSuggestion(
+                poId,
+                actor.tenantId(),
+                poNumber,
+                cmd.supplierId(),
+                actor.accountId(),
+                cmd.currency(),
+                cmd.sourceSuggestionId()
+        );
+        for (DraftFromSuggestionCommand.Line line : cmd.lines()) {
+            // unitPriceRef is a placeholder, not a price — persist 0 pending the
+            // operator setting the real price at DRAFT review (ADR-027 D5).
+            PurchaseOrderLine lineEntity = PurchaseOrderLine.create(
+                    UuidV7.randomString(),
+                    poId,
+                    actor.tenantId(),
+                    line.lineNo(),
+                    line.sku(),
+                    null,
+                    BigDecimal.valueOf(line.quantity()),
+                    BigDecimal.ZERO
+            );
+            po.addLine(lineEntity);
+        }
+
+        PurchaseOrder saved;
+        try {
+            saved = poRepository.save(po);
+        } catch (DataIntegrityViolationException race) {
+            // Concurrent call for the same suggestion won the unique index; the
+            // loser re-reads the winner (idempotent contract preserved).
+            log.info("from-suggestion race on suggestion={} — re-reading the winning PO",
+                    cmd.sourceSuggestionId());
+            return poRepository.findBySourceSuggestionId(cmd.sourceSuggestionId(), actor.tenantId())
+                    .map(PurchaseOrderView::from)
+                    .orElseThrow(() -> race);
+        }
+
+        auditLogRepository.save(AuditLog.of(
+                saved.getTenantId(), AGGREGATE_PO, saved.getId(), "DRAFT",
+                actor.accountId(), actor.actorType(), null,
+                "{\"origin\":\"DEMAND_PLANNING\",\"sourceSuggestionId\":\""
+                        + cmd.sourceSuggestionId() + "\"}"));
 
         return PurchaseOrderView.from(saved);
     }

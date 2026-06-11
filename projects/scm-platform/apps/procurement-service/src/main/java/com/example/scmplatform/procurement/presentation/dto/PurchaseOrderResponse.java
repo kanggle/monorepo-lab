@@ -1,6 +1,7 @@
 package com.example.scmplatform.procurement.presentation.dto;
 
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
+import com.example.scmplatform.procurement.domain.po.PoOrigin;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -15,6 +16,10 @@ public record PurchaseOrderResponse(
         String supplierId,
         String buyerAccountId,
         PoStatus status,
+        // Provenance (ADR-MONO-027 D5): origin is always present; sourceSuggestionId
+        // is non-null only for demand-planning-materialized POs.
+        PoOrigin origin,
+        String sourceSuggestionId,
         // procurement-api.md serialises monetary/quantity decimals as STRINGS
         // (e.g. "125000.00") to preserve scale/precision — NOT JSON numbers.
         // Jackson's default BigDecimal serialisation is a number; @JsonFormat
@@ -54,7 +59,7 @@ public record PurchaseOrderResponse(
                 .toList();
         return new PurchaseOrderResponse(
                 v.id(), v.tenantId(), v.poNumber(), v.supplierId(), v.buyerAccountId(),
-                v.status(), v.totalAmount(), v.currency(),
+                v.status(), v.origin(), v.sourceSuggestionId(), v.totalAmount(), v.currency(),
                 v.submittedAt(), v.acknowledgedAt(), v.confirmedAt(), v.canceledAt(),
                 v.createdAt(), v.updatedAt(),
                 lines

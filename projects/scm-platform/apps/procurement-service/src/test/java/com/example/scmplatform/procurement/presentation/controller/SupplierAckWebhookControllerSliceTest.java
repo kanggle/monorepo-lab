@@ -3,6 +3,7 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
+import com.example.scmplatform.procurement.domain.po.PoOrigin;
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
@@ -60,7 +61,7 @@ class SupplierAckWebhookControllerSliceTest {
         Instant now = Instant.now();
         return new PurchaseOrderView(
                 "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
-                PoStatus.ACKNOWLEDGED, BigDecimal.TEN, "USD",
+                PoStatus.ACKNOWLEDGED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 now, now, null, null, now, now, List.of()
         );
     }

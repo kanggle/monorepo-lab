@@ -42,6 +42,11 @@ public class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
     }
 
     @Override
+    public Optional<PurchaseOrder> findBySourceSuggestionId(String sourceSuggestionId, String tenantId) {
+        return poJpa.findBySourceSuggestionIdAndTenantId(sourceSuggestionId, tenantId).map(this::hydrate);
+    }
+
+    @Override
     public Page<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, Pageable pageable) {
         Page<PurchaseOrder> page = poJpa.search(tenantId, status, supplierId, pageable);
         return page.map(this::hydrate);

@@ -3,8 +3,10 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.scmplatform.procurement.application.ActorContext;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
+import com.example.scmplatform.procurement.application.command.DraftFromSuggestionCommand;
 import com.example.scmplatform.procurement.application.command.DraftPurchaseOrderCommand;
 import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
+import com.example.scmplatform.procurement.domain.po.PoOrigin;
 import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
 import com.example.scmplatform.procurement.domain.error.SupplierNotFoundException;
 import com.example.scmplatform.procurement.domain.error.SupplierUnavailableException;
@@ -84,7 +86,7 @@ class PurchaseOrderControllerSliceTest {
         Instant now = Instant.now();
         return new PurchaseOrderView(
                 "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
-                PoStatus.DRAFT, BigDecimal.TEN, "USD",
+                PoStatus.DRAFT, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 null, null, null, null, now, now,
                 List.of(new PurchaseOrderView.LineView(
                         "line-001", 1, "sku-001", "sup-sku-001",
@@ -92,11 +94,24 @@ class PurchaseOrderControllerSliceTest {
         );
     }
 
+    private PurchaseOrderView fromSuggestionView() {
+        Instant now = Instant.now();
+        return new PurchaseOrderView(
+                "po-dp-001", "scm", "PO-DP01", "sup-001", "operator-001",
+                PoStatus.DRAFT, PoOrigin.DEMAND_PLANNING, "0192cccc-0000-0000-0000-000000000001",
+                BigDecimal.ZERO, "KRW",
+                null, null, null, null, now, now,
+                List.of(new PurchaseOrderView.LineView(
+                        "line-dp-001", 1, "SKU-APPLE-001", null,
+                        BigDecimal.valueOf(100), BigDecimal.ZERO, BigDecimal.ZERO))
+        );
+    }
+
     private PurchaseOrderView submittedView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
                 "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
-                PoStatus.SUBMITTED, BigDecimal.TEN, "USD",
+                PoStatus.SUBMITTED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 now, null, null, null, now, now, List.of()
         );
     }
@@ -105,7 +120,7 @@ class PurchaseOrderControllerSliceTest {
         Instant now = Instant.now();
         return new PurchaseOrderView(
                 "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
-                PoStatus.CANCELED, BigDecimal.TEN, "USD",
+                PoStatus.CANCELED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 null, null, null, now, now, now, List.of()
         );
     }
@@ -162,6 +177,64 @@ class PurchaseOrderControllerSliceTest {
                         .content(draftRequestJson()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SUPPLIER_NOT_FOUND"));
+    }
+
+    // ---- POST /api/procurement/po/from-suggestion (ADR-MONO-027 D5) ----
+
+    private String fromSuggestionRequestJson() throws Exception {
+        return objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("supplierId", "sup-001");
+            put("currency", "KRW");
+            put("origin", "DEMAND_PLANNING");
+            put("sourceSuggestionId", "0192cccc-0000-0000-0000-000000000001");
+            put("lines", List.of(new java.util.HashMap<String, Object>() {{
+                put("lineNo", 1);
+                put("sku", "SKU-APPLE-001");
+                put("quantity", 100);
+                put("unitPriceRef", "LAST_KNOWN");
+            }}));
+        }});
+    }
+
+    @Test
+    @DisplayName("POST /po/from-suggestion — 201 DRAFT carrying origin + sourceSuggestionId, no Idempotency-Key header required")
+    void fromSuggestionHappyPath() throws Exception {
+        when(service.draftFromSuggestion(any(DraftFromSuggestionCommand.class)))
+                .thenReturn(fromSuggestionView());
+
+        // Deliberately NO Idempotency-Key header — this entry keys idempotency on
+        // sourceSuggestionId, not the generic header.
+        mockMvc.perform(post(BASE_URL + "/from-suggestion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(fromSuggestionRequestJson()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value("po-dp-001"))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.origin").value("DEMAND_PLANNING"))
+                .andExpect(jsonPath("$.data.sourceSuggestionId")
+                        .value("0192cccc-0000-0000-0000-000000000001"));
+    }
+
+    @Test
+    @DisplayName("POST /po/from-suggestion — 400 VALIDATION_ERROR when origin is not DEMAND_PLANNING")
+    void fromSuggestionRejectsForeignOrigin() throws Exception {
+        String body = objectMapper.writeValueAsString(new java.util.HashMap<String, Object>() {{
+            put("supplierId", "sup-001");
+            put("currency", "KRW");
+            put("origin", "OPERATOR");
+            put("sourceSuggestionId", "0192cccc-0000-0000-0000-000000000001");
+            put("lines", List.of(new java.util.HashMap<String, Object>() {{
+                put("lineNo", 1);
+                put("sku", "SKU-APPLE-001");
+                put("quantity", 100);
+            }}));
+        }});
+
+        mockMvc.perform(post(BASE_URL + "/from-suggestion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     // ---- GET /api/procurement/po/{poId} ----
