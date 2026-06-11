@@ -8,7 +8,9 @@ ADR-MONO-028 step 2 — `TimeWindowCondition` shared evaluator + contract flip. 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: evaluator+계약 PR #1313 (squash `c69ce4b6`). 3차원 ✓ (MERGED / origin/main tip=`c69ce4b6` 일치 / 머지 전 20 pass·0 fail — wms `ZoneIntegrationTest` `shortSuffix()` warehouseCode 충돌 flake 1건 rerun으로 GREEN 회복[내 libs 변경과 무관]). `TimeWindowCondition`(libs/java-security, SourceIpCondition 미러: same-day `[start,end)`·IANA zone·days·fail-safe·net-zero·midnight-wrap deferred) + 8 단위테스트(`:libs:java-security:test` GREEN) + 계약 §1 TIME_WINDOW reserved→implemented + AND-only 다중조건 합성 노트(input-specific evaluators, 도메인이 seam서 AND). producer 무변경(D3-B). 다음=iam BE enforcement(RequiresPermissionAspect를 SOURCE_IP AND TIME_WINDOW로 일반화). 분석/구현=Opus 4.8.
 
 # Owner
 
