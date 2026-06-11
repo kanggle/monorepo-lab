@@ -356,6 +356,13 @@ services:
       # overrides the perceived source IP per-request via X-Forwarded-For to prove
       # out-of-range → 403 ACCESS_CONDITION_UNMET vs in-range → 2xx.
       ADMIN_ACCESS_SOURCE_IP_CIDRS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128"
+      # TASK-MONO-228 (ADR-MONO-029 § D6 step 4) — turn ON the RESOURCE_TAG access
+      # condition (deny-if-present on `protected`), composed AND-only with SOURCE_IP.
+      # Per-resource input: only an operator tagged `protected` (the seeded
+      # rt-protected-target) is gated — every other operator is unaffected, so this
+      # is net-zero for the suite (unlike a global TIME_WINDOW). The
+      # iam-admin-resource-tag-condition spec proves tagged → 403 / untagged → 2xx.
+      ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN: "protected"
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }

@@ -529,3 +529,50 @@ SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
  WHERE o.operator_id = 'ip-pilot-target';
+
+-- ===========================================================================
+-- TASK-MONO-228 — ADR-MONO-029 § D6 step 4 RESOURCE_TAG access-condition
+-- federation-e2e proof (deterministic — unlike the global-clock TIME_WINDOW).
+--
+-- Two throwaway target operators scoped to the DEDICATED `ip-pilot-corp` tenant
+-- (account_db V9004), the OBJECTS of a SUPER_ADMIN role mutation:
+--
+--   (a) `rt-protected-target`  — tags='protected' → a role/status/profile mutation
+--       on it is DENIED (403 ACCESS_CONDITION_UNMET) once the admin-service is
+--       configured with ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN=protected (compose).
+--   (b) `rt-untagged-target`   — tags=NULL → the SAME mutation is allowed (2xx).
+--
+-- The discriminant is the TARGET resource's tag — per-resource, so the gate is
+-- net-zero for every other operator (no other seeded operator is tagged
+-- `protected`), unlike a global TIME_WINDOW that would gate the whole suite. The
+-- caller is the persisted SUPER_ADMIN; the gate is orthogonal to RBAC so it bites
+-- even '*'. Neither target logs in (no auth_db credential — objects only).
+--
+-- The `tags` column is V0034 (admin-service Flyway); this seed runs after Flyway
+-- (Phase 1.5), so it may set it. ON DUPLICATE re-applies tags for re-runnability.
+-- ===========================================================================
+
+INSERT INTO admin_operators (
+    operator_id, tenant_id, email, password_hash, display_name, status,
+    oidc_subject, tags, created_at, updated_at, version
+) VALUES
+    ('rt-protected-target', 'ip-pilot-corp', 'rt-protected-target@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'RT Protected Target', 'ACTIVE', 'rt-protected-target@example.com',
+     'protected', NOW(6), NOW(6), 0),
+    ('rt-untagged-target', 'ip-pilot-corp', 'rt-untagged-target@example.com',
+     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+     'RT Untagged Target', 'ACTIVE', 'rt-untagged-target@example.com',
+     NULL, NOW(6), NOW(6), 0)
+ON DUPLICATE KEY UPDATE
+    tags       = VALUES(tags),
+    status     = 'ACTIVE',
+    updated_at = NOW(6);
+
+-- SUPPORT_READONLY @ ip-pilot-corp for both (benign baseline; the role the
+-- SUPER_ADMIN re-sets — idempotent — to exercise the role-mutation gate).
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
+ WHERE o.operator_id IN ('rt-protected-target', 'rt-untagged-target');
