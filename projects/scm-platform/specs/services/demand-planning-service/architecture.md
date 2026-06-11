@@ -101,6 +101,11 @@ config/         ← Spring @Configuration beans only
   it, multi-replica double-raises).
 - Reads inventory-visibility read-model asynchronously (S5 — never couples the
   suggestion decision to IVS availability synchronously in the live path).
+- IVS read uses `InventoryVisibilityRestAdapter` → IVS internal endpoint
+  `GET /internal/inventory-visibility/snapshot` (no JWT — the batch is unattended
+  with no operator token; network-trusted, gateway-blocked; ADR-MONO-027 §D7.1).
+  On any transport/IVS failure the sweep skips the run + increments
+  `reorder_sweep_ivs_unavailable_total`; the live alert path is unaffected.
 - Restartable / idempotent: re-running the sweep funnels through the same
   open-suggestion guard, so a re-run raises no duplicate.
 

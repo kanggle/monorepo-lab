@@ -151,6 +151,16 @@ public class InventoryVisibilityApplicationService {
         return snapshotRepository.countAll(tenantId);
     }
 
+    /**
+     * Cross-tenant snapshot for the demand-planning replenishment batch
+     * (ADR-MONO-027 §D7.1). Served only by the internal network-trusted endpoint
+     * (no JWT, no tenant claim — the batch is tenant-agnostic).
+     */
+    @Transactional(readOnly = true)
+    public List<InventorySnapshot> getAllSnapshotsAcrossTenants() {
+        return snapshotRepository.findAllAcrossTenants();
+    }
+
     @Transactional(readOnly = true)
     public List<InventorySnapshot> getSnapshotByNode(String nodeId, String tenantId) {
         NodeId id = NodeId.of(nodeId);

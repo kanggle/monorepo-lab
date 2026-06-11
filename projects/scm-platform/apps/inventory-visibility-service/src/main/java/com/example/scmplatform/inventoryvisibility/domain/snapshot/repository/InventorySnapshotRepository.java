@@ -23,6 +23,14 @@ public interface InventorySnapshotRepository {
 
     List<InventorySnapshot> findAll(String tenantId, int page, int size);
 
+    /**
+     * Cross-tenant snapshot read for the demand-planning replenishment batch
+     * (ADR-MONO-027 §D7.1) — the batch is tenant-agnostic and reads via the
+     * internal network-trusted endpoint. NOT used by the authenticated `/api`
+     * surface (which is always tenant-scoped).
+     */
+    List<InventorySnapshot> findAllAcrossTenants();
+
     long countAll(String tenantId);
 
     InventorySnapshot save(InventorySnapshot snapshot);

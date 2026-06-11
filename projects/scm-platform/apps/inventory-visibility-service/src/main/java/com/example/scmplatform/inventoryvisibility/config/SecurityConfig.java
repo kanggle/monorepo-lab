@@ -38,6 +38,11 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
+                        // Internal, network-trusted, gateway-blocked (ADR-MONO-027 §D7.1).
+                        // No JWT: the demand-planning replenishment batch is unattended (no
+                        // operator token). Reachable only on the intra-scm container network —
+                        // scm-gateway routes only /api/v1/**, never /internal/**.
+                        .requestMatchers("/internal/inventory-visibility/**").permitAll()
                         .requestMatchers("/api/inventory-visibility/**").authenticated()
                         .anyRequest().denyAll()
                 )
