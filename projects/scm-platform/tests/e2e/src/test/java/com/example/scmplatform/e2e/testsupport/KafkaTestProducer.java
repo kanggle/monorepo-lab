@@ -31,6 +31,7 @@ public final class KafkaTestProducer implements AutoCloseable {
 
     public static final String TOPIC_WMS_INVENTORY_ADJUSTED = "wms.inventory.adjusted.v1";
     public static final String TOPIC_WMS_INVENTORY_RECEIVED = "wms.inventory.received.v1";
+    public static final String TOPIC_WMS_INVENTORY_ALERT = "wms.inventory.alert.v1";
 
     private static final String DEFAULT_PRODUCER = "inventory-service";
 
@@ -108,6 +109,43 @@ public final class KafkaTestProducer implements AutoCloseable {
         envelope.put("payload", payload);
 
         sendBlocking(TOPIC_WMS_INVENTORY_RECEIVED, locationId, envelope);
+        return id;
+    }
+
+    /**
+     * Emit a {@code wms.inventory.alert.v1} low-stock alert (ADR-MONO-027 D1)
+     * whose envelope mirrors the wms {@code inventory.low-stock-detected} shape
+     * that {@code demand-planning-service}'s {@code WmsLowStockAlertConsumer}
+     * deserializes. {@code warehouseId} (the location UUID) becomes the
+     * suggestion's warehouse dimension; {@code skuCode} the join key to the
+     * reorder policy + supplier mapping.
+     *
+     * @return the {@code eventId} so tests can re-publish for T8 dedup assertions.
+     */
+    public UUID publishLowStockAlert(UUID eventId, String skuCode, String warehouseId,
+                                     int availableQty, int threshold)
+            throws ExecutionException, InterruptedException, TimeoutException {
+        UUID id = eventId != null ? eventId : UUID.randomUUID();
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("eventId", id.toString());
+        envelope.put("eventType", "inventory.low-stock-detected");
+        envelope.put("eventVersion", 1);
+        envelope.put("occurredAt", Instant.now().toString());
+        envelope.put("producer", DEFAULT_PRODUCER);
+        envelope.put("aggregateType", "inventory");
+        envelope.put("aggregateId", warehouseId);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("skuId", UUID.randomUUID().toString());
+        payload.put("skuCode", skuCode);
+        payload.put("locationId", warehouseId);
+        payload.put("locationCode", "WH-E2E");
+        payload.put("availableQty", availableQty);
+        payload.put("threshold", threshold);
+        payload.put("triggeringEventType", "inventory.adjusted");
+        envelope.put("payload", payload);
+
+        sendBlocking(TOPIC_WMS_INVENTORY_ALERT, warehouseId, envelope);
         return id;
     }
 

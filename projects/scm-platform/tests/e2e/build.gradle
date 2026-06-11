@@ -103,13 +103,15 @@ def baseE2eConfig = { Test t ->
     t.dependsOn ':projects:scm-platform:apps:gateway-service:bootJar'
     t.dependsOn ':projects:scm-platform:apps:procurement-service:bootJar'
     t.dependsOn ':projects:scm-platform:apps:inventory-visibility-service:bootJar'
+    t.dependsOn ':projects:scm-platform:apps:demand-planning-service:bootJar'
 
     // Forward pre-built image names when set by CI. Local dev (without these
     // properties) falls back to ImageFromDockerfile in ScmPlatformE2ETestBase.
     [
         'scm.e2e.gatewayImage',
         'scm.e2e.procurementImage',
-        'scm.e2e.inventoryVisibilityImage'
+        'scm.e2e.inventoryVisibilityImage',
+        'scm.e2e.demandPlanningImage'
     ].each { prop ->
         def val = System.getProperty(prop)
         if (val) t.systemProperty prop, val

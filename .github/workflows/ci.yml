@@ -607,6 +607,7 @@ jobs:
           :projects:scm-platform:apps:gateway-service:bootJar
           :projects:scm-platform:apps:procurement-service:bootJar
           :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          :projects:scm-platform:apps:demand-planning-service:bootJar
           --no-daemon --stacktrace
 
       - name: Upload scm-platform boot jars
@@ -621,6 +622,7 @@ jobs:
             projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+            projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
           retention-days: 1
 
   frontend-unit-tests:
@@ -1608,12 +1610,15 @@ jobs:
           mkdir -p projects/scm-platform/apps/gateway-service/build/libs/
           mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
           mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
+          mkdir -p projects/scm-platform/apps/demand-planning-service/build/libs/
           mv artifact-staging-scm/gateway-service/build/libs/gateway-service.jar \
              projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
           mv artifact-staging-scm/procurement-service/build/libs/procurement-service.jar \
              projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
           mv artifact-staging-scm/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
              projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+          mv artifact-staging-scm/demand-planning-service/build/libs/demand-planning-service.jar \
+             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1631,6 +1636,9 @@ jobs:
           docker build -t scm-platform-inventory-visibility-service:e2e \
             -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
             projects/scm-platform/apps/inventory-visibility-service/
+          docker build -t scm-platform-demand-planning-service:e2e \
+            -f projects/scm-platform/apps/demand-planning-service/Dockerfile \
+            projects/scm-platform/apps/demand-planning-service/
 
       - name: Run scm-platform cross-service e2e smoke suite
         # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
@@ -1644,9 +1652,11 @@ jobs:
           -x :projects:scm-platform:apps:gateway-service:bootJar
           -x :projects:scm-platform:apps:procurement-service:bootJar
           -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          -x :projects:scm-platform:apps:demand-planning-service:bootJar
           -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
           -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
           -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
+          -Dscm.e2e.demandPlanningImage=scm-platform-demand-planning-service:e2e
           --no-daemon --stacktrace
 
       - name: Upload scm-platform e2e test reports on failure

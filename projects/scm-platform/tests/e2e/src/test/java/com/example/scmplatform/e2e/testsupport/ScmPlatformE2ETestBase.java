@@ -83,6 +83,7 @@ public abstract class ScmPlatformE2ETestBase {
     protected static final String KAFKA_ALIAS = "scm-e2e-kafka";
     protected static final String PROCUREMENT_ALIAS = "scm-e2e-procurement";
     protected static final String INVENTORY_VISIBILITY_ALIAS = "scm-e2e-inventory-visibility";
+    protected static final String DEMAND_PLANNING_ALIAS = "scm-e2e-demand-planning";
     protected static final String GATEWAY_ALIAS = "scm-e2e-gateway";
 
     protected static final int SERVICE_PORT = 8080;
@@ -94,6 +95,7 @@ public abstract class ScmPlatformE2ETestBase {
     private static final String DB_PASSWORD = "scm";
     private static final String DB_NAME_PROCUREMENT = "scm_procurement";
     private static final String DB_NAME_INVENTORY_VISIBILITY = "scm_inventory_visibility";
+    private static final String DB_NAME_DEMAND_PLANNING = "scm_demand_planning";
 
     /** Boot jars produced by Gradle's {@code bootJar} task — referenced by the dev fallback path. */
     private static final Path GATEWAY_JAR = locateOptionalJar(
@@ -102,12 +104,16 @@ public abstract class ScmPlatformE2ETestBase {
             "apps/procurement-service/build/libs/procurement-service.jar");
     private static final Path INVENTORY_VISIBILITY_JAR = locateOptionalJar(
             "apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar");
+    private static final Path DEMAND_PLANNING_JAR = locateOptionalJar(
+            "apps/demand-planning-service/build/libs/demand-planning-service.jar");
 
     /** Dockerfile locations — reused verbatim from production image builds. */
     private static final Path GATEWAY_DOCKERFILE = locateFile("apps/gateway-service/Dockerfile");
     private static final Path PROCUREMENT_DOCKERFILE = locateFile("apps/procurement-service/Dockerfile");
     private static final Path INVENTORY_VISIBILITY_DOCKERFILE =
             locateFile("apps/inventory-visibility-service/Dockerfile");
+    private static final Path DEMAND_PLANNING_DOCKERFILE =
+            locateFile("apps/demand-planning-service/Dockerfile");
 
     protected Network network;
     protected PostgreSQLContainer<?> postgres;
@@ -115,6 +121,7 @@ public abstract class ScmPlatformE2ETestBase {
     protected KafkaContainer kafka;
     protected GenericContainer<?> procurement;
     protected GenericContainer<?> inventoryVisibility;
+    protected GenericContainer<?> demandPlanning;
     protected GenericContainer<?> gateway;
 
     protected JwtTestHelper jwt;
@@ -198,7 +205,13 @@ public abstract class ScmPlatformE2ETestBase {
             admin.createTopics(java.util.List.of(
                     new org.apache.kafka.clients.admin.NewTopic("wms.inventory.received.v1", 1, (short) 1),
                     new org.apache.kafka.clients.admin.NewTopic("wms.inventory.adjusted.v1", 1, (short) 1),
-                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.transferred.v1", 1, (short) 1)
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.transferred.v1", 1, (short) 1),
+                    // ADR-MONO-027 D1 — demand-planning subscribes to the low-stock
+                    // alert; its @RetryableTopic non-retryable path routes to the DLT.
+                    // Pre-creating both avoids the subscribe-before-publish race
+                    // (TASK-SCM-INT-002 leg 1 deterministic guard).
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.alert.v1", 1, (short) 1),
+                    new org.apache.kafka.clients.admin.NewTopic("wms.inventory.alert.v1.DLT", 1, (short) 1)
             )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
             log.info("Pre-created cross-project wms.inventory.* topics for e2e");
         }
@@ -263,6 +276,35 @@ public abstract class ScmPlatformE2ETestBase {
                 .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.inventory-visibility")));
         inventoryVisibility.start();
 
+        // ----- demand-planning-service (ADR-MONO-027 Phase 1) ---------------
+        // Subscribes to wms.inventory.alert.v1, raises reorder suggestions, and
+        // on operator approve calls procurement (PROCUREMENT_BASE_URL) to create
+        // a DRAFT PO. Mirrors the procurement env shape.
+        demandPlanning = buildServiceContainer(
+                "scm.e2e.demandPlanningImage", DEMAND_PLANNING_JAR, DEMAND_PLANNING_DOCKERFILE)
+                .withNetwork(network)
+                .withNetworkAliases(DEMAND_PLANNING_ALIAS)
+                .withExtraHost("host.docker.internal", "host-gateway")
+                .withEnv("SERVER_PORT", String.valueOf(SERVICE_PORT))
+                .withEnv("SPRING_PROFILES_ACTIVE", "default")
+                .withEnv("POSTGRES_HOST", POSTGRES_ALIAS)
+                .withEnv("POSTGRES_PORT", "5432")
+                .withEnv("POSTGRES_DB", DB_NAME_DEMAND_PLANNING)
+                .withEnv("POSTGRES_USER", DB_USERNAME)
+                .withEnv("POSTGRES_PASSWORD", DB_PASSWORD)
+                .withEnv("KAFKA_BOOTSTRAP", KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT)
+                .withEnv("OIDC_ISSUER_URL", JwtTestHelper.SAS_ISSUER)
+                .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
+                .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
+                // Intra-scm procurement leg (ADR-027 D5) — reach procurement on
+                // the shared network alias.
+                .withEnv("PROCUREMENT_BASE_URL", "http://" + PROCUREMENT_ALIAS + ":" + SERVICE_PORT)
+                .waitingFor(Wait.forHttp("/actuator/health")
+                        .forStatusCode(200)
+                        .withStartupTimeout(Duration.ofMinutes(3)))
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("scm-e2e.demand-planning")));
+        demandPlanning.start();
+
         // ----- gateway-service ---------------------------------------------
         gateway = buildServiceContainer(
                 "scm.e2e.gatewayImage", GATEWAY_JAR, GATEWAY_DOCKERFILE)
@@ -276,6 +318,8 @@ public abstract class ScmPlatformE2ETestBase {
                 .withEnv("PROCUREMENT_SERVICE_URI", "http://" + PROCUREMENT_ALIAS + ":" + SERVICE_PORT)
                 .withEnv("INVENTORY_VISIBILITY_SERVICE_URI",
                         "http://" + INVENTORY_VISIBILITY_ALIAS + ":" + SERVICE_PORT)
+                .withEnv("DEMAND_PLANNING_SERVICE_URI",
+                        "http://" + DEMAND_PLANNING_ALIAS + ":" + SERVICE_PORT)
                 .withEnv("OIDC_ISSUER_URL", JwtTestHelper.SAS_ISSUER)
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
@@ -300,6 +344,7 @@ public abstract class ScmPlatformE2ETestBase {
         if (supplierMock != null) supplierMock.close();
         if (jwks != null) jwks.close();
         if (gateway != null) gateway.stop();
+        if (demandPlanning != null) demandPlanning.stop();
         if (inventoryVisibility != null) inventoryVisibility.stop();
         if (procurement != null) procurement.stop();
         if (kafka != null) kafka.stop();
@@ -331,6 +376,12 @@ public abstract class ScmPlatformE2ETestBase {
     protected URI inventoryVisibilityBaseUri() {
         return URI.create("http://" + inventoryVisibility.getHost()
                 + ":" + inventoryVisibility.getMappedPort(SERVICE_PORT));
+    }
+
+    /** Direct demand-planning URL — useful for actuator health verification only. */
+    protected URI demandPlanningBaseUri() {
+        return URI.create("http://" + demandPlanning.getHost()
+                + ":" + demandPlanning.getMappedPort(SERVICE_PORT));
     }
 
     /** Kafka bootstrap address reachable from the host JVM. Containers use the network alias instead. */
@@ -420,6 +471,7 @@ public abstract class ScmPlatformE2ETestBase {
             dumpContainerLogs("gateway", suite.gateway);
             dumpContainerLogs("procurement", suite.procurement);
             dumpContainerLogs("inventory-visibility", suite.inventoryVisibility);
+            dumpContainerLogs("demand-planning", suite.demandPlanning);
         }
 
         private static void dumpContainerLogs(String label, GenericContainer<?> container) {
