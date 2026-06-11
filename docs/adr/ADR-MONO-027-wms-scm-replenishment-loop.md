@@ -1,7 +1,7 @@
 # ADR-MONO-027 — wms → scm Stock-Replenishment Loop (low-stock → reorder suggestion)
 
-**Status:** PROPOSED
-**Date:** 2026-06-11 (PROPOSED)
+**Status:** ACCEPTED
+**Date:** 2026-06-11 (PROPOSED 2026-06-11 · ACCEPTED 2026-06-11, same-session user-explicit intent "진행" on the §2 decisions — see § 6)
 **Decision driver:** User request (2026-06-11) — *"재고 부족이 자동으로 보충 발주를 트리거하게 만들고 싶다"* (when warehouse stock runs low, automatically drive a replenishment reorder). Via AskUserQuestion the user chose: **reorder *suggestion* (DRAFT) only — not auto-submit** (operator reviews before the supplier PO is dispatched); **SKU→supplier mapping in a demand-planning-owned minimal table** (not a full `supplier-service` v2 bootstrap); and scope **through federation E2E proof**.
 **Supersedes:** none.
 **Related:** [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) (the *forward* order-fulfillment loop ecommerce→wms — this ADR is the **replenishment** counter-loop that refills what fulfillment consumes), [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) (shared `libs/java-messaging` outbox/consumer scaffolding — the transport this rides on), [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) (saga category taxonomy), [`platform/service-boundaries.md`](../../platform/service-boundaries.md) §「Asynchronous (Events) — cross-project allowed」, the live precedent **scm `inventory-visibility-service` ← wms inventory events** (`projects/scm-platform/specs/contracts/events/inventory-visibility-subscriptions.md`), [scm `PROJECT.md`](../../projects/scm-platform/PROJECT.md) § Service Map (`demand-planning-service` v2 entry), memory `project_portfolio_7axis_architecture`.
@@ -192,4 +192,5 @@ PR shape per scm `tasks/INDEX.md`: each task = spec PR ↔ impl PR ↔ chore PR 
 
 ## 6. Status history
 
-- **2026-06-11 PROPOSED** — authored for user review of §2 (D1 Kafka subscribe, D2 suggestion-only, D3 demand-planning-owned mapping, D4 scm-owned reorder policy, D5 intra-scm DRAFT-PO materialization). User pre-selected D2-a / D3-minimal-table / scope-through-federation-E2E via AskUserQuestion before authoring. ACCEPTED transition is TASK-MONO-220, pending explicit user approval of this document.
+- **2026-06-11 PROPOSED** — authored for user review of §2 (D1 Kafka subscribe, D2 suggestion-only, D3 demand-planning-owned mapping, D4 scm-owned reorder policy, D5 intra-scm DRAFT-PO materialization). User pre-selected D2-a / D3-minimal-table / scope-through-federation-E2E via AskUserQuestion before authoring.
+- **2026-06-11 ACCEPTED** (TASK-MONO-220) — user reviewed the PROPOSED document (PR #1292) and gave explicit affirmative intent ("진행") accepting the §2 decisions as recommended. **NOT self-ACCEPT**: the user directed the transition. Cross-project runtime coupling between two independently-published portfolio axes (wms ↔ scm) is a genuine architecture decision, recorded here before the §3 implementation tasks proceed. Phase 0 spec tasks (SCM-BE-022/023) are now unblocked; Phase 1 impl (BE-024/025/INT-002) follows as their specs merge.

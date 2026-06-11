@@ -8,7 +8,9 @@ TASK-MONO-220
 
 # Status
 
-ready
+done
+
+> **DONE (2026-06-11)**: ADR-MONO-027 Status PROPOSED → ACCEPTED on explicit user "진행" intent accepting the §2 decisions as reviewed (PR #1292). §6 status-history ACCEPTED line added (user-directed, NOT self-ACCEPT). §2 decision bodies byte-unchanged. Unblocks SCM-BE-022/023 spec tasks. Bundled with MONO-219 close + ADR edit in one docs PR. 분석=Opus 4.8 / 구현=Opus(직접).
 
 # Owner
 

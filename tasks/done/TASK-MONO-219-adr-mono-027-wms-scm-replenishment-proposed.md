@@ -8,7 +8,9 @@ Author **ADR-MONO-027 PROPOSED** — wms → scm stock-replenishment loop (low-s
 
 # Status
 
-ready
+done
+
+> **DONE (2026-06-11)**: ADR-MONO-027 PROPOSED published + full scm task breakdown authored (BE-022/023 ready, BE-024/025/INT-002 backlog) + root/scm INDEX updated. PR #1292 squash `35c54201f` (docs fast-lane, all code jobs skipped, 0 fail; 3-dim verified: MERGED + origin/main tip `35c54201f` + failing=0). ADR ACCEPTED transition done same-session via TASK-MONO-220. 분석=Opus 4.8 / 구현=Opus(직접).
 
 # Owner
 
