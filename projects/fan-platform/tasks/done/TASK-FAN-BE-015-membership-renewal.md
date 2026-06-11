@@ -1,6 +1,6 @@
 # TASK-FAN-BE-015 — membership renewal (seamless re-activation)
 
-Status: ready
+Status: done
 Type: backend (TASK-FAN-BE)
 Project: fan-platform
 Apps: membership-service (renew endpoint) + fan-platform-web (renew UI)
@@ -125,3 +125,18 @@ on CI.
   `Idempotency-Key` replay guard (AC-5), same mechanism as subscribe.
 - **Token leak** — `accessToken` on a client component. Mitigation: AC-7 (renew via
   a `'use server'` action; client components receive only plain data).
+
+## Completion
+
+Implemented + merged as **PR #1301** (squash `4be026bf`). Verified in an isolated
+git worktree before merge: membership `:test` (unit + slice) BUILD SUCCESSFUL
+(`RenewMembershipUseCaseTest` seamless/fresh/canceled/404/decline; controller slice
+renew 201 / 422 `MEMBERSHIP_NOT_RENEWABLE` / 400); FE `tsc` 0, `vitest` 53/53,
+`next lint` 0, `next build` OK. CI all-green incl. **Integration (fan-platform)
+Testcontainers** (`RenewIntegrationTest`: subscribe → renew stacks the window;
+renew unknown → 404). 3-dim merge verified: state=MERGED, `origin/main` tip ==
+`4be026bf`, pre-merge 0 failing required checks.
+
+Connects the FAN-BE-014 expiry notification to a real renew action (StatusCard
+"연장하기" / RenewPanel "갱신하기"). Deferred: distinct `renewed.v1` event /
+`RENEWAL` notification type; plan-length change at renewal.
