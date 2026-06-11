@@ -8,7 +8,9 @@ ADR-MONO-026 § D7 step 2 (axis ② 2단계 pilot) — iam admin-service `SOURCE
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11, 3-dim verified — impl PR #1290 squash `37fed322d`)**: ADR-MONO-026 § D7 step 2 (axis ② 2단계 pilot). iam admin-service `SOURCE_IP` access condition = **4번째 authz 게이트**(RBAC 통과 후). `AdminAccessConditionProperties`(`admin.access.source-ip-allowed-cidrs`, 빈 기본=net-zero) + `AccessConditionConfig`(`SourceIpCondition` bean, D3-B 가드설정, producer/JWT 무변경) + `RequiresPermissionAspect` 4번째 게이트(변이만, `X-Forwarded-For` 첫홉→remote-addr, configured&&!satisfied→DENIED audit+`AccessConditionUnmetException`) + `AdminExceptionHandler`→403 `ACCESS_CONDITION_UNMET` + rbac.md 서브섹션 + application.yml 문서화. `ObjectProvider` 주입=빈 부재 시 net-zero(기존 슬라이스 무영향). 슬라이스 5: met/unmet/remote-addr fallback 양방향/RBAC-denial 우선. **3-dim**: (a) MERGED+`37fed322d`; (b) origin/main tip 일치; (c) pre-merge **Build & Test + Integration(iam) + 전 체크 GREEN, 0 fail**. ⚠️재사용: `RequiresPermissionAspect.checkAnnotated` 가 RBAC/조건 단일 결정지점·`ObjectProvider`로 optional evaluator 주입=net-zero 안전·`@WebMvcTest` 슬라이스 set remoteAddr=`.with(req->{req.setRemoteAddr(...);return req;})`. **ADR-026 전 4단계 종결(216 PROPOSED→217 ACCEPTED→218 계약+evaluator→351 iam enforcement)**. 분석=Opus 4.8 / 구현=Opus. [[feedback_spring_boot_diagnostic_patterns]]
 
 # Owner
 
