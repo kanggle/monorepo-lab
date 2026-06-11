@@ -8,7 +8,9 @@ Author the `demand-planning-service` spec suite (architecture / data-model / reo
 
 # Status
 
-ready
+done
+
+> **DONE (2026-06-11, spec-only self-review)**: ADR-MONO-027 service spec suite authored. NEW `demand-planning-service/` specs — `architecture.md` (3-facet event-consumer+batch-job+rest-api, Hexagonal, canonical Identity + Service Type Composition, D7 decisioning-only boundary, S-rule mapping, T8+open-guard idempotency, ADR-005 Cat C/D, justified no-outbox), `data-model.md` (4 tables: `reorder_policy`/`sku_supplier_map` FK-free supplier ref/`reorder_suggestion` + partial-unique open-guard/`processed_events`; suggestion status machine), `reorder-policy.md` (D4 rule distinct from wms threshold; v2 forecasting seam), `overview.md`. NEW contract `demand-planning-api.md` (suggestions list/approve/dismiss + policy/mapping seed, new error codes, route publicity). **Additive** procurement `procurement-api.md` § `POST /po/from-suggestion` (D5 — DRAFT factory, idempotent on `sourceSuggestionId`, no new PO state, no auto-SUBMIT, scope-guarded). PROJECT.md Service Map demand-planning **v2→v1-active** (+ supplier-service v2 노트 sku_supplier_map 이관). gateway-public-routes.md `/api/v1/demand-planning/**` route reserved (BE-024 activates). spec-only, markdown fast-lane. traits frontmatter byte-unchanged. 선행=BE-022 ✓. 후속=BE-024/025. 분석=Opus 4.8 / 구현=Opus(직접).
 
 # Owner
 

@@ -334,9 +334,57 @@ returns the previously-stored ASN with the original receivedAt.
 
 ---
 
+## POST /api/procurement/po/from-suggestion (internal — ADR-MONO-027 D5)
+
+**Additive** entry point for `demand-planning-service` to create a Purchase Order
+in `DRAFT` from an approved reorder suggestion. Reuses the **existing** `DRAFT`
+state + `PoStatusMachine` + audit/outbox — **no new PO state, no auto-SUBMIT.**
+
+- **Caller**: `demand-planning-service` only (intra-scm, internal trust — same
+  gateway-internal posture other scm services use). Not a public/operator route;
+  the operator never calls this directly (they call demand-planning's
+  `POST /suggestions/{id}/approve`, which calls this).
+- **Idempotent on `sourceSuggestionId`** (NOT the generic `Idempotency-Key`
+  header): a repeated call for the same suggestion returns the **existing** PO,
+  never a duplicate. This is the cross-service idempotency key (S2).
+
+**Request body:**
+```json
+{
+  "supplierId": "9b1d4a8c-1f2c-7a90-b1d4-3e6f8a2c9d10",
+  "currency": "KRW",
+  "origin": "DEMAND_PLANNING",
+  "sourceSuggestionId": "0192...",
+  "lines": [
+    { "lineNo": 1, "sku": "SKU-APPLE-001", "quantity": "100.0000", "unitPriceRef": "LAST_KNOWN" }
+  ]
+}
+```
+
+- `origin`: `DEMAND_PLANNING` (vs the default operator-authored origin) — recorded
+  on the PO for provenance/audit.
+- `unitPriceRef`: a price **reference/placeholder** (e.g. `LAST_KNOWN`), not a
+  computed price — demand-planning invents no pricing; the operator sets the actual
+  price during DRAFT review. (v1 may persist a 0/placeholder unit price pending review.)
+
+**Response `201`:** the created (or existing, on idempotent re-call) PO in `DRAFT`,
+carrying `origin=DEMAND_PLANNING` + `sourceSuggestionId`.
+
+**Errors:** standard procurement codes. The PO is created in `DRAFT` only;
+transition to `SUBMITTED` (supplier dispatch) remains the operator's existing flow.
+procurement does **not** FK-validate `supplierId` (FK-free cross-service
+convention) — an unknown supplier is caught by the operator at DRAFT review.
+
+> Scope guard: this endpoint MUST NOT introduce demand/forecast concepts into
+> procurement, and MUST NOT auto-advance the PO past `DRAFT`. It is a thin,
+> idempotent DRAFT factory keyed by `sourceSuggestionId`.
+
+---
+
 ## References
 
 - [`procurement-service/architecture.md`](../../services/procurement-service/architecture.md)
+- [`demand-planning-service/architecture.md`](../../services/demand-planning-service/architecture.md) — the caller (ADR-MONO-027 D5)
 - [`gateway-public-routes.md`](./gateway-public-routes.md)
 - `platform/error-handling.md`
 - `rules/domains/scm.md` § Standard Error Codes — Procurement
