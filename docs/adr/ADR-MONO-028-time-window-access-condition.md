@@ -1,6 +1,6 @@
 # ADR-MONO-028 — `TIME_WINDOW` Access Condition (2nd condition type under ADR-026's closed enum)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-11
 
@@ -41,15 +41,17 @@ ADR-026 § D7.4 routed additional condition types to "each its own ADR/task", an
 
 Carried verbatim, no change: **closed enum** (`TIME_WINDOW` is an existing member), **AND-only** combination, **restriction-only** (a condition only gates an already-RBAC-/tenant-/data-scope-authorised action, never grants), **fail-safe** (unresolvable input ⇒ deny), **net-zero/opt-in** (unconfigured ⇒ no gate, byte-identical), **D3-B carrier** (domain/endpoint guard-config — no producer / token / IAM change). This ADR does not reopen any of these.
 
-### D2 — Pilot domain + composition (GATE — to fix at ACCEPTED)
+### D2 — Pilot domain + composition (FIXED at ACCEPTED 2026-06-11 = D2-A)
 
-Which domain enforces `TIME_WINDOW`, and whether it composes with an existing condition.
+Which domain enforces `TIME_WINDOW`, and whether it composes with an existing condition. **User-selected at the ACCEPTED gate: D2-A** — iam admin, `TIME_WINDOW` composed AND-only with the existing `SOURCE_IP` (the multi-condition composition pilot).
 
-- **D2-A (chosen-PROPOSED — recommended)** — **iam admin-service, composed AND-only with the existing `SOURCE_IP`** on the same `@RequiresPermission`-gated admin mutation surface. The 4th gate evaluates *both* conditions: a mutation proceeds only when it is **in-CIDR AND in-window**; either unmet → `403 ACCESS_CONDITION_UNMET`. *Pro:* exercises the blessed-but-unproven **AND-only multi-condition composition** (the real new architecture); smallest delta (extends BE-351's single-condition aspect to a condition list); reuses the MONO-221 federation harness for the composition proof. *Con:* requires generalising the aspect from one condition to a set (a small, contained refactor).
+- **D2-A (CHOSEN, ACCEPTED 2026-06-11)** — **iam admin-service, composed AND-only with the existing `SOURCE_IP`** on the same `@RequiresPermission`-gated admin mutation surface. The 4th gate evaluates *both* conditions: a mutation proceeds only when it is **in-CIDR AND in-window**; either unmet → `403 ACCESS_CONDITION_UNMET`. *Pro:* exercises the blessed-but-unproven **AND-only multi-condition composition** (the real new architecture); smallest delta (extends BE-351's single-condition aspect to a condition list); reuses the MONO-221 federation harness for the composition proof. *Con:* requires generalising the aspect from one condition to a set (a small, contained refactor).
 - **D2-B (alternative)** — **wms write endpoints, fresh single `TIME_WINDOW`** (the ADR-026 § D4 not-chosen candidate — e.g. outbound-confirm only during business hours). *Pro:* proves the evaluator generalises to a *second domain*. *Con:* does **not** exercise composition (single condition again, like BE-351); a brand-new domain enforcement seam (more surface than extending iam's existing one).
 - **D2-C (rejected)** — both domains at once. Too broad for a pilot; violates the minimal-blast-radius discipline (ADR-025 § D3 / ADR-026 § D4 each picked exactly one).
 
-### D3 — `TIME_WINDOW` semantics + config schema (GATE — to fix at ACCEPTED)
+### D3 — `TIME_WINDOW` semantics + config schema (FIXED at ACCEPTED 2026-06-11)
+
+The schema below is fixed as proposed; **midnight-wrap stays deferred** to a fast-follow (same-day `start < end` only in the pilot).
 
 - **Input**: the request time (server `Clock`/`Instant`) evaluated against a declared **IANA zone** (e.g. `Asia/Seoul`), so DST is handled by `java.time` — no manual offset math.
 - **Config (D3-B domain guard-config, `@ConfigurationProperties` / `application.yml`)** — PROPOSED shape:
@@ -98,11 +100,11 @@ Restriction-only · fail-safe · net-zero · closed enum (code-not-data, AND-onl
 
 ### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
 
-0. **`TASK-MONO-222` (PROPOSED, this)** — doc-only. Model = Opus (analysis).
-1. **`TASK-MONO-2xx`** — ACCEPTED transition (the gate fixes D2 pilot/composition + D3 schema). Doc-only.
-2. **`TASK-MONO-2xx`** — `TimeWindowCondition` evaluator (libs/java-security) + contract update + (D2-A) the AND-only multi-condition aspect generalisation note. Unit tests. Model = Opus (security-lib).
-3. **`TASK-<domain>-BE-xxx`** — pilot enforcement + IT (met / unmet-time / unmet-ip / absent / AND-composition). Model = Opus (authorization enforcement; security-critical).
-4. **(optional)** federation-e2e composition proof. Model = Opus.
+0. **`TASK-MONO-222` (PROPOSED, DONE #1309)** — doc-only. Model = Opus (analysis).
+1. **`TASK-MONO-223` (ACCEPTED transition, this)** — the gate fixed **D2 = D2-A** (iam admin composed AND-only with the existing `SOURCE_IP`) + **D3** (the schema above; midnight-wrap deferred). Doc-only. Model = Opus.
+2. **`TASK-MONO-224`** — `TimeWindowCondition` evaluator (libs/java-security, sibling to `SourceIpCondition`) + `platform/access-conditions.md` § 1 `TIME_WINDOW` reserved → implemented + § 4 adopter note + the AND-only multi-condition enforcement note. Unit tests. Producer untouched (D3-B). Model = Opus (security-lib).
+3. **`TASK-<iam>-BE-xxx`** — the iam pilot's `TIME_WINDOW` enforcement composed AND-only with `SOURCE_IP` inside `RequiresPermissionAspect` (generalise the 4th gate to evaluate a condition set) + config + IT (met-both / unmet-time / unmet-ip / absent net-zero / AND-composition). Model = Opus (authorization enforcement; security-critical).
+4. **(optional)** federation-e2e composition proof (reuses the MONO-221 `ip-pilot` harness): in-CIDR + in-window → 2xx; in-CIDR + out-of-window → 403; out-of-CIDR + in-window → 403 (AND-only); read never gated. Model = Opus.
 
 ---
 
@@ -134,4 +136,5 @@ Append-only.
 
 | Date | Transition | Decision direction | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-06-11 | created PROPOSED | Executes ADR-026 § D7.4 for the `TIME_WINDOW` enum member; inherits ADR-026's framework unchanged (closed enum / AND-only / restriction-only / fail-safe / net-zero / D3-B carrier); decides only the open gates — **D2** pilot domain + composition (A: iam admin composed AND-only with the existing `SOURCE_IP` [chosen-PROPOSED, exercises multi-condition composition + reuses the MONO-221 harness] vs B: wms fresh single `TIME_WINDOW`) and **D3** `TIME_WINDOW` semantics + config schema (IANA zone + days-of-week + same-day `[start,end)` local window; fail-safe on bad input; net-zero on unset; cross-midnight deferred). D4-D5 inherited (net-zero; no full engine). D6 staged (evaluator+contract → pilot enforcement+IT → optional fed-e2e composition proof). | "TIME_WINDOW 2번째 조건타입" — after the access-conditions axis ② 2단계 SOURCE_IP pilot closed end-to-end (BE-351 + MONO-221 federation GREEN) and with the non-SCM ready queue drained, the user selected adding the 2nd closed-enum condition type as the next increment. ADR-first per the established ADR-019…026 staged pattern. | #<this> (TASK-MONO-222) |
+| 2026-06-11 | created PROPOSED | Executes ADR-026 § D7.4 for the `TIME_WINDOW` enum member; inherits ADR-026's framework unchanged (closed enum / AND-only / restriction-only / fail-safe / net-zero / D3-B carrier); decides only the open gates — **D2** pilot domain + composition (A: iam admin composed AND-only with the existing `SOURCE_IP` [chosen-PROPOSED, exercises multi-condition composition + reuses the MONO-221 harness] vs B: wms fresh single `TIME_WINDOW`) and **D3** `TIME_WINDOW` semantics + config schema (IANA zone + days-of-week + same-day `[start,end)` local window; fail-safe on bad input; net-zero on unset; cross-midnight deferred). D4-D5 inherited (net-zero; no full engine). D6 staged (evaluator+contract → pilot enforcement+IT → optional fed-e2e composition proof). | "TIME_WINDOW 2번째 조건타입" — after the access-conditions axis ② 2단계 SOURCE_IP pilot closed end-to-end (BE-351 + MONO-221 federation GREEN) and with the non-SCM ready queue drained, the user selected adding the 2nd closed-enum condition type as the next increment. ADR-first per the established ADR-019…026 staged pattern. | #1309 (TASK-MONO-222) |
+| 2026-06-11 | PROPOSED → ACCEPTED | D1, D4-D6 directions **finalised unchanged** from PROPOSED #1309 squash `c0f8ac4c` (framework inherited from ADR-026); **D2 finalised = D2-A** (iam admin-service, `TIME_WINDOW` composed AND-only with the existing `SOURCE_IP` — the multi-condition composition pilot; generalises `RequiresPermissionAspect`'s 4th gate to a condition set); **D3 finalised** = the proposed schema (IANA zone + days-of-week + same-day `[start,end)` local window; fail-safe on bad input; net-zero on unset) with **midnight-wrap deferred** to a fast-follow. Authorises the § 3.3 execution roadmap (dependency-correct base = this ACCEPTED main): `TimeWindowCondition` evaluator (`libs/java-security`) + `platform/access-conditions.md` reserved→implemented flip + AND-only multi-condition note → iam pilot enforcement (compose with `SOURCE_IP`) + IT → optional federation-e2e composition proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024/025/026). | "A: iam admin + SOURCE_IP와 AND 합성" (+ D3 schema as proposed, midnight-wrap deferred) — the user fixed the pilot=iam-admin + composition=AND-with-`SOURCE_IP` at the gate and authorised ACCEPTED + execution. | #<this> (TASK-MONO-223) |
