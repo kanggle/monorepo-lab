@@ -8,7 +8,9 @@ ADR-MONO-029 § D6 step 4 — iam admin `RESOURCE_TAG` access-condition federati
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-12)**: impl PR #1328 (squash `7d515101`). **federation run 27378458404 GREEN — 20 passed / 0 failed (첫 실행, flake 無)** on the branch. 3차원 ✓ (MERGED / origin/main tip 일치 / 머지 전 표준 20 pass·0 fail) + AC-4 (federation GREEN). **ADR-MONO-029 § D6 step 4 종결 = RESOURCE_TAG 전체 완료 = 닫힌 조건 enum {SOURCE_IP, TIME_WINDOW, RESOURCE_TAG} 3타입 end-to-end 완성**. **증명**: 공유 admin-service `ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN=protected`, SUPER_ADMIN이 patchRoles → `rt-protected-target`(tags='protected')→403 `ACCESS_CONDITION_UNMET` / `rt-untagged-target`(무태그)→200. **결정적 + net-zero**(per-resource: 태그된 1 operator만 게이트, 타 18 테스트 GREEN=다른 operator 무영향) — TIME_WINDOW(전역시계)이 못한 federation 증명. SOURCE_IP도 켜진 상태(XFF 없음→사설 remoteAddr→SOURCE_IP 통과)라 403은 RESOURCE_TAG 특정=**라이브 3-way AND 합성**. seed §17 dedicated ip-pilot-corp 테넌트, 로그인 안 함. 분석/구현=Opus 4.8.
 
 # Owner
 
