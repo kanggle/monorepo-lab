@@ -111,7 +111,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-219-adr-mono-027-wms-scm-replenishment-proposed.md` — **Author ADR-MONO-027 PROPOSED** (wms→scm stock-replenishment loop: low-stock alert → reorder *suggestion*). New cross-project coupling direction activating scm's v2-deferred `demand-planning-service`; suggestion-only (operator-gated), demand-planning-owned sku→supplier mapping, scm-owned reorder policy distinct from the wms threshold. Doc-only; authors the follow-on scm task breakdown (BE-022/023 ready, BE-024/025/INT-002 backlog). 후속=MONO-220 (ACCEPTED). 분석=Opus 4.8 / 구현 권장=Opus.
+- `TASK-MONO-220-adr-mono-027-accepted-transition.md` — **ADR-MONO-027 PROPOSED → ACCEPTED** transition, gated on explicit user approval of §2 decisions (not self-ACCEPT). Unblocks scm Phase 1 impl. 선행=MONO-219. 분석=Opus 4.8 / 구현 권장=Sonnet.
 
 ## in-progress
 

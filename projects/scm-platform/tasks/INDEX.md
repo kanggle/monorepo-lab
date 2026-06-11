@@ -74,11 +74,14 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-SCM-BE-024-demand-planning-service-bootstrap.md` — **ADR-MONO-027 Phase 1 impl**. Bootstrap `demand-planning-service` (scm 4th domain service): wms `inventory.low-stock-detected` consumer → reorder-policy eval → `reorder_suggestion` + ShedLock nightly batch sweep over IVS read-model + read REST. backlog → ready after BE-022 + BE-023 specs merge. 선행=BE-022/023. 후속=BE-025/INT-002. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (IVS pattern reuse).
+- `TASK-SCM-BE-025-demand-planning-procurement-materialization.md` — **ADR-MONO-027 D5 impl**. Operator approves suggestion → resolve `sku_supplier_map` → procurement creates **DRAFT** PO (`origin=DEMAND_PLANNING`, idempotent on `sourceSuggestionId`, no auto-SUBMIT). backlog → ready after BE-024. 분석=Opus 4.8 / 구현 권장=Opus (cross-service idempotent materialization).
+- `TASK-SCM-INT-002-replenishment-loop-e2e.md` — **ADR-MONO-027 Phase 2 proof**. Deterministic Testcontainers cross-service E2E (simulated wms alert → suggestion → approve → DRAFT PO, PR-gated) + federation-stack live leg (real wms alert → scm DRAFT PO, nightly). backlog → ready after BE-024 + BE-025. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-022-replenishment-subscriptions-contract.md` — **ADR-MONO-027 D1 contract (spec-only)**. Author `replenishment-subscriptions.md` — scm `demand-planning-service` subscribes to **existing** wms `wms.inventory.alert.v1` (`inventory.low-stock-detected`), group `scm-demand-planning-v1`, eventId T8 dedup, retry/DLT, unmapped-SKU→DLT fail-closed. +1-line cross-project consumer note in wms `inventory-events.md` §7 (zero producer change). 선행=ADR-027 ACCEPTED (MONO-220). 후속=BE-023. 분석=Opus 4.8 / 구현 권장=Opus.
+- `TASK-SCM-BE-023-demand-planning-service-spec.md` — **ADR-MONO-027 service spec suite (spec-only)**. `demand-planning-service` architecture (Hexagonal, event-consumer+batch-job+rest-api) + data-model (`reorder_policy`/`sku_supplier_map`/`reorder_suggestion`+open-guard/`processed_events`) + reorder-policy (D4, distinct from wms threshold) + HTTP API + **additive** procurement DRAFT-PO-from-suggestion entry (D5, no new PO state) + PROJECT.md v2→v1-active. 선행=BE-022. 후속=BE-024/025. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
