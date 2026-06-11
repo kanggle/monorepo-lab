@@ -9,6 +9,7 @@ import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.security.access.SourceIpCondition;
+import com.example.security.access.TimeWindowCondition;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,12 +64,19 @@ public class RequiresPermissionAspect {
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
     /**
-     * ADR-MONO-026 4th gate — the SOURCE_IP access condition (optional/opt-in).
-     * When no bean is present (slice tests, or service started before the config
-     * is wired) the gate is net-zero. The bean defaults to an empty allowlist
-     * ({@link SourceIpCondition#isConfigured()} false) which is also net-zero.
+     * ADR-MONO-026 / ADR-MONO-028 4th gate — the access conditions (optional/opt-in),
+     * composed AND-only. When a provider has no bean (slice tests, or the service
+     * started before the config is wired) that condition is net-zero. Each bean
+     * defaults to empty config ({@code isConfigured()} false), also net-zero.
      */
     private final ObjectProvider<SourceIpCondition> sourceIpConditionProvider;
+    /** ADR-MONO-028 — the TIME_WINDOW condition, composed AND-only with SOURCE_IP. */
+    private final ObjectProvider<TimeWindowCondition> timeWindowConditionProvider;
+    /**
+     * The request clock for TIME_WINDOW. Resolves a uniquely-defined {@code Clock}
+     * bean if present (slice tests inject a fixed one), else {@code Clock.systemUTC()}.
+     */
+    private final ObjectProvider<Clock> clockProvider;
 
     /** Annotated path: explicit permission requirement. */
     @Around("@annotation(requires)")
@@ -91,26 +100,57 @@ public class RequiresPermissionAspect {
                     "Operator lacks required permission: " + permissionUsed);
         }
 
-        // ADR-MONO-026 (axis ② 2단계) — the 4th authorization gate: the SOURCE_IP
-        // access condition. Restriction-only (runs only AFTER RBAC granted) +
-        // fail-safe (unresolvable IP denies) + net-zero (skipped entirely when the
-        // condition is unconfigured). Mutation-only: GET reads are not gated.
+        // ADR-MONO-026 / ADR-MONO-028 (axis ② 2단계) — the 4th authorization gate:
+        // the access conditions (SOURCE_IP + TIME_WINDOW), composed AND-only.
+        // Restriction-only (runs only AFTER RBAC granted) + fail-safe (unresolvable
+        // input denies) + net-zero (each condition is skipped when unconfigured).
+        // Mutation-only: GET reads are never gated.
         Method joined = ((MethodSignature) pjp.getSignature()).getMethod();
-        SourceIpCondition sourceIpCondition = sourceIpConditionProvider.getIfAvailable();
-        if (sourceIpCondition != null && sourceIpCondition.isConfigured() && isMutation(joined)) {
+        if (isMutation(joined)) {
             HttpServletRequest request = currentRequest();
-            String sourceIp = resolveSourceIp(request);
-            if (!sourceIpCondition.isSatisfiedBy(sourceIp)) {
+            if (anyConditionUnmet(request)) {
                 String endpoint = request != null ? request.getRequestURI() : null;
                 String method = request != null ? request.getMethod() : null;
                 ActionCode actionCode = actionCodeForMethod(pjp);
                 auditor.recordDenied(actionCode, joinKeys(required), endpoint, method, null);
                 throw new AccessConditionUnmetException(
-                        "Request source IP is outside the permitted range");
+                        "Request does not satisfy a configured access condition");
             }
         }
 
         return pjp.proceed();
+    }
+
+    /**
+     * AND-only composition of the configured access conditions (ADR-026 SOURCE_IP +
+     * ADR-028 TIME_WINDOW). Returns {@code true} iff ANY <i>configured</i> condition
+     * is unsatisfied for this request — an unconfigured condition is skipped
+     * (net-zero), so the gate degrades cleanly to whichever conditions are
+     * configured. Fail-safe: an unresolvable input denies (the evaluators return
+     * {@code false} on bad input).
+     */
+    private boolean anyConditionUnmet(HttpServletRequest request) {
+        SourceIpCondition sourceIp = sourceIpConditionProvider.getIfAvailable();
+        if (sourceIp != null && sourceIp.isConfigured()
+                && !sourceIp.isSatisfiedBy(resolveSourceIp(request))) {
+            return true;
+        }
+        TimeWindowCondition timeWindow = timeWindowConditionProvider.getIfAvailable();
+        if (timeWindow != null && timeWindow.isConfigured()
+                && !timeWindow.isSatisfiedBy(currentClock().instant())) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * The request clock for the TIME_WINDOW condition — a uniquely-defined
+     * {@code Clock} bean if present (slice tests inject a fixed one), else the
+     * system UTC clock. {@code getIfUnique} avoids any ambiguity if the context
+     * happens to hold more than one {@code Clock}.
+     */
+    private Clock currentClock() {
+        return clockProvider.getIfUnique(Clock::systemUTC);
     }
 
     /**
