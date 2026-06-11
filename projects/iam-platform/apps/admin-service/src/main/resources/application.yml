@@ -65,6 +65,13 @@ admin:
   permission-cache:
     ttl-seconds: ${ADMIN_PERM_CACHE_TTL_SECONDS:10}
     key-prefix: ${ADMIN_PERM_CACHE_KEY_PREFIX:admin:operator:perm:}
+  # ADR-MONO-026 (axis ② 2단계) — SOURCE_IP access condition (the 4th
+  # authorization gate, after RBAC). Comma-separated CIDRs/IPs that may invoke
+  # admin MUTATION endpoints; an out-of-range request is denied 403
+  # ACCESS_CONDITION_UNMET. EMPTY (the default) = net-zero (no gate) — reads are
+  # never gated. See platform/access-conditions.md.
+  access:
+    source-ip-allowed-cidrs: ${ADMIN_ACCESS_SOURCE_IP_CIDRS:}
   jwt:
     # Active kid used for newly minted operator tokens. Rotation: register a
     # new kid under signing-keys, flip active-signing-kid, retire old kid

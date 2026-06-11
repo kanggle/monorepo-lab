@@ -3,10 +3,12 @@ package com.example.admin.presentation.aspect;
 import com.example.admin.application.ActionCode;
 import com.example.admin.application.AdminActionAuditor;
 import com.example.admin.application.OperatorContext;
+import com.example.admin.application.exception.AccessConditionUnmetException;
 import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
+import com.example.security.access.SourceIpCondition;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -58,6 +61,13 @@ public class RequiresPermissionAspect {
 
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
+    /**
+     * ADR-MONO-026 4th gate — the SOURCE_IP access condition (optional/opt-in).
+     * When no bean is present (slice tests, or service started before the config
+     * is wired) the gate is net-zero. The bean defaults to an empty allowlist
+     * ({@link SourceIpCondition#isConfigured()} false) which is also net-zero.
+     */
+    private final ObjectProvider<SourceIpCondition> sourceIpConditionProvider;
 
     /** Annotated path: explicit permission requirement. */
     @Around("@annotation(requires)")
@@ -81,7 +91,45 @@ public class RequiresPermissionAspect {
                     "Operator lacks required permission: " + permissionUsed);
         }
 
+        // ADR-MONO-026 (axis ② 2단계) — the 4th authorization gate: the SOURCE_IP
+        // access condition. Restriction-only (runs only AFTER RBAC granted) +
+        // fail-safe (unresolvable IP denies) + net-zero (skipped entirely when the
+        // condition is unconfigured). Mutation-only: GET reads are not gated.
+        Method joined = ((MethodSignature) pjp.getSignature()).getMethod();
+        SourceIpCondition sourceIpCondition = sourceIpConditionProvider.getIfAvailable();
+        if (sourceIpCondition != null && sourceIpCondition.isConfigured() && isMutation(joined)) {
+            HttpServletRequest request = currentRequest();
+            String sourceIp = resolveSourceIp(request);
+            if (!sourceIpCondition.isSatisfiedBy(sourceIp)) {
+                String endpoint = request != null ? request.getRequestURI() : null;
+                String method = request != null ? request.getMethod() : null;
+                ActionCode actionCode = actionCodeForMethod(pjp);
+                auditor.recordDenied(actionCode, joinKeys(required), endpoint, method, null);
+                throw new AccessConditionUnmetException(
+                        "Request source IP is outside the permitted range");
+            }
+        }
+
         return pjp.proceed();
+    }
+
+    /**
+     * Resolve the request's source IP for the SOURCE_IP condition: the first hop
+     * of {@code X-Forwarded-For} (the real client, since admin-service sits behind
+     * the shared gateway), falling back to the transport remote address. Returns
+     * {@code null} when no request is bound — the condition treats that as a
+     * fail-safe deny.
+     */
+    private static String resolveSourceIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            int comma = forwarded.indexOf(',');
+            return (comma >= 0 ? forwarded.substring(0, comma) : forwarded).trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /**
