@@ -1,6 +1,7 @@
 package com.example.erp.readmodel.presentation.security;
 
 import com.example.erp.readmodel.config.security.TenantClaimValidator;
+import com.example.security.jwt.AbacDataScope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
@@ -91,37 +92,21 @@ public class ReadAuthorizationGate {
             return OrgScope.platform();
         }
         boolean claimPresent = jwt.hasClaim("org_scope") || jwt.hasClaim("data_scope");
-        Set<String> raw = extractOrgScope(jwt);
-        if (raw.contains("*")) {
+        // Parse the data-scope token set via the shared canonical reader
+        // (ADR-MONO-025; dual-reads org_scope + data_scope). The platform/
+        // zero-scope distinction below is the read-model's domain-local
+        // interpretation, which AbacDataScope does not carry.
+        AbacDataScope scope = AbacDataScope.fromClaimValues(
+                jwt.getClaim("org_scope"), jwt.getClaim("data_scope"));
+        if (scope.isUnrestricted()) {
             return OrgScope.platform();
         }
-        if (raw.isEmpty()) {
+        if (scope.isEmpty()) {
             // Absent claim → net-zero platform; explicit present-but-empty
             // (org_scope=[]) → zero-scope (narrows to nothing, fail-closed).
             return claimPresent ? OrgScope.of(Set.of()) : OrgScope.platform();
         }
-        return OrgScope.of(raw);
-    }
-
-    private static Set<String> extractOrgScope(Jwt jwt) {
-        Set<String> out = new HashSet<>();
-        for (String name : new String[]{"org_scope", "data_scope"}) {
-            Object claim = jwt.getClaim(name);
-            if (claim == null) {
-                continue;
-            }
-            if (claim instanceof Collection<?> c) {
-                for (Object v : c) {
-                    String s = String.valueOf(v);
-                    if (!s.isBlank()) out.add(s);
-                }
-            } else if (claim instanceof String s) {
-                for (String part : s.split("[,\\s]+")) {
-                    if (!part.isBlank()) out.add(part);
-                }
-            }
-        }
-        return out;
+        return OrgScope.of(scope.tokens());
     }
 
     private static boolean isOperator(Set<String> roles) {

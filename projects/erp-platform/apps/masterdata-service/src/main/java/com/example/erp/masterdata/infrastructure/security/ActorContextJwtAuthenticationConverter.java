@@ -1,6 +1,7 @@
 package com.example.erp.masterdata.infrastructure.security;
 
 import com.example.erp.masterdata.application.ActorContext;
+import com.example.security.jwt.AbacDataScope;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -17,9 +18,14 @@ import java.util.Set;
 /**
  * Converts a verified {@link Jwt} into an authentication token whose principal
  * is an {@link ActorContext} — lifts {@code sub}, {@code tenant_id},
- * {@code roles}/{@code role}/{@code scope} (claim name aliases) and
- * {@code org_scope} into a typed value so use cases never touch Spring
- * Security.
+ * {@code roles}/{@code role}/{@code scope} (claim name aliases) and the
+ * data-scope claim into a typed value so use cases never touch Spring Security.
+ *
+ * <p>The data-scope token set is parsed by the shared canonical reader
+ * {@link AbacDataScope} (ADR-MONO-025; dual-reads {@code org_scope} +
+ * {@code data_scope}); this converter keeps only the domain-local
+ * {@code client_credentials → ["*"]} default. The downstream interpretation
+ * (subtree containment) lives in {@code RoleScopeAuthorizationAdapter}.
  */
 public class ActorContextJwtAuthenticationConverter
         implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -35,7 +41,8 @@ public class ActorContextJwtAuthenticationConverter
             throw new IllegalStateException("tenant_id claim is missing on the JWT");
         }
         Set<String> roles = extractClaim(jwt, "roles", "role", "scope", "scopes");
-        Set<String> scope = extractClaim(jwt, "org_scope", "data_scope");
+        Set<String> scope = new HashSet<>(AbacDataScope.fromClaimValues(
+                jwt.getClaim("org_scope"), jwt.getClaim("data_scope")).tokens());
         // client_credentials machine tokens default to platform-wide scope.
         if (scope.isEmpty() && roles.contains("client_credentials")) {
             scope = Set.of("*");
