@@ -1,6 +1,6 @@
 # ADR-MONO-029 — `RESOURCE_TAG` Access Condition (3rd / final condition type under ADR-026's closed enum)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-11
 
@@ -42,19 +42,19 @@ Same as ADR-028: ADR-026 § D7.4 routes additional types to their own ADR/task, 
 
 Closed enum (`RESOURCE_TAG` is the last existing member), AND-only, restriction-only, fail-safe, net-zero, D3-B carrier — all carried verbatim. Adding `RESOURCE_TAG` is a code change (a new evaluator class + tests), never runtime registration.
 
-### D2 — Enforcement seam (GATE — to fix at ACCEPTED) — the new architectural question
+### D2 — Enforcement seam (FIXED at ACCEPTED 2026-06-11 = D2-A) — the new architectural question
 
-Where `RESOURCE_TAG` is evaluated, given its input is the target resource's tags.
+Where `RESOURCE_TAG` is evaluated, given its input is the target resource's tags. **User-selected at the ACCEPTED gate: D2-A** — keep the single authorization decision site; the aspect resolves the target resource's tags via a domain `ResourceTagResolver` and composes the condition AND-only with `SOURCE_IP`/`TIME_WINDOW`.
 
-- **D2-A (chosen-PROPOSED — recommended): aspect + a `ResourceTagResolver`.** Keep the **single authorization decision site** (`RequiresPermissionAspect`, the contract § 4 invariant): the aspect resolves the target resource id from the request path and consults a small domain-provided `ResourceTagResolver` to fetch its tags, then evaluates `ResourceTagCondition` AND-only alongside `SOURCE_IP`/`TIME_WINDOW`. *Pro:* preserves the uniform "all conditions at one seam" model + the `isConfigured()/isSatisfiedBy()` enforcement shape; net-zero (no resolver / no config ⇒ no gate). *Con:* a pre-mutation tag lookup (one extra read) that the use-case may repeat — acceptable for a pilot (one endpoint, one resource type).
+- **D2-A (CHOSEN, ACCEPTED 2026-06-11): aspect + a `ResourceTagResolver`.** Keep the **single authorization decision site** (`RequiresPermissionAspect`, the contract § 4 invariant): the aspect resolves the target resource id from the request path and consults a small domain-provided `ResourceTagResolver` to fetch its tags, then evaluates `ResourceTagCondition` AND-only alongside `SOURCE_IP`/`TIME_WINDOW`. *Pro:* preserves the uniform "all conditions at one seam" model + the `isConfigured()/isSatisfiedBy()` enforcement shape; net-zero (no resolver / no config ⇒ no gate). *Con:* a pre-mutation tag lookup (one extra read) that the use-case may repeat — acceptable for a pilot (one endpoint, one resource type).
 - **D2-B (alternative): domain/service-layer evaluation (post-load).** Evaluate `RESOURCE_TAG` inside the use-case AFTER it loads the target resource (the resource — and its tags — is already in hand; no extra read). Mirrors how ADR-025 data-scope is enforced at the domain layer. *Pro:* no double-load; natural for resource-heavy flows. *Con:* introduces a **second** authorization decision site (the aspect is no longer the only one), departing from the contract § 4 "single decision site" invariant — a meaningful divergence to weigh.
 - **D2-C (rejected): the client supplies the resource's tags on the request.** Spoofable — the caller could assert a benign tag set to dodge a deny-if-present gate. Tags MUST come from trusted domain data, never the request body.
 
-### D3 — Pilot resource + semantics (GATE — to fix at ACCEPTED)
+### D3 — Pilot resource + semantics (FIXED at ACCEPTED 2026-06-11)
 
-Which resource carries a tag and how the tag gates.
+Which resource carries a tag and how the tag gates. **User-selected at the gate: iam admin `operators` tagged `protected`, deny-if-present** (self-contained in admin_db; no cross-service tag read).
 
-- **Pilot candidate (PROPOSED): iam admin `operators` tagged `protected`** — self-contained in admin_db (`admin_operators`), mutated by `OperatorAdminController` (role/status change). A `protected` operator's role/status mutations are denied (a guardrail against accidental modification of a sensitive operator). Alternatives: tenants (cross-service — tags live in account_db) or accounts.
+- **Pilot (CHOSEN): iam admin `operators` tagged `protected`** — self-contained in admin_db (`admin_operators`), mutated by `OperatorAdminController` (role/status change). A `protected` operator's role/status mutations are denied (a guardrail against accidental modification of a sensitive operator). Alternatives: tenants (cross-service — tags live in account_db) or accounts.
 - **Semantics (PROPOSED = deny-if-present):** the condition denies when the resource **carries** a forbidden tag (e.g. `protected`). The mirror **require-tag** variant (allow only if the resource carries a required tag) is the same evaluator with inverted config; the pilot picks **deny-if-present** (ADR-026 § D4's "deny mutating actions on rows tagged confidential" example). A single negation lives *within* the type (ADR-026 § D1 — not a combinator).
 - **Tag model lift:** the pilot adds a minimal `tags` set (or a single sensitivity label) to the chosen resource + a migration. This is the feature cost `RESOURCE_TAG` carries that `SOURCE_IP`/`TIME_WINDOW` (request-context) did not.
 
@@ -91,11 +91,11 @@ Restriction-only · fail-safe · net-zero · closed enum (code-not-data, AND-onl
 
 ### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
 
-0. **`TASK-MONO-225` (PROPOSED, this)** — doc-only. Model = Opus.
-1. **`TASK-MONO-2xx`** — ACCEPTED transition (the gate fixes D2 seam + D3 pilot/semantics + tag model). Doc-only.
-2. **`TASK-MONO-2xx`** — `ResourceTagCondition` evaluator (libs) + contract flip + seam note. Unit tests.
-3. **`TASK-<iam>-BE-xxx`** — the pilot: tag model (migration) + enforcement (D2) + config + IT.
-4. **`TASK-MONO-2xx`** — federation-e2e proof (tagged → 403 / untagged → 2xx; per-resource net-zero). This one IS deterministic.
+0. **`TASK-MONO-225` (PROPOSED, DONE #1318)** — doc-only. Model = Opus.
+1. **`TASK-MONO-226` (ACCEPTED transition, this)** — the gate fixed **D2 = D2-A** (aspect + `ResourceTagResolver`) + **D3** (iam admin operators tagged `protected`, deny-if-present). Doc-only. Model = Opus.
+2. **`TASK-MONO-227`** — `ResourceTagCondition` evaluator (libs/java-security: `forbidden(tags)` / `required(tags)`, `isSatisfiedBy(Set<String> resourceTags)`, fail-safe + net-zero) + `platform/access-conditions.md` § 1 `RESOURCE_TAG` reserved → implemented + § 4 the resolver-seam note. Unit tests. Model = Opus (security-lib).
+3. **`TASK-<iam>-BE-xxx`** — the pilot: a minimal `tags` model on `admin_operators` (migration) + a `ResourceTagResolver` (operator-path-aware) + `RequiresPermissionAspect` wiring (compose `RESOURCE_TAG` AND-only with `SOURCE_IP`/`TIME_WINDOW`) + config (the forbidden `protected` tag) + IT (tagged → deny / untagged → allow / unconfigured → net-zero / composition). Model = Opus (authorization enforcement).
+4. **`TASK-MONO-2xx`** — federation-e2e proof (seed a `protected`-tagged + an untagged operator; a role/status mutation on the tagged one → 403 `ACCESS_CONDITION_UNMET`, on the untagged one → 2xx; every other spec unaffected). **Deterministic + net-zero-safe** (per-resource input). Model = Opus.
 
 ---
 
@@ -127,4 +127,5 @@ Append-only.
 
 | Date | Transition | Decision direction | User intent quote | PR(s) |
 |---|---|---|---|---|
-| 2026-06-11 | created PROPOSED | Executes ADR-026 § D7.4 for the last enum member `RESOURCE_TAG`; inherits ADR-026's framework unchanged; decides the gates a resource-attribute condition raises — **D2** enforcement seam (A: aspect + `ResourceTagResolver`, preserves the single decision site [chosen-PROPOSED] vs B: domain/service-layer post-load, no double-read but a 2nd decision site; C: client-supplied tags rejected as spoofable) and **D3** pilot resource + semantics (candidate: iam admin operators tagged `protected`, deny-if-present; vs require-tag; + the tag-model lift). D4-D5 inherited (net-zero; no full engine). D6 staged, and step 4 federation-e2e IS deterministic (per-resource input, unlike ADR-028's global clock). | "RESOURCE_TAG (3번째·마지막 조건타입)" — after `TIME_WINDOW` (ADR-028) closed and with the non-SCM ready queue drained, the user selected completing the closed condition enum with the final type. ADR-first per the established ADR-019…028 staged pattern. | #<this> (TASK-MONO-225) |
+| 2026-06-11 | created PROPOSED | Executes ADR-026 § D7.4 for the last enum member `RESOURCE_TAG`; inherits ADR-026's framework unchanged; decides the gates a resource-attribute condition raises — **D2** enforcement seam (A: aspect + `ResourceTagResolver`, preserves the single decision site [chosen-PROPOSED] vs B: domain/service-layer post-load, no double-read but a 2nd decision site; C: client-supplied tags rejected as spoofable) and **D3** pilot resource + semantics (candidate: iam admin operators tagged `protected`, deny-if-present; vs require-tag; + the tag-model lift). D4-D5 inherited (net-zero; no full engine). D6 staged, and step 4 federation-e2e IS deterministic (per-resource input, unlike ADR-028's global clock). | "RESOURCE_TAG (3번째·마지막 조건타입)" — after `TIME_WINDOW` (ADR-028) closed and with the non-SCM ready queue drained, the user selected completing the closed condition enum with the final type. ADR-first per the established ADR-019…028 staged pattern. | #1318 (TASK-MONO-225) |
+| 2026-06-11 | PROPOSED → ACCEPTED | D1, D4-D6 directions **finalised unchanged** from PROPOSED #1318 squash `d2770300` (framework inherited); **D2 finalised = D2-A** (aspect + `ResourceTagResolver` — the single authorization decision site is preserved; the aspect resolves the target resource's tags and composes `RESOURCE_TAG` AND-only with `SOURCE_IP`/`TIME_WINDOW`); **D3 finalised** = iam admin `operators` tagged `protected`, **deny-if-present** (self-contained in admin_db; a `protected` operator's role/status mutation is denied). Authorises the § 3.3 roadmap: `ResourceTagCondition` evaluator (`libs/java-security`) + contract reserved→implemented flip → the pilot (a `tags` model on `admin_operators` + `ResourceTagResolver` + aspect wiring + config) + IT → the deterministic federation-e2e proof. Same one-off Meta-policy category as the sibling ACCEPTED transitions (ADR-023/024/025/026/028). | "A: aspect + ResourceTagResolver" + "iam operators + protected (deny-if-present)" — the user fixed the seam = aspect+resolver and the pilot = iam operators / `protected` / deny-if-present at the gate and authorised ACCEPTED + execution. | #<this> (TASK-MONO-226) |
