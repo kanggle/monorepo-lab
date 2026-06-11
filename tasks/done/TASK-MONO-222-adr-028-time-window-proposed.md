@@ -8,7 +8,9 @@ ADR-MONO-028 (PROPOSED) — `TIME_WINDOW` Access Condition (2nd condition type u
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: PROPOSED ADR 작성 PR #1309 (squash `c0f8ac4c`). 3차원 ✓ (MERGED / origin/main tip=`c0f8ac4c` 일치 / 코드 체크 all-skip path-filter, 0 failing required). `ADR-MONO-028` Status=PROPOSED — ADR-026 프레임워크 inherit-unchanged + 신규 타입 게이트만 결정: **D2** pilot/composition(A=iam admin SOURCE_IP와 AND 합성[chosen-PROPOSED, 미검증 다중조건 합성 실증+MONO-221 하네스 재사용] vs B=wms fresh 단일) + **D3** TIME_WINDOW semantics/config(IANA zone+days+same-day `[start,end)`·fail-safe·net-zero·midnight-wrap deferred). 핵심=ADR-026이 축복했으나 BE-351이 미검증한 **AND-only 다중조건 합성**을 실증하는 게 진짜 증분. 다음=**ACCEPTED 게이트 사용자 결정**(D2 pilot/composition + D3 schema)→evaluator+계약→pilot enforcement+IT→optional fed-e2e. 분석=Opus 4.8.
 
 # Owner
 
