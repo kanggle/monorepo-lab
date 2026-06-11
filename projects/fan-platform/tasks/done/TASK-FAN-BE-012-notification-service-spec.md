@@ -8,7 +8,9 @@ fan-platform **notification-service** SPEC increment — author `specs/services/
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: SPEC PR #1280 (squash `90508f95`). 3차원 ✓ (MERGED / origin/main tip=`90508f95` 일치 / fast-lane: `changes` pass·code job skip·0 fail — spec-only). `specs/services/notification-service/architecture.md` 작성: event-consumer(primary)+thin inbox rest-api, Layered, `fanplatform_notification` Postgres, **terminal consumer**(outbox 없음). 구독=발행중인 2토픽(`fan.membership.activated.v1`/`canceled.v1`, group `notification-service-membership-events`, key `membershipId`); `expired.v1`=forward-declared-not-subscribed(미발행). event-consumer.md 전 요구사항(processed_events 멱등·retry→`<topic>.dlq`·schemaVersion 분기·OTel·메트릭) + multi-tenant 3계층 충족. event→notification 템플릿(activated→WELCOME/canceled→CANCELLATION)·mock `NotificationChannelPort`(로그 email/push)·inbox API(list+mark-read). production/build/ADR 0(HARDSTOP-09=PROJECT.md Service Map v2 + architecture.md, membership 선례). **구현=TASK-FAN-BE-013**. 분석=Opus 4.8 / 구현권장=Opus 4.8(신규 서비스 부트스트랩).
 
 # Owner
 
