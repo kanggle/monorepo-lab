@@ -20,10 +20,12 @@ A condition is one of a **fixed, code-defined** set of types. Adding a type is a
 | Type | Input | Evaluates | Status |
 |---|---|---|---|
 | `SOURCE_IP` | request source IP | the IP is within an allowed CIDR set | **implemented** (`SourceIpCondition`) — iam pilot (ADR-026 § D4) |
-| `TIME_WINDOW` | request time + zone | request-time within an allowed local time-of-day / day-of-week window | reserved (added when first piloted) |
+| `TIME_WINDOW` | request time + zone | request-time within an allowed local time-of-day / day-of-week window | **implemented** (`TimeWindowCondition`) — iam pilot composed with `SOURCE_IP` (ADR-028) |
 | `RESOURCE_TAG` | targeted resource's tags | the resource carries / lacks a required tag | reserved (added when first piloted) |
 
 **Combination is AND-only**: when more than one condition guards an action, all must hold. There is no OR/NOT nesting; a single negation is expressed *within* a type (e.g. a `RESOURCE_TAG` deny-if-present variant), never as a combinator.
+
+> **First multi-condition composition (ADR-028).** The iam admin pilot is the first endpoint guarded by **two** conditions — `SOURCE_IP` **AND** `TIME_WINDOW`. Each evaluator stays input-specific (`SourceIpCondition.isSatisfiedBy(String ip)` / `TimeWindowCondition.isSatisfiedBy(Instant time)`); the consuming domain composes them at the enforcement seam, denying with `403 ACCESS_CONDITION_UNMET` when **any** configured condition is unsatisfied. A condition that is not configured is skipped (net-zero), so AND-only composition degrades cleanly to "whichever conditions are configured".
 
 ---
 
@@ -94,6 +96,7 @@ The condition parameters live in the consuming domain's configuration (e.g. iam 
 
 ## References
 
-- `docs/adr/ADR-MONO-026-role-grant-access-conditions.md` (the decision)
+- `docs/adr/ADR-MONO-026-role-grant-access-conditions.md` (the framework decision + `SOURCE_IP` pilot)
+- `docs/adr/ADR-MONO-028-time-window-access-condition.md` (the `TIME_WINDOW` 2nd-type decision + the AND-only composition pilot)
 - `docs/adr/ADR-MONO-025-abac-data-scope-generalization.md` + `platform/abac-data-scope.md` (axis ② 1단계 — the sibling ABAC data-scope this complements)
-- `libs/java-security` `com.example.security.access.SourceIpCondition` (the canonical `SOURCE_IP` evaluator)
+- `libs/java-security` `com.example.security.access.SourceIpCondition` (the canonical `SOURCE_IP` evaluator) + `com.example.security.access.TimeWindowCondition` (the `TIME_WINDOW` evaluator)
