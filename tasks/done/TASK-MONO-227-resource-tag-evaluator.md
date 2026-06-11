@@ -8,7 +8,9 @@ ADR-MONO-029 step 2 — `ResourceTagCondition` shared evaluator + contract flip.
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: evaluator+계약 PR #1322 (squash `546031cb`). 3차원 ✓ (MERGED / origin/main tip 일치 / 머지 전 20 pass·0 fail). libs `ResourceTagCondition`(SourceIp/TimeWindow 미러: `forbidden(tags)` deny-if-present + `required(tags)` require-all, `isSatisfiedBy(Set<String>)` 대소문자무시+trim·**null=fail-safe deny / empty=known-untagged allow**·미선언=net-zero, 8단위 `:libs:java-security:test` GREEN) + 계약 §1 RESOURCE_TAG reserved→implemented + **input-source 구분 노트**(request-context SOURCE_IP/TIME_WINDOW vs resource-attribute RESOURCE_TAG)+aspect-resolver seam(단일결정지점 `ResourceTagResolver`로 유지·per-resource라 결정적 federation-provable). **닫힌 enum 3타입 evaluator/계약 전부 implemented**. 다음=iam BE enforcement(tags 모델+resolver+aspect 배선). 분석/구현=Opus 4.8.
 
 # Owner
 
