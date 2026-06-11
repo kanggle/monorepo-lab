@@ -14,6 +14,9 @@ importers:
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.41
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
       tsx:
         specifier: ^4.7.0
         version: 4.22.3
@@ -202,6 +205,10 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  kafkajs@2.2.4:
+    resolution: {integrity: sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==}
+    engines: {node: '>=14.0.0'}
+
   playwright-core@1.60.0:
     resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
     engines: {node: '>=18'}
@@ -347,6 +354,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  kafkajs@2.2.4: {}
 
   playwright-core@1.60.0: {}
 
