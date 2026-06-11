@@ -21,11 +21,13 @@ A condition is one of a **fixed, code-defined** set of types. Adding a type is a
 |---|---|---|---|
 | `SOURCE_IP` | request source IP | the IP is within an allowed CIDR set | **implemented** (`SourceIpCondition`) — iam pilot (ADR-026 § D4) |
 | `TIME_WINDOW` | request time + zone | request-time within an allowed local time-of-day / day-of-week window | **implemented** (`TimeWindowCondition`) — iam pilot composed with `SOURCE_IP` (ADR-028) |
-| `RESOURCE_TAG` | targeted resource's tags | the resource carries / lacks a required tag | reserved (added when first piloted) |
+| `RESOURCE_TAG` | targeted resource's tags | the resource carries (deny-if-present) / lacks (require) a tag | **implemented** (`ResourceTagCondition`) — iam pilot (operators tagged `protected`, deny-if-present), aspect-resolved (ADR-029) |
 
 **Combination is AND-only**: when more than one condition guards an action, all must hold. There is no OR/NOT nesting; a single negation is expressed *within* a type (e.g. a `RESOURCE_TAG` deny-if-present variant), never as a combinator.
 
 > **First multi-condition composition (ADR-028).** The iam admin pilot is the first endpoint guarded by **two** conditions — `SOURCE_IP` **AND** `TIME_WINDOW`. Each evaluator stays input-specific (`SourceIpCondition.isSatisfiedBy(String ip)` / `TimeWindowCondition.isSatisfiedBy(Instant time)`); the consuming domain composes them at the enforcement seam, denying with `403 ACCESS_CONDITION_UNMET` when **any** configured condition is unsatisfied. A condition that is not configured is skipped (net-zero), so AND-only composition degrades cleanly to "whichever conditions are configured".
+
+> **Input source — request context vs resource attribute (ADR-029).** `SOURCE_IP` (request header) and `TIME_WINDOW` (request clock) read **request context**, available at the enforcement seam BEFORE the target resource is loaded. `RESOURCE_TAG`'s input is the **target resource's tag set** — domain data the consuming domain must resolve. To keep the **single authorization decision site** (§ 4), the domain provides a `ResourceTagResolver` that the seam consults to fetch the target's tags (ADR-029 § D2-A), then composes `ResourceTagCondition.isSatisfiedBy(Set<String> tags)` AND-only with the others. The resolver MUST source tags from trusted domain data, never the request (a client-supplied tag would be spoofable). An *unresolved* tag set (`null`) is a fail-safe deny; a *known-empty* set (the resource has no tags) is allowed under deny-if-present. This per-resource input also makes `RESOURCE_TAG` **deterministically federation-provable** (seed a tagged + an untagged resource), unlike the global-clock `TIME_WINDOW`.
 
 ---
 
@@ -98,5 +100,6 @@ The condition parameters live in the consuming domain's configuration (e.g. iam 
 
 - `docs/adr/ADR-MONO-026-role-grant-access-conditions.md` (the framework decision + `SOURCE_IP` pilot)
 - `docs/adr/ADR-MONO-028-time-window-access-condition.md` (the `TIME_WINDOW` 2nd-type decision + the AND-only composition pilot)
+- `docs/adr/ADR-MONO-029-resource-tag-access-condition.md` (the `RESOURCE_TAG` 3rd/final-type decision + the aspect-resolver seam — closes the enum)
 - `docs/adr/ADR-MONO-025-abac-data-scope-generalization.md` + `platform/abac-data-scope.md` (axis ② 1단계 — the sibling ABAC data-scope this complements)
-- `libs/java-security` `com.example.security.access.SourceIpCondition` (the canonical `SOURCE_IP` evaluator) + `com.example.security.access.TimeWindowCondition` (the `TIME_WINDOW` evaluator)
+- `libs/java-security` `com.example.security.access.SourceIpCondition` / `TimeWindowCondition` / `ResourceTagCondition` (the canonical evaluators — the closed enum is now fully implemented)
