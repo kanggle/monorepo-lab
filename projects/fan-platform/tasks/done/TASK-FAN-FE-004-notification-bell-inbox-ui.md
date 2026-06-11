@@ -1,6 +1,6 @@
 # TASK-FAN-FE-004 — notification bell + inbox UI
 
-Status: ready
+Status: done
 Type: frontend (TASK-FAN-FE)
 Project: fan-platform
 App: fan-platform-web (`projects/fan-platform/web/fan-platform-web`)
@@ -140,3 +140,17 @@ history page (separate follow-up).
   degrades the bell to "no notifications" rather than breaking every authed page.
 - **Throwing on the expected 404 no-op** — would replace the page with an error
   boundary; `markNotificationRead` treats 404 as a no-op (AC-7).
+
+## Completion
+
+Implemented + merged as **PR #1295** (squash `5e4add65`). Verified in an isolated
+git worktree before merge: `tsc --noEmit` 0, `vitest run` 50/50 (17 new), `next
+lint --dir src` 0, `next build` OK (`/notifications` dynamic route). CI all-green
+(Frontend lint & build / unit / E2E smoke; observability footprint correctly
+skipped — no workflow change). 3-dim merge verified: state=MERGED,
+`origin/main` tip == `5e4add65`, pre-merge 0 failing required checks.
+
+Closes the notification vertical slice's user-visible surface (backend leg =
+FAN-BE-012 spec / FAN-BE-013 impl). Follow-ups (unchanged): membership history
+page · real push channels (FCM/APNs/SES) · `fan.membership.expired.v1` sweeper +
+its `EXPIRY_REMINDER` notification type · inbox pagination UI.
