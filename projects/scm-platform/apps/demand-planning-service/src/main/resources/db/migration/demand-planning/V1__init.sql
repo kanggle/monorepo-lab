@@ -30,7 +30,7 @@ CREATE TABLE sku_supplier_map (
     supplier_id         UUID            NOT NULL,
     default_order_qty   INT             NOT NULL,
     lead_time_days      INT             NOT NULL,
-    currency            CHAR(3)         NOT NULL,
+    currency            VARCHAR(3)      NOT NULL,
     CONSTRAINT pk_sku_supplier_map PRIMARY KEY (tenant_id, sku_code),
     CONSTRAINT ck_sku_supplier_default_qty CHECK (default_order_qty > 0),
     CONSTRAINT ck_sku_supplier_lead_days CHECK (lead_time_days >= 0)
