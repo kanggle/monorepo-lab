@@ -68,6 +68,30 @@ public final class E2ETestFixtures {
     }
 
     // ------------------------------------------------------------------
+    // demand-planning (ADR-MONO-027) — gateway-fronted operator paths
+    // ------------------------------------------------------------------
+
+    /** Gateway path: seed/inspect the SKU→supplier mapping. */
+    public static String pathDemandPlanningSkuSupplierMap(String skuCode) {
+        return "/api/v1/demand-planning/sku-supplier-map/" + skuCode;
+    }
+
+    /** Gateway path: seed/inspect the reorder policy. */
+    public static String pathDemandPlanningPolicy(String skuCode) {
+        return "/api/v1/demand-planning/policies/" + skuCode;
+    }
+
+    /** Gateway path: list reorder suggestions (optionally filtered by skuCode). */
+    public static String pathDemandPlanningSuggestions(String skuCode) {
+        return "/api/v1/demand-planning/suggestions?skuCode=" + skuCode;
+    }
+
+    /** Gateway path: approve a suggestion → procurement DRAFT PO (D5). */
+    public static String pathDemandPlanningApprove(String suggestionId) {
+        return "/api/v1/demand-planning/suggestions/" + suggestionId + "/approve";
+    }
+
+    // ------------------------------------------------------------------
     // Fixture data generators — unique per call to avoid cross-scenario races
     // ------------------------------------------------------------------
 

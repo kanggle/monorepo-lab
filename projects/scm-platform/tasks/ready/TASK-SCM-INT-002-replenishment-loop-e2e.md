@@ -8,7 +8,7 @@ Replenishment-loop E2E — Testcontainers cross-service (simulated wms alert →
 
 # Status
 
-backlog
+ready
 
 # Owner
 

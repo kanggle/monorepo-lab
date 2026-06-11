@@ -487,6 +487,7 @@ jobs:
           :projects:scm-platform:apps:gateway-service:bootJar
           :projects:scm-platform:apps:procurement-service:bootJar
           :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          :projects:scm-platform:apps:demand-planning-service:bootJar
           --no-daemon --stacktrace
 
       - name: Verify Docker (Testcontainers prerequisite)
@@ -503,6 +504,9 @@ jobs:
           docker build -t scm-platform-inventory-visibility-service:e2e \
             -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
             projects/scm-platform/apps/inventory-visibility-service/
+          docker build -t scm-platform-demand-planning-service:e2e \
+            -f projects/scm-platform/apps/demand-planning-service/Dockerfile \
+            projects/scm-platform/apps/demand-planning-service/
 
       - name: Run scm-platform cross-service e2e full suite
         run: >-
@@ -511,9 +515,11 @@ jobs:
           -x :projects:scm-platform:apps:gateway-service:bootJar
           -x :projects:scm-platform:apps:procurement-service:bootJar
           -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          -x :projects:scm-platform:apps:demand-planning-service:bootJar
           -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
           -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
           -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
+          -Dscm.e2e.demandPlanningImage=scm-platform-demand-planning-service:e2e
           --no-daemon --stacktrace
 
       - name: Upload scm-platform e2e full test reports on failure
