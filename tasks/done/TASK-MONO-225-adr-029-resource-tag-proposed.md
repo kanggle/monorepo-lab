@@ -8,7 +8,9 @@ ADR-MONO-029 (PROPOSED) — `RESOURCE_TAG` Access Condition (3rd / final conditi
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-11)**: PROPOSED ADR 작성 PR #1318 (squash `d2770300`). 3차원 ✓ (MERGED / origin/main tip=`d2770300` 일치 / 코드 all-skip path-filter, 0 failing). `ADR-MONO-029` Status=PROPOSED — ADR-026 프레임워크 inherit-unchanged + 신규타입 게이트만: **D2** enforcement seam(A=aspect+`ResourceTagResolver` 단일결정지점 유지[chosen-PROPOSED] vs B=도메인층 post-load 2nd site vs C=client-supplied 거부=spoofable) + **D3** pilot resource+semantics(후보=iam admin operators `protected` 태그 deny-if-present, +태그모델 lift). 핵심: RESOURCE_TAG 입력=**대상 리소스 태그(도메인속성, request-context 아님)**→aspect가 pre-resource라 seam 결정이 새 아키텍처 게이트; **per-resource라 federation 증명 결정적·net-zero 안전**(TIME_WINDOW 전역시계가 못한 것). 다음=ACCEPTED 게이트 사용자결정(D2 seam + D3 pilot/semantics)→evaluator+계약→pilot 태그모델+enforcement→**결정적 fed-e2e**. 분석=Opus 4.8.
 
 # Owner
 
