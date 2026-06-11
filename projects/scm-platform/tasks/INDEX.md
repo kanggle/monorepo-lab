@@ -74,8 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-- `TASK-SCM-BE-024-demand-planning-service-bootstrap.md` — **ADR-MONO-027 Phase 1 impl** (✅ specs merged — **ready to promote backlog → ready**). Bootstrap `demand-planning-service` (scm 4th domain service): wms `inventory.low-stock-detected` consumer → reorder-policy eval → `reorder_suggestion` + ShedLock nightly batch sweep over IVS read-model + read REST. 선행=BE-022 ✓ / BE-023 ✓. 후속=BE-025/INT-002. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (IVS pattern reuse).
-- `TASK-SCM-BE-025-demand-planning-procurement-materialization.md` — **ADR-MONO-027 D5 impl**. Operator approves suggestion → resolve `sku_supplier_map` → procurement creates **DRAFT** PO (`origin=DEMAND_PLANNING`, idempotent on `sourceSuggestionId`, no auto-SUBMIT). backlog → ready after BE-024. 분석=Opus 4.8 / 구현 권장=Opus (cross-service idempotent materialization).
+- `TASK-SCM-BE-025-demand-planning-procurement-materialization.md` — **ADR-MONO-027 D5 impl** (✅ BE-024 merged — **ready to promote backlog → ready**). Operator approves suggestion → resolve `sku_supplier_map` → procurement creates **DRAFT** PO (`origin=DEMAND_PLANNING`, idempotent on `sourceSuggestionId`, no auto-SUBMIT). Picks up BE-024 stubs: approve 501→real, IVS stub→RestClient. 선행=BE-024 ✓. 분석=Opus 4.8 / 구현 권장=Opus (cross-service idempotent materialization).
 - `TASK-SCM-INT-002-replenishment-loop-e2e.md` — **ADR-MONO-027 Phase 2 proof**. Deterministic Testcontainers cross-service E2E (simulated wms alert → suggestion → approve → DRAFT PO, PR-gated) + federation-stack live leg (real wms alert → scm DRAFT PO, nightly). backlog → ready after BE-024 + BE-025. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## ready
@@ -91,6 +90,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## done
+
+- `TASK-SCM-BE-024-demand-planning-service-bootstrap.md` — **DONE (2026-06-11, ADR-MONO-027 Phase 1 impl)**. Bootstrapped `demand-planning-service` (scm 4th domain service, Hexagonal): `WmsLowStockAlertConsumer`(@RetryableTopic 3×→DLT) → `EvaluateReorderUseCase`(T8 dedup→unmapped-SKU fail-closed→D4 eval+fallback→D6 open-guard) ; `ReorderSweepScheduler`(ShedLock) ; REST suggestions list/detail/dismiss + policy/mapping seed (approve=501 stub→BE-025) ; Flyway V1 (5 tables incl. **D6 partial-unique open-guard** + shedlock) ; OAuth2 RS tenant_id=scm + entitlement dual-accept ; gateway route + compose + CI wiring. 구현=backend-engineer Sonnet 4.6 (IVS blueprint). **독립 재검증(Opus)**: `:check --rerun-tasks` BUILD SUCCESSFUL 1m27s / 40 tests / 0 fail ; Flyway D6 + UseCase 로직 스펙 부합. IT 4종 컴파일 OK, Docker 없어 로컬 skip→CI/INT-002 권위검증. 스텁=approve 501 / IVS read stub / ops logging (BE-025 후속). 분석=Opus 4.8 / 구현=Sonnet 4.6 / 검증=Opus 4.8.
 
 - `TASK-SCM-BE-023-demand-planning-service-spec.md` — **DONE (2026-06-11, spec-only self-review)**. ADR-MONO-027 service spec suite. NEW `demand-planning-service/` specs (`architecture.md` 3-facet event-consumer+batch-job+rest-api Hexagonal + D7 decisioning-only + T8/open-guard + ADR-005 Cat C/D + justified no-outbox; `data-model.md` 4 tables incl. partial-unique open-suggestion guard + FK-free supplier ref + suggestion status machine; `reorder-policy.md` D4 rule distinct from wms threshold; `overview.md`) + NEW `demand-planning-api.md` (suggestions/approve/dismiss + policy/mapping seed + new error codes) + **additive** procurement `procurement-api.md` § `POST /po/from-suggestion` (D5 DRAFT factory, idempotent on `sourceSuggestionId`, no new PO state/no auto-SUBMIT) + PROJECT.md Service Map demand-planning **v2→v1-active** + gateway route reserved. spec-only, markdown fast-lane, traits frontmatter byte-unchanged. 선행=BE-022 ✓. 후속=BE-024/025. 분석=Opus 4.8 / 구현=Opus(직접).
 

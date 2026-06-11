@@ -355,11 +355,13 @@ jobs:
         # TASK-SCM-BE-001: gateway-service
         # TASK-SCM-BE-002: procurement-service
         # TASK-SCM-BE-003: inventory-visibility-service
+        # TASK-SCM-BE-024: demand-planning-service
         run: >-
           ./gradlew
           :projects:scm-platform:apps:gateway-service:check
           :projects:scm-platform:apps:procurement-service:check
           :projects:scm-platform:apps:inventory-visibility-service:check
+          :projects:scm-platform:apps:demand-planning-service:check
           --no-daemon --stacktrace
 
       - name: Build and check finance-platform backend (Docker-free)
@@ -1111,6 +1113,7 @@ jobs:
           ./gradlew
           :projects:scm-platform:apps:procurement-service:integrationTest
           :projects:scm-platform:apps:inventory-visibility-service:integrationTest
+          :projects:scm-platform:apps:demand-planning-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload SCM integration test reports on failure
