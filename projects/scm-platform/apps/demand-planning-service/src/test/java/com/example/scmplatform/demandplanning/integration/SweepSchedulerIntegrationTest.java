@@ -1,9 +1,9 @@
 package com.example.scmplatform.demandplanning.integration;
 
-import com.example.scmplatform.demandplanning.adapter.outbound.batch.ReorderSweepScheduler;
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.ReorderPolicyJpaEntity;
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.ReorderSuggestionJpaEntity;
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.SkuSupplierMappingJpaEntity;
+import com.example.scmplatform.demandplanning.application.usecase.SweepReorderUseCase;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionSource;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
 import okhttp3.mockwebserver.Dispatcher;
@@ -33,12 +33,20 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * {@code InventoryVisibilityRestAdapter} + {@code SweepReorderUseCase} +
  * {@code ReorderSweepScheduler} are exercised end-to-end against real Postgres.
  *
- * <p>Determinism: the IVS stub uses a {@link Dispatcher} (not FIFO enqueue) so the
- * response is independent of request count — the {@code ResilienceClientFactory}
- * RestClient retries up to 3×, and a FIFO queue would mis-align across retries.
- * Each test uses a <b>unique SKU + warehouse</b> and asserts only on that SKU, so
- * the shared Kafka consumer re-processing leaked alerts from sibling IT classes
- * (earliest-offset group) cannot perturb the count.
+ * <p>Determinism:
+ * <ul>
+ *   <li>Calls {@link SweepReorderUseCase#sweep()} DIRECTLY rather than the
+ *       ShedLock-wrapped {@code ReorderSweepScheduler.runSweep()}. The scheduler
+ *       lock is {@code lockAtLeastFor=PT5M}, so the FIRST runSweep in the JVM holds
+ *       the lock for 5 minutes and every later call (other tests, and this test's
+ *       second sweep) is a silent no-op — which is exactly what the open-guard
+ *       re-run case needs to actually execute.</li>
+ *   <li>The IVS stub uses a {@link Dispatcher} (not FIFO enqueue) so the response is
+ *       independent of request count.</li>
+ *   <li>Each test uses a <b>unique SKU + warehouse</b> and asserts only on that SKU,
+ *       so the shared Kafka consumer re-processing leaked alerts from sibling IT
+ *       classes (earliest-offset group) cannot perturb the count.</li>
+ * </ul>
  */
 @DisplayName("IT: batch sweep → IVS internal read → BATCH suggestion (ADR-027 §D7.1)")
 class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTest {
@@ -81,7 +89,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     }
 
     @Autowired
-    ReorderSweepScheduler sweepScheduler;
+    SweepReorderUseCase sweepUseCase;
 
     /** A fresh, collision-proof SKU + warehouse per test (open-guard is keyed on both). */
     private String uniqueSku() {
@@ -136,7 +144,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         seedPolicyAndMapping(sku, supplier, 20, 50);
         expectSnapshot(sku, warehouse, 5); // 5 <= reorderPoint(20)
 
-        sweepScheduler.runSweep();
+        sweepUseCase.sweep();
 
         List<ReorderSuggestionJpaEntity> mine = suggestionsFor(sku);
         assertThat(mine).hasSize(1);
@@ -156,7 +164,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
         expectSnapshot(sku, warehouse, 50); // 50 > reorderPoint(20)
 
-        sweepScheduler.runSweep();
+        sweepUseCase.sweep();
 
         assertThat(suggestionsFor(sku)).isEmpty();
     }
@@ -169,8 +177,8 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
         expectSnapshot(sku, warehouse, 5);
 
-        sweepScheduler.runSweep();
-        sweepScheduler.runSweep();
+        sweepUseCase.sweep();
+        sweepUseCase.sweep();
 
         long suggested = suggestionsFor(sku).stream()
                 .filter(s -> s.getStatus() == SuggestionStatus.SUGGESTED)
@@ -186,7 +194,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
         expectIvsUnavailable();
 
-        assertThatCode(() -> sweepScheduler.runSweep()).doesNotThrowAnyException();
+        assertThatCode(() -> sweepUseCase.sweep()).doesNotThrowAnyException();
         assertThat(suggestionsFor(sku)).isEmpty();
     }
 }
