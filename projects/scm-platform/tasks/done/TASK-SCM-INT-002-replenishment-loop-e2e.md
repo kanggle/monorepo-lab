@@ -8,7 +8,7 @@ Replenishment-loop E2E — Testcontainers cross-service (simulated wms alert →
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -100,3 +100,10 @@ Prove the full replenishment loop end to end, with a **deterministic PR-gated** 
 
 - 분석=Opus 4.8 / 구현 권장=Opus (cross-project E2E + federation wiring + flake-class handling).
 - The deterministic leg is the PR-gated authority; the federation leg is the live demonstration. Both required for "federation E2E 실증까지" scope (user decision).
+
+# Closure
+
+- **leg 1 (deterministic Testcontainers, PR-gated)** — merged PR #1315 squash `ca12217f1` (prior session). scm `tests/e2e` ReplenishmentLoopE2ETest: simulated wms alert → demand-planning suggestion → approve → procurement DRAFT PO + dedup/unmapped/open-guard edges. **AC-1..AC-4 satisfied.**
+- **leg 2 (federation live proof, nightly)** — merged PR #1324 squash `e78f21d2b` (3-dim verified: state=MERGED · origin/main tip = `e78f21d2b` · pre-merge `gh pr checks` 0 failing required). Dedicated event overlay `docker-compose.federation-e2e.replenishment.yml` (redpanda dual-listener + scm-dp-postgres + scm-demand-planning-service; procurement repointed at redpanda; base byte-unchanged per TASK-MONO-170 invariant). `specs/scm-replenishment-loop.spec.ts`: a domain-facing IAM operator (SUPER_ADMIN base access token) seeds policy+mapping → the canonical wms `inventory.low-stock-detected` envelope is published to the real broker → the REAL demand-planning consumer raises a suggestion → approve → procurement DRAFT PO, Playwright + REST asserted. **AC-5 satisfied** (branch `workflow_dispatch` run 27347926040 GREEN, 18 passed; post-merge main run AC-6).
+- **Decision (user-directed):** zero-wms-change (ADR-027 §D1/§5) — wms-inventory-service is not booted; the only wms low-stock trigger is a role-gated REST mutation (`ROLE_INVENTORY_WRITE`) the production IAM token model never mints, so a committed nightly spec injects the canonical envelope (fidelity guarded by leg-1's KafkaTestProducer) rather than relaxing wms authz. This is the FIRST committed nightly spec to drive a real Kafka event path in the otherwise event-free federation stack.
+- **AC-6** post-merge federation nightly verified green on main (`gh run list --workflow=federation-hardening-e2e.yml`).
