@@ -1,5 +1,6 @@
 package com.example.admin.presentation.advice;
 
+import com.example.admin.application.exception.AccessConditionUnmetException;
 import com.example.admin.application.exception.AuditFailureException;
 import com.example.admin.application.exception.CurrentPasswordMismatchException;
 import com.example.admin.application.exception.PasswordPolicyViolationException;
@@ -99,6 +100,16 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleRoleGrantForbidden(RoleGrantForbiddenException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("ROLE_GRANT_FORBIDDEN", e.getMessage()));
+    }
+
+    // TASK-BE-351 (ADR-MONO-026, axis ② 2단계) — admin mutation passed RBAC but
+    // the request source IP is outside the configured allowlist (the SOURCE_IP
+    // access condition, the 4th authorization gate). Restriction-only: only
+    // raised after the permission check granted.
+    @ExceptionHandler(AccessConditionUnmetException.class)
+    public ResponseEntity<ErrorResponse> handleAccessConditionUnmet(AccessConditionUnmetException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ACCESS_CONDITION_UNMET", e.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

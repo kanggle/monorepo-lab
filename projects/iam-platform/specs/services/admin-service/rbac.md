@@ -174,6 +174,16 @@ function evaluate(request, annotationPermission):
 
 DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A10 fail-closed). 감사 기록 실패 시 응답도 실패(500)하여 로그 누락을 방지한다.
 
+### Source-IP Access Condition (ADR-MONO-026, axis ② 2단계)
+
+권한 union 통과(step 4) **이후**, **변이(mutation) 엔드포인트**(`@RequiresPermission` 가 붙은 POST/PUT/PATCH/DELETE)는 추가로 **SOURCE_IP access condition** 게이트를 거친다 ([ADR-MONO-026](../../../../../docs/adr/ADR-MONO-026-role-grant-access-conditions.md), [platform/access-conditions.md](../../../../../platform/access-conditions.md)). 이는 RBAC → tenant-scope → data-scope 다음의 **4번째 직교 게이트**로, 닫힌 조건 enum 중 `SOURCE_IP` 타입이다.
+
+- **carrier = 도메인 가드설정(D3-B)**: 허용 CIDR 목록은 `admin.access.source-ip-allowed-cidrs` (env `ADMIN_ACCESS_SOURCE_IP_CIDRS`) 로 admin-service 가 보유 — JWT claim·producer·IAM 무변경(consumer-side).
+- **restriction-only**: step 4 통과 후에만 평가하며 권한을 **부여하지 않고 게이트만** 한다. 요청 source IP(게이트웨이 `X-Forwarded-For` 첫 홉, 없으면 remote addr)가 허용 CIDR 밖이면 `recordDenied(...)` 후 **403 `ACCESS_CONDITION_UNMET`**.
+- **fail-safe**: source IP 미해석/공백 → deny.
+- **net-zero / opt-in**: CIDR 미설정(기본 빈 값)이면 게이트 비활성 — 기존 동작과 byte-identical. **읽기(GET)는 게이트되지 않는다.**
+- 평가는 공유 `com.example.security.access.SourceIpCondition` (`libs/java-security`) 이 수행하며, `RequiresPermissionAspect` 단일 결정 지점에서 합성된다.
+
 ### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
 
 권한 union 통과(step 4) 이후, **administration 표면의 변이**(operator/assignment/subscription 관리)는 추가로 **대상 테넌트 confinement**를 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D2). 한 operator 가 *어떤 테넌트를 관리(administer)* 할 수 있는지는 그 permission 을 부여하는 **role-grant 의 테넌트 스코프**로 결정된다 — assume-tenant 운영 스코프(`TenantScopeResolver` = home ∪ `operator_tenant_assignment`)와는 **별개의 축**이다.
