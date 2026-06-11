@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- TASK-MONO-218 — ADR-MONO-026 § D7 step 1: `platform/access-conditions.md` contract + shared `com.example.security.access.SourceIpCondition` evaluator (`libs/java-security`, closed-enum SOURCE_IP, CIDR allowlist, fail-safe, net-zero/opt-in) + unit tests. Producer untouched (D3-B). Blocks the iam admin-service SOURCE_IP enforcement.
 
 ## in-progress
 
