@@ -3,6 +3,7 @@ package com.example.finance.ledger.application;
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
+import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -113,5 +115,39 @@ class PostJournalEntryUseCaseGuardTest {
         inOrder.verify(journalRepository).save(saved);
         inOrder.verify(auditLogRepository).save(any());
         inOrder.verify(ledgerEventPublisher).publishEntryPosted(saved);
+    }
+
+    @Test
+    @DisplayName("the no-actor overload records the finance-ledger-service default audit actor (net-zero)")
+    void noActorOverloadUsesServiceDefault() {
+        when(clock.now()).thenReturn(NOW);
+        when(accountingPeriodRepository.findCovering(TENANT, POSTED_AT, PeriodStatus.CLOSED))
+                .thenReturn(Optional.empty());
+        when(ledgerAccountRepository.existsByCode(anyString(), eq(TENANT))).thenReturn(true);
+        when(journalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.post(entry(), "reason");
+
+        org.mockito.ArgumentCaptor<AuditLog> audit =
+                org.mockito.ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(audit.capture());
+        assertThat(audit.getValue().getActor()).isEqualTo("finance-ledger-service");
+    }
+
+    @Test
+    @DisplayName("the actor overload records the supplied operator subject as the audit actor")
+    void actorOverloadRecordsOperator() {
+        when(clock.now()).thenReturn(NOW);
+        when(accountingPeriodRepository.findCovering(TENANT, POSTED_AT, PeriodStatus.CLOSED))
+                .thenReturn(Optional.empty());
+        when(ledgerAccountRepository.existsByCode(anyString(), eq(TENANT))).thenReturn(true);
+        when(journalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.post(entry(), "reason", "operator-7");
+
+        org.mockito.ArgumentCaptor<AuditLog> audit =
+                org.mockito.ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(audit.capture());
+        assertThat(audit.getValue().getActor()).isEqualTo("operator-7");
     }
 }

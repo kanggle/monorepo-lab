@@ -14,6 +14,9 @@ public interface JournalEntryJpaRepository extends JpaRepository<JournalEntry, S
     Optional<JournalEntry> findBySourceSourceTransactionIdAndTenantId(
             String sourceTransactionId, String tenantId);
 
+    Optional<JournalEntry> findBySourceSourceEventIdAndTenantId(
+            String sourceEventId, String tenantId);
+
     /** Count of entries with {@code postedAt < to}, tenant-scoped (period entryCount). */
     long countByTenantIdAndPostedAtBefore(String tenantId, Instant to);
 }

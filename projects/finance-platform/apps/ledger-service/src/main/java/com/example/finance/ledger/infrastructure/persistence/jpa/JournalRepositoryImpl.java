@@ -36,6 +36,11 @@ public class JournalRepositoryImpl implements JournalRepository {
     }
 
     @Override
+    public Optional<JournalEntry> findBySourceEventId(String sourceEventId, String tenantId) {
+        return entryJpa.findBySourceSourceEventIdAndTenantId(sourceEventId, tenantId);
+    }
+
+    @Override
     public LinePage findLinesByAccountCode(String ledgerAccountCode, String tenantId,
                                            int page, int size) {
         Page<JournalLine> p = lineJpa

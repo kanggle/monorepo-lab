@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -40,6 +41,7 @@ public class GlobalExceptionHandler {
             Map.entry("RECONCILIATION_STATEMENT_NOT_FOUND", HttpStatus.NOT_FOUND),
             Map.entry("RECONCILIATION_DISCREPANCY_NOT_FOUND", HttpStatus.NOT_FOUND),
             Map.entry("RECONCILIATION_ALREADY_RESOLVED", HttpStatus.CONFLICT),
+            Map.entry("IDEMPOTENCY_KEY_REQUIRED", HttpStatus.BAD_REQUEST),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 
     @ExceptionHandler(LedgerDomainException.class)
@@ -64,6 +66,19 @@ public class GlobalExceptionHandler {
             Money.CurrencyMismatchException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+    }
+
+    /**
+     * A required request header is absent — the manual posting {@code POST /entries}
+     * without an {@code Idempotency-Key} (5th increment) → 400
+     * {@code IDEMPOTENCY_KEY_REQUIRED} (ledger-api.md § 9; the blank/oversized-key
+     * guard in the use case surfaces the same code via {@link LedgerDomainException}).
+     */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiErrorBody.of("IDEMPOTENCY_KEY_REQUIRED",
+                        "Missing required header: " + e.getHeaderName()));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

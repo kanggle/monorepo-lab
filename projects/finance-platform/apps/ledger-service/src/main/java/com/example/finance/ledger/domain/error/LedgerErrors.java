@@ -126,4 +126,19 @@ public final class LedgerErrors {
             super("RECONCILIATION_ALREADY_RESOLVED", message);
         }
     }
+
+    // ---- Manual journal posting (5th increment — TASK-FIN-BE-011, F1) ----
+
+    /**
+     * A manual {@code POST /entries} arrived without a client {@code Idempotency-Key}
+     * (or with a blank / oversized key). 400 — the idempotency key is required so a
+     * double-submit is replay-safe (architecture.md § Manual Journal Posting,
+     * fintech F1). The key must be ≤ 50 chars (so {@code "manual:" + key} fits the
+     * 64-char {@code source_event_id} column).
+     */
+    public static final class IdempotencyKeyRequiredException extends LedgerDomainException {
+        public IdempotencyKeyRequiredException(String message) {
+            super("IDEMPOTENCY_KEY_REQUIRED", message);
+        }
+    }
 }
