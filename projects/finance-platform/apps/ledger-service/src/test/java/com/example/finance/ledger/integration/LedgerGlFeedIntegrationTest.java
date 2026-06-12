@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -137,8 +138,11 @@ class LedgerGlFeedIntegrationTest extends AbstractLedgerIntegrationTest {
         long entriesBeforeClose = journalEntryJpa.count();
 
         // (2) Open a window covering now, close it → consume period.closed.v1.
-        Instant windowFrom = Instant.now().minus(Duration.ofHours(1));
-        Instant windowTo = Instant.now().plus(Duration.ofHours(1));
+        // Truncate to MICROS so the POST body, MySQL DATETIME(6) round-trip, and the
+        // emitted payload all agree (MySQL is microsecond-precision — without this the
+        // nanosecond `Instant.now()` differs from the persisted/emitted value).
+        Instant windowFrom = Instant.now().minus(Duration.ofHours(1)).truncatedTo(ChronoUnit.MICROS);
+        Instant windowTo = Instant.now().plus(Duration.ofHours(1)).truncatedTo(ChronoUnit.MICROS);
         HttpResponse<String> openResp = post("/api/finance/ledger/periods", token,
                 "{\"from\":\"" + windowFrom + "\",\"to\":\"" + windowTo + "\"}");
         assertThat(openResp.statusCode()).isEqualTo(201);
