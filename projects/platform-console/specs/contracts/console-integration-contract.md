@@ -768,6 +768,182 @@ time** (it is reused verbatim here, not re-derived).
 > ADR-MONO-013 Phase 5 = COMPLETE; erp (Phase 6) inherits the proven
 > non-IAM contract (third confirmation of § 3.3 zero-retrofit).
 
+#### 2.4.7.1 finance ledger operations surface (TASK-PC-FE-072 — cross-reference, not a redefinition)
+
+The **second finance-product service** bound by the console — the
+**`ledger-service`** alongside the § 2.4.7 `account-service` — exactly as
+§ 2.4.5.1 binds a **second wms service** (`outbound-service`) alongside the
+§ 2.4.5 `admin-service`. The console's `features/ledger-ops` renders,
+**server-side and tenant-scoped**, the finance `ledger-service`'s existing
+**read-only** double-entry general-ledger surface: the trial balance, the
+journal-entry detail, the accounting periods, and the reconciliation
+discrepancy review queue. This binding makes the **eleven ledger increments**
+(FIN-BE-007…017 — double-entry posting, period close, manual posting,
+reconciliation, multi-currency journals, FX revaluation, FX settlement,
+multi-currency reconciliation) **operator-visible** for the first time. It is
+**strictly read-only**: the ledger's operator **mutation** endpoints
+(`POST /entries` manual posting, `POST /revaluations`, `POST /settlements`,
+reconciliation `POST /statements` ingest + `…/resolve`) are domain
+journal-movement / operator-domain mutations (each `Idempotency-Key`-gated,
+fintech F1) — **explicitly out of scope** here (not silently dropped), exactly
+as the finance § 2.4.7 account write surface is. The producer contracts are
+**authoritative and unchanged** — this section only states the consumer
+obligation and points at the owning finance specs.
+
+- **Authoritative producers (owned by finance, do NOT redefine here —
+  consumed read-only)**: finance
+  [`ledger-api.md`](../../../finance-platform/specs/contracts/http/ledger-api.md)
+  and
+  [`reconciliation-api.md`](../../../finance-platform/specs/contracts/http/reconciliation-api.md)
+  — **unchanged, consumed only**. The console consumes exactly these GET
+  endpoints (request/response/headers/error tables are canonical there):
+
+  | # | Operation | Producer endpoint (`ledger-api.md` / `reconciliation-api.md` §) | Kind |
+  |---|---|---|---|
+  | 1 | trial balance | `GET /api/finance/ledger/trial-balance` (per-account debit/credit + base-currency totals; grand base totals; `inBalance`) | read |
+  | 2 | accounting periods (list) | `GET /api/finance/ledger/periods` (paginated, most-recent window first) | read |
+  | 3 | accounting period (detail) | `GET /api/finance/ledger/periods/{periodId}` (incl. close `snapshot` when CLOSED) | read |
+  | 4 | journal entry (detail) | `GET /api/finance/ledger/entries/{entryId}` (lines: `money` + `exchangeRate` + `baseAmount`; `source.sourceType`; `balanced`) | read |
+  | 5 | reconciliation discrepancies (queue) | `GET /api/finance/ledger/reconciliation/discrepancies` (`?status=OPEN\|RESOLVED`, paginated) | read |
+  | 6 | reconciliation discrepancy (detail) | `GET /api/finance/ledger/reconciliation/discrepancies/{id}` (incl. `resolution` when RESOLVED) | read |
+
+  **Honest ledger read-surface constraint (recorded, not papered over)**:
+  the trial balance and the period list are **index-style** browsable reads
+  (no input required — tenant-scoped from the JWT claim); the journal-entry
+  read is **id-driven** (`GET /entries/{entryId}` — there is **no** list/search
+  GET over entries at this increment, the same honest constraint as the
+  finance § 2.4.7 account surface), and the discrepancy queue is a
+  **status-filtered list**. Account-level drill (`GET
+  /accounts/{ledgerAccountCode}/{balance,entries}`) and the statement-detail
+  read (`GET /reconciliation/statements/{id}`) exist in the producer but are
+  **forward-declared** for a follow-up surface (not fabricated here — the v1
+  ledger surface is trial-balance + periods + entry-by-id + discrepancy
+  queue). Fabricating any non-existent ledger endpoint is **forbidden**.
+
+- **Per-domain credential selection — reuse of the § 2.4.5 rule via the
+  § 2.4.7 finance binding (do NOT re-derive, do NOT diverge)**: the
+  `ledger-service` sits behind the **same finance gateway hostname**
+  (`finance.local`) as the account-service, on a **distinct path prefix**
+  (`/api/finance/ledger/**` vs `/api/finance/accounts/**`), and validates the
+  **same** credential: a IAM RS256 JWT (ADR-001) against IAM's JWKS,
+  `tenant_id` accepted by the finance dual-accept gate
+  (`finance` / `*` / `entitled_domains ∋ finance`), `finance.read` scope,
+  responses tenant-scoped (ledger `architecture.md` § Security; the same
+  finance `iam-integration.md` § *platform-console Operator Read Consumer*
+  basis as § 2.4.7). The credential is therefore the operator's
+  **domain-facing IAM OIDC access token** (`getDomainFacingToken()` —
+  the assumed tenant-scoped token when the operator has switched, else the
+  base access token, ADR-MONO-020 D4 / § 2.7), sent **directly** as
+  `Authorization: Bearer <token>` server-side — **never** the IAM § 2.6
+  exchanged operator token (`getOperatorToken()`; the #569 invariant is
+  IAM-domain-scoped and does **not** generalise to finance, exactly as
+  § 2.4.7 establishes). The `features/ledger-ops` client uses
+  `getDomainFacingToken()` and **never** `getOperatorToken()` (asserted by
+  test). **Tenant model**: the ledger resolves the tenant from the JWT
+  `tenant_id` claim producer-side — the console does **not** send
+  `X-Tenant-Id` (the tenant rides inside the IAM OIDC token, the § 2.4.5 /
+  § 2.4.7 divergence). **Eligibility**: the ledger is part of the **`finance`
+  product** (one registry product, two services) — the section reuses the
+  **same finance eligibility gate** as § 2.4.7 (`productKey === 'finance'`,
+  `available`, `tenants.length > 0`); when the operator's IAM token is not
+  finance-eligible the console **blocks the section** with an actionable "no
+  finance-scoped access" state — no cross-tenant call is ever fabricated;
+  the ledger rejects cross-tenant producer-side regardless
+  (`403 TENANT_FORBIDDEN`, never weakened here). A new env pair
+  `LEDGER_BASE_URL` (default `http://finance.local` — the shared finance
+  gateway) + `LEDGER_TIMEOUT_MS` (default `5000`) parameterises the upstream,
+  parallel to the `FINANCE_BASE_URL` / `FINANCE_TIMEOUT_MS` pair (per-service
+  base+timeout convention).
+
+- **Read-only binding (normative — no mutation scaffolding at all)**: there is
+  **no** mutation anywhere in this section. **No** `Idempotency-Key`, **no**
+  `X-Operator-Reason`, **no** confirm dialogs, **no** ledger write call
+  (`POST /entries`, `/revaluations`, `/settlements`,
+  `/reconciliation/statements`, `/reconciliation/discrepancies/{id}/resolve`).
+  Carrying the FE-007 alert-ack scaffolding **or** the IAM § 2.4.1 mutation
+  scaffolding into this section is a **defect** (asserted absent by test —
+  same read discipline as §§ 2.4.6/2.4.7). Every ledger call is a pure `GET`.
+  `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` / the `…RATE_INVALID`
+  codes are **mutation-only** per `ledger-api.md` — reads never hit them
+  (recorded, not invented).
+
+- **fintech producer obligations surfacing (finance domain constraint,
+  normative — reuses the § 2.4.7 fintech obligations, extended for the ledger
+  multi-currency model — contract obligations, NOT UX niceties)**:
+
+  - **F5 money shape — multi-currency ledger form (contract obligation, NOT a
+    UX nicety)**: every money value is `{ amount: "<string-integer-minor-units>",
+    currency }` (KRW=0, USD=2 scale). A journal line carries **three**
+    money/rate fields — the transaction `money`, the `exchangeRate` (an
+    exact-decimal **string** factor in minor units, never a float), and the
+    `baseAmount` (the line's value in the fixed base currency **KRW**, which is
+    **balance-authoritative**). The console **MUST** render all of them
+    faithfully from the **string** minor-units (scale-correct display via
+    `formatMoney`) and **MUST NOT** coerce any `amount` or `exchangeRate` to a
+    float / JS `Number` / lose precision anywhere. A round-trip of a large
+    minor-units amount (e.g. KRW `"1234567890123"`) and of an exact decimal
+    rate (e.g. `"13.5"`) MUST be **bit-exact** as a string. Asserted by test —
+    there is **no** `Number(...)` / `parseFloat(...)` / `parseInt(...)` applied
+    to an `amount` or `exchangeRate` value anywhere in `features/ledger-ops/`.
+    The trial-balance `inBalance` and the entry `balanced` flags (which hold by
+    the posting guard) are surfaced honestly.
+
+  - **confidential + F7 discipline**: finance is `data_sensitivity:
+    confidential`. The console **MUST NOT** log ledger balances, journal-entry
+    lines, account codes, reconciliation amounts, or the token — only
+    `requestId` + the sanitised route shape (no `entryId` / `periodId` /
+    `discrepancyId` in the log field).
+
+  - **honest state surfacing**: journal-entry `source.sourceType`
+    (`TRANSACTION | MANUAL | REVALUATION | SETTLEMENT`), accounting-period
+    `status` (`OPEN | CLOSED`), and reconciliation discrepancy `type`
+    (`UNMATCHED_EXTERNAL | UNMATCHED_INTERNAL | AMOUNT_MISMATCH | …`) +
+    `status` (`OPEN | RESOLVED`) — surfaced **honestly** (an `OPEN`
+    discrepancy, a `CLOSED` period, an `AMOUNT_MISMATCH` FX-difference are
+    shown as such, never hidden). The **11th-increment** FX-difference
+    discrepancy (`type: AMOUNT_MISMATCH` carrying **both** `externalRef` and
+    `journalEntryId`, KRW `expected`/`actual`) is rendered with its matched
+    pair (the settlement reconciled, the FX gap flagged — F8 never
+    auto-adjusted). Unknown / future `sourceType`, period `status`, or
+    discrepancy `type`/`status` enum values degrade to a generic label, never
+    a parser throw (the same tolerant-parser discipline as §§ 2.4.6/2.4.7).
+
+- **Resilience (§ 2.5) — finance flat error envelope (reuse of § 2.4.7; the
+  ledger is the SAME finance producer family, flat shape, finance error-code
+  vocabulary)**: the ledger error envelope is **flat** `{ code, message,
+  details?, timestamp }`, success `{ data, meta: { timestamp } }` (per
+  `ledger-api.md` / `reconciliation-api.md` envelopes). Mapping:
+  `401 UNAUTHORIZED` → forced **whole-session IAM re-login** (no partial
+  authed state, consistent with §§ 2.4.5–2.4.8); `403 TENANT_FORBIDDEN`
+  (token not finance-scoped) → inline "not available / not scoped";
+  `404 JOURNAL_ENTRY_NOT_FOUND` / `404 ACCOUNTING_PERIOD_NOT_FOUND` /
+  `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` → inline actionable "no such
+  entry / period / discrepancy" (no crash); `400` / `422` → inline actionable;
+  `503 SERVICE_UNAVAILABLE` / timeout / network → **only the ledger section
+  degrades** (the console shell + the IAM / wms / scm / finance-account / erp
+  sections stay intact). The ledger contracts document **no `429` /
+  rate-limit** response — the console MUST NOT fabricate a backoff clause (no
+  `Retry-After` branch; the honest difference from § 2.4.6, asserted absent by
+  test — the same posture as § 2.4.7).
+
+- **Producer immutability**: this is a **cross-reference only**. Any change to
+  the finance `ledger-service` read producer contracts is a finance
+  project-internal spec-first change in `ledger-api.md` /
+  `reconciliation-api.md`; this section follows it, never redefines it (§ 5
+  Change Rule). The finance-side acknowledgment of this console consumer is the
+  merged finance `iam-integration.md` § *platform-console Operator Read
+  Consumer* (TASK-FIN-BE-005) — the same spec-first basis that sanctions the
+  § 2.4.7 account binding (the ledger shares the finance tenant gate).
+
+> **Not a § 3 parity row**: like §§ 2.4.5–2.4.8, § 2.4.7.1 has **no** § 3 line.
+> § 3 is the IAM `admin-web` absorption parity gate (FE-006-finalized); the
+> ledger section is a federated **domain** section (a second finance-product
+> service). This binding adds **no** row to § 3 and changes **none** (the
+> § 3.1 per-row attestation-marker count stays exactly 16 — the FE-006
+> no-drift guard remains green). It is the proof that a single federated
+> product can bind **multiple producer services** under one credential +
+> eligibility gate (the finance analog of the wms § 2.4.5 + § 2.4.5.1 pair).
+
 #### 2.4.8 erp operations surface (TASK-PC-FE-010 — cross-reference, not a redefinition)
 
 The **fourth non-IAM** per-domain binding of § 2.4 (ADR-MONO-013
