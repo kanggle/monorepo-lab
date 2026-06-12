@@ -6,9 +6,12 @@ import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
 import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
+import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
+import com.example.finance.ledger.domain.period.PeriodStatus;
+import com.example.finance.ledger.domain.period.repository.AccountingPeriodRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,7 @@ public class PostJournalEntryUseCase {
     private final JournalRepository journalRepository;
     private final LedgerAccountRepository ledgerAccountRepository;
     private final AuditLogRepository auditLogRepository;
+    private final AccountingPeriodRepository accountingPeriodRepository;
     private final ClockPort clock;
 
     /**
@@ -47,6 +51,7 @@ public class PostJournalEntryUseCase {
     @Transactional
     public JournalEntry post(JournalEntry entry, String reason) {
         Instant now = clock.now();
+        guardClosedPeriod(entry);
         for (JournalLine line : entry.lines()) {
             ensureAccountExists(line.ledgerAccountCode(), entry.tenantId(), now);
         }
@@ -55,6 +60,23 @@ public class PostJournalEntryUseCase {
                 entry.tenantId(), AGGREGATE_TYPE, entry.entryId(), "POSTED",
                 ACTOR, auditSummary(entry), reason, now));
         return saved;
+    }
+
+    /**
+     * Posting guard (architecture.md § Accounting Period § Posting guard). If a
+     * CLOSED period covers the entry's {@code postedAt} the books are locked →
+     * {@link LedgerPeriodClosedException} (→ DLT on the consumer path; the dedupe
+     * row is not written). <b>Net-zero</b>: {@code findCovering} empty — the common
+     * case, and always when no period is defined — posting proceeds byte-identically
+     * to the first increment (periods are optional, absence = unrestricted).
+     */
+    private void guardClosedPeriod(JournalEntry entry) {
+        if (accountingPeriodRepository.findCovering(
+                entry.tenantId(), entry.postedAt(), PeriodStatus.CLOSED).isPresent()) {
+            throw new LedgerPeriodClosedException(
+                    "journal posting into a CLOSED accounting period (postedAt="
+                            + entry.postedAt() + ", entryId=" + entry.entryId() + ")");
+        }
     }
 
     private void ensureAccountExists(String code, String tenantId, Instant now) {

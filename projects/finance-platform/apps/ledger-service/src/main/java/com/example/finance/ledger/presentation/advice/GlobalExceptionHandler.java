@@ -32,6 +32,10 @@ public class GlobalExceptionHandler {
             Map.entry("LEDGER_ENTRY_UNBALANCED", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("CURRENCY_MISMATCH", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("LEDGER_PERIOD_CLOSED", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("ACCOUNTING_PERIOD_NOT_FOUND", HttpStatus.NOT_FOUND),
+            Map.entry("ACCOUNTING_PERIOD_OVERLAP", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("ACCOUNTING_PERIOD_ALREADY_CLOSED", HttpStatus.CONFLICT),
+            Map.entry("ACCOUNTING_PERIOD_INVALID_WINDOW", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 
     @ExceptionHandler(LedgerDomainException.class)

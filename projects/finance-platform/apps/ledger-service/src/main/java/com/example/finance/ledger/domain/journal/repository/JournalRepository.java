@@ -30,6 +30,17 @@ public interface JournalRepository {
     /** Debit/credit totals for one ledger account, tenant-scoped. */
     Optional<AccountTotals> accountTotals(String ledgerAccountCode, String tenantId);
 
+    /**
+     * Per-account debit/credit totals over entries with {@code postedAt < to}
+     * (tenant-scoped) — the close-time period snapshot (architecture.md
+     * § Accounting Period § Close-time snapshot). Same shape as
+     * {@link #accountTotals(String)} bounded by the period's exclusive upper edge.
+     */
+    List<AccountTotals> accountTotalsUpTo(String tenantId, java.time.Instant to);
+
+    /** Count of journal entries with {@code postedAt < to}, tenant-scoped (period entryCount). */
+    long countEntriesUpTo(String tenantId, java.time.Instant to);
+
     /** A line + the id/postedAt of its owning entry (for the per-account view). */
     record LineRow(String entryId, java.time.Instant postedAt, JournalLine line) {
     }

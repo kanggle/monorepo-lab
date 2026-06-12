@@ -43,4 +43,49 @@ public final class LedgerErrors {
             super("CURRENCY_MISMATCH", message);
         }
     }
+
+    // ---- Accounting period (2nd increment — TASK-FIN-BE-008) ----
+
+    /**
+     * A journal entry whose {@code postedAt} is covered by a CLOSED accounting
+     * period — the books are locked for that window (architecture.md § Accounting
+     * Period § Posting guard, F2). 422; on the consumer path the event routes to
+     * the DLT (no dedupe row written). Net-zero when no closed period covers it.
+     */
+    public static final class LedgerPeriodClosedException extends LedgerDomainException {
+        public LedgerPeriodClosedException(String message) {
+            super("LEDGER_PERIOD_CLOSED", message);
+        }
+    }
+
+    public static final class AccountingPeriodNotFoundException extends LedgerDomainException {
+        public AccountingPeriodNotFoundException(String message) {
+            super("ACCOUNTING_PERIOD_NOT_FOUND", message);
+        }
+    }
+
+    /**
+     * An opened window overlaps an existing period for the tenant — would make
+     * "which period owns this entry" ambiguous (architecture.md § Non-overlap
+     * invariant, F2). 422.
+     */
+    public static final class AccountingPeriodOverlapException extends LedgerDomainException {
+        public AccountingPeriodOverlapException(String message) {
+            super("ACCOUNTING_PERIOD_OVERLAP", message);
+        }
+    }
+
+    /** A close attempted on an already-CLOSED period (no reopen). 409. */
+    public static final class AccountingPeriodAlreadyClosedException extends LedgerDomainException {
+        public AccountingPeriodAlreadyClosedException(String message) {
+            super("ACCOUNTING_PERIOD_ALREADY_CLOSED", message);
+        }
+    }
+
+    /** An opened window with {@code from ≥ to} (the half-open window is empty). 422. */
+    public static final class AccountingPeriodInvalidWindowException extends LedgerDomainException {
+        public AccountingPeriodInvalidWindowException(String message) {
+            super("ACCOUNTING_PERIOD_INVALID_WINDOW", message);
+        }
+    }
 }

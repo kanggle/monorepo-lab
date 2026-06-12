@@ -59,6 +59,16 @@ public class JournalRepositoryImpl implements JournalRepository {
                 .findFirst().map(this::toTotals);
     }
 
+    @Override
+    public List<AccountTotals> accountTotalsUpTo(String tenantId, java.time.Instant to) {
+        return lineJpa.accountTotalsUpTo(tenantId, to).stream().map(this::toTotals).toList();
+    }
+
+    @Override
+    public long countEntriesUpTo(String tenantId, java.time.Instant to) {
+        return entryJpa.countByTenantIdAndPostedAtBefore(tenantId, to);
+    }
+
     private AccountTotals toTotals(AccountTotalsRow row) {
         return new AccountTotals(row.ledgerAccountCode(), row.currency().code(),
                 row.debitMinor(), row.creditMinor());

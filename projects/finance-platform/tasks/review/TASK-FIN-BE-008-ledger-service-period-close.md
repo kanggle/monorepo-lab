@@ -1,6 +1,6 @@
 # TASK-FIN-BE-008 — ledger-service period close (2nd increment: accounting-period lifecycle + posting guard + close snapshot)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (complex domain — accounting-period state machine, non-overlap invariant, posting-path guard, close-time trial-balance snapshot)
