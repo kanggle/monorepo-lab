@@ -8,7 +8,7 @@ ecommerce **inner-axis seller (marketplace) slice** — ADR-MONO-030 **Step 3** 
 
 # Status
 
-review
+done
 
 # Owner
 
