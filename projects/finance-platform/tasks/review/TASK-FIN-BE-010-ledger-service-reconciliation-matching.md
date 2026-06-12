@@ -1,6 +1,6 @@
 # TASK-FIN-BE-010 — ledger-service reconciliation matching (4th increment: external-statement matching + discrepancy queue, F8 no-auto-close)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (complex domain — matching engine, discrepancy state machine, F8 no-auto-close policy, outbox emission)
