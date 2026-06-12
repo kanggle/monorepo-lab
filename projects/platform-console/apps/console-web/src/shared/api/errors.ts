@@ -371,6 +371,57 @@ export class FinanceUnavailableError extends Error {
 }
 
 /**
+ * finance `ledger-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.7.1 / § 2.5). The SECOND finance-
+ * product service section (the `ledger-service` alongside the § 2.4.7
+ * `account-service`) — read-only, mirroring {@link FinanceUnavailableError}
+ * exactly (the ledger is the SAME finance producer family, behind the same
+ * `finance.local` gateway, on a distinct `/api/finance/ledger/**` path). A
+ * `503 SERVICE_UNAVAILABLE` / timeout / network failure on a ledger call
+ * degrades ONLY the ledger section (the console shell + the IAM / wms / scm /
+ * finance-account / erp sections stay intact). Auth failures (`401` — the
+ * IAM OIDC session expired) are raised as {@link ApiError} so the caller
+ * forces a clean WHOLE-SESSION re-login (no partial authed state — NOT a
+ * per-section degrade). Inline-recoverable producer errors
+ * (`403 TENANT_FORBIDDEN`/`FORBIDDEN`/`PERMISSION_DENIED`,
+ * `404 JOURNAL_ENTRY_NOT_FOUND`/`ACCOUNTING_PERIOD_NOT_FOUND`/
+ * `RECONCILIATION_DISCREPANCY_NOT_FOUND`, `400|422 VALIDATION_ERROR`) are
+ * raised as {@link ApiError} so the UI renders an inline actionable message
+ * without crashing.
+ *
+ * NOTE — **no 429**: the ledger contracts (`ledger-api.md` /
+ * `reconciliation-api.md`) document NO rate-limit response (identical to
+ * finance § 2.4.7); the console does NOT fabricate a backoff path for the
+ * ledger (an honest difference from scm — § 2.4.6 — recorded, not
+ * cargo-culted). A `RateLimitedError` is intentionally absent for the ledger.
+ *
+ * NOTE the credential reuse: like the finance + wms + scm + erp siblings
+ * (NOT the IAM ones), the ledger credential is the domain-facing IAM OIDC
+ * access token itself (`getDomainFacingToken()`) — the § 2.4.5 per-domain
+ * credential rule reused via the § 2.4.7 finance binding (the #569 invariant
+ * is GAP-domain-scoped — § 2.4.7.1). The ledger error envelope is **flat**
+ * `{ code, message, details?, timestamp }` — same wire shape + finance
+ * error-code family as the account-service (own parser; NOT wms's nested
+ * `{ error: { code } }`). No token / PII / ledger balance / journal line /
+ * account code / reconciliation amount is ever placed in this error
+ * (confidential + F7).
+ */
+export class LedgerUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: LedgerUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'LedgerUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * erp `masterdata-service` operations surface degrade signal
  * (console-integration-contract § 2.4.8 / § 2.5). Sibling of
  * {@link FinanceUnavailableError} / {@link ScmUnavailableError} /
@@ -503,6 +554,14 @@ const MESSAGES: Record<string, string> = {
   // finance reuses the existing entry; the producer code is identical.)
   FINANCE_NOT_ELIGIBLE:
     'finance 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- finance ledger operations (TASK-PC-FE-072 / §2.4.7.1) --------------
+  JOURNAL_ENTRY_NOT_FOUND:
+    '대상 분개(journal entry)를 찾을 수 없습니다.',
+  ACCOUNTING_PERIOD_NOT_FOUND: '대상 회계 기간을 찾을 수 없습니다.',
+  RECONCILIATION_DISCREPANCY_NOT_FOUND:
+    '대상 대사 차이(reconciliation discrepancy)를 찾을 수 없습니다.',
+  LEDGER_NOT_ELIGIBLE:
+    'finance ledger 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- erp operations (TASK-PC-FE-010 / §2.4.8) ---------------------------
   MASTERDATA_NOT_FOUND: '대상 마스터 레코드를 찾을 수 없습니다.',
   DATA_SCOPE_FORBIDDEN:

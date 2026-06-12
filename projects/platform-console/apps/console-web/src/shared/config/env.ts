@@ -153,6 +153,27 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for finance operations calls
    *  (integration-heavy I1 — same convention as SCM_TIMEOUT_MS). */
   FINANCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** finance `ledger-service` base for the ledger operations surface
+   *  (TASK-PC-FE-072 / § 2.4.7.1). The read-only trial-balance +
+   *  accounting-periods + journal-entry + reconciliation-discrepancy
+   *  endpoints hang off `${LEDGER_BASE_URL}/api/finance/ledger/...` —
+   *  request/response/error owned by finance `ledger-api.md` /
+   *  `reconciliation-api.md` (authoritative, consumed read-only). The
+   *  ledger sits behind the **same finance gateway hostname**
+   *  (`finance.local`) as the § 2.4.7 account-service, on a DISTINCT path
+   *  prefix (`/api/finance/ledger/**` vs `/api/finance/accounts/**`) —
+   *  hence a default of `http://finance.local`, parallel to
+   *  FINANCE_BASE_URL (the per-service base+timeout convention). NOTE:
+   *  like finance + wms + scm + erp (NOT GAP) this is reached with the
+   *  IAM OIDC access token DIRECTLY — the § 2.4.5 per-domain credential
+   *  rule reused via the § 2.4.7 finance binding (the #569 invariant is
+   *  GAP-domain-scoped; the ledger validates the IAM RS256 token +
+   *  `tenant_id ∈ {finance,*}` claim producer-side, the same finance
+   *  tenant gate as the account-service per TASK-FIN-BE-005). */
+  LEDGER_BASE_URL: z.string().url().default('http://finance.local'),
+  /** Outbound timeout (ms) for finance ledger operations calls
+   *  (integration-heavy I1 — same convention as FINANCE_TIMEOUT_MS). */
+  LEDGER_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** erp `masterdata-service` base for the operations surface
    *  (TASK-PC-FE-010 / § 2.4.8). The read-only 5 master × {list,
    *  detail} = 10 GET endpoints hang off
@@ -202,6 +223,8 @@ export function getServerEnv(): ServerEnv {
     SCM_TIMEOUT_MS: process.env.SCM_TIMEOUT_MS,
     FINANCE_BASE_URL: process.env.FINANCE_BASE_URL,
     FINANCE_TIMEOUT_MS: process.env.FINANCE_TIMEOUT_MS,
+    LEDGER_BASE_URL: process.env.LEDGER_BASE_URL,
+    LEDGER_TIMEOUT_MS: process.env.LEDGER_TIMEOUT_MS,
     ERP_BASE_URL: process.env.ERP_BASE_URL,
     ERP_TIMEOUT_MS: process.env.ERP_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,

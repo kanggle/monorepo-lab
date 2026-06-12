@@ -1,0 +1,254 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/shared/api/client';
+import {
+  TrialBalanceSchema,
+  type TrialBalance,
+  PeriodSchema,
+  type Period,
+  PeriodsResponseSchema,
+  type PeriodsResponse,
+  type PeriodsQueryParams,
+  JournalEntrySchema,
+  type JournalEntry,
+  DiscrepancySchema,
+  type Discrepancy,
+  DiscrepanciesResponseSchema,
+  type DiscrepanciesResponse,
+  type DiscrepanciesQueryParams,
+  LEDGER_DEFAULT_PAGE_SIZE,
+  LEDGER_MAX_PAGE_SIZE,
+} from '../api/types';
+
+/**
+ * Client-side finance ledger-ops hooks (architecture.md § Server vs Client
+ * Components — React Query is client-only). Every call goes to the
+ * same-origin `/api/ledger/**` proxy (the typed API client's single backend
+ * entry point); the proxy attaches the HttpOnly **IAM OIDC access token**
+ * server-side — the browser never reads a token or calls the ledger
+ * directly (contract § 2.3). The § 2.4.5 per-domain credential rule is
+ * reused via the § 2.4.7 finance binding, NOT re-derived (§ 2.4.7.1).
+ *
+ * READ-ONLY: there are NO mutation hooks at all (the ledger surface is a
+ * pure read — trial balance / periods / journal entries / reconciliation
+ * queue). The hooks below are pure reads.
+ *
+ * No tight refetch loop / refetchInterval / refetchOnWindowFocus — a
+ * re-query is a periodId / entryId / filter / page change (a new queryKey)
+ * or an explicit user retry. **No 429 / Retry-After / backoff branch**
+ * (§ 2.4.7.1 — the ledger has no documented 429; React Query
+ * `retry: false` means a failure surfaces immediately, no client retry).
+ */
+
+const LEDGER_KEY = 'ledger-ops';
+
+function clampSize(size?: number): number {
+  // Page size arithmetic — NOT money. F5 invariant is amount-only.
+  return Math.min(
+    LEDGER_MAX_PAGE_SIZE,
+    Math.max(1, size ?? LEDGER_DEFAULT_PAGE_SIZE),
+  );
+}
+
+// --- trial balance read --------------------------------------------------
+
+export function trialBalanceKey() {
+  return [LEDGER_KEY, 'trial-balance'] as const;
+}
+
+async function fetchTrialBalance(): Promise<TrialBalance> {
+  const raw = await apiClient.get<unknown>('/api/ledger/trial-balance');
+  return TrialBalanceSchema.parse(raw);
+}
+
+export function useTrialBalance(initial?: TrialBalance) {
+  return useQuery({
+    queryKey: trialBalanceKey(),
+    queryFn: fetchTrialBalance,
+    initialData: initial,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- periods list read ---------------------------------------------------
+
+export function periodsKey(params: PeriodsQueryParams) {
+  return [
+    LEDGER_KEY,
+    'periods',
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildPeriodsQs(params: PeriodsQueryParams): string {
+  const qs = new URLSearchParams();
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchPeriods(
+  params: PeriodsQueryParams,
+): Promise<PeriodsResponse> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/periods?${buildPeriodsQs(params)}`,
+  );
+  return PeriodsResponseSchema.parse(raw);
+}
+
+export function usePeriods(
+  params: PeriodsQueryParams,
+  initial?: PeriodsResponse,
+) {
+  const seeded = initial !== undefined && (params.page ?? 0) === 0;
+  return useQuery({
+    queryKey: periodsKey(params),
+    queryFn: () => fetchPeriods(params),
+    initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- period detail read --------------------------------------------------
+
+export function periodKey(periodId: string | null) {
+  return [LEDGER_KEY, 'period', periodId ?? ''] as const;
+}
+
+async function fetchPeriod(periodId: string): Promise<Period> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/periods/${encodeURIComponent(periodId)}`,
+  );
+  return PeriodSchema.parse(raw);
+}
+
+export function usePeriod(periodId: string | null) {
+  return useQuery({
+    queryKey: periodKey(periodId),
+    queryFn: () => fetchPeriod(periodId as string),
+    enabled: Boolean(periodId && periodId.trim()),
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- journal entry read (id-driven; no list/search) ----------------------
+
+export function journalEntryKey(entryId: string | null) {
+  return [LEDGER_KEY, 'entry', entryId ?? ''] as const;
+}
+
+async function fetchJournalEntry(entryId: string): Promise<JournalEntry> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/entries/${encodeURIComponent(entryId)}`,
+  );
+  return JournalEntrySchema.parse(raw);
+}
+
+export function useJournalEntry(
+  entryId: string | null,
+  initial?: JournalEntry,
+) {
+  const seeded = initial !== undefined && Boolean(entryId);
+  return useQuery({
+    queryKey: journalEntryKey(entryId),
+    queryFn: () => fetchJournalEntry(entryId as string),
+    enabled: Boolean(entryId && entryId.trim()),
+    initialData: seeded ? initial : undefined,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- reconciliation discrepancies (queue) read ---------------------------
+
+export function discrepanciesKey(params: DiscrepanciesQueryParams) {
+  return [
+    LEDGER_KEY,
+    'discrepancies',
+    params.status ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildDiscrepanciesQs(
+  params: DiscrepanciesQueryParams,
+): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set('status', params.status);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchDiscrepancies(
+  params: DiscrepanciesQueryParams,
+): Promise<DiscrepanciesResponse> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/reconciliation/discrepancies?${buildDiscrepanciesQs(params)}`,
+  );
+  return DiscrepanciesResponseSchema.parse(raw);
+}
+
+export function useDiscrepancies(
+  params: DiscrepanciesQueryParams,
+  initial?: DiscrepanciesResponse,
+) {
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    params.status === 'OPEN';
+  return useQuery({
+    queryKey: discrepanciesKey(params),
+    queryFn: () => fetchDiscrepancies(params),
+    initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- reconciliation discrepancy detail read ------------------------------
+
+export function discrepancyKey(id: string | null) {
+  return [LEDGER_KEY, 'discrepancy', id ?? ''] as const;
+}
+
+async function fetchDiscrepancy(id: string): Promise<Discrepancy> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/reconciliation/discrepancies/${encodeURIComponent(id)}`,
+  );
+  return DiscrepancySchema.parse(raw);
+}
+
+export function useDiscrepancy(id: string | null) {
+  return useQuery({
+    queryKey: discrepancyKey(id),
+    queryFn: () => fetchDiscrepancy(id as string),
+    enabled: Boolean(id && id.trim()),
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
