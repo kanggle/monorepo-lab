@@ -14,6 +14,9 @@ public interface NotificationJpaRepository extends JpaRepository<NotificationJpa
     Optional<NotificationJpaEntity> findByIdAndTenantIdAndRecipientId(
             String id, String tenantId, String recipientId);
 
+    /** System-internal lookup (tenant-scoped, NOT recipient-scoped) — external retry render. */
+    Optional<NotificationJpaEntity> findByIdAndTenantId(String id, String tenantId);
+
     @Query("""
             SELECT n FROM NotificationJpaEntity n
             WHERE n.tenantId = :tenantId AND n.recipientId = :recipientId

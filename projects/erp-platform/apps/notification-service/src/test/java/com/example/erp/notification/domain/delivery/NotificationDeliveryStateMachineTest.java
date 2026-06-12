@@ -19,6 +19,18 @@ class NotificationDeliveryStateMachineTest {
     }
 
     @Test
+    void createPendingExternalIsImmediatelyDue() {
+        // TASK-ERP-BE-020: external delivery is created PENDING + due now (scheduledRetryAt set),
+        // unlike the IN_APP createPending (no scheduledRetryAt).
+        NotificationDelivery d = NotificationDelivery.createPendingExternal(
+                "dlv-2", "erp", "ntf-1", "evt-1", DeliveryChannel.SLACK, now);
+        assertThat(d.status()).isEqualTo(DeliveryStatus.PENDING);
+        assertThat(d.attemptCount()).isZero();
+        assertThat(d.scheduledRetryAt()).contains(now);
+        assertThat(d.isTerminal()).isFalse();
+    }
+
+    @Test
     void inAppDeliversSynchronouslyWithAttemptCountOne() {
         NotificationDelivery d = pending(DeliveryChannel.IN_APP);
         d.markDelivered(now);

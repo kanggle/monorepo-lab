@@ -40,5 +40,14 @@ public interface NotificationChannelPort {
         public static DeliveryOutcome noop() {
             return new DeliveryOutcome(false, "external channel not implemented (v2)");
         }
+
+        /**
+         * A real external attempt that did not succeed (transient or permanent) —
+         * NOT delivered; {@code detail} carries the error for the retry record
+         * (TASK-ERP-BE-020, green-wash discipline: never reported as delivered).
+         */
+        public static DeliveryOutcome failed(String detail) {
+            return new DeliveryOutcome(false, detail);
+        }
     }
 }

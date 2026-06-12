@@ -100,3 +100,22 @@ erpplatform:
     # iam D2-b).
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
+
+  # External-channel delivery (TASK-ERP-BE-020, v2.0). Default OFF = production
+  # net-zero: no external delivery is created (enabled=false) and the retry
+  # scheduler bean is absent (retry.enabled=false) → v1 IN_APP-only behaviour.
+  # mode=slack swaps the no-op stub for the real SlackWebhookChannelAdapter.
+  notification:
+    external:
+      enabled: ${NOTIFICATION_EXTERNAL_ENABLED:false}
+      mode: ${NOTIFICATION_EXTERNAL_MODE:noop}
+      slack:
+        webhook-url: ${NOTIFICATION_SLACK_WEBHOOK_URL:}
+        connect-timeout-ms: ${NOTIFICATION_SLACK_CONNECT_TIMEOUT_MS:2000}
+        read-timeout-ms: ${NOTIFICATION_SLACK_READ_TIMEOUT_MS:5000}
+      retry:
+        enabled: ${NOTIFICATION_RETRY_ENABLED:false}
+        poll-interval-ms: ${NOTIFICATION_RETRY_POLL_INTERVAL_MS:5000}
+        batch-size: ${NOTIFICATION_RETRY_BATCH_SIZE:50}
+        initial-backoff-ms: ${NOTIFICATION_RETRY_INITIAL_BACKOFF_MS:1000}
+        max-backoff-ms: ${NOTIFICATION_RETRY_MAX_BACKOFF_MS:60000}

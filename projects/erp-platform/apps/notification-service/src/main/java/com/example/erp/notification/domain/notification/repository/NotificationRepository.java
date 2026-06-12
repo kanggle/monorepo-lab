@@ -17,6 +17,14 @@ public interface NotificationRepository {
     /** Recipient-scoped lookup; a foreign-recipient id resolves to empty (→ 404). */
     Optional<Notification> findByIdForRecipient(String tenantId, String id, String recipientId);
 
+    /**
+     * System-internal lookup by id (NOT recipient-scoped) — used by the external-channel
+     * retry scheduler to render the outbound message (TASK-ERP-BE-020). This is a
+     * system-driven read, never an inbox/recipient request, so it carries no recipient
+     * scope; the inbox surface continues to use {@link #findByIdForRecipient}.
+     */
+    Optional<Notification> findByIdInternal(String tenantId, String id);
+
     /** Newest-first inbox page for one recipient, optionally filtered by read flag. */
     List<Notification> findInbox(String tenantId, String recipientId, Boolean read,
                                  int page, int size);
