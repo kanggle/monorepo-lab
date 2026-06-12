@@ -23,7 +23,7 @@ Consumers must not depend on fields not defined in this contract.
 
 Published when a payment is successfully processed.
 
-**Consumers:** order-service
+**Consumers:** order-service, settlement-service (commission accrual — ADR-MONO-030 Step 4 facet b; see `settlement-subscriptions.md`)
 
 **Payload**
 ```json
@@ -61,7 +61,7 @@ Published when a payment processing fails.
 
 Published when a payment refund is processed.
 
-**Consumers:** order-service
+**Consumers:** order-service, settlement-service (commission reversal — ADR-MONO-030 Step 4 facet b; see `settlement-subscriptions.md`)
 
 **Payload**
 ```json
